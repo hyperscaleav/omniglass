@@ -53,6 +53,9 @@ type Config struct {
 	// pipeline records into (#1628); nil means a recorder of the Server's own,
 	// which nothing reports.
 	Metrics *platformmetric.Recorder
+	// PlatformComponentID is the server's own component in the platform
+	// system, where its retention figures land (#1629); empty writes none.
+	PlatformComponentID string
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
@@ -93,6 +96,9 @@ type Server struct {
 	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
 	cons              jetstream.Consumer // the telemetry durable, read for its backlog
 	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
+	// platformComponentID is the server's own platform component, where the
+	// retention pass lands its figures (#1629); empty writes none.
+	platformComponentID string
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -104,7 +110,8 @@ func New(cfg Config, store Store) (*Server, error) {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
-		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics}}
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
+		platformComponentID: cfg.PlatformComponentID}
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
@@ -203,23 +210,7 @@ func (s *Server) subscribe() error {
 		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
 			return
 		}
-		pending, err := s.store.PendingNodeCommands(context.Background(), node)
-		s.request(requestCommandPull, err)
-		if err != nil {
-			return // read failed; drop, the node re-pulls next tick
-		}
-		reply := collection.CommandPullReply{}
-		for _, d := range pending {
-			reply.Commands = append(reply.Commands, collection.CommandDelivery{
-				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
-				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
-			})
-		}
-		b, err := json.Marshal(reply)
-		if err != nil {
-			return
-		}
-		_ = msg.Respond(b)
+		s.answerCommands(context.Background(), node, msg.Respond)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command queue: %w", err)
@@ -229,19 +220,7 @@ func (s *Server) subscribe() error {
 	// the store re-checks the placement before stamping.
 	cs, err := nc.Subscribe(collection.CommandStatusWildcard, func(msg *nats.Msg) {
 		node := collection.NodeFromSubject(msg.Subject)
-		var st collection.CommandStatus
-		if err := json.Unmarshal(msg.Data, &st); err != nil {
-			return
-		}
-		// A report a node had no standing to make (a command dispatched to a
-		// different node, or already stamped) is logged, never silently
-		// dropped: it is either a race or a misbehaving node, and both want a
-		// trail.
-		err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply)
-		s.request(requestCommandReport, err)
-		if err != nil {
-			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
-		}
+		s.recordCommandStatus(context.Background(), node, msg.Data)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command status: %w", err)
@@ -736,5 +715,53 @@ func (s *Server) calcPass(ctx context.Context) {
 	case d.Deferred > 0 || d.Depth > 0:
 		// A mark waiting out its backoff: every pass sees it, so it is not news.
 		slog.Debug("calc tick", attrs...)
+	}
+}
+
+// answerCommands answers a node's command pull with its rendered pending
+// commands (the read itself marks them dispatched). Every way the answer
+// fails to reach the node is logged at WARN with the node and the error
+// (#1630): the node re-pulls next tick, but a pull that keeps failing is a
+// fleet whose commands time out, and the operator needs to see why.
+func (s *Server) answerCommands(ctx context.Context, node string, respond func([]byte) error) {
+	pending, err := s.store.PendingNodeCommands(ctx, node)
+	s.request(requestCommandPull, err)
+	if err != nil {
+		slog.Warn("command pull could not read the queue", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	reply := collection.CommandPullReply{}
+	for _, d := range pending {
+		reply.Commands = append(reply.Commands, collection.CommandDelivery{
+			ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
+			EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
+			Disruptive: d.Disruptive, QuietSeconds: d.QuietSeconds, HoldSeconds: d.HoldSeconds, HoldEndpoints: d.HoldEndpoints,
+		})
+	}
+	b, err := json.Marshal(reply)
+	if err != nil {
+		slog.Warn("command pull reply could not be encoded", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	if err := respond(b); err != nil {
+		slog.Warn("command pull reply could not be sent", "facility", "command", "node", node, "error", err.Error())
+	}
+}
+
+// recordCommandStatus records a node's execution report. A report the server
+// cannot parse, or that the node had no standing to make (a command
+// dispatched to a different node, or already stamped), is logged at WARN,
+// never silently dropped: it is a race or a misbehaving node, and both want
+// a trail.
+func (s *Server) recordCommandStatus(ctx context.Context, node string, data []byte) {
+	var st collection.CommandStatus
+	if err := json.Unmarshal(data, &st); err != nil {
+		slog.Warn("command execution report could not be parsed", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	err := s.store.RecordCommandExecution(ctx, node, st.ID, st.Error, st.Reply)
+	s.request(requestCommandReport, err)
+	if err != nil {
+		slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
 	}
 }

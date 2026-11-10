@@ -1596,7 +1596,7 @@
             "type": "string"
           },
           "deadline": {
-            "description": "When its settle window closes; a command still issued past it is timed out by the next sweep",
+            "description": "When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep",
             "format": "date-time",
             "type": "string"
           },
@@ -1673,7 +1673,7 @@
             "description": "The invocation params"
           },
           "phase": {
-            "description": "Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status",
+            "description": "Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status",
             "enum": [
               "queued",
               "delivered",
@@ -1694,7 +1694,7 @@
             "type": "string"
           },
           "settle_mode": {
-            "description": "How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)",
+            "description": "How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)",
             "enum": [
               "reply",
               "observation",
@@ -1713,7 +1713,7 @@
             "type": "string"
           },
           "settled_by": {
-            "description": "What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence",
+            "description": "What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report",
             "enum": [
               "issue",
               "reply",
@@ -1808,6 +1808,15 @@
           "description": {
             "type": "string"
           },
+          "disruptive": {
+            "description": "The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target",
+            "type": "boolean"
+          },
+          "hold_seconds": {
+            "description": "A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive",
+            "format": "int64",
+            "type": "integer"
+          },
           "id": {
             "description": "The command type's uuid, the stable form of name",
             "type": "string"
@@ -1823,6 +1832,15 @@
           },
           "params_schema": {
             "description": "A JSON Schema fragment for the invocation params"
+          },
+          "power_outlet_param": {
+            "description": "Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type",
+            "type": "string"
+          },
+          "quiet_seconds": {
+            "description": "A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive",
+            "format": "int64",
+            "type": "integer"
           },
           "settle_window_seconds": {
             "description": "How long the device is given to actuate before a mismatch is a failed command",
@@ -1842,6 +1860,9 @@
           "id",
           "name",
           "settle_window_seconds",
+          "disruptive",
+          "quiet_seconds",
+          "hold_seconds",
           "official"
         ],
         "type": "object"
@@ -1954,6 +1975,63 @@
           "system_count",
           "name_generated",
           "label_generated"
+        ],
+        "type": "object"
+      },
+      "ComponentDependencyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ComponentDependencyBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "description": "Name of the dependent component, the one that goes down with the upstream",
+            "type": "string"
+          },
+          "component_id": {
+            "description": "The dependent component's uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When the edge was recorded",
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "description": "How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)",
+            "enum": [
+              "power",
+              "host",
+              "path"
+            ],
+            "type": "string"
+          },
+          "outlet": {
+            "description": "The upstream's outlet that feeds the component; set on a power edge only",
+            "type": "string"
+          },
+          "upstream": {
+            "description": "Name of the component it depends on",
+            "type": "string"
+          },
+          "upstream_id": {
+            "description": "The upstream component's uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "component_id",
+          "upstream",
+          "upstream_id",
+          "kind",
+          "created_at"
         ],
         "type": "object"
       },
@@ -2393,6 +2471,16 @@
             "description": "What the command does",
             "type": "string"
           },
+          "disruptive": {
+            "description": "The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again",
+            "type": "boolean"
+          },
+          "hold_seconds": {
+            "description": "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "label": {
             "description": "A human label",
             "type": "string"
@@ -2404,6 +2492,17 @@
           },
           "params_schema": {
             "description": "A JSON Schema fragment for the params"
+          },
+          "power_outlet_param": {
+            "description": "Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "quiet_seconds": {
+            "description": "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "settle_window_seconds": {
             "description": "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.",
@@ -2422,6 +2521,53 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "CreateComponentDependencyInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateComponentDependencyInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "kind": {
+            "description": "How it depends: power, host or path",
+            "enum": [
+              "power",
+              "host",
+              "path"
+            ],
+            "examples": [
+              "power"
+            ],
+            "type": "string"
+          },
+          "outlet": {
+            "description": "The upstream's outlet that feeds this component: required on a power edge, refused on any other",
+            "examples": [
+              "3"
+            ],
+            "maxLength": 64,
+            "type": "string"
+          },
+          "upstream": {
+            "description": "Name or uuid of the component this one depends on, or a dotted address",
+            "examples": [
+              "pdu-1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "upstream",
+          "kind"
         ],
         "type": "object"
       },
@@ -2702,6 +2848,10 @@
           "node": {
             "description": "Node placement, by name or id",
             "type": "string"
+          },
+          "out_of_band": {
+            "description": "Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open",
+            "type": "boolean"
           },
           "params": {
             "description": "Address/target settings (jsonb); an attach derives them from the inputs instead"
@@ -4947,6 +5097,10 @@
             "description": "The placed node's id; the stable form of node",
             "type": "string"
           },
+          "out_of_band": {
+            "description": "A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it",
+            "type": "boolean"
+          },
           "params": {
             "description": "The address/target settings (jsonb)"
           },
@@ -4962,7 +5116,37 @@
         "required": [
           "id",
           "name",
-          "transport"
+          "transport",
+          "out_of_band"
+        ],
+        "type": "object"
+      },
+      "EndpointObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/EndpointObservation.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "node": {
+            "$ref": "#/components/schemas/RequestTallySnapshot"
+          },
+          "sim_after": {
+            "$ref": "#/components/schemas/SimObservation"
+          },
+          "sim_before": {
+            "$ref": "#/components/schemas/SimObservation"
+          }
+        },
+        "required": [
+          "sim_before",
+          "node",
+          "sim_after"
         ],
         "type": "object"
       },
@@ -5104,6 +5288,24 @@
         },
         "required": [
           "tags"
+        ],
+        "type": "object"
+      },
+      "EpochHigh": {
+        "additionalProperties": false,
+        "properties": {
+          "e": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "m": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "e",
+          "m"
         ],
         "type": "object"
       },
@@ -6013,6 +6215,28 @@
         ],
         "type": "object"
       },
+      "GaugeReading": {
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "high_water": {
+            "items": {
+              "$ref": "#/components/schemas/EpochHigh"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "current"
+        ],
+        "type": "object"
+      },
       "GrantBody": {
         "additionalProperties": false,
         "properties": {
@@ -6831,6 +7055,56 @@
         "required": [
           "component",
           "commands"
+        ],
+        "type": "object"
+      },
+      "ListComponentDependenciesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListComponentDependenciesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "description": "The component, as addressed",
+            "type": "string"
+          },
+          "dependents": {
+            "description": "What depends on this component, ordered by kind then dependent name",
+            "items": {
+              "$ref": "#/components/schemas/ComponentDependencyBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "hidden": {
+            "description": "How many more edges this component has whose other end is outside the caller's component:read: counted, never named",
+            "format": "int64",
+            "type": "integer"
+          },
+          "upstreams": {
+            "description": "What this component depends on, ordered by kind then upstream name",
+            "items": {
+              "$ref": "#/components/schemas/ComponentDependencyBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "component",
+          "upstreams",
+          "dependents",
+          "hidden"
         ],
         "type": "object"
       },
@@ -9645,6 +9919,35 @@
         ],
         "type": "object"
       },
+      "PlatformAlarmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "raised_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rule": {
+            "description": "The name of the rule that raised the alarm; absent for a hand-raised alarm",
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "message",
+          "raised_at"
+        ],
+        "type": "object"
+      },
       "PlatformBindingInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -9716,6 +10019,35 @@
         ],
         "type": "object"
       },
+      "PlatformInstanceFigureBody": {
+        "additionalProperties": false,
+        "properties": {
+          "instance": {
+            "description": "The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key the figure is a sample of",
+            "type": "string"
+          },
+          "observed_at": {
+            "description": "When the sample was taken",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "instance",
+          "value",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "PlatformKeyBody": {
         "additionalProperties": false,
         "properties": {
@@ -9784,6 +10116,81 @@
           "name",
           "label",
           "enrolled"
+        ],
+        "type": "object"
+      },
+      "PlatformPanelBody": {
+        "additionalProperties": false,
+        "properties": {
+          "figures": {
+            "description": "The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure",
+            "items": {
+              "$ref": "#/components/schemas/PlatformInstanceFigureBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "keys": {
+            "description": "The panel's keys, in order, each with its catalog facts",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPanelKeyBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "The panel's title",
+            "type": "string"
+          },
+          "name": {
+            "description": "The panel's stable handle",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "keys",
+          "figures"
+        ],
+        "type": "object"
+      },
+      "PlatformPanelKeyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The metric type's catalog description, the row's tooltip",
+            "type": "string"
+          },
+          "label": {
+            "description": "The metric type's label, the row's title",
+            "type": "string"
+          },
+          "name": {
+            "description": "The metric type's name: the key the panel's figures carry",
+            "type": "string"
+          },
+          "of": {
+            "description": "The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first",
+            "format": "int64",
+            "type": "integer"
+          },
+          "unit": {
+            "description": "The metric type's unit, when it has one",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label"
         ],
         "type": "object"
       },
@@ -10075,9 +10482,29 @@
       "PlatformServerBody": {
         "additionalProperties": false,
         "properties": {
+          "alarms": {
+            "description": "The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAlarmBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "component": {
             "description": "The server's platform component uuid",
             "type": "string"
+          },
+          "groups": {
+            "description": "The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPanelBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "name": {
             "description": "The server's platform component name",
@@ -10100,7 +10527,9 @@
         "required": [
           "component",
           "name",
-          "verdict"
+          "verdict",
+          "groups",
+          "alarms"
         ],
         "type": "object"
       },
@@ -10186,7 +10615,7 @@
             "type": "string"
           },
           "servers": {
-            "description": "Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read",
+            "description": "Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read",
             "items": {
               "$ref": "#/components/schemas/PlatformServerBody"
             },
@@ -11405,7 +11834,7 @@
             "type": "string"
           },
           "gate_reasons": {
-            "description": "Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), oldest first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection",
+            "description": "Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection",
             "items": {
               "$ref": "#/components/schemas/ReachGateReasonBody"
             },
@@ -11493,17 +11922,21 @@
       "ReachGateReasonBody": {
         "additionalProperties": false,
         "properties": {
+          "component": {
+            "description": "An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind",
+            "type": "string"
+          },
           "kind": {
-            "description": "The reason's kind: unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict",
+            "description": "The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)",
             "type": "string"
           },
           "since": {
-            "description": "When the reason began: for unreachable, the first of the down verdicts that closed the gate",
+            "description": "When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's",
             "format": "date-time",
             "type": "string"
           },
           "source": {
-            "description": "The task whose observation added the reason (the reachability probe's task id)",
+            "description": "What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe",
             "type": "string"
           }
         },
@@ -12041,6 +12474,53 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "RequestTallySnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "batches_acknowledged": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "batches_dropped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "busy_workers": {
+            "$ref": "#/components/schemas/GaugeReading"
+          },
+          "node": {
+            "type": "string"
+          },
+          "queue_depth": {
+            "$ref": "#/components/schemas/GaugeReading"
+          },
+          "started": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "transports": {
+            "items": {
+              "$ref": "#/components/schemas/TallyCounters"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "node",
+          "at",
+          "started",
+          "batches_acknowledged",
+          "batches_dropped"
+        ],
         "type": "object"
       },
       "ResetPasswordInputBody": {
@@ -13742,6 +14222,40 @@
         ],
         "type": "object"
       },
+      "SimFaceOverlap": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "face": {
+            "type": "string"
+          },
+          "overlapped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "received": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "component_id",
+          "component",
+          "face",
+          "protocol",
+          "received",
+          "overlapped"
+        ],
+        "type": "object"
+      },
       "SimFleetOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -13859,6 +14373,61 @@
         ],
         "type": "object"
       },
+      "SimObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "devices": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "faces": {
+            "items": {
+              "$ref": "#/components/schemas/SimFaceOverlap"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "faces_overlapped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "impaired": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "node": {
+            "type": "string"
+          },
+          "protocols": {
+            "items": {
+              "$ref": "#/components/schemas/SimProtocolObservation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "started": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "at",
+          "started",
+          "devices",
+          "impaired",
+          "protocols"
+        ],
+        "type": "object"
+      },
       "SimOperationResult": {
         "additionalProperties": false,
         "properties": {
@@ -13969,6 +14538,103 @@
         },
         "required": [
           "profiles"
+        ],
+        "type": "object"
+      },
+      "SimProtocolObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "answered": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dropped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_flight": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_flight_high": {
+            "items": {
+              "$ref": "#/components/schemas/EpochHigh"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "latency": {
+            "items": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "open_connections": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "open_streams": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "overlapped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "received": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "refused": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "served": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "streams_opened": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unhit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unhit_sample": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "withheld": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol"
         ],
         "type": "object"
       },
@@ -15199,6 +15865,53 @@
         ],
         "type": "object"
       },
+      "TallyCounters": {
+        "additionalProperties": false,
+        "properties": {
+          "answered": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "connections": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_flight": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "refused": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "timed_out": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "transport": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "transport",
+          "connections",
+          "sent",
+          "in_flight",
+          "answered",
+          "refused",
+          "error",
+          "timed_out"
+        ],
+        "type": "object"
+      },
       "TaskBody": {
         "additionalProperties": false,
         "properties": {
@@ -16108,12 +16821,33 @@
             "description": "What the command does",
             "type": "string"
           },
+          "disruptive": {
+            "description": "Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row",
+            "type": "boolean"
+          },
+          "hold_seconds": {
+            "description": "A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "label": {
             "description": "A human label",
             "type": "string"
           },
           "params_schema": {
             "description": "A JSON Schema fragment (replaces wholesale)"
+          },
+          "power_outlet_param": {
+            "description": "The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "quiet_seconds": {
+            "description": "A disruptive type's quiet period in seconds",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
           },
           "settle_window_seconds": {
             "description": "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)",
@@ -16252,6 +16986,10 @@
           "node": {
             "description": "Reassign the node placement, by name or id",
             "type": "string"
+          },
+          "out_of_band": {
+            "description": "Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone",
+            "type": "boolean"
           },
           "params": {
             "description": "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
@@ -19108,7 +19846,7 @@
         "x-omniglass-permission": "command_type:read"
       },
       "patch": {
-        "description": "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+        "description": "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
         "operationId": "update-command-type",
         "parameters": [
           {
@@ -20170,6 +20908,176 @@
           "open_world": true
         },
         "x-omniglass-permission": "command:issue"
+      }
+    },
+    "/components/{name}/dependencies": {
+      "get": {
+        "description": "This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.",
+        "operationId": "list-component-dependencies",
+        "parameters": [
+          {
+            "description": "Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "codec-1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListComponentDependenciesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List what a component depends on and what depends on it",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:read"
+      },
+      "post": {
+        "description": "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).",
+        "operationId": "create-component-dependency",
+        "parameters": [
+          {
+            "description": "Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "codec-1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComponentDependencyInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentDependencyBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record that a component depends on another",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:update"
+      }
+    },
+    "/components/{name}/dependencies/{kind}/{upstream}": {
+      "delete": {
+        "description": "Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.",
+        "operationId": "delete-component-dependency",
+        "parameters": [
+          {
+            "description": "Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "codec-1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The edge's kind",
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "description": "The edge's kind",
+              "enum": [
+                "power",
+                "host",
+                "path"
+              ],
+              "examples": [
+                "power"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Name or uuid of the upstream component, or a dotted address",
+            "in": "path",
+            "name": "upstream",
+            "required": true,
+            "schema": {
+              "description": "Name or uuid of the upstream component, or a dotted address",
+              "examples": [
+                "pdu-1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a component's dependency on another",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:update"
       }
     },
     "/components/{name}/effective-secrets": {
@@ -22061,7 +22969,7 @@
     },
     "/drivers:preview": {
       "post": {
-        "description": "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A target host the node's probe reads unreachable is a 409 naming that reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+        "description": "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
         "operationId": "preview-driver",
         "requestBody": {
           "content": {
@@ -22299,7 +23207,7 @@
         "x-omniglass-permission": "endpoint:read"
       },
       "patch": {
-        "description": "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+        "description": "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "update-endpoint",
         "parameters": [
           {
@@ -22357,7 +23265,7 @@
     },
     "/endpoints/{endpoint}/polls/{poll}:run": {
       "post": {
-        "description": "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal or an unreachable verdict from the endpoint's probe, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+        "description": "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "run-endpoint-poll",
         "parameters": [
           {
@@ -25353,6 +26261,48 @@
         },
         "summary": "Add a simulated component",
         "x-omniglass-permission": "simulation:update"
+      }
+    },
+    "/nodes/{name}/simulation/observation": {
+      "get": {
+        "description": "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
+        "operationId": "get-node-simulation-observation",
+        "parameters": [
+          {
+            "description": "The node's unique name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The node's unique name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointObservation"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a node's endpoint observation",
+        "x-omniglass-permission": "simulation:read"
       }
     },
     "/nodes/{name}/simulation/systems": {
@@ -33165,7 +34115,7 @@
     },
     "/views/platform": {
       "get": {
-        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
+        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
         "operationId": "get-platform-view",
         "responses": {
           "200": {

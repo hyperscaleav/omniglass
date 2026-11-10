@@ -47,6 +47,10 @@ type sessionHooks struct {
 	// certificate hears a tls public key the endpoint trusted on first use
 	// (#1035), and republishes it while the server lacks it.
 	certificate func(taskID, endpoint, fingerprint string)
+	// gateMoved hears a disruptive delivery close its endpoints' gates
+	// (#1651), off the run loop: the dispatcher's next pass defers their
+	// probes and arms the hold backstop's wake.
+	gateMoved func()
 }
 
 // sessionConn is what a held connection depends on: the transport, the
@@ -536,6 +540,9 @@ func (h *heldSession) publishTo() (string, string) {
 type sessionManager struct {
 	dialers map[string]collection.SessionDialer
 	hooks   sessionHooks
+	// dials bounds how many of the node's sessions dial and handshake at
+	// once (#1636), shared by every session it starts; nil is unbounded.
+	dials collection.DialSlots
 	// mapsMu guards held, certPins, datagrams, datagramRefused and
 	// httpEndpoints (#1634): the run loop alone writes them, under the write
 	// lock, and the dispatcher's workers read them, under the read lock, while
@@ -593,6 +600,10 @@ type sessionManager struct {
 	streamResumes map[string]heldResume
 	// httpFetch sends a stream login's steps; nil is the real fetcher.
 	httpFetch collection.HTTPFetcher
+	// now is the node's clock for a disruption's quiet and hold (#1651):
+	// when a disruptive delivery adds disrupted, and what a held session's
+	// dial waits on. The wall clock unless a test sets it.
+	now func() time.Time
 }
 
 // heldResume is an endpoint's stream resume and the target it was learned
@@ -702,10 +713,36 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
-	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
+	m := &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
 		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
-		streamResumes: map[string]heldResume{}}
+		streamResumes: map[string]heldResume{}, now: time.Now}
+	// A new upstream reason is since the manager's clock, so a test that
+	// moves the clock moves it too.
+	m.gates.clock = func() time.Time { return m.now() }
+	return m
+}
+
+// settle publishes every endpoint whose upstream reason moved (#1652) and
+// wakes the dispatcher, which holds or releases their probes and polls: one
+// endpoint's gate moving can close or open every endpoint reached through it.
+func (m *sessionManager) settle() {
+	moved := m.gates.takeMoved()
+	for _, ep := range moved {
+		m.syncRejection(ep)
+	}
+	if len(moved) > 0 && m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// upstreamHeld is whether the endpoint is held by a path upstream (#1652):
+// its probes are not run.
+func (m *sessionManager) upstreamHeld(endpointID string) bool {
+	if m == nil {
+		return false
+	}
+	return m.gates.upstreamHeld(endpointID)
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -837,6 +874,7 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	if m.gates.record(endpointID, fingerprint, terr) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // refuseOver gates an endpoint for a terminal refusal met over a transport,
@@ -853,6 +891,7 @@ func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint strin
 	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // currentFingerprint is the fingerprint the endpoint is connected with now.
@@ -870,6 +909,7 @@ func (m *sessionManager) pass(endpointID string) {
 	}
 	m.gates.clear(endpointID)
 	m.syncRejection(endpointID)
+	m.settle()
 }
 
 // refusedAt is the refused reason that holds rung r for the endpoint, if any.
@@ -898,11 +938,71 @@ func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Tim
 	if m.gates.verdict(endpointID, taskID, up, at) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
+}
+
+// disrupt closes the gate of every endpoint a disruptive delivery holds
+// (#1651), before the command is sent: disrupted since now, naming the
+// command, with the delivery's quiet period and hold backstop. Each is
+// published, and the dispatcher is woken to defer their probes.
+func (m *sessionManager) disrupt(d collection.CommandDelivery) {
+	if m == nil || !d.Disruptive || len(d.HoldEndpoints) == 0 {
+		return
+	}
+	m.gates.disrupt(d.HoldEndpoints, d.CommandType, d.ID, m.now(),
+		time.Duration(d.QuietSeconds)*time.Second, time.Duration(d.HoldSeconds)*time.Second)
+	for _, ep := range d.HoldEndpoints {
+		m.syncRejection(ep)
+	}
+	slog.Info("disruptive command closed its endpoints' gates", "facility", "command", "command", d.ID,
+		"command_type", d.CommandType, "endpoints", d.HoldEndpoints, "quiet_seconds", d.QuietSeconds, "hold_seconds", d.HoldSeconds)
+	m.settle()
+	if m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// quietUntil is when the endpoint's quiet period ends; false when it is not
+// in one at now.
+func (m *sessionManager) quietUntil(endpointID string, now time.Time) (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.quietUntil(endpointID, now)
+}
+
+// expireHolds releases every disrupted endpoint whose hold backstop came
+// with no up verdict, publishes each, and returns them for the report to
+// count (hold-expiry-count).
+func (m *sessionManager) expireHolds(now time.Time) []string {
+	if m == nil {
+		return nil
+	}
+	var expired []string
+	for _, x := range m.gates.expire(now) {
+		m.syncRejection(x.endpoint)
+		slog.Warn("disrupted endpoint released at its hold backstop with no up verdict", "facility", "command",
+			"command", x.source, "endpoint", x.endpoint)
+		expired = append(expired, x.endpoint)
+	}
+	m.settle()
+	return expired
+}
+
+// nextHoldExpiry is the earliest hold backstop held, for the dispatcher's
+// wake.
+func (m *sessionManager) nextHoldExpiry() (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.nextExpiry()
 }
 
 // observe takes each endpoint's fingerprint and published rejection off the
 // worklist: a gate under another fingerprint lifts, one carried back from
-// before a restart is adopted.
+// before a restart is adopted. The path dependencies it carries (#1652) are
+// the gates' topology, taken before the endpoints that left are dropped, so an
+// adopted upstream reason is derived against them.
 func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	// The publishing task is chosen afresh from this worklist (a re-derived
 	// driver deletes old task ids, and a sample under one is an orphan).
@@ -925,7 +1025,9 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 			m.gates.place(t.EndpointID, p.Target)
 		}
 	}
+	m.gates.topology(topologyOf(tasks), m.now())
 	m.gates.retain(endpoints, taskIDs)
+	m.gates.route(tasks)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
 	// What the server reflects back is what is published: a gate the node
@@ -941,6 +1043,42 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	for id := range reflected {
 		m.syncRejection(id)
 	}
+	m.settle()
+}
+
+// topologyOf is the path dependencies a worklist carries (#1652): each
+// endpoint's component, its path upstreams, and whether it has a probe (a
+// task that is not a baked poll) to wait for once its upstream opens. Only a
+// dependent's task carries its component; an upstream's is read off the edge
+// that names it.
+func topologyOf(tasks []collection.TaskSpec) upstreamTopology {
+	t := upstreamTopology{componentOf: map[string]string{}, edges: map[string][]pathUpstream{}, probed: map[string]bool{}}
+	for _, task := range tasks {
+		ep := task.EndpointID
+		if ep == "" {
+			continue
+		}
+		if task.ComponentID != "" {
+			t.componentOf[ep] = task.ComponentID
+		}
+		if !driver.IsBaked(task.Spec) {
+			t.probed[ep] = true
+		}
+		if _, ok := t.edges[ep]; ok || len(task.PathUpstreams) == 0 {
+			continue
+		}
+		ups := make([]pathUpstream, len(task.PathUpstreams))
+		for i, pu := range task.PathUpstreams {
+			ups[i] = pathUpstream{component: pu.ComponentID, name: pu.ComponentName, endpoints: pu.EndpointIDs}
+			for _, u := range pu.EndpointIDs {
+				if _, ok := t.componentOf[u]; !ok {
+					t.componentOf[u] = pu.ComponentID
+				}
+			}
+		}
+		t.edges[ep] = ups
+	}
+	return t
 }
 
 // reconcile brings the held set to what the worklist asks for.
@@ -1096,10 +1234,17 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		rejected = gt.refusal()
 	}
 	h.sess = collection.StartSession(collection.SessionConfig{
+		// A disruptive command's quiet period (#1651) holds the dial: a
+		// recover after the device drops waits it out.
+		Quiet: func() time.Time {
+			until, _ := m.gates.quietUntil(id, m.now())
+			return until
+		},
 		Rejected: rejected,
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,
 		Dialer:   m.dialers[w.conn.transport],
+		Dials:    m.dials,
 		Inbound:  h.router,
 		Arm:      arm,
 		Auth:     w.auth,
@@ -1153,10 +1298,10 @@ func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
 
-// flushUnclaimed reports, once per tick, the inbound lines no listener
-// claimed: a self-log with the count and the last, and, when the spec's
-// policy is collection-failed, one collection-failed under the session's
-// listen task.
+// flushUnclaimed reports, once per housekeeping pass, the inbound lines no
+// listener claimed: a self-log with the count and the last, and, when the
+// spec's policy is collection-failed, one collection-failed under the
+// session's listen task.
 func (m *sessionManager) flushUnclaimed() {
 	if m == nil {
 		return
@@ -1173,7 +1318,7 @@ func (m *sessionManager) flushUnclaimed() {
 		}
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
-			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
+			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last flush, last: %q", n, last))
 		}
 	}
 }

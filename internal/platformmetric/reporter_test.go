@@ -129,3 +129,31 @@ func TestReporterRunsEachWindowUntilCancelled(t *testing.T) {
 		t.Fatalf("reported %d windows, want the loop to keep going past failed writes", n)
 	}
 }
+
+// TestAReporterWithNoComponentSamplesAndWritesNothing (#1671): a process with
+// no platform component still closes its windows, so its samplers run and its
+// recorder drains, and lands nothing.
+func TestAReporterWithNoComponentSamplesAndWritesNothing(t *testing.T) {
+	t.Parallel()
+	rec := platformmetric.NewRecorder(time.Now)
+	store := &fakeStore{}
+	sampled := 0
+	rp := platformmetric.NewReporter(rec, store, "", func(context.Context) time.Duration { return time.Minute }, nil,
+		func(_ context.Context, r *platformmetric.Recorder) {
+			sampled++
+			r.Gauge(writerclass.DBPoolMax, "", 4)
+		})
+	rec.Count(writerclass.HTTPRequestCount, "GET /x 2xx", 1)
+	if err := rp.Report(context.Background()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if sampled != 1 {
+		t.Errorf("samplers ran %d times, want once a window", sampled)
+	}
+	if w := store.writes(); len(w) != 0 {
+		t.Fatalf("writes = %+v, want none with no component", w)
+	}
+	if rows := rec.Flush("c"); len(rows) != 1 || rows[0].Value != 0 {
+		t.Errorf("recorder after the window = %+v, want it drained to the count's one zero", rows)
+	}
+}

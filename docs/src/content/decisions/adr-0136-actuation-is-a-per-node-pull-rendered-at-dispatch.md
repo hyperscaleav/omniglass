@@ -29,3 +29,4 @@ summary: "The command wire is a per-node pull (`og.v1.command.<node>`, request-r
   the execution arc (`dispatched_at`, `executed_at`, `exec_error`) lands beside the settlement
   arc rather than inside it because "the device was told" and "the device did" are different
   facts, and conflating them is how a wire ack gets mistaken for an outcome.
+- **Amended (#1637):** the pull stays the delivery guarantee, but a node is to be woken by a server push with a fallback pull rather than pulling on each heartbeat, and to run a command on a bounded command pool through its endpoint's lane, ahead of scheduled work (#1635, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).

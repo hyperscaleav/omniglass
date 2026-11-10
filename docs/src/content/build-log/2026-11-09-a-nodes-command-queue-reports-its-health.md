@@ -12,7 +12,7 @@ on the node's platform component. The wire writes one dispatch latency sample at
 take and one execution latency sample at its report, each in the stamp's transaction. A 15 s server
 timer reads the whole fleet's queues in one statement through the same candidate fragment the pull
 uses, and writes each node's pending count, oldest pending age (zero when idle) and stuck count every read,
-plus the window's redeliveries and expiries when nonzero, the redeliveries read 5 s behind so a take
+plus the window's redeliveries and expiries, zero for a quiet window, the redeliveries read 5 s behind so a take
 still committing is not missed. Expiry keys on the execution stamp rather than the
 recorded status, so a fire-and-forget command no node took counts as `undelivered`
 ([ADR-1626](/architecture/decisions/#adr-1626-command-queue-expiry-keys-on-the-execution-stamp-not-the-status)).

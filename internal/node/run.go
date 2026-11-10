@@ -28,6 +28,12 @@ const DefaultHeartbeat = 30 * time.Second
 // short heartbeat does not mean a worklist rebuild as often.
 const DefaultWorklistEvery = 30 * time.Second
 
+// DefaultSessionDials is how many held sessions a node lets make their first
+// dial and handshake at once when it is not told otherwise (#1636): enough that a restart with
+// hundreds of held endpoints comes up in seconds, few enough that it does not
+// open them all in one burst against the network and the devices.
+const DefaultSessionDials = 16
+
 // worklistTimeout bounds a single worklist request-reply; a var so a test can
 // shorten it.
 var worklistTimeout = 5 * time.Second
@@ -57,9 +63,10 @@ type Config struct {
 	// dispatcher's timer, never the heartbeat (#1634). Zero is
 	// DefaultProbeEvery.
 	ProbeEvery time.Duration
-	// PollWorkers is how many tasks the node runs at once (#1634), one at a
-	// time per endpoint. Zero is DefaultPollWorkers.
-	PollWorkers int
+	// LaneWorkers is how many endpoint lanes run at once (#1634, #1249):
+	// each runs one request to its endpoint at a time, an operator's ahead
+	// of the scheduled. Zero is DefaultLaneWorkers.
+	LaneWorkers int
 	// WorklistEvery is how often the node pulls its worklist, on a goroutine
 	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
 	// the heartbeat's interval; `node run` defaults it to DefaultWorklistEvery.
@@ -68,26 +75,31 @@ type Config struct {
 	// overriding the platform's the worklist carries: a test's, or a lab's.
 	// Zero takes the worklist's.
 	ReportEvery time.Duration
+	// SessionDials bounds how many held sessions make their first dial and
+	// handshake at once (#1636); a session waiting for a slot reads
+	// establishing, and a redial takes none. Zero takes
+	// DefaultSessionDials.
+	SessionDials int
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests
 	// and one-shot invocations.
 	Once bool
 	// Dialer is the tcp probe primitive the node runs its tcp tasks with. Nil
-	// defaults to the real collection.NewTCPDialer(); tests inject a fake.
+	// defaults to the real collection.NewTalliedTCPDialer(Tally); tests inject a fake.
 	Dialer collection.TCPDialer
 	// Pinger is the icmp probe primitive the node runs its icmp tasks with. Nil
 	// defaults to the real collection.NewICMPPinger(); tests inject a fake.
 	Pinger collection.Pinger
 	// HTTP is the layer-7 http probe primitive (#812). Nil defaults to the
-	// real collection.NewHTTPProber(); tests inject a fake.
+	// real collection.NewTalliedHTTPProber(Tally); tests inject a fake.
 	HTTP collection.HTTPProber
 	// HTTPFetch sends a driver's http and https requests (#902). Nil
-	// defaults to the real collection.NewHTTPFetcher().
+	// defaults to the real collection.NewTalliedHTTPFetcher(Tally).
 	HTTPFetch collection.HTTPFetcher
 	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
 	// real collection.NewSSHProber(); tests inject a fake.
 	SSH collection.SSHProber
 	// SNMP is the driver-poll v2c GET client (#814). Nil defaults to the
-	// real collection.NewSNMPGetter(); tests inject a fake.
+	// real collection.NewTalliedSNMPGetter(Tally); tests inject a fake.
 	SNMP collection.SNMPGetter
 	// Line is the driver-poll stateless line-protocol client (#814). Nil
 	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
@@ -115,6 +127,11 @@ type Config struct {
 	// wss. Nil defaults to the real collection.NewWebSocketDialer(); tests
 	// shorten its keepalive.
 	WebSocketSession collection.SessionDialer
+	// Tally counts what the node sends (#1639), read by a scale lab on the
+	// node's tally subject. Nil defaults to a fresh tally; the transports the
+	// node builds itself count into it, and an injected transport counts
+	// only if it was built with the same tally.
+	Tally *collection.RequestTally
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -158,11 +175,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: jetstream: %w", err)
 	}
+	tally := cfg.Tally
+	if tally == nil {
+		tally = collection.NewRequestTally()
+	}
 	spool := newTelemetrySpool(collection.TelemetrySubject(cfg.Name), cfg.Name, jetStreamPublish(js))
+	spool.tally = tally
 
 	dialer := cfg.Dialer
 	if dialer == nil {
-		dialer = collection.NewTCPDialer()
+		dialer = collection.NewTalliedTCPDialer(tally)
 	}
 	pinger := cfg.Pinger
 	if pinger == nil {
@@ -170,7 +192,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	httpProber := cfg.HTTP
 	if httpProber == nil {
-		httpProber = collection.NewHTTPProber()
+		httpProber = collection.NewTalliedHTTPProber(tally)
 	}
 	sshProber := cfg.SSH
 	if sshProber == nil {
@@ -178,7 +200,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	snmpGetter := cfg.SNMP
 	if snmpGetter == nil {
-		snmpGetter = collection.NewSNMPGetter()
+		snmpGetter = collection.NewTalliedSNMPGetter(tally)
 	}
 	lineExchanger := cfg.Line
 	if lineExchanger == nil {
@@ -194,7 +216,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	httpFetcher := cfg.HTTPFetch
 	if httpFetcher == nil {
-		httpFetcher = collection.NewHTTPFetcher()
+		httpFetcher = collection.NewTalliedHTTPFetcher(tally)
 	}
 	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber, TLS: tlsProber, HTTPFetch: httpFetcher}
 
@@ -253,6 +275,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if err := publishBatch(spool, cfg.Name, taskID, sessionSamples(tr)); err != nil {
 				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
+			if d != nil {
+				d.kick()
+			}
+		},
+		gateMoved: func() {
+			// A disruptive delivery closed its endpoints' gates (#1651): a
+			// pass defers their probes and re-arms the timer for the hold
+			// backstop.
 			if d != nil {
 				d.kick()
 			}
@@ -329,6 +359,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		},
 	})
 	sessions.httpFetch = httpFetcher
+	sessions.dials = collection.NewDialSlots(sessionDials(cfg.SessionDials))
 	defer sessions.closeAll()
 
 	heartbeat := cfg.HeartbeatEvery
@@ -352,7 +383,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
-	executedCommands := map[int64]commandOutcome{}
+	// It also carries whether the last pull failed, so a failing pull is logged
+	// on the transition only (#1630).
+	executedCommands := newCommandState()
 	// report accumulates each endpoint's collection telemetry over a report
 	// window (#1369), published when the window is due.
 	report := newCollectionReport(cfg.ReportEvery, time.Now())
@@ -370,7 +403,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	d = newDispatcher(dispatchConfig{workers: cfg.PollWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
+	d = newDispatcher(dispatchConfig{workers: cfg.LaneWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})
 	coll.every, coll.wake = d.interval, d.kick
 	// Shutdown waits for the runs in flight before the sessions close
@@ -402,14 +435,21 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return wl, nil
 	}
 
-	// The server's on-demand runs (#1163): a preview runs on its request's
-	// goroutine, a run now waits for the loop below, which owns the sessions.
-	runJobs := make(chan runJob, 1)
-	runSub, err := subscribeRuns(ctx, nc, cfg.Name, runner, sessions.gates, runJobs)
+	// The server's on-demand runs (#1163) are operator work on the endpoint
+	// lanes (#1249): a run now on its endpoint's, a preview on the lane of
+	// the endpoint it resolves to (off-lane when none), each answered from
+	// the worker that ran it.
+	runSub, err := subscribeRuns(ctx, nc, runRoute{out: spool, node: cfg.Name, runner: runner,
+		sessions: sessions, sched: sched, report: report, pool: d.pool})
 	if err != nil {
 		return wl, fmt.Errorf("node: subscribe runs: %w", err)
 	}
 	defer func() { _ = runSub.Unsubscribe() }()
+	tallySub, err := subscribeTally(nc, cfg.Name, tally)
+	if err != nil {
+		return wl, fmt.Errorf("node: subscribe tally: %w", err)
+	}
+	defer func() { _ = tallySub.Unsubscribe() }()
 
 	// The worklist is pulled on its own goroutine and interval (#1577); the
 	// loop takes the latest one pulled and runs the one it has until then.
@@ -430,13 +470,20 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	var commands sync.WaitGroup
 	var commandsBusy atomic.Bool
 	defer commands.Wait()
-	// A run now waits for its endpoint's lane, ahead of the scheduled tasks
-	// queued there, and answers from the worker that ran it.
-	var runNows sync.WaitGroup
-	defer runNows.Wait()
 
+	// The run loop (#1636): sessions reconcile the moment a worklist lands
+	// and on their own safety-net timer, the dispatcher takes the worklist
+	// at once and wakes at its earliest due (#1634), the heartbeat carries
+	// only its own work, and session housekeeping runs on a timer at the
+	// report window. Every handler runs on the loop's goroutine, the
+	// session maps' one writer.
 	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
+	reconciler := time.NewTicker(heartbeat)
+	defer reconciler.Stop()
+	keepEvery := housekeepEvery(heartbeat, report.every)
+	housekeeper := time.NewTicker(keepEvery)
+	defer housekeeper.Stop()
 	// due wakes the loop at the dispatcher's earliest due (#1634); with
 	// nothing booked it waits a heartbeat, and a pass ends early whenever a
 	// run ends or a gate moves (d.wake).
@@ -450,39 +497,24 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		due.Reset(wait)
 	}
 	arm()
-	for {
-		select {
-		case <-ctx.Done():
-			// Ship what the spool still holds, its pending groups flushed
-			// first, before the connection closes, within a bound: the spool
-			// is memory, so a batch left in it at exit is gone.
-			dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
-			if err := spool.drain(dctx); err != nil {
-				logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
-			}
-			cancel()
-			_ = nc.Flush()
-			return wl, nil
-		case <-due.C:
-			d.pass(ctx, time.Now())
-		case <-d.wake:
-			d.pass(ctx, time.Now())
-		case job := <-runJobs:
-			if time.Now().Before(job.deadline) {
-				runNows.Go(func() {
-					d.pool.do(laneKey(job.task), laneOperator, func() {
-						job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
-					})
-				})
-			}
-		case next := <-worklists:
-			// Sessions and the dispatcher take the new worklist at once: a
-			// new task runs now, one gone stops, the rest keep their dues.
-			wl = next
-			sessions.reconcile(wl.Tasks)
+	loop := &runLoop{
+		worklists: worklists,
+		due:       due.C,
+		wake:      d.wake,
+		heartbeat: ticker.C,
+		reconcile: reconciler.C,
+		housekeep: housekeeper.C,
+		sessions:  sessions,
+		onWorklist: func(wl collection.WorklistReply) {
+			// The loop has reconciled the sessions; the dispatcher takes the
+			// new worklist at once: a new task runs now, one gone stops, the
+			// rest keep their dues.
+			self.worklist(len(wl.Tasks), time.Now())
 			d.sync(wl, time.Now())
 			d.pass(ctx, time.Now())
-		case <-ticker.C:
+		},
+		onDue: func() { d.pass(ctx, time.Now()) },
+		onHeartbeat: func(wl collection.WorklistReply) {
 			_ = publishHeartbeat(nc, cfg.Name)
 			// Ship what the spool held since the last tick, so batches land
 			// in the order they were collected (#454).
@@ -496,12 +528,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				coll.forgetTransitions()
 				sched.forgetOccurrences()
 			}
-			// Hold, recycle, or tear down sessions to match the latest
-			// worklist pulled; a failed pull left the last good one in place.
-			sessions.reconcile(wl.Tasks)
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
 				self.setEvery(wl.ReportEvery())
+				if every := housekeepEvery(heartbeat, report.every); every != keepEvery {
+					keepEvery = every
+					housekeeper.Reset(every)
+				}
 			}
 			// Pull and actuate the pending command queue (#815).
 			if commandsBusy.CompareAndSwap(false, true) {
@@ -510,10 +543,18 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands, self)
 				})
 			}
-			// Report the inbound lines no listener claimed this tick.
+			// The dispatcher's account of the heartbeat window just ended
+			// (#1634) is said in the log when it passed a due over, and sent as
+			// the node's account of itself (#1625) beside the self-logs.
+			w := d.takeWindow()
+			logDispatchWindow(logger, w)
+			publishSelf(spool, cfg.Name, sink, self.account(w, spool, sessions))
+		},
+		onHousekeep: func(wl collection.WorklistReply) {
+			// Report the inbound lines no listener claimed since the last pass.
 			sessions.flushUnclaimed()
-			// Count this tick's pushes into the collection report, and
-			// publish the report when its window is due (#1369). A publish
+			// Count the pushes since the last pass into the collection report,
+			// and publish the report when its window is due (#1369). A publish
 			// failure is non-fatal: the spool holds the batch and retries it.
 			sessions.reportPushes(report)
 			if now := time.Now(); report.due(now) {
@@ -521,31 +562,52 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 					_ = publishBatch(spool, cfg.Name, row.task, row.samples)
 				}
 			}
-			// The dispatcher's account of the heartbeat window just ended
-			// (#1634) is said in the log when it passed a due over, and sent as
-			// the node's account of itself (#1625) beside the self-logs.
-			w := d.takeWindow()
-			logDispatchWindow(logger, w)
-			publishSelf(spool, cfg.Name, sink, self.account(w, spool, sessions))
-		}
-		arm()
+			// Ship the self-logs captured since the last pass; the node's
+			// account of itself stays on the heartbeat window (#1625).
+			publishSelf(spool, cfg.Name, sink, nil)
+		},
+		settle: arm,
 	}
+	wl = loop.run(ctx, wl)
+
+	// Ship what the spool still holds, its pending groups flushed first,
+	// before the connection closes, within a bound: the spool is memory, so a
+	// batch left in it at exit is gone.
+	dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+	defer cancel()
+	if err := spool.drain(dctx); err != nil {
+		logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
+	}
+	_ = nc.Flush()
+	return wl, nil
+}
+
+// sessionDials is the node's session-dials bound: the configured one, or
+// DefaultSessionDials when none is set.
+func sessionDials(n int) int {
+	if n <= 0 {
+		return DefaultSessionDials
+	}
+	return n
 }
 
 // logDispatchWindow self-logs the dispatcher's account of the heartbeat
 // window just ended (#1634): the longest pass, the dues that met their run
 // still in flight, the dues passed over, the latest dispatch, and the most
-// workers busy and dispatches waiting at once. Said only for a window that
-// passed a due over, so a node keeping its schedule logs nothing.
+// workers busy and dispatches waiting at once, and the operator work offered
+// to the lanes against the offers refused at the operator queue's cap
+// (#1249). Said only for a window that passed a due over or refused
+// operator work, so a node keeping its schedule logs nothing.
 func logDispatchWindow(logger *slog.Logger, w dispatchWindow) {
-	if w.overruns == 0 && w.skips == 0 {
+	if w.overruns == 0 && w.skips == 0 && w.operatorRefusals == 0 {
 		return
 	}
 	logger.Warn("dispatch window", "facility", "collection",
 		"passes", w.passes, "tick-duration-ms", w.passMax.Milliseconds(),
 		"tick-overrun-count", w.overruns, "schedule-skip-count", w.skips,
 		"dispatch-late-ms", w.lateMax.Milliseconds(),
-		"worker-busy-count", w.busyMax, "dispatch-queue-depth", w.queueMax)
+		"worker-busy-count", w.busyMax, "dispatch-queue-depth", w.queueMax,
+		"operator-offer-count", w.operatorOffers, "operator-refused-count", w.operatorRefusals)
 }
 
 // reconnectWait and reconnectJitter space the node's reconnect attempts

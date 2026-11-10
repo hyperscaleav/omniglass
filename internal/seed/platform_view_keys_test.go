@@ -73,6 +73,59 @@ func TestPlatformWindowKeysAreTheNonzeroCounts(t *testing.T) {
 	}
 }
 
+// TestPlatformServerGroupKeysAreSeeded proves the Platform health server
+// panels (#1645) name only metric types the boot seed ships: each panel is a
+// group the view returns per server, with a tooltip read off the catalog, so
+// a key the seed does not carry would be a row with no description and no
+// figure ever. Every group has a name, a label and a key; a key appears in
+// one group only; a pair's denominator (Of) is a seeded key of the same
+// group; and only a split key is ranked.
+func TestPlatformServerGroupKeysAreSeeded(t *testing.T) {
+	var doc metricTypesDoc
+	if err := yaml.Unmarshal(metricTypesYAML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	seeded := map[string]bool{}
+	for _, m := range doc.MetricTypes {
+		seeded[m.Name] = true
+	}
+	if len(storage.PlatformServerGroups) == 0 {
+		t.Fatal("the platform view declares no server groups")
+	}
+	seen := map[string]string{}
+	for _, g := range storage.PlatformServerGroups {
+		if g.Name == "" || g.Label == "" || len(g.Keys) == 0 {
+			t.Errorf("server group %+v needs a name, a label and at least one key", g)
+		}
+		inGroup := map[string]bool{}
+		for _, k := range g.Keys {
+			inGroup[k.Name] = true
+		}
+		for _, k := range g.Keys {
+			if !seeded[k.Name] {
+				t.Errorf("server group %s names %s, which metric_types.yaml does not seed", g.Name, k.Name)
+			}
+			if prev, dup := seen[k.Name]; dup {
+				t.Errorf("%s appears in server group %s and again in %s", k.Name, prev, g.Name)
+			}
+			seen[k.Name] = g.Name
+			if k.Of != "" && !inGroup[k.Of] {
+				t.Errorf("%s in server group %s is read against %s, which the group does not carry", k.Name, g.Name, k.Of)
+			}
+			if k.Rank < 0 {
+				t.Errorf("%s in server group %s has a negative rank %d", k.Name, g.Name, k.Rank)
+			}
+		}
+	}
+	for _, g := range storage.PlatformViewGroups {
+		for _, key := range g.Keys {
+			if prev, dup := seen[key]; dup {
+				t.Errorf("%s is a node column and also in server group %s", key, prev)
+			}
+		}
+	}
+}
+
 // TestPlatformPipelineHopsAreSeeded proves the pipeline's hop list (#1646) is
 // one the page can draw and the catalog can teach: every key of every hop is a
 // seeded metric type, every hop id is one of #1641's hop names and appears

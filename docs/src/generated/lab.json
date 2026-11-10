@@ -141,7 +141,7 @@
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
-      "description": "From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.",
+      "description": "From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
       "setup": []
     },
     {

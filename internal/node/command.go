@@ -22,7 +22,8 @@ import (
 // touching the device again.
 
 // commandMemoryTTL bounds how long a command's remembered outcome is kept. The
-// server's redelivery window is deliveryTTL (10 minutes, internal/storage); once
+// server's delivery window is deliveryTTL (storage.CommandDeliveryWindow, 10
+// minutes); once
 // a command can no longer be redelivered its remembered outcome is dead weight,
 // so the map is pruned past a margin over that window rather than growing for the
 // life of the run.
@@ -46,51 +47,75 @@ func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
 	}
 }
 
+// commandState is what the command loop carries from one tick to the next:
+// each command's remembered outcome (the idempotence a redelivery relies on),
+// and whether the last pull failed, so a pull that keeps failing is logged on
+// the transition, not on every tick.
+type commandState struct {
+	executed    map[int64]commandOutcome
+	pullFailing bool
+}
+
+func newCommandState() *commandState {
+	return &commandState{executed: map[int64]commandOutcome{}}
+}
+
 // runCommands runs one pull-execute-report cycle. A pull failure is counted
-// on the node's report (#1626) and otherwise survived: the next tick re-pulls,
-// the server redelivers. A report publish failure is also survivable, since
-// the redelivered command finds its outcome remembered. Each command waits
-// for its endpoint's lane on pool, ahead of the scheduled tasks queued there
-// (#1634), so it never talks to a device a poll is talking to; a nil pool
-// runs it at once.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, pool *lanePool, executed map[int64]commandOutcome, self *nodeReport) {
+// on the node's report (#1626), and logged at WARN on the transition into
+// failing and at INFO on the first pull that succeeds after (#1630), never on
+// every tick: the next tick re-pulls and the server redelivers, but a node
+// that cannot reach its queue leaves every command it carries to time out,
+// and its log must say why. A pull reply it cannot parse is counted as a
+// failed pull and logged at WARN every time, as is a report it cannot encode
+// or publish; a lost report is survivable, since the redelivered command
+// finds its outcome remembered. Each command waits for its endpoint's lane on
+// pool, ahead of the scheduled tasks queued there (#1634), so it never talks
+// to a device a poll is talking to; a nil pool runs it at once.
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, pool *lanePool, st *commandState, self *nodeReport) {
 	now := time.Now()
-	pruneCommandMemory(executed, now)
+	pruneCommandMemory(st.executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
 	if err != nil {
 		self.commandPullFailed()
+		if !st.pullFailing {
+			slog.Warn("command pull failed", "facility", "command", "node", name, "error", err.Error())
+		}
+		st.pullFailing = true
 		return
+	}
+	if st.pullFailing {
+		slog.Info("command pull recovered", "facility", "command", "node", name)
+		st.pullFailing = false
 	}
 	var reply collection.CommandPullReply
 	if err := json.Unmarshal(msg.Data, &reply); err != nil {
 		self.commandPullFailed()
+		slog.Warn("command pull reply could not be parsed", "facility", "command", "node", name, "error", err.Error())
 		return
 	}
 	for _, d := range reply.Commands {
 		if commandWaits(d, sessions) {
 			continue
 		}
-		o, done := executed[d.ID]
+		o, done := st.executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
-			actuate := func() { reply, outcome = executeDelivery(ctx, runner, d, sessions) }
-			if pool != nil {
-				pool.do(commandLane(d), laneOperator, actuate)
-			} else {
-				actuate()
-			}
-			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
+			reply, outcome = deliverOnLane(ctx, runner, d, sessions, pool)
+			st.executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
 			} else {
 				slog.Warn("command failed", "facility", "command", "command", d.ID, "type", d.CommandType, "error", outcome)
 			}
 		}
-		st, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome, Reply: reply})
+		report, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome, Reply: reply})
 		if err != nil {
+			slog.Warn("command report could not be encoded", "facility", "command", "node", name, "command", d.ID, "error", err.Error())
 			continue
 		}
-		_ = nc.Publish(collection.CommandStatusSubject(name), st)
+		if err := nc.Publish(collection.CommandStatusSubject(name), report); err != nil {
+			slog.Warn("command report could not be published", "facility", "command", "node", name, "command", d.ID, "error", err.Error())
+		}
 	}
 }
 
@@ -100,6 +125,20 @@ func commandLane(d collection.CommandDelivery) string {
 		return d.EndpointID
 	}
 	return "command:" + strconv.FormatInt(d.ID, 10)
+}
+
+// deliverOnLane actuates one delivery on its endpoint's lane (#1249), as
+// operator work ahead of the scheduled tasks queued there and never beside
+// another request to the endpoint, and waits for it. With no pool it
+// actuates directly.
+func deliverOnLane(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager, pool *lanePool) (reply, outcome string) {
+	actuate := func() { reply, outcome = executeDelivery(ctx, runner, d, sessions) }
+	if pool == nil {
+		actuate()
+		return reply, outcome
+	}
+	pool.do(commandLane(d), laneOperator, actuate)
+	return reply, outcome
 }
 
 // commandWaits reports a command that waits a tick: an http command whose
@@ -120,15 +159,21 @@ func commandWaits(d collection.CommandDelivery, sessions *sessionManager) bool {
 // server from the reply (when the binding settles from the response) or from
 // what is observed next.
 func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
-	if gt, gated := sessions.refusedAt(d.EndpointID, rungResponsive); gated {
-		// A gated endpoint (#1056 ruling): the command fails fast with the
-		// refusal on every path, never a dial under the refused fingerprint.
-		return "", "node: the endpoint is gated: " + gt.refusal().Error()
+	if c, closed := sessions.consult(d.EndpointID, rungResponsive, true); closed {
+		// A closed gate (#1056 ruling, #1650, #1651) fails the command fast
+		// with its most causal reason on every path, never a dial the gate
+		// says will not land. Asked here, as the endpoint's lane takes the
+		// command, so a command queued behind a reboot reads the reboot.
+		return "", commandRefusal(c)
 	}
-	if r, held := sessions.holding(d.EndpointID); held {
-		// An unreachable endpoint (#1650) answers at once with the reason,
-		// never a dial the probe already says will not land.
-		return "", "node: the endpoint is " + r.text + ", so the command was not sent"
+	if d.Disruptive {
+		// A disruptive command (#1651) closes the gate of every endpoint of
+		// its component on this node before it goes out, so nothing the
+		// dispatcher starts meanwhile reads the device going down as a
+		// failure. A send that fails leaves the gates closed: the device may
+		// still have acted, and each reopens on its first up verdict after
+		// the quiet period, or at the hold backstop.
+		sessions.disrupt(d)
 	}
 	switch {
 	case driver.IsHTTP(d.Transport):

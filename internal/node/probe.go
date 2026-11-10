@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +54,9 @@ type collector struct {
 	// every is a task's interval, the cap on its retry backoff: the
 	// dispatcher's, which fills in an interval a poll does not declare.
 	every func(collection.TaskSpec) time.Duration
+	// pings shares the informational ping of a host among its probes in one
+	// probe slot (#1249).
+	pings pingShare
 
 	memMu     sync.Mutex
 	verdicts  map[string]string
@@ -169,8 +171,12 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) error {
 	// The ladder's informational ping runs beside the probe, bounded, so
 	// gear that drops ICMP costs the run nothing extra.
+	// began is when the probe read the device: its verdict is judged at
+	// it, so an up from a probe in flight across a disruptive delivery
+	// cannot release the disruption (#1651).
+	began := c.clock()
 	pinged := make(chan []collection.Sample, 1)
-	go func() { pinged <- pingInformational(ctx, c.runner, task, nil) }()
+	go func() { pinged <- c.sharedPing(ctx, task) }()
 	dps, err := collectProbe(ctx, c.runner, task, c.sessions)
 	pings := <-pinged // joined here, before any path leaves
 	if err != nil {
@@ -191,7 +197,7 @@ func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) erro
 	// that could not be attempted left above and never reaches here, and a
 	// refusal's own down reading is no verdict (probeVerdict).
 	if up, ok := probeVerdict(dps); ok {
-		c.sessions.verdict(task.EndpointID, task.ID, up, c.clock())
+		c.sessions.verdict(task.EndpointID, task.ID, up, began)
 		c.wake()
 	}
 	// Compute and, on a transition only, append the endpoint reachability
@@ -581,16 +587,9 @@ const informationalPingTimeout = 500 * time.Millisecond
 // the verdict is judged, so a component that blocks ping never reads down
 // for it; a node that cannot ping lands nothing.
 func pingInformational(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, dps []collection.Sample) []collection.Sample {
-	if task.Ladder == nil || !task.Ladder.Ping || task.Transport == "icmp" || runner.Ping == nil {
+	host, ok := pingHost(runner, task)
+	if !ok {
 		return dps
-	}
-	t, err := parseTCPTask(task)
-	if err != nil {
-		return dps
-	}
-	host, _, err := net.SplitHostPort(t.Target)
-	if err != nil {
-		host = t.Target
 	}
 	pings, err := runner.CollectICMP(ctx, collection.ICMPTask{Target: host, Timeout: informationalPingTimeout})
 	if err != nil {

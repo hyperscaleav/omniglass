@@ -255,6 +255,7 @@ func newReasonLoop(t *testing.T, runner *collection.Runner) *reasonLoop {
 func (l *reasonLoop) dispatcher() *dispatcher {
 	if l.d == nil {
 		clock := func() time.Time { return l.now }
+		l.sessions.now = clock
 		l.coll = newCollector(l.spool, "edge", l.runner, l.sessions, l.sched, l.report)
 		l.coll.clock = clock
 		l.d = newDispatcher(dispatchConfig{workers: 4, heartbeat: time.Second, probeEvery: l.probeEvery,
@@ -522,40 +523,46 @@ func TestARunNowOnAnUnreachableEndpointAnswersWithTheReason(t *testing.T) {
 }
 
 // A run now on an unreachable endpoint is answered as it arrives, not queued
-// behind the run loop: a tick running long (a probe timing out against the
-// gone device) would otherwise outlast the caller's budget, and the caller
-// would read a timeout where the gate had its reason ready. A run now on an
-// open endpoint is queued as before.
-func TestARunNowOnAnUnreachableEndpointIsAnsweredBeforeTheRunLoop(t *testing.T) {
+// behind its endpoint's lane: a request running long there (a probe timing
+// out against the gone device) would otherwise outlast the caller's budget,
+// and the caller would read a timeout where the gate had its reason ready. A
+// run now on an open endpoint waits for its lane as before.
+func TestARunNowOnAnUnreachableEndpointIsAnsweredBeforeItsLane(t *testing.T) {
 	t.Parallel()
-	m := newSessionManager(nil, sessionHooks{})
-	m.reconcile([]collection.TaskSpec{reasonPollTask()})
-	jobs := make(chan runJob, 1)
-	var replies []collection.RunReply
-	respond := func(r collection.RunReply) { replies = append(replies, r) }
+	getter := &countingGetter{reply: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86"}}
+	rig := newLaneRig(t, &collection.Runner{SNMP: getter}, reasonPollTask())
+	release := blockLane(t, rig.d.pool, "ep-1")
+	got := &replies{}
 	req := collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}}
 
-	takeRun(t.Context(), nil, m.gates, jobs, req, respond)
-	if len(replies) != 0 || len(jobs) != 1 {
-		t.Fatalf("an open endpoint's run now: replies %+v, queued %d; want queued, unanswered", replies, len(jobs))
+	takeRun(t.Context(), rig.route(), req, got.respond)
+	if n := len(got.all()); n != 0 {
+		t.Fatalf("an open endpoint's run now answered %d times behind a busy lane; want it waiting", n)
 	}
-	<-jobs
 
-	m.gates.verdict("ep-1", "t-probe", false, gateT0)
-	m.gates.verdict("ep-1", "t-probe", false, gateT0.Add(time.Second))
-	takeRun(t.Context(), nil, m.gates, jobs, req, respond)
-	if len(jobs) != 0 {
-		t.Fatal("a run now on an unreachable endpoint was queued to the run loop")
+	rig.l.sessions.gates.verdict("ep-1", "t-probe", false, gateT0)
+	rig.l.sessions.gates.verdict("ep-1", "t-probe", false, gateT0.Add(time.Second))
+	takeRun(t.Context(), rig.route(), req, got.respond)
+	all := got.all()
+	if len(all) != 1 || !all[0].Gated || all[0].GateReason != string(reasonUnreachable) ||
+		!strings.Contains(all[0].Error, "unreachable since 2026-11-09T14:03:00Z") {
+		t.Fatalf("replies = %+v, want one gated by unreachable, answered while the lane is busy", all)
 	}
-	if len(replies) != 1 || !replies[0].Gated || replies[0].GateReason != string(reasonUnreachable) ||
-		!strings.Contains(replies[0].Error, "unreachable since 2026-11-09T14:03:00Z") {
-		t.Fatalf("replies = %+v, want one gated by unreachable", replies)
+	release()
+	waitFor(t, func() bool { return len(got.all()) == 2 }, "the queued run now to answer")
+	if last := got.all()[1]; !last.Gated || last.GateReason != string(reasonUnreachable) {
+		t.Fatalf("the queued run now answered %+v, want the gate that closed while it waited", last)
+	}
+	if getter.count() != 0 {
+		t.Fatal("a run now on an unreachable endpoint fetched")
 	}
 }
 
 // A preview carries no endpoint: it answers Gated when its target's host is
-// unreachable on this node, and runs when only a refusal holds (a preview
-// connects with its own inputs).
+// unreachable on this node. A refusal holds it only when it resolves to the
+// refused endpoint by transport and target (#1249): it sends its own
+// request, with inputs no better than the refused ones until an operator
+// acts. A preview to another host is never held.
 func TestAPreviewToAnUnreachableHostAnswersWithTheReason(t *testing.T) {
 	t.Parallel()
 	getter := &countingGetter{reply: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86"}}
@@ -564,9 +571,12 @@ func TestAPreviewToAnUnreachableHostAnswersWithTheReason(t *testing.T) {
 	m.reconcile([]collection.TaskSpec{reasonPollTask()})
 	m.gates.record("ep-1", "", &collection.TerminalError{Class: driver.ClassAuth, Reason: "authorizationError"})
 	preview := snmpPreviewTask()
-	if reply := previewRun(t.Context(), runner, m.gates, []collection.TaskSpec{preview}, nil, 5*time.Second); reply.Gated {
-		t.Fatalf("a refusal gated a preview: %+v", reply)
+	if reply := previewRun(t.Context(), runner, m.gates, []collection.TaskSpec{preview}, nil, 5*time.Second); !reply.Gated || reply.GateReason != string(reasonRefused) {
+		t.Fatalf("a preview resolving to the refused endpoint answered %+v, want gated by the refusal", reply)
 	}
+	// A fresh endpoint with no refusal: unreachable is the only reason.
+	m = newSessionManager(nil, sessionHooks{})
+	m.reconcile([]collection.TaskSpec{reasonPollTask()})
 	m.gates.verdict("ep-1", "t-probe", false, gateT0)
 	m.gates.verdict("ep-1", "t-probe", false, gateT0.Add(time.Second))
 	before := getter.count()

@@ -233,6 +233,10 @@ func (d *Device) serveEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	sub, replay := h.subscribe(r.Header.Get("Last-Event-ID"))
 	defer h.unsubscribe(sub)
+	if rec, ok := w.(*statusRecorder); ok {
+		rec.streamed = true
+	}
+	defer d.observe.openStream(obsHTTP)()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)

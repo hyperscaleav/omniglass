@@ -17,6 +17,7 @@ import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
+import { SYSTEM_PAGE_READS } from "../lib/system_page_reads.gen";
 import { TAGS_KEY } from "../lib/tags";
 import { COMPONENTS_KEY } from "../lib/components";
 import { PRODUCTS_KEY } from "../lib/products";
@@ -1080,5 +1081,56 @@ describe("the system view refreshes (#940)", () => {
     const before = screen.getByTestId("since-line").textContent;
     await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(screen.getByTestId("since-line").textContent).not.toBe(before);
+  });
+});
+
+// The lab's system page load (lab measure --page-clients) replays the reads
+// this page makes on a cold open from the list the Go side generates. This
+// guard fails when the page gains or drops a read the list does not carry, so
+// the timed load keeps matching what an operator's browser actually fetches.
+describe("the lab's system page load", () => {
+  it("makes exactly the reads a cold open of the page makes", async () => {
+    const id = uuidFor("szp-sys");
+    const reads = new Set<string>();
+    const json = (b: unknown) =>
+      Promise.resolve(new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const u = new URL(req.url);
+        const path = u.pathname.replace(/^\/api\/v1/, "");
+        const query = u.search.replace(/instance=[^&]*/, "instance={instance}");
+        reads.add(
+          (path.replace(id, "{system}").replace(/\/metrics\/[^/]+\/samples$/, "/metrics/{metric}/samples") + query),
+        );
+        if (path === "/views/fleet") return json(view);
+        if (path === "/auth/me") return json({ username: "admin", permissions: ["*:*"], fleet_permissions: ["*:*"] });
+        if (path === `/systems/${id}/metrics`)
+          return json({
+            metrics: [
+              { metric_type_name: "cpu-load", from_contract: false, is_sampled: true, instance: "core-0" },
+              { metric_type_name: "uptime", from_contract: true, is_sampled: false, instance: "" },
+            ],
+          });
+        return json({});
+      }),
+    );
+    try {
+      const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+      window.history.pushState({}, "", `/web/systems/${id}`);
+      render(() => (
+        <QueryClientProvider client={qc}>
+          <Router base="/web">
+            <Route path="/systems/:id" component={Systems} />
+          </Router>
+        </QueryClientProvider>
+      ));
+      await waitFor(() => expect(reads.has("/systems/{system}/metrics/{metric}/samples?hours=24&resolution=300")).toBe(true));
+      await new Promise((r) => setTimeout(r, 200));
+      expect([...reads].sort()).toEqual([...SYSTEM_PAGE_READS].sort());
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -113,9 +113,15 @@
    "doc": "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"
   },
   {
-   "key": "OMNIGLASS_POLL_WORKERS",
+   "key": "OMNIGLASS_NODE_SESSION_DIALS",
+   "default": "16",
    "scope": "node",
-   "doc": "how many collection tasks omniglass node run runs at once, one at a time per endpoint, when --poll-workers is omitted"
+   "doc": "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"
+  },
+  {
+   "key": "OMNIGLASS_LANE_WORKERS",
+   "scope": "node",
+   "doc": "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"
   },
   {
    "key": "DOCKER_HOST",

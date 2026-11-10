@@ -162,6 +162,9 @@ type heldDatagram struct {
 	arm      []string
 	timeout  time.Duration
 	arming   bool
+	// rearm is set when an arm conversation was cut short by a panic
+	// (#1636): the next reconcile sends it again.
+	rearm bool
 	// up is the request rung's last verdict, nil before the first: a rung
 	// that recovers (down, then up) re-arms, since a component that
 	// rebooted forgot its subscriber.
@@ -184,11 +187,22 @@ func (m *sessionManager) reconcileDatagrams(tasks []collection.TaskSpec) {
 			m.closeDatagram(id, h, "it left the worklist")
 		case w.conn != h.conn:
 			m.closeDatagram(id, h, "its endpoint changed")
+		case socketEnded(h.sock):
+			// Its reader died (a panic on its routing, #1636): rebound
+			// below, and armed afresh.
+			m.closeDatagram(id, h, fmt.Sprintf("its socket ended: %v", h.sock.Err()))
 		default:
 			h.mu.Lock()
 			h.taskID, h.endpoint, h.arm, h.timeout = w.taskID, w.endpoint, w.arm, w.timeout
+			rearm := h.rearm && !h.arming
+			if rearm {
+				h.rearm = false
+			}
 			h.mu.Unlock()
 			h.router.set(w.listeners, w.policy)
+			if rearm {
+				m.armDatagram(id, h)
+			}
 		}
 	}
 	for id, w := range want {
@@ -232,6 +246,15 @@ func (m *sessionManager) openDatagram(id string, w datagramWant) error {
 	return nil
 }
 
+func socketEnded(sock *collection.DatagramConn) bool {
+	select {
+	case <-sock.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 	_ = h.sock.Close()
 	m.mapsMu.Lock()
@@ -270,29 +293,37 @@ func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
 	h.mu.Unlock()
 	fingerprint := m.currentFingerprint(id)
 	go func() {
-		defer func() {
-			h.mu.Lock()
-			h.arming = false
-			h.mu.Unlock()
-		}()
-		for _, line := range arm {
-			ans, err := h.sock.Exchange(context.Background(), line, driver.AnyLine(), timeout, 0)
-			if errors.Is(err, collection.ErrNoAnswer) {
-				err = collection.ErrUnacknowledged
-			}
-			if m.hooks.arm != nil {
-				taskID, endpoint := h.publishTo()
-				m.hooks.arm(taskID, endpoint, line, ans.Line, err)
-			}
-			if terr, ok := collection.AsTerminal(err); ok {
-				m.refuseOver("udp", id, fingerprint, terr)
-				return
-			}
-			if err != nil && !errors.Is(err, collection.ErrUnacknowledged) {
-				return
-			}
-		}
+		// A panic here (the arm hook, an answer's classification) is the
+		// endpoint's, never the node's: recovered, logged, and the arm runs
+		// again on the next reconcile (#1636).
+		pe := collection.Supervise("udp arm "+h.conn.target, func() { m.sendArm(id, h, arm, timeout, fingerprint) })
+		h.mu.Lock()
+		h.arming = false
+		h.rearm = pe != nil
+		h.mu.Unlock()
 	}()
+}
+
+// sendArm is one arm conversation, in order, stopping at a terminal reply
+// (which gates the endpoint) or a failure.
+func (m *sessionManager) sendArm(id string, h *heldDatagram, arm []string, timeout time.Duration, fingerprint string) {
+	for _, line := range arm {
+		ans, err := h.sock.Exchange(context.Background(), line, driver.AnyLine(), timeout, 0)
+		if errors.Is(err, collection.ErrNoAnswer) {
+			err = collection.ErrUnacknowledged
+		}
+		if m.hooks.arm != nil {
+			taskID, endpoint := h.publishTo()
+			m.hooks.arm(taskID, endpoint, line, ans.Line, err)
+		}
+		if terr, ok := collection.AsTerminal(err); ok {
+			m.refuseOver("udp", id, fingerprint, terr)
+			return
+		}
+		if err != nil && !errors.Is(err, collection.ErrUnacknowledged) {
+			return
+		}
+	}
 }
 
 // datagramOf is the socket a poll or command on endpointID borrows, or nil
@@ -379,7 +410,7 @@ func (m *sessionManager) flushDatagrams() {
 		}
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
-			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
+			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last flush, last: %q", n, last))
 		}
 	}
 }

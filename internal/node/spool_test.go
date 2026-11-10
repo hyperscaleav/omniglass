@@ -14,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
+	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -901,6 +902,45 @@ func TestSpoolShipsPushedSamplesAtOnce(t *testing.T) {
 	}
 	if got := batches[0].GetGroups()[1].GetTaskId(); got != "pushed" {
 		t.Fatalf("second group is task %q, want the pushed one", got)
+	}
+}
+
+// TestSpoolTalliesEveryBatchAcknowledgedOrDropped (#1639): the lab reconciles
+// what the node published against what landed, so the spool counts each batch
+// the stream acknowledged and each it gave up on, an overflow or a refusal.
+// A retry of a held batch is not counted twice.
+func TestSpoolTalliesEveryBatchAcknowledgedOrDropped(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{down: true}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	tally := collection.NewRequestTally()
+	s.tally = tally
+	s.maxBatches = 3
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	for i := 2; i <= 5; i++ {
+		queueTagged(t, s, fmt.Sprintf("b%d", i))
+	}
+	tick(t, s) // still down: a retry counts nothing
+	pub.setDown(false)
+	tick(t, s)
+	snap := tally.Snapshot(time.Now())
+	if snap.BatchesAcknowledged != 3 || snap.BatchesDropped != 2 {
+		t.Fatalf("acknowledged %d dropped %d, want 3 and 2", snap.BatchesAcknowledged, snap.BatchesDropped)
+	}
+}
+
+func TestSpoolTalliesARefusedBatchAsDropped(t *testing.T) {
+	t.Parallel()
+	publish := func(string, []byte, string) (ackWait, error) { return nil, nats.ErrMaxPayload }
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
+	tally := collection.NewRequestTally()
+	s.tally = tally
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	snap := tally.Snapshot(time.Now())
+	if snap.BatchesAcknowledged != 0 || snap.BatchesDropped != 1 {
+		t.Fatalf("acknowledged %d dropped %d, want 0 and 1", snap.BatchesAcknowledged, snap.BatchesDropped)
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 )
 
 // nodeReport is the node's account of itself (#1625): how long the
-// dispatcher's passes take and the dues it could not meet, how late its
-// tasks run against their intervals, how deep its spool is and what it
+// dispatcher's passes take and the dues it could not meet (#1634), how late
+// its tasks run against their intervals, how deep its spool is and what it
 // delivers, the sessions it holds, and what its process costs. They are platform metrics
 // on the node's own platform component, sent in the node-self block of the
 // batch the tick publishes; the server lands them under the platform writer.
@@ -39,8 +39,9 @@ type nodeReport struct {
 	// acked (#1659).
 	flow delivery.Counts
 	// pullFailures is the command queue pulls that failed in the window
-	// (#1626): no answer from the bus, or one the node could not read. The
-	// command cycle runs off the heartbeat (#1634), so it tallies atomically.
+	// (#1626): no answer from the bus, or one the node could not read.
+	// Atomic because the command cycle runs off the heartbeat goroutine
+	// (#1634) while the heartbeat takes the window.
 	pullFailures atomic.Int64
 
 	// rt is the runtime sampler the server shares, so the node's CPU time

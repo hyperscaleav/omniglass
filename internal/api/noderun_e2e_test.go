@@ -162,6 +162,44 @@ func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
 	if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusConflict || !strings.Contains(string(raw), "unreachable since") {
 		t.Errorf("a held preview = %d %s, want 409 naming unreachable, not 502", code, raw)
 	}
+	// A preview that resolved to an inventoried endpoint (#1249) is held by
+	// that endpoint's gate, a disruption or a refusal included.
+	for reason, text := range map[string]string{
+		"disrupted": "node: the endpoint at 10.20.4.31:443 is disrupted by reboot (command 42) since 2026-11-09T14:03:00Z, so the preview was not sent",
+		"refused":   "node: the endpoint at 10.20.4.31:443 is gated: auth: 401, so the preview was not sent",
+	} {
+		s.runner.mu.Lock()
+		s.runner.held = &collection.RunReply{Gated: true, GateReason: reason, Error: text}
+		s.runner.mu.Unlock()
+		if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusConflict || !strings.Contains(string(raw), text) {
+			t.Errorf("a preview held %s = %d %s, want 409 naming the reason", reason, code, raw)
+		}
+	}
+}
+
+// Operator work past the node's operator lane cap (#1249) is refused there
+// unrun: a 429 for a run now and a preview alike, never a gateway fault.
+func TestFullOperatorLanesAnswerTooManyRequests(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-full", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-full", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.32", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	full := "the node's operator lanes are full; retry in a moment"
+	s.runner.mu.Lock()
+	s.runner.held = &collection.RunReply{Full: true, Error: full}
+	s.runner.mu.Unlock()
+	if code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-full%2F"+ep.Name+"/polls/identity:run", nil); code != http.StatusTooManyRequests || !strings.Contains(string(raw), full) {
+		t.Errorf("a run now on full lanes = %d %s, want 429", code, raw)
+	}
+	if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusTooManyRequests || !strings.Contains(string(raw), full) {
+		t.Errorf("a preview on full lanes = %d %s, want 429", code, raw)
+	}
 }
 
 // A spec that does not validate is a 422 listing its findings, and the node is

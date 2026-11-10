@@ -408,6 +408,14 @@ endpoint placed on the node and inside the caller's component read scope, its pr
 joined to the simulator's stated capabilities
 and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
 stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
+`GET /nodes/{name}/simulation/observation` (gated `simulation:read`, and only for a caller whose component
+read scope is all, since the totals span every component the node simulates; any narrower scope is a 403)
+is what the simulated endpoints beside the node saw arrive and how each request settled, and what the node
+tallied sending, read as a bracket: the simulator, then the node over the bus, then the simulator again, so
+a request in transit between reads is never a false gap. Totals are per protocol, with a capped sample of
+device ids, and count since each process started; a scale lab reconciles them
+([what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). A node that does not
+exist is a 404, and no simulator or node answering a 503.
 
 **The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
 is every node whose simulator has pulled since the server started and simulates a component in the caller's
@@ -1165,8 +1173,10 @@ earns its own tier only when composing the entity reads in the browser would be 
   the wire is pinned by test against being widened back into a component list.
 - `GET /views/platform` (`node:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
-  server's build and start time, the node table's column groups with each key's catalog facts,
-  and one row per node with its current figure per key (a gauge's latest sample, a
+  server's build and start time with its panel groups (each key's current figure, a key written
+  only for a window that saw something only while that window is current, a ranked key's
+  instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
+  the node table's column groups with each key's catalog facts, and one row per node with its current figure per key (a gauge's latest sample, a
   window count only while its window is the newest), in a fixed number of statements however
   many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
   `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an

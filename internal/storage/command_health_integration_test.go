@@ -16,7 +16,8 @@ import (
 )
 
 // commandQueueSpec is lineProtoSpec binding reboot too, so a fire-and-forget
-// command (reboot settles at issue) has an endpoint to be delivered over.
+// command (reboot, decided by its execution report) has an endpoint to be
+// delivered over.
 var commandQueueSpec = strings.Replace(lineProtoSpec,
 	`{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}}`,
 	`{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}},
@@ -329,6 +330,25 @@ func TestCommandLatencySamplesLandOnThePlatformComponent(t *testing.T) {
 	}
 }
 
+// TestCommandFirstTakesInOnePullEachKeepTheirSample: commands first taken
+// in one pull are stamped in one statement at one now() (#1631), yet each
+// writes its own dispatch-latency sample (#1626), all at the same instant on
+// one series. A pull that wrote one sample for its batch would undercount the
+// dispatches the delivery loss ratio divides by.
+func TestCommandFirstTakesInOnePullEachKeepTheirSample(t *testing.T) {
+	t.Parallel()
+	f := newCommandQueueFixture(t, "edge-b")
+	for range 3 {
+		f.issue(t, "edge-b", "set-input")
+	}
+	if got := f.pull(t, "edge-b"); len(got) != 3 {
+		t.Fatalf("pull = %+v, want the three commands", got)
+	}
+	if got := f.latencySamples(t, f.platform["edge-b"], writerclass.CommandDispatchLatency); len(got) != 3 {
+		t.Fatalf("dispatch latency samples %v after three first takes in one pull, want three", got)
+	}
+}
+
 // TestCommandStuckAndExpiredCounts (#1626): a command dispatched and silent
 // past redeliverAfter is stuck; a command that crosses deliveryTTL
 // unexecuted counts once, in the window it crossed, as undelivered (no node
@@ -350,8 +370,8 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	if err := f.conn.QueryRow(f.ctx, `select status from command where id = $1`, ignored).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
-	if status != "settled" {
-		t.Fatalf("the reboot reads %q, want the fire-and-forget settled at issue", status)
+	if status != "issued" {
+		t.Fatalf("the reboot reads %q, want the fire-and-forget issued until its report (#1630)", status)
 	}
 	first, _ := f.health(t, time.Time{})
 	// Both cross deliveryTTL a moment after the first pass.
@@ -374,6 +394,24 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	_, q = f.health(t, second.Now)
 	if got := q["edge-s"]; got.ExpiredUndelivered != 0 || got.ExpiredUnexecuted != 0 {
 		t.Errorf("the next window counts them again: %+v", got)
+	}
+}
+
+// TestCommandPendingCountSkipsATerminalCommand (#1630): a command its
+// settlement already stamped terminal inside its delivery window is never
+// handed to a node, so the live queue does not count it either: pending and
+// its oldest agree with a pull that delivers nothing.
+func TestCommandPendingCountSkipsATerminalCommand(t *testing.T) {
+	t.Parallel()
+	f := newCommandQueueFixture(t, "edge-t")
+	id := f.issue(t, "edge-t", "set-input")
+	f.exec(t, `update command set status = 'timed-out', settled_at = now(), settled_by = 'window' where id = $1`, id)
+	_, q := f.health(t, time.Time{})
+	if got := q["edge-t"]; got.Pending != 0 || got.Oldest != nil || got.Stuck != 0 {
+		t.Errorf("a timed-out command reads in the live queue: %+v, want nothing pending", got)
+	}
+	if got := f.pull(t, "edge-t"); len(got) != 0 {
+		t.Errorf("the pull delivered %d commands, want the timed-out one withheld", len(got))
 	}
 }
 
@@ -482,8 +520,10 @@ func TestCommandQueueKeysRefuseOtherWriters(t *testing.T) {
 
 // TestCommandHealthReadUsesTheUnexecutedIndex (#1626): the health read runs
 // every timer pass over a command table that only grows, so its plan reaches
-// the unexecuted rows through command_unexecuted_idx, never a scan of every
-// executed command.
+// the unexecuted rows through a partial index holding only them, never a scan
+// of every executed command. Either such index serves: command_unexecuted_idx,
+// or #1631's command_deliverable_idx, which holds the same rows keyed by
+// component and which the planner may prefer.
 func TestCommandHealthReadUsesTheUnexecutedIndex(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-x")
@@ -511,8 +551,8 @@ func TestCommandHealthReadUsesTheUnexecutedIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := strings.Join(plan, "\n")
-	if !strings.Contains(text, "command_unexecuted_idx") {
-		t.Errorf("the health read does not use command_unexecuted_idx:\n%s", text)
+	if !strings.Contains(text, "command_unexecuted_idx") && !strings.Contains(text, "command_deliverable_idx") {
+		t.Errorf("the health read reaches the unexecuted commands through neither unexecuted index:\n%s", text)
 	}
 	if strings.Contains(text, "Seq Scan on command") {
 		t.Errorf("the health read scans the command table:\n%s", text)

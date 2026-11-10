@@ -103,11 +103,44 @@ type platformSystemBody struct {
 }
 
 type platformServerBody struct {
-	Component string     `json:"component" doc:"The server's platform component uuid"`
-	Name      string     `json:"name" doc:"The server's platform component name"`
-	Version   string     `json:"version,omitempty" doc:"The build the server runs, as its boot wrote it (server-version); absent before a boot has written it"`
-	StartedAt *time.Time `json:"started_at,omitempty" doc:"When the server's current boot started (server-started-at); uptime is read_at minus this"`
-	Verdict   string     `json:"verdict" doc:"The server component's recorded verdict"`
+	Component string              `json:"component" doc:"The server's platform component uuid"`
+	Name      string              `json:"name" doc:"The server's platform component name"`
+	Version   string              `json:"version,omitempty" doc:"The build the server runs, as its boot wrote it (server-version); absent before a boot has written it"`
+	StartedAt *time.Time          `json:"started_at,omitempty" doc:"When the server's current boot started (server-started-at); uptime is read_at minus this"`
+	Verdict   string              `json:"verdict" doc:"The server component's recorded verdict"`
+	Groups    []platformPanelBody `json:"groups" doc:"The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own"`
+	Alarms    []platformAlarmBody `json:"alarms" doc:"The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries"`
+}
+
+type platformPanelKeyBody struct {
+	Name        string `json:"name" doc:"The metric type's name: the key the panel's figures carry"`
+	Label       string `json:"label" doc:"The metric type's label, the row's title"`
+	Unit        string `json:"unit,omitempty" doc:"The metric type's unit, when it has one"`
+	Description string `json:"description,omitempty" doc:"The metric type's catalog description, the row's tooltip"`
+	Of          string `json:"of,omitempty" doc:"The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone"`
+	Rank        int    `json:"rank,omitempty" doc:"Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first"`
+}
+
+type platformInstanceFigureBody struct {
+	Key        string    `json:"key" doc:"The key the figure is a sample of"`
+	Instance   string    `json:"instance" doc:"The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key"`
+	Value      float64   `json:"value"`
+	ObservedAt time.Time `json:"observed_at" doc:"When the sample was taken"`
+}
+
+type platformPanelBody struct {
+	Name    string                       `json:"name" doc:"The panel's stable handle"`
+	Label   string                       `json:"label" doc:"The panel's title"`
+	Keys    []platformPanelKeyBody       `json:"keys" doc:"The panel's keys, in order, each with its catalog facts"`
+	Figures []platformInstanceFigureBody `json:"figures" doc:"The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure"`
+}
+
+type platformAlarmBody struct {
+	Rule     string    `json:"rule,omitempty" doc:"The name of the rule that raised the alarm; absent for a hand-raised alarm"`
+	Key      string    `json:"key,omitempty" doc:"The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm"`
+	Severity string    `json:"severity"`
+	Message  string    `json:"message"`
+	RaisedAt time.Time `json:"raised_at"`
 }
 
 type platformKeyBody struct {
@@ -200,7 +233,7 @@ type platformViewOutput struct {
 		Lab         bool                  `json:"lab" doc:"True when this server runs as an omniglass lab"`
 		FiguresRead bool                  `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
 		System      *platformSystemBody   `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
-		Servers     []platformServerBody  `json:"servers" doc:"Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read"`
+		Servers     []platformServerBody  `json:"servers" doc:"Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read"`
 		Groups      []platformGroupBody   `json:"groups" doc:"The node table's column groups, in order: the page renders these and has no key list of its own"`
 		Nodes       []platformNodeBody    `json:"nodes" doc:"One row per node, in name order"`
 		LossHops    []string              `json:"loss_hops" doc:"The hops a node's loss composes: the ones its own platform component records"`
@@ -268,6 +301,28 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 		body := platformServerBody{Component: s.ComponentID, Name: s.Name, StartedAt: s.StartedAt, Verdict: s.Verdict}
 		if s.Version != nil {
 			body.Version = *s.Version
+		}
+		body.Groups = make([]platformPanelBody, 0, len(s.Groups))
+		for _, g := range s.Groups {
+			panel := platformPanelBody{Name: g.Name, Label: g.Label,
+				Keys:    make([]platformPanelKeyBody, 0, len(g.Keys)),
+				Figures: make([]platformInstanceFigureBody, 0, len(g.Figures))}
+			for _, k := range g.Keys {
+				panel.Keys = append(panel.Keys, platformPanelKeyBody{Name: k.Name, Label: k.Label, Unit: k.Unit,
+					Description: k.Description, Of: k.Of, Rank: k.Rank})
+			}
+			for _, f := range g.Figures {
+				panel.Figures = append(panel.Figures, platformInstanceFigureBody{Key: f.Key, Instance: f.Instance, Value: f.Value, ObservedAt: f.ObservedAt})
+			}
+			body.Groups = append(body.Groups, panel)
+		}
+		body.Alarms = make([]platformAlarmBody, 0, len(s.Alarms))
+		for _, a := range s.Alarms {
+			ab := platformAlarmBody{Rule: a.Rule, Severity: a.Severity, Message: a.Message, RaisedAt: a.RaisedAt}
+			if a.Key != nil {
+				ab.Key = *a.Key
+			}
+			body.Alarms = append(body.Alarms, ab)
 		}
 		out.Body.Servers = append(out.Body.Servers, body)
 	}
@@ -345,7 +400,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/platform",
 		Summary:     "Read Omniglass's own health in one call",
-		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
 	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
 		v, err := gw.PlatformView(ctx,
 			a.scopeFor(ctx, "node", "read"),

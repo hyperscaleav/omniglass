@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ func (d *Device) startUDP(port int) (net.Addr, error) {
 	}
 	addr = conn.LocalAddr().String()
 	port = boundPort(conn.LocalAddr()) // what its hits report
+	face := d.observe.face(strconv.Itoa(port), obsUDP)
 	d.udpMu.Lock()
 	d.udpConns = append(d.udpConns, conn)
 	d.udpMu.Unlock()
@@ -48,8 +50,14 @@ func (d *Device) startUDP(port int) (net.Addr, error) {
 				}
 				return
 			}
-			// Echo everything back.
-			_, _ = conn.WriteTo(buf[:n], from)
+			// Echo everything back: each datagram is one request, dropped
+			// when the reply cannot be written.
+			tok := d.observe.begin(obsUDP, face)
+			if _, werr := conn.WriteTo(buf[:n], from); werr != nil {
+				tok.end(OutcomeDropped)
+			} else {
+				tok.end(OutcomeAnswered)
+			}
 			if d.Logger != nil {
 				d.Logger(RequestLog{
 					DeviceID:  d.DeviceID,
@@ -192,6 +200,11 @@ type udpFace struct {
 	reg  *SessionRegistry
 	port int
 	loss *datagramLoss
+	// face is the observation face every datagram is counted against: one
+	// lost on the way in or to a full queue is withheld, one from a source
+	// the registry refuses is refused, and each line that reaches the shell
+	// loop is counted there.
+	face *faceObservation
 
 	mu      sync.Mutex
 	sources map[string]*udpSource
@@ -228,6 +241,7 @@ func (d *Device) startUDPFace(port int, reg *SessionRegistry, name string, lossP
 	}
 	f := &udpFace{d: d, conn: conn, reg: reg, port: boundPort(conn.LocalAddr()),
 		loss: newDatagramLoss(lossSeed(d.DeviceID, name), lossPct), sources: map[string]*udpSource{}}
+	f.face = d.observe.face(strconv.Itoa(f.port), obsUDP)
 	reg.setPort(f.port)
 	d.udpMu.Lock()
 	d.udpFaces = append(d.udpFaces, f)
@@ -249,10 +263,14 @@ func (f *udpFace) serve() {
 			return
 		}
 		if f.loss.drop("in", buf[:n]) {
+			f.d.observe.begin(obsUDP, f.face).end(OutcomeWithheld)
 			continue
 		}
-		src := f.source(from)
+		src, refused := f.source(from)
 		if src == nil {
+			if refused {
+				f.d.observe.begin(obsUDP, f.face).end(OutcomeRefused)
+			}
 			continue
 		}
 		frame := append([]byte(nil), buf[:n]...)
@@ -262,26 +280,28 @@ func (f *udpFace) serve() {
 		select {
 		case src.in <- frame:
 		default: // the source's queue is full: lost, as a full socket buffer loses it
+			f.d.observe.begin(obsUDP, f.face).end(OutcomeWithheld)
 		}
 	}
 }
 
 // source returns the session for a source address, opening one on its
-// first datagram; nil when the registry refuses (its session limit).
-func (f *udpFace) source(from *net.UDPAddr) *udpSource {
+// first datagram; nil when the face has stopped, or when the registry
+// refuses (its session limit), which refused reports.
+func (f *udpFace) source(from *net.UDPAddr) (src *udpSource, refused bool) {
 	key := from.String()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.stopped {
-		return nil
+		return nil, false
 	}
 	if s, ok := f.sources[key]; ok {
-		return s
+		return s, false
 	}
 	sess, err := f.reg.Open(key)
 	if err != nil {
 		slog.Debug("UDP face session refused", "device", f.d.Hostname, "remote", key, "error", err)
-		return nil
+		return nil, true
 	}
 	pr, pw := io.Pipe()
 	s := &udpSource{in: make(chan []byte, 64), pw: pw, done: make(chan struct{})}
@@ -292,7 +312,7 @@ func (f *udpFace) source(from *net.UDPAddr) *udpSource {
 		_ = pr.Close()
 	}()
 	go f.feed(key, s)
-	return s
+	return s, false
 }
 
 // feed hands a source's datagrams to its shell loop, in order, and ends the

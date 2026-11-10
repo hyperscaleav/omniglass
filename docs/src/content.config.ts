@@ -9,9 +9,11 @@ import { withFragments } from './plugins/fragments-loader.mjs';
 // image from the same entry, so the capture list and the embed can never drift
 // apart. The PNGs themselves are a generated resource (see `make docs-shots`).
 const screenshotStep = z.object({
-  action: z.enum(['click', 'hover', 'fill', 'press']),
+  action: z.enum(['wait', 'click', 'hover', 'fill', 'press']),
   selector: z.string().optional(),
   value: z.string().optional(),
+  // wait only: how long to hold for the selector, in ms (default two minutes).
+  timeout: z.number().int().positive().optional(),
 });
 
 const screenshot = z.object({
