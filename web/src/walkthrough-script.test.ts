@@ -10,6 +10,7 @@ import {
   budgetLimits,
   previewOpeningProblem,
   previewStartSeconds,
+  readyFailure,
   budgetProblems,
   idProblem,
   parseWalkthrough,
@@ -147,6 +148,40 @@ describe("walkthrough setup", () => {
     expect(bad({ title: "T", steps: [{ wait: { text: "x" }, caption: "a" }], setup: { post: "/x" } })).toContain("setup must be a list");
   });
 
+});
+
+// A walkthrough's ready condition (#1645): a state the scene needs that only
+// time makes (the server's first report window), waited for in the console off
+// camera before the title card, so the wait never counts against the budget.
+describe("walkthrough ready", () => {
+  const done = [{ wait: { text: "x" }, caption: "a" }];
+  it("is optional, and a console path with a visible result to wait for when present", () => {
+    expect(ok(done).ready).toBeNull();
+    const w = ok(done, { ready: { goto: "/platform", wait: { selector: "#rows", timeout: 120_000 } } });
+    expect(w.ready).toEqual({ path: "/platform", target: { selector: "#rows" }, timeout: 120_000 });
+    expect(ok(done, { ready: { goto: "/platform", wait: { text: "Requests" } } }).ready?.timeout).toBe(10_000);
+  });
+  it("refuses a ready that is not { goto, wait }, naming what is wrong", () => {
+    const m = bad({ title: "T", steps: done, ready: { goto: "platform", wait: { timeout: 1 }, hold: 3 } });
+    expect(m).toContain('ready has unknown key "hold"');
+    expect(m).toContain('ready (goto) must be a console path starting with "/"');
+    expect(m).toContain("ready (wait) needs text, selector, or role");
+    expect(bad({ title: "T", steps: done, ready: { goto: "/p", wait: { text: "x", timeout: 300_000 } } })).toContain(
+      "ready (wait): timeout must be whole milliseconds, 1 to 180000",
+    );
+    expect(bad({ title: "T", steps: done, ready: { goto: "/p" } })).toContain("ready needs wait: a visible result");
+    expect(bad({ title: "T", steps: done, ready: "/p" })).toContain("ready must be { goto, wait }");
+  });
+  it("names what a ready that never came waited for, on which path, and for how long", () => {
+    const w = ok(done, { ready: { goto: "/platform", wait: { selector: "#rows", timeout: 90_000 } } });
+    expect(readyFailure("d", w.ready!, "Timeout 90000ms exceeded.\n  call log")).toBe(
+      'walkthrough d: not ready: waited 90s on /platform for selector "#rows" to be visible (Timeout 90000ms exceeded.)',
+    );
+  });
+});
+
+describe("walkthrough setup requests", () => {
+  const body = { name: "bay-2-display", product: "boreal-edge-55", location: "bay-2" };
   type Call = { url: string; init: RequestInit };
   const fake = (statuses: number[]) => {
     const calls: Call[] = [];

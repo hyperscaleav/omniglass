@@ -35,6 +35,16 @@
 //     - post: /components                           # an API path (under /api/v1)
 //       body: { name: bay-2-display, product: boreal-edge-55, location: bay-2 }
 //
+// An optional `ready` waits off camera, after the setup and before the title
+// card, for a state the scene needs that only time makes (#1645: the server's
+// first report window), so that wait never counts against the budget. It opens
+// a console path and waits for a visible result, as a wait step does, with a
+// longer ceiling (MAX_READY_MS):
+//
+//   ready:
+//     goto: /platform
+//     wait: { selector: '[data-testid=panel-row-x]', timeout: 120000 }
+//
 // Every step also takes `hold` (extra milliseconds to linger after it, for a
 // result worth reading) and `poster: true` (its still is the poster frame, at
 // most one step; default the last). Unknown keys, unknown kinds, and a step with two kinds
@@ -64,7 +74,8 @@ import { PREVIEW } from './walkthroughcore.mjs';
  * @property {number} [timeout]
  */
 /** @typedef {{ method: 'POST', path: string, body: Record<string, unknown> }} SetupItem */
-/** @typedef {{ title: string, description: string, setup: SetupItem[], steps: Step[], poster: number }} Walkthrough */
+/** @typedef {{ path: string, target: Target, timeout: number }} Ready */
+/** @typedef {{ title: string, description: string, setup: SetupItem[], ready: Ready | null, steps: Step[], poster: number }} Walkthrough */
 /**
  * Where a step failed: waiting for its target to be visible, scrolling to it,
  * acting on it, loading a page, or taking its still; with that phase's timeout
@@ -101,9 +112,10 @@ export const PREVIEW_MIN_YMAX = 200;
 
 export const DEFAULT_WAIT_MS = 10_000;
 const MAX_WAIT_MS = 60_000;
+const MAX_READY_MS = 180_000;
 const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
-const TOP = ['title', 'description', 'setup', 'steps'];
+const TOP = ['title', 'description', 'setup', 'ready', 'steps'];
 
 /** @type {(v: unknown) => v is Record<string, any>} */
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -247,6 +259,31 @@ function validateSetup(raw) {
   return [items, problems];
 }
 
+// Validates a walkthrough's ready condition; returns [normalized | null, problems].
+/**
+ * @param {unknown} raw
+ * @returns {[Ready | null, string[]]}
+ */
+function validateReady(raw) {
+  if (raw === undefined) return [null, []];
+  if (!isObj(raw)) return [null, ['ready must be { goto, wait }']];
+  const problems = Object.keys(raw)
+    .filter((k) => k !== 'goto' && k !== 'wait')
+    .map((k) => `ready has unknown key "${k}"`);
+  if (!isStr(raw.goto) || !raw.goto.startsWith('/')) problems.push('ready (goto) must be a console path starting with "/"');
+  if (!('wait' in raw)) {
+    problems.push('ready needs wait: a visible result, as a wait step names one');
+    return [null, problems];
+  }
+  if (!isObj(raw.wait)) return [null, [...problems, 'ready (wait) must be { text | selector | role, timeout? }']];
+  const { timeout, ...target } = raw.wait;
+  if (timeout !== undefined && !(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_READY_MS)) {
+    problems.push(`ready (wait): timeout must be whole milliseconds, 1 to ${MAX_READY_MS}`);
+  }
+  problems.push(...targetProblems(target, 'ready (wait)', true));
+  return [{ path: raw.goto, target: /** @type {Target} */ (target), timeout: timeout ?? DEFAULT_WAIT_MS }, problems];
+}
+
 // Validates a parsed walkthrough document. Throws one Error listing every
 // problem, each prefixed with the file; returns the normalized walkthrough.
 /**
@@ -262,6 +299,8 @@ export function validateWalkthrough(doc, file) {
   if ('description' in doc && !isStr(doc.description)) problems.push('description must be a non-empty string');
   const [setup, setupProblems] = validateSetup(doc.setup);
   problems.push(...setupProblems);
+  const [ready, readyProblems] = validateReady(doc.ready);
+  problems.push(...readyProblems);
   /** @type {Step[]} */
   const steps = [];
   if (!Array.isArray(doc.steps) || doc.steps.length === 0) {
@@ -280,7 +319,7 @@ export function validateWalkthrough(doc, file) {
   const posters = steps.filter((s) => s.poster).map((s) => s.n);
   if (posters.length > 1) problems.push(`only one step may be the poster (steps ${posters.join(', ')} are)`);
   if (problems.length) throw new Error(problems.map((p) => `${file}: ${p}`).join('\n'));
-  return { title: doc.title, description: doc.description ?? '', setup, steps, poster: posters[0] ?? steps.length };
+  return { title: doc.title, description: doc.description ?? '', setup, ready, steps, poster: posters[0] ?? steps.length };
 }
 
 // Makes a walkthrough's setup through the API at base, with the owner token:
@@ -395,6 +434,19 @@ function describePhase(step, { name, timeoutMs }) {
 export function stepFailure(id, step, phase, reason) {
   const first = String(reason ?? '').split('\n')[0].trim();
   return `walkthrough ${id}: step ${step.n} (${step.kind}) failed at ${phase.name}: ${describePhase(step, phase)}${first ? ` (${first})` : ''}`;
+}
+
+// The failure line a ready condition that never came prints: what it waited
+// for, on which console path, for how long, and the underlying reason.
+/**
+ * @param {string} id
+ * @param {Ready} ready
+ * @param {unknown} [reason]
+ * @returns {string}
+ */
+export function readyFailure(id, ready, reason) {
+  const first = String(reason ?? '').split('\n')[0].trim();
+  return `walkthrough ${id}: not ready: waited ${ready.timeout / 1000}s on ${ready.path} for ${describeTarget(ready.target)} to be visible${first ? ` (${first})` : ''}`;
 }
 
 /** @param {number} b */

@@ -2,7 +2,8 @@
 // lab's network (web/e2e/walkthroughs.sh, via lab_pw):
 //
 //   node e2e/walkthrough.mjs record <file.yaml> <out-dir>
-//       make the script's setup through the API (off camera), sign in, play the
+//       make the script's setup through the API (off camera), sign in, wait
+//       for its ready condition (off camera too), play the
 //       script against the real console with Playwright's
 //       video capture on, and write <out-dir>/<id>.webm, a still per step
 //       (step-NN.png), poster.png and walkthrough.json. A step whose expected
@@ -46,6 +47,7 @@ import {
   previewOpeningProblem,
   runSetup,
   previewStartSeconds,
+  readyFailure,
   stepFailure,
   stillName,
 } from './walkthroughlib.mjs';
@@ -135,6 +137,13 @@ async function record(file, out) {
   try {
     // Sign in off camera, then record in a fresh context holding the session.
     const storageState = await signIn(browser, base, user, password);
+    if (w.ready) {
+      const reason = await awaitReady(browser, base, storageState, w.ready);
+      if (reason !== null) {
+        console.error(readyFailure(id, w.ready, reason));
+        return 1;
+      }
+    }
     const ctx = await browser.newContext({
       viewport: VIEWPORT,
       colorScheme: 'dark',
@@ -231,6 +240,23 @@ async function signIn(browser, base, user, password) {
   const state = await ctx.storageState();
   await ctx.close();
   return state;
+}
+
+// The script's ready condition, waited for off camera (no video) in its own
+// context, so a console that is still filling (a first report window) never
+// spends the recording's budget. Null when it came, else why not.
+async function awaitReady(browser, base, storageState, ready) {
+  const ctx = await browser.newContext({ viewport: VIEWPORT, colorScheme: 'dark', storageState });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(`${base}/web${ready.path}`);
+    await locate(page, ready.target).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: ready.timeout });
+    return null;
+  } catch (e) {
+    return e?.message ?? String(e);
+  } finally {
+    await ctx.close();
+  }
 }
 
 // One step: the caption first, then the action with the cursor drawn to it.
