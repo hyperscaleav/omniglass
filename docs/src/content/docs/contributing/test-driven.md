@@ -210,6 +210,7 @@ thing. Knowing which answers a given question is most of the value:
 | Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
 | Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
 | Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **No.** A diagnostic | **No.** Inert without `-bench` |
+| Fleet it reads | The test's own fixture | The test's own fixture | The dev scenario's fleet, one standard workload | The corporate scenario at 20 systems by default, read from the lab's labels | The benchmark's own fixture |
 | How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make lab-footprint` | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
@@ -293,12 +294,17 @@ current figures, and `BenchmarkIngestFootprint` in `make bench` times the same p
 The ingest footprint counts one batch through the handler; it cannot say what a lab costs to
 run. `make lab-footprint` does
 ([ADR-1277](/architecture/decisions/#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing)).
-It builds the image, brings up a throwaway lab of its own project at a
+It builds the image, brings up a throwaway lab of its own project, the `corporate` scenario at
+20 systems (`-scenario` and `-systems` change it), at a
 [cadence profile](/guides/lab/#what-runs-with-which-privilege), warms it up, and measures N
-back-to-back windows:
+back-to-back windows. Every level that measures runs the corporate scenario at a stated size, so
+a figure from here compares with the same size on the
+[scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev fleet is the showcase,
+never a measurement basis, and the report names the scenario and size it read from the lab's
+labels.
 
-- **CPU per container** (server, node, Postgres), in millicores, from each cgroup's CPU time
-  as the Engine reports it.
+- **CPU per container** (server, the nodes summed into one row, Postgres), in millicores, from
+  each cgroup's CPU time as the Engine reports it.
 - **Memory per container**, the working set: anonymous plus shared memory, never RSS, which
   counts the binary's file pages and the page cache the kernel would reclaim.
 - **Rows a minute** on the metric and property lanes, from Postgres's cumulative statistics, so
@@ -316,7 +322,7 @@ two runs you took minutes apart. When it is done it stops the lab and fails if a
 network or volume of its project is left.
 
 ```bash
-make lab-footprint                                            # the lab profile, 5 one-minute windows
+make lab-footprint                                            # corporate at 20, the lab profile, 5 one-minute windows
 make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.json"
 ```
 
@@ -331,7 +337,7 @@ reconciles each node's tally against what its simulators observed and what lande
 `published-not-landed`, `spool-dropped`, `unhit-endpoint`), each a lower bound with its masking
 term beside it ([how to read them](/guides/lab/#every-request-reached-its-endpoint-and-was-answered)).
 The arithmetic is pure and unit-tested gap by gap; `make test-lab` brings up a 20-system corporate
-scale lab and fails on any loss, any face that saw two requests at once, any polled protocol that
+scale lab, measures it with `lab measure`'s own path at that size, and fails on any loss, any face that saw two requests at once, any polled protocol that
 drew no request, or a restart inside the window. It needs the image `make` builds, so it is outside
 `make test` and CI.
 
