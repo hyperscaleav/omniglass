@@ -95,8 +95,8 @@ materialized, resolved task and command instances.
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
 carried, so a change the server has written is running within one pull interval plus one
-heartbeat (the pull carries it, the next tick reconciles sessions and runs against it), with
-no restart and nothing to apply. The server side is the re-derive: an endpoint edit
+heartbeat (the pull carries it and reconciles held sessions the moment it lands, #1636; the next
+tick runs the polls against it), with no restart and nothing to apply. The server side is the re-derive: an endpoint edit
 (`PATCH /endpoints/{endpoint}`, its driver inputs included) and a driver spec change (#823) rewrite
 the affected tasks in the same transaction, and a held session whose
 [connection fingerprint](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)
@@ -359,6 +359,33 @@ is a `certificate` refusal that gates the transport rung, beneath which the prob
 connect
 ([tls](/architecture/collection/#tls),
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
+
+Built with #1636: the held sessions are a **supervised, independent pool** that no longer rides the
+heartbeat ([ADR-1636](/architecture/decisions/#adr-1636-held-sessions-reconcile-on-arrival-are-supervised-and-dial-through-node-wide-slots)).
+
+- **Reconcile on arrival.** A worklist reconciles the held sessions and datagram sockets the moment
+  it lands: a held endpoint added, removed, re-addressed or re-keyed is started, torn down or
+  recycled then, not at the next heartbeat. A reconcile on its own timer (the heartbeat interval)
+  stays as the safety net for a gate or a retry that changed between worklists. Every reconcile
+  runs on the node's one run-loop goroutine, which owns the session maps, so a reconcile, a poll
+  borrowing a session and a housekeeping pass never race.
+- **Supervision.** Every session-layer goroutine (the session machine, each connection's reader,
+  the arm conversation, the datagram arm) runs under a recover. A recovered panic is logged at
+  error with its stack (facility `collection`), counted, and becomes that session's ordinary
+  failure: the connection closes, the session reads `recovering` with the reason `panic: <value>`,
+  and the normal backoff redials it, so one that panics on every attempt still reaches `down`
+  after the attempt budget. A panic on one device's bytes costs that one session; the node and
+  every other session keep running. A datagram arm that panics closes its socket, and the next
+  reconcile binds and arms it again.
+- **Bounded establish.** Dials and handshakes (the connect, the TLS or ssh handshake, the login
+  dialog) share node-wide slots, `node run --session-dials` (env `OMNIGLASS_NODE_SESSION_DIALS`,
+  default 16), so a node restarting with hundreds of held endpoints opens them a few at a time. A
+  session waiting for a slot reads `establishing`, and an exchange against it follows the
+  first-dial wait.
+- **Housekeeping on its own clock.** Unclaimed lines are flushed and pushes are counted into the
+  collection report on a housekeeping timer at the report window, never longer than the
+  heartbeat, so a long heartbeat does not hold them.
+
 Still design below: the pool knobs.
 
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
@@ -411,7 +438,8 @@ this, above). Where the protocol itself frames responses vs events (xAPI `*r` vs
 id; built for a correlated websocket exchange's id), framing drives routing and the regex only
 extracts within the matched frame, and a driver's declared prompt delimits a held answer (#1057).
 An **unmatched** frame lands as `raw` (orphan, logged): a missing matcher surfaces, never fails
-silently. Today it is counted and logged once per tick, counted once a report window as the
+silently. Today it is counted and logged once a housekeeping pass (the report window, never longer
+than a heartbeat, #1636), counted once a report window as the
 endpoint's `push-unclaimed-count` ([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)),
 and lands as a log line only where the spec asks (`unmatched: log`).
 :::
