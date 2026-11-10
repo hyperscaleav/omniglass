@@ -2,7 +2,7 @@
 title: "Held sessions reconcile on arrival, are supervised, and dial through node-wide slots"
 date: 2026-11-10
 status: Accepted
-summary: "Accepted: a worklist reconciles held sessions the moment it lands, with a reconcile on its own heartbeat-interval timer as the safety net; every session-layer goroutine runs under a recover that turns a panic into that session's ordinary failure; dials and handshakes share node-wide slots (--session-dials, default 16); unclaimed lines and push counts flush on a housekeeping timer at the shorter of the report window and the heartbeat. All of it stays on the one run-loop goroutine (ADR-1637), so #1634's lock is not needed for the push count. Publishing the recovered-panic count as a node metric is #1700."
+summary: "Accepted: a worklist reconciles held sessions the moment it lands, with a reconcile on its own heartbeat-interval timer as the safety net; every session-layer goroutine runs under a recover that turns a panic into that session's ordinary failure; a session's first dial and handshake share node-wide slots (--session-dials, default 16), a redial takes none; unclaimed lines and push counts flush on a housekeeping timer at the shorter of the report window and the heartbeat. All of it stays on the one run-loop goroutine (ADR-1637), so #1634's lock is not needed for the push count. Publishing the recovered-panic count as a node metric is #1700."
 refs: [1636, 1637, 1624, 1634, 1094, 1625, 1700, 816, 1588]
 ---
 
@@ -24,10 +24,16 @@ refs: [1636, 1637, 1624, 1634, 1094, 1625, 1700, 816, 1588]
      `recovering` with the reason `panic: <value>`, the normal backoff redials, and the attempt
      budget still drives a session that panics every time to `down`. A datagram arm that panics
      closes its socket and the next reconcile binds and arms it again.
-  4. **Bounded establish.** Dials and handshakes (connect, TLS or ssh handshake, the login dialog)
-     acquire one of the node's `DialSlots` before they start and release it once the connection is
-     made or has failed. `node run --session-dials` (env `OMNIGLASS_NODE_SESSION_DIALS`, default
-     16) sets the count. A session waiting for a slot reads `establishing`.
+  4. **Bounded establish.** A session's first dial and handshake (connect, TLS or ssh handshake,
+     the login dialog) acquire one of the node's `DialSlots` before they start and release it once
+     the connection is made or has failed. `node run --session-dials` (env
+     `OMNIGLASS_NODE_SESSION_DIALS`, default 16) sets the count. A session waiting for a slot reads
+     `establishing`. A redial takes no slot: an endpoint that blackholes its dials holds a slot for
+     its whole dial timeout on every attempt, so bounding redials would let a few dead endpoints
+     queue every healthy session's recovery behind theirs (at 16 slots, the 5 s default timeout and the
+     30 s backoff cap, about a hundred blackholed endpoints keep every slot busy, and fewer already
+     make a recovery wait). The jittered backoff already spreads a
+     mass redial.
   5. **Housekeeping timer.** `flushUnclaimed`, the push count into the collection report and the
      report's publish run on their own timer at the shorter of the report window and the heartbeat.
      The spec named the report cadence; at the default one-minute window and 30 s heartbeat that

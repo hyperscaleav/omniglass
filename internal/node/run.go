@@ -26,8 +26,8 @@ const DefaultHeartbeat = 30 * time.Second
 // short heartbeat does not mean a worklist rebuild as often.
 const DefaultWorklistEvery = 30 * time.Second
 
-// DefaultSessionDials is how many held sessions a node dials and handshakes
-// at once when it is not told otherwise (#1636): enough that a restart with
+// DefaultSessionDials is how many held sessions a node lets make their first
+// dial and handshake at once when it is not told otherwise (#1636): enough that a restart with
 // hundreds of held endpoints comes up in seconds, few enough that it does not
 // open them all in one burst against the network and the devices.
 const DefaultSessionDials = 16
@@ -68,8 +68,9 @@ type Config struct {
 	// overriding the platform's the worklist carries: a test's, or a lab's.
 	// Zero takes the worklist's.
 	ReportEvery time.Duration
-	// SessionDials bounds how many held sessions dial and handshake at once
-	// (#1636); a session waiting for a slot reads establishing. Zero takes
+	// SessionDials bounds how many held sessions make their first dial and
+	// handshake at once (#1636); a session waiting for a slot reads
+	// establishing, and a redial takes none. Zero takes
 	// DefaultSessionDials.
 	SessionDials int
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests

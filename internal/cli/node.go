@@ -109,7 +109,7 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
 	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull")
-	cmd.Flags().IntVar(&sessionDials, "session-dials", node.DefaultSessionDials, "how many held sessions dial and handshake at once; a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS)")
+	cmd.Flags().IntVar(&sessionDials, "session-dials", node.DefaultSessionDials, "how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS)")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
 	cmd.Flags().BoolVar(&impairments, "impairments", false, "with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container)")

@@ -11,8 +11,8 @@ the one goroutine that owns the session maps, so a unit test drives it with a he
 fires and still sees a session start and stop. Every session-layer goroutine runs under
 `collection.Supervise`: a panic on one device's bytes is logged with its stack, counted, and becomes
 that session's `recovering` transition with the reason `panic: <value>`, then the normal backoff; the
-node and every other session keep running. Dials and handshakes share node-wide slots
-(`node run --session-dials`, default 16), so a restart with fifty held endpoints opens them a few at a
+node and every other session keep running. First dials and handshakes share node-wide slots
+(`node run --session-dials`, default 16; a redial takes none), so a restart with fifty held endpoints opens them a few at a
 time; the integration test restarts a node over fifty simulated panels with four slots, checks no more
 than four connect at once, injects a panic into one panel's reader and watches that one recover while
 the other forty-nine keep the connections they held. Unclaimed lines and push counts flush on a

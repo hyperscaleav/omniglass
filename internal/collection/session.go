@@ -347,9 +347,9 @@ type SessionConfig struct {
 	// declares it over a dialer that cannot run one is a protocol refusal,
 	// never a plaintext connection.
 	TLS *TLSTrust
-	// Dials are the node's dial slots, shared by every session (#1636): an
-	// attempt takes one for its connect and auth step and gives it back
-	// after. Nil is unbounded.
+	// Dials are the node's dial slots, shared by every session (#1636): the
+	// session's first attempt takes one for its connect and auth step and
+	// gives it back after; a redial does not. Nil is unbounded.
 	Dials DialSlots
 }
 
@@ -664,6 +664,8 @@ func (s *Session) run(ctx context.Context) {
 // needAnswer holds while answer timeouts are what failed: a down session
 // then leaves down only on an answer, never on age alone. held is the
 // attempt's connection while the machine holds it, so a panic closes it.
+// dialed is set once the first dial has run: only that one takes a dial
+// slot.
 type machine struct {
 	s          *Session
 	ctx        context.Context
@@ -671,6 +673,7 @@ type machine struct {
 	failures   int
 	needAnswer bool
 	held       HeldConn
+	dialed     bool
 }
 
 // fail counts a failed attempt: down at the budget, recovering from up.
@@ -741,7 +744,8 @@ func (m *machine) attempts() {
 		if wait > 0 && !s.sleep(ctx, wait) {
 			return
 		}
-		conn, err := s.dial(ctx)
+		conn, err := s.dial(ctx, !m.dialed)
+		m.dialed = true
 		m.held = conn
 		if ctx.Err() != nil {
 			if conn != nil {
@@ -1040,14 +1044,18 @@ func (s *Session) arm(ctx context.Context, conn HeldConn) (err error) {
 	return err
 }
 
-// dial makes one attempt's connection inside one of the node's dial slots,
-// waiting for one first (the session reads establishing meanwhile), a
-// panic in it made the attempt's error.
-func (s *Session) dial(ctx context.Context) (conn HeldConn, err error) {
-	if !s.cfg.Dials.acquire(ctx) {
-		return nil, ctx.Err()
+// dial makes one attempt's connection, a panic in it made the attempt's
+// error. The session's first dial (bounded) runs inside one of the node's
+// dial slots, waiting for one first while the session reads establishing; a
+// redial never waits, so endpoints that blackhole their dials and hold a
+// slot a whole timeout each cannot queue a healthy session's recovery.
+func (s *Session) dial(ctx context.Context, bounded bool) (conn HeldConn, err error) {
+	if bounded {
+		if !s.cfg.Dials.acquire(ctx) {
+			return nil, ctx.Err()
+		}
+		defer s.cfg.Dials.release()
 	}
-	defer s.cfg.Dials.release()
 	if pe := Supervise("session dial "+s.cfg.Target, func() { conn, err = s.connect(ctx) }); pe != nil {
 		return nil, pe
 	}

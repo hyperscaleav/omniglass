@@ -61,9 +61,10 @@ func asPanic(err error) (*PanicError, bool) {
 	return pe, errors.As(err, &pe)
 }
 
-// DialSlots bounds how many sessions dial at once, node-wide: a node
-// restarted with every held endpoint wanted brings them up a few at a time
-// rather than all at once. A session waiting for a slot reads establishing.
+// DialSlots bounds how many sessions make their first dial at once,
+// node-wide: a node restarted with every held endpoint wanted brings them up
+// a few at a time rather than all at once. A session waiting for a slot
+// reads establishing; a redial takes none.
 // Nil is unbounded.
 type DialSlots chan struct{}
 

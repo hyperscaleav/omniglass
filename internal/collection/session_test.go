@@ -874,6 +874,12 @@ func TestSessionReaderPanicRecoversThroughTheFailurePath(t *testing.T) {
 	if !strings.HasPrefix(reason, "panic: ") || !strings.Contains(reason, "EVT boom") {
 		t.Fatalf("recovering reason = %q, want the panic's value behind panic:", reason)
 	}
+	// The redial's connect completes in the kernel before the listener's
+	// Accept returns, so the session can read up before the count moves.
+	deadline := time.Now().Add(3 * time.Second)
+	for accepts.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	if accepts.Load() != 2 {
 		t.Fatalf("accepted %d connections, want the redial after the panic", accepts.Load())
 	}
@@ -1024,6 +1030,28 @@ func TestSessionExchangeWaitsForADialSlot(t *testing.T) {
 	if got, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second); err != nil || got != "echo GET INPUT" {
 		t.Fatalf("exchange once the slot freed = %q, %v", got, err)
 	}
+}
+
+// The slots bound a session's first dial, the establish a node restart
+// storms, never a redial: an endpoint that blackholes its dials holds a slot
+// a whole dial timeout each attempt, so a fleet with a few of them would
+// queue every healthy session's recovery behind theirs.
+func TestSessionRedialDoesNotWaitForADialSlot(t *testing.T) {
+	slots := collection.NewDialSlots(1)
+	d, r := &fakeSessionDialer{}, newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{Dials: slots})
+	r.waitStates(t, establishing, up)
+	dead := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: &blockingDialer{release: make(chan struct{})}, Dials: slots})
+	t.Cleanup(dead.Close)
+	deadline := time.Now().Add(3 * time.Second)
+	for !slotTaken(slots) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !slotTaken(slots) {
+		t.Fatal("the blackholed first dial never took the slot")
+	}
+	d.last().kill(errors.New("connection reset by peer"))
+	r.waitStates(t, establishing, up, recovering, up)
 }
 
 func slotTaken(s collection.DialSlots) bool { return len(s) == cap(s) }

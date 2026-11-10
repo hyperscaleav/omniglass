@@ -110,7 +110,7 @@
    "key": "OMNIGLASS_NODE_SESSION_DIALS",
    "default": "16",
    "scope": "node",
-   "doc": "how many held sessions omniglass node run dials and handshakes at once when --session-dials is omitted; a session waiting for a slot reads establishing"
+   "doc": "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"
   },
   {
    "key": "DOCKER_HOST",

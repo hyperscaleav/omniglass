@@ -377,11 +377,12 @@ heartbeat ([ADR-1636](/architecture/decisions/#adr-1636-held-sessions-reconcile-
   after the attempt budget. A panic on one device's bytes costs that one session; the node and
   every other session keep running. A datagram arm that panics closes its socket, and the next
   reconcile binds and arms it again.
-- **Bounded establish.** Dials and handshakes (the connect, the TLS or ssh handshake, the login
-  dialog) share node-wide slots, `node run --session-dials` (env `OMNIGLASS_NODE_SESSION_DIALS`,
-  default 16), so a node restarting with hundreds of held endpoints opens them a few at a time. A
-  session waiting for a slot reads `establishing`, and an exchange against it follows the
-  first-dial wait.
+- **Bounded establish.** A session's first dial and handshake (the connect, the TLS or ssh
+  handshake, the login dialog) share node-wide slots, `node run --session-dials` (env
+  `OMNIGLASS_NODE_SESSION_DIALS`, default 16), so a node restarting with hundreds of held endpoints
+  opens them a few at a time. A session waiting for a slot reads `establishing`, and an exchange
+  against it follows the first-dial wait. A redial takes no slot, so endpoints that never answer a
+  dial cannot hold up a healthy session's recovery; the jittered backoff spreads a mass redial.
 - **Housekeeping on its own clock.** Unclaimed lines are flushed and pushes are counted into the
   collection report on a housekeeping timer at the report window, never longer than the
   heartbeat, so a long heartbeat does not hold them.
@@ -422,8 +423,8 @@ size per endpoint, a shared versus dedicated session for a stream).
 Built for the line protocol (#817): one reader per held connection routes every inbound line,
 **listeners first** (a claimed line is never an answer unless it also matches the exchange's
 declared reply shape), then the exchange in flight by its reply shape (or, with none declared, the
-first unclaimed line), then unclaimed (counted, and a `collection-failed` per tick when the spec
-says so). This reverses the design's order below, which tried an outstanding poll's matcher first
+first unclaimed line), then unclaimed (counted, and a `collection-failed` per housekeeping pass
+when the spec says so). This reverses the design's order below, which tried an outstanding poll's matcher first
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
 [collection](/architecture/collection/#listeners-over-a-held-session).
 
