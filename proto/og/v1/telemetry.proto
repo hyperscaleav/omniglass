@@ -119,31 +119,67 @@ message TelemetryBatch {
   // declared node-self platform key is refused. Set only on a node's lane.
   NodeSelf node_self = 15;
 
-  // ledger is the node's delivery accounting for this batch (#1641): which
-  // boot of the node's spool minted it, its dense sequence in that boot, and
-  // how many items of each kind it carries and the boot minted before it. The
-  // server reads a gap in a boot's sequence as items that never landed, and
-  // the offsets say how many of each kind. Stamped under the spool's lock and
-  // encoded once, so every retry carries it unchanged. Set only on a node's
-  // lane; the API push lane carries none.
+  // ledger is the publisher's delivery accounting for this batch (#1641):
+  // which boot minted it, its dense sequence in that boot, and how many items
+  // of each kind it carries and the boot minted before it. The server reads a
+  // gap in a boot's sequence as items that never landed, and the offsets say
+  // how many of each kind. On a node's lane the boot is the node's spool's,
+  // stamped under its lock and encoded once, so every retry carries it
+  // unchanged; on the API push lane it is the server's own, minted as the
+  // server publishes each batch (#1696).
   DeliveryLedger ledger = 16;
 }
 
-// DeliveryLedger is one node batch's place in its boot's delivery count
-// (#1641). A boot is one start of the node's spool.
+// DeliveryLedger is one batch's place in its boot's delivery count (#1641).
+// A boot is one start of a node's spool, or of the server's push lane
+// publisher (#1696).
 message DeliveryLedger {
-  // boot is a UUIDv7 minted once when the node's spool starts.
+  // boot is a UUIDv7 minted once when the node's spool, or the server's push
+  // lane publisher, starts.
   string boot = 1;
   // seq is dense from 1 per boot, minted when the batch is flushed.
   uint64 seq = 2;
-  // minted is the node's clock when seq was minted.
+  // minted is the publisher's clock when seq was minted.
   google.protobuf.Timestamp minted = 3;
   // resolved is the highest seq of this boot at or below which every batch
-  // had left the spool (acked or dropped) when this one was minted: a gap at
-  // or below it can no longer fill from the spool.
+  // had its answer (left the spool, acked or dropped; on the push lane, the
+  // stream's ack or refusal) when this one was minted: a gap at or below it
+  // can no longer fill.
   uint64 resolved = 4;
   // kinds is one count per telemetry kind the boot has minted any of.
   repeated KindCount kinds = 5;
+  // dropped is each run of this boot's batches the spool gave up on (#1692),
+  // carried by every batch minted after the drop until one of them is acked:
+  // the server reads a gap those runs cover as the node hop's loss, under
+  // their cause, and not as missing at ingest.
+  repeated DroppedRun dropped = 6;
+  // lost is the items this boot lost before any batch carried them (#1692),
+  // running totals from the boot's start by cause and kind, so any landed
+  // batch says what was lost up to it.
+  repeated LostCount lost = 7;
+}
+
+// DroppedRun is a run of consecutive seqs of one boot the node's spool
+// dropped for one cause, and the items of each kind they carried.
+message DroppedRun {
+  // cause is spool-overflow, spool-expired or bus-refused.
+  string cause = 1;
+  // from_seq and to_seq bound the run, both included.
+  uint64 from_seq = 2;
+  uint64 to_seq = 3;
+  // kinds is the items of each kind the run carried; before is unset.
+  repeated KindCount kinds = 4;
+}
+
+// LostCount is one cause's running count of one kind's items a boot lost
+// before minting them into a batch.
+message LostCount {
+  // cause is self-log-overflow or encode-failed.
+  string cause = 1;
+  // kind is metric, property, event or log.
+  string kind = 2;
+  // count is the items lost since the boot began.
+  uint64 count = 3;
 }
 
 // KindCount is one telemetry kind's count on a DeliveryLedger.

@@ -36,6 +36,32 @@ type Manifest struct {
 	Sites       SiteBounds  `yaml:"sites"`
 	Standards   []Standard  `yaml:"standards"`
 	Archetypes  []Archetype `yaml:"archetypes"`
+	// Pushers are the outside actors each site has (#1743), declared like
+	// its devices: an emulator profile with a push face, how many a site,
+	// and how many of the site's systems each is scoped to.
+	Pushers []Pusher `yaml:"pushers"`
+}
+
+// Pusher is one outside actor a scenario places at every site: an emulator
+// device whose profile has a push face (a booking service, say), PerSite of
+// them a site, each granted telemetry:push on Systems of the site's systems.
+// The lab seeds each one's principal and mints its token per run.
+type Pusher struct {
+	Name    Ref `yaml:"name"`
+	Profile Ref `yaml:"profile"`
+	PerSite int `yaml:"per_site"`
+	Systems int `yaml:"systems"`
+	Line    int `yaml:"-"`
+}
+
+// UnmarshalYAML decodes a pusher and keeps its line.
+func (p *Pusher) UnmarshalYAML(n *yaml.Node) error {
+	type plain Pusher
+	if err := decodeKnown(n, (*plain)(p), "name", "profile", "per_site", "systems"); err != nil {
+		return err
+	}
+	p.Line = n.Line
+	return nil
 }
 
 // SiteBounds are the fewest and the most sites the scenario resolves to,
@@ -196,7 +222,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

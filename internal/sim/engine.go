@@ -261,6 +261,12 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		}
 	}
 
+	push, err := compilePush(prof.Name, prof.Push)
+	if err != nil {
+		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
+	}
+	dev.push = push
+
 	e.installSeams(dev)
 	return dev, nil
 }
@@ -321,6 +327,7 @@ func (e *Engine) startDevice(dev *Device) error {
 		}
 	}
 	dev.StartBehaviors()
+	dev.StartPush()
 	return errors.Join(errs...)
 }
 
@@ -495,6 +502,7 @@ func (e *Engine) StopAll() {
 }
 
 func (e *Engine) stopDevice(dev *Device) {
+	dev.StopPush()
 	dev.StopBehaviors()
 	dev.StopBehaviorOverrides()
 	dev.StopHTTP()

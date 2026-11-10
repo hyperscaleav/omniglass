@@ -52,12 +52,16 @@ func newSimCmd() *cobra.Command {
 			if serverURL == "" || name == "" || token == "" {
 				return fmt.Errorf("sim: --server, --name, and --token are the node's (or set OMNIGLASS_SERVER / OMNIGLASS_NODE_NAME / OMNIGLASS_NODE_TOKEN)")
 			}
+			pushers, err := simnode.ParsePushers(config.Get(simnode.PushersEnv))
+			if err != nil {
+				return err
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return simnode.Run(ctx, simnode.Config{
 				ServerURL: serverURL, Name: name, Token: token,
 				PortOffset: portOffset, Poll: poll, Impairments: impairments,
-				PushToken: config.Get("OMNIGLASS_SIM_PUSH_TOKEN"),
+				Pushers: pushers,
 			})
 		},
 	}

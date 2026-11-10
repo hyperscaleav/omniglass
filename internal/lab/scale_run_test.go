@@ -201,3 +201,41 @@ func TestFormatSitesNotUpCountsPastTheFirstTwenty(t *testing.T) {
 		}
 	}
 }
+
+// A kept scale lab (#1633), held then stopped: its volumes stay, and the
+// stop line and the banner name the command that brings this lab back (its
+// own scenario, size and --keep), since a bare lab run would start the dev
+// fleet instead.
+func TestScaleRunKeptStopsKeepingTheDataAndNamesItsRestart(t *testing.T) {
+	srv := scaleServer(t, testSites, nil, nil)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	var out bytes.Buffer
+	cfg := scaleConfig()
+	cfg.Ephemeral, cfg.Hold = false, true
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { _, err := testRunner(eng, &out).Run(ctx, cfg); done <- err }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		eng.mu.Lock()
+		n := len(eng.containers)
+		eng.mu.Unlock()
+		if n == 4 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("a stopped kept scale lab: %v\n%s", err, out.String())
+	}
+	if len(eng.containers) != 0 || len(eng.volumes) != 2 {
+		t.Fatalf("after stop: containers %v volumes %v, want none and both kept", eng.containers, eng.volumes)
+	}
+	restart := "omniglass lab run --scenario corporate --systems 20 --keep"
+	for _, line := range []string{"so `" + restart + "` picks up where you left off", restart + " --fresh starts over"} {
+		if !strings.Contains(out.String(), line) {
+			t.Errorf("output lacks %q:\n%s", line, out.String())
+		}
+	}
+}

@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -34,17 +34,28 @@ lab: all
 # up, publishes one loopback port, keeps privilege on the node, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
+# The measuring tests run the ladder's smoke size, corporate at 20 systems
+# (every product seeded; #1719): the footprint and a scale measure.
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
-	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run Integration ./internal/lab/ ./internal/labfootprint/
+	$(MAKE) test-lab-image
+
+# The same tests against an image already built, building nothing: LAB_IMAGE
+# names it (a private tag where omniglass:dev is shared; empty runs
+# omniglass:dev), and LAB_RUN narrows the tests.
+LAB_RUN ?= Integration
+test-lab-image:
+	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
 
 # The scale lab (#1554): a scale lab scenario at a size, one node per site,
 # checked by scripts/scale-lab.sh (a node container per site, every simulated
 # component at its own loopback address, the containers' memory and CPU, and
 # a teardown that leaves nothing). Outside make test and CI: it builds the
 # image and stands up thousands of simulated devices. SYSTEMS sets the size,
-# SCENARIO the scenario, SCALE_LAB_ARGS passes lab run flags.
-SYSTEMS  ?= 100
+# SCENARIO the scenario, SCALE_LAB_ARGS passes lab run flags. The measurement
+# ladder is 300, 1,000 and 3,000 systems (#1719), so the default is its first
+# level; the dev fleet is the showcase, never a measurement basis.
+SYSTEMS  ?= 300
 SCENARIO ?= corporate
 scale-lab: all
 	scripts/scale-lab.sh $(SYSTEMS) $(SCENARIO) $(SCALE_LAB_ARGS)
@@ -305,7 +316,8 @@ footprint:
 	printf '%s\n' "$$out" | grep -E 'metric_block(_lineage)?_test.go|^(ok|FAIL|---)'; \
 	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; fi; exit $$status
 
-# The lab footprint (#1277): a throwaway lab at a cadence profile, warmed up,
+# The lab footprint (#1277): a throwaway lab of corporate at 20 systems (the
+# ladder's smoke size, every product seeded; #1719) at a cadence profile, warmed up,
 # then each container's CPU (millicores) and working set (anon plus shmem),
 # metric and property rows a minute, table, database and WAL growth a day, and
 # the 24 h and 30 d series read latency with the server and Postgres held to

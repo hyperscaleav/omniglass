@@ -659,13 +659,13 @@
    "name": "delivery-in-count",
    "data_type": "int",
    "label": "Delivery In",
-   "description": "Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. Written every window, 0 when quiet."
+   "description": "Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. At a node's schedule/{kind} instance it counts the runs due on the schedule that produce that kind. Written every window, 0 when quiet."
   },
   {
    "name": "delivery-out-count",
    "data_type": "int",
    "label": "Delivery Out",
-   "description": "Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. Written every window, 0 when quiet."
+   "description": "Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. At a node's schedule/{kind} instance it counts the runs made of those due. Written every window, 0 when quiet."
   },
   {
    "name": "delivery-loss-ratio",
@@ -673,7 +673,7 @@
    "unit": "ratio",
    "precision": 3,
    "label": "Delivery Loss",
-   "description": "The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log). 0 is healthy, and a quiet window writes 0."
+   "description": "The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log); at a node's schedule/{kind} instance, the share of runs due that were skipped. 0 is healthy, and a quiet window writes 0."
   },
   {
    "name": "session-held-count",
