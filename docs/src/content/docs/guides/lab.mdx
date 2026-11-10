@@ -209,7 +209,10 @@ Each probe and each poll runs on its own interval, on the node's own timer, not 
 The throwaway lab each walkthrough is recorded on runs at
 `walkthrough` and probes every 2s, since a recording is held to a time budget, so in your
 lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
-seconds longer than its recording. `default` is the product's own cadence, what a deployment's
+seconds longer than its recording. Its seed also sets the platform's report window
+(`collection.report_seconds`) to 10s, so the node's and the server's own figures, the ones
+[Platform health](/guides/operator/platform-health/) reads, land inside the recording; your lab
+reports at the platform's 60s, so those figures take up to a minute to appear. `default` is the product's own cadence, what a deployment's
 node runs at; the [lab footprint](/contributing/test-driven/#measuring-a-running-lab) measures a lab
 at each to say what that cadence costs.
 

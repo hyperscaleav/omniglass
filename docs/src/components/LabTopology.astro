@@ -84,6 +84,7 @@ const privilege = (c: (typeof facts.containers)[number]) => {
           <th>Checks in</th>
           <th>Probes reachability</th>
           <th>Pulls its worklist</th>
+          <th>Reports collection</th>
           <th>For</th>
         </tr>
       </thead>
@@ -96,6 +97,7 @@ const privilege = (c: (typeof facts.containers)[number]) => {
             <td>every {c.heartbeat}</td>
             <td>{c.probe_every === 'every check-in' ? c.probe_every : `every ${c.probe_every}`}</td>
             <td>every {c.worklist_every}</td>
+            <td>{c.report_every ? `every ${c.report_every}` : "at the platform's setting"}</td>
             <td>{c.for}</td>
           </tr>
         ))}

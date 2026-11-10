@@ -28,7 +28,7 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, pushCredential{}); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, pushCredential{}, 0); err != nil {
 			t.Fatalf("lab seed (no node %v): %v", noNode, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -84,7 +84,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 		}
 		var out bytes.Buffer
 		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(nodeHash), false,
-			pushCredential{Hash: hex.EncodeToString(hash), Prefix: prefix}); err != nil {
+			pushCredential{Hash: hex.EncodeToString(hash), Prefix: prefix}, 0); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 		return hash
@@ -102,6 +102,44 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 	}
 	if _, err := gw.AuthenticateBearer(ctx, first); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("the last run's token still authenticates: %v", err)
+	}
+}
+
+// A walkthrough lab's seed sets the platform's collection report window
+// (#1646), so the node and the server, which both read it at start, report
+// every 10s from their first window; a seed told nothing leaves the setting
+// at the platform's own 60s.
+func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
+	window := func(seconds int) int {
+		t.Helper()
+		ctx := context.Background()
+		dsn := storagetest.NewDSN(t)
+		t.Setenv("OMNIGLASS_DSN", dsn)
+		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+		_, hash, _, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, pushCredential{}, seconds); err != nil {
+			t.Fatalf("lab seed (report seconds %d): %v", seconds, err)
+		}
+		gw, err := storage.NewPG(ctx, dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer gw.Close()
+		s, err := gw.CollectionSettings(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s.ReportSeconds
+	}
+	if got := window(10); got != 10 {
+		t.Errorf("seeded with 10: collection.report_seconds = %d, want 10", got)
+	}
+	if got := window(0); got != 60 {
+		t.Errorf("seeded with none: collection.report_seconds = %d, want the platform's 60", got)
 	}
 }
 
