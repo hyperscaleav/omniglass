@@ -22,12 +22,6 @@ import (
 // missing.
 const MaxDeliveryWindow = 23 * time.Hour
 
-// receiptLookback is how far before the window the read reaches for each
-// boot's receipts: far enough to hold the lower neighbor of the window's
-// first batch, which owns the gap below it. A polling node lands a batch far
-// more often than this.
-const receiptLookback = time.Hour
-
 // missingLabel is what a missing item is, at this stage: the ingest cannot
 // yet tell these apart (see the lab guide).
 const missingLabel = "never landed: Termed at ingest, dropped at the node, or lost in between"
@@ -146,17 +140,24 @@ func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 }
 
 // ReceiptsQuery writes one JSON object a line: every ledgered receipt of
-// each boot that minted a batch in (from, to], from an hour before the
-// window on, so a boot's batches after the window (which say it has settled)
-// and the lower neighbor of its first batch in it are both read.
+// each boot that minted a batch in (from, to], from that boot's first batch
+// in the window on (its batches after the window say whether it has
+// settled), and the lower neighbor of that first batch, the boot's highest
+// seq below it, which owns the gap below it however long before the window
+// it was minted.
 func ReceiptsQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select row_to_json(r) from (
-		select node, boot, seq, minted, resolved, deliveries, ledger, outcome from telemetry_receipt
-		where ledger is not null and minted > to_timestamp(%[1]s) - interval '%[3]d seconds'
-			and boot in (select distinct boot from telemetry_receipt
-				where ledger is not null and minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s))
-		order by node, boot, seq) r`,
-		epoch(from), epoch(to), int(receiptLookback.Seconds()))
+		with first_in as (
+			select boot, min(seq) as seq from telemetry_receipt
+			where ledger is not null and minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s)
+			group by boot)
+		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome
+		from telemetry_receipt t join first_in f on f.boot = t.boot
+		where t.ledger is not null and (t.seq >= f.seq or t.seq = (
+			select max(l.seq) from telemetry_receipt l
+			where l.boot = f.boot and l.ledger is not null and l.seq < f.seq))
+		order by t.node, t.boot, t.seq) r`,
+		epoch(from), epoch(to))
 }
 
 func epoch(t time.Time) string { return strconv.FormatFloat(float64(t.UnixMicro())/1e6, 'f', 6, 64) }

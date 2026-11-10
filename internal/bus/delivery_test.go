@@ -771,6 +771,35 @@ func TestWithheldBatchReadsAsMissing(t *testing.T) {
 	}
 }
 
+// TestLowerNeighborLongBeforeTheWindowOwnsItsGap: the boot's batch 1 was
+// minted two hours before the window (the node was down in between), so
+// batch 2 is the boot's first in it. Batch 1 is still the lower neighbor
+// that owns the seqs below 2: the read finds it by seq, however long ago it
+// was minted, and the window reads loss 0 rather than batch 1's items as
+// missing.
+func TestLowerNeighborLongBeforeTheWindowOwnsItsGap(t *testing.T) {
+	r := newLedgerRig(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	first := r.ledgered(1, 0)
+	early := timestamppb.New(r.base.Add(-2 * time.Hour))
+	first.Ledger.Minted, first.Groups[0].Ts, first.Logs[0].Ts = early, early, early
+	r.publish(t, nc, first, r.ledgered(2, 1), r.ledgered(3, 2), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, srv, 6)
+
+	rows, unsettled := r.read(t)
+	if len(unsettled) != 0 {
+		t.Fatalf("unsettled %v, want the boot settled: batch 6 resolved past the window", unsettled)
+	}
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 4, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4})
+	}
+}
+
 // TestHeldBatchLandsLateAndReadsWhole: batch 1 is held in the node's spool
 // while 2 to 5 land. Until it lands the boot is unsettled and reads no
 // ratio; once it lands late, the read is loss 0.

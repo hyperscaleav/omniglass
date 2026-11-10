@@ -44,8 +44,9 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
   - The push lane records no ledger and reads no row (#1696); a whole-batch Term leaves no receipt
     and reads as `missing` (#1691); a node's spool drops and a killed boot's tail read as ingest
     `missing` or not at all until the node hop (#1692).
-  - The read reaches one hour before the window for a boot's lower neighbor, exact while a polling
-    node lands a batch more often than that; the window is capped at 23 hours by the receipts' day.
+  - The read finds a boot's lower neighbor by seq, however long before the window it was minted, while
+    its receipt is kept (a day): a neighbor pruned before a long outage ends reads the gap below the
+    window as `missing`. The window is capped at 23 hours by the receipts' day.
   - The settle reads the stream's backlog from the server's own `bus-consumer-pending` and
     `bus-consumer-ack-pending` platform gauges (#1628), not from JetStream directly.
   - The induced unregistered-key end-to-end run is #1698, and the healthy end-to-end test ran by
