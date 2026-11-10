@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -101,9 +103,10 @@ type reachRejectionBody struct {
 // reachGateReasonBody is a reason other than a refusal the endpoint's gate
 // holds (#1650): its kind, since when, and the task that added it.
 type reachGateReasonBody struct {
-	Kind   string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict"`
-	Since  time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate"`
-	Source string    `json:"source" doc:"What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id"`
+	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"`
+	Since     time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's"`
+	Source    string    `json:"source" doc:"What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe"`
+	Component string    `json:"component,omitempty" doc:"An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind"`
 }
 
 // reachTLSBody is the handshake and certificate of an endpoint over the tls
@@ -186,8 +189,44 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 			}
 			out.Body.Endpoints = append(out.Body.Endpoints, row)
 		}
+		if err := nameUpstreams(ctx, gw, a.scopeFor(ctx, "component", "read"), out.Body.Endpoints); err != nil {
+			return nil, huma.Error500InternalServerError("read reachability")
+		}
 		return out, nil
 	})
+}
+
+// nameUpstreams serves each upstream reason's component name beside the uuid
+// the node published as its source (#1652), resolved under the caller's read:
+// a component outside it, or gone, leaves the name absent rather than
+// disclosing it. Each source is looked up once per read.
+func nameUpstreams(ctx context.Context, gw storage.Gateway, read scope.Set, rows []reachEndpointBody) error {
+	names := map[string]string{}
+	for i := range rows {
+		for j := range rows[i].GateReasons {
+			r := &rows[i].GateReasons[j]
+			if r.Kind != "upstream" || r.Source == "" {
+				continue
+			}
+			name, seen := names[r.Source]
+			if !seen {
+				comp, err := gw.GetComponent(ctx, r.Source, read)
+				switch {
+				case err == nil:
+					name = comp.Name
+				case errors.Is(err, storage.ErrComponentNotFound):
+				default:
+					var refErr *storage.ErrPathNotFound
+					if !errors.As(err, &refErr) {
+						return err
+					}
+				}
+				names[r.Source] = name
+			}
+			r.Component = name
+		}
+	}
+	return nil
 }
 
 // composeEndpoint assembles one endpoint's reachability row from the property and
