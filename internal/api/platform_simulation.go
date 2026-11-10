@@ -50,7 +50,7 @@ type platformSimulationProtocol struct {
 // platformSimulationDevice is one simulated device over the window.
 type platformSimulationDevice struct {
 	ComponentID string           `json:"component_id"`
-	Name        string           `json:"name" doc:"The component's name; empty when it is no longer one of the node's simulated devices."`
+	Component   string           `json:"component" doc:"The component's name; empty when it is no longer one of the node's simulated devices."`
 	Received    map[string]int64 `json:"received" doc:"Requests the device saw over the window, by protocol."`
 	Impaired    bool             `json:"impaired" doc:"Whether the simulator impairs the device at the window's end."`
 	Unhit       bool             `json:"unhit" doc:"Whether it is a poll target due over the window that the simulator never saw."`
@@ -112,7 +112,7 @@ func toPlatformSimulationNode(w closedloop.NodeWindow, names map[string]string) 
 		}
 	}
 	for _, d := range w.Devices {
-		n.Devices = append(n.Devices, platformSimulationDevice{ComponentID: d.ComponentID, Name: names[d.ComponentID],
+		n.Devices = append(n.Devices, platformSimulationDevice{ComponentID: d.ComponentID, Component: names[d.ComponentID],
 			Received: d.Received, Impaired: d.Impaired, Unhit: d.Unhit})
 	}
 	return n

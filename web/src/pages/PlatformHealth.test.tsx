@@ -171,7 +171,7 @@ const measured: PlatformSimNode = {
   receipts: { landed: 42, margin: 1, backlog: 0, after_end: 0 },
   protocols: [{ protocol: "http", accepted: 9, received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
   in_flight_high: 2, queue_depth: null, busy_workers: null,
-  devices: [{ component_id: uuidFor("display"), name: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
+  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
 };
 const simBody = (nodes: PlatformSimNode[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, nodes });
 

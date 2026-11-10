@@ -496,7 +496,7 @@ type platformSimulationWire struct {
 		BusyWorkers *int64 `json:"busy_workers"`
 		Devices     []struct {
 			ComponentID string           `json:"component_id"`
-			Name        string           `json:"name"`
+			Component   string           `json:"component"`
 			Received    map[string]int64 `json:"received"`
 			Impaired    bool             `json:"impaired"`
 		} `json:"devices"`
@@ -670,7 +670,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	if n.QueueDepth != nil || n.BusyWorkers != nil {
 		t.Fatalf("queue %v, busy %v: want both null (not wired yet) from a node that reports neither", n.QueueDepth, n.BusyWorkers)
 	}
-	if len(n.Devices) != 1 || n.Devices[0].ComponentID != panelID || n.Devices[0].Name != "panel-1" || n.Devices[0].Received["tcp"] != 12 {
+	if len(n.Devices) != 1 || n.Devices[0].ComponentID != panelID || n.Devices[0].Component != "panel-1" || n.Devices[0].Received["tcp"] != 12 {
 		t.Fatalf("devices = %+v, want panel-1 with its 12 tcp hits over the window", n.Devices)
 	}
 

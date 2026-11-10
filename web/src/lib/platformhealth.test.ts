@@ -232,13 +232,13 @@ describe("states with no number", () => {
 });
 
 describe("devices", () => {
-  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", name: "", received: {}, impaired: false, unhit: false, ...over });
+  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, ...over });
   it("sums a device's requests over its protocols", () => {
     expect(deviceReceived(dev({ received: { http: 4, tcp: 2 } }))).toBe(6);
     expect(deviceReceived(dev({}))).toBe(0);
   });
   it("lists unhit, then impaired, then the rest by name", () => {
-    const got = sortDevices([dev({ name: "b" }), dev({ name: "a" }), dev({ name: "z", impaired: true }), dev({ name: "y", unhit: true })]).map((d) => d.name);
+    const got = sortDevices([dev({ component: "b" }), dev({ component: "a" }), dev({ component: "z", impaired: true }), dev({ component: "y", unhit: true })]).map((d) => d.component);
     expect(got).toEqual(["y", "z", "a", "b"]);
   });
 });

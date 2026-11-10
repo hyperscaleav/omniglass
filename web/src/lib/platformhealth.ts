@@ -193,5 +193,5 @@ export function deviceReceived(d: Pick<PlatformSimDevice, "received">): number {
 // then by name.
 export function sortDevices(devices: PlatformSimDevice[] | null | undefined): PlatformSimDevice[] {
   const rank = (d: PlatformSimDevice) => (d.unhit ? 0 : d.impaired ? 1 : 2);
-  return [...(devices ?? [])].sort((a, b) => rank(a) - rank(b) || (a.name || a.component_id).localeCompare(b.name || b.component_id));
+  return [...(devices ?? [])].sort((a, b) => rank(a) - rank(b) || (a.component || a.component_id).localeCompare(b.component || b.component_id));
 }

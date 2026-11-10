@@ -267,7 +267,7 @@ function DeviceTable(props: { node: PlatformSimNode }) {
               <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
                 <td>
                   <A href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
-                    {d.name || d.component_id}
+                    {d.component || d.component_id}
                   </A>
                 </td>
                 <td class="tnum text-right text-sm">

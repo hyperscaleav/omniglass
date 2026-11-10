@@ -7344,14 +7344,14 @@ components:
     PlatformSimulationDevice:
       additionalProperties: false
       properties:
+        component:
+          description: The component's name; empty when it is no longer one of the node's simulated devices.
+          type: string
         component_id:
           type: string
         impaired:
           description: Whether the simulator impairs the device at the window's end.
           type: boolean
-        name:
-          description: The component's name; empty when it is no longer one of the node's simulated devices.
-          type: string
         received:
           additionalProperties:
             format: int64
@@ -7363,7 +7363,7 @@ components:
           type: boolean
       required:
         - component_id
-        - name
+        - component
         - received
         - impaired
         - unhit

@@ -9750,11 +9750,11 @@ export interface components {
             version?: string;
         };
         PlatformSimulationDevice: {
+            /** @description The component's name; empty when it is no longer one of the node's simulated devices. */
+            component: string;
             component_id: string;
             /** @description Whether the simulator impairs the device at the window's end. */
             impaired: boolean;
-            /** @description The component's name; empty when it is no longer one of the node's simulated devices. */
-            name: string;
             /** @description Requests the device saw over the window, by protocol. */
             received: {
                 [key: string]: number;
