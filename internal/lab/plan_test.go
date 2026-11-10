@@ -485,6 +485,49 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 }
 
+// A kept scale lab (#1633) tells its seed so, with a hidden --keep: the seed
+// then keeps the fleet a database already holds and re-enrolls its nodes. A
+// throwaway one's seed carries no --keep, so a database holding data stays
+// refused.
+func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
+	for _, tc := range []struct {
+		ephemeral bool
+		want      string
+	}{
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --keep"},
+	} {
+		o := scaleOptions()
+		o.Ephemeral = tc.ephemeral
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(s.Seed.Cmd, " "); got != tc.want {
+			t.Errorf("ephemeral %v: seed command %q, want %q", tc.ephemeral, got, tc.want)
+		}
+	}
+}
+
+// The stop line's restart hint (#1633) is the command that brings this lab
+// back: a bare lab run for a learner's lab, and for a kept scale lab its own
+// scenario, size and --keep (and its cadence, when not the lab's own), which
+// a bare lab run would not bring back.
+func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
+	if got := RestartCommand(testOptions()); got != "omniglass lab run" {
+		t.Errorf("a learner's lab: %q", got)
+	}
+	o := scaleOptions()
+	o.Ephemeral, o.Systems, o.Cadence = false, 3000, CadenceLab
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --keep" {
+		t.Errorf("a kept scale lab: %q", got)
+	}
+	o.Cadence = CadenceDefault
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --cadence default --keep" {
+		t.Errorf("a kept scale lab at the default cadence: %q", got)
+	}
+}
+
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
 // the ingest lag from (a row's commit time less its probe time). A dev lab's
 // does not: it pays for nothing it does not read.
