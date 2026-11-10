@@ -152,8 +152,13 @@ func TestCLIEndToEnd(t *testing.T) {
 
 	// Component dependencies (#1648): the generated commands record a codec
 	// fed from a PDU's outlet, list it from the codec's side, and remove it.
+	// The test mints its own product rather than borrow a seeded SKU.
+	if out, code := cli("product", "create", "--name", "cli-dep-box", "--label", "CLI dependency box",
+		"--kind", "device", "--component-type", "generic-device"); code != 0 {
+		t.Fatalf("product create exit %d:\n%s", code, out)
+	}
 	for _, name := range []string{"pdu-1", "codec-1"} {
-		if out, code := cli("component", "create", "--name", name, "--product", "boreal-edge-55"); code != 0 {
+		if out, code := cli("component", "create", "--name", name, "--product", "cli-dep-box"); code != 0 {
 			t.Fatalf("component create %s exit %d:\n%s", name, code, out)
 		}
 	}

@@ -16,7 +16,7 @@ var Subsystems = []Cluster{
 	{Name: "fleet", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",
 		"system", "system_member",
-		"component",
+		"component", "component_dependency",
 		"endpoint", "endpoint_live",
 	}},
 	{Name: "catalog", Tables: []string{
