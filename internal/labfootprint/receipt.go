@@ -10,14 +10,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// receiptMargin is how far before the window's start a node's receipts are
-// counted: the stream's ack wait (telemetryAckWait in internal/bus), the
-// longest a batch the bus acknowledged after the start read can have landed
-// before it.
-const receiptMargin = 30 * time.Second
-
 // maxEndpointWindow is the longest window the receipt count can read: the
-// server prunes receipts past a 24 h horizon (receiptHorizon in internal/bus),
+// server prunes receipts past a 24 h horizon (ReceiptHorizon in internal/bus),
 // and a window that long would lose its earliest receipts to the prune.
 const maxEndpointWindow = 23 * time.Hour
 
@@ -38,7 +32,7 @@ func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
 		count(*) filter (where landed_at > to_timestamp(%[4]s))
 		from telemetry_receipt
 		where starts_with(batch_id, %[1]s) and landed_at >= to_timestamp(%[5]s)`,
-		sqlLiteral(prefix), epochLiteral(t0), epochLiteral(drained), epochLiteral(t1), epochLiteral(t0.Add(-receiptMargin)))
+		sqlLiteral(prefix), epochLiteral(t0), epochLiteral(drained), epochLiteral(t1), epochLiteral(t0.Add(-closedloop.ReceiptMargin)))
 }
 
 // parseReceiptCount reads the query's one row as psql -At prints it.

@@ -101,6 +101,10 @@ type NodeBracket struct {
 	Receipts   ReceiptCount
 	Targets    []PollTarget
 	Window     time.Duration
+	// Between is the sim reads taken between the window's ends (the ring's
+	// brackets inside it), read only for an impairment applied and lifted
+	// inside the window. The lab harness takes none.
+	Between []collection.SimObservation
 }
 
 // ClosedLoopGap is one gap on one node. Count is the lower bound read as
@@ -247,12 +251,12 @@ func tallyRow(s collection.RequestTallySnapshot, transport string) collection.Ta
 	return collection.TallyCounters{Transport: transport}
 }
 
-// impaired is whether any of the node's sim reads carried an applied
-// impairment. TODO(#1662): attribute an impairment to the protocol it
+// impaired is whether any of the node's sim reads, those between the ends
+// included, carried an applied impairment. TODO(#1662): attribute an impairment to the protocol it
 // impairs, and count the changes, so an unimpaired protocol on an impaired
 // node still reads loss.
 func impaired(b NodeBracket) bool {
-	for _, o := range []collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter} {
+	for _, o := range append([]collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}, b.Between...) {
 		if o.Impaired > 0 {
 			return true
 		}
