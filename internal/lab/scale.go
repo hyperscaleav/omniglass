@@ -2,8 +2,17 @@ package lab
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 )
 
 // The scale lab (#1554) is a resolved scenario plan brought up as a
@@ -15,6 +24,18 @@ import (
 // ScaleProject is a scale lab's compose project: its own, so it runs beside
 // a learner's lab, and every container and network it creates carries it.
 const ScaleProject = "omniglass-scale"
+
+// The measuring ladder (#1719): every lab that measures runs the corporate
+// scenario at a stated size, so two figures compare only when the fleet they
+// were read from is the same. SmokeSystems is the smoke rung (make test-lab
+// and make lab-footprint), the smallest round size past the last one that
+// drops a product the manifest names (16 and 17 do, every size from 18 up
+// does not); the scale levels are 300, 1,000 and 3,000 systems. The dev
+// scenario is the showcase, never a measurement basis.
+const (
+	MeasureScenario = "corporate"
+	SmokeSystems    = 20
+)
 
 // Footprint is what a part of the lab takes of the host at steady state:
 // resident memory in MiB, and CPU in cores.
@@ -222,4 +243,129 @@ func FormatMiB(m float64) string {
 		return fmt.Sprintf("%.1f GiB", m/1024)
 	}
 	return fmt.Sprintf("%.0f MiB", m)
+}
+
+// PerfSize is one size the perf gate measures (#1640): a fixed scenario at a
+// fixed number of systems, warmed up and read over a fixed window, so a
+// baseline and a check of it measure the same fleet the same way. The window
+// is a whole multiple of every interval the lab runs on
+// (ScenarioPollIntervals), so each window reads whole poll cycles.
+type PerfSize struct {
+	// Name is what --size takes: ci fits a hosted runner, laptop the
+	// architect's machine.
+	Name       string
+	Scenario   string
+	Systems    int
+	Warmup     time.Duration
+	Window     time.Duration
+	FleetReads int
+}
+
+// BaselineFile is the size's committed baseline, under
+// internal/labfootprint/baseline/: the scenario, the systems, the size.
+func (s PerfSize) BaselineFile() string {
+	return fmt.Sprintf("%s-%d.%s.json", s.Scenario, s.Systems, s.Name)
+}
+
+// PerfSizes are the gate's sizes, smallest first: the ladder the architect
+// set on #1640 (corporate 300 on a runner, 1,000 on the laptop, 3,000 the
+// goal).
+func PerfSizes() []PerfSize {
+	return []PerfSize{
+		{Name: "ci", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: 20},
+		{Name: "laptop", Scenario: "corporate", Systems: 1000, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: 20},
+	}
+}
+
+// PerfSizeNamed returns the size of that name, or refuses naming the sizes.
+func PerfSizeNamed(name string) (PerfSize, error) {
+	var names []string
+	for _, s := range PerfSizes() {
+		if s.Name == name {
+			return s, nil
+		}
+		names = append(names, s.Name)
+	}
+	return PerfSize{}, fmt.Errorf("perf size %q: want one of %s", name, strings.Join(names, ", "))
+}
+
+// ScenarioPollIntervals is every interval a scale lab of the scenario at that
+// size runs on, shortest first, each once: each driver poll of each product
+// the plan places, the lab cadence's timers, and the platform's collection
+// report window (the lab cadence leaves it at the platform's default).
+func ScenarioPollIntervals(name string, systems int) ([]time.Duration, error) {
+	plan, err := resolveScenario(name, systems)
+	if err != nil {
+		return nil, err
+	}
+	drivers := map[string]string{}
+	for _, p := range seed.ShippedProducts() {
+		drivers[p.Name] = p.Driver
+	}
+	polls := seed.ShippedDriverPolls()
+	seen := map[time.Duration]bool{}
+	for _, c := range plan.Totals.Products {
+		for _, d := range polls[drivers[c.Name]] {
+			seen[d] = true
+		}
+	}
+	cad, err := LookupCadence(CadenceLab, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range []string{cad.Heartbeat, cad.ProbeEvery, cad.WorklistEvery, cad.SimPoll, cad.ClosedLoopBracket} {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return nil, fmt.Errorf("cadence %s: %w", cad.Name, err)
+		}
+		seen[d] = true
+	}
+	report := cad.ReportSeconds
+	if report == 0 {
+		v, ok := settings.Defaults()["collection"]["report_seconds"].(int)
+		if !ok {
+			return nil, errors.New("settings: collection.report_seconds has no integer default")
+		}
+		report = v
+	}
+	seen[time.Duration(report)*time.Second] = true
+	out := make([]time.Duration, 0, len(seen))
+	for d := range seen {
+		out = append(out, d)
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// PerfPlanDigest is a digest of the device set a scenario at a size places:
+// the printed plan, every site, system and component count. A baseline
+// records it, and a check whose build resolves a different one is not
+// comparable to it.
+func PerfPlanDigest(name string, systems int) (string, error) {
+	plan, err := resolveScenario(name, systems)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	if err := scenario.WritePlan(h, plan); err != nil {
+		return "", err
+	}
+	for _, site := range plan.Sites {
+		for _, sys := range site.Systems {
+			fmt.Fprintf(h, "%s %s %s %s %s %v %v\n", site.Name, sys.Name, sys.Standard, sys.Building, sys.Room, sys.Components, sys.Roles)
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func resolveScenario(name string, systems int) (*scenario.Plan, error) {
+	m, err := scenario.Shipped(name)
+	if err != nil {
+		return nil, err
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		return nil, err
+	}
+	return scenario.Resolve(m, cat, systems)
 }

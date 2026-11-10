@@ -415,6 +415,11 @@ type ScaleRun struct {
 	EndpointsGap string
 	// Delivery is the receipts the delivery table reconciles (#1641).
 	Delivery DeliveryRead
+	// Host is the machine the lab ran on, nil when the daemon was not this
+	// one; PlanDigest is the device set the scenario at its size places
+	// (#1640). The perf gate reads both.
+	Host       *Fingerprint
+	PlanDigest string
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -474,17 +479,27 @@ type ScaleReport struct {
 	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 
 	// Delivery is each kind's loss across each hop it crosses (#1641), over
-	// the settled boots, one set of rows per lane (#1696); DeliveryEndToEnd
-	// is each kind's loss over all the node lane's hops (the push lane's one
-	// row is its own end to end); DeliveryUnsettled names each boot no ratio
-	// was read from.
+	// the settled boots, one set of rows per lane (#1696), the node lane's
+	// after the sim hop's row per protocol (#1694); DeliveryEndToEnd is each
+	// kind's loss over all the node lane's hops (the push lane's one row is
+	// its own end to end); DeliveryUnsettled names each boot no ratio was read
+	// from; DeliveryEnded each boot read only as far as it landed, because its
+	// node (or, for the push lane, the server) started again (#1692).
 	Delivery          []DeliveryRow             `json:"delivery"`
 	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
 	DeliveryUnsettled []UnsettledBoot           `json:"delivery_unsettled,omitempty"`
+	DeliveryEnded     []EndedBoot               `json:"delivery_unshipped,omitempty"`
 	// DeliveryNotRead is why no receipts were read, when none were;
 	// DeliveryNote qualifies a read that was.
 	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
 	DeliveryNote    string `json:"delivery_note,omitempty"`
+
+	// Host is the machine the lab ran on, absent when the lab's daemon was
+	// not this machine's; PlanDigest is the device set the scenario at its
+	// size places. The perf gate (#1640) compares a host-dependent figure
+	// only on the baseline's host, and a run only with the baseline's plan.
+	Host       *Fingerprint `json:"host,omitempty"`
+	PlanDigest string       `json:"plan_digest,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -515,6 +530,8 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		Absolutes:             r.Absolutes,
 		SystemPageFigures:     SummarizePage(r.Page),
 		EndpointsGap:          r.EndpointsGap,
+		Host:                  r.Host,
+		PlanDigest:            r.PlanDigest,
 	}
 	if len(r.Endpoints) > 0 {
 		e := closedloop.SummarizeEndpoints(r.Endpoints)
@@ -525,10 +542,13 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ms[i] = s * 1000
 	}
 	out.IngestLag = QuantilesOf(ms)
+	out.Delivery = SimDeliveryOf(r.Endpoints)
 	if d := r.Delivery; !d.Read {
 		out.DeliveryNotRead = cmp.Or(d.Reason, "no receipts read")
 	} else {
-		out.Delivery, out.DeliveryUnsettled = DeliveryOf(d)
+		var hops []DeliveryRow
+		hops, out.DeliveryUnsettled, out.DeliveryEnded = DeliveryOf(d)
+		out.Delivery = append(out.Delivery, WithSchedule(ScheduleRowsOf(d.Schedule), hops)...)
 		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
 		if !d.StreamClear {
 			out.DeliveryNote = fmt.Sprintf("unsettled: the telemetry consumer still held batches when the settle ran out (%s pending, %s unacked)",

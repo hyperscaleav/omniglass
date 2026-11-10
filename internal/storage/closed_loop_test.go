@@ -5,12 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // A node's receipts are counted by landed_at only inside the read's span,
 // and split into the margin before the window's start and the run after its
-// end; another node's receipts never count, however its name begins.
+// end; another node's receipts never count, however its name begins, and
+// neither does a Term receipt.
 func TestCountTelemetryReceipts(t *testing.T) {
 	t.Parallel()
 	f := newLandFixture(t)
@@ -35,6 +37,16 @@ func TestCountTelemetryReceipts(t *testing.T) {
 		if _, err := f.conn.Exec(ctx, `update telemetry_receipt set landed_at = $2 where batch_id = $1`, id, at); err != nil {
 			t.Fatalf("stamp %s: %v", id, err)
 		}
+	}
+	// A batch the server Termed leaves a receipt that names its loss
+	// (#1691); it landed nothing, so it never counts.
+	termed := "og.v1.telemetry.edge-1 termed"
+	if err := f.gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Node: "edge-1",
+		Ledger: delivery.Stamp{Boot: "boot-1", Seq: 1, Minted: start, Kinds: delivery.Declared{delivery.Log: {Count: 1}}}}); err != nil {
+		t.Fatalf("record %s: %v", termed, err)
+	}
+	if _, err := f.conn.Exec(ctx, `update telemetry_receipt set landed_at = $2 where batch_id = $1`, termed, start.Add(time.Minute)); err != nil {
+		t.Fatalf("stamp %s: %v", termed, err)
 	}
 	got, err := f.gw.CountTelemetryReceipts(ctx, "og.v1.telemetry.edge-1 ", from, start, end, next)
 	if err != nil {

@@ -2,7 +2,8 @@
 
 // The lab against a real Docker daemon: the integration test that closes the
 // runner's capability gate (the fake-engine tests are its checkpoint). It
-// needs the image `make` builds (omniglass:dev) and runs through make test-lab.
+// needs the image `make` builds (omniglass:dev), or the one OMNIGLASS_LAB_IMAGE
+// names, and runs through make test-lab.
 // Everything it creates carries a project name of its own, so it never meets
 // a person's lab on the same daemon, and it removes only that project.
 package lab
@@ -26,6 +27,24 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
 )
 
+// labTestImage is the image these tests run: omniglass:dev, which make
+// test-lab builds, unless OMNIGLASS_LAB_IMAGE names another, a private tag
+// for a run that must not rebuild the shared omniglass:dev.
+func labTestImage() string {
+	if ref := os.Getenv("OMNIGLASS_LAB_IMAGE"); ref != "" {
+		return ref
+	}
+	return DevImage
+}
+
+// labTestChoice runs image as a dev image held to its own build id, so an
+// override is checked the way omniglass:dev is.
+func labTestChoice(image string, labels map[string]string) ImageChoice {
+	c := SelectImage(labels[VersionLabel], "")
+	c.Ref = image
+	return c
+}
+
 func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the lab's integration test runs through make test-lab (it needs the image make builds)")
@@ -40,9 +59,10 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	labels, found, err := eng.ImageLabels(ctx, DevImage)
+	image := labTestImage()
+	labels, found, err := eng.ImageLabels(ctx, image)
 	if err != nil || !found {
-		t.Fatalf("the image %s (run make first): found %v, %v", DevImage, found, err)
+		t.Fatalf("the image %s (run make first): found %v, %v", image, found, err)
 	}
 	host, _ := os.Hostname()
 	project := fmt.Sprintf("omniglass-lab-it-%d", os.Getpid())
@@ -57,12 +77,12 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	})
 	cfg := func(pid int) Config {
 		return Config{
-			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: DefaultScenario,
+			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: DefaultScenario,
 				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
 				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
 					Token: "lab-it-push-token", TokenHash: tokenHash("lab-it-push-token"), TokenPrefix: "labitpsh"}},
 				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
-			Image:         SelectImage(labels[VersionLabel], ""),
+			Image:         labTestChoice(image, labels),
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
 		}
 	}
@@ -408,9 +428,10 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	labels, found, err := eng.ImageLabels(ctx, DevImage)
+	image := labTestImage()
+	labels, found, err := eng.ImageLabels(ctx, image)
 	if err != nil || !found {
-		t.Fatalf("the image %s (run make first): found %v, %v", DevImage, found, err)
+		t.Fatalf("the image %s (run make first): found %v, %v", image, found, err)
 	}
 	host, _ := os.Hostname()
 	project := fmt.Sprintf("omniglass-lab-it-throwaway-%d", os.Getpid())
@@ -429,10 +450,10 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	t.Cleanup(func() { _ = holder.Process.Kill(); _ = holder.Wait() })
 	file := t.TempDir() + "/lab.env"
 	cfg := Config{
-		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: "empty",
+		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: "empty",
 			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
 			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}, Ephemeral: true},
-		Image: SelectImage(labels[VersionLabel], ""), Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
+		Image: labTestChoice(image, labels), Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
 	}
 	var out bytes.Buffer
 	done := make(chan error, 1)

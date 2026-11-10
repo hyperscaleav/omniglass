@@ -11,6 +11,7 @@ batch at a time so `resolved` is always the seq below. A publish the stream refu
 `503` and takes its items back off the offsets, since the pusher still holds them. A new
 `internal/delivery` `Publisher` owns the stamp, the turn and the withdrawal. The push lane's receipts
 carry no node, so `omniglass lab measure` reconciles each lane apart: the delivery table gains a
-`lane` column (and the JSON a `lane` key), a Termed pushed batch reads `missing` on the push lane with
-its own footer, and the end-to-end line composes the node lane alone. The decisions are
+`lane` column (and the JSON a `lane` key), a Termed pushed batch reads under its own cause on the
+push lane (its Term receipt under the server's boot), a hole there reads `missing` with its own footer,
+and the end-to-end line composes the node lane alone. The decisions are
 [ADR-1696](/architecture/decisions/#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row).

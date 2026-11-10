@@ -27,6 +27,17 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
+// fleetSizeSQL reads a lab's fleet: its systems, components and enabled
+// tasks. The platform system (og/platform, which the boot seed plants on
+// every server since #1625) is the server's own, not the scenario's, so it
+// is not counted: a scale lab at 300 systems reads 300, which the perf gate
+// compares with its baseline's size (#1640).
+const fleetSizeSQL = `select
+	(select count(*) from system s left join system_type st on st.id = s.system_type_id
+	 where st.id is null or not (st.namespace = 'og' and st.name = 'platform')),
+	(select count(*) from component),
+	(select count(*) from task where enabled)`
+
 // ScaleConfig is one scale measurement (#1556).
 type ScaleConfig struct {
 	// Binary, when set, is the omniglass binary whose `lab run` brings up a
@@ -35,12 +46,19 @@ type ScaleConfig struct {
 	Binary   string
 	Scenario string
 	Systems  int
+	// Image, when set, is the omniglass image the brought-up lab runs (lab
+	// run's own --image); empty is the binary's own build.
+	Image string
 	// DockerHost is the daemon the lab runs on.
 	DockerHost string
 	// ReadyTimeout bounds a bring-up (lab run's own --ready-timeout).
 	ReadyTimeout time.Duration
-	Warmup       time.Duration
-	Window       time.Duration
+	// InduceUnregistered brings the lab up with one device answering a
+	// property key no driver registers (lab run's --induce-unregistered,
+	// #1698), so the delivery table shows a refusal as property loss.
+	InduceUnregistered bool
+	Warmup             time.Duration
+	Window             time.Duration
 	// FleetReads is how many console fleet-view reads are timed, spread
 	// evenly over the window.
 	FleetReads int
@@ -75,6 +93,9 @@ type scaleLab struct {
 	nodes map[string]string
 	// image is the server's image, for its build label.
 	image string
+	// labels are the server container's labels, which name the fleet the
+	// lab seeded (lab.FleetOf).
+	labels map[string]string
 }
 
 // containers is every container the window reads, by the name the table
@@ -115,6 +136,22 @@ func MeasureScale(ctx context.Context, cfg ScaleConfig) (rep ScaleReport, err er
 	return h.measureScale(ctx, cfg)
 }
 
+// scaleRunArgs is the `lab run` a scale bring-up execs: the scenario at its
+// size on a free port, saying how to reach it in ready, held for the process
+// pid, on the config's image when it names one.
+func scaleRunArgs(cfg ScaleConfig, ready string, pid int) []string {
+	args := []string{"lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
+		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(pid),
+		"--ready-timeout", cfg.ReadyTimeout.String()}
+	if cfg.Image != "" {
+		args = append(args, "--image", cfg.Image)
+	}
+	if cfg.InduceUnregistered {
+		args = append(args, "--induce-unregistered")
+	}
+	return args
+}
+
 // bringUpScale starts `lab run` for the scale lab, waits for its ready file,
 // and returns the function that stops it and checks nothing is left.
 func (h *harness) bringUpScale(ctx context.Context, cfg ScaleConfig) (func() error, error) {
@@ -134,9 +171,7 @@ func (h *harness) bringUpScale(ctx context.Context, cfg ScaleConfig) (func() err
 	}
 	ready := filepath.Join(dir, "lab.env")
 	h.say("bringing up the scale lab: %s at %d systems", cfg.Scenario, cfg.Systems)
-	cmd := exec.Command(cfg.Binary, "lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
-		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(os.Getpid()),
-		"--ready-timeout", cfg.ReadyTimeout.String())
+	cmd := exec.Command(cfg.Binary, scaleRunArgs(cfg, ready, os.Getpid())...)
 	cmd.Stdout, cmd.Stderr = cfg.LabLog, cfg.LabLog
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dir)
@@ -178,7 +213,7 @@ func (h *harness) discoverScale(ctx context.Context) (scaleLab, error) {
 		}
 		switch svc {
 		case "server":
-			l.server, l.image = c.ID, c.Image
+			l.server, l.image, l.labels = c.ID, c.Image, c.Labels
 		case "db":
 			l.db = c.ID
 		default:
@@ -293,6 +328,10 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	if err != nil {
 		return scaleSession{}, err
 	}
+	run, err := scaleRunOf(l.labels, cfg, len(l.nodes))
+	if err != nil {
+		return scaleSession{}, err
+	}
 	h.env = map[string]string{"LAB_DB": l.db, "LAB_SERVER": l.server}
 	base, err := h.hostURL(ctx, l.server)
 	if err != nil {
@@ -311,21 +350,33 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 		return scaleSession{}, errors.New("the lab's Postgres does not record commit timestamps, which the ingest lag reads: stop this lab and bring it up again with this build's `lab run`")
 	}
 
-	run := ScaleRun{Scenario: cfg.Scenario, Warmup: cfg.Warmup, Window: cfg.Window, Sites: len(l.nodes)}
-	if run.Scenario == "" {
-		run.Scenario = lab.DefaultScenario
-	}
 	if img, err := h.dc.ImageInspect(ctx, l.image); err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	fleet, err := h.psql(ctx, fleetSizeSQL)
 	if err != nil {
 		return scaleSession{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
 	if f := strings.Split(strings.TrimSpace(fleet), "|"); len(f) == 3 {
-		run.Systems, _ = strconv.Atoi(f[0])
+		// The size is the one the lab was resolved at; a database holding
+		// another count was changed after the seed, which the run names.
+		if seeded, _ := strconv.Atoi(f[0]); seeded != run.Systems {
+			h.say("note: the lab was brought up at %d systems and its database now holds %d", run.Systems, seeded)
+		}
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
+	}
+	// The perf gate (#1640) names the host a run measured on and the device
+	// set its scenario places. A lab on a remote daemon ran elsewhere, so
+	// its runs carry no host rather than this one's.
+	if cfg.DockerHost == "" || lab.IsLocal(cfg.DockerHost) {
+		host := ReadFingerprint()
+		run.Host = &host
+	}
+	// The device set is the one the lab's labelled scenario and size place
+	// (#1719), which a lab this run brought up shares with cfg.
+	if digest, err := lab.PerfPlanDigest(run.Scenario, run.Systems); err == nil {
+		run.PlanDigest = digest
 	}
 	// One read before anything is timed, so an API that refuses the fleet
 	// view fails the run in seconds, not after its window. Its answer names
@@ -343,6 +394,21 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	h.say("ready: %d systems, %d components, %d enabled tasks, %d node containers; warming up for %s",
 		run.Systems, run.Components, run.Tasks, len(l.nodes), cfg.Warmup)
 	return s, nil
+}
+
+// scaleRunOf is the run's conditions: the fleet as the lab's server
+// container is labelled with it (#1719), never as cfg's --scenario and
+// --systems, which only size a lab the run brings up; the windows as cfg
+// gives them; and the sites as the lab's node containers count them.
+func scaleRunOf(serverLabels map[string]string, cfg ScaleConfig, sites int) (ScaleRun, error) {
+	fleet, err := lab.FleetOf(serverLabels)
+	if err != nil {
+		return ScaleRun{}, err
+	}
+	if fleet.Systems == 0 {
+		return ScaleRun{}, fmt.Errorf("the lab runs the %s scenario, which has no size: measure a scale lab (`omniglass lab run --scenario corporate --systems N`)", fleet.Scenario)
+	}
+	return ScaleRun{Scenario: fleet.Scenario, Systems: fleet.Systems, Warmup: cfg.Warmup, Window: cfg.Window, Sites: sites}, nil
 }
 
 // measureWindow measures one window into run: the readings at its ends, the
@@ -651,12 +717,25 @@ func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound tim
 		}
 		d := DeliveryRead{Read: true, Window: w, Receipts: rs, StreamClear: backlog.Clear(), Backlog: backlog}
 		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !time.Now().Before(deadline) {
-			return d
+			return h.readSchedule(ctx, d)
 		}
 		if err := sleep(ctx, settlePoll); err != nil {
 			return DeliveryRead{Reason: err.Error()}
 		}
 	}
+}
+
+// readSchedule adds the schedule hop (#1693) to a settled read: the nodes
+// report it in the batches the settle waited on.
+func (h *harness) readSchedule(ctx context.Context, d DeliveryRead) DeliveryRead {
+	out, err := h.psql(ctx, ScheduleQuery(d.Window.From, d.Window.To))
+	if err != nil {
+		return DeliveryRead{Reason: fmt.Sprintf("the schedule hop did not read: %v", err)}
+	}
+	if d.Schedule, err = ParseSchedule(out); err != nil {
+		return DeliveryRead{Reason: err.Error()}
+	}
+	return d
 }
 
 // ingestLag reads the lag of the samples the window landed. When none had,

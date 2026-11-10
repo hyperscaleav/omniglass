@@ -2,8 +2,14 @@ package bus
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
@@ -170,8 +176,11 @@ func TestFanOutTalliesUnboundAndUnidentified(t *testing.T) {
 // the batch it is asked to land.
 type outcomeStore struct {
 	fakeStore
-	owners map[string]storage.TaskOwner
-	landed *storage.IngestBatch
+	owners  map[string]storage.TaskOwner
+	landed  *storage.IngestBatch
+	landErr error                 // what LandBatch returns, nil to land
+	termed  []storage.TermedBatch // every Term receipt recorded
+	termErr error                 // what RecordTermedBatch returns
 }
 
 func (s *outcomeStore) ResolveTaskOwners(_ context.Context, _ string, ids []string) (map[string]storage.TaskOwner, error) {
@@ -198,7 +207,18 @@ func (s *outcomeStore) ListEventTypes(context.Context) ([]storage.EventType, err
 
 func (s *outcomeStore) LandBatch(_ context.Context, b storage.IngestBatch) (storage.LandResult, error) {
 	s.landed = &b
+	if s.landErr != nil {
+		return storage.LandResult{}, s.landErr
+	}
 	return storage.LandResult{Landed: true}, nil
+}
+
+func (s *outcomeStore) RecordTermedBatch(_ context.Context, b storage.TermedBatch) error {
+	if s.termErr != nil {
+		return s.termErr
+	}
+	s.termed = append(s.termed, b)
+	return nil
 }
 
 // TestLandNodeTalliesEachPath: a node tick's paths that land nothing count
@@ -279,6 +299,91 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 		}
 		if store.landed.Ledger != nil || !store.landed.Tally.Empty() {
 			t.Fatalf("ledger %+v tally %s, want neither for a batch that carried no ledger", store.landed.Ledger, mustJSON(t, store.landed.Tally))
+		}
+	})
+}
+
+// TestTermRecordsItsCause: each path that Terms a node's batch whole
+// records a receipt for it, its declared items under the path's own outcome,
+// so the loss table names the cause instead of reading them missing (#1691).
+// An undecodable batch has no readable ledger, so it records nothing and its
+// items stay missing; a transient failure below the bound redelivers and
+// records nothing; and a receipt that fails to record still Terms the batch.
+func TestTermRecordsItsCause(t *testing.T) {
+	stamp := delivery.Stamp{Boot: "boot-1", Seq: 7, Minted: time.Date(2026, 11, 10, 1, 0, 0, 0, time.UTC), Resolved: 6,
+		Kinds: delivery.Declared{delivery.Log: {Count: 1, Before: 3}, delivery.Metric: {Before: 4}}}
+	batch := func(edit func(*ogv1.TelemetryBatch)) []byte {
+		ev := &ogv1.TelemetryBatch{Ledger: stamp.Proto(), Logs: []*ogv1.LogLine{{Message: "self"}}}
+		if edit != nil {
+			edit(ev)
+		}
+		b, err := proto.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	header := nats.Header{jetstream.MsgIDHeader: []string{"node-a-boot-1-7"}}
+	const id = "og.v1.telemetry.node-a node-a-boot-1-7"
+	transient := errors.New("database away")
+	refused := fmt.Errorf("land: %w", &storage.KeyWriterError{Key: "k"})
+	delivered := func(n uint64) *jetstream.MsgMetadata { return &jetstream.MsgMetadata{NumDelivered: n} }
+
+	cases := []struct {
+		name    string
+		data    []byte
+		landErr error
+		meta    *jetstream.MsgMetadata
+		metaErr error
+		cause   delivery.Outcome // "" records nothing
+		nak     bool
+	}{
+		{name: "undecodable", data: []byte{0xff, 0xff, 0xff}, meta: delivered(1)},
+		{name: "owner asserted on the node lane", meta: delivered(1), cause: delivery.RefusedOwner,
+			data: batch(func(ev *ogv1.TelemetryBatch) { ev.Owner = &ogv1.Owner{Kind: "component", Ref: "disp-1"} })},
+		{name: "task rows outside the groups", meta: delivered(1), cause: delivery.RefusedTask,
+			data: batch(func(ev *ogv1.TelemetryBatch) { ev.TaskId = "t-1" })},
+		{name: "gateway refused the batch", data: batch(nil), landErr: refused, meta: delivered(1), cause: delivery.RefusedBatch},
+		{name: "unreadable delivery metadata", data: batch(nil), landErr: transient, metaErr: errors.New("no metadata"), cause: delivery.RefusedMetadata},
+		{name: "max deliveries reached", data: batch(nil), landErr: transient, meta: delivered(maxTelemetryDeliveries), cause: delivery.Abandoned},
+		{name: "below the bound redelivers", data: batch(nil), landErr: transient, meta: delivered(1), nak: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store := &outcomeStore{landErr: c.landErr}
+			s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
+			m := &fakeMsg{data: c.data, header: header, meta: c.meta, metaErr: c.metaErr}
+			s.handleTelemetry(m)
+			if m.naked != c.nak || m.termed == c.nak {
+				t.Fatalf("naked=%v termed=%v, want naked=%v", m.naked, m.termed, c.nak)
+			}
+			if c.cause == "" {
+				if len(store.termed) != 0 {
+					t.Fatalf("recorded %+v, want no Term receipt", store.termed)
+				}
+				return
+			}
+			if len(store.termed) != 1 {
+				t.Fatalf("recorded %d Term receipts, want 1", len(store.termed))
+			}
+			got := store.termed[0]
+			if got.BatchID != id || got.Node != "node-a" || got.Ledger.Boot != "boot-1" || got.Ledger.Seq != 7 ||
+				got.Ledger.Resolved != 6 || !got.Ledger.Minted.Equal(stamp.Minted) {
+				t.Fatalf("receipt = %+v, want batch %q of node-a carrying its ledger", got, id)
+			}
+			if !only(got.Outcome, delivery.Log, c.cause, 1) {
+				t.Fatalf("outcome = %s, want its one declared log %s and nothing else", mustJSON(t, got.Outcome), c.cause)
+			}
+		})
+	}
+
+	t.Run("a receipt that fails to record still Terms", func(t *testing.T) {
+		store := &outcomeStore{termErr: transient}
+		s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
+		m := &fakeMsg{data: batch(func(ev *ogv1.TelemetryBatch) { ev.TaskId = "t-1" }), header: header, meta: delivered(1)}
+		s.handleTelemetry(m)
+		if !m.termed || m.naked {
+			t.Fatalf("naked=%v termed=%v, want the batch Termed whatever its receipt", m.naked, m.termed)
 		}
 	})
 }

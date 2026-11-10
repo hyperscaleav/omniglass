@@ -92,6 +92,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
+| `run:perf` | runs the [perf gate](/guides/lab/#checking-against-the-baseline) (`make perf-check SIZE=ci`) on the PR's branch and upserts one comment with its verdict table; opt in, never a required check | yes |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
@@ -134,6 +135,13 @@ name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
 - **Merge conflicts:** GitHub runs no `pull_request` workflow on a PR with merge conflicts, so
   the label does nothing until they are resolved.
 - **Forks:** fork PRs are skipped (their token cannot push).
+
+`run:perf` (`perf.yml`) measures three throwaway scale labs of the `ci` size against the committed
+`ci` baseline and upserts one comment with the verdict table. It stays opt in and is never a required
+check: each run takes a runner for the better part of an hour, and whether it ever gates a merge waits
+on a record of its noise ([ADR-1640](/architecture/decisions/#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)).
+Fork PRs are skipped. Its `workflow_dispatch` with `update` set regenerates the `ci` baseline instead
+and uploads it as an artifact; committing it is the author's act.
 
 `run:test` and `run:build` are retired, not reserved: the full test suite is the merge gate, so it
 runs on every PR rather than on demand (ruled on #214: a test outside the CI gate is a gate

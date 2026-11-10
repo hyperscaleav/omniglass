@@ -67,13 +67,13 @@ func (h PlatformPipelineHop) kindOf(instance string) (delivery.Kind, bool) {
 
 // PlatformPipelineHops is the pipeline's hops in the order an item crosses
 // them: the one place the page's hop list is written. A hop is here once a
-// producer records it. The schedule hop waits on #1693; until a node-recorded
-// hop names itself in its instance, only one hop per class may use the bare
-// kind (TestPlatformPipelineHopsAreSeeded).
+// producer records it. A node records the schedule hop at schedule/{kind}
+// since #1693, and the page draws it with #1739; until then only one hop per
+// class may use the bare kind (TestPlatformPipelineHopsAreSeeded).
 var PlatformPipelineHops = []PlatformPipelineHop{
 	{
 		ID: delivery.Node, Label: "Node",
-		Description:    "The node's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, or it never encodes (lost).",
+		Description:    "The node's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, it never encodes, or (a self-log line) the bounded log buffer drops it (lost).",
 		ComponentClass: PlatformClassNode, InstanceForm: pipelineKindToken,
 	},
 	{

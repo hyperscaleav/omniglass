@@ -21,6 +21,9 @@ type Stamp struct {
 	Minted   time.Time
 	Resolved uint64
 	Kinds    Declared
+	// Loss is the node's account of what it dropped or lost, as of the mint
+	// (#1692).
+	Loss NodeLoss
 }
 
 // Ledger is a node boot's running count, held by the node's spool: the next
@@ -31,6 +34,8 @@ type Ledger struct {
 	boot   string
 	seq    uint64
 	minted map[Kind]uint64
+	drops  []pendingDrop               // runs dropped that no acked batch carried yet
+	lost   map[Outcome]map[Kind]uint64 // lost before minting, since the boot began
 }
 
 // NewLedger starts a boot's count.
@@ -50,7 +55,7 @@ func (l *Ledger) Last() uint64 { return l.seq }
 // batch carries none.
 func (l *Ledger) Mint(counts map[Kind]int, at time.Time, resolved uint64) Stamp {
 	l.seq++
-	s := Stamp{Boot: l.boot, Seq: l.seq, Minted: at, Resolved: resolved, Kinds: Declared{}}
+	s := Stamp{Boot: l.boot, Seq: l.seq, Minted: at, Resolved: resolved, Kinds: Declared{}, Loss: l.loss()}
 	for _, k := range Kinds {
 		n := uint64(max(counts[k], 0))
 		before := l.minted[k]
@@ -99,4 +104,15 @@ func (l *Ledger) Withdraw(s Stamp) {
 	for k, c := range s.Kinds {
 		l.minted[k] -= min(c.Count, l.minted[k])
 	}
+}
+
+// Under counts every item the ledger declared under the one outcome, kind by
+// kind: the tally of a batch the server Termed whole, whose items all share
+// its cause. Pure.
+func (d Declared) Under(o Outcome) Tally {
+	var t Tally
+	for _, k := range Kinds {
+		t.Add(k, o, int(d[k].Count))
+	}
+	return t
 }

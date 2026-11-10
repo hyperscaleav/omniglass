@@ -199,18 +199,19 @@ brand; and a test whose assertions read the **type tree** (stems, labels,
 inherited facts) mints a product under the type it needs, because the walk
 under test never looked at the product anyway.
 
-## Five performance instruments, three of which gate
+## Six performance instruments, four of which gate
 
-Performance has five instruments in this repo, and they are deliberately not the same
+Performance has six instruments in this repo, and they are deliberately not the same
 thing. Knowing which answers a given question is most of the value:
 
-| | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Lab footprint** | **Wall-clock benchmarks** |
-|---|---|---|---|---|---|
-| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | What a running lab costs per container and per day: CPU, memory, rows a minute, growth, read latency | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
-| Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
-| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
-| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **No.** A diagnostic | **No.** Inert without `-bench` |
-| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make lab-footprint` | `make bench`, deliberately, before and after |
+| | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Scale lab gate** | **Lab footprint** | **Wall-clock benchmarks** |
+|---|---|---|---|---|---|---|
+| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | A fleet that loses work or costs more to run than the committed baseline: closed-loop gaps, delivery loss, rows and bytes per system, latency, CPU and memory | What a running lab costs per container and per day: CPU, memory, rows a minute, growth, read latency | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
+| Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | A regression smaller than its tolerance or the runs' spread; times and usage on a host other than the baseline's | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
+| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Exact for the loss figures; the rest a median of N runs against a spread | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
+| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **Opt in.** Fails the change it runs on; never a required check | **No.** A diagnostic | **No.** Inert without `-bench` |
+| Fleet it reads | The test's own fixture | The test's own fixture | The dev scenario's fleet, one standard workload | The corporate scenario at a named size (`ci` or `laptop`), stated in the baseline it compares with | The corporate scenario at 20 systems by default, read from the lab's labels | The benchmark's own fixture |
+| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make perf-check SIZE=ci`, or the `run:perf` label on a PR | `make lab-footprint` | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
 as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
@@ -293,12 +294,17 @@ current figures, and `BenchmarkIngestFootprint` in `make bench` times the same p
 The ingest footprint counts one batch through the handler; it cannot say what a lab costs to
 run. `make lab-footprint` does
 ([ADR-1277](/architecture/decisions/#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing)).
-It builds the image, brings up a throwaway lab of its own project at a
+It builds the image, brings up a throwaway lab of its own project, the `corporate` scenario at
+20 systems (`-scenario` and `-systems` change it), at a
 [cadence profile](/guides/lab/#what-runs-with-which-privilege), warms it up, and measures N
-back-to-back windows:
+back-to-back windows. Every lab level that measures runs the corporate scenario at a stated size, so
+a figure from here compares with the same size on the
+[scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev lab is the showcase,
+never a lab measurement's basis, and the report names the scenario and size it read from the lab's
+labels ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)).
 
-- **CPU per container** (server, node, Postgres), in millicores, from each cgroup's CPU time
-  as the Engine reports it.
+- **CPU per container** (server, the nodes summed into one row, Postgres), in millicores, from
+  each cgroup's CPU time as the Engine reports it.
 - **Memory per container**, the working set: anonymous plus shared memory, never RSS, which
   counts the binary's file pages and the page cache the kernel would reclaim.
 - **Rows a minute** on the metric and property lanes, from Postgres's cumulative statistics, so
@@ -316,7 +322,7 @@ two runs you took minutes apart. When it is done it stops the lab and fails if a
 network or volume of its project is left.
 
 ```bash
-make lab-footprint                                            # the lab profile, 5 one-minute windows
+make lab-footprint                                            # corporate at 20, the lab profile, 5 one-minute windows
 make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.json"
 ```
 
@@ -331,7 +337,7 @@ reconciles each node's tally against what its simulators observed and what lande
 `published-not-landed`, `spool-dropped`, `unhit-endpoint`), each a lower bound with its masking
 term beside it ([how to read them](/guides/lab/#every-request-reached-its-endpoint-and-was-answered)).
 The arithmetic is pure and unit-tested gap by gap; `make test-lab` brings up a 20-system corporate
-scale lab and fails on any loss, any face that saw two requests at once, any polled protocol that
+scale lab, measures it with `lab measure`'s own path at that size, and fails on any loss, any face that saw two requests at once, any polled protocol that
 drew no request, or a restart inside the window. It needs the image `make` builds, so it is outside
 `make test` and CI.
 
@@ -383,6 +389,25 @@ deliberately does **not** do is as much of the design as what it does:
   committed to the tree would be a number from a different machine on a different day.
 - **No timing assertion, anywhere.** Not in a benchmark, not in a test. Timing assertions
   flake on a dev laptop, and that flake is the reason the counting instrument exists.
+
+Those three refusals hold for a benchmark. A whole scale lab answers each of them differently, and is
+the one instrument that gates on time at all
+([ADR-1640](/architecture/decisions/#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)).
+`make perf-check SIZE=ci|laptop` measures three throwaway labs of a named size and compares them with
+that size's committed baseline:
+
+- **A CI job, but opt in.** The `run:perf` label runs it on a PR and posts the verdict; it is never a
+  required check.
+- **A stored baseline, but generated and fingerprinted.** `make perf-baseline` writes it on the host
+  class it gates (the `ci` file from the `perf` workflow's dispatch artifact, the `laptop` file on the
+  architect's laptop), with that host's CPU, cores and memory. Times and usage gate only on a matching
+  host and read `reported` elsewhere; the counts gate everywhere. A PR that changes a baseline says why.
+- **Medians against a spread, never one run.** A figure fails only past its tolerance and past the
+  baseline's spread plus the runs' spread; runs that spread past the tolerance read `noisy`, which does
+  not fail. The loss figures (closed-loop gaps, delivery loss, redeliveries) are exact and must be 0.
+
+How to run and read it is in the lab guide's
+[Checking against the baseline](/guides/lab/#checking-against-the-baseline).
 
 Three rules make a benchmark here mean anything:
 

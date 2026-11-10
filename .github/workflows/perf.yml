@@ -1,0 +1,133 @@
+name: perf
+
+# The perf gate (#1640, ADR-1640): a scale lab measured end to end against the
+# committed baseline. Opt in and never a required check: each run stands up a
+# real scale lab for minutes, and a gate on the merge would wait on the
+# noise record that does not exist yet.
+#
+# - On a PR, the `run:perf` label runs `make perf-check SIZE=ci` on the PR's
+#   branch and posts its verdict table as one upserted PR comment. Fork PRs
+#   are skipped.
+# - workflow_dispatch runs the same check on the chosen ref; with `update`
+#   true it runs `make perf-baseline SIZE=ci` instead and uploads the
+#   regenerated baseline as an artifact. Committing it stays the author's
+#   act, so CI never writes to a branch. The CI baseline is generated here,
+#   on the runner class it gates, so its host fingerprint matches here.
+#
+# The token boundary, as demo.yml keeps it: the job that checks the tree out
+# and runs its code holds a read-only token and hands the verdict on as an
+# artifact; the job that writes the comment checks nothing out and runs
+# nothing from the tree. No loop: the PR run starts only on the `labeled`
+# event, and the comment is the workflow's only write. Event fields pass
+# through env, never into a shell.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      update:
+        description: "Regenerate the CI baseline (perf-baseline) instead of checking against it"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One perf run per PR at a time; every other label applied also starts this
+# workflow, and its group is its own run, so it cancels nothing.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request' &&
+    (github.event.label.name == 'run:perf' && format('perf-pr-{0}', github.event.pull_request.number) || format('perf-other-{0}', github.run_id)) ||
+    format('perf-dispatch-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  perf:
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.event.label.name == 'run:perf' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    env:
+      UPDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.update }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Check against the CI baseline
+        if: ${{ env.UPDATE != 'true' }}
+        run: |
+          set -o pipefail
+          mkdir -p perf-out
+          status=0
+          make perf-check SIZE=ci PERF_ARGS="--json perf-out/verdict.json --append perf-out/runs.jsonl" 2>perf-out/lab.log | tee perf-out/verdict.txt || status=$?
+          echo "$status" >perf-out/exit-code
+          exit "$status"
+
+      - name: Regenerate the CI baseline
+        if: ${{ env.UPDATE == 'true' }}
+        run: |
+          mkdir -p perf-out
+          make perf-baseline SIZE=ci PERF_ARGS="--append perf-out/runs.jsonl --out perf-out/corporate-300.ci.json" 2>&1 | tee perf-out/lab.log
+
+      - name: Keep the verdict, the runs and the baseline
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf
+          path: perf-out/
+          if-no-files-found: warn
+
+  comment:
+    needs: perf
+    if: ${{ always() && github.event_name == 'pull_request' && needs.perf.result != 'skipped' && needs.perf.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: perf
+          path: perf-out
+        continue-on-error: true
+
+      - name: Upsert the verdict comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ needs.perf.result }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- omniglass-perf -->'
+          if [ -s perf-out/verdict.txt ]; then
+            table=$(cat perf-out/verdict.txt)
+          else
+            table="The check printed no verdict: the lab did not come up or a run failed. See the run's lab log artifact."
+          fi
+          body="${MARKER}
+          ### Perf gate (\`make perf-check SIZE=ci\`)
+
+          Job: **${RESULT}**. Opt in, never a required check. [Run and artifacts](${RUN_URL}).
+
+          \`\`\`
+          ${table}
+          \`\`\`"
+          cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
+          if [ -n "$cid" ]; then
+            gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -f body="$body" >/dev/null
+          else
+            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -f body="$body" >/dev/null
+          fi
