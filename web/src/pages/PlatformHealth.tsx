@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
+import PlatformSimulation from "./PlatformSimulation";
 import { ArrowUpRight } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -82,6 +83,7 @@ export default function PlatformHealth() {
               </div>
             </Show>
             <NodeTable view={v()} />
+            <PlatformSimulation />
           </>
         )}
       </Show>

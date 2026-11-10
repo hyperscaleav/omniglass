@@ -13,6 +13,7 @@ import {
   productGroups,
   risenHits,
   sidebarPollMs,
+  simulatorConnected,
   SIDEBAR_POLL_MS,
   SIDEBAR_IDLE_POLL_MS,
   surfaceKind,
@@ -166,6 +167,17 @@ describe("the sidebar's poll", () => {
     expect(sidebarPollMs({ connected: false, nodes: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(sidebarPollMs(undefined)).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(SIDEBAR_IDLE_POLL_MS).toBeGreaterThan(SIDEBAR_POLL_MS);
+  });
+});
+
+describe("simulatorConnected", () => {
+  const me = (permissions: string[]) => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  it("holds only for a simulation reader with a simulator connected (#1647)", () => {
+    expect(simulatorConnected(me(["simulation:read"]), { connected: true, nodes: [] })).toBe(true);
+    expect(simulatorConnected(me(["simulation:read"]), { connected: false, nodes: [] })).toBe(false);
+    expect(simulatorConnected(me(["simulation:read"]), undefined)).toBe(false);
+    expect(simulatorConnected(me(["node:read"]), { connected: true, nodes: [] })).toBe(false);
+    expect(simulatorConnected(undefined, { connected: true, nodes: [] })).toBe(false);
   });
 });
 

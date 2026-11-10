@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import { entityNameError } from "./names";
+import { can, type Me } from "./auth";
 export { ENTITY_NAME_RE, entityNameError } from "./names";
 
 // The simulation data layer (#890): thin typed wrappers over the generated client
@@ -64,6 +65,14 @@ export const BLINK_MS = 700;
 // sidebarPollMs: the sidebar's interval for the fleet it last read.
 export function sidebarPollMs(f: SimFleet | undefined): number {
   return f?.connected ? SIDEBAR_POLL_MS : SIDEBAR_IDLE_POLL_MS;
+}
+
+// simulatorConnected is the nav's "simulator" condition (#890): a principal
+// who can read simulation, with a simulator connected to the server. The
+// sidebar's Simulation door and Platform health's simulation section (#1647)
+// both wait on it, so they appear and disappear together.
+export function simulatorConnected(me: Me | null | undefined, f: SimFleet | undefined): boolean {
+  return can(me, "simulation", "read") && f?.connected === true;
 }
 
 export async function getSimulation(): Promise<SimFleet> {
