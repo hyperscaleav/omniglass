@@ -102,7 +102,10 @@ never stored.
 A server timer beside the settlement sweep reads the whole fleet's queues every 15 s in one
 statement, using the same candidate resolution the pull uses (one SQL fragment, which the pull
 narrows to its own components, so the depth it reports cannot disagree with what a pull delivers), and attributes each command to the node its
-chosen endpoint is placed on. Every node with a platform component gets, at each read:
+chosen endpoint is placed on. The read applies no status term, since its expired counts need the
+terminal commands that never ran, so it cannot use the pull's `command_deliverable_idx` (which holds
+only `issued` rows) and finds its candidates through `command_unexecuted_idx`, keyed on `ts` over
+the unexecuted rows; without it the read walks a component index and grows with history (#1728). Every node with a platform component gets, at each read:
 
 - `command-pending-count`: the commands its next pull would take plus the ones it took that still
   await their report, and `command-pending-age`, how long the oldest has waited (zero while none
