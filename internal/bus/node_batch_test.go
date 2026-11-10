@@ -125,7 +125,8 @@ func newTickFixture(t *testing.T) *tickFixture {
 	if _, err := conn.Exec(ctx, `
 		insert into endpoint (name, transport, component, node_name, params)
 		select c.name || '-tcp', 'tcp', c.id, n.principal_id, '{"target":"127.0.0.1:1"}'::jsonb
-		from component c join node n on n.name = case when c.name = 'disp-b' then 'node-b' else 'node-a' end;
+		from component c join node n on n.name = case when c.name = 'disp-b' then 'node-b' else 'node-a' end
+		where c.name like 'disp-%';
 		insert into task (id, mode, endpoint_id, enabled)
 		select 't-' || substr(e.name, 6, 1), 'poll', e.id, true from endpoint e`); err != nil {
 		t.Fatalf("endpoints and tasks: %v", err)

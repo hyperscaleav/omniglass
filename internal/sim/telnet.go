@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,7 +45,7 @@ func (d *Device) startTelnet(port int, defaultUser, defaultPassword string, perm
 	if reg := d.telnetSession; reg != nil {
 		reg.setPort(port)
 	}
-	tracked := trackConns(lis, d.logConnect)
+	tracked := trackConns(lis, d.logConnect).observedAs(d.observe, obsTelnet)
 	d.telnetListener = tracked
 
 	effectivePermissive := permissive
@@ -130,8 +131,12 @@ func (d *Device) serveTelnetConn(conn net.Conn, defaultUser, defaultPassword str
 	}
 	_, _ = io.WriteString(w, "\r\n")
 	d.telnetLogins.Add(1)
+	face := d.observe.face(strconv.Itoa(port), obsTelnet)
 
 	if !telnetAuthOK(user, pass, defaultUser, defaultPassword, permissive) {
+		// A wrong password is one refused request; a right one is not a
+		// request at all, only the way in to them.
+		d.observe.begin(obsTelnet, face).end(OutcomeRefused)
 		// A silent device hangs up on a wrong password without a word, the
 		// case a driver's terminal rule cannot match (#1056).
 		if !d.telnetSilentReject.Load() {
@@ -173,6 +178,7 @@ func (d *Device) serveTelnetConn(conn net.Conn, defaultUser, defaultPassword str
 			_, _ = io.WriteString(w, "bye\r\n")
 			return
 		}
+		tok := d.observe.begin(obsTelnet, face)
 		start := time.Now()
 		result, ok, rerr := d.RunCommand(cmd)
 		elapsed := time.Since(start)
@@ -190,6 +196,7 @@ func (d *Device) serveTelnetConn(conn net.Conn, defaultUser, defaultPassword str
 				_, _ = io.WriteString(w, "\r\n")
 			}
 		}
+		tok.end(outcomeForLine(status))
 		if d.Logger != nil {
 			d.Logger(RequestLog{
 				DeviceID:   d.DeviceID,

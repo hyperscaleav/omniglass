@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -101,6 +102,7 @@ func (s *Server) startTelemetryConsumer() error {
 	if err != nil {
 		return err
 	}
+	s.cons = cons
 	cc, err := cons.Consume(func(msg jetstream.Msg) { s.handleTelemetry(msg) })
 	if err != nil {
 		return err
@@ -139,10 +141,11 @@ func (s *Server) batchID(msg jetstream.Msg) string {
 // ack confirms a batch to the stream and waits for the stream to take it
 // (the double ack): a batch whose ack is lost anyway is redelivered after
 // telemetryAckWait, and its receipt makes the second landing a no-op.
-func ack(msg jetstream.Msg) {
+func (s *Server) ack(msg jetstream.Msg) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := msg.DoubleAck(ctx); err != nil {
+		s.metrics.count(writerclass.BusTelemetryAckFailureCount, "", 1)
 		slog.Warn("telemetry ack not confirmed, the batch will be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
 	}
 }
@@ -161,7 +164,10 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
-		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
+		// Its items read as missing at the ledger's next read (#1641); the
+		// warning says why.
+		slog.Warn(undecodableLog, "facility", "ingest", "subject", msg.Subject(), "bytes", len(msg.Data()), "error", err.Error())
+		s.drop(msg, nil) // undecodable: it will never succeed, stop redelivery
 		return
 	}
 	id := s.batchID(msg)
@@ -172,14 +178,14 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	if msg.Subject() == collection.APITelemetrySubject {
 		bind, ok := apiBinding(&ev)
 		if !ok {
-			_ = msg.Term() // malformed owner: it will never resolve, stop redelivery
+			s.drop(msg, delivery.BatchItems(&ev)) // malformed owner: it will never resolve, stop redelivery
 			return
 		}
 		if err := s.land(ctx, id, &ev, bind); err != nil {
-			s.failed(msg, err)
+			s.failed(msg, delivery.BatchItems(&ev), err)
 			return
 		}
-		ack(msg)
+		s.ack(msg)
 		return
 	}
 
@@ -193,7 +199,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// field that looks authoritative and is not, so say so and stop redelivery.
 	if ev.GetOwner() != nil {
 		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
-		_ = msg.Term()
+		s.drop(msg, delivery.BatchItems(&ev))
 		return
 	}
 
@@ -204,16 +210,16 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// redelivery. The batch's self-logs are the only top-level rows it carries.
 	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
 		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
-		_ = msg.Term()
+		s.drop(msg, delivery.BatchItems(&ev))
 		return
 	}
 
 	stamp, err := s.landNode(ctx, id, node, &ev)
 	if err != nil {
-		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
+		s.failed(msg, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
-	ack(msg)
+	s.ack(msg)
 	// Each landed group's endpoint delivered this tick, whatever the sinks
 	// kept of it (#933), stamped in one write after the ack so it holds
 	// nothing in flight. A failed stamp loses one tick's freshness, which the
@@ -225,6 +231,18 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	}
 }
 
+// undecodableLog is the warning for a telemetry message that does not
+// decode, which is Term'd.
+const undecodableLog = "telemetry batch undecodable, dropped"
+
+// declaredShortLog and declaredOverLog are the warnings for a batch that
+// decoded to fewer, or more, items of a kind than its ledger declared
+// (#1641): the shortfall is counted missing, an excess only warned.
+const (
+	declaredShortLog = "batch decoded fewer items than its ledger declared, counted missing"
+	declaredOverLog  = "batch decoded more items than its ledger declared"
+)
+
 // topLevelTaskLog is the warning for a node-lane batch that carries a task or
 // samples outside its groups (#1582), which is Term'd.
 const topLevelTaskLog = "node-lane batch carried task rows outside its groups, dropped"
@@ -233,16 +251,66 @@ const topLevelTaskLog = "node-lane batch carried task rows outside its groups, d
 // Gateway refused (#1582): that group is dropped and its siblings land.
 const refusedGroupLog = "task group refused, dropped; its siblings landed"
 
-// landNode lands one node tick (#1582): the node's self-logs and each task
-// group under its own writer, in ONE LandBatch under the tick's receipt.
+// nodeSelfRefusedLog is the warning for a node's self-report the Storage
+// Gateway refused (#1625): the report drops and the tick's groups land.
+const nodeSelfRefusedLog = "node-self report refused, dropped; the tick's groups landed"
+
+// nodeSelfOwnerLog is the warning for a node-self block one of whose samples
+// names an identity (#1625): the report is the node's own, never about an
+// owner it names, so the block drops and the tick's groups land.
+const nodeSelfOwnerLog = "node-self report named an identity, dropped; the tick's groups landed"
+
+// nodeSelfReport is the tick's node-self block as the report the gateway
+// lands on node's platform component (#1625), each sample's time resolved
+// against the batch's. It is nil for a tick with no block. named reports a
+// block one of whose samples names an identity: such a block is no report of
+// the node's own, so it is nil too. The keys are not filtered here: the
+// gateway's node-self writer refuses a key that is not the node's. Pure.
+func nodeSelfReport(ev *ogv1.TelemetryBatch, node string) (r *storage.NodeSelfReport, named bool) {
+	ms := ev.GetNodeSelf().GetMetrics()
+	if len(ms) == 0 {
+		return nil, false
+	}
+	r = &storage.NodeSelfReport{Node: node, Metrics: make([]storage.NodeSelfSample, 0, len(ms))}
+	for _, m := range ms {
+		if m.GetIdentity() != nil {
+			return nil, true
+		}
+		r.Metrics = append(r.Metrics, storage.NodeSelfSample{Key: m.GetName(), Instance: m.GetInstance(),
+			Value: m.GetValue(), TS: sampleTime(ev, m.GetTs())})
+	}
+	return r, false
+}
+
+// landNode lands one node tick (#1582): the node's self-logs, its self-report
+// (#1625, on its platform component) and each task group under its own
+// writer, in ONE LandBatch under the tick's receipt.
 // Every group's task resolves in one read; a group whose task the node does
 // not hold (another node's, unknown, a shared interface) is an orphan the
 // fence drops (#1200) while its siblings land. A group the gateway refuses is
 // warned and dropped, never the tick. It returns the endpoints to stamp seen:
 // every resolved group's that was not refused. A returned error is the
 // resolve's, the registry's or the batch's (failed decides what it means).
+//
+// The batch carries the node's ledger, and every item the consumer lands no
+// row for is counted on its Tally under its outcome (#1641): refused by its
+// lane, unplaced by the fan-out, orphaned, a node-self block that names an
+// identity, or declared by the ledger and absent from the batch. The
+// gateway counts the rest.
 func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
-	batch := storage.IngestBatch{BatchID: id, NodeLogs: nodeLogWrites(ev, node)}
+	batch := storage.IngestBatch{BatchID: id, Node: node, NodeLogs: nodeLogWrites(ev, node)}
+	t := &batch.Tally
+	if l := ev.GetLedger(); l != nil {
+		stamp := delivery.FromProto(l)
+		batch.Ledger = &stamp
+		declaredShortfall(t, stamp, ev, node)
+	}
+	self, named := nodeSelfReport(ev, node)
+	if named {
+		slog.Warn(nodeSelfOwnerLog, "facility", "ingest", "node", node)
+		t.Add(delivery.Metric, delivery.RefusedInvalid, len(ev.GetNodeSelf().GetMetrics()))
+	}
+	batch.NodeSelf = self
 
 	views := make([]*ogv1.TelemetryBatch, 0, len(ev.GetGroups()))
 	var tasks []string
@@ -278,6 +346,8 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 			// The fence drops an orphan group by design, but never silently
 			// (#1200), and only that group: its siblings are the node's own.
 			s.recordOrphan(node, v.GetTaskId(), sampleCount(v), len(v.GetTaskLogs()))
+			tallySamples(t, v, delivery.Orphaned)
+			t.Add(delivery.Log, delivery.Orphaned, len(v.GetTaskLogs()))
 			continue
 		}
 		bind := nodeBinding(node, owner)
@@ -304,7 +374,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		v := r.view
 		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner)}
 		if sampleCount(v) > 0 {
-			rows := s.deriveSamples(v, r.bind, reg, identities)
+			rows := s.deriveSamples(v, r.bind, reg, identities, t)
 			group.Metrics, group.Properties, group.Events = rows.Metrics, rows.Properties, rows.Events
 			group.Fanned, group.Unbound = rows.Fanned, rows.Unbound
 		}
@@ -316,6 +386,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	if err != nil {
 		return nil, err
 	}
+	s.settled(ev, res)
 	refused := make(map[int]bool, len(res.Refused))
 	for _, r := range res.Refused {
 		refused[r.Index] = true
@@ -323,9 +394,38 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		if r.Err != nil {
 			cause = r.Err.Error()
 		}
+		if r.Index == storage.NodeSelfIndex {
+			slog.Warn(nodeSelfRefusedLog, "facility", "ingest", "node", node, "error", cause)
+			continue
+		}
 		slog.Warn(refusedGroupLog, "facility", "ingest", "node", node, "task", r.TaskID, "error", cause)
 	}
+	if res.Landed {
+		var l landing // the groups that landed, parallel to batch.Groups
+		for i, r := range resolved {
+			if !refused[i] {
+				l.lanes(r.view)
+			}
+		}
+		s.committed(l)
+	}
 	return seenEndpoints(endpoints, refused), nil
+}
+
+// declaredShortfall counts on t, as missing, each item stamp declared that
+// ev does not carry, and warns of each kind ev carries more of than it
+// declared (#1641).
+func declaredShortfall(t *delivery.Tally, stamp delivery.Stamp, ev *ogv1.TelemetryBatch, node string) {
+	short, over := stamp.Kinds.Against(delivery.BatchItems(ev))
+	for _, k := range delivery.Kinds {
+		if n := short[k]; n > 0 {
+			slog.Warn(declaredShortLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "missing", n)
+			t.Add(k, delivery.Missing, n)
+		}
+		if n := over[k]; n > 0 {
+			slog.Warn(declaredOverLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "over", n)
+		}
+	}
 }
 
 // seenEndpoints is the endpoints a tick stamps seen: each landed group's,
@@ -539,12 +639,17 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		if err != nil {
 			return err
 		}
-		rows := s.deriveSamples(ev, bind, reg, identities)
+		rows := s.deriveSamples(ev, bind, reg, identities, &batch.Tally) // no ledger (#1641), but its server hop counts (#1659)
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
-	if _, err := s.store.LandBatch(ctx, batch); err != nil {
+	res, err := s.store.LandBatch(ctx, batch)
+	if err != nil {
 		return err
+	}
+	s.settled(ev, res)
+	if res.Landed {
+		s.committed(batchLanding(ev))
 	}
 	// The endpoint delivered this batch, whatever the sinks kept of it: an
 	// instanced series, an unchanged property the guard skipped, a sample a
@@ -582,15 +687,17 @@ type sampleRows struct {
 // An identified sample is the conduit's report about another owner (#1282):
 // it is split off here and lands only through the fan-out, never on the
 // conduit, placed by identities, the batch's (or its tick's) one read.
-func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, identities map[string]*storage.IdentityResolution) sampleRows {
+// Every sample that derives no row is counted in t under its outcome
+// (#1641); nil counts nothing.
+func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, identities map[string]*storage.IdentityResolution, t *delivery.Tally) sampleRows {
 	own, fanned := splitIdentified(ev)
 	rows := sampleRows{
-		Metrics:    deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
-		Properties: deriveProperties(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
-		Events:     deriveEvents(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
+		Metrics:    deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer, t),
+		Properties: deriveProperties(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer, t),
+		Events:     deriveEvents(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer, t),
 	}
 	if fanned != nil {
-		rows.Fanned, rows.Unbound = s.fanOut(fanned, bind, reg, identities[bind.Conduit])
+		rows.Fanned, rows.Unbound = s.fanOut(fanned, bind, reg, identities[bind.Conduit], t)
 	}
 	return rows
 }
@@ -633,11 +740,13 @@ func (s *Server) resolveIdentities(ctx context.Context, wants map[string][]stora
 // resolution: the rows that land on their bound owners (nil when none), and
 // what the conduit heard that no binding places, for its inbox. A batch with
 // no conduit to resolve against (a system push, which never carries an
-// identity) lands none of them, nor does one whose conduit resolved nothing.
-func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, res *storage.IdentityResolution) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
+// identity) lands none of them, nor does one whose conduit resolved nothing:
+// those count unidentified in t, an unbound one unbound (#1641).
+func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, res *storage.IdentityResolution, t *delivery.Tally) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
 	n := sampleCount(fanned)
 	if bind.Conduit == "" {
 		slog.Warn("identified samples on a batch with no conduit, dropped", "facility", "ingest", "samples", n)
+		tallySamples(t, fanned, delivery.Unidentified)
 		return nil, nil
 	}
 	if res == nil {
@@ -645,9 +754,10 @@ func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg col
 		// is a valid identity: nothing to land and nothing to keep.
 		slog.Warn("identified samples dropped: no conduit to resolve them on, or no valid identity",
 			"facility", "ingest", "conduit", bind.Conduit, "samples", n)
+		tallySamples(t, fanned, delivery.Unidentified)
 		return nil, nil
 	}
-	plan := planFanOut(fanned, bind.Conduit, res.ConduitName, bind.ConduitEndpoint, res.Owners, reg, time.Now().UTC())
+	plan := planFanOut(fanned, bind.Conduit, res.ConduitName, bind.ConduitEndpoint, res.Owners, reg, time.Now().UTC(), t)
 	var rows *storage.FannedRows
 	if len(plan.rows.Metrics)+len(plan.rows.Properties)+len(plan.rows.Events) > 0 {
 		rows = &plan.rows
@@ -665,18 +775,25 @@ func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg col
 	return rows, plan.unbound
 }
 
+// tallySamples counts every sample of ev, by its lane's kind, under o.
+func tallySamples(t *delivery.Tally, ev *ogv1.TelemetryBatch, o delivery.Outcome) {
+	t.Add(delivery.Metric, o, len(ev.GetMetrics()))
+	t.Add(delivery.Property, o, len(ev.GetProperties()))
+	t.Add(delivery.Event, o, len(ev.GetEvents()))
+}
+
 // failed answers a batch whose landing failed. A write the gateway refuses
 // outright (storage.IsRefusedWrite: its owner gone, its key's writer class
 // refusing the writer, a value Postgres refuses as data or by a CHECK) is Term'd at once,
 // since one batch in flight means every batch behind it waits on it; any
 // other failure is redelivered, bounded (nakOrTerm).
-func (s *Server) failed(msg jetstream.Msg, err error) {
+func (s *Server) failed(msg jetstream.Msg, items map[delivery.Kind]int, err error) {
 	if storage.IsRefusedWrite(err) {
-		_ = msg.Term()
+		s.drop(msg, items)
 		slog.Warn("telemetry batch refused, dropped", "subject", msg.Subject(), "error", err.Error())
 		return
 	}
-	s.nakOrTerm(msg)
+	s.nakOrTerm(msg, items)
 }
 
 // nakOrTerm redelivers a telemetry message that failed for a transient reason
@@ -689,15 +806,15 @@ func (s *Server) failed(msg jetstream.Msg, err error) {
 // bounds the redelivery loop; ConsumerConfig.MaxDeliver is the JetStream-side
 // backstop for the same bound. With one batch in flight, the redelivery comes
 // before anything behind it.
-func (s *Server) nakOrTerm(msg jetstream.Msg) {
+func (s *Server) nakOrTerm(msg jetstream.Msg, items map[delivery.Kind]int) {
 	meta, err := msg.Metadata()
 	if err != nil {
-		_ = msg.Term()
+		s.drop(msg, items)
 		slog.Warn("telemetry message dropped: could not read delivery metadata", "subject", msg.Subject(), "error", err)
 		return
 	}
 	if meta.NumDelivered >= maxTelemetryDeliveries {
-		_ = msg.Term()
+		s.drop(msg, items)
 		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
 		return
 	}
@@ -833,15 +950,17 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // deriveMetrics maps the metric lane to metric rows: the name must be a
 // registered metric_type. The value is a double by wire type, so there is no
 // shape to validate beyond the name.
-func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.MetricSampleWrite {
+func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
 		mt, ok := reg.Metric(dp.GetName())
 		if !ok {
+			t.Add(delivery.Metric, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not a metric_type name
 		}
-		instance, ok := laneInstance(mt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
-		if !ok {
+		instance, refused := laneInstance(mt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if refused != "" {
+			t.Add(delivery.Metric, refused, 1)
 			continue
 		}
 		out = append(out, storage.MetricSampleWrite{
@@ -861,21 +980,24 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 // registered property_type, the value must be canonical JSON of the type's
 // data_type, and when the type declares a validation schema the value must
 // satisfy it (key.ValidateValue, the same validator every registered key obeys).
-func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.PropertySampleWrite {
+func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
 		pt, ok := reg.Property(dp.GetName())
 		if !ok {
+			t.Add(delivery.Property, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not a property_type name
 		}
-		instance, ok := laneInstance(pt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
-		if !ok {
+		instance, refused := laneInstance(pt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if refused != "" {
+			t.Add(delivery.Property, refused, 1)
 			continue
 		}
 		raw := json.RawMessage(dp.GetValueJson())
 		if err := key.ValidateValue(pt.DataType, raw, pt.Validation); err != nil {
 			slog.Warn("property sample refused: value fails the type's validation",
 				"name", dp.GetName(), "error", err)
+			t.Add(delivery.Property, delivery.RefusedInvalid, 1)
 			continue
 		}
 		out = append(out, storage.PropertySampleWrite{
@@ -898,19 +1020,22 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 // sample). A component published the occurrence natively (an xAPI event, an
 // SNMP trap): origin caught, the platform did not derive it. Raw log lines are
 // a separate ingest lane, not this path (ADR-0066).
-func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.EventWrite {
+func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
 		et, ok := reg.Event(dp.GetName())
 		if !ok {
+			t.Add(delivery.Event, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not an event_type name
 		}
-		instance, ok := laneInstance(et.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
-		if !ok {
+		instance, refused := laneInstance(et.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if refused != "" {
+			t.Add(delivery.Event, refused, 1)
 			continue
 		}
 		payload := dp.GetPayload()
 		if dp.GetMessage() == "" && len(payload) == 0 {
+			t.Add(delivery.Event, delivery.RefusedEmpty, 1)
 			continue // an occurrence with no content says nothing
 		}
 		if len(payload) > 0 {
@@ -919,6 +1044,7 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 			if err := key.ValidateValue("json", payload, et.PayloadSchema); err != nil {
 				slog.Warn("event sample refused: payload fails the event_type's schema",
 					"name", dp.GetName(), "error", err)
+				t.Add(delivery.Event, delivery.RefusedInvalid, 1)
 				continue
 			}
 		}
@@ -938,7 +1064,8 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 }
 
 // laneInstance resolves a sample's instance discriminator, or refuses the
-// sample (ok false). The wire value wins where supplied, else the task
+// sample, naming the refusal's outcome (#1641); refused is empty for a
+// sample it admits. The wire value wins where supplied, else the task
 // endpoint's name: the node lane sets none (its endpoint name IS the
 // discriminator), a driver may name its own (one series per port), and a push
 // has no endpoint, so it must be able to say it.
@@ -951,24 +1078,24 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 // other (another node's endpoint on the same component, a name no endpoint
 // holds) is refused, never written into a series the console reads as that
 // endpoint's.
-func laneInstance(class writerclass.Class, name, instance string, owner storage.TaskOwner, w storage.KeyWriter) (string, bool) {
+func laneInstance(class writerclass.Class, name, instance string, owner storage.TaskOwner, w storage.KeyWriter) (string, delivery.Outcome) {
 	if !writerclass.Admits(class, w.Kind, name) {
 		slog.Warn("sample refused: its writer class does not admit the lane",
 			"name", name, "class", class, "writer", w.Kind)
-		return "", false
+		return "", delivery.RefusedWriter
 	}
 	if class == writerclass.NodeProbe && w.Kind == writerclass.Node {
 		if owner.EndpointName == "" || (instance != "" && instance != owner.EndpointName) {
 			slog.Warn("node-probe sample refused: a node writes one only under its task's endpoint",
 				"name", name, "instance", instance, "endpoint", owner.EndpointName)
-			return "", false
+			return "", delivery.RefusedInstance
 		}
-		return owner.EndpointName, true
+		return owner.EndpointName, ""
 	}
 	if instance != "" {
-		return instance, true
+		return instance, ""
 	}
-	return owner.EndpointName, true
+	return owner.EndpointName, ""
 }
 
 // laneSource resolves a batch's provenance source: the batch's own wins, else

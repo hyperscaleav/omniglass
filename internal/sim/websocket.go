@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,6 +62,9 @@ type wsFace struct {
 	srv     *http.Server
 	lis     net.Listener
 	serving sync.WaitGroup
+
+	// face is the observation face its upgrades and frames count against.
+	face *faceObservation
 
 	attempts   atomic.Int64
 	upgrades   atomic.Int64
@@ -185,6 +189,7 @@ func (f *wsFace) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.attempts.Add(1)
 	rec := &statusRecorder{ResponseWriter: w, bodyCap: httpBodyCaptureCap}
 	if !d.checkStaticAuth(rec, r, f.auth) {
+		d.observe.begin(obsWebSocket, f.face).end(OutcomeRefused)
 		f.refusals.Add(1)
 		f.log(r, rec.status)
 		return
@@ -193,10 +198,12 @@ func (f *wsFace) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// The upgrader answered the refusal itself (a request that is not
 		// an upgrade, or an origin it will not admit).
+		d.observe.begin(obsWebSocket, f.face).end(OutcomeError)
 		f.log(r, http.StatusBadRequest)
 		return
 	}
 	f.upgrades.Add(1)
+	defer d.observe.openStream(obsWebSocket)()
 	f.log(r, http.StatusSwitchingProtocols)
 	conn.SetReadLimit(wsReadLimit)
 	s := &wsSock{c: conn, out: make(chan []byte, wsQueue), stop: make(chan struct{}), remote: r.RemoteAddr}
@@ -216,7 +223,16 @@ func (f *wsFace) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		f.answer(s, data)
+		// Each frame is one request: answered when the face could reply,
+		// dropped when the socket ended before the reply was queued.
+		tok := d.observe.begin(obsWebSocket, f.face)
+		out := outcomeForLine(f.answer(s, data))
+		select {
+		case <-s.stop:
+			out = OutcomeDropped
+		default:
+		}
+		tok.end(out)
 	}
 }
 
@@ -248,15 +264,15 @@ type wsMessage struct {
 	Value json.RawMessage `json:"value"`
 }
 
-// answer reads one frame and answers it.
-func (f *wsFace) answer(s *wsSock, data []byte) {
+// answer reads one frame and answers it, returning the status it published.
+func (f *wsFace) answer(s *wsSock, data []byte) int {
 	var m wsMessage
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	if err := dec.Decode(&m); err != nil {
 		f.reply(s, nil, map[string]any{"type": "error", "error": "the frame is not a JSON object"})
 		f.publish(s, "FRAME", "", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest
 	}
 	switch m.Type {
 	case "subscribe":
@@ -264,7 +280,7 @@ func (f *wsFace) answer(s *wsSock, data []byte) {
 		if len(paths) == 0 {
 			f.reply(s, m.ID, map[string]any{"type": "error", "error": "subscribe to one or more of the paths this socket streams"})
 			f.publish(s, "SUBSCRIBE", strings.Join(m.Paths, ","), http.StatusNotFound)
-			return
+			return http.StatusNotFound
 		}
 		s.mu.Lock()
 		s.paths = paths
@@ -277,7 +293,7 @@ func (f *wsFace) answer(s *wsSock, data []byte) {
 		if !ok {
 			f.reply(s, m.ID, map[string]any{"type": "error", "error": "no such path: " + m.Path})
 			f.publish(s, "GET", m.Path, http.StatusNotFound)
-			return
+			return http.StatusNotFound
 		}
 		f.reply(s, m.ID, map[string]any{"type": "result", "value": v})
 		f.publish(s, "GET", m.Path, http.StatusOK)
@@ -286,14 +302,16 @@ func (f *wsFace) answer(s *wsSock, data []byte) {
 		if err != nil {
 			f.reply(s, m.ID, map[string]any{"type": "error", "error": err.Error()})
 			f.publish(s, "SET", m.Path, http.StatusBadRequest)
-			return
+			return http.StatusBadRequest
 		}
 		f.reply(s, m.ID, map[string]any{"type": "result", "value": v})
 		f.publish(s, "SET", m.Path, http.StatusOK)
 	default:
 		f.reply(s, m.ID, map[string]any{"type": "error", "error": fmt.Sprintf("unknown message type %q", m.Type)})
 		f.publish(s, "FRAME", m.Type, http.StatusBadRequest)
+		return http.StatusBadRequest
 	}
+	return http.StatusOK
 }
 
 // reply queues an answer, echoing the id the frame carried.
@@ -423,17 +441,16 @@ func (d *Device) startWebSocket(port int, tlsCfg *tls.Config) (net.Addr, error) 
 		return nil, fmt.Errorf("the device has no websocket face")
 	}
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
-	lis, err := net.Listen("tcp", addr)
+	raw, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
+	// The tracked listener counts each connection and closes it out when
+	// the socket ends, whether or not the upgrade hijacked it.
+	lis := trackConns(raw, d.logConnect).observedAs(d.observe, obsWebSocket)
+	f.face = d.observe.face(strconv.Itoa(boundPort(raw.Addr())), obsWebSocket)
 	srv := &http.Server{Handler: f, TLSConfig: tlsCfg,
-		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelDebug),
-		ConnState: func(c net.Conn, s http.ConnState) {
-			if s == http.StateNew {
-				d.logConnect(c)
-			}
-		}}
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelDebug)}
 	f.srv, f.lis = srv, lis
 	f.serving.Add(1)
 	go func() {

@@ -59,7 +59,7 @@ func TestACommandPullFailureIsLoggedOnTheTransition(t *testing.T) {
 	ctx := context.Background()
 	state := newCommandState()
 	pull := func() []slog.Record {
-		return captureLogs(t, func() { runCommands(ctx, nc, "edge-7", nil, nil, state) })
+		return captureLogs(t, func() { runCommands(ctx, nc, "edge-7", nil, nil, nil, state, nil) })
 	}
 	at := func(recs []slog.Record, level slog.Level) []slog.Record {
 		var out []slog.Record

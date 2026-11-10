@@ -105,6 +105,12 @@ type CommandRecord struct {
 	ObservedAt    *time.Time
 	IssuedAt      time.Time
 	DeliveredAt   *time.Time
+	// FirstDeliveredAt is when a node first took it; DeliveredAt moves on a
+	// redelivery, this does not (#1626).
+	FirstDeliveredAt *time.Time
+	// DeliveryCount is how many times a node has taken it: 0 queued, 1
+	// delivered once, more when it went silent and was redelivered.
+	DeliveryCount int
 	ExecutedAt    *time.Time
 	SettledAt     *time.Time
 	// Endpoint is the endpoint the command rides: the one a node took it
@@ -192,7 +198,7 @@ const commandRideSQL = `left join lateral (
 
 // commandReadCols is the read shape, in the order scanCommandRecord reads it.
 var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.instance, c.params, c.status,
-	c.dispatched_at, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
+	c.dispatched_at, c.first_dispatched_at, c.delivery_count, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
 	coalesce(c.settled_by, ''), c.observed_value, c.observed_at, c.caused_event_id, c.settled_event_id,
 	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
@@ -247,7 +253,7 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 		spec                        []byte
 	)
 	if err := row.Scan(&r.ID, &r.IssuedAt, &r.ComponentID, &r.Component, &r.CommandType, &r.Instance, &r.Params, &r.Status,
-		&r.DeliveredAt, &r.ExecutedAt, &r.SettledAt, &r.ExecError, &r.Reply, &r.Reason,
+		&r.DeliveredAt, &r.FirstDeliveredAt, &r.DeliveryCount, &r.ExecutedAt, &r.SettledAt, &r.ExecError, &r.Reply, &r.Reason,
 		&r.SettledBy, &r.ObservedValue, &r.ObservedAt, &r.CausedEventID, &r.SettledEventID,
 		&r.IssuerID, &username, &service, &nodeName,
 		&r.SettleWindowSeconds, &propTarget, &metricTarget, &intendedProp, &intendedMetric,

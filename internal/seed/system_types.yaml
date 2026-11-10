@@ -81,3 +81,12 @@ system_types:
     stem: interactive-sign
     abbrev: isgn
     icon: touchpad
+  # The platform: the reserved type of the one system the boot seed creates to
+  # hold Omniglass's own parts (#1094). Outside the av tree on purpose: it is
+  # not a kind of space an operator builds, and the Gateway refuses giving it
+  # to any other system.
+  - id: platform
+    label: Platform
+    stem: platform
+    abbrev: plat
+    icon: server

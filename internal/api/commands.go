@@ -69,6 +69,8 @@ type commandBody struct {
 	Observed            *commandObservation `json:"observed,omitempty" doc:"The sample of its target that decided it, when an observation did"`
 	IssuedAt            time.Time           `json:"issued_at" doc:"When it was issued"`
 	DeliveredAt         *time.Time          `json:"delivered_at,omitempty" doc:"When a node last took it from its queue"`
+	FirstDeliveredAt    *time.Time          `json:"first_delivered_at,omitempty" doc:"When a node first took it from its queue; a redelivery moves delivered_at, not this"`
+	DeliveryCount       int                 `json:"delivery_count" doc:"How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again"`
 	ExecutedAt          *time.Time          `json:"executed_at,omitempty" doc:"When its node's execution report landed"`
 	SettledAt           *time.Time          `json:"settled_at,omitempty" doc:"When it reached its terminal status"`
 	Endpoint            string              `json:"endpoint,omitempty" doc:"The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it"`
@@ -95,7 +97,7 @@ func toCommandBody(r *storage.CommandRecord) commandBody {
 		Params: r.Params, Intended: r.Intended, TargetKind: r.TargetKind, Target: r.Target,
 		Status: r.Status, Phase: r.Phase, SettleMode: r.SettleMode, SettleWindowSeconds: r.SettleWindowSeconds, Deadline: r.Deadline,
 		SettledBy: r.SettledBy, Reason: r.Reason, ExecError: r.ExecError, Reply: r.Reply,
-		IssuedAt: r.IssuedAt, DeliveredAt: r.DeliveredAt, ExecutedAt: r.ExecutedAt, SettledAt: r.SettledAt,
+		IssuedAt: r.IssuedAt, DeliveredAt: r.DeliveredAt, FirstDeliveredAt: r.FirstDeliveredAt, DeliveryCount: r.DeliveryCount, ExecutedAt: r.ExecutedAt, SettledAt: r.SettledAt,
 		Endpoint: r.Endpoint, EndpointID: r.EndpointID, Node: r.Node, Driver: r.Driver,
 		Issuer: r.Issuer, IssuerID: r.IssuerID, CausedEventID: r.CausedEventID, SettledEventID: r.SettledEventID,
 	}

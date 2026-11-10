@@ -51,6 +51,16 @@ describe("filterNav", () => {
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
+  // Platform health (#1644) sits after Nodes behind the same node:read door,
+  // because its rows are the node list.
+  it("shows Platform health after Nodes, and only to a node:read holder", () => {
+    const labels = navItems.map((i) => i.label);
+    expect(labels.indexOf("Platform health")).toBe(labels.indexOf("Nodes") + 1);
+    expect(rail(["node:read"])).toContain("Platform health");
+    expect(rail(["component:read", "system:read"])).not.toContain("Platform health");
+    expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
+  });
+
   it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Nodes", () => {
     const out = filterNav(navItems, (tokens) => !["location", "system", "component"].includes(tokens[0]));
     const labels = out.map((i) => i.label);

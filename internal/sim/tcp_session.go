@@ -32,7 +32,7 @@ func (d *Device) startTCPSession(port int, reg *SessionRegistry, tlsConfig *tls.
 	if reg != nil {
 		reg.setPort(port)
 	}
-	tracked := trackConns(lis, d.logConnect)
+	tracked := trackConns(lis, d.logConnect).observedAs(d.observe, obsTCP)
 	d.tcpMu.Lock()
 	d.tcpListeners = append(d.tcpListeners, tracked)
 	d.tcpMu.Unlock()

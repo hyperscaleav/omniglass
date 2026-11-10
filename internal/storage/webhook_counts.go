@@ -75,3 +75,13 @@ func (p *PG) CollectionSettings(ctx context.Context) (settings.CollectionSetting
 	}
 	return s.Collection, nil
 }
+
+// DatabaseSettings is the effective database namespace (#1627): the
+// slow-query threshold the server's tracer logs past.
+func (p *PG) DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error) {
+	s, err := p.platformSettings(ctx, p.pool)
+	if err != nil {
+		return settings.DatabaseSettings{}, fmt.Errorf("storage: database settings: %w", err)
+	}
+	return s.Database, nil
+}

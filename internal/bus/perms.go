@@ -44,6 +44,10 @@ func nodePermissions(node string) *server.Permissions {
 			collection.SimopSubject(node),
 			// The node takes the server's on-demand runs for it (#1163).
 			collection.RunSubject(node),
+			// The lab's endpoint observation (#1639): the simulator answers
+			// what its endpoints observed, the node what it tallied sending.
+			collection.SimobsSubject(node),
+			collection.RequestTallySubject(node),
 		}},
 		// One reply to each request the node received, so the simulator can
 		// answer an operation, and the node a run, without a grant to publish

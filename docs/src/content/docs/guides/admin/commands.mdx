@@ -135,8 +135,11 @@ issuer holds where it may issue): `GET /components/{name}/commands/{id}` for one
 `until` (RFC3339) and `limit`. A component you cannot read is a non-disclosing 404, and one you can
 read but whose commands you may not is a 403. Each command carries:
 
-- its **status** and a time for each transition: issued, delivered (a node took it), executed (the
-  node's report landed) and settled;
+- its **status** and a time for each transition: issued, delivered (a node last took it), executed
+  (the node's report landed) and settled, plus its **first delivery** (`first_delivered_at`) and how
+  many times a node took it (`delivery_count`). A count above one means the node went silent after
+  taking it and the queue redelivered it; the console's arc shows the count and the first delivery's
+  offset beside the last;
 - its **phase**, where it sits while in flight: **queued** for its node, **delivered** (its binding
   settles on observation, so the reply decides nothing), **awaiting reply**, or **awaiting
   observation** within its window, with the `deadline` when the window closes (a fire-and-forget
