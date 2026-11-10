@@ -31,7 +31,7 @@ Wait
 Type "# Each is a service principal that may push to its site's systems and do nothing else"
 Enter
 Wait
-Type `omniglass principal list | jq -c '.principals[] | select(.service.name | test("-booking-")) | {service: .service.name, grants: [.grants[] | {role, scope_kind}]}'`
+Type `omniglass principal list | jq -c '.principals[] | select(.service.name // "" | test("-booking-")) | {service: .service.name, grants: [.grants[] | {role, scope_kind}]}'`
 Enter
 Wait
 Type "# Nobody pushes by hand: the simulator posts each room's bookings with that principal's token"
