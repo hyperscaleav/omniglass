@@ -591,7 +591,7 @@
    "name": "tick-overrun-count",
    "data_type": "int",
    "label": "Tick Overruns",
-   "description": "Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported only when nonzero."
+   "description": "Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "schedule-lateness",
@@ -611,7 +611,7 @@
    "name": "schedule-skip-count",
    "data_type": "int",
    "label": "Schedule Skips",
-   "description": "Whole task intervals the schedule skipped because a run came late, over the report window; reported only when nonzero."
+   "description": "Whole task intervals the schedule skipped because a run came late, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "spool-batch-count",
@@ -623,13 +623,13 @@
    "name": "spool-drop-count",
    "data_type": "int",
    "label": "Spool Drops",
-   "description": "Batches the spool dropped as full or overflowed, over the report window; reported only when nonzero."
+   "description": "Batches the spool dropped as full or overflowed, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "publish-failure-count",
    "data_type": "int",
    "label": "Publish Failures",
-   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported only when nonzero."
+   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "session-held-count",

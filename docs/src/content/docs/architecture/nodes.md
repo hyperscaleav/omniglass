@@ -559,7 +559,8 @@ on the publishing node's platform component under the platform writer class, so 
 itself, and only in the keys declared as its own. Figures the node reads every tick (the pass duration,
 the worst lateness and gap excess of the tick's due runs, the spool depth, the sessions held by state,
 the Go process figures) go every tick; counts (overruns, skipped intervals, spool drops, publish
-failures) go once per report window, and only when nonzero. The schedule figures are where the
+failures) go once per report window, every window, 0 when quiet, so a count returns to 0 after the
+window that had it. The schedule figures are where the
 heartbeat rounding below shows: a 45 s poll on a 30 s heartbeat reads a 15 s `schedule-gap-excess`
 every run. A node that goes silent sends nothing, so the server writes the one figure that keeps
 moving: `checkin-age`, every claimed node's seconds since its last heartbeat (or its claim, before the

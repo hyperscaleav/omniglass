@@ -475,7 +475,9 @@ node-silent rule reads. The webhook counts are the receiver's
 duration, the tick's worst lateness and gap excess, the spool's depth, the sessions held by state,
 the process figures) are one observation per sample, never a stored average. The counts (overruns,
 skipped intervals, spool drops, publish failures) are tallied over the node's report window and land
-once when it ends, only when nonzero, the `poll-failure-count` convention. The schedule figures are
+once when it ends, every window, 0 when quiet, so a count's latest value returns to 0 after the
+window that had it rather than standing on the last event; the first window runs from the node's
+start and lands too. The schedule figures are
 measured per task start, not per tick: each run's lateness is its actual start against its due time,
 and its gap excess is how far its gap since its own previous start strays from its interval, early or
 late, so a 45 s poll on a 30 s heartbeat reads 15 s every run and heartbeat rounding is visible. An
