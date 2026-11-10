@@ -111,10 +111,10 @@ func TestReconcileNamesEachHopsGap(t *testing.T) {
 	}{
 		{"a connection the sim never accepted", func(b *NodeBracket) {
 			endSims(b, func(o *collection.SimObservation) { protocol(o, "http").Accepted = 157 })
-		}, ClosedLoopGap{Gap: GapConnectNotAccepted, Protocol: "http", Count: 3, MaskedBy: maskedByBacklog}},
+		}, ClosedLoopGap{Gap: GapConnectNotAccepted, Count: 3, MaskedBy: maskedByBacklog}},
 		{"a tcp connect the sim never accepted", func(b *NodeBracket) {
 			endSims(b, func(o *collection.SimObservation) { protocol(o, "tcp").Accepted = 18 })
-		}, ClosedLoopGap{Gap: GapConnectNotAccepted, Protocol: "tcp", Count: 2, MaskedBy: maskedByBacklog}},
+		}, ClosedLoopGap{Gap: GapConnectNotAccepted, Count: 2, MaskedBy: maskedByBacklog}},
 		{"a request the sim never received", func(b *NodeBracket) {
 			endSims(b, func(o *collection.SimObservation) {
 				p := protocol(o, "snmp")
@@ -156,6 +156,32 @@ func TestReconcileNamesEachHopsGap(t *testing.T) {
 func TestReconcileBalancedFiguresYieldNoGap(t *testing.T) {
 	if got := Reconcile(balanced()); len(got) != 0 {
 		t.Fatalf("balanced figures read %s", describe(got))
+	}
+}
+
+// A connection is an L4 fact: the node knows the transport it dialed and
+// the sim knows the listener that accepted it, and the two need not agree (a
+// tcp reachability probe on a port the sim serves http on, an http probe of a
+// websocket face). So connections pool across every listener: one the node
+// opened that some listener accepted is no loss (#1647), and the hop reads
+// one node-wide row.
+func TestReconcileAConnectAcceptedOnAnotherListenerIsNoLoss(t *testing.T) {
+	b := balanced()
+	// Two tcp probes the node opened landed on the sim's http listener, and
+	// one more on a listener whose traffic the node does not tally.
+	transportRow(&b.End.Node, "tcp").Connections = 23
+	endSims(&b, func(o *collection.SimObservation) {
+		protocol(o, "http").Accepted = 162
+		o.Protocols = append(o.Protocols, collection.SimProtocolObservation{Protocol: "ssh", Accepted: 1})
+	})
+	if l := losses(Reconcile(b)); len(l) != 0 {
+		t.Fatalf("connects accepted on another listener read as loss: %s", describe(l))
+	}
+	// One more the node opened that no listener accepted is the gap.
+	transportRow(&b.End.Node, "tcp").Connections = 24
+	want := ClosedLoopGap{Gap: GapConnectNotAccepted, Node: "edge", Count: 1, MaskedBy: maskedByBacklog, Reading: ReadingLoss}
+	if l := losses(Reconcile(b)); len(l) != 1 || l[0] != want {
+		t.Fatalf("gaps = %s, want only %+v", describe(l), want)
 	}
 }
 

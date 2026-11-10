@@ -51,11 +51,11 @@ func Ratios(b NodeBracket) []GapRatio {
 	}
 
 	s1a, s2b, s2 := b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter
+	put(GapConnectNotAccepted, "", nodeConnections(b))
 	replied := func(o collection.SimProtocolObservation) int64 { return o.Answered + o.Refused + o.Error }
 	for _, n2 := range b.End.Node.Transports {
 		p := n2.Transport
 		n1 := tallyRow(b.Start.Node, p)
-		put(GapConnectNotAccepted, p, n2.Connections-n1.Connections)
 		put(GapSentNotReceived, p, n2.Sent-n1.Sent)
 		// Reconcile reads answers over the narrowest sim span, so that span's
 		// answers are what could have been lost on the way back.

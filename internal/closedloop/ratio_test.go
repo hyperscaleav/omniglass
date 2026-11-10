@@ -59,7 +59,7 @@ func TestRatiosBalancedWindowReadsZero(t *testing.T) {
 		gap, protocol string
 		in            int64
 	}{
-		{GapConnectNotAccepted, "http", 60}, {GapConnectNotAccepted, "tcp", 10},
+		{GapConnectNotAccepted, "", 70},
 		{GapSentNotReceived, "http", 60}, {GapSentNotReceived, "snmp", 30},
 		{GapReceivedNotSettled, "http", 160}, {GapAnsweredNotReturned, "snmp", 30},
 		{GapPublishedNotLanded, "", 6}, {GapSpoolDropped, "", 6}, {GapUnhitEndpoint, "http", 1},

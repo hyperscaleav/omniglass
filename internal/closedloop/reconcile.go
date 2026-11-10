@@ -147,17 +147,21 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 	}
 	s1, s1a, s2b, s2 := b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter
 
-	// The node hops, per transport the node tallied. A tally transport is
+	// Connections pool across every listener (#1647): the node knows the
+	// transport it dialed, the sim the listener that accepted, and the two
+	// need not agree (a tcp probe of a port the sim serves http on). The
+	// widest sim span (first read to last) carries the most the sim could
+	// have seen, so the difference is a floor.
+	add(ClosedLoopGap{Gap: GapConnectNotAccepted, MaskedBy: maskedByBacklog,
+		Count: nodeConnections(b) - simAccepted(s1, s2)})
+
+	// The request hops, per transport the node tallied. A tally transport is
 	// named as the sim's protocol, so the rows pair by name.
 	for _, n2 := range b.End.Node.Transports {
 		p := n2.Transport
 		n1 := tallyRow(b.Start.Node, p)
 		sent := n2.Sent - n1.Sent
 		received := s2.Protocol(p).Received - s1.Protocol(p).Received
-		// The widest sim span (first read to last) carries the most the sim
-		// could have seen, so the difference is a floor.
-		add(ClosedLoopGap{Gap: GapConnectNotAccepted, Protocol: p, MaskedBy: maskedByBacklog,
-			Count: (n2.Connections - n1.Connections) - (s2.Protocol(p).Accepted - s1.Protocol(p).Accepted)})
 		add(ClosedLoopGap{Gap: GapSentNotReceived, Protocol: p, MaskedBy: maskedByNodeInFlight,
 			Count: sent - received - n2.InFlight, Masked: n2.InFlight})
 		// Answers: the narrowest sim span (the start's second read to the
@@ -239,6 +243,26 @@ func dueProtocol(t PollTarget, window time.Duration) (string, bool) {
 		return "", false
 	}
 	return collection.SimProtocolOf(t.Transport)
+}
+
+// nodeConnections is every connection the node opened inside the window,
+// whatever transport it tallied it under.
+func nodeConnections(b NodeBracket) int64 {
+	var n int64
+	for _, n2 := range b.End.Node.Transports {
+		n += n2.Connections - tallyRow(b.Start.Node, n2.Transport).Connections
+	}
+	return n
+}
+
+// simAccepted is every connection the sim's listeners accepted between two
+// reads, whatever protocol the listener serves.
+func simAccepted(from, to collection.SimObservation) int64 {
+	var n int64
+	for _, p := range to.Protocols {
+		n += p.Accepted - from.Protocol(p.Protocol).Accepted
+	}
+	return n
 }
 
 // tallyRow is a transport's row in a node read, zero when it has none.
