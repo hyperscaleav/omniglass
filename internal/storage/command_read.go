@@ -48,9 +48,11 @@ const (
 	SettleModeNone        = "none"
 )
 
-// What decided a terminal command, recorded in settled_by: its issue (it set
-// nothing, so nothing settles it), its execution report, an observation of
-// its target, or its settle window closing on no evidence.
+// What decided a terminal command, recorded in settled_by: its execution
+// report, an observation of its target, or its window closing on no evidence
+// (the settle window, or a fire-and-forget command's delivery window). Issue
+// is historical: before #1630 a fire-and-forget command read settled at its
+// issue, and the column still admits the rows that did.
 const (
 	SettledByIssue       = "issue"
 	SettledByReply       = "reply"
@@ -86,8 +88,9 @@ type CommandRecord struct {
 	TargetKind          string
 	Target              string
 	SettleWindowSeconds int
-	// Deadline is when the settle window closes: past it, a command with no
-	// evidence is timed out by the next sweep.
+	// Deadline is when the settle window closes (a fire-and-forget command's
+	// delivery window, #1630): past it, a command with no evidence is timed
+	// out by the next sweep.
 	Deadline   time.Time
 	Status     string
 	Phase      string
@@ -131,10 +134,19 @@ type CommandFilter struct {
 // awaiting the reply (by how it settles) until its report lands, then
 // awaiting the observation that settles it. A command no endpoint can carry
 // is awaiting observation from its issue: no node will take it, and only a
-// sample of its target (a push, a poll) can settle it. Pure.
+// sample of its target (a push, a poll) can settle it. A fire-and-forget
+// command (mode none) has no observation to wait on: it is queued until a node
+// takes it, even when none can (its delivery window then times it out), and
+// delivered until its report decides it (#1630). Pure.
 func CommandPhase(status, mode string, delivered, executed, deliverable bool) string {
 	if status != "issued" {
 		return status
+	}
+	if mode == SettleModeNone {
+		if delivered || executed {
+			return PhaseDelivered
+		}
+		return PhaseQueued
 	}
 	switch {
 	case executed || !deliverable:
@@ -263,8 +275,11 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 	case intendedMetric != nil:
 		r.Intended = json.RawMessage(strconv.FormatFloat(*intendedMetric, 'g', -1, 64))
 	}
-	r.Deadline = r.IssuedAt.Add(time.Duration(r.SettleWindowSeconds) * time.Second)
 	r.SettleMode = SettleModeOf(specs.binding(r.Driver, spec, r.CommandType), r.TargetKind != "" && r.Intended != nil)
+	r.Deadline = r.IssuedAt.Add(time.Duration(r.SettleWindowSeconds) * time.Second)
+	if r.SettleMode == SettleModeNone {
+		r.Deadline = r.IssuedAt.Add(CommandDeliveryWindow)
+	}
 	r.Phase = CommandPhase(r.Status, r.SettleMode, r.DeliveredAt != nil, r.ExecutedAt != nil, r.EndpointID != "")
 	return &r, nil
 }

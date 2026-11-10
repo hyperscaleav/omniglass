@@ -31,11 +31,24 @@ const (
 	// report before the next pull redelivers it.
 	redeliverAfter = "30 seconds"
 	// deliveryTTL bounds how long an unexecuted command stays deliverable at
-	// all: past it, a command no node picked up is abandoned to its
-	// settlement arc (a settleable one is stamped failed by the settle-check
-	// when its window passes; a fire-and-forget one simply never actuated).
+	// all, as SQL interval text (CommandDeliveryWindow is the same span): past
+	// it, a command no node picked up is abandoned to its settlement arc (a
+	// settleable one is judged by the settle-check when its window passes; a
+	// fire-and-forget one, which only its execution report decides, is timed
+	// out by the sweep, #1630).
 	deliveryTTL = "10 minutes"
 )
+
+// CommandDeliveryWindow is deliveryTTL as a duration: how long a command stays
+// deliverable, and so how long a fire-and-forget command waits on its
+// execution report before it reads timed out (#1630).
+const CommandDeliveryWindow = 10 * time.Minute
+
+// commandOpensIntendedSQL is true of a command (aliased c) that opened an
+// intended row, the value its observation settles against; one that opened
+// none is fire-and-forget, decided by its execution report (#1630).
+const commandOpensIntendedSQL = `(exists (select 1 from property pr where pr.command_id = c.id and pr.provenance = 'intended')
+			or exists (select 1 from metric_declared md where md.command_id = c.id))`
 
 // CommandDelivery is one command resolved for a node's queue: the rendered
 // request (templates resolved against the command's intended value and
@@ -65,7 +78,8 @@ type CommandDelivery struct {
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
-// should actuate now: unexecuted, within the delivery TTL, not recently
+// should actuate now: unexecuted, still issued (a terminal command, timed out
+// or failed, is never handed to a node, #1630), within the delivery TTL, not recently
 // dispatched, owned by a component whose driver-attached endpoint is placed
 // on this node, with the driver's spec binding the command's type. A command
 // whose binding cannot render (a template reference the issue did not supply)
@@ -93,6 +107,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			join driver d on d.id = i.driver_id
 			where c.owner_kind = 'component'
 			  and c.executed_at is null
+			  and c.status = 'issued'
 			  and (c.dispatched_at is null or c.dispatched_at < now() - interval '`+redeliverAfter+`')
 			  and c.ts > now() - interval '`+deliveryTTL+`'
 			  and jsonb_path_exists(d.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
@@ -156,8 +171,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			// exactly one delivery endpoint per command, so recording the fault
 			// on the row (which stops redelivery and shows the operator the
 			// cause) cannot strand a delivery another endpoint would have made.
-			if _, uerr := p.pool.Exec(ctx, `update command set executed_at = now(), exec_error = $2, dispatched_endpoint_id = $3 where id = $1 and executed_at is null`, r.id, err.Error(), r.endpointID); uerr != nil {
-				return nil, fmt.Errorf("storage: record render fault for command %d: %w", r.id, uerr)
+			if uerr := p.recordRenderFault(ctx, r.id, r.endpointID, err); uerr != nil {
+				return nil, uerr
 			}
 			continue
 		}
@@ -183,8 +198,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			// mints the correlation into it at execute.
 			frame, err := req.Frame()
 			if err != nil {
-				if _, uerr := p.pool.Exec(ctx, `update command set executed_at = now(), exec_error = $2, dispatched_endpoint_id = $3 where id = $1 and executed_at is null`, r.id, err.Error(), r.endpointID); uerr != nil {
-					return nil, fmt.Errorf("storage: record render fault for command %d: %w", r.id, uerr)
+				if uerr := p.recordRenderFault(ctx, r.id, r.endpointID, err); uerr != nil {
+					return nil, uerr
 				}
 				continue
 			}
@@ -216,6 +231,10 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 // login never has it stored or served. When the endpoint's secrets cannot be
 // read the masking fails closed and both are withheld (endpointMask). The
 // judgment below reads the reply whole, as the node sent it.
+//
+// A fire-and-forget command (one that opened no intended row) is decided by
+// the report itself (#1630): settled when the node carried it out, failed
+// with the masked execution error when it did not.
 //
 // When the binding settles from the response (ADR-0141), the reply decides
 // the command in the same transaction: a value it carries is recorded as an
@@ -267,8 +286,17 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		return fmt.Errorf("storage: savepoint for command %d settlement: %w", commandID, err)
 	}
 	serr := func() error {
-		o, err := p.settleFromResponse(ctx, sp, commandID, ownerKind, arc, instance, commandType, endpointID, storedErr, reply)
-		if err != nil || o == nil {
+		ff, err := fireAndForget(ctx, sp, commandID)
+		if err != nil {
+			return err
+		}
+		var o *settlementOutcome
+		if ff {
+			// Nothing was told to a series, so no observation can decide it:
+			// the report itself is the outcome (#1630).
+			r := reportOutcome(storedErr)
+			o = &r
+		} else if o, err = p.settleFromResponse(ctx, sp, commandID, ownerKind, arc, instance, commandType, endpointID, storedErr, reply); err != nil || o == nil {
 			return err
 		}
 		o.reason = mask(o.reason)
@@ -292,6 +320,65 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit record execution: %w", err)
+	}
+	return nil
+}
+
+// fireAndForget reports a command that opened no intended row: nothing it
+// was told can be observed, so its execution report decides it (#1630).
+func fireAndForget(ctx context.Context, q querier, commandID int64) (bool, error) {
+	var opens bool
+	if err := q.QueryRow(ctx, `select `+commandOpensIntendedSQL+` from command c where c.id = $1`, commandID).Scan(&opens); err != nil {
+		return false, fmt.Errorf("storage: intended row of command %d: %w", commandID, err)
+	}
+	return !opens, nil
+}
+
+// reportOutcome is a fire-and-forget command's outcome read off its execution
+// report (#1630): carried out cleanly it settles, and an execution error
+// (already masked) fails it with that error as the reason. Either way the
+// reply decided it.
+func reportOutcome(execErr string) settlementOutcome {
+	if execErr != "" {
+		return settlementOutcome{status: "failed", by: SettledByReply, reason: "the execution failed: " + execErr}
+	}
+	return settlementOutcome{status: "settled", by: SettledByReply, reason: "the node carried it out"}
+}
+
+// recordRenderFault stamps a command whose binding cannot render as executed
+// with the render error, on the endpoint it would have gone out on, so it
+// stops being redelivered and the fault is visible on the row. A
+// fire-and-forget command, which only its report could decide, is failed at
+// once with its lifecycle event (#1630); a settleable one is left to its
+// settle-check, whose observation still decides it.
+func (p *PG) recordRenderFault(ctx context.Context, id int64, endpointID string, fault error) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin render fault for command %d: %w", id, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `update command set executed_at = now(), exec_error = $2, dispatched_endpoint_id = $3 where id = $1 and executed_at is null`,
+		id, fault.Error(), endpointID)
+	if err != nil {
+		return fmt.Errorf("storage: record render fault for command %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 1 {
+		ff, err := fireAndForget(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if ff {
+			now, err := dbNow(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if err := recordOutcome(ctx, tx, id, reportOutcome(storedText(fault.Error())), now); err != nil {
+				return fmt.Errorf("storage: fail command %d on its render fault: %w", id, err)
+			}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit render fault for command %d: %w", id, err)
 	}
 	return nil
 }

@@ -829,7 +829,7 @@
   {
    "name": "reboot",
    "label": "Reboot",
-   "description": "Tell a component to restart. A fire-and-forget command: it records the invocation and a caused event, with no intended value to settle."
+   "description": "Tell a component to restart. A fire-and-forget command: it opens no intended value, so its node's execution report settles or fails it, and it times out when no report arrives within its delivery window."
   },
   {
    "name": "set-volume",

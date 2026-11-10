@@ -535,3 +535,42 @@ func TestADispatchedCommandIsJudgedOnItsEndpointAlone(t *testing.T) {
 		t.Fatalf("nothing on its own endpoint: status = %q, want timed-out", got)
 	}
 }
+
+// A fire-and-forget command with no execution report is timed out by the
+// sweep once its delivery window passes, saying where it stopped and writing
+// command-timed-out; inside the window it stays issued (#1630).
+func TestSweepTimesOutAFireAndForgetCommandPastItsDeliveryWindow(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, "")
+	issueAt := func(age string) int64 {
+		t.Helper()
+		cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", "switcher", "reboot", "", nil, nil)
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
+		if _, err := r.conn.Exec(r.ctx, `update command set ts = ts - $2::interval where id = $1`, cmd.ID, age); err != nil {
+			t.Fatal(err)
+		}
+		return cmd.ID
+	}
+	past := issueAt("11 minutes")
+	inside := issueAt("5 minutes")
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var reason, event string
+	if err := r.conn.QueryRow(r.ctx, `select coalesce(c.reason, ''), coalesce(et.name, '') from command c
+		left join event e on e.id = c.settled_event_id left join event_type et on et.id = e.event_type_id
+		where c.id = $1`, past).Scan(&reason, &event); err != nil {
+		t.Fatal(err)
+	}
+	if status, by, _ := r.outcome(t, past); status != "timed-out" || by != storage.SettledByWindow || event != "command-timed-out" {
+		t.Fatalf("past its delivery window: %s by %q with event %q, want timed-out by the window with command-timed-out", status, by, event)
+	}
+	if reason != "no endpoint of this component has a driver that binds reboot" {
+		t.Fatalf("reason = %q, want where it stopped", reason)
+	}
+	if status, _, _ := r.outcome(t, inside); status != "issued" {
+		t.Fatalf("inside its delivery window: %s, want issued", status)
+	}
+}

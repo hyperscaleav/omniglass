@@ -1195,7 +1195,7 @@ components:
           description: The component's uuid, the stable form of component
           type: string
         deadline:
-          description: When its settle window closes; a command still issued past it is timed out by the next sweep
+          description: When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep
           format: date-time
           type: string
         delivered_at:
@@ -1246,7 +1246,7 @@ components:
         params:
           description: The invocation params
         phase:
-          description: "Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"
+          description: "Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"
           enum:
             - queued
             - delivered
@@ -1263,7 +1263,7 @@ components:
           description: The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands
           type: string
         settle_mode:
-          description: "How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)"
+          description: "How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)"
           enum:
             - reply
             - observation
@@ -1278,7 +1278,7 @@ components:
           format: date-time
           type: string
         settled_by:
-          description: "What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence"
+          description: "What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report"
           enum:
             - issue
             - reply

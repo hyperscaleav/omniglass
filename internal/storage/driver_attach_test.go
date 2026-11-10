@@ -687,6 +687,54 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatal("a redelivered report re-stamped the execution")
 	}
 
+	// #1630: a terminal command is not delivered, and a fire-and-forget
+	// command whose binding cannot render fails at the pull that found it.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "switcher-ff"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "ff-proto", Label: "FF Proto", Version: "1.0.0", Spec: []byte(`{
+		"version": 1, "transport": "tcp",
+		"inputs": [{"name": "host", "kind": "string", "required": true}, {"name": "port", "kind": "number", "default": "4998"}],
+		"commands": [{"command_type": "reboot", "request": {"line": "REBOOT ${arg.delay}"}},
+			{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}}]}`)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	ffComp, ffDrv := "switcher-ff", "ff-proto"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &ffDrv, Component: &ffComp, Node: &node, Inputs: map[string]string{"host": "10.20.4.51"},
+	}, all); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	timedOut, err := gw.IssueCommand(ctx, actor, "component", "switcher-ff", "set-input", "", json.RawMessage(`"hdmi-3"`), nil)
+	if err != nil {
+		t.Fatalf("issue set-input: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update command set status = 'timed-out', settled_at = now(), settled_by = 'window' where id = $1`, timedOut.ID); err != nil {
+		t.Fatalf("time out: %v", err)
+	}
+	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+		t.Fatalf("a timed-out command inside its delivery window was delivered: %+v (err %v)", got, err)
+	}
+	unrenderable, err := gw.IssueCommand(ctx, actor, "component", "switcher-ff", "reboot", "", nil, nil)
+	if err != nil {
+		t.Fatalf("issue reboot: %v", err)
+	}
+	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+		t.Fatalf("an unrenderable command was delivered: %+v (err %v)", got, err)
+	}
+	var ffStatus, ffBy, ffReason, ffEvent string
+	if err := conn.QueryRow(ctx, `select c.status, coalesce(c.settled_by, ''), coalesce(c.reason, ''), coalesce(et.name, '')
+		from command c left join event e on e.id = c.settled_event_id left join event_type et on et.id = e.event_type_id
+		where c.id = $1`, unrenderable.ID).Scan(&ffStatus, &ffBy, &ffReason, &ffEvent); err != nil {
+		t.Fatalf("read the unrenderable command: %v", err)
+	}
+	if ffStatus != "failed" || ffBy != storage.SettledByReply || !strings.Contains(ffReason, "the execution failed: ") || !strings.Contains(ffReason, "${arg.delay}") {
+		t.Fatalf("unrenderable fire-and-forget = %s by %q (%q), want failed by reply naming the render error", ffStatus, ffBy, ffReason)
+	}
+	if ffEvent != "command-failed" {
+		t.Fatalf("unrenderable fire-and-forget wrote lifecycle event %q, want command-failed", ffEvent)
+	}
+
 	// A command no driver binds (reboot is not in the line-proto spec) is
 	// never delivered; its arc is settlement's business alone.
 	if _, err := gw.IssueCommand(ctx, actor, "component", "switcher-9", "reboot", "", nil, nil); err != nil {
