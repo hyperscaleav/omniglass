@@ -89,8 +89,8 @@ func TestEventRules(t *testing.T) {
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
 		t.Fatalf("a scoped create: err %v, want ErrEventRuleForbidden", err)
 	}
-	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 3 {
-		t.Fatalf("a scoped reader lists %d rules (%v), want all 3", len(list), err)
+	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 4 {
+		t.Fatalf("a scoped reader lists %d rules (%v), want all 4 (two authored, the official reachability-lost and ingest-lag-high)", len(list), err)
 	}
 	if r, err := gw.GetEventRule(ctx, "reach-lost", none); err != nil || r.Name != "reach-lost" {
 		t.Fatalf("a scoped reader gets %+v (%v), want reach-lost", r, err)
@@ -101,8 +101,8 @@ func TestEventRules(t *testing.T) {
 	if err := gw.DeleteEventRule(ctx, "", "reach-lost", none); !errors.Is(err, storage.ErrEventRuleForbidden) {
 		t.Fatalf("a scoped delete: err %v, want ErrEventRuleForbidden", err)
 	}
-	if list, _ := gw.ListEventRules(ctx, all); len(list) != 3 {
-		t.Fatalf("an all-scope reader lists %d rules, want 3 (the two authored and the official reachability rule)", len(list))
+	if list, _ := gw.ListEventRules(ctx, all); len(list) != 4 {
+		t.Fatalf("an all-scope reader lists %d rules, want 4 (the two authored and the official reachability-lost and ingest-lag-high)", len(list))
 	}
 
 	// An update bumps the version; disabling is an update.

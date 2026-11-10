@@ -124,6 +124,8 @@ const (
 	ProcessGoroutineCount = "process-goroutine-count"
 	ProcessHeapSize       = "process-heap-size"
 	ProcessGCPause        = "process-gc-pause"
+	ProcessCPUSeconds     = "process-cpu-seconds"
+	ProcessFDCount        = "process-fd-count"
 )
 
 // The server's request and database keys (#1627): what the server's HTTP
@@ -143,6 +145,41 @@ const (
 	DBPoolWaitCount        = "db-pool-wait-count"
 	DBPoolWaitDuration     = "db-pool-wait-duration"
 )
+
+// The server's pipeline keys (#1628): how far behind ingest is, how deep the
+// telemetry consumer, the calc queue and the notification outbox stand, and
+// whether the bus request-reply paths and the sweeps are failing, over a
+// report window, landed by the server on its own platform component. Every
+// failure count has the count it is a share of: a drop or an ack failure of
+// ingest-batch-count, a request failure of bus-request-count, a sweep failure
+// of sweep-count, so each loss reads as a ratio where zero is healthy.
+const (
+	IngestLag                   = "ingest-lag"
+	IngestLagMax                = "ingest-lag-max"
+	IngestBatchCount            = "ingest-batch-count"
+	IngestSampleCount           = "ingest-sample-count"
+	IngestLaneBusy              = "ingest-lane-busy"
+	BusConsumerPending          = "bus-consumer-pending"
+	BusConsumerAckPending       = "bus-consumer-ack-pending"
+	BusConsumerRedelivered      = "bus-consumer-redelivered"
+	BusTelemetryAckFailureCount = "bus-telemetry-ack-failure-count"
+	BusTelemetryDropCount       = "bus-telemetry-drop-count"
+	BusWorklistPullCount        = "bus-worklist-pull-count"
+	BusWorklistReplyBytesMax    = "bus-worklist-reply-bytes-max"
+	BusRequestCount             = "bus-request-count"
+	BusRequestFailureCount      = "bus-request-failure-count"
+	CalcPendingDepth            = "calc-pending-depth"
+	CalcServedCount             = "calc-served-count"
+	CalcPassDuration            = "calc-pass-duration"
+	OutboxQueuedDepth           = "outbox-queued-depth"
+	OutboxDueAge                = "outbox-due-age"
+	SweepDuration               = "sweep-duration"
+	SweepCount                  = "sweep-count"
+	SweepFailureCount           = "sweep-failure-count"
+)
+
+// serverPipelineWriter is what writes the server's pipeline keys.
+const serverPipelineWriter = "the server's pipeline recorder"
 
 // serverSelfWriter is what writes the server's request and database keys.
 const serverSelfWriter = "the server's request and database recorder"
@@ -185,6 +222,11 @@ const serverBootWriter = "the server boot"
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
 
+// processSelfWriter is what writes the generic process-* keys: any Omniglass
+// process, of itself. A node reports them on its node-self lane, so they are
+// node-self keys too; the server lands them on its own component.
+const processSelfWriter = "a process, of itself (a node on its node-self report, the server on its own component)"
+
 // platform maps each platform key to the part of the process that writes it.
 // A key only the Omniglass process writes about itself joins here with its
 // writer.
@@ -203,9 +245,11 @@ var platform = map[string]string{
 	SpoolDropCount:        nodeSelfWriter,
 	PublishFailureCount:   nodeSelfWriter,
 	SessionHeldCount:      nodeSelfWriter,
-	ProcessGoroutineCount: nodeSelfWriter,
-	ProcessHeapSize:       nodeSelfWriter,
-	ProcessGCPause:        nodeSelfWriter,
+	ProcessGoroutineCount: processSelfWriter,
+	ProcessHeapSize:       processSelfWriter,
+	ProcessGCPause:        processSelfWriter,
+	ProcessCPUSeconds:     processSelfWriter,
+	ProcessFDCount:        processSelfWriter,
 
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
@@ -232,19 +276,46 @@ var platform = map[string]string{
 	CommandStuckCount:       "the server's command queue timer",
 	CommandExpiredCount:     "the server's command queue timer",
 	CommandPullFailureCount: nodeSelfWriter,
+
+	// The server's pipeline (#1628).
+	IngestLag:                   serverPipelineWriter,
+	IngestLagMax:                serverPipelineWriter,
+	IngestBatchCount:            serverPipelineWriter,
+	IngestSampleCount:           serverPipelineWriter,
+	IngestLaneBusy:              serverPipelineWriter,
+	BusConsumerPending:          serverPipelineWriter,
+	BusConsumerAckPending:       serverPipelineWriter,
+	BusConsumerRedelivered:      serverPipelineWriter,
+	BusTelemetryAckFailureCount: serverPipelineWriter,
+	BusTelemetryDropCount:       serverPipelineWriter,
+	BusWorklistPullCount:        serverPipelineWriter,
+	BusWorklistReplyBytesMax:    serverPipelineWriter,
+	BusRequestCount:             serverPipelineWriter,
+	BusRequestFailureCount:      serverPipelineWriter,
+	CalcPendingDepth:            serverPipelineWriter,
+	CalcServedCount:             serverPipelineWriter,
+	CalcPassDuration:            serverPipelineWriter,
+	OutboxQueuedDepth:           serverPipelineWriter,
+	OutboxDueAge:                serverPipelineWriter,
+	SweepDuration:               serverPipelineWriter,
+	SweepCount:                  serverPipelineWriter,
+	SweepFailureCount:           serverPipelineWriter,
 }
 
 // NodeSelf reports a platform key a node may report of itself on the
 // node-self lane (#1625), exactly (the wire carries the declared name). A
 // node's self-report never speaks for another writer's key: a node naming
 // health or checkin-age on the lane is refused like any undeclared key.
-func NodeSelf(key string) bool { return platform[key] == nodeSelfWriter }
+func NodeSelf(key string) bool { return nodeSelf(platform[key]) }
+
+// nodeSelf reports a writer whose keys a node reports of itself.
+func nodeSelf(by string) bool { return by == nodeSelfWriter || by == processSelfWriter }
 
 // NodeSelfKeys is every key a node reports of itself, sorted.
 func NodeSelfKeys() []string {
 	var out []string
 	for k, by := range platform {
-		if by == nodeSelfWriter {
+		if nodeSelf(by) {
 			out = append(out, k)
 		}
 	}

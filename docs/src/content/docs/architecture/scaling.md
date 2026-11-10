@@ -198,6 +198,35 @@ share of the wall clock is the lane's utilisation, and a lag that sits at the no
 flush while the lane is mostly idle is not a consumer bottleneck
 ([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
 
+### Scale up or scale out: what the figures say
+
+A running server reports the figures that make this call on its own platform component, every report
+window (#1628; [messaging](/architecture/messaging/#measuring-the-pipeline),
+[workers](/architecture/workers/#measuring-the-ticks)), so the evidence is the fleet's own history,
+not a lab run. Read them together:
+
+- **The lane is the ceiling.** `ingest-lane-busy` near 1, `bus-consumer-pending` growing window over
+  window and `ingest-lag-max` climbing: the one consumer with one batch in flight is saturated. A
+  bigger box helps only as far as it shortens each batch's landing (a faster database, a lower
+  `db-pool-wait-duration`); past that the lane needs to run in parallel, which waits on sequencing per
+  publisher ([workers](/architecture/workers/#one-machinery-several-consumers)); #1517 measures where
+  the ceiling sits in a scale lab. This is the scale-out signal.
+- **The database or the process is the ceiling.** `db-pool-wait-count` nonzero with
+  `db-pool-acquired` at `db-pool-max`, or `process-cpu-seconds` divided by the window near the cores
+  the server has, while the lane is not saturated: the server is starved, not the design. Scale up (more
+  cores, a larger pool, a faster database) before adding a replica that would share the same database.
+- **The lag is not the server's.** `ingest-lag` high while `ingest-lane-busy` is low and the backlog
+  near 0: the samples arrive late (a node's spool holding through an outage, a slow WAN) or the node's
+  clock is behind the server's. The lag is commit time minus the node's `ts`, two clocks
+  subtracted, so a skew reads as lag and a negative lag is a node clock ahead; fix the clock, not the
+  server (#419).
+- **A tick is the ceiling.** `calc-pending-depth` growing while `calc-pass-duration` nears its second,
+  or `outbox-due-age` growing, says that tick, not ingest, has fallen behind.
+
+The seeded `ingest-lag-high` rule opens a warning alarm on the server's component when
+`ingest-lag-max` holds over 30 s for 2 minutes, the point at which a reader of any panel is looking at
+data at least half a minute old.
+
 ## Platform configuration
 
 Configuration is **two tiers**, and platform settings are deliberately **centralized**:

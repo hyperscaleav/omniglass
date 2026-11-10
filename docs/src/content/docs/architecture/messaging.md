@@ -22,7 +22,9 @@ lane fanning the commit onto JetStream for an `action_rule` consumer
 ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
 The delivery contract on that stream is built: every publish waits for the stream's ack under a
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
-under its receipt ([below](#delivery-a-batch-lands-once)).
+under its receipt ([below](#delivery-a-batch-lands-once)). The server measures that pipeline from
+inside, its ingest lag, backlog, drops and request failures, on its own platform component
+([below](#measuring-the-pipeline)).
 :::
 
 This page is the **one home of the two-lane data plane**: the admission / trusted / persistence split, the CDC publisher, and the ingest-path enumeration live here, only named (with a link) everywhere else.
@@ -211,6 +213,67 @@ and calculated samples carry `source_rule` on the row, and intended names its co
 keyed to a property sample as its observed side.
 
 :::
+
+## Measuring the pipeline
+
+The server measures its own pipeline from inside and lands the figures on its platform component,
+the `omniglass-server` in the platform system, once a report window (`collection.report_seconds`),
+through the same window recorder as its request timing
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself), #1628). Every
+failure count has its attempts beside it, so each loss reads as a ratio where 0 is healthy.
+
+- **`ingest-lag`, `ingest-lag-max`**: how far behind its samples the server lands them. **Ingest lag
+  is the server's clock at the batch's commit minus the sample's `ts`**, read on the server once the
+  transaction has committed, so it covers the whole trip (the node's spool, the publish, the stream,
+  the consumer's queue and the landing itself). `ingest-lag` is the window's mean over each committed
+  batch's newest and oldest sample; `ingest-lag-max` is the window's worst, the oldest sample of any
+  batch. A sample with no `ts` on it, its group or its batch is stamped at ingest, so it counts
+  toward throughput and never toward lag. Healthy is about the node's spool flush (a second) plus the
+  landing: a few seconds, and `ingest-lag-max` close to `ingest-lag`. The seeded official rule
+  **`ingest-lag-high`** opens a warning alarm on the server's component when `ingest-lag-max` holds
+  over 30 s for 2 minutes, and clears it when a window reads 30 s or under.
+- **The clock skew caveat.** The node stamps `ts` and the server reads the commit, so lag is two
+  clocks subtracted. A node clock ahead of the server's reads short, even negative; one behind reads
+  long. A negative lag is kept as read, not clamped: it is the evidence of the skew, and fixing the
+  clock is the fix ([time](/architecture/time/), #419). Read a lag that jumps on one node's batches
+  and not the rest as a clock before a pipeline.
+- **`ingest-batch-count`, `ingest-sample-count`**: the batches the consumer committed in the window
+  and the samples they landed, the throughput. Their ratio is samples per batch. A redelivery its
+  receipt held to a no-op landed nothing, so it adds no batch, no sample and no lag; nor does a
+  node's group the fence or the gateway dropped.
+- **`bus-telemetry-drop-count`**, per reason: the batches the consumer gave up on. `refused` is a
+  batch the gateway refused whole (a refused group alone drops nothing:
+  [above](#delivery-a-batch-lands-once)); `metadata` a delivery whose count could not be read;
+  `max-deliver` a batch that failed its fifth delivery; `malformed` one that will never land as sent
+  (undecodable, or naming an owner or a task it may not). The drop ratio is the drops over
+  themselves plus `ingest-batch-count`; healthy is 0.
+- **`bus-telemetry-ack-failure-count`**: deliveries whose double ack the stream did not confirm,
+  a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
+  work, not rows; as a share of `ingest-batch-count`, healthy is 0.
+- **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the
+  `og-telemetry-worker` durable at the window's close: batches stored and not yet delivered, delivered
+  and not yet acked (at most one, the batch in flight), and redelivered. Healthy is a pending count
+  near 0 that does not grow window over window; a growing one is a backlog the lane is not clearing.
+- **`ingest-lane-busy`**: the share of the window the consumer spent handling batches. One batch is
+  in flight, so this is the lane's utilisation. Near 1 with a growing backlog, the lane is the
+  ceiling; low with a high lag, the lag is upstream of it.
+- **`bus-worklist-pull-count`**, per outcome (`served`, `read-failed`, `oversize`, `respond-failed`,
+  `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: the window's worklist
+  pulls, counted as each window's own (the change in the server's running totals, never the totals),
+  and the largest reply held for any node. Every outcome but `served` is a loss over the sum; a reply
+  size nearing the bus payload limit is the warning before `oversize`.
+- **`bus-request-count`, `bus-request-failure-count`**, per path (`heartbeat`, `command-pull`,
+  `command-report`): the node requests the server handled and those it failed to serve. A heartbeat
+  write that fails also logs one WARN for the node, `heartbeat not recorded, the node may read as
+  silent`, and not again until a heartbeat from that node lands, so a database outage under a fleet
+  heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures.
+
+A count reads its window's sum, then one zero the window after its last activity, then nothing; a
+gauge, mean or max reads nothing in a window with no observation, so a missing figure is no activity,
+never a zero that did not happen. What the figures say about scaling is
+[scaling](/architecture/scaling/#scale-up-or-scale-out-what-the-figures-say); the calc, outbox and
+sweep figures are [workers](/architecture/workers/#measuring-the-ticks). The decisions are
+[ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
 
 ## Subjects, accounts, and scope
 

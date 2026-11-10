@@ -37,6 +37,10 @@ type nodeReport struct {
 	// (#1626): no answer from the bus, or one the node could not read.
 	pullFailures int
 
+	// rt is the runtime sampler the server shares, so the node's CPU time
+	// reads as the time between two of its ticks.
+	rt platformmetric.Runtime
+
 	samples []*ogv1.MetricSample
 }
 
@@ -136,7 +140,7 @@ func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
 	if r == nil {
 		return
 	}
-	for _, rd := range p.Readings() {
+	for _, rd := range r.rt.Readings(p) {
 		r.sample(rd.Key, rd.Value, at, "")
 	}
 }

@@ -31,14 +31,16 @@ a caller who holds `rule:create` only on a grant bounded to a place or system is
 rule** (nor Edit, Disable or Delete without the matching permission on an all-scope grant), since the
 server would refuse the write.
 
-## The rule that ships
+## The rules that ship
 
-One rule ships with Omniglass, rendered here from the seed itself:
+Two rules ship with Omniglass, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
-It is **official**: it updates with Omniglass, so it is read-only, and the blade greys Edit and
-Delete with that reason. It is what makes an unplugged component move its system: unplug a
+Both are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
+and Delete with that reason. `ingest-lag-high` watches Omniglass itself: it opens a warning alarm on
+the server's own component when the server lands telemetry more than 30 s behind its samples for 2
+minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `reachability-lost` is what makes an unplugged component move its system: unplug a
 simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
 its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Rules page
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system

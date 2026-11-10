@@ -491,13 +491,12 @@ between fires past one and a half heartbeats). `tick-duration` and `tick-overrun
 today's serial loop; #1634 redefines them when the loop changes. Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
 later slice folds them into it. The `process-*` figures come from one runtime sampler
-(`internal/platformmetric`); the server reports none of them yet, and #1628 adds that sampler to its
-own component.
+(`internal/platformmetric`), the same one the server reports its own through.
 
 ### Self-monitoring: the server's account of itself
 
-A server reports its request and database timing on its own platform component, an
-`omniglass-server` in the platform system (#1627). Each boot ensures the component of the server's
+A server reports its request and database timing, its runtime and its pipeline on its own platform
+component, an `omniglass-server` in the platform system (#1627, #1628). Each boot ensures the component of the server's
 **identity**, `OMNIGLASS_SERVER_NAME` (the hostname when unset): a `platform_server` row names the
 identity's component, so a restart under one identity reports on one component and two servers
 report on two. Boots take the platform step's lock, so two starting at once under one identity still
@@ -527,6 +526,16 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   **`db-pool-wait-count`** and **`db-pool-wait-duration`** are the window's acquires that found the
   pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
   healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+- **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
+  files of the server process, read by the one runtime sampler a node reports its own through. The
+  server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
+  estimates it rather than the kernel's account, so over the window's length it is the cores the
+  server kept busy.
+- **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog and drops, the bus
+  request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and
+  the calc, notification and settlement ticks' depth, pace and failures
+  ([workers](/architecture/workers/#measuring-the-ticks)). The seeded `ingest-lag-high` rule raises a
+  warning alarm on this component when the server falls 30 s behind its samples for 2 minutes.
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
 gone by the write is dropped rather than failed, as a node's is. The decisions are
