@@ -86,8 +86,14 @@ const (
 	// PollFailureCount is how many of an endpoint's polls failed in a report
 	// window (#1369): a run that faulted and landed nothing, or a due poll
 	// the endpoint's gate refused, as the scheduler books a failure. Landed
-	// only when nonzero.
+	// only when nonzero. A poll held because the endpoint's probe reads it
+	// unreachable is not one: it is counted apart, in PollHeldCount.
 	PollFailureCount = "poll-failure-count"
+	// PollHeldCount is how many of an endpoint's due polls its gate held in
+	// a report window (#1650) because the endpoint's own probe reads it
+	// unreachable: never sent, so not a failure and no backoff, counted once
+	// in each interval it waits through. Landed only when nonzero.
+	PollHeldCount = "poll-held-count"
 	// PushMessageCount is how many messages an endpoint's held session or
 	// udp socket delivered that a listener claimed, over a report window
 	// (#1369). Landed every window while the endpoint is held, zero
@@ -118,7 +124,7 @@ var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
-	CollectionFailed, PollDuration, PollFailureCount, PushMessageCount, PushUnclaimedCount,
+	CollectionFailed, PollDuration, PollFailureCount, PollHeldCount, PushMessageCount, PushUnclaimedCount,
 }
 
 // pushable are the native keys a push may write too, each mapped to the

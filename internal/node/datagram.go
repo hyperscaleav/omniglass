@@ -247,7 +247,7 @@ func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 // waits: the rung reads down until the gate lifts, and its first answer then
 // arms, as a recovery does.
 func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
-	if _, gated := m.blocked(id, rungResponsive); gated {
+	if _, gated := m.refusedAt(id, rungResponsive); gated {
 		down := false
 		h.mu.Lock()
 		h.up = &down
@@ -388,8 +388,8 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok {
-		return []collection.Sample{responsive(collection.VerdictDown, "rejected: "+gt.class)}, nil
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok {
+		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+gt.class)}, nil
 	}
 	var timeout time.Duration
 	var p endpointParams
@@ -411,7 +411,7 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	if terr, ok := collection.AsTerminal(err); ok {
 		sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
 		sessions.datagramVerdict(task.EndpointID, false)
-		return []collection.Sample{responsive(collection.VerdictDown, "rejected: "+terr.Class)}, nil
+		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+terr.Class)}, nil
 	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("node: task %s: %w", task.ID, ctx.Err())

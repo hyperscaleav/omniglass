@@ -454,7 +454,22 @@ resumes its durable consumer on the command queue, and replays unacked telemetry
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-:::design[Target design: the layered availability gate's per-host ping, concurrent pre-pass and verdict-gated polls, tracked in #1249; the ping's rtt and loss are #1063]
+**Verdict-gated polls** are built (#1650,
+[ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)). The
+endpoint's reachability probe feeds its gate: **two consecutive down verdicts** add an
+`unreachable` reason to the gate, dated from the first down, so one lost probe never stops
+collection; an inconclusive probe neither adds nor resets the streak, nor does a rung that reads
+down only because a refusal holds it (snmp's held get, udp's gated request), so a refused endpoint
+never also reads unreachable; the next up verdict removes it. While the gate holds `unreachable`, a due poll is **held**: nothing is sent, no failure and no
+backoff are booked, and the window counts it as `poll-held-count`, apart from
+`poll-failure-count`, because a poll the node chose not to send is not a lost sample. The first
+tick after the up verdict runs it. A command or a run now on the held endpoint answers at once
+naming the reason (`unreachable since <time>`), and a preview answers 409, not a transport
+failure. An endpoint with no probe has no verdict, so its polls fail and back off as before.
+Held sessions and listen tasks are not gated by `unreachable`; their own reconnect handles a
+gone device.
+
+:::design[Target design: the layered availability gate's per-host ping, concurrent pre-pass, tracked in #1249; the ping's rtt and loss are #1063]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
 feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
 signal are one always-on probe.
@@ -499,9 +514,9 @@ with ICMP fully blocked even that is lost. The ssh probe still tries a params cr
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
 cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
 
-**Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
-never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
-down endpoint's gate samples ship in **one** batched call. L5 (socket) and further L7 handshakes
+**Listener** (`mode=listen`) tasks run ungated, never pinged; **inline probes** (`icmp`/`tcp` with
+the host on the task) *are* the check, ungated. A down endpoint's gate samples ship in **one**
+batched call. L5 (socket) and further L7 handshakes
 extend the stack as rungs a driver's ladder declares, not as toggles.
 :::
 

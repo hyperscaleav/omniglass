@@ -332,11 +332,24 @@ the ladder, the ssh and tls pins an operator declared, and the `:retry` counter)
 verification mode is one of its driver's inputs, so editing it moves the fingerprint too. The rungs below keep running, so reachability
 stays observed while auth is rejected, except where the transport rung itself carries the credential:
 an snmp get carries the community, so beneath an snmp auth gate nothing is sent and the rung reads
-down, rejected ([snmp](#snmp)). The gate is published as `endpoint-rejection` (`<rung>
-<class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
-its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
+down, rejected ([snmp](#snmp)), a reading that is the refusal's echo and so no reachability
+verdict. **The gate is a set of reasons** (#1650,
+[ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
+refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
+the reachability probe reads down twice running and removed on its next up verdict, is another,
+holding the whole host's polls ([nodes](/architecture/nodes/#implicit-reachability)). The gate is
+closed while any reason holds, each kind keeps its own release rule, and removing one leaves the
+others; a query that asks only about refusals (the rung checks, the ssh probe's credential, a held
+session's start, a datagram listener) sees only `refused`, so an unreachable endpoint keeps its probe
+credential and starts its session unrejected when the device returns. The gate is published as
+`endpoint-rejection` (`<rung> <class> <fingerprint>`, or `none`; a refusal of a changed key appends
+`<pinned-key> <offered-key>`, its evidence,
+[ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered);
+every other reason follows after a `;` as `<kind> <since> <source>`, which the reachability read serves as
+`gate_reasons`)
 and carried back on the worklist, so a restarted node makes no attempt against an unchanged
-fingerprint and keeps the evidence it adopts. Beside it, in the same batch, the node publishes why:
+fingerprint and keeps the evidence it adopts; it adopts the refusal only, since an unreachable
+reason is the probe's to re-earn. Beside it, in the same batch, the node publishes why:
 `endpoint-rejection-reason`, the refusal's class and the component's own text, scrubbed of anything
 the node sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
 says why it holds. A gate adopted after a restart publishes no reason, since the node never saw that
@@ -403,7 +416,8 @@ of its own:
 | Key | Written by | What it counts, per report window | Lands |
 |---|---|---|---|
 | `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
-| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll the endpoint's gate refused | when nonzero |
+| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
+| `poll-held-count` | the node | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running): not loss, so never a failure, and no backoff booked | when nonzero |
 | `push-message-count` | the node | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
 | `push-unclaimed-count` | the node | the messages no listener claimed | when nonzero |
 | `webhook-post-count` | the server | the webhook posts it accepted for the endpoint | when nonzero, then one zero after a stream stops |

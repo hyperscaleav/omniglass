@@ -23,6 +23,12 @@ import (
 // runNodeReporting starts the node with its own collection report window, as
 // runNode does with the platform's: a test cannot wait the minute.
 func (s *gateStack) runNodeReporting(name string, every time.Duration) {
+	s.runNodeProbing(name, every, 0)
+}
+
+// runNodeProbing is runNodeReporting with the reachability probes on their
+// own interval, not every tick (zero: every tick).
+func (s *gateStack) runNodeProbing(name string, every, probeEvery time.Duration) {
 	if s.stop != nil {
 		s.stop()
 	}
@@ -30,7 +36,7 @@ func (s *gateStack) runNodeReporting(name string, every time.Duration) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
-			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every})
+			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every, ProbeEvery: probeEvery})
 		ran <- err
 	}()
 	s.stop = func() {
@@ -60,7 +66,7 @@ func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool
 // its listeners claim) attached to a simulated bar, and to a second bar
 // whose device is gone. Each report window, the live bar's endpoint lands
 // the mean time of its polls and the messages its listeners claimed, a
-// quiet window as zero; the dead bar's endpoint lands its failed polls. The
+// quiet window as zero; the dead bar's endpoint lands its held polls. The
 // rows are the endpoint's own series (instance: the endpoint), owned by its
 // component, and a push may not forge them.
 func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
@@ -102,9 +108,10 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v >= 1 }, "the claimed change counted")
 	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v == 0 }, "a quiet window as zero")
 
-	// The gone bar's polls are refused at the port: each window counts them.
-	s.waitMetric("bar-gone", gone.Name, probekeys.PollFailureCount, func(v float64) bool { return v >= 1 }, "the refused polls counted")
-	s.waitMetric("bar-gone", gone.Name, probekeys.PollDuration, func(v float64) bool { return v >= 0 }, "a failed poll's time counted too")
+	// The gone bar's probe reads down at the port, so its gate holds
+	// unreachable and its due polls are held (#1650): each window counts
+	// them, apart from failures.
+	s.waitMetric("bar-gone", gone.Name, probekeys.PollHeldCount, func(v float64) bool { return v >= 1 }, "the held polls counted")
 }
 
 // fastDriver authors a copy of a shipped driver whose every poll runs each
@@ -132,6 +139,23 @@ func (s *gateStack) latestAt(comp, instance, key string) time.Time {
 		return time.Time{}
 	}
 	return m.TS
+}
+
+// earliestAt is the time of the endpoint's earliest key in the last hour,
+// zero when none landed.
+func (s *gateStack) earliestAt(comp, instance, key string) time.Time {
+	s.t.Helper()
+	rows, err := s.gw.ListMetricSeries(s.ctx, "component", comp, key, time.Hour, 1000)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	var first time.Time
+	for _, m := range rows {
+		if m.Instance == instance && (first.IsZero() || m.TS.Before(first)) {
+			first = m.TS
+		}
+	}
+	return first
 }
 
 // TestAGatedPollAndARunNowCountInTheReport drives the two poll paths beside

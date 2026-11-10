@@ -131,7 +131,7 @@ private key; a `session.login` beside it only answers keyboard-interactive quest
 nothing declared answers, such as a one-time code, rejects the session), `session.pty` asks for a
 terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
-naming both keys, which the gate carries as data (`endpoint-rejection` ends with the pinned and the
+naming both keys, which the gate carries as data (the refusal's entry in `endpoint-rejection` ends with the pinned and the
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be

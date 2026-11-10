@@ -28,6 +28,10 @@ metric_types:
     data_type: int
     label: Poll Failures
     description: The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero.
+  - name: poll-held-count
+    data_type: int
+    label: Held Polls
+    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable; never sent, so not failures; reported only when nonzero.
   - name: push-message-count
     data_type: int
     label: Pushed Messages

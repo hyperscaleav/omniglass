@@ -34,6 +34,9 @@ type endpointTally struct {
 	held      bool
 	claimed   int
 	unclaimed int
+	// heldPolls is the due polls the endpoint's gate held (#1650): never
+	// sent, so neither a run nor a failure.
+	heldPolls int
 }
 
 // endpointReport is one endpoint's rows for a window, under the task they
@@ -91,6 +94,16 @@ func (r *collectionReport) refused(endpoint string) {
 	r.tally(endpoint).failures++
 }
 
+// heldPoll records a due poll the endpoint's gate held for a reason other
+// than a refusal (its probe reads it unreachable, #1650): nothing was sent
+// and nothing failed, so it is apart from the failures.
+func (r *collectionReport) heldPoll(endpoint string) {
+	if r == nil {
+		return
+	}
+	r.tally(endpoint).heldPolls++
+}
+
 // pushes records what a held endpoint's listeners claimed and did not since
 // the last call; a held endpoint reports its claimed count every window, zero
 // included.
@@ -113,7 +126,7 @@ func (r *collectionReport) due(now time.Time) bool { return !now.Before(r.since.
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
 // moved to another node) reports nothing. A mean duration lands only for an
-// endpoint that polled, a failure or unclaimed count only when nonzero, and a
+// endpoint that polled, a failure, held or unclaimed count only when nonzero, and a
 // claimed count for every held endpoint. Ordered by task, so a publish order
 // holds still.
 func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpointReport {
@@ -132,6 +145,9 @@ func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpoi
 		}
 		if e.failures > 0 {
 			metric(probekeys.PollFailureCount, float64(e.failures))
+		}
+		if e.heldPolls > 0 {
+			metric(probekeys.PollHeldCount, float64(e.heldPolls))
 		}
 		if e.held {
 			metric(probekeys.PushMessageCount, float64(e.claimed))

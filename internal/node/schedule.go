@@ -32,12 +32,15 @@ type pollSchedule struct {
 	// content changes, not on every run. Node memory alone, so a restart may
 	// fire one again.
 	occurred map[string]map[string]string
+	// heldAt is when each held poll was last counted held (#1650): a poll
+	// the gate holds counts once in each interval it waits through.
+	heldAt map[string]time.Time
 }
 
 // newPollSchedule keeps the schedule for a node ticking every heartbeat,
 // which is also where a failed poll's retry backoff starts.
 func newPollSchedule(heartbeat time.Duration) *pollSchedule {
-	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}}
+	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}, heldAt: map[string]time.Time{}}
 }
 
 // failed rebooks a poll that ran at now and landed nothing (its fetch
@@ -137,18 +140,46 @@ func (s *pollSchedule) nextOf(taskID string) (time.Time, bool) {
 // the task a few milliseconds sooner than the one that booked it would
 // otherwise skip it, and an interval equal to the heartbeat would double.
 func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) bool {
+	if !s.pending(taskID, every, now) {
+		return false
+	}
+	delete(s.heldAt, taskID)
 	if every <= 0 {
 		return true
 	}
 	at, booked := s.next[taskID]
-	if booked && now.Add(s.heartbeat/2).Before(at) {
-		return false
-	}
 	next := now.Add(every)
 	if booked && now.Sub(at) < every {
 		next = at.Add(every)
 	}
 	s.next[taskID] = next
+	return true
+}
+
+// pending reports whether the task would be due at now, booking nothing.
+func (s *pollSchedule) pending(taskID string, every time.Duration, now time.Time) bool {
+	if every <= 0 {
+		return true
+	}
+	at, booked := s.next[taskID]
+	return !booked || !now.Add(s.heartbeat/2).Before(at)
+}
+
+// heldDue reports whether a poll the gate holds (#1650) is due and not yet
+// counted held in this interval, and if so remembers counting it. It books no
+// run, no backoff and no refusal: a held poll was never attempted, so it
+// stays due and runs on the first tick the gate opens.
+func (s *pollSchedule) heldDue(taskID string, every time.Duration, now time.Time) bool {
+	if !s.pending(taskID, every, now) {
+		return false
+	}
+	if at, counted := s.heldAt[taskID]; counted && every > 0 && now.Sub(at) < every-s.heartbeat/2 {
+		return false
+	}
+	if s.heldAt == nil {
+		s.heldAt = map[string]time.Time{}
+	}
+	s.heldAt[taskID] = now
 	return true
 }
 
@@ -162,6 +193,7 @@ func (s *pollSchedule) retain(ids map[string]bool) {
 	forget(s.refused, ids)
 	forget(s.fingerprint, ids)
 	forget(s.occurred, ids)
+	forget(s.heldAt, ids)
 }
 
 // forget drops every task of m not in ids.

@@ -45,6 +45,8 @@ type httpStack struct {
 	dsn     string
 	devices map[string]*sim.Device // by profile
 	ips     map[string]string      // by profile
+	engine  *sim.Engine
+	snaps   []sim.DeviceSnapshot
 }
 
 // newHTTPStack serves each profile pick names on a claimed loopback
@@ -101,7 +103,7 @@ func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pic
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithNodeRunner(srv)))
 	t.Cleanup(apiSrv.Close)
 	s := &httpStack{gateStack: &gateStack{t: t, ctx: ctx, gw: gw, all: all, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}},
-		dsn: dsn, devices: map[string]*sim.Device{}, ips: ips}
+		dsn: dsn, devices: map[string]*sim.Device{}, ips: ips, engine: engine, snaps: snaps}
 	for _, d := range engine.Devices() {
 		s.devices[d.DeviceID] = d
 	}
