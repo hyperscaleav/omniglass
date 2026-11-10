@@ -4,7 +4,8 @@
 # items of each kind it holds. The server writes what became of each item onto the batch's
 # receipt (stored, coalesced, deduplicated, or refused and why), and omniglass lab measure
 # reconciles the ledgers against the receipts once every node has settled. Each kind and hop reads
-# as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641).
+# as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641). A
+# batch the server Terms whole reads under its own cause, not missing (#1691, ADR-1691).
 
 # demo-needs: docker-socket
 
@@ -35,5 +36,11 @@ Type `jq -c '.delivery[] | {kind, hop, in, out, loss, deduplicated, outcomes}' /
 Enter
 Wait
 Type `jq -c '.delivery_end_to_end' /tmp/lab-measure.json`
+Enter
+Wait
+Type "# A batch the server Terms whole reads under its cause; each is a count on every row, 0 here"
+Enter
+Wait
+Type `jq -c '.delivery[] | {kind, termed: (.outcomes | {"refused-owner", "refused-task", "refused-batch", "refused-metadata", abandoned})}' /tmp/lab-measure.json`
 Enter
 Wait
