@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -30,6 +31,8 @@ func newNodeRunCmd() *cobra.Command {
 		token      string
 		heartbeat  time.Duration
 		probeEvery time.Duration
+		// laneWorkers is how many endpoint lanes run at once (#1634, #1249).
+		laneWorkers int
 		// worklistEvery is the pull interval (#1577), apart from the heartbeat.
 		worklistEvery time.Duration
 		once          bool
@@ -72,9 +75,24 @@ func newNodeRunCmd() *cobra.Command {
 			if serverURL == "" || name == "" || token == "" {
 				return fmt.Errorf("node: --server, --name, and --token are required (or set OMNIGLASS_SERVER / OMNIGLASS_NODE_NAME / OMNIGLASS_NODE_TOKEN)")
 			}
+			if probeEvery <= 0 {
+				return fmt.Errorf("node: --probe-every %s: a probe runs on an interval of its own, so it must be positive", probeEvery)
+			}
+			if !cmd.Flags().Changed("lane-workers") {
+				if v := config.Get("OMNIGLASS_LANE_WORKERS"); v != "" {
+					n, err := strconv.Atoi(v)
+					if err != nil {
+						return fmt.Errorf("node: OMNIGLASS_LANE_WORKERS %q is not a whole number", v)
+					}
+					laneWorkers = n
+				}
+			}
+			if laneWorkers <= 0 {
+				return fmt.Errorf("node: --lane-workers %d: a node needs at least one lane worker to run its tasks", laneWorkers)
+			}
 			nodeCfg := node.Config{
 				ServerURL: serverURL, Name: name, Token: token,
-				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, WorklistEvery: worklistEvery, Once: once,
+				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, LaneWorkers: laneWorkers, WorklistEvery: worklistEvery, Once: once,
 			}
 			if simulate {
 				// A signal stops both halves gracefully, so the simulator
@@ -99,7 +117,8 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "this node's registered name (env OMNIGLASS_NODE_NAME)")
 	cmd.Flags().StringVar(&token, "token", "", "enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN)")
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
-	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
+	cmd.Flags().DurationVar(&probeEvery, "probe-every", node.DefaultProbeEvery, "how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
+	cmd.Flags().IntVar(&laneWorkers, "lane-workers", node.DefaultLaneWorkers, "how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS)")
 	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")

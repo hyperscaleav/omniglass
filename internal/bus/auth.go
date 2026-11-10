@@ -30,6 +30,9 @@ type Store interface {
 	// written on its platform component.
 	NodeCheckins(ctx context.Context) ([]storage.NodeCheckin, error)
 	RecordPlatformMetrics(ctx context.Context, rows []storage.PlatformMetric) error
+	// CommandQueueHealth is the command queue health timer's read (#1626):
+	// every node's queue, and the window's counts since the previous read.
+	CommandQueueHealth(ctx context.Context, since time.Time) (storage.CommandQueueRead, error)
 	// RecordOrphanedBatches counts a node's batches the confinement fence
 	// orphaned (#1200), once per flush rather than per batch.
 	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error
@@ -89,6 +92,9 @@ type Store interface {
 	// retention pass, and each day past every window dropped whole.
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// RetentionStatus is the storage read after each pass (#1629): the
+	// metric partitions held and the stored tables' and database's bytes.
+	RetentionStatus(ctx context.Context) (storage.RetentionStatus, error)
 	// CompactMetricTrends and PruneMetricTrends are the trend tier's (#1276):
 	// hours closed into trends on every pass, and the trend window kept.
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)

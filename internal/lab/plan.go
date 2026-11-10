@@ -91,11 +91,11 @@ const (
 // costs beside what a lab does.
 type Cadence struct {
 	Name string
-	// Heartbeat is the node's check-in interval: every collection task runs
-	// at it unless its driver declares a slower schedule.
+	// Heartbeat is the node's check-in interval, and the interval of a
+	// driver poll that declares no schedule of its own (#1634).
 	Heartbeat string
-	// ProbeEvery is the reachability probe interval; empty probes on every
-	// check-in.
+	// ProbeEvery is the reachability probe interval, on the node's own
+	// timer, apart from its check-in (#1634).
 	ProbeEvery string
 	// WorklistEvery is how often the node pulls its worklist (#1577), apart
 	// from its check-in, so a short check-in does not rebuild every
@@ -129,12 +129,12 @@ func CadenceProfiles() []Cadence {
 		// rebuilding every site's worklist every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s",
 			For: "a learner's lab: a change in the console shows within seconds"},
-		// A script's throwaway lab lives for minutes and probes on every
-		// check-in, so a walkthrough waiting on a probe's verdict keeps its
-		// recorded budget.
-		{Name: CadenceWalkthrough, Heartbeat: "2s", WorklistEvery: "2s", SimPoll: "2s",
+		// A script's throwaway lab lives for minutes and probes every 2s, so
+		// a walkthrough waiting on a probe's verdict keeps its recorded
+		// budget.
+		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(),
+		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(),
 			For: "the product's own defaults: what a deployment's node runs at"},
 	}
 }
@@ -466,11 +466,8 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the node.",
 	}
-	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat}
-	if cadence.ProbeEvery != "" {
-		nodeCmd = append(nodeCmd, "--probe-every", cadence.ProbeEvery)
-	}
-	nodeCmd = append(nodeCmd, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll)
+	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
+		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
 	nodeService := func(service, name, token, pushToken, role string) Service {
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,

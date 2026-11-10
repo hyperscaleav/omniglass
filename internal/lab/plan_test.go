@@ -219,9 +219,10 @@ func TestPlanVolumes(t *testing.T) {
 
 // A learner's lab probes every 10s (#1273): it checks in every 2s so a change
 // in the console shows within seconds, but it may run for days, and a probe
-// on every check-in writes most of its rows. A script's throwaway lab sets no
-// probe interval, so it probes on every 2s check-in: it lives for minutes, and
-// a walkthrough that waits on a probe's verdict is recorded against a budget.
+// on every check-in writes most of its rows. A script's throwaway lab probes
+// every 2s: it lives for minutes, and a walkthrough that waits on a probe's
+// verdict is recorded against a budget. Since #1634 a probe runs on the node's
+// own timer, never the check-in, so every lab names its interval.
 func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	flag := func(cmd []string, name string) string {
 		i := slices.Index(cmd, name)
@@ -245,8 +246,8 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(s.Node.Cmd, "--probe-every") {
-		t.Fatalf("a throwaway lab: %v sets a probe interval, want none (every check-in)", s.Node.Cmd)
+	if got := flag(s.Node.Cmd, "--probe-every"); got != "2s" {
+		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s", got, s.Node.Cmd)
 	}
 	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
@@ -295,17 +296,17 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		cadence   string
 		ephemeral bool
 		heartbeat string
-		probe     string // "" probes on every check-in
+		probe     string
 		worklist  string
 		simPoll   string
 	}{
 		{"", false, "2s", "10s", "5s", "2s"},
-		{"", true, "2s", "", "2s", "2s"},
+		{"", true, "2s", "2s", "2s", "2s"},
 		{"lab", true, "2s", "10s", "5s", "2s"},
-		{"walkthrough", false, "2s", "", "2s", "2s"},
+		{"walkthrough", false, "2s", "2s", "2s", "2s"},
 		// The product's own: the node's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
-		{"default", true, node.DefaultHeartbeat.String(), "", node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String()},
+		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String()},
 	}
 	for _, c := range cases {
 		o := testOptions()

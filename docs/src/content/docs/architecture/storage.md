@@ -34,6 +34,9 @@ and the server prunes `metric` and `property` samples to their retention windows
 provenance-aware floor, and `log_line` and `node_log` by severity band
 ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+Each pass's figures (per lane removed and behind, the mark lags, the table sizes) are built as
+platform metrics with a seeded `retention-behind` rule, and land once the server has its platform
+component ([below](#what-a-retention-pass-reports), #1671).
 See [implementation status](/architecture/status/).
 :::
 
@@ -585,6 +588,50 @@ on an official type too, since a shipped type's definition is the seed's but how
 its samples is the install's. The boot seed never writes it. The lane's own prune skips every
 overridden type, and the pass gives each one a lane of its own, pruned to its window with the same
 floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+
+### What a retention pass reports
+
+Each pass lands its figures as platform metrics on the server's component in the platform system,
+written as the process, so no node, push or operator can write them (#1629; the keys are listed on
+the [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself) page, rendered from the
+code). One pass writes one sample per key and instance, at the pass's end:
+
+- **`retention-deleted-count`** and **`retention-behind`**, one each per lane the pass pruned, the
+  instance the lane's own name: `metric`, `property`, `metric_trend`, a type's override lane
+  (`metric/<type>`), a log band (`log_line/info`, `node_log/warn`). A lane added later reports under
+  its name with no change to the reporter. The deleted count is the rows the chunks removed; a day
+  dropped whole is not counted there.
+- **`retention-behind`** for `metric_trend compaction` and `metric_block compaction`, and
+  **`retention-window-days`** (instance `metric`), when the pass ran the compactions (it skips them on
+  a metric window out of range).
+- **`retention-pass-duration`** (seconds), **`retention-pass-failure-count`**, and
+  **`metric-partition-created-count`** and **`metric-partition-dropped-count`**, the days the pass
+  created ahead and dropped whole.
+- **`metric-trend-mark-lag`** (hours) and **`metric-block-mark-lag`** (days): now less each
+  compaction's mark, once it has one. A healthy trend mark trails by a day and an hour or so (it closes
+  each hour that ended a day ago), and a healthy block mark by one to two days.
+- From one status read after the prunes: **`metric-partition-count`**, **`metric-oldest-day-age`**
+  (days from the oldest partition's start to now, to read against `retention-window-days`),
+  **`table-bytes`** per stored table (`metric` summed over its day partitions, `metric_trend`,
+  `metric_block`, `property`, `log_line`, `node_log`) and **`database-bytes`**. A failed status read
+  loses only these; the pass's own figures still land. The log tables' oldest row is not read: with no
+  index leading on `ts` it is a full scan, so the behind flags and deleted counts stand in until #1417
+  partitions them.
+
+**Behind and failed read differently.** A lane is *behind* when the pass stopped at its chunk budget
+with rows still past the window, which is normal after a long outage or a window shortened: the next
+pass comes a minute later and catches up. A *failure* is an error (a statement that failed, a window
+out of range), counted in `retention-pass-failure-count`; a lane whose prune failed is also flagged
+behind, since it did not reach its window. So a failure count above zero is a fault to read in the
+server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
+**`retention-behind`** rule reads the second: a lane flagged 1 for five minutes, several catch-up
+passes, opens a warning alarm on the server's component naming the lane, and the first pass that
+reads it 0 clears it (a lane that leaves the report while flagged keeps its alarm open, #1673). The
+four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
+healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
+the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)
+rather than at 0, and the sizes, ages and window are levels to read against each other. Until the
+server registers its platform component (#1627, wired in #1671), the server writes none of these.
 
 ::::design[Target design: the metric lane is partitioned (#1275); the other append-only tables are tracked in #1417, and the `raw_sample` buffer in #430]
 
