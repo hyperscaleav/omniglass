@@ -331,9 +331,13 @@ function KeyTip(props: { k: PlatformPanelKey; server: PlatformServer }) {
 }
 
 // A section is one key. An unsplit key is a single row named by the key; a
-// split or ranked key is a heading row over one row per instance.
+// split or ranked key is a heading row over one row per instance. A ranked key
+// with no window yet has nothing to rank, so it too is one not-reported row.
 function Section(props: { section: PanelSection; server: PlatformServer; view: PlatformView; live: boolean }) {
-  const single = () => props.section.rows.length === 1 && props.section.rows[0].instance === "" && !props.section.ranked;
+  const single = () => {
+    const rows = props.section.rows;
+    return rows.length === 1 && rows[0].instance === "" && (!props.section.ranked || rows[0].value === null);
+  };
   return (
     <Show
       when={!single()}

@@ -226,6 +226,11 @@ describe("PlatformHealth page", () => {
       expect(rows.length).toBeGreaterThan(0);
       for (const r of Array.from(rows)) expect(r).toHaveTextContent("not reported");
     }
+    // A ranked key with no window yet is one not-reported row under its own
+    // name: there is no route to rank, so no instance (and no owner-level series).
+    const requests = within(set).getByTestId("server-panel-requests");
+    expect(requests).not.toHaveTextContent("owner-level");
+    expect(requests).not.toHaveTextContent("newest window");
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(errors).not.toHaveBeenCalled();
   });
