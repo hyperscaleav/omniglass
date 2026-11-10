@@ -185,10 +185,10 @@ func TestRecordServerIdentityRefusesAMissingComponent(t *testing.T) {
 }
 
 // TestPlatformViewReadsAWindowCountAsItsNewestWindow: a window count is
-// written only when nonzero, once a window, so the figure is the newest
-// window's, summed across the instances that split it, and a count no
-// window has repeated within two report windows is absent: that window is
-// over and the ones since counted nothing. A gauge never ages out.
+// written once a window, every window, zero when quiet, so the figure is the
+// newest window's, summed across the instances that split it, and like a
+// gauge it never ages out: an old sample means the node stopped reporting,
+// which its checkin age says.
 func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	t.Parallel()
 	f := newPlatformViewFixture(t)
@@ -203,7 +203,7 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 		// undelivered: the newest window is the figure, not their total.
 		{ComponentID: f.bravo.ID, Key: writerclass.CommandExpiredCount, Instance: "unexecuted", Value: 7, TS: earlier},
 		{ComponentID: f.bravo.ID, Key: writerclass.CommandExpiredCount, Instance: "undelivered", Value: 2, TS: window},
-		// edge-bravo dropped five batches ten minutes ago and none since.
+		// edge-bravo's last report window, ten minutes ago, dropped five.
 		{ComponentID: f.bravo.ID, Key: writerclass.SpoolDropCount, Value: 5, TS: gone},
 	}); err != nil {
 		t.Fatalf("record platform metrics: %v", err)
@@ -226,8 +226,8 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	if got := bravo.Figures[writerclass.CommandExpiredCount]; got.Value != 2 {
 		t.Errorf("edge-bravo command-expired-count = %+v, want the newest window's 2", got)
 	}
-	if got, ok := bravo.Figures[writerclass.SpoolDropCount]; ok {
-		t.Errorf("edge-bravo spool-drop-count = %+v, want absent: its window ended ten minutes ago", got)
+	if got := bravo.Figures[writerclass.SpoolDropCount]; got.Value != 5 || !got.ObservedAt.Equal(gone) {
+		t.Errorf("edge-bravo spool-drop-count = %+v, want its last window's 5 at %s: a count written every window does not age out", got, gone)
 	}
 	if got := alpha.Figures[writerclass.CheckinAge]; got.Value != 3 {
 		t.Errorf("edge-alpha checkin-age = %+v, want the gauge's latest, 3, however old", got)

@@ -89,6 +89,12 @@
       "labelled": true
     },
     {
+      "table": "component_dependency",
+      "shape": "id only",
+      "reason": "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named",
+      "labelled": false
+    },
+    {
       "table": "component_type",
       "shape": "key-bearing",
       "labelled": true

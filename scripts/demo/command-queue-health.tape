@@ -49,7 +49,7 @@ Hide
 Type `demo_until 90 'omniglass component command list "$bar" --limit 1 | jq -e ".commands[0].delivery_count >= 2"'`
 Enter
 Wait@120s
-Type `demo_until 60 'omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"command-redelivery-count\" or .metric_type_name == \"command-pending-count\") | .value] | length == 2 and all(. >= 1)"'`
+Type `demo_until 60 'omniglass component metric sample list edge-hq command-redelivery-count --hours 1 | jq -e "[.samples[].value] | add >= 1" && omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"command-pending-count\") | .value] | length == 1 and all(. >= 1)"'`
 Enter
 Wait@90s
 Type "clear"
@@ -72,6 +72,12 @@ Type "# The node's platform component carries the queue: depth, oldest age, late
 Enter
 Wait
 Type `omniglass component metric list edge-hq | jq -c '[.metrics[] | select(.metric_type_name | startswith("command-")) | {(.metric_type_name): (.value | floor)}] | add'`
+Enter
+Wait
+Type "# Redeliveries count per 15 s window, zero when quiet, so the series keeps the window that saw it"
+Enter
+Wait
+Type `omniglass component metric sample list edge-hq command-redelivery-count --hours 1 | jq -c '{windows: (.samples | length), redelivered: ([.samples[].value] | add)}'`
 Enter
 Wait
 

@@ -119,6 +119,21 @@ type WorklistTask struct {
 	// every task of a driver-attached endpoint; nil for a bare endpoint,
 	// whose probe is its transport's own.
 	Ladder *driver.EffectiveLadder
+	// ComponentID is the component the endpoint hangs off (#1652).
+	ComponentID string
+	// PathUpstreams is every path dependency of the endpoint's component
+	// (#1652): the upstream and its in-band endpoints on the same node. None
+	// for an out-of-band endpoint, and none for an upstream with no in-band
+	// endpoint on this node (a cross-node path is #1655).
+	PathUpstreams []PathUpstream
+}
+
+// PathUpstream is one path upstream a worklist task's endpoint is reached
+// through (#1652).
+type PathUpstream struct {
+	ComponentID   string
+	ComponentName string
+	EndpointIDs   []string
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
@@ -577,6 +592,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		epInputsOf[len(wl.Tasks)] = epInputs
 		if componentID != nil {
 			componentOf[len(wl.Tasks)] = *componentID
+			wt.ComponentID = *componentID
 		}
 		if pinKey, pinned := pinKeyOf[wt.Transport]; pinned && componentID != nil {
 			pins = append(pins, pinRef{idx: len(wl.Tasks), componentID: *componentID, instance: wt.EndpointName, key: pinKey})
@@ -701,6 +717,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			Retry:          t.SessionRetry,
 		})
 	}
+	upstreams, err := pathUpstreams(ctx, p.pool, name)
+	if err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
+	}
+	for idx := range wl.Tasks {
+		wl.Tasks[idx].PathUpstreams = upstreams[wl.Tasks[idx].EndpointID]
+	}
 	// config_generation moves at operator-config pace: the max endpoint
 	// updated_at (epoch seconds) across the node's endpoints, 0 when none.
 	if err := p.pool.QueryRow(ctx, `
@@ -714,6 +737,37 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	}
 	wl.ReportSeconds = s.Collection.ReportSeconds
 	return wl, nil
+}
+
+// pathUpstreams is every in-band endpoint's path upstreams on the named node
+// (#1652), in one statement whatever the node carries: for each path edge
+// from the endpoint's component, the upstream and its in-band endpoints
+// placed on the same node. An out-of-band endpoint carries none, and an
+// upstream with no in-band endpoint on the node is left out.
+func pathUpstreams(ctx context.Context, q querier, nodeName string) (map[string][]PathUpstream, error) {
+	rows, err := q.Query(ctx, `
+		select i.id::text, d.upstream_id::text, c.name, array_agg(u.id::text order by u.id)
+		from endpoint i
+		join component_dependency d on d.component_id = i.component and d.kind = 'path'
+		join component c on c.id = d.upstream_id
+		join endpoint u on u.component = d.upstream_id and u.node_name = i.node_name and not u.out_of_band
+		where i.node_name = (select principal_id from node where name = $1) and not i.out_of_band
+		group by i.id, d.upstream_id, c.name
+		order by i.id, d.upstream_id`, nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("path upstreams: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]PathUpstream{}
+	for rows.Next() {
+		var ep string
+		var pu PathUpstream
+		if err := rows.Scan(&ep, &pu.ComponentID, &pu.ComponentName, &pu.EndpointIDs); err != nil {
+			return nil, fmt.Errorf("scan path upstream: %w", err)
+		}
+		out[ep] = append(out[ep], pu)
+	}
+	return out, rows.Err()
 }
 
 // GetNode reads one node by name. Requires an all read scope (a node is

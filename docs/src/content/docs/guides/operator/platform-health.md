@@ -60,10 +60,9 @@ Hover a column's header, or tab to it, for what the key measures; the text is th
 never reported reads **not reported**, never 0: a 0 would claim the node measured nothing wrong.
 
 The overrun, skip, drop, failure and expired columns are counts over a window (the collection report
-window, or the server's command pass for expired commands), and a window that counted nothing writes
-nothing. So a count shows only while it is the newest window's, and reads **not reported** again once
-two report windows pass with nothing new: a node that dropped five batches last week does not show
-five today. Expired commands are the newest pass's total, the undelivered and the unexecuted
+window, or the server's command pass for expired commands), written every window, 0 when nothing
+happened. So a count is the newest window's: a node that dropped five batches last week and none
+since shows 0 today. Expired commands are the newest pass's total, the undelivered and the unexecuted
 together; the node's platform component splits them by instance.
 
 Click a row to open the node's **platform component**, the same component view any device has.

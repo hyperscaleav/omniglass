@@ -136,11 +136,7 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		f.Volumes = append(f.Volumes, FactVolume{Name: v.Name, Holds: v.Holds})
 	}
 	for _, c := range CadenceProfiles() {
-		probe := c.ProbeEvery
-		if probe == "" {
-			probe = "every check-in"
-		}
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, WorklistEvery: c.WorklistEvery, For: c.For})
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {

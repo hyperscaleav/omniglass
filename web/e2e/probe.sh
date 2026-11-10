@@ -98,7 +98,7 @@ node)
   docker run -d --rm "${labels[@]}" --network "$OG_STACK_NET" \
     --sysctl net.ipv4.ping_group_range="0 65535" \
     -e OMNIGLASS_SERVER="$OG_STACK_SRV_URL" -e OMNIGLASS_NODE_NAME="$name" -e OMNIGLASS_NODE_TOKEN="$enroll" \
-    "$OG_STACK_IMAGE" node run --heartbeat 2s --worklist-every 2s
+    "$OG_STACK_IMAGE" node run --heartbeat 2s --probe-every 2s --worklist-every 2s
   exit
   ;;
 *)

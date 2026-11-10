@@ -30,7 +30,7 @@ func snmpPreviewTask() collection.TaskSpec {
 func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
 	t.Parallel()
 	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86", "1.3.6.1.2.1.1.3.0": "812"}}}
-	reply := previewRun(t.Context(), runner, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
+	reply := previewRun(t.Context(), runner, nil, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
 	if reply.Error != "" || len(reply.Results) != 1 {
 		t.Fatalf("reply = %+v", reply)
 	}
@@ -74,7 +74,7 @@ func TestRunNowRefusesANonPoll(t *testing.T) {
 	t.Parallel()
 	probe := snmpPreviewTask()
 	probe.Mode = "probe"
-	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(time.Second), nil, probe, time.Now().Add(time.Second)); r.Error == "" {
+	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(), nil, probe, time.Now().Add(time.Second)); r.Error == "" {
 		t.Errorf("a non-poll run = %+v, want a refusal", r)
 	}
 }
@@ -89,7 +89,7 @@ func (errTimeout) Error() string { return "i/o timeout" }
 // #1145 change memory, shared). The answer still carries every sample.
 func TestRunNowSharesTheChangeMemory(t *testing.T) {
 	t.Parallel()
-	sched := newPollSchedule(time.Second)
+	sched := newPollSchedule()
 	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "A"}
 	first := landableRun(sched, "t1", []collection.Sample{ev})
 	if len(first) != 1 {
@@ -133,7 +133,7 @@ func TestPreviewExcerptIsScrubbedBeforeTheCut(t *testing.T) {
 // a landing that failed to publish is offered again by the next run.
 func TestRunNowCommitsOnlyWhatPublished(t *testing.T) {
 	t.Parallel()
-	sched := newPollSchedule(time.Second)
+	sched := newPollSchedule()
 	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "B"}
 	landed := landableRun(sched, "t1", []collection.Sample{ev})
 	if len(landed) != 1 {
