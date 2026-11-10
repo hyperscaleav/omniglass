@@ -651,12 +651,25 @@ func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound tim
 		}
 		d := DeliveryRead{Read: true, Window: w, Receipts: rs, StreamClear: backlog.Clear(), Backlog: backlog}
 		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !time.Now().Before(deadline) {
-			return d
+			return h.readSchedule(ctx, d)
 		}
 		if err := sleep(ctx, settlePoll); err != nil {
 			return DeliveryRead{Reason: err.Error()}
 		}
 	}
+}
+
+// readSchedule adds the schedule hop (#1693) to a settled read: the nodes
+// report it in the batches the settle waited on.
+func (h *harness) readSchedule(ctx context.Context, d DeliveryRead) DeliveryRead {
+	out, err := h.psql(ctx, ScheduleQuery(d.Window.From, d.Window.To))
+	if err != nil {
+		return DeliveryRead{Reason: fmt.Sprintf("the schedule hop did not read: %v", err)}
+	}
+	if d.Schedule, err = ParseSchedule(out); err != nil {
+		return DeliveryRead{Reason: err.Error()}
+	}
+	return d
 }
 
 // ingestLag reads the lag of the samples the window landed. When none had,

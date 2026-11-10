@@ -737,3 +737,60 @@ func tallyOf(k delivery.Kind, o delivery.Outcome, n int) delivery.Tally {
 	t.Add(k, o, n)
 	return t
 }
+
+// The schedule hop (#1693) prints as its own row ahead of the kind's other
+// hops, its runs due in and runs made out, a passed-over due its cause, and
+// end to end composes it with the ingest. A kind no schedule produces (here
+// property, crossing the ingest alone, and event, scheduled but never due)
+// has no schedule row, not a fake healthy 0; with no schedule row anywhere
+// the table reads as it did.
+func TestScaleDeliveryScheduleHopRow(t *testing.T) {
+	d := func(m, p uint64, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: m, Before: before * m}, delivery.Property: {Count: p, Before: before * p}}
+	}
+	run := deliveryRun(
+		receipt("b1", 1, 100, d(40, 4, 0), nil),
+		receipt("b1", 2, 200, d(40, 4, 1), nil),
+		receipt("b1", 3, 700, d(40, 4, 2), nil),
+	)
+	before := SummarizeScale(run).Table()
+	run.Delivery.Schedule = []ScheduleCount{{Kind: delivery.Metric, Due: 10, Made: 8}, {Kind: delivery.Event}}
+	rep := SummarizeScale(run)
+	if len(rep.Delivery) != 3 {
+		t.Fatalf("delivery rows = %+v, want metric schedule, metric ingest and property ingest", rep.Delivery)
+	}
+	if r := rep.Delivery[0]; r.Hop != delivery.Schedule || r.Kind != delivery.Metric || r.In != 10 || r.Out != 8 ||
+		r.Loss == nil || *r.Loss != 0.2 || r.Cause != delivery.Skipped || r.Outcomes[delivery.Made] != 8 || r.Outcomes[delivery.Skipped] != 2 {
+		t.Errorf("schedule row = %+v, want metric 10 due, 8 made, 0.2 lost to skipped dues", r)
+	}
+	table := rep.Table()
+	for _, want := range []string{
+		"delivery    hop       in       out      loss     dedup  cause",
+		"metric      schedule  10       8        0.2      0      skipped",
+		"metric      ingest    80       80       0        0      -",
+		"property    ingest    8        8        0        0      -",
+		"end to end  metric 0.2  property 0  event -  log -",
+	} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	for _, absent := range []string{"property    schedule", "event       schedule"} {
+		if strings.Contains(table, absent) {
+			t.Errorf("the table has a schedule row for a kind no schedule produced, %q:\n%s", absent, table)
+		}
+	}
+	if strings.Index(table, "metric      schedule") > strings.Index(table, "metric      ingest") {
+		t.Errorf("the schedule row does not lead its kind's hops:\n%s", table)
+	}
+	if !strings.Contains(before, "delivery    hop     in       out") || strings.Contains(before, "schedule") {
+		t.Errorf("with no schedule read the table changed:\n%s", before)
+	}
+	b, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `{"hop":"schedule","kind":"metric","in":10,"out":8,"loss":0.2,"deduplicated":0,"outcomes":{"made":8,"skipped":2}}`) {
+		t.Errorf("the JSON schedule row: %s", b)
+	}
+}

@@ -39,6 +39,8 @@ type DeliveryRead struct {
 	// unacked batch when the settle ended; Backlog is what it last read.
 	StreamClear bool
 	Backlog     Backlog
+	// Schedule is the schedule hop's runs due and made per kind (#1693).
+	Schedule []ScheduleCount
 }
 
 // DeliveryRow is one kind across one hop: the same keys for every kind and
@@ -244,8 +246,14 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		fmt.Fprintf(b, "%-12s%s\n", "delivery", "not measured: "+r.DeliveryNotRead)
 		return
 	}
+	// The hop column fits its longest name with two spaces after it, eight
+	// wide at least.
+	hop := 8
+	for _, d := range r.Delivery {
+		hop = max(hop, len(d.Hop)+2)
+	}
 	row := func(cells ...string) {
-		fmt.Fprintf(b, "%-12s%-8s%-9s%-9s%-9s%-7s%s\n", cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
+		fmt.Fprintf(b, "%-12s%-*s%-9s%-9s%-9s%-7s%s\n", cells[0], hop, cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
 	}
 	row("delivery", "hop", "in", "out", "loss", "dedup", "cause")
 	missing := false
