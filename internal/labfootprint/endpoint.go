@@ -14,16 +14,10 @@ import (
 // harness's half: each node's cadence, read off its container, and the
 // report's lines.
 
-// NodeCadence is how often a node ticks and probes, read off its command.
-type NodeCadence struct {
-	Heartbeat  time.Duration
-	ProbeEvery time.Duration
-}
-
 // ParseNodeCadence reads --heartbeat and --probe-every off a node's command;
 // a flag missing or unreadable keeps the node's default.
-func ParseNodeCadence(cmd []string) NodeCadence {
-	c := NodeCadence{Heartbeat: node.DefaultHeartbeat}
+func ParseNodeCadence(cmd []string) closedloop.NodeCadence {
+	c := closedloop.NodeCadence{Heartbeat: node.DefaultHeartbeat}
 	flag := func(i int, name string) (string, bool) {
 		if v, ok := strings.CutPrefix(cmd[i], name+"="); ok {
 			return v, true
@@ -46,20 +40,6 @@ func ParseNodeCadence(cmd []string) NodeCadence {
 		}
 	}
 	return c
-}
-
-// Interval is how often a poll task with schedule every actually runs: a
-// driver poll at its own interval, checked each tick, so never faster than
-// the heartbeat; a bare reachability probe (every empty) at the probe
-// interval, every tick when there is none.
-func (c NodeCadence) Interval(every string) time.Duration {
-	var d time.Duration
-	if every == "" {
-		d = c.ProbeEvery
-	} else if p, err := time.ParseDuration(every); err == nil && p > 0 {
-		d = p
-	}
-	return max(d, c.Heartbeat)
 }
 
 // endpointTable renders the closed loop's lines.

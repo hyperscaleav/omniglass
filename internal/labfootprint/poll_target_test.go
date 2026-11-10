@@ -12,7 +12,7 @@ import (
 // when it declares none), a probe at the node's probe interval.
 func TestParsePollTargetsAppliesEachNodesCadence(t *testing.T) {
 	out := "edge-a|c1|http|45s\nedge-a|c1|tcp|\nedge-a|c2|snmp|0s\nedge-b|c3|tcp|\nedge-z|c4|tcp|\n"
-	cadence := map[string]NodeCadence{
+	cadence := map[string]closedloop.NodeCadence{
 		"edge-a": {Heartbeat: 5 * time.Second, ProbeEvery: 30 * time.Second},
 		"edge-b": {Heartbeat: 10 * time.Second},
 	}

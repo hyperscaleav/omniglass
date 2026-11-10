@@ -9,26 +9,14 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
-// The node's cadence is read off its container's command, and a target's
-// interval is the slower of its own and the tick it waits on.
-func TestNodeCadenceAndEffectiveInterval(t *testing.T) {
+// The node's cadence is read off its container's command.
+func TestParseNodeCadence(t *testing.T) {
 	c := ParseNodeCadence([]string{"node", "run", "--simulate", "--heartbeat", "2s", "--probe-every=10s", "--poll", "x"})
 	if c.Heartbeat != 2*time.Second || c.ProbeEvery != 10*time.Second {
 		t.Fatalf("cadence = %+v", c)
 	}
 	if d := ParseNodeCadence([]string{"node", "run"}); d.Heartbeat != 30*time.Second || d.ProbeEvery != 0 {
 		t.Fatalf("default cadence = %+v", d)
-	}
-	for _, x := range []struct {
-		every string
-		want  time.Duration
-	}{{"", 10 * time.Second}, {"1m", time.Minute}, {"500ms", 2 * time.Second}, {"nonsense", 2 * time.Second}} {
-		if got := c.Interval(x.every); got != x.want {
-			t.Errorf("Interval(%q) = %v, want %v", x.every, got, x.want)
-		}
-	}
-	if got := (NodeCadence{Heartbeat: 2 * time.Second}).Interval(""); got != 2*time.Second {
-		t.Errorf("a probe with no probe interval = %v, want the heartbeat", got)
 	}
 }
 

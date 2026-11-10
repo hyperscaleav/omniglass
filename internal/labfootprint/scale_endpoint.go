@@ -164,8 +164,8 @@ func (h *harness) readEndpoints(ctx context.Context, l scaleLab) (map[string]col
 
 // nodeCadences reads each node container's heartbeat and probe interval off
 // its command.
-func (h *harness) nodeCadences(ctx context.Context, l scaleLab) (map[string]NodeCadence, error) {
-	out := map[string]NodeCadence{}
+func (h *harness) nodeCadences(ctx context.Context, l scaleLab) (map[string]closedloop.NodeCadence, error) {
+	out := map[string]closedloop.NodeCadence{}
 	for node, id := range l.nodes {
 		r, err := h.dc.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 		if err != nil {

@@ -25,7 +25,7 @@ const pollTargetsQuery = `select n.name, i.component, i.transport,
 // parsePollTargets reads pollTargetsQuery's rows into each node's targets,
 // each at the interval its node actually runs it. A node with no cadence
 // (not one of the lab's node containers) keeps the node's defaults.
-func parsePollTargets(out string, cadence map[string]NodeCadence) (map[string][]closedloop.PollTarget, error) {
+func parsePollTargets(out string, cadence map[string]closedloop.NodeCadence) (map[string][]closedloop.PollTarget, error) {
 	targets := map[string][]closedloop.PollTarget{}
 	for line := range strings.Lines(out) {
 		line = strings.TrimRight(line, "\r\n")
