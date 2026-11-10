@@ -107,3 +107,10 @@ func (s *Server) MaxPayload() int64 { return s.nc.MaxPayload() }
 // AsTick is a one-task batch as the node tick that carries it (#1582): its
 // task's rows in the tick's one group.
 func AsTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch { return asTick(ev) }
+
+// CalcPassNow runs one calc drain now, as the calc tick does each
+// calcTickEvery, so a test reads the pass's figures without waiting on it.
+func (s *Server) CalcPassNow(ctx context.Context) { s.calcPass(ctx) }
+
+// HeartbeatFailLog is the warning a run of failed heartbeat writes logs once.
+const HeartbeatFailLog = heartbeatFailLog

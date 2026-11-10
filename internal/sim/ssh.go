@@ -6,10 +6,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,7 +72,7 @@ func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permiss
 			if conn.User() == defaultUser && string(pass) == defaultPassword {
 				return nil, nil
 			}
-			return nil, fmt.Errorf("auth rejected")
+			return nil, errSSHAuthRejected
 		},
 	}
 	cfg.AddHostKey(hostKey)
@@ -83,8 +86,9 @@ func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permiss
 	if reg := d.sshSession; reg != nil {
 		reg.setPort(boundPort(lis.Addr()))
 	}
-	tracked := trackConns(lis, d.logConnect)
+	tracked := trackConns(lis, d.logConnect).observedAs(d.observe, obsSSH)
 	d.sshListener = tracked
+	face := d.observe.face(strconv.Itoa(boundPort(lis.Addr())), obsSSH)
 
 	go func() {
 		slog.Debug("device SSH started", "device", d.Hostname, "addr", addr)
@@ -96,7 +100,7 @@ func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permiss
 				}
 				return
 			}
-			go d.serveSSHConn(conn, cfg)
+			go d.serveSSHConn(conn, cfg, face)
 		}
 	}()
 	return lis.Addr(), nil
@@ -113,7 +117,7 @@ func (d *Device) StopSSH() {
 // channels. Anything other than `exec` is rejected, except when the
 // device has an SSH SessionRegistry bound, in that case `shell`
 // channels open a persistent session.
-func (d *Device) serveSSHConn(conn net.Conn, cfg *ssh.ServerConfig) {
+func (d *Device) serveSSHConn(conn net.Conn, cfg *ssh.ServerConfig, face *faceObservation) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
@@ -125,6 +129,12 @@ func (d *Device) serveSSHConn(conn net.Conn, cfg *ssh.ServerConfig) {
 
 	_, chans, reqs, err := ssh.NewServerConn(conn, cfg)
 	if err != nil {
+		if sshPasswordRejected(err) {
+			// The refusal is the request the client sent: the
+			// handshake's other failures (a port check that hangs up,
+			// a key exchange gone wrong) never asked for anything.
+			d.observe.begin(obsSSH, face).end(OutcomeRefused)
+		}
 		slog.Debug("ssh handshake failed", "device", d.Hostname, "error", err)
 		return
 	}
@@ -150,7 +160,7 @@ func (d *Device) serveSSHConn(conn net.Conn, cfg *ssh.ServerConfig) {
 		if err != nil {
 			continue
 		}
-		go d.serveSSHSession(ch, reqs, remote)
+		go d.serveSSHSession(ch, reqs, remote, face)
 	}
 }
 
@@ -160,7 +170,7 @@ func (d *Device) serveSSHConn(conn net.Conn, cfg *ssh.ServerConfig) {
 // `shell` requests open a long-lived shell session; otherwise `shell`
 // is rejected. `pty-req` is accepted as a no-op when shell is enabled
 // so clients that always pair them still negotiate cleanly.
-func (d *Device) serveSSHSession(ch ssh.Channel, reqs <-chan *ssh.Request, remote string) {
+func (d *Device) serveSSHSession(ch ssh.Channel, reqs <-chan *ssh.Request, remote string, face *faceObservation) {
 	defer ch.Close()
 	persistent := d.sshSession != nil
 	for req := range reqs {
@@ -194,6 +204,7 @@ func (d *Device) serveSSHSession(ch ssh.Channel, reqs <-chan *ssh.Request, remot
 			cmd := string(req.Payload[4 : 4+cmdLen])
 			_ = req.Reply(true, nil)
 
+			tok := d.observe.begin(obsSSH, face)
 			start := time.Now()
 			result, ok, rerr := d.RunCommand(cmd)
 			elapsed := time.Since(start)
@@ -218,6 +229,11 @@ func (d *Device) serveSSHSession(ch ssh.Channel, reqs <-chan *ssh.Request, remot
 			statusBytes := make([]byte, 4)
 			binary.BigEndian.PutUint32(statusBytes, exitStatus)
 			_, _ = ch.SendRequest("exit-status", false, statusBytes)
+			if exitStatus == 0 {
+				tok.end(OutcomeAnswered)
+			} else {
+				tok.end(OutcomeError)
+			}
 
 			if d.Logger != nil {
 				// Map SSH exit status into the HTTP-ish Status field the
@@ -323,4 +339,18 @@ func generateHostKey() (ssh.Signer, error) {
 		return nil, err
 	}
 	return ssh.NewSignerFromKey(priv)
+}
+
+// errSSHAuthRejected is the password callback's refusal, which the handshake
+// hands back among its auth errors.
+var errSSHAuthRejected = errors.New("auth rejected")
+
+// sshPasswordRejected reports whether a failed handshake refused a password,
+// as opposed to a client that hung up before asking.
+func sshPasswordRejected(err error) bool {
+	var authErr *ssh.ServerAuthError
+	if !errors.As(err, &authErr) {
+		return false
+	}
+	return slices.ContainsFunc(authErr.Errors, func(e error) bool { return errors.Is(e, errSSHAuthRejected) })
 }

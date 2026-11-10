@@ -1,0 +1,74 @@
+{
+  "id": "read-platform-health",
+  "title": "Read the platform's health",
+  "description": "From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Home's Platform tile carries the platform's verdict and how many nodes are not up.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open Platform health.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "wait",
+      "caption": "The build, its uptime and the verdict, each read from the platform's own components.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Each server's panels fold to its name and verdict. Close them to reach the node table under them.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "wait",
+      "caption": "One row per node. A figure the node never reported reads not reported, never 0.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "hover",
+      "caption": "A key's name teaches it. Rest on it to read what it measures.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "The figure is a series on the server's platform component, one link away.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Follow it.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The server's platform component, the same detail as any device. Its request timing is a series like any other metric.",
+      "still": "step-10.png"
+    }
+  ],
+  "poster": "step-10.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 41,
+    "bytes": 618167,
+    "previewBytes": 432662
+  }
+}

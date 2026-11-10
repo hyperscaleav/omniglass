@@ -149,7 +149,7 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		Path:       "/drivers:preview",
 		Summary:    "Preview a driver spec's polls through a node",
 		Description: "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). " +
-			"A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+			"A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
 	}, "driver", "preview"), func(ctx context.Context, in *previewDriverInput) (*previewDriverOutput, error) {
 		if runner == nil {
 			return nil, huma.Error503ServiceUnavailable("no bus is wired, so no node can run a preview")
@@ -178,6 +178,15 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		if err != nil {
 			return nil, mapNodeRunErr(err)
 		}
+		if reply.Full {
+			return nil, huma.NewError(http.StatusTooManyRequests, reply.Error)
+		}
+		if reply.Gated {
+			// The node's own gates hold the endpoint the preview resolves to,
+			// or the target's host (#1650, #1249): it answered at once with
+			// the reason and sent nothing, so this is no gateway fault.
+			return nil, huma.Error409Conflict("the node held the preview, so nothing was sent: " + redact.Secrets(reply.Error, plan.Sealed...))
+		}
 		if reply.Error != "" {
 			return nil, huma.Error502BadGateway("the node could not run the preview: " + redact.Secrets(reply.Error, plan.Sealed...))
 		}
@@ -196,7 +205,7 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{endpoint}/polls/{poll}:run",
 		Summary:     "Run an endpoint's poll now",
-		Description: "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. " +
+		Description: "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. " +
 			"Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "run"), func(ctx context.Context, in *runEndpointPollInput) (*runEndpointPollOutput, error) {
 		if runner == nil {
@@ -217,8 +226,14 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 			return nil, mapNodeRunErr(err)
 		}
 		switch {
+		case reply.Full:
+			return nil, huma.NewError(http.StatusTooManyRequests, reply.Error)
 		case reply.Pending:
 			return nil, huma.Error409Conflict(reply.Error)
+		case reply.Gated && reply.GateReason != "" && reply.GateReason != "refused":
+			// A reason the endpoint's probe holds (#1650): the node's text
+			// names it and how it reopens; no operator retry lifts it.
+			return nil, huma.Error409Conflict("the endpoint is held, so the poll was not sent: " + reply.Error)
 		case reply.Gated:
 			return nil, huma.Error409Conflict("the endpoint is gated, so the poll was not sent: " + reply.Error + "; fix what refused it, or retry the endpoint (retry-endpoint)")
 		case reply.Error != "":

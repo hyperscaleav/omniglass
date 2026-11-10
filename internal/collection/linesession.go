@@ -120,7 +120,7 @@ func openLineConn(c net.Conn, target string, in Inbound) *lineConn {
 		c: c, target: target, br: bufio.NewReaderSize(c, maxLineAnswer), in: in,
 		asks: make(chan lineAsk, 1), done: make(chan struct{}),
 	}
-	go lc.read()
+	goSupervised("line reader "+target, lc.read, func(pe *PanicError) { lc.fail(pe) })
 	return lc
 }
 

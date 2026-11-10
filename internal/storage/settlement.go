@@ -88,8 +88,8 @@ func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) 
 // inside the transaction that just opened the intended value reads exactly the
 // ts that row was stamped with, so the two ends of the comparison are one
 // reading of one clock rather than two readings that happen to be close. It also
-// keeps `settled_at` in the same currency as the `now()` the insert path already
-// stamps a fire-and-forget command with.
+// keeps `settled_at` in the same currency as the `now()` the execution report
+// stamps `executed_at` with.
 //
 // Settle itself stays pure and still takes `now` as an argument. What changed is
 // who supplies it, which is the repo's own rule about the clock being an edge
@@ -112,8 +112,9 @@ func dbNow(ctx context.Context, q querier) (time.Time, error) {
 // row (the command_id lineage) and the observation it is judged on
 // (judgedObservation, ADR-0456), and stamps the terminal status with
 // settled_at in the caller's transaction. A pending
-// command stays issued; a command that opened no intended row (a pre-#590
-// fire-and-forget) has nothing to wait on and settles.
+// command stays issued; a command that opened no intended row (fire-and-
+// forget) is decided by its execution report, so here it only times out, once
+// its delivery window passes with no report (#1630).
 // ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
 // ambiguity-safe for component/system/location, #627), and the resolved arc
 // threaded into judgeCommands below rather than left for it to re-derive.
@@ -191,7 +192,10 @@ func (p *PG) pendingCommands(ctx context.Context, q querier, sql string, args ..
 // judgeCommands settles each pending command against its own intended row
 // and the observation of its target it is judged on (judgedObservation),
 // stamping a terminal verdict with settled_at; a pending verdict leaves it
-// issued.
+// issued. A command with no intended row (fire-and-forget) has no
+// observation to wait on: its execution report decides it, so here it is
+// only timed out, by the window, once its delivery window has passed with no
+// report (#1630).
 func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ownerKind, arc string, pending []pendingCommand, now time.Time) error {
 	reads := &observationReads{on: map[string]*CurrentValue{}}
 	for _, pc := range pending {
@@ -199,23 +203,51 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 		if err != nil {
 			return err
 		}
-		observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
-		if err != nil {
-			return err
-		}
 		var o settlementOutcome
 		if intended == nil {
-			o = settlementOutcome{status: "settled", by: SettledByIssue, reason: "nothing was told, so there was nothing to settle"}
-		} else if verdict := Settle(intended, observed, ct.SettleWindowSeconds, now); verdict == SettlementPending {
-			continue
-		} else if o, err = p.observationOutcome(ctx, q, ct, pc.id, verdict, intended, observed); err != nil {
-			return err
+			due, err := p.deliveryWindowPassed(ctx, q, pc.id, now)
+			if err != nil {
+				return err
+			}
+			if !due {
+				continue
+			}
+			stop, err := p.commandStop(ctx, q, pc.id)
+			if err != nil {
+				return err
+			}
+			o = settlementOutcome{status: "timed-out", by: SettledByWindow,
+				reason: deliveryTimeoutWords(ct.Name, stop.delivered, stop.carried, stop.endpoint, stop.node)}
+		} else {
+			observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
+			if err != nil {
+				return err
+			}
+			verdict := Settle(intended, observed, ct.SettleWindowSeconds, now)
+			if verdict == SettlementPending {
+				continue
+			}
+			if o, err = p.observationOutcome(ctx, q, ct, pc.id, verdict, intended, observed); err != nil {
+				return err
+			}
 		}
 		if err := recordOutcome(ctx, q, pc.id, o, now); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// deliveryWindowPassed reports a command issued longer ago than its delivery
+// window (CommandDeliveryWindow) with no execution report: the server will
+// not hand it to a node again, so nothing can still report it.
+func (p *PG) deliveryWindowPassed(ctx context.Context, q querier, id int64, now time.Time) (bool, error) {
+	var issued time.Time
+	var executed bool
+	if err := q.QueryRow(ctx, `select ts, executed_at is not null from command where id = $1`, id).Scan(&issued, &executed); err != nil {
+		return false, fmt.Errorf("storage: delivery window of command %d: %w", id, err)
+	}
+	return !executed && now.Sub(issued) > CommandDeliveryWindow, nil
 }
 
 // observationReads holds what one settle-check has read of a target's
@@ -343,15 +375,18 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 	return nil
 }
 
-// SweepCommandSettlements judges every issued command whose settle window
-// has passed, so a command nothing else settles reaches timed-out (or
-// failed) without waiting for another command or read. The server runs it
-// on a short interval.
+// SweepCommandSettlements judges every issued command whose window has
+// passed, so a command nothing else settles reaches timed-out (or failed)
+// without waiting for another command or read: a settleable command past its
+// settle window, a fire-and-forget one (which only its execution report
+// settles) past the delivery window the pending query shares (deliveryTTL,
+// #1630). The server runs it on a short interval.
 func (p *PG) SweepCommandSettlements(ctx context.Context) error {
 	rows, err := p.pool.Query(ctx, `select distinct c.owner_kind,
 			coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text, ct.name, c.instance
 		from command c join command_type ct on ct.id = c.command_type_id
-		where c.status = 'issued' and c.ts < now() - make_interval(secs => ct.settle_window_seconds)`)
+		where c.status = 'issued' and c.ts < now() - case when `+commandOpensIntendedSQL+`
+			then make_interval(secs => ct.settle_window_seconds) else interval '`+deliveryTTL+`' end`)
 	if err != nil {
 		return fmt.Errorf("storage: sweep settlements: %w", err)
 	}

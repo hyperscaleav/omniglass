@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -147,6 +148,15 @@ func Run(ctx context.Context, cfg Config) error {
 		impairs.st.Reason = "impairments are off; run the simulator with --impairments (and NET_ADMIN) to enable them"
 	}
 	defer impairs.clear()
+	// The lab reads what each endpoint observed on request (#1639). The
+	// responder runs on the bus's goroutine, so it reads the impaired count
+	// the pull loop stores, never the impairer itself.
+	var impairedCount atomic.Int64
+	obs, err := subscribeObservation(nc, cfg.Name, engine, func() int { return int(impairedCount.Load()) })
+	if err != nil {
+		return fmt.Errorf("sim: subscribe observation: %w", err)
+	}
+	defer func() { _ = obs.Unsubscribe() }()
 
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
@@ -179,6 +189,7 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 		}
 		impairs.reconcile(served, wants)
+		impairedCount.Store(int64(len(impairs.status().Impaired)))
 		if st := impairs.status(); st.Error != "" {
 			log.Warn("impairments did not apply", "error", st.Error)
 		}

@@ -33,7 +33,8 @@ visible to every reader; the write gates decide who may change it.
 - The **target is two-armed**: a **settleable** command names the value it sets in exactly one
   lane, a property (`set-input` targets `video-input`) or a metric (a volume command targets a
   numeric level), **never both**. A command with no target is **fire-and-forget** (`reboot`): it
-  records that it was told, with no value to settle. The create and edit forms offer **one
+  records that it was told, with no value to settle, so the node's report of carrying it out
+  decides it. The create and edit forms offer **one
   picker over both catalogs**, grouped by lane, so a selection sets exactly one arm; through the
   API, naming both arms is refused (422, naming the exclusive arc), and a target must be a
   registered property or metric type.
@@ -49,8 +50,9 @@ visible to every reader; the write gates decide who may change it.
   if the target already reports what it was told, and failing if it does not); it is an answer
   you give rather than one the form gives for you
   ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
-  A **fire-and-forget** type never reaches settlement at all, so leave the field blank: the type
-  records a window of 0 and nothing ever consults it. That is `reboot`'s shape.
+  A **fire-and-forget** type has nothing for a window to judge, so leave the field blank: the type
+  records a window of 0 and nothing ever consults it. Its node's execution report decides it
+  instead, within a ten minute delivery window. That is `reboot`'s shape.
 - **New command type** (with `command_type:create`, granted to operators) opens a create
   **drawer**: give it a **name** (a single lowercase kebab segment, for example `set-input` or
   `reboot`), optionally add a **label** and **description**, pick a **target** (or None),
@@ -112,13 +114,16 @@ of them agrees
 ([which observation](/architecture/commands/#settlement-the-verdict-is-computed-the-outcome-is-recorded)). The command row also
 records a terminal **status**, `issued` until it is stamped `settled`, `failed` (the device
 reported a different value, or its reply said no), or `timed-out` (the window expired with
-nothing observed), with `settled_at` as the terminal moment. Which evidence settles a command is
+nothing observed), with `settled_at` as the terminal moment. A fire-and-forget command has no
+value to observe, so its node's execution report decides it: `settled` when the node carried it
+out, `failed` when the execution failed (or its binding could not render), and `timed-out` when
+no report arrives within its ten minute delivery window, the reason saying where it stopped. Which evidence settles a command is
 the driver's declaration on its binding: the device's reply, or the next observation of the
 target ([commands](/architecture/commands/)). The check runs at issue, when the execution report
 lands, when an observation of the target lands, and on a sweep every few seconds for commands
 past their window, so a zero-window command returns already terminal, a fire-and-forget command
-records `settled` at issue since it has nothing to wait on, and no command stays `issued` past
-its window. A node carries the invocation to the device over the endpoint whose driver binds the
+returns `issued` and waits on its report, and no command stays `issued` past its window. A
+command that has reached a terminal status is never delivered to a node. A node carries the invocation to the device over the endpoint whose driver binds the
 type ([commands](/architecture/commands/#actuation-the-wire-to-the-device)).
 
 ## Read a command back
@@ -130,11 +135,16 @@ issuer holds where it may issue): `GET /components/{name}/commands/{id}` for one
 `until` (RFC3339) and `limit`. A component you cannot read is a non-disclosing 404, and one you can
 read but whose commands you may not is a 403. Each command carries:
 
-- its **status** and a time for each transition: issued, delivered (a node took it), executed (the
-  node's report landed) and settled;
+- its **status** and a time for each transition: issued, delivered (a node last took it), executed
+  (the node's report landed) and settled, plus its **first delivery** (`first_delivered_at`) and how
+  many times a node took it (`delivery_count`). A count above one means the node went silent after
+  taking it and the queue redelivered it; the console's arc shows the count and the first delivery's
+  offset beside the last;
 - its **phase**, where it sits while in flight: **queued** for its node, **delivered** (its binding
   settles on observation, so the reply decides nothing), **awaiting reply**, or **awaiting
-  observation** within its window, with the `deadline` when the window closes;
+  observation** within its window, with the `deadline` when the window closes (a fire-and-forget
+  command reads **queued** then **delivered** until its report lands, its `deadline` the end of
+  its delivery window);
 - how it **settles** (from the reply, from an observation, or not at all) and the endpoint, node and
   driver that carry it;
 - the **evidence**: the component's **reply**, masked of the endpoint's credentials and of anything

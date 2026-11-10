@@ -28,6 +28,22 @@ metric_types:
     data_type: int
     label: Poll Failures
     description: The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero.
+  - name: poll-held-count
+    data_type: int
+    label: Held Polls
+    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here); never sent, so not failures; reported only when nonzero.
+  - name: hold-expiry-count
+    data_type: int
+    label: Hold Expiries
+    description: Disruptions of the endpoint (a reboot closed its gate) released in the report window by the command type's hold backstop because no up verdict came after the quiet period; reported only when nonzero.
+  - name: poll-due-count
+    data_type: int
+    label: Due Polls
+    description: The endpoint's driver polls that fell due in the report window, each on its own interval, held, refused and skipped ones included; reported only when nonzero.
+  - name: poll-skipped-count
+    data_type: int
+    label: Skipped Polls
+    description: The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero.
   - name: push-message-count
     data_type: int
     label: Pushed Messages
@@ -44,6 +60,333 @@ metric_types:
     data_type: int
     label: Webhook Refusals
     description: Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero.
+  # Platform self-monitoring (#1625, #1094): a node's account of its own
+  # schedule, spool, sessions and process, landed on the node's component in
+  # the platform system under the platform writer class. Only the node (and the
+  # server, for checkin-age) may write them; no driver, rule or operator can.
+  - name: checkin-age
+    data_type: float
+    unit: s
+    label: Check-in Age
+    description: Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent.
+  - name: worklist-task-count
+    data_type: int
+    label: Worklist Tasks
+    description: Tasks in the worklist the node installed, sampled on each install.
+  - name: tick-duration
+    data_type: float
+    unit: ms
+    label: Tick Duration
+    description: The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat.
+  - name: tick-overrun-count
+    data_type: int
+    label: Tick Overruns
+    description: Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet.
+  - name: schedule-lateness
+    data_type: float
+    unit: ms
+    label: Schedule Lateness
+    description: The worst gap between a task's due time and its dispatch over one heartbeat window's scheduled runs.
+  - name: schedule-gap-excess
+    data_type: float
+    unit: ms
+    label: Schedule Gap Excess
+    description: The worst deviation between a task's gap since its previous scheduled start and its interval over one heartbeat window; a poll keeping its interval reads 0, a skipped slot a whole interval.
+  - name: schedule-skip-count
+    data_type: int
+    label: Schedule Skips
+    description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet.
+  - name: spool-batch-count
+    data_type: int
+    label: Spool Depth
+    description: Batches waiting in the node's spool for the bus, sampled each tick.
+  - name: delivery-in-count
+    data_type: int
+    label: Delivery In
+    description: Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. Written every window, 0 when quiet.
+  - name: delivery-out-count
+    data_type: int
+    label: Delivery Out
+    description: Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. Written every window, 0 when quiet.
+  - name: delivery-loss-ratio
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Delivery Loss
+    description: The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log). 0 is healthy, and a quiet window writes 0.
+  - name: session-held-count
+    data_type: int
+    label: Sessions Held
+    description: Device sessions the node holds, one sample per session state as the instance, sampled each tick.
+  - name: process-goroutine-count
+    data_type: int
+    label: Goroutines
+    description: Goroutines the Omniglass process runs, sampled each tick.
+  - name: process-heap-size
+    data_type: int
+    unit: bytes
+    label: Heap Size
+    description: Bytes of heap the Omniglass process holds in live and unswept objects, sampled each tick.
+  - name: process-gc-pause
+    data_type: float
+    unit: ms
+    label: GC Pause
+    description: The most recent garbage collection pause of the Omniglass process; absent until the first collection.
+  - name: process-cpu-seconds
+    data_type: float
+    unit: s
+    label: CPU Time
+    description: CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy.
+  - name: process-fd-count
+    data_type: int
+    label: Open Files
+    description: File descriptors the Omniglass process holds open, sockets included; absent where the platform does not expose them.
+  # The retention pass's figures (#1629): the server writes them on its own
+  # platform component after each pass. A lane's instance is its name as the
+  # pass keys it (metric, property, metric_trend, log_line/info, an override's
+  # <lane>/<type>); a table's is the table's name.
+  - name: retention-deleted-count
+    data_type: int
+    label: Retention Deleted
+    description: Rows the retention pass removed from one lane in one pass; a day's partition dropped whole is counted in Metric Partitions Dropped, not here.
+  - name: retention-behind
+    data_type: int
+    label: Retention Behind
+    description: 1 when the pass stopped at its chunk cap with rows (or compaction work) still past the window, or its prune or compaction failed, 0 when it caught up; a lane that stays at 1 is falling behind.
+  - name: retention-pass-duration
+    data_type: float
+    unit: s
+    label: Retention Pass Duration
+    description: Wall time of one retention pass, every lane, the partition roll and both compactions.
+  - name: retention-pass-failure-count
+    data_type: int
+    label: Retention Pass Failures
+    description: Steps of one retention pass that returned an error (a lane, the roll, a compaction, a window out of range); 0 on a clean pass.
+  - name: retention-window-days
+    data_type: int
+    unit: d
+    label: Retention Window
+    description: The retention window in days the pass applied to a lane.
+  - name: metric-partition-created-count
+    data_type: int
+    label: Metric Partitions Created
+    description: Day partitions of the metric table the pass created ahead of now.
+  - name: metric-partition-dropped-count
+    data_type: int
+    label: Metric Partitions Dropped
+    description: Day partitions of the metric table the pass dropped whole, every row in them past the window.
+  - name: metric-partition-count
+    data_type: int
+    label: Metric Partitions
+    description: Day partitions the metric table holds after the pass.
+  - name: metric-oldest-day-age
+    data_type: float
+    unit: d
+    label: Oldest Metric Day
+    description: Days from the start of the oldest metric partition to the pass; steady at about the metric window plus one once retention keeps up.
+  - name: metric-trend-mark-lag
+    data_type: float
+    unit: h
+    label: Trend Compaction Lag
+    description: Hours from the trend compaction's mark to now; steady at about 24 to 25, the trend horizon, and growing when the compaction falls behind.
+  - name: metric-block-mark-lag
+    data_type: float
+    unit: d
+    label: Block Compaction Lag
+    description: Days from the block fold's mark to now; steady at about 1 to 2 (a day folds once its hours are compacted) and growing when the fold falls behind.
+  - name: table-bytes
+    data_type: int
+    unit: bytes
+    label: Table Size
+    description: On-disk bytes of one stored table with its indexes and toast; the metric table's is the sum of its day partitions.
+  - name: database-bytes
+    data_type: int
+    unit: bytes
+    label: Database Size
+    description: On-disk bytes of the whole Omniglass database.
+  # The server's own request and database figures (#1627), landed on the
+  # server's component in the platform system each report window. Only the
+  # server writes them. An http-request-* sample's instance is the request's
+  # method, route template and status class ("GET /api/v1/components/{name}
+  # 2xx"), never its path, so the instance set stays as small as the API.
+  - name: http-request-count
+    data_type: int
+    label: HTTP Requests
+    description: Requests the server answered for one method, route template and status class over the report window; one zero follows a window with requests, then none while quiet.
+  - name: http-request-duration
+    data_type: float
+    unit: ms
+    label: HTTP Request Time
+    description: Mean time the server took to answer a request of one method, route template and status class over the report window.
+  - name: http-request-duration-max
+    data_type: float
+    unit: ms
+    label: HTTP Request Time (max)
+    description: The slowest request of one method, route template and status class over the report window.
+  - name: db-slow-query-count
+    data_type: int
+    label: Slow Queries
+    description: Queries that ran past the database slow-query threshold over the report window, each also logged as a warning with its fingerprint; one zero follows a window with slow queries.
+  - name: db-pool-acquired
+    data_type: int
+    label: Pool Connections In Use
+    description: Database connections the server's pool had checked out at the end of the report window.
+  - name: db-pool-idle
+    data_type: int
+    label: Pool Connections Idle
+    description: Open database connections the server's pool held idle at the end of the report window.
+  - name: db-pool-total
+    data_type: int
+    label: Pool Connections Open
+    description: Database connections the server's pool held open, in use or idle, at the end of the report window.
+  - name: db-pool-max
+    data_type: int
+    label: Pool Size
+    description: The most connections the server's pool may open; db-pool-total reaching it means a new query waits.
+  - name: db-pool-wait-count
+    data_type: int
+    label: Pool Waits
+    description: Connection acquires that found the pool exhausted and waited for a connection, over the report window.
+  - name: db-pool-wait-duration
+    data_type: float
+    unit: ms
+    label: Pool Wait Time
+    description: Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window.
+  # The server's pipeline (#1628), landed on the server's component in the
+  # platform system each report window: how far behind ingest is, how deep
+  # the queues stand, and whether the bus paths and sweeps fail. Every
+  # failure count reads as a share of the count beside it, so zero is
+  # healthy.
+  - name: ingest-lag
+    data_type: float
+    unit: s
+    label: Ingest Lag
+    description: Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the node's clock stamps the sample, so a skewed node clock reads as lag.
+  - name: ingest-lag-max
+    data_type: float
+    unit: s
+    label: Ingest Lag (max)
+    description: The oldest sample's lag at commit across every batch landed in the report window.
+  - name: ingest-batch-count
+    data_type: int
+    label: Batches Landed
+    description: Telemetry batches the server committed over the report window; a redelivery its receipt held to a no-op landed nothing and counts none.
+  - name: ingest-sample-count
+    data_type: int
+    label: Samples Landed
+    description: Samples the server's committed telemetry batches landed over the report window; a node group the fence or the gateway dropped counts none.
+  - name: ingest-lane-busy
+    data_type: float
+    unit: ratio
+    label: Ingest Lane Busy
+    description: Share of the report window the telemetry lane spent handling batches; near 1 the lane is saturated and the consumer backlog grows.
+  - name: bus-consumer-pending
+    data_type: int
+    label: Telemetry Backlog
+    description: Batches on the telemetry stream not yet delivered to the server's consumer, at the end of the report window.
+  - name: bus-consumer-ack-pending
+    data_type: int
+    label: Telemetry In Flight
+    description: Batches delivered to the server's telemetry consumer and not yet acknowledged, at the end of the report window.
+  - name: bus-consumer-redelivered
+    data_type: int
+    label: Telemetry Redelivering
+    description: Batches the telemetry consumer holds that were delivered more than once, at the end of the report window.
+  - name: bus-telemetry-ack-failure-count
+    data_type: int
+    label: Telemetry Ack Failures
+    description: Batch deliveries whose acknowledgement the bus did not confirm over the report window, a redelivery its receipt held included; each is redelivered and its receipt keeps it from landing twice, so this costs work, not rows. As a share of ingest-batch-count, healthy is 0.
+  - name: bus-worklist-pull-count
+    data_type: int
+    label: Worklist Pulls
+    description: Node worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy).
+  - name: bus-worklist-reply-bytes-max
+    data_type: int
+    unit: bytes
+    label: Worklist Reply Size (max)
+    description: The largest worklist reply the server holds sized for any node, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize.
+  - name: bus-request-count
+    data_type: int
+    label: Bus Requests
+    description: Node requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report).
+  - name: bus-request-failure-count
+    data_type: int
+    label: Bus Request Failures
+    description: Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count.
+  - name: calc-pending-depth
+    data_type: int
+    label: Calc Backlog
+    description: The deepest the queue of calculated metrics waiting to be computed stood over the report window.
+  - name: calc-served-count
+    data_type: int
+    label: Calcs Served
+    description: Calculated metric rows the server computed over the report window.
+  - name: calc-pass-duration
+    data_type: float
+    unit: ms
+    label: Calc Pass Time
+    description: Mean time one pass over the calc queue took over the report window.
+  - name: outbox-queued-depth
+    data_type: int
+    label: Outbox Depth
+    description: Notifications queued to send, due or waiting out a retry backoff, at the end of the report window.
+  - name: outbox-due-age
+    data_type: float
+    unit: s
+    label: Outbox Due Age
+    description: How long the oldest due notification has waited past its send time, at the end of the report window; zero when nothing is due.
+  - name: sweep-duration
+    data_type: float
+    unit: ms
+    label: Sweep Time
+    description: Mean time one pass of a server sweep took over the report window, one sample per sweep as the instance (command-settlement, event-rule).
+  - name: sweep-count
+    data_type: int
+    label: Sweeps
+    description: Passes of a server sweep over the report window, one sample per sweep as the instance.
+  - name: sweep-failure-count
+    data_type: int
+    label: Sweep Failures
+    description: Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count.
+  # A node's command queue (#1626), on the node's platform component: the
+  # server writes all but the pull failures, which the node counts of itself.
+  # Each is one observation per sample; a percentile derives from the
+  # per-command latencies, never a stored average.
+  - name: command-pending-count
+    data_type: int
+    label: Pending Commands
+    description: Commands waiting for the node, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick.
+  - name: command-pending-age
+    data_type: float
+    unit: s
+    label: Oldest Pending Command
+    description: Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits.
+  - name: command-dispatch-latency
+    data_type: float
+    unit: ms
+    label: Command Dispatch Latency
+    description: Time from a command's issue to the first time a node took it, one sample per command at that take; a command no node takes writes none and counts as expired.
+  - name: command-execution-latency
+    data_type: float
+    unit: ms
+    label: Command Execution Latency
+    description: Time from a command's first take to the node's execution report, one sample per command at the report.
+  - name: command-redelivery-count
+    data_type: int
+    label: Command Redeliveries
+    description: Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; written every tick, zero when none.
+  - name: command-stuck-count
+    data_type: int
+    label: Stuck Commands
+    description: Commands the node took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick.
+  - name: command-expired-count
+    data_type: int
+    label: Expired Commands
+    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); written every tick, zero when none.
+  - name: command-pull-failure-count
+    data_type: int
+    label: Command Pull Failures
+    description: Pulls of the node's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

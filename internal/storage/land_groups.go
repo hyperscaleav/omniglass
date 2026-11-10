@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -43,6 +44,10 @@ type GroupRefusal struct {
 type LandResult struct {
 	Landed  bool
 	Refused []GroupRefusal
+	// Outcome is the batch's items by kind and outcome (#1641): the
+	// caller's IngestBatch.Tally plus what the committed pass stored,
+	// coalesced and refused. Empty when nothing landed.
+	Outcome delivery.Tally
 }
 
 // landGroup is one group as landBatch walks it. whole marks the batch's
@@ -77,9 +82,13 @@ func (g IngestGroup) carries() bool {
 }
 
 // allMetrics is every metric sample the batch carries, its groups' and
-// fanned rows' included: the days a partition miss has to make.
+// fanned rows' and its node-self report's included: the days a partition
+// miss has to make.
 func (b IngestBatch) allMetrics() []MetricSampleWrite {
 	var out []MetricSampleWrite
+	if b.NodeSelf != nil {
+		out = append(out, b.NodeSelf.writes("")...)
+	}
 	for _, g := range b.groups() {
 		out = append(out, g.Metrics...)
 		if g.Fanned != nil {
@@ -119,9 +128,14 @@ func (g IngestGroup) ownerRefs() [][2]string {
 // resolved yet, so a tick of many groups, each on its own component, costs
 // one read for its owners however many groups it carries (#1582). An owner
 // the read does not find is left to ownerArcValue, which names the miss.
-func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, nodeLogs []NodeLogWrite) error {
+// selfNode is the node whose self-report the batch carries (#1625), "" for
+// none: the same read resolves its platform component (nodeSelfArc).
+func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, nodeLogs []NodeLogWrite, selfNode string) error {
 	ids := map[string][]string{}
-	var nodeNames []string
+	var nodeNames, selfNodes []string
+	if _, ok := bt.arcs[nodeSelfArc(selfNode)]; selfNode != "" && !ok {
+		selfNodes = append(selfNodes, selfNode)
+	}
 	seen := map[string]bool{}
 	want := func(kind, ref string) {
 		k := kind + "\x00" + ref
@@ -147,15 +161,17 @@ func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, n
 	for _, l := range nodeLogs {
 		want("node", l.Node)
 	}
-	if len(ids)+len(nodeNames) == 0 {
+	if len(ids)+len(nodeNames)+len(selfNodes) == 0 {
 		return nil
 	}
 	rows, err := bt.Query(ctx, `select 'component', id::text, id::text from component where id = any($1::uuid[])
 		union all select 'system', id::text, id::text from system where id = any($2::uuid[])
 		union all select 'location', id::text, id::text from location where id = any($3::uuid[])
 		union all select 'node', principal_id::text, principal_id::text from node where principal_id = any($4::uuid[])
-		union all select 'node', name, principal_id::text from node where name = any($5::text[])`,
-		ids["component"], ids["system"], ids["location"], ids["node"], nodeNames)
+		union all select 'node', name, principal_id::text from node where name = any($5::text[])
+		union all select 'platform', name, platform_component_id::text from node
+			where name = any($6::text[]) and platform_component_id is not null`,
+		ids["component"], ids["system"], ids["location"], ids["node"], nodeNames, selfNodes)
 	if err != nil {
 		return fmt.Errorf("storage: land batch: resolve owners: %w", err)
 	}
