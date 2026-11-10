@@ -401,4 +401,49 @@ test.describe("operator console", () => {
       if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
     }
   });
+
+  test("platform health: after a report window each server panel shows a figure and the ingest lag sparkline has points", async ({ page }) => {
+    // A report window is a minute by default; the first lands one window after
+    // boot, the ingest lag one window after a batch commits.
+    test.setTimeout(240_000);
+
+    // The empty scenario runs no node, so nothing is ingested on its own: push
+    // one sample through the ingest lane, a few seconds old, so the server has a
+    // lag to report.
+    const name = `e2e-ingest-${Date.now()}`;
+    expect((await page.request.post("/api/v1/components", { data: { name, product: "generic-device" } })).ok()).toBeTruthy();
+    const pushed = await page.request.post("/api/v1/telemetry:push", {
+      data: {
+        owner: { kind: "component", ref: name },
+        metrics: [{ name: "room-temperature", value: 21.5, ts: new Date(Date.now() - 3_000).toISOString() }],
+      },
+    });
+    expect(pushed.status()).toBe(202);
+
+    // Wait out the window on the view the page reads, not on the page.
+    type View = { servers?: { groups?: { name: string; figures?: { key: string }[] }[] }[] };
+    await expect
+      .poll(
+        async () => {
+          const v = (await (await page.request.get("/api/v1/views/platform")).json()) as View;
+          const groups = v.servers?.[0]?.groups ?? [];
+          const reported = (g: string) => (groups.find((x) => x.name === g)?.figures ?? []).length > 0;
+          const lag = (groups.find((x) => x.name === "ingest")?.figures ?? []).some((f) => f.key === "ingest-lag");
+          return ["requests", "ingest", "queues", "retention"].every(reported) && lag;
+        },
+        { timeout: 200_000, intervals: [5_000] },
+      )
+      .toBe(true);
+
+    await page.goto("/web/platform");
+    const set = page.locator("[data-testid^=server-panels-]").first();
+    await expect(set).toHaveAttribute("open", "");
+    for (const panel of ["requests", "ingest", "queues", "retention"]) {
+      const rows = set.getByTestId(`server-panel-${panel}`).locator("tr[data-testid^=panel-row-]");
+      await expect(rows.filter({ hasNotText: /not reported/ }).first()).toBeVisible();
+    }
+    await expect(set.locator("tr[data-testid=panel-row-ingest-lag] [data-testid=sparkline]")).toBeVisible();
+
+    expect((await page.request.delete(`/api/v1/components/${name}`)).ok()).toBeTruthy();
+  });
 });

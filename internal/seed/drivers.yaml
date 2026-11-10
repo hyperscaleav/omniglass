@@ -297,7 +297,7 @@ drivers:
       # enterprise arc (1.3.6.1.4.1.55560): the mains voltage and total current
       # at .1, and an outlet table at .2.1.<column>.<outlet> (column 2 the state,
       # 3 the current). Identity sits at .5, sysDescr and sysUpTime are MIB-II's.
-      # Read only: switching an outlet is a command, not this driver's.
+      # Read only: ferrite-pdu-api switches an outlet (#1653).
       transport: snmp
       inputs:
         - { name: host, kind: string, required: true }
@@ -332,6 +332,43 @@ drivers:
             - { name: outlet-2-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.2" } }
             - { name: outlet-3-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.3" } }
             - { name: outlet-4-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.4" } }
+  - id: ferrite-pdu-api
+    label: Ferrite PDU API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Ferrite PDU 4C's control face (#1653): its http-api on 80, every
+      # request behind basic auth, switching one outlet on or off by its id.
+      # It carries the PDU's commands, and reads only the identity the JSON
+      # document's agent block names (the poll that carries its login to the
+      # node); ferrite-pdu-snmp reads the outlets, so its next status poll
+      # shows the switch. Both
+      # commands are fire-and-forget, settled at their issue, so no reply
+      # settles them; settling against the outlet's state waits on one
+      # outlet-state property with the outlet as its instance (#1252).
+      transport: http
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "80" }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { path: /pdu.json }
+          emits:
+            - { name: model-number, extract: { jsonpath: Agent.Model } }
+            - { name: serial-number, extract: { jsonpath: Agent.SerialNumber } }
+            - { name: firmware-version, extract: { jsonpath: Agent.Version } }
+      commands:
+        # A whole-leaf ${arg.outlet} keeps the param's type: the outlet
+        # rides as a number, as the PDU's own document numbers it.
+        - command_type: outlet-off
+          request: { method: POST, path: /api/outlets/state, body: { outlet: "${arg.outlet}", state: "off" } }
+        - command_type: outlet-on
+          request: { method: POST, path: /api/outlets/state, body: { outlet: "${arg.outlet}", state: "on" } }
   - id: kestrel-api
     label: Kestrel Device API
     version: "1.0.0"

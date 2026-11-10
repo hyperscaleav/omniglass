@@ -29,7 +29,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, two official rules (`reachability-lost`, and `ingest-lag-high` on the server's own component), each rule's
+sustains held by a durable streak and a sweep, three official rules (`reachability-lost`, and `ingest-lag-high` and `retention-behind` on the server's own component), each rule's
 live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
@@ -367,7 +367,7 @@ index probe per series on either lane), the open alarms and the streaks are read
 lane and judged in memory, and a streak that agrees keeps its clock. A restarted server's first pass
 reads back a bounded number of recent samples, not the whole history, since the race it could have lost
 was in flight around its own start; a series whose correction fails is retried on its own for a few
-passes and then dropped with an error logged, while the pass moves on. The platform ships two official rules, rendered here from the seed itself:
+passes and then dropped with an error logged, while the pass moves on. The platform ships three official rules, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
@@ -378,7 +378,9 @@ is `outage` and losing it drops the role below quorum; otherwise the system read
 impact says, and a component that fills no role moves no system. The second, `ingest-lag-high`,
 watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 minutes opens a
 `warning` alarm on the server's platform component, and a window back at 30 s or under clears it
-([messaging](/architecture/messaging/#measuring-the-pipeline)).
+([messaging](/architecture/messaging/#measuring-the-pipeline)). The third, `retention-behind`, opens a
+`warning` alarm on the same component when a retention lane or compaction stays behind its window for
+5 minutes, and clears on the first pass that catches up ([storage](/architecture/storage/#what-a-retention-pass-reports)).
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's

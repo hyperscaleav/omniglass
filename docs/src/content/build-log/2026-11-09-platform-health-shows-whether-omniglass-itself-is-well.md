@@ -14,8 +14,9 @@ where each figure is a series with its history. Every figure is a sample on a pl
 fleet already had (#1625, #1626, #1627): the page reads them through one composed read,
 `GET /views/platform`, which gathers the whole platform in a fixed number of statements and returns
 the column groups with each key's catalog description, so the page holds no key list and no
-threshold. A count reported only when nonzero shows only while its window is the newest, so a drop
-from last week never reads as today's. A boot now writes `server-version` and `server-started-at` on the server's platform
+threshold. A count reported only when nonzero would show only while its window is the newest, so a
+drop from last week never reads as today's; every windowed count is now written every window, zero
+when quiet, so none ages out. A boot now writes `server-version` and `server-started-at` on the server's platform
 component, keys only the boot may write. A caller whose component read is short of fleet-wide sees
 the rows with their pills and a line saying the figures need a fleet-wide read; the figures are left
 out, never zeroed. The page is a page, not a dashboard

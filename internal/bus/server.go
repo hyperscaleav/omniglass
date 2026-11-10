@@ -53,6 +53,9 @@ type Config struct {
 	// pipeline records into (#1628); nil means a recorder of the Server's own,
 	// which nothing reports.
 	Metrics *platformmetric.Recorder
+	// PlatformComponentID is the server's own component in the platform
+	// system, where its retention figures land (#1629); empty writes none.
+	PlatformComponentID string
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
@@ -93,6 +96,9 @@ type Server struct {
 	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
 	cons              jetstream.Consumer // the telemetry durable, read for its backlog
 	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
+	// platformComponentID is the server's own platform component, where the
+	// retention pass lands its figures (#1629); empty writes none.
+	platformComponentID string
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -104,7 +110,8 @@ func New(cfg Config, store Store) (*Server, error) {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
-		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics}}
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
+		platformComponentID: cfg.PlatformComponentID}
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
@@ -213,6 +220,7 @@ func (s *Server) subscribe() error {
 			reply.Commands = append(reply.Commands, collection.CommandDelivery{
 				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
 				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
+				Disruptive: d.Disruptive, QuietSeconds: d.QuietSeconds, HoldSeconds: d.HoldSeconds, HoldEndpoints: d.HoldEndpoints,
 			})
 		}
 		b, err := json.Marshal(reply)

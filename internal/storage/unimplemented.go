@@ -763,6 +763,9 @@ func (UnimplementedGateway) PruneMetricTrends(context.Context, time.Time, int) (
 func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RetentionStatus(context.Context) (RetentionStatus, error) {
+	return RetentionStatus{}, nil
+}
 func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
 	return 0, nil
 }
@@ -907,6 +910,15 @@ func (UnimplementedGateway) PutIdentityBinding(context.Context, string, string, 
 	return &IdentityBinding{}, nil
 }
 func (UnimplementedGateway) DeleteIdentityBinding(context.Context, string, string, string, string, IdentityBindingScopes) error {
+	return nil
+}
+func (UnimplementedGateway) CreateComponentDependency(context.Context, string, string, ComponentDependencySpec, scope.Set, scope.Set) (*ComponentDependency, error) {
+	return &ComponentDependency{}, nil
+}
+func (UnimplementedGateway) ListComponentDependencies(context.Context, string, scope.Set) (*ComponentDependencyList, error) {
+	return &ComponentDependencyList{}, nil
+}
+func (UnimplementedGateway) DeleteComponentDependency(context.Context, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {

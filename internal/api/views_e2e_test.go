@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,6 +213,28 @@ type platformViewWire struct {
 		Version   string     `json:"version"`
 		StartedAt *time.Time `json:"started_at"`
 		Verdict   string     `json:"verdict"`
+		Groups    []struct {
+			Name  string `json:"name"`
+			Label string `json:"label"`
+			Keys  []struct {
+				Name        string `json:"name"`
+				Label       string `json:"label"`
+				Description string `json:"description"`
+				Of          string `json:"of"`
+				Rank        int    `json:"rank"`
+			} `json:"keys"`
+			Figures []struct {
+				Key        string    `json:"key"`
+				Instance   string    `json:"instance"`
+				Value      float64   `json:"value"`
+				ObservedAt time.Time `json:"observed_at"`
+			} `json:"figures"`
+		} `json:"groups"`
+		Alarms []struct {
+			Rule     string `json:"rule"`
+			Key      string `json:"key"`
+			Severity string `json:"severity"`
+		} `json:"alarms"`
 	} `json:"servers"`
 	Groups []struct {
 		Name  string `json:"name"`
@@ -233,6 +256,9 @@ type platformViewWire struct {
 		} `json:"figures"`
 	} `json:"nodes"`
 }
+
+// platformRigRoute is the slowest route the rig's server sampled.
+const platformRigRoute = "GET /api/v1/components/{name} 2xx"
 
 // platformViewRig is a seeded platform with one node carrying a figure and a
 // server carrying its boot identity, served by a lab handler.
@@ -279,6 +305,14 @@ func newPlatformViewRig(t *testing.T) *platformViewRig {
 	r.startedAt = time.Date(2026, 11, 9, 9, 30, 0, 0, time.UTC)
 	if err := gw.RecordServerIdentity(ctx, server, "v9.9.9", r.startedAt); err != nil {
 		t.Fatalf("record server identity: %v", err)
+	}
+	window := time.Now().UTC().Truncate(time.Second)
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: server, Key: writerclass.IngestLag, Value: 2.5, TS: window},
+		{ComponentID: server, Key: writerclass.HTTPRequestDurationMax, Instance: platformRigRoute, Value: 40, TS: window},
+		{ComponentID: server, Key: writerclass.HTTPRequestDurationMax, Instance: "GET /api/v1/fast 2xx", Value: 3, TS: window},
+	}); err != nil {
+		t.Fatalf("record the server's figures: %v", err)
 	}
 	return r
 }
@@ -369,6 +403,32 @@ func TestPlatformViewAPIServesTheSeededViewer(t *testing.T) {
 	if n.Verdict == "" {
 		t.Error("edge-alpha verdict missing for an all-scope component read")
 	}
+
+	// The server's panels (#1645): every server group, in order, with its
+	// keys' catalog facts and the server's latest figures, the slowest route
+	// first.
+	s := w.Servers[0]
+	if len(s.Groups) != len(storage.PlatformServerGroups) {
+		t.Fatalf("server groups = %+v, want %d", s.Groups, len(storage.PlatformServerGroups))
+	}
+	for i, g := range storage.PlatformServerGroups {
+		if s.Groups[i].Name != g.Name || len(s.Groups[i].Keys) != len(g.Keys) {
+			t.Errorf("server group %d = %s with %d keys, want %s with %d", i, s.Groups[i].Name, len(s.Groups[i].Keys), g.Name, len(g.Keys))
+		}
+	}
+	requests, ingest := s.Groups[0], s.Groups[1]
+	if k := requests.Keys[0]; k.Name != writerclass.HTTPRequestDurationMax || k.Rank != 10 || k.Description == "" {
+		t.Errorf("requests key 0 = %+v, want http-request-duration-max ranked 10 with its description", k)
+	}
+	if len(requests.Figures) != 2 || requests.Figures[0].Instance != platformRigRoute || requests.Figures[0].Value != 40 {
+		t.Errorf("requests figures = %+v, want the slowest route first", requests.Figures)
+	}
+	if len(ingest.Figures) != 1 || ingest.Figures[0].Key != writerclass.IngestLag || ingest.Figures[0].Value != 2.5 {
+		t.Errorf("ingest figures = %+v, want ingest-lag 2.5", ingest.Figures)
+	}
+	if s.Alarms == nil || len(s.Alarms) != 0 {
+		t.Errorf("alarms = %+v, want an empty list on a server with none open", s.Alarms)
+	}
 }
 
 // TestPlatformViewAPIOmitsWhatTheCallerCannotRead: a fleet-wide node:read
@@ -395,7 +455,11 @@ func TestPlatformViewAPIOmitsWhatTheCallerCannotRead(t *testing.T) {
 		t.Errorf("system = %+v, want it absent for a location-scoped system read", w.System)
 	}
 	if len(w.Servers) != 0 {
-		t.Errorf("servers = %+v, want none", w.Servers)
+		t.Errorf("servers = %+v, want none, and so no server groups", w.Servers)
+	}
+	raw := string(r.c.do(tok, http.MethodGet, "/views/platform", nil, http.StatusOK))
+	if strings.Contains(raw, platformRigRoute) || strings.Contains(raw, writerclass.IngestLag) {
+		t.Errorf("a location-scoped component read carries a server figure: %s", raw)
 	}
 	if len(w.Nodes) != 1 || w.Nodes[0].Name != "edge-alpha" {
 		t.Fatalf("nodes = %+v, want the edge-alpha row", w.Nodes)

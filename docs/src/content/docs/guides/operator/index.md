@@ -30,7 +30,8 @@ There are two ways to operate, and they are the same API with the same checks be
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
   adding a protocol-named endpoint to a component, and reading its reachability and events.
 - **[Platform health](/guides/operator/platform-health/)**: whether Omniglass itself is well, the
-  build running and its uptime, and each node's check-in, schedule and command queue.
+  build running and its uptime, each server's request timing, ingest lag, queues and retention,
+  and each node's check-in, schedule and command queue.
 - **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside a node,
   watching the collector reach its devices, exercising and adding a device, and breaking one on
   purpose.

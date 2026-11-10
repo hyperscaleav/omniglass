@@ -16,20 +16,23 @@ import (
 // heartbeat.
 const DefaultProbeEvery = 30 * time.Second
 
-// DefaultPollWorkers is how many tasks a node runs at once when it is given
-// no worker count (#1634).
-const DefaultPollWorkers = 16
+// DefaultLaneWorkers is how many endpoint lanes a node runs at once when it
+// is given no worker count (#1634, #1249).
+const DefaultLaneWorkers = 16
 
 // The dispatcher (#1634) runs each poll and probe on its own interval, from
 // a timer of its own, not on the heartbeat tick. Every task sits once in a
 // due-time heap; the run loop sleeps until the earliest due and calls pass,
-// which hands each due task to a lane pool (one lane per endpoint, a fixed
-// set of workers) and books its next due on the task's phase grid. A task
-// still in flight at its next due is skipped and counted, never queued
-// behind itself. A poll the endpoint's gate holds is decided here, in the
-// pass, so it never takes a lane: counted held once per due, released the
-// moment the gate opens. The heartbeat keeps the node's housekeeping and
-// sets no task's cadence.
+// which hands each due task to its endpoint's lane (#1249: one request in
+// flight per endpoint, a fixed set of workers) and books its next due on the
+// task's phase grid. A task still in flight at its next due is skipped and
+// counted, never queued behind itself. The endpoint's gate is asked when
+// the job is taken off its lane (admit), not when it is queued, so a poll
+// queued behind a command that closed the gate (a reboot) is held, not
+// sent: counted held once per due, released the moment the gate opens. A
+// probe of an endpoint a path upstream holds (#1652) is held the same way,
+// in the pass and again at admit, released when the upstream opens. The
+// heartbeat keeps the node's housekeeping and sets no task's cadence.
 
 // phaseOf is where on its interval a task's slots fall: a function of its
 // id alone, so a restarted node keeps each task's slots and a fleet of tasks
@@ -106,6 +109,11 @@ type dispatchWindow struct {
 	runs     int           // tasks dispatched on the schedule
 	busyMax  int           // worker-busy-count: most workers busy at once
 	queueMax int           // dispatch-queue-depth: most dispatches waiting at once
+	// operatorOffers and operatorRefusals are operator work offered to the
+	// endpoint lanes (operator-offer-count) and refused at the operator
+	// queue's cap (operator-refused-count), #1249.
+	operatorOffers   int
+	operatorRefusals int
 }
 
 type dueEntry struct {
@@ -159,15 +167,19 @@ type dispatcher struct {
 	tasks    map[string]collection.TaskSpec
 	inflight map[string]bool
 	held     map[string]string // held poll id to its endpoint
+	// heldProbes is each probe a path upstream holds (#1652) to its
+	// endpoint: released when the upstream opens, as its polls stay held
+	// until the probe reads the endpoint up.
+	heldProbes map[string]string
 	// started is when each task's last scheduled run was dispatched, the
-	// start the next one's gap is read from.
+	// start the next one's gap is read from (#1625).
 	started map[string]time.Time
 	window  dispatchWindow
 }
 
 func newDispatcher(cfg dispatchConfig) *dispatcher {
 	if cfg.workers <= 0 {
-		cfg.workers = DefaultPollWorkers
+		cfg.workers = DefaultLaneWorkers
 	}
 	if cfg.probeEvery <= 0 {
 		cfg.probeEvery = DefaultProbeEvery
@@ -180,7 +192,8 @@ func newDispatcher(cfg dispatchConfig) *dispatcher {
 	}
 	return &dispatcher{cfg: cfg, pool: newLanePool(cfg.workers), wake: make(chan struct{}, 1),
 		entries: map[string]*dueEntry{}, tasks: map[string]collection.TaskSpec{},
-		inflight: map[string]bool{}, held: map[string]string{}, started: map[string]time.Time{}}
+		inflight: map[string]bool{}, held: map[string]string{}, heldProbes: map[string]string{},
+		started: map[string]time.Time{}}
 }
 
 // interval is how often a task runs: a driver poll at its declared
@@ -227,6 +240,7 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 			delete(d.entries, id)
 			delete(d.tasks, id)
 			delete(d.held, id)
+			delete(d.heldProbes, id)
 			delete(d.started, id)
 		}
 	}
@@ -253,6 +267,11 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 // pass dispatches every task due at now and returns how many it started.
 func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	began := time.Now()
+	// A disruption's hold backstop that came with no up verdict (#1651)
+	// releases its endpoint, counted, before the held polls are looked at.
+	for _, ep := range d.cfg.sessions.expireHolds(now) {
+		d.cfg.report.holdExpired(ep)
+	}
 	d.mu.Lock()
 	d.releaseLocked(now)
 	var jobs []collection.TaskSpec
@@ -277,6 +296,15 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			next := slotAfter(now, phase, every)
 			d.cfg.sched.book(e.id, next)
 			e.at, e.slot, e.fresh, e.extra = next, next, false, false
+			heap.Fix(&d.due, e.idx)
+			continue
+		}
+		if until, quiet := d.cfg.sessions.quietUntil(t.EndpointID, now); quiet && !poll {
+			// A disruptive command's quiet period (#1651): the endpoint's
+			// probe (and its ping) waits it out, so nothing reads the device
+			// mid-reboot, and its first run after is the verdict that can
+			// reopen the gate. A poll is held by the gate below.
+			e.at = until
 			heap.Fix(&d.due, e.idx)
 			continue
 		}
@@ -305,6 +333,15 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 		extra, fresh := e.extra, e.fresh
 		e.at, e.slot, e.fresh, e.extra = next, next, false, false
 		heap.Fix(&d.due, e.idx)
+		if !poll && d.cfg.sessions.upstreamHeld(t.EndpointID) {
+			// A path upstream holds the endpoint (#1652): its probe is not
+			// run, so the endpoint gives no verdict while the cause is
+			// upstream, and nothing failed. It counts held once per due and
+			// runs the moment the upstream opens.
+			d.cfg.report.heldPoll(t.EndpointID)
+			d.heldProbes[e.id] = t.EndpointID
+			continue
+		}
 		if poll {
 			for range missed {
 				d.cfg.report.pollDue(t.EndpointID)
@@ -313,22 +350,9 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			if !extra {
 				d.cfg.report.pollDue(t.EndpointID)
 			}
-			ownRequest := d.cfg.sessions.lookup(t.EndpointID) == nil || driver.IsHTTP(t.Transport)
-			_, refused := d.cfg.sessions.refusedAt(t.EndpointID, statelessRung(t))
-			if !(refused && ownRequest) {
-				if _, holding := d.cfg.sessions.holding(t.EndpointID); holding {
-					// The gate holds the endpoint for a reason other than a
-					// refusal (#1650): nothing is sent and nothing booked
-					// beyond the next due, so it is no failure and starts
-					// no backoff. It counts held once per due and runs the
-					// moment the gate opens.
-					d.cfg.report.heldPoll(t.EndpointID)
-					d.held[e.id] = t.EndpointID
-					continue
-				}
-			}
 		}
 		delete(d.held, e.id)
+		delete(d.heldProbes, e.id)
 		d.inflight[e.id] = true
 		if !extra {
 			d.window.runs++
@@ -345,6 +369,9 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	for _, t := range jobs {
 		id := t.ID
 		d.pool.submit(laneKey(t), laneScheduled, func() {
+			if !d.admit(t) {
+				return
+			}
 			d.cfg.work(ctx, t)
 			d.finished(id)
 		})
@@ -360,7 +387,7 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 
 // gapExcess is how far a gap between two scheduled starts of a task missed
 // its interval, either way: a skipped slot reads a whole interval, a run
-// started early or late against the last its own distance.
+// started early or late against the last its own distance (#1625).
 func gapExcess(gap, every time.Duration) time.Duration {
 	if d := gap - every; d >= 0 {
 		return d
@@ -368,10 +395,61 @@ func gapExcess(gap, every time.Duration) time.Duration {
 	return every - gap
 }
 
+// admit asks the endpoint's gate as a job is taken off its lane (#1249):
+// whatever ran ahead of it on the lane (a reboot) may have closed it since
+// the pass. A poll the gate holds for a reason other than its own refusal
+// (#1650, #1651) sends nothing and books nothing beyond the next due, so it
+// is no failure and starts no backoff: counted held, and run again the
+// moment the gate opens. A refusal at the rung a poll sends its own request
+// at is runPoll's to count. A probe in a disruptive command's quiet period
+// waits it out; one a path upstream holds (#1652) is not run, counted held
+// like a poll and run again the moment the upstream opens. false when the
+// job ends here.
+func (d *dispatcher) admit(t collection.TaskSpec) bool {
+	if !driver.IsBaked(t.Spec) {
+		if until, quiet := d.cfg.sessions.quietUntil(t.EndpointID, d.cfg.clock()); quiet {
+			d.deferTo(t.ID, until)
+			return false
+		}
+		if d.cfg.sessions.upstreamHeld(t.EndpointID) {
+			d.mu.Lock()
+			d.heldProbes[t.ID] = t.EndpointID
+			d.mu.Unlock()
+			d.cfg.report.heldPoll(t.EndpointID)
+			d.finished(t.ID)
+			return false
+		}
+		return true
+	}
+	c, closed := d.cfg.sessions.consult(t.EndpointID, statelessRung(t), sendsOwnRequest(d.cfg.sessions, t))
+	if !closed || c.reason.kind == reasonRefused {
+		return true
+	}
+	d.mu.Lock()
+	d.held[t.ID] = t.EndpointID
+	d.mu.Unlock()
+	d.cfg.report.heldPoll(t.EndpointID)
+	d.finished(t.ID)
+	return false
+}
+
+// deferTo ends a job that did not run and makes its task due at until, off
+// the schedule unless until is its slot.
+func (d *dispatcher) deferTo(id string, until time.Time) {
+	d.mu.Lock()
+	delete(d.inflight, id)
+	if e, ok := d.entries[id]; ok {
+		e.at, e.fresh, e.extra = until, false, until.Before(e.slot)
+		heap.Fix(&d.due, e.idx)
+	}
+	d.mu.Unlock()
+	d.kick()
+}
+
 // releaseLocked makes due at once what was waiting on a gate that opened: a
 // refused poll whose held session reads up again (#1049), and a held poll
-// whose endpoint's gate no longer holds it (#1650). Neither is a due of its
-// own.
+// whose endpoint's gate no longer holds it (#1650), and a held probe whose
+// path upstream opened (#1652). None is a due of its own.
 func (d *dispatcher) releaseLocked(now time.Time) {
 	for _, id := range d.cfg.sched.refusedIDs() {
 		t, ok := d.tasks[id]
@@ -385,8 +463,14 @@ func (d *dispatcher) releaseLocked(now time.Time) {
 		}
 	}
 	for id, ep := range d.held {
-		if _, holding := d.cfg.sessions.holding(ep); !holding {
+		if c, closed := d.cfg.sessions.consult(ep, statelessRung(d.tasks[id]), sendsOwnRequest(d.cfg.sessions, d.tasks[id])); !closed || c.reason.kind == reasonRefused {
 			delete(d.held, id)
+			d.runNowLocked(id, now)
+		}
+	}
+	for id, ep := range d.heldProbes {
+		if !d.cfg.sessions.upstreamHeld(ep) {
+			delete(d.heldProbes, id)
 			d.runNowLocked(id, now)
 		}
 	}
@@ -429,14 +513,16 @@ func (d *dispatcher) kick() {
 	}
 }
 
-// next is the earliest due, for the run loop's timer.
+// next is the earliest due or hold backstop (#1651), for the run loop's
+// timer.
 func (d *dispatcher) next() (time.Time, bool) {
+	at, ok := d.cfg.sessions.nextHoldExpiry()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.due.Len() == 0 {
-		return time.Time{}, false
+	if d.due.Len() > 0 && (!ok || d.due[0].at.Before(at)) {
+		return d.due[0].at, true
 	}
-	return d.due[0].at, true
+	return at, ok
 }
 
 // settle waits for every dispatched run to end.
@@ -448,6 +534,8 @@ func (d *dispatcher) takeWindow() dispatchWindow {
 	w := d.window
 	d.window = dispatchWindow{}
 	d.mu.Unlock()
-	w.busyMax, w.queueMax = d.pool.takeWindow()
+	lw := d.pool.takeWindow()
+	w.busyMax, w.queueMax = lw.busy, lw.queued
+	w.operatorOffers, w.operatorRefusals = lw.offers, lw.refused
 	return w
 }

@@ -52,7 +52,7 @@ func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 	}
 	got := readings(r.take(t0.Add(time.Minute)))
 	if v, ok := got[writerclass.TickOverrunCount]; !ok || v != 0 {
-		t.Fatalf("an on-time loop's window read tick-overrun-count %v (written %v), want 0: %v", v, ok, got)
+		t.Fatalf("a punctual dispatcher's window read tick-overrun-count %v (written %v), want 0: %v", v, ok, got)
 	}
 	if got[writerclass.TickDuration] != 2000 {
 		t.Fatalf("tick-duration = %v ms, want 2000", got[writerclass.TickDuration])
@@ -65,7 +65,7 @@ func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 	r := newNodeReport(time.Minute, t0)
 	r.dispatch(dispatchWindow{}, t0)
 	if got := readings(r.take(t0)); len(got) != 0 {
-		t.Fatalf("an empty window read %v", got)
+		t.Fatalf("an empty dispatch window read %v", got)
 	}
 }
 
@@ -265,7 +265,7 @@ func TestNodeReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
 	got := readings(r.take(t0))
 	for _, k := range []string{writerclass.ScheduleLateness, writerclass.ScheduleGapExcess} {
 		if _, ok := got[k]; ok {
-			t.Errorf("a tick that ran no task read %s", k)
+			t.Errorf("a window that ran no task read %s", k)
 		}
 	}
 }
@@ -303,7 +303,8 @@ func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 
 // TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
 // pull of the command queue is tallied, and the window's tally is sent once
-// when it ends; a window with no failure sends it as zero.
+// when it ends; a window with no failure sends zero, so the count returns to
+// zero after the window that had it.
 func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)

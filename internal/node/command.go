@@ -73,12 +73,7 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		o, done := executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
-			actuate := func() { reply, outcome = executeDelivery(ctx, runner, d, sessions) }
-			if pool != nil {
-				pool.do(commandLane(d), laneOperator, actuate)
-			} else {
-				actuate()
-			}
+			reply, outcome = deliverOnLane(ctx, runner, d, sessions, pool)
 			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
@@ -102,6 +97,20 @@ func commandLane(d collection.CommandDelivery) string {
 	return "command:" + strconv.FormatInt(d.ID, 10)
 }
 
+// deliverOnLane actuates one delivery on its endpoint's lane (#1249), as
+// operator work ahead of the scheduled tasks queued there and never beside
+// another request to the endpoint, and waits for it. With no pool it
+// actuates directly.
+func deliverOnLane(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager, pool *lanePool) (reply, outcome string) {
+	actuate := func() { reply, outcome = executeDelivery(ctx, runner, d, sessions) }
+	if pool == nil {
+		actuate()
+		return reply, outcome
+	}
+	pool.do(commandLane(d), laneOperator, actuate)
+	return reply, outcome
+}
+
 // commandWaits reports a command that waits a tick: an http command whose
 // endpoint's stream is making its first attempt under this fingerprint
 // (#1038) waits for the stream's verdict rather than sending the credential
@@ -120,15 +129,21 @@ func commandWaits(d collection.CommandDelivery, sessions *sessionManager) bool {
 // server from the reply (when the binding settles from the response) or from
 // what is observed next.
 func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
-	if gt, gated := sessions.refusedAt(d.EndpointID, rungResponsive); gated {
-		// A gated endpoint (#1056 ruling): the command fails fast with the
-		// refusal on every path, never a dial under the refused fingerprint.
-		return "", "node: the endpoint is gated: " + gt.refusal().Error()
+	if c, closed := sessions.consult(d.EndpointID, rungResponsive, true); closed {
+		// A closed gate (#1056 ruling, #1650, #1651) fails the command fast
+		// with its most causal reason on every path, never a dial the gate
+		// says will not land. Asked here, as the endpoint's lane takes the
+		// command, so a command queued behind a reboot reads the reboot.
+		return "", commandRefusal(c)
 	}
-	if r, held := sessions.holding(d.EndpointID); held {
-		// An unreachable endpoint (#1650) answers at once with the reason,
-		// never a dial the probe already says will not land.
-		return "", "node: the endpoint is " + r.text + ", so the command was not sent"
+	if d.Disruptive {
+		// A disruptive command (#1651) closes the gate of every endpoint of
+		// its component on this node before it goes out, so nothing the
+		// dispatcher starts meanwhile reads the device going down as a
+		// failure. A send that fails leaves the gates closed: the device may
+		// still have acted, and each reopens on its first up verdict after
+		// the quiet period, or at the hold backstop.
+		sessions.disrupt(d)
 	}
 	switch {
 	case driver.IsHTTP(d.Transport):
