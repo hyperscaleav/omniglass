@@ -395,7 +395,7 @@ func (m *sessionManager) flushDatagrams() {
 		}
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
-			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
+			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last flush, last: %q", n, last))
 		}
 	}
 }

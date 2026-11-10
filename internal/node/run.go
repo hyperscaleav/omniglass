@@ -26,6 +26,12 @@ const DefaultHeartbeat = 30 * time.Second
 // short heartbeat does not mean a worklist rebuild as often.
 const DefaultWorklistEvery = 30 * time.Second
 
+// DefaultSessionDials is how many held sessions a node dials and handshakes
+// at once when it is not told otherwise (#1636): enough that a restart with
+// hundreds of held endpoints comes up in seconds, few enough that it does not
+// open them all in one burst against the network and the devices.
+const DefaultSessionDials = 16
+
 // worklistTimeout bounds a single worklist request-reply; a var so a test can
 // shorten it.
 var worklistTimeout = 5 * time.Second
@@ -62,6 +68,10 @@ type Config struct {
 	// overriding the platform's the worklist carries: a test's, or a lab's.
 	// Zero takes the worklist's.
 	ReportEvery time.Duration
+	// SessionDials bounds how many held sessions dial and handshake at once
+	// (#1636); a session waiting for a slot reads establishing. Zero takes
+	// DefaultSessionDials.
+	SessionDials int
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests
 	// and one-shot invocations.
 	Once bool
@@ -317,6 +327,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		},
 	})
 	sessions.httpFetch = httpFetcher
+	sessions.dials = collection.NewDialSlots(sessionDials(cfg.SessionDials))
 	defer sessions.closeAll()
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
@@ -401,30 +412,31 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, worklists) })
 	defer func() { stopPulls(); pulls.Wait() }()
 
+	// The run loop (#1636): sessions reconcile the moment a worklist lands
+	// and on their own safety-net timer, the heartbeat carries only its own
+	// work, and session housekeeping runs on a timer at the report window.
+	// Every handler runs on the loop's goroutine, the session maps' one owner.
 	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			// Ship what the spool still holds, its pending groups flushed
-			// first, before the connection closes, within a bound: the spool
-			// is memory, so a batch left in it at exit is gone.
-			dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
-			if err := spool.drain(dctx); err != nil {
-				logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
-			}
-			cancel()
-			_ = nc.Flush()
-			return wl, nil
-		case job := <-runJobs:
+	reconciler := time.NewTicker(heartbeat)
+	defer reconciler.Stop()
+	keepEvery := housekeepEvery(heartbeat, report.every)
+	housekeeper := time.NewTicker(keepEvery)
+	defer housekeeper.Stop()
+	loop := &runLoop{
+		worklists: worklists,
+		jobs:      runJobs,
+		heartbeat: ticker.C,
+		reconcile: reconciler.C,
+		housekeep: housekeeper.C,
+		sessions:  sessions,
+		onJob: func(job runJob) {
 			if time.Now().Before(job.deadline) {
 				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
 			}
 			publishSelfLogs(spool, cfg.Name, sink)
-		case next := <-worklists:
-			// The next tick reconciles sessions and runs tasks against it.
-			wl = next
-		case <-ticker.C:
+		},
+		onHeartbeat: func(wl collection.WorklistReply) {
 			_ = publishHeartbeat(nc, cfg.Name)
 			// Ship what the spool held since the last tick before this tick's
 			// work, so batches land in the order they were collected (#454).
@@ -438,21 +450,25 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				clear(faultseen)
 				sched.forgetOccurrences()
 			}
-			// Hold, recycle, or tear down sessions to match the latest
-			// worklist pulled; a failed pull left the last good one in place.
-			sessions.reconcile(wl.Tasks)
-			// Run the worklist's tcp tasks and publish their telemetry. A publish
-			// failure is non-fatal (retry next tick).
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
+				if every := housekeepEvery(heartbeat, report.every); every != keepEvery {
+					keepEvery = every
+					housekeeper.Reset(every)
+				}
 			}
+			// Run the worklist's tasks and publish their telemetry. A publish
+			// failure is non-fatal (retry next tick).
 			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now())
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
-			// Report the inbound lines no listener claimed this tick.
+			publishSelfLogs(spool, cfg.Name, sink)
+		},
+		onHousekeep: func(wl collection.WorklistReply) {
+			// Report the inbound lines no listener claimed since the last pass.
 			sessions.flushUnclaimed()
-			// Count this tick's pushes into the collection report, and
-			// publish the report when its window is due (#1369). A publish
+			// Count the pushes since the last pass into the collection report,
+			// and publish the report when its window is due (#1369). A publish
 			// failure is non-fatal: the spool holds the batch and retries it.
 			sessions.reportPushes(report)
 			if now := time.Now(); report.due(now) {
@@ -460,10 +476,30 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 					_ = publishBatch(spool, cfg.Name, row.task, row.samples)
 				}
 			}
-			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(spool, cfg.Name, sink)
-		}
+		},
 	}
+	wl = loop.run(ctx, wl)
+
+	// Ship what the spool still holds, its pending groups flushed first,
+	// before the connection closes, within a bound: the spool is memory, so a
+	// batch left in it at exit is gone.
+	dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+	defer cancel()
+	if err := spool.drain(dctx); err != nil {
+		logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
+	}
+	_ = nc.Flush()
+	return wl, nil
+}
+
+// sessionDials is the node's session-dials bound: the configured one, or
+// DefaultSessionDials when none is set.
+func sessionDials(n int) int {
+	if n <= 0 {
+		return DefaultSessionDials
+	}
+	return n
 }
 
 // reconnectWait and reconnectJitter space the node's reconnect attempts
