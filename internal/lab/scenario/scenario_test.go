@@ -837,6 +837,27 @@ func TestCorporateDeclaresAMeetingPlatformASite(t *testing.T) {
 	}
 }
 
+// A webhook sender is a component the site's simulator serves beside the
+// site's own (#1747), so the count a site's bring-up waits for includes it,
+// while a token pusher, which is no component, adds nothing.
+func TestASiteSimulatesItsWebhookSendersBesideItsComponents(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, s := range p.Sites {
+		if got, want := s.Simulated(), s.Totals.Components+1; got != want {
+			t.Errorf("site %s simulates %d components, want its %d and its one meeting platform", s.Name, got, s.Totals.Components)
+		}
+		total += s.Simulated()
+	}
+	if got := p.Simulated(); got != total {
+		t.Errorf("plan simulates %d components, want the sum of its sites' %d", got, total)
+	}
+}
+
 // A declaration whose systems are omitted is scoped to every system of its
 // site, and a profile with a webhook face places as a webhook sender.
 func TestResolveOmittedSystemsScopesEverySystem(t *testing.T) {

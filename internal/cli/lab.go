@@ -173,7 +173,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			return err
 		}
 		nodes[i] = lab.SiteNode{Name: labscenario.SiteNode(site.Name), Token: token, TokenHash: hex.EncodeToString(hash),
-			Components: site.Totals.Components}
+			Components: site.Simulated()}
 	}
 	pushers, err := scaleLabPushers(plan, auth.NewBearerToken)
 	if err != nil {
@@ -188,7 +188,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 		cadence = lab.CadenceLab
 	}
 	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (a node each), %d simulated components.\n",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components)
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Simulated())
 	fmt.Fprintln(out)
 	eng, daemon, err := labEngine(ctx, out)
 	if err != nil {

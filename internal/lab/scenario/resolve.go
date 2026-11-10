@@ -69,6 +69,28 @@ type PusherPlan struct {
 	Webhook bool
 }
 
+// Simulated is how many components the site's simulator serves: the site's
+// own and each webhook sender's (#1747), a component with an address on the
+// site's node. A token pusher is no component and is not counted.
+func (s SitePlan) Simulated() int {
+	n := s.Totals.Components
+	for _, p := range s.Pushers {
+		if p.Webhook {
+			n++
+		}
+	}
+	return n
+}
+
+// Simulated is how many components every site's simulator serves together.
+func (p *Plan) Simulated() int {
+	n := 0
+	for _, s := range p.Sites {
+		n += s.Simulated()
+	}
+	return n
+}
+
 // BuildingPlan is one building and its floor count.
 type BuildingPlan struct {
 	Name   string
