@@ -49,6 +49,16 @@ type ScaleConfig struct {
 	Backlog int64
 	// DrainTimeout bounds the wait for the pass to clear the backlog.
 	DrainTimeout time.Duration
+	// PageClients is how many clients load the console's system page at
+	// once across the window, each PageLoads times; 0 skips the load.
+	// PageSystem names the system they open, empty the fleet view's first.
+	PageClients int
+	PageLoads   int
+	PageSystem  string
+	// Every and Samples are a sampling run's interval and its count of
+	// samples, 0 sampling until stopped; SampleScale reads them.
+	Every   time.Duration
+	Samples int
 	// SettleTimeout bounds the delivery read's wait for the window's batches
 	// to land (#1641).
 	SettleTimeout time.Duration
@@ -245,25 +255,63 @@ func (h *harness) signIn(ctx context.Context, base string) (string, error) {
 	return out.Token, nil
 }
 
+// scaleSession is a scale lab found and signed in to: what every window
+// reads from, read once however many windows a run measures.
+type scaleSession struct {
+	l scaleLab
+	// fleet is the run's conditions, copied into each window's run.
+	fleet ScaleRun
+	// pageSystem is the id of the system the page load opens, when it runs.
+	pageSystem string
+}
+
 func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleReport, error) {
-	l, err := h.discoverScale(ctx)
+	s, err := h.prepareScale(ctx, cfg)
 	if err != nil {
 		return ScaleReport{}, err
+	}
+	if err := sleep(ctx, cfg.Warmup); err != nil {
+		return ScaleReport{}, err
+	}
+	run := s.fleet
+	run.Started = time.Now()
+	if _, err := h.measureWindow(ctx, cfg, s, &run); err != nil {
+		return ScaleReport{}, err
+	}
+	if cfg.Backlog > 0 {
+		if run.Drain, err = h.drainProbe(ctx, s.l.server, cfg); err != nil {
+			return ScaleReport{}, err
+		}
+	}
+	return SummarizeScale(run), nil
+}
+
+// prepareScale finds the running lab, signs in, reads the fleet's size, and
+// makes one fleet view read before anything is timed.
+func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSession, error) {
+	l, err := h.discoverScale(ctx)
+	if err != nil {
+		return scaleSession{}, err
 	}
 	h.env = map[string]string{"LAB_DB": l.db, "LAB_SERVER": l.server}
 	base, err := h.hostURL(ctx, l.server)
 	if err != nil {
-		return ScaleReport{}, err
+		return scaleSession{}, err
 	}
 	h.env["LAB_HOST_URL"] = base
-	if h.env["LAB_TOKEN"], err = h.signIn(ctx, base); err != nil {
-		return ScaleReport{}, err
+	tok, err := h.signIn(ctx, base)
+	if err != nil {
+		return scaleSession{}, err
 	}
+	h.env["LAB_TOKEN"] = tok
+	// A sampling run outlives its token's day: a read the server refuses as
+	// unauthenticated mints a fresh one and is made again.
+	h.tokens = newTokenSource(tok, func(ctx context.Context) (string, error) { return h.signIn(ctx, base) })
 	if on, err := h.psql(ctx, `show track_commit_timestamp`); err != nil || strings.TrimSpace(on) != "on" {
-		return ScaleReport{}, errors.New("the lab's Postgres does not record commit timestamps, which the ingest lag reads: stop this lab and bring it up again with this build's `lab run`")
+		return scaleSession{}, errors.New("the lab's Postgres does not record commit timestamps, which the ingest lag reads: stop this lab and bring it up again with this build's `lab run`")
 	}
 
-	run := ScaleRun{Scenario: cfg.Scenario, Started: time.Now(), Warmup: cfg.Warmup, Window: cfg.Window, Sites: len(l.nodes)}
+	run := ScaleRun{Scenario: cfg.Scenario, Warmup: cfg.Warmup, Window: cfg.Window, Sites: len(l.nodes)}
 	if run.Scenario == "" {
 		run.Scenario = lab.DefaultScenario
 	}
@@ -272,7 +320,7 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	}
 	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
 	if err != nil {
-		return ScaleReport{}, fmt.Errorf("read the fleet's size: %w", err)
+		return scaleSession{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
 	if f := strings.Split(strings.TrimSpace(fleet), "|"); len(f) == 3 {
 		run.Systems, _ = strconv.Atoi(f[0])
@@ -280,60 +328,73 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 		run.Tasks, _ = strconv.Atoi(f[2])
 	}
 	// One read before anything is timed, so an API that refuses the fleet
-	// view fails the run in seconds, not after its window.
-	if err := h.readFleetView(ctx); err != nil {
-		return ScaleReport{}, err
+	// view fails the run in seconds, not after its window. Its answer names
+	// the system the page load opens.
+	view, err := h.fleetView(ctx)
+	if err != nil {
+		return scaleSession{}, err
+	}
+	s := scaleSession{l: l, fleet: run}
+	if cfg.PageClients > 0 {
+		if s.pageSystem, err = PickPageSystem(view, cfg.PageSystem); err != nil {
+			return scaleSession{}, err
+		}
 	}
 	h.say("ready: %d systems, %d components, %d enabled tasks, %d node containers; warming up for %s",
 		run.Systems, run.Components, run.Tasks, len(l.nodes), cfg.Warmup)
-	if err := sleep(ctx, cfg.Warmup); err != nil {
-		return ScaleReport{}, err
-	}
+	return s, nil
+}
 
+// measureWindow measures one window into run: the readings at its ends, the
+// fleet view and system page loads across it, the database's size at its
+// end, what the server logged in it, each node's endpoint observation around
+// it and the delivery receipts it reconciles. It returns when the window
+// closed.
+func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSession, run *ScaleRun) (time.Time, error) {
+	l := s.l
 	// The closed loop's marks sit outside the window's own reads. A lab
 	// whose nodes do not answer for their endpoints still measures the rest.
 	start, endpointErr := h.markStart(ctx, l)
 	db0, use0, err := h.readScale(ctx, l)
 	if err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	h.say("measuring for %s, with %d fleet-view reads", cfg.Window, cfg.FleetReads)
 	end := time.Now().Add(cfg.Window)
-	gap := cfg.Window / time.Duration(max(cfg.FleetReads, 1))
-	for i := 0; i < cfg.FleetReads; i++ {
-		if err := sleep(ctx, gap); err != nil {
-			return ScaleReport{}, err
-		}
-		start := time.Now()
-		if err := h.readFleetView(ctx); err != nil {
-			return ScaleReport{}, err
-		}
-		run.FleetView = append(run.FleetView, time.Since(start))
+	if err := h.loadWindow(ctx, cfg, s.pageSystem, run); err != nil {
+		return time.Time{}, err
 	}
 	if err := sleep(ctx, time.Until(end)); err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	db1, use1, err := h.readScale(ctx, l)
 	if err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	var stop endpointMark
 	if endpointErr == nil {
 		stop, endpointErr = h.markEnd(ctx, l)
 	}
 	if run.Measured, err = WindowOf(db0, db1, use0, use1); err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	h.say("window: %s metric rows a minute, %.0f millicores in all", count(run.Measured.MetricRowsPerMinute), totalMillicores(run.Measured))
+	out, err := h.psql(ctx, AbsolutesQuery)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("read the database's size: %w", err)
+	}
+	if run.Absolutes, err = ParseAbsolutes(out); err != nil {
+		return time.Time{}, err
+	}
 
 	if run.Lag, run.LagGap, err = h.ingestLag(ctx, db0.At, db1.At); err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	if run.Redeliveries, err = h.redeliveries(ctx, l.server, db0.At); err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	if run.Lane, err = h.consumerLane(ctx, l.server, db0.At, db1.At); err != nil {
-		return ScaleReport{}, err
+		return time.Time{}, err
 	}
 	if endpointErr == nil {
 		run.Endpoints, endpointErr = h.endpointBrackets(ctx, l, start, stop)
@@ -346,12 +407,130 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	if run.Delivery.Read {
 		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
 	}
-	if cfg.Backlog > 0 {
-		if run.Drain, err = h.drainProbe(ctx, l.server, cfg); err != nil {
-			return ScaleReport{}, err
+	return db1.At, nil
+}
+
+// loadWindow reads the fleet view cfg.FleetReads times across the window
+// while the page clients load the system page, into run. A read that fails
+// stops the page clients before it returns, so none loads into the next
+// window.
+func (h *harness) loadWindow(ctx context.Context, cfg ScaleConfig, system string, run *ScaleRun) error {
+	pageCtx, stopPages := context.WithCancel(ctx)
+	pages := h.loadPages(pageCtx, cfg, system)
+	defer func() {
+		stopPages()
+		pages()
+	}()
+	gap := cfg.Window / time.Duration(max(cfg.FleetReads, 1))
+	for i := 0; i < cfg.FleetReads; i++ {
+		if err := sleep(ctx, gap); err != nil {
+			return err
 		}
+		start := time.Now()
+		if err := h.readFleetView(ctx); err != nil {
+			return err
+		}
+		run.FleetView = append(run.FleetView, time.Since(start))
 	}
-	return SummarizeScale(run), nil
+	run.Page = pages()
+	return nil
+}
+
+// loadPages starts cfg.PageClients clients loading the system page across
+// the window, each cfg.PageLoads times at an even spacing, the clients
+// staggered across one spacing so their loads overlap as operators' would.
+// The function it returns waits for them and gives their loads.
+func (h *harness) loadPages(ctx context.Context, cfg ScaleConfig, system string) func() PageRun {
+	run := PageRun{Clients: cfg.PageClients}
+	if cfg.PageClients <= 0 {
+		return func() PageRun { return run }
+	}
+	h.say("loading the system page with %d clients, %d loads each", cfg.PageClients, cfg.PageLoads)
+	gap := cfg.Window / time.Duration(max(cfg.PageLoads, 1))
+	base := h.env["LAB_HOST_URL"]
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	for c := range cfg.PageClients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if sleep(ctx, gap*time.Duration(c)/time.Duration(cfg.PageClients)) != nil {
+				return
+			}
+			for range cfg.PageLoads {
+				due := time.Now().Add(gap)
+				load := h.loadSystemPage(ctx, base, system)
+				mu.Lock()
+				run.Loads = append(run.Loads, load)
+				mu.Unlock()
+				if sleep(ctx, time.Until(due)) != nil {
+					return
+				}
+			}
+		}()
+	}
+	return func() PageRun {
+		wg.Wait()
+		return run
+	}
+}
+
+// uptime is how long the server container had been running at t, so a
+// sample shows a restart as its uptime falling.
+func (h *harness) uptime(ctx context.Context, server string, t time.Time) (float64, error) {
+	r, err := h.dc.ContainerInspect(ctx, server, client.ContainerInspectOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("read the server's start: %w", err)
+	}
+	if r.Container.State == nil {
+		return 0, errors.New("read the server's start: the container reports no state")
+	}
+	started, err := time.Parse(time.RFC3339Nano, r.Container.State.StartedAt)
+	if err != nil {
+		return 0, fmt.Errorf("read the server's start: %w", err)
+	}
+	return t.Sub(started).Seconds(), nil
+}
+
+// SampleScale samples the scale lab already running every cfg.Every, one
+// line a sample to out, until cfg.Samples are written or stop is cancelled
+// (#1632). The lab is found and warmed up once; each sample is one window,
+// with no retention probe, since that restarts the server mid-series.
+func SampleScale(stop context.Context, cfg ScaleConfig, out io.Writer) error {
+	dc, err := client.New(client.WithHost(cfg.DockerHost))
+	if err != nil {
+		return fmt.Errorf("docker: %w", err)
+	}
+	defer dc.Close()
+	h := &harness{
+		cfg:  Config{Project: lab.ScaleProject, Out: cfg.Out, LabLog: cfg.LabLog},
+		dc:   dc,
+		http: &http.Client{Timeout: 2 * time.Minute},
+	}
+	s, err := h.prepareScale(stop, cfg)
+	if err != nil {
+		return err
+	}
+	if sleep(stop, cfg.Warmup) != nil {
+		return nil
+	}
+	return RunSamples(stop, SampleLoop{Every: cfg.Every, Samples: cfg.Samples, Out: out,
+		Measure: func(ctx context.Context, seq int) (SampleResult, error) {
+			h.say("sample %d", seq)
+			run := s.fleet
+			run.Started = time.Now()
+			end, err := h.measureWindow(ctx, cfg, s, &run)
+			if err != nil {
+				return SampleResult{}, err
+			}
+			up, err := h.uptime(ctx, s.l.server, end)
+			if err != nil {
+				return SampleResult{}, err
+			}
+			return SampleResult{Report: SummarizeScale(run), End: end, UptimeS: up}, nil
+		}})
 }
 
 func totalMillicores(w Window) float64 {
@@ -405,10 +584,17 @@ func (h *harness) readScale(ctx context.Context, l scaleLab) (DBCounters, map[st
 // readFleetView reads the console's whole-fleet view, as its Explore page
 // does on load.
 func (h *harness) readFleetView(ctx context.Context) error {
-	if err := h.get(ctx, h.env["LAB_HOST_URL"]+"/api/v1/views/fleet", nil); err != nil {
-		return fmt.Errorf("read the fleet view: %w", err)
+	_, err := h.fleetView(ctx)
+	return err
+}
+
+// fleetView is the console's whole-fleet view's answer.
+func (h *harness) fleetView(ctx context.Context) ([]byte, error) {
+	var raw json.RawMessage
+	if err := h.get(ctx, h.env["LAB_HOST_URL"]+"/api/v1/views/fleet", &raw); err != nil {
+		return nil, fmt.Errorf("read the fleet view: %w", err)
 	}
-	return nil
+	return raw, nil
 }
 
 // lagSampleRows bounds the lag query: the newest observed samples of the

@@ -404,6 +404,10 @@ type ScaleRun struct {
 	Lane      Lane
 	FleetView []time.Duration
 	Drain     Drain
+	// Page is the system page loads made during the window.
+	Page PageRun
+	// Absolutes is the database's standing size, read at the window's end.
+	Absolutes Absolutes
 	// Endpoints is each node's bracketed endpoint observation; when none was
 	// read, EndpointsGap says why.
 	Endpoints    []NodeBracket
@@ -457,6 +461,12 @@ type ScaleReport struct {
 	ConsumerLane Lane         `json:"consumer_lane"`
 	FleetView    Quantiles    `json:"fleet_view_ms"`
 	Drain        Drain        `json:"retention_drain"`
+	// Absolutes is what the database holds at the window's end, where the
+	// rates above are what it gains a day.
+	Absolutes Absolutes `json:"absolutes"`
+	// SystemPageFigures is the system page load, absent when no client
+	// loaded it.
+	*SystemPageFigures
 	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
 	// then says why.
 	Endpoints    *EndpointReport `json:"endpoints,omitempty"`
@@ -499,6 +509,8 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
+		Absolutes:             r.Absolutes,
+		SystemPageFigures:     SummarizePage(r.Page),
 		EndpointsGap:          r.EndpointsGap,
 	}
 	if len(r.Endpoints) > 0 {
@@ -572,6 +584,7 @@ func (r ScaleReport) Table() string {
 	line("database a day", size(r.DatabaseBytesPerDay))
 	line("WAL a day", size(r.WALBytesPerDay))
 	line("WAL a sample", count(r.WALBytesPerSample)+" B")
+	r.Absolutes.lines(line)
 	line("batches landed", count(float64(r.BatchesLanded)))
 	line("samples landed", count(float64(r.SamplesLanded)))
 	line("samples per batch", fmt.Sprintf("%.1f", r.SamplesPerBatch))
@@ -597,6 +610,13 @@ func (r ScaleReport) Table() string {
 	line("consumer lane busy", r.ConsumerLane.describe())
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
+	if p := r.SystemPageFigures; p != nil {
+		line("system page p50", ms(p.Ms.P50))
+		line("system page p95", ms(p.Ms.P95)+p.describe())
+	} else {
+		line("system page p50", "not measured")
+		line("system page p95", "not measured")
+	}
 	line("retention drain", r.Drain.describe())
 	if r.Endpoints != nil {
 		r.Endpoints.table(&b)

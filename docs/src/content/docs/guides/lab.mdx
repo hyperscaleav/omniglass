@@ -382,16 +382,8 @@ the ingest lag reads the commit times Postgres records only when the lab asks it
 (`track_commit_timestamp`), and a lab started before that says so and stops. It writes the same figures
 as JSON (`--json`, `lab-measure.json` by default, empty for none), so two runs diff.
 
-| Flag | Default | What it does |
-| --- | --- | --- |
-| `--systems` | 0 | bring up a throwaway lab of this many systems; 0 measures the running one |
-| `--scenario` | `corporate` | the scale scenario a `--systems` lab runs |
-| `--warmup` | 2m | how long the lab runs before the window starts |
-| `--window` | 5m | the window the rates, growth and usage are read over |
-| `--fleet-reads` | 20 | timed fleet view reads, spread evenly over the window |
-| `--backlog` | 150000 | aged property rows the retention probe plants; 0 skips it and its server restart |
-| `--drain-timeout` | 3m | how long the probe waits for the pass to clear the backlog |
-| `--settle-timeout` | 3m | how long the delivery read waits for the window's batches to land |
+Every flag, its default and its meaning is in the generated
+[CLI reference](/reference/cli/#omniglass-lab-measure), which `make gen` writes from the command itself.
 
 How to read each row:
 
@@ -422,6 +414,14 @@ How to read each row:
   sizes replication and backups per device rather than per day. It carries every writer's WAL (the
   receipts, the calculated metrics, the server's own rows), so it reads a little high for the raw
   lane alone; a figure far above the row's width is index and receipt cost, not the sample.
+- **database size, metric partitions, metric blocks and trends, dead tuples**: what the database holds
+  at the window's end, where the rows above are what it gains. The size is the whole database; the
+  partitions are the metric lane's daily partitions and the day the oldest starts, so retention is
+  keeping up when the oldest day moves forward and the count stays level. The blocks and trends are
+  the bytes of the two rollup tables. The dead tuples are the rows deleted or updated in `property`,
+  `log_line` and `node_log` that vacuum has not yet reclaimed, summed over their partitions; a count
+  that only climbs across a sampling run is vacuum falling behind. Each is a level, not a rate, so one
+  run reads one point, and [a sampling run](#sampling-a-scale-lab-over-time) reads its trend.
 - **`<container>` cpu, memory**: each container's CPU in millicores (a thousand is one core) over
   the window, from the cgroup's CPU time, and its working set (anonymous plus shared memory, the part
   not reclaimable as page cache). One line each for the server, Postgres and every node, then the
@@ -465,6 +465,17 @@ How to read each row:
   opens on, read through the API with a token the harness mints, spread evenly over the window so it
   is read while the lab collects, not while it idles. The reads are sequential, so these are one
   user's response times, not a load test.
+- **system page p50, p95**: the time an operator waits for the console's system page, with
+  `--page-clients N` (0, the default, skips it and the rows read `not measured`). A load is every read a
+  cold open of the page makes, all at once as the browser makes them, timed from the first request to
+  the last answer: the catalogs it labels with, the system, its health, members, roles and metrics, and
+  then one 24 hour series read for each chart the metrics answer names. N clients each make
+  `--page-loads` loads spread over the window, staggered so their loads overlap, against the system
+  `--page-system` names or the fleet view's first. A load where any read does not answer 200 is an
+  error, kept out of the times and counted in the p95 row and as `system_page_error_ratio` in the JSON,
+  0 when every load answered. The page's own test fails when the page gains or drops a read this list
+  lacks, so the load cannot drift from the page. The alarms, events and logs are not part of it: the
+  page reads them only when its activity tab is opened.
 - **retention drain**: how fast the retention pass deletes rows past their window. After the window
   the probe plants aged property rows (`--backlog`, each with a newer row of its own series, which
   the prune requires), restarts the server so its pass runs at start, and reads the count of rows
@@ -575,6 +586,33 @@ whose server predates the ledger reads `delivery not measured` with the reason, 
 is still reported.
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
+
+### Sampling a scale lab over time
+
+One window says what a fleet costs now; whether growth, retention and vacuum keep up shows only over
+hours. `--every` samples the running lab on an interval instead, one compact JSON line a sample:
+
+```bash
+./bin/omniglass lab measure --every 10m --window 5m --append scale.jsonl --page-clients 4
+jq -r '[.seq, .ingest_lag_ms.p95, .system_page_ms.p95, .absolutes.dead_tuples.property] | @tsv' scale.jsonl
+```
+
+The lab is found, signed in to and warmed up once; then every `--every` one window is measured. Each
+line carries the one-shot report's fields at the same paths `--json` writes them, so a query written
+against one measurement reads every sample, plus `seq`, `at` (when the window closed) and
+`uptime_seconds` (how long the server had been running then, so a series whose uptime falls was
+measured across a restart). `--append` opens the file for append, creating it if missing, so a series
+stopped and started again continues the same file; without it the lines go to standard output.
+`--samples N` stops after N samples, and 0 samples until interrupted: the first Ctrl-C or SIGTERM lets
+the sample in flight finish and write its line. A sample that fails writes a line with its `error` and
+no figures, and the run goes on, so a gap in the series is visible rather than missing. Each sample
+also reads the endpoints block and the delivery table; the delivery read's `--settle-timeout` wait can
+run a sample past `--every`, and the next one then starts at once rather than skipping its slot.
+
+Sampling never restarts the server: it skips the retention probe, `--backlog` defaults to 0, and a
+`--backlog` you give is refused, as are `--systems` (sample a lab you brought up), an `--every`
+shorter than the `--window` it measures, and `--json`. The schedule's health on the nodes and command
+latency are not in a sample yet (#1625, #1626).
 
 ### The manifest format
 
