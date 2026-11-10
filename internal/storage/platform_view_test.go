@@ -200,13 +200,13 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 		// edge-alpha's newest pass expired two undelivered and one unexecuted.
 		{ComponentID: f.alpha.ID, Key: writerclass.CommandExpiredCount, Instance: "undelivered", Value: 2, TS: window},
 		{ComponentID: f.alpha.ID, Key: writerclass.CommandExpiredCount, Instance: "unexecuted", Value: 1, TS: window},
-		{ComponentID: f.alpha.ID, Key: writerclass.PublishFailureCount, Value: 4, TS: window},
+		{ComponentID: f.alpha.ID, Key: writerclass.ScheduleSkipCount, Value: 4, TS: window},
 		// edge-bravo's earlier pass expired seven unexecuted, its newest two
 		// undelivered: the newest window is the figure, not their total.
 		{ComponentID: f.bravo.ID, Key: writerclass.CommandExpiredCount, Instance: "unexecuted", Value: 7, TS: earlier},
 		{ComponentID: f.bravo.ID, Key: writerclass.CommandExpiredCount, Instance: "undelivered", Value: 2, TS: window},
-		// edge-bravo's last report window, ten minutes ago, dropped five.
-		{ComponentID: f.bravo.ID, Key: writerclass.SpoolDropCount, Value: 5, TS: gone},
+		// edge-bravo's last report window, ten minutes ago, counted five overruns.
+		{ComponentID: f.bravo.ID, Key: writerclass.TickOverrunCount, Value: 5, TS: gone},
 	}); err != nil {
 		t.Fatalf("record platform metrics: %v", err)
 	}
@@ -222,14 +222,14 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	if got := alpha.Figures[writerclass.CommandExpiredCount]; got.Value != 3 || !got.ObservedAt.Equal(window) {
 		t.Errorf("edge-alpha command-expired-count = %+v, want 3 (undelivered 2 + unexecuted 1) at %s", got, window)
 	}
-	if got := alpha.Figures[writerclass.PublishFailureCount]; got.Value != 4 {
-		t.Errorf("edge-alpha publish-failure-count = %+v, want this window's 4", got)
+	if got := alpha.Figures[writerclass.ScheduleSkipCount]; got.Value != 4 {
+		t.Errorf("edge-alpha schedule-skip-count = %+v, want this window's 4", got)
 	}
 	if got := bravo.Figures[writerclass.CommandExpiredCount]; got.Value != 2 {
 		t.Errorf("edge-bravo command-expired-count = %+v, want the newest window's 2", got)
 	}
-	if got := bravo.Figures[writerclass.SpoolDropCount]; got.Value != 5 || !got.ObservedAt.Equal(gone) {
-		t.Errorf("edge-bravo spool-drop-count = %+v, want its last window's 5 at %s: a count written every window does not age out", got, gone)
+	if got := bravo.Figures[writerclass.TickOverrunCount]; got.Value != 5 || !got.ObservedAt.Equal(gone) {
+		t.Errorf("edge-bravo tick-overrun-count = %+v, want its last window's 5 at %s: a count written every window does not age out", got, gone)
 	}
 	if got := alpha.Figures[writerclass.CheckinAge]; got.Value != 3 {
 		t.Errorf("edge-alpha checkin-age = %+v, want the gauge's latest, 3, however old", got)
@@ -406,7 +406,7 @@ func TestPlatformViewServerPanelsCarryTheirCatalogAndAlarms(t *testing.T) {
 
 // TestPlatformViewAgesOutAServerWindowFigure (#1645): a server key written
 // only for a window that observed something (a request, a landed batch, a
-// drop, a slow query) is that window's figure, not a current reading; a
+// slow query) is that window's figure, not a current reading; a
 // later window that saw nothing writes no row. So once two report windows
 // have passed it is absent, instance by instance, as a node's window count is (#1644), and the
 // panel reads not reported instead of the last lag as current. A gauge the
@@ -421,12 +421,10 @@ func TestPlatformViewAgesOutAServerWindowFigure(t *testing.T) {
 		{ComponentID: f.server, Key: writerclass.IngestLag, Value: 4, TS: gone},
 		{ComponentID: f.server, Key: writerclass.IngestLagMax, Value: 9, TS: gone},
 		{ComponentID: f.server, Key: writerclass.IngestSampleCount, Value: 80, TS: gone},
-		{ComponentID: f.server, Key: writerclass.BusTelemetryDropCount, Instance: "malformed", Value: 3, TS: gone},
 		{ComponentID: f.server, Key: writerclass.HTTPRequestDurationMax, Instance: "GET /api/v1/old 2xx", Value: 50, TS: gone},
 		{ComponentID: f.server, Key: writerclass.HTTPRequestCount, Instance: "GET /api/v1/old 2xx", Value: 6, TS: gone},
 		{ComponentID: f.server, Key: writerclass.DBSlowQueryCount, Value: 2, TS: gone},
 		{ComponentID: f.server, Key: writerclass.IngestBatchCount, Value: 4, TS: window},
-		{ComponentID: f.server, Key: writerclass.BusTelemetryDropCount, Instance: "refused", Value: 1, TS: window},
 		{ComponentID: f.server, Key: writerclass.OutboxQueuedDepth, Value: 7, TS: gone},
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric", Value: 0, TS: gone},
 	}); err != nil {
@@ -448,11 +446,6 @@ func TestPlatformViewAgesOutAServerWindowFigure(t *testing.T) {
 	}
 	if got := figuresOf(serverPanel(t, v, "ingest"), writerclass.IngestBatchCount); len(got) != 1 || got[0].Value != 4 {
 		t.Errorf("ingest-batch-count = %+v, want this window's 4", got)
-	}
-	// A drop reason is aged out on its own: this window's refused is read,
-	// the malformed batches of ten minutes ago are not read beside it.
-	if got := figuresOf(serverPanel(t, v, "ingest"), writerclass.BusTelemetryDropCount); len(got) != 1 || got[0].Instance != "refused" || got[0].Value != 1 {
-		t.Errorf("bus-telemetry-drop-count = %+v, want only this window's refused 1", got)
 	}
 	if got := figuresOf(serverPanel(t, v, "queues"), writerclass.OutboxQueuedDepth); len(got) != 1 || got[0].Value != 7 {
 		t.Errorf("outbox-queued-depth = %+v, want the gauge's latest, 7, however old", got)

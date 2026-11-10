@@ -282,8 +282,8 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 // server's checkin-age, so a node cannot speak for another writer.
 func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 	keys := NodeSelfKeys()
-	if len(keys) != 16 {
-		t.Fatalf("node-self keys %v, want the 16 a node reports of itself", keys)
+	if len(keys) != 17 {
+		t.Fatalf("node-self keys %v, want the 17 a node reports of itself", keys)
 	}
 	for _, key := range append(keys, CheckinAge) {
 		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
@@ -358,7 +358,7 @@ func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
 		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
-		BusTelemetryDropCount, BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
+		BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
 		BusRequestFailureCount, CalcPendingDepth, CalcServedCount, CalcPassDuration, OutboxQueuedDepth,
 		OutboxDueAge, SweepDuration, SweepCount, SweepFailureCount}
 	for _, key := range keys {
@@ -430,6 +430,29 @@ func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
 		}
 		if NodeSelf(key) {
 			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
+// TestTheDeliveryKeysAreEveryHopsOwn: a hop's delivery keys (#1659) are
+// platform keys the process alone writes, of itself: a node on its node-self
+// lane, the server on its own component. They replace the folded drop and
+// failure counts, which are no longer declared.
+func TestTheDeliveryKeysAreEveryHopsOwn(t *testing.T) {
+	for _, key := range []string{DeliveryInCount, DeliveryOutCount, DeliveryLossRatio} {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a delivery key", key)
+		}
+		if !NodeSelf(key) {
+			t.Errorf("the node-self lane refuses %s", key)
+		}
+	}
+	for _, key := range []string{"spool-drop-count", "publish-failure-count", "bus-telemetry-drop-count"} {
+		if _, ok := Reserved(key); ok {
+			t.Errorf("%s is still declared; the delivery keys fold it", key)
 		}
 	}
 }

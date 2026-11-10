@@ -46,11 +46,6 @@ var PlatformViewGroups = []PlatformViewGroup{
 	{Name: "schedule", Label: "Schedule", Keys: []string{
 		writerclass.ScheduleLateness, writerclass.TickOverrunCount, writerclass.ScheduleSkipCount,
 	}},
-	// The node's own delivery counts, until #1646 folds them into its Loss
-	// group: this slice prints no loss figure.
-	{Name: "delivery", Label: "Delivery", Keys: []string{
-		writerclass.SpoolDropCount, writerclass.PublishFailureCount,
-	}},
 	{Name: "commands", Label: "Commands", Keys: []string{
 		writerclass.CommandPendingCount, writerclass.CommandPendingAge,
 		writerclass.CommandStuckCount, writerclass.CommandExpiredCount,
@@ -72,7 +67,7 @@ func platformViewKeys() []string {
 // the Rank highest instances of the key's newest window, highest first,
 // sorted in SQL, so a large route table never reaches the browser. Window
 // marks a key the server writes only for a report window that observed
-// something (a request, a landed batch, a drop, a slow query): its last
+// something (a request, a landed batch, a slow query): its last
 // sample is that window's figure, not a current reading, so the view leaves
 // it out once platformWindowHorizon has passed, as PlatformWindowKeys does
 // for a node. Every other key is a gauge sampled each window or a retention
@@ -99,7 +94,7 @@ const platformRouteRank = 10
 // The page renders the panels the view returns and has no list of its own.
 // Each key is a seeded platform metric (TestPlatformServerGroupKeysAreSeeded).
 // The request keys are ranked: the ten slowest and the ten busiest routes of
-// the newest window. Every other split key (a drop reason, a retention lane,
+// the newest window. Every other split key (a retention lane,
 // a table) reads back its latest sample per instance, a set as small as the
 // code that names it.
 var PlatformServerGroups = []PlatformServerGroup{
@@ -116,7 +111,6 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.IngestLagMax, Window: true},
 		{Name: writerclass.IngestBatchCount, Window: true},
 		{Name: writerclass.IngestSampleCount, Window: true},
-		{Name: writerclass.BusTelemetryDropCount, Window: true},
 	}},
 	{Name: "queues", Label: "Queues", Keys: []PlatformServerKey{
 		{Name: writerclass.BusConsumerPending},
@@ -571,7 +565,7 @@ func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer)
 // key is returned in instance order. A window key's (PlatformServerKey.Window)
 // sample older than platformWindowHorizon is left out, instance by instance:
 // its window is over and the ones since observed nothing on that instance,
-// so a drop reason last seen an hour ago is not read beside this window's.
+// so an instance last seen an hour ago is not read beside this window's.
 func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int, windows []bool) (map[string]map[string][]PlatformInstanceFigure, error) {
 	out := map[string]map[string][]PlatformInstanceFigure{}
 	if len(ids) == 0 {

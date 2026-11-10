@@ -167,7 +167,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		// Its items read as missing at the ledger's next read (#1641); the
 		// warning says why.
 		slog.Warn(undecodableLog, "facility", "ingest", "subject", msg.Subject(), "bytes", len(msg.Data()), "error", err.Error())
-		s.drop(msg, dropMalformed) // undecodable: it will never succeed, stop redelivery
+		s.drop(msg, nil) // undecodable: it will never succeed, stop redelivery
 		return
 	}
 	id := s.batchID(msg)
@@ -178,11 +178,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	if msg.Subject() == collection.APITelemetrySubject {
 		bind, ok := apiBinding(&ev)
 		if !ok {
-			s.drop(msg, dropMalformed) // malformed owner: it will never resolve, stop redelivery
+			s.drop(msg, delivery.BatchItems(&ev)) // malformed owner: it will never resolve, stop redelivery
 			return
 		}
 		if err := s.land(ctx, id, &ev, bind); err != nil {
-			s.failed(msg, err)
+			s.failed(msg, delivery.BatchItems(&ev), err)
 			return
 		}
 		s.ack(msg)
@@ -199,7 +199,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// field that looks authoritative and is not, so say so and stop redelivery.
 	if ev.GetOwner() != nil {
 		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
-		s.drop(msg, dropMalformed)
+		s.drop(msg, delivery.BatchItems(&ev))
 		return
 	}
 
@@ -210,13 +210,13 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// redelivery. The batch's self-logs are the only top-level rows it carries.
 	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
 		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
-		s.drop(msg, dropMalformed)
+		s.drop(msg, delivery.BatchItems(&ev))
 		return
 	}
 
 	stamp, err := s.landNode(ctx, id, node, &ev)
 	if err != nil {
-		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
+		s.failed(msg, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
@@ -386,6 +386,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	if err != nil {
 		return nil, err
 	}
+	s.settled(ev, res)
 	refused := make(map[int]bool, len(res.Refused))
 	for _, r := range res.Refused {
 		refused[r.Index] = true
@@ -638,7 +639,7 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		if err != nil {
 			return err
 		}
-		rows := s.deriveSamples(ev, bind, reg, identities, nil) // the API lane carries no ledger (#1641)
+		rows := s.deriveSamples(ev, bind, reg, identities, &batch.Tally) // no ledger (#1641), but its server hop counts (#1659)
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
@@ -646,6 +647,7 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	if err != nil {
 		return err
 	}
+	s.settled(ev, res)
 	if res.Landed {
 		s.committed(batchLanding(ev))
 	}
@@ -785,13 +787,13 @@ func tallySamples(t *delivery.Tally, ev *ogv1.TelemetryBatch, o delivery.Outcome
 // refusing the writer, a value Postgres refuses as data or by a CHECK) is Term'd at once,
 // since one batch in flight means every batch behind it waits on it; any
 // other failure is redelivered, bounded (nakOrTerm).
-func (s *Server) failed(msg jetstream.Msg, err error) {
+func (s *Server) failed(msg jetstream.Msg, items map[delivery.Kind]int, err error) {
 	if storage.IsRefusedWrite(err) {
-		s.drop(msg, dropRefused)
+		s.drop(msg, items)
 		slog.Warn("telemetry batch refused, dropped", "subject", msg.Subject(), "error", err.Error())
 		return
 	}
-	s.nakOrTerm(msg)
+	s.nakOrTerm(msg, items)
 }
 
 // nakOrTerm redelivers a telemetry message that failed for a transient reason
@@ -804,15 +806,15 @@ func (s *Server) failed(msg jetstream.Msg, err error) {
 // bounds the redelivery loop; ConsumerConfig.MaxDeliver is the JetStream-side
 // backstop for the same bound. With one batch in flight, the redelivery comes
 // before anything behind it.
-func (s *Server) nakOrTerm(msg jetstream.Msg) {
+func (s *Server) nakOrTerm(msg jetstream.Msg, items map[delivery.Kind]int) {
 	meta, err := msg.Metadata()
 	if err != nil {
-		s.drop(msg, dropMetadata)
+		s.drop(msg, items)
 		slog.Warn("telemetry message dropped: could not read delivery metadata", "subject", msg.Subject(), "error", err)
 		return
 	}
 	if meta.NumDelivered >= maxTelemetryDeliveries {
-		s.drop(msg, dropMaxDeliver)
+		s.drop(msg, items)
 		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
 		return
 	}

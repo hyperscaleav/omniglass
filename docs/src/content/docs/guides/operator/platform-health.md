@@ -26,7 +26,7 @@ screenshots:
   # table then sits at a fixed place under the header and the closed set.
   - id: platform-health-nodes
     path: /web/platform
-    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule, Delivery and Commands."
+    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule and Commands."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -75,9 +75,9 @@ to it and press Enter or Space, to open the full chart beneath it, and again to 
 it measures, the description from the [metrics catalog](/guides/admin/metrics/); the tooltip links
 onto the key's series on the server's platform component, the same component view any device has.
 A key the server has not reported reads **not reported**, never 0, and has no sparkline. A key the
-server writes only for a window that saw something (a request, a landed batch, a drop, a slow query)
-is that window's figure, so it reads **not reported** again once two report windows pass with
-nothing new, a drop reason on its own: an ingest lag from before the fleet went quiet is not shown as
+server writes only for a window that saw something (a request, a landed batch, a slow query) is
+that window's figure, so it reads **not reported** again once two report windows pass with nothing
+new, instance by instance: an ingest lag from before the fleet went quiet is not shown as
 today's. The gauges the server samples every window, and the retention facts its hourly pass
 writes, read their latest however old. A pair
 that only reads against its bound (a pool's connections in use against its size, the oldest
@@ -105,8 +105,9 @@ How far behind the pipeline that lands telemetry runs. **Ingest Lag** is the tim
 timestamp to the commit that landed it, averaged over the window's batches, so it reads how stale
 the figures on every other page can be; **Ingest Lag (max)** beside it is the oldest sample's. The
 sample's time is the node's clock, so a node whose clock is skewed reads as lag. Then the batches
-and samples landed in the window, and the batches the server gave up on, one row per reason. An
-oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
+and samples landed in the window. The server hop's delivery (the items of each kind it took in,
+handed on and lost, as a loss ratio where 0 is healthy) lands on its platform component every window
+(#1659); its row on this panel is #1646's. An oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
 which turns this panel amber.
 
 ### Queues
@@ -138,19 +139,22 @@ The columns are the platform keys, grouped:
 
 - **Checkin**: how long since the node last checked in.
 - **Schedule**: how late its collection ticks run, and how many overran or were skipped.
-- **Delivery**: the node's own counts of samples dropped from its spool and publishes that failed.
 - **Commands**: how many commands wait for it, the oldest one's age, and how many are stuck or
   expired.
+
+The node's delivery (the items of each kind its spool took in, handed on and lost, as a loss ratio
+where 0 is healthy) lands on its platform component every window (#1659); its column group on this
+page is #1646's.
 
 Hover a column's header, or tab to it, for what the key measures; the text is the key's description from the
 [metrics catalog](/guides/admin/metrics/), not prose written into the page. A figure the node has
 never reported reads **not reported**, never 0: a 0 would claim the node measured nothing wrong.
 
-The overrun, skip, drop, failure and expired columns are counts over a window (the collection report
-window, or the server's command pass for expired commands), written every window, 0 when nothing
-happened. So a count is the newest window's: a node that dropped five batches last week and none
-since shows 0 today. Expired commands are the newest pass's total, the undelivered and the unexecuted
-together; the node's platform component splits them by instance.
+The overrun, skip and expired columns are counts over a window (the collection report window, or
+the server's command pass for expired commands), written every window, 0 when nothing happened. So a
+count is the newest window's: a node that skipped five polls last week and none since shows 0 today.
+Expired commands are the newest pass's total, the undelivered and the unexecuted together; the
+node's platform component splits them by instance.
 
 Click a row to open the node's **platform component**, the same component view any device has.
 Each figure on the row is a series there, with its history. The arrow at the end of the row opens

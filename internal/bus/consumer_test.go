@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -201,39 +203,50 @@ func (m *fakeMsg) TermWithReason(string) error               { m.termed = true; 
 // TestNakOrTerm proves the WorkQueue-cleanliness decision: a message under the
 // maxTelemetryDeliveries bound is redelivered (Nak), one at or past the bound is
 // dropped (Term) rather than redelivered forever, and an unreadable delivery
-// count (Metadata error) also drops rather than guessing.
+// count (Metadata error) also drops rather than guessing. A redelivery counts
+// nothing yet; a drop counts its items as lost at the server's hop (#1659).
 func TestNakOrTerm(t *testing.T) {
-	s := &Server{}
-
+	items := map[delivery.Kind]int{delivery.Metric: 2, delivery.Log: 1}
 	t.Run("below the bound redelivers", func(t *testing.T) {
+		s := &Server{}
 		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: 1}}
-		s.nakOrTerm(m)
+		s.nakOrTerm(m, items)
 		if !m.naked || m.termed {
 			t.Fatalf("delivery 1 of %d: want Nak only, got naked=%v termed=%v", maxTelemetryDeliveries, m.naked, m.termed)
 		}
-	})
-
-	t.Run("at the bound drops", func(t *testing.T) {
-		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries}}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("delivery %d (== bound): want Term only, got naked=%v termed=%v", maxTelemetryDeliveries, m.naked, m.termed)
+		for _, rd := range s.flow.Take().Readings() {
+			if rd.Value != 0 {
+				t.Fatalf("%s[%s] = %v for a batch held for redelivery, want it counted once it settles", rd.Key, rd.Instance, rd.Value)
+			}
 		}
 	})
 
-	t.Run("past the bound drops", func(t *testing.T) {
-		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries + 3}}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("delivery past bound: want Term only, got naked=%v termed=%v", m.naked, m.termed)
-		}
-	})
-
-	t.Run("unreadable metadata drops rather than guesses", func(t *testing.T) {
-		m := &fakeMsg{metaErr: errors.New("metadata unavailable")}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("metadata error: want Term only, got naked=%v termed=%v", m.naked, m.termed)
-		}
-	})
+	for _, tc := range []struct {
+		name string
+		msg  *fakeMsg
+	}{
+		{"at the bound drops", &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries}}},
+		{"past the bound drops", &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries + 3}}},
+		{"unreadable metadata drops rather than guesses", &fakeMsg{metaErr: errors.New("metadata unavailable")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Server{}
+			s.nakOrTerm(tc.msg, items)
+			if !tc.msg.termed || tc.msg.naked {
+				t.Fatalf("want Term only, got naked=%v termed=%v", tc.msg.naked, tc.msg.termed)
+			}
+			for _, rd := range s.flow.Take().Readings() {
+				want, ok := map[string]float64{
+					writerclass.DeliveryInCount + "/metric": 2, writerclass.DeliveryOutCount + "/metric": 0, writerclass.DeliveryLossRatio + "/metric": 1,
+					writerclass.DeliveryInCount + "/log": 1, writerclass.DeliveryOutCount + "/log": 0, writerclass.DeliveryLossRatio + "/log": 1,
+				}[rd.Key+"/"+rd.Instance]
+				if !ok {
+					want = 0
+				}
+				if rd.Value != want {
+					t.Errorf("%s[%s] = %v, want %v", rd.Key, rd.Instance, rd.Value, want)
+				}
+			}
+		})
+	}
 }

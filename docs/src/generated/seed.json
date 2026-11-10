@@ -656,16 +656,24 @@
    "description": "Batches waiting in the node's spool for the bus, sampled each tick."
   },
   {
-   "name": "spool-drop-count",
+   "name": "delivery-in-count",
    "data_type": "int",
-   "label": "Spool Drops",
-   "description": "Batches the spool dropped as full or overflowed, over the report window; reported every window, 0 when quiet."
+   "label": "Delivery In",
+   "description": "Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. Written every window, 0 when quiet."
   },
   {
-   "name": "publish-failure-count",
+   "name": "delivery-out-count",
    "data_type": "int",
-   "label": "Publish Failures",
-   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported every window, 0 when quiet."
+   "label": "Delivery Out",
+   "description": "Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. Written every window, 0 when quiet."
+  },
+  {
+   "name": "delivery-loss-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Delivery Loss",
+   "description": "The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log). 0 is healthy, and a quiet window writes 0."
   },
   {
    "name": "session-held-count",
@@ -910,12 +918,6 @@
    "data_type": "int",
    "label": "Telemetry Ack Failures",
    "description": "Batch deliveries whose acknowledgement the bus did not confirm over the report window, a redelivery its receipt held included; each is redelivered and its receipt keeps it from landing twice, so this costs work, not rows. As a share of ingest-batch-count, healthy is 0."
-  },
-  {
-   "name": "bus-telemetry-drop-count",
-   "data_type": "int",
-   "label": "Telemetry Drops",
-   "description": "Batches the server gave up on over the report window, one sample per reason as the instance (refused, metadata, max-deliver, malformed); over itself plus ingest-batch-count it is the drop ratio."
   },
   {
    "name": "bus-worklist-pull-count",

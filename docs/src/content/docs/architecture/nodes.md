@@ -682,11 +682,18 @@ the tick already publishes (`TelemetryBatch.node_self`). The block names no owne
 on the publishing node's platform component under the platform writer class, so a node speaks only for
 itself, and only in the keys declared as its own. Figures the node reads every tick (the dispatcher's longest pass,
 the worst lateness and gap excess of the runs it dispatched, the spool depth, the sessions held by
-state, the Go process figures) go every tick; counts (dues met in flight, skipped intervals, spool
-drops, publish failures) go once per report window, every window, 0 when quiet, so a count returns
-to 0 after the window that had it. The schedule figures read the dispatcher's window
-([below](#scheduling-concurrency-and-self-observability)): a poll keeping its interval reads a zero
-`schedule-gap-excess`, and a late pass or a skipped slot reads the distance it lost. A node that goes silent sends nothing, so the server writes the one figure that keeps
+state, the Go process figures) go every tick; counts (dues met in flight, skipped intervals) go once
+per report window, every window, 0 when quiet, so a count returns to 0 after the window that had it.
+The node hop's **delivery** goes the same way (#1659): per item kind as the instance,
+`delivery-in-count` (items that settled at the spool this window), `delivery-out-count` (the ones the
+stream acked) and `delivery-loss-ratio`, `(in - out) / in`, 0 when nothing came in. An item settles
+when the stream acks its batch (in and out), or when the spool drops it at a cap, the bus refuses it,
+or it never encodes (in only); a batch held for a retry has not settled and counts in the window it
+does. These three replace the old spool-drop and publish-failure counts, so every hop's loss reads
+as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). The schedule figures read
+the dispatcher's window ([below](#scheduling-concurrency-and-self-observability)): a poll keeping its
+interval reads a zero `schedule-gap-excess`, and a late pass or a skipped slot reads the distance it
+lost. A node that goes silent sends nothing, so the server writes the one figure that keeps
 moving: `checkin-age`, every claimed node's seconds since its last heartbeat (or its claim, before the
 first), every 15 s; it grows while the node is silent and is the input of the node-down sweep
 below. The keys, their units and how each is sampled are in

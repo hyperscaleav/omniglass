@@ -1,10 +1,12 @@
 package node
 
 import (
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
@@ -72,11 +74,11 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T
 	t0 := time.Unix(1_800_000_000, 0)
 	r := newNodeReport(time.Minute, t0)
 
-	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount, writerclass.SpoolDropCount, writerclass.PublishFailureCount}
+	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
 	// Inside the window: counts accumulate, none is emitted.
 	r.dispatch(dispatchWindow{overruns: 1, skips: 2}, t0)
-	r.spool(spoolFigures{batches: 4, drops: 3, failures: 1}, t0)
+	r.spool(spoolFigures{batches: 4}, t0)
 	mid := readings(r.take(t0.Add(30 * time.Second)))
 	for _, k := range windowed {
 		if _, ok := mid[k]; ok {
@@ -89,14 +91,11 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T
 
 	// The window ends: each count lands once with the window's whole tally.
 	r.dispatch(dispatchWindow{skips: 1}, t0.Add(time.Minute))
-	r.spool(spoolFigures{drops: 2}, t0.Add(time.Minute))
 	end := r.take(t0.Add(time.Minute))
 	got := readings(end)
 	want := map[string]float64{
-		writerclass.TickOverrunCount:    1,
-		writerclass.ScheduleSkipCount:   3,
-		writerclass.SpoolDropCount:      5,
-		writerclass.PublishFailureCount: 1,
+		writerclass.TickOverrunCount:  1,
+		writerclass.ScheduleSkipCount: 3,
 	}
 	for k, v := range want {
 		if got[k] != v {
@@ -121,7 +120,7 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T
 
 // TestNodeReportCountsReturnToZeroAfterAQuietWindow: the node's first window
 // runs from its start, so it is whole and writes every count, zero included;
-// a window with an overrun, a skip, a drop and a failure follows, then a
+// a window with an overrun and a skip follows, then a
 // quiet one, and each key's latest value is 0 again at the quiet window's end
 // rather than the event's count left standing as current.
 func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
@@ -129,7 +128,7 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	t1, t2, t3 := t0.Add(time.Minute), t0.Add(2*time.Minute), t0.Add(3*time.Minute)
 	r := newNodeReport(time.Minute, t0)
-	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount, writerclass.SpoolDropCount, writerclass.PublishFailureCount}
+	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
 	first := readings(r.take(t1))
 	for _, k := range windowed {
@@ -138,8 +137,7 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 		}
 	}
 
-	r.dispatch(dispatchWindow{overruns: 1, skips: 1}, t1.Add(time.Second))
-	r.spool(spoolFigures{drops: 1, failures: 1}, t1.Add(time.Second))
+	r.dispatch(dispatchWindow{passes: 1, passMax: 40 * time.Second, overruns: 1, skips: 1}, t1.Add(time.Second))
 	event := r.take(t2)
 	quiet := r.take(t3)
 
@@ -151,6 +149,63 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 		m, ok := latest[k]
 		if !ok || !m.GetTs().AsTime().Equal(t3) || m.GetValue() != 0 {
 			t.Errorf("%s latest = %v (written %v), want 0 at the quiet window's end %v", k, m, ok, t3)
+		}
+	}
+}
+
+// TestNodeReportEmitsDeliveryPerKindOncePerWindow (#1659): the spool's
+// settled items tally over the report window and land once at its end, in,
+// out and the loss ratio for every telemetry kind, the kind as the instance:
+// a window with drops reads a loss above 0, a kind with no traffic reads 0,
+// and a quiet window writes every figure as 0.
+func TestNodeReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	key := func(k string, kind delivery.Kind) string { return k + "/" + string(kind) }
+
+	var early delivery.Counts
+	early.Delivered(map[delivery.Kind]int{delivery.Metric: 3})
+	early.Lost(map[delivery.Kind]int{delivery.Metric: 1})
+	r.spool(spoolFigures{batches: 1, flow: early}, t0)
+	mid := readings(r.take(t0.Add(30 * time.Second)))
+	for _, k := range []string{writerclass.DeliveryInCount, writerclass.DeliveryOutCount, writerclass.DeliveryLossRatio} {
+		if _, ok := mid[key(k, delivery.Metric)]; ok {
+			t.Fatalf("%s emitted before its window ended: %v", k, mid)
+		}
+	}
+
+	var late delivery.Counts
+	late.Delivered(map[delivery.Kind]int{delivery.Log: 2})
+	r.spool(spoolFigures{flow: late}, t0.Add(time.Minute))
+	end := readings(r.take(t0.Add(time.Minute)))
+	want := map[string]float64{
+		key(writerclass.DeliveryInCount, delivery.Metric):     4,
+		key(writerclass.DeliveryOutCount, delivery.Metric):    3,
+		key(writerclass.DeliveryLossRatio, delivery.Metric):   0.25,
+		key(writerclass.DeliveryInCount, delivery.Log):        2,
+		key(writerclass.DeliveryOutCount, delivery.Log):       2,
+		key(writerclass.DeliveryLossRatio, delivery.Log):      0,
+		key(writerclass.DeliveryInCount, delivery.Property):   0,
+		key(writerclass.DeliveryLossRatio, delivery.Property): 0,
+		key(writerclass.DeliveryInCount, delivery.Event):      0,
+		key(writerclass.DeliveryLossRatio, delivery.Event):    0,
+	}
+	for k, v := range want {
+		if g, ok := end[k]; !ok || g != v {
+			t.Errorf("%s = %v (written %v), want %v", k, g, ok, v)
+		}
+		if _, dup := end[k+"#dup"]; dup {
+			t.Errorf("%s emitted twice in one window", k)
+		}
+	}
+
+	quiet := readings(r.take(t0.Add(2 * time.Minute)))
+	for _, kind := range delivery.Kinds {
+		for _, k := range []string{writerclass.DeliveryInCount, writerclass.DeliveryOutCount, writerclass.DeliveryLossRatio} {
+			if v, ok := quiet[key(k, kind)]; !ok || v != 0 {
+				t.Errorf("a quiet window read %s = %v (written %v), want 0", key(k, kind), v, ok)
+			}
 		}
 	}
 }
@@ -255,7 +310,7 @@ func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	r := newNodeReport(time.Minute, t0)
 	r.commandPullFailed()
-	if mid := readings(r.take(t0.Add(30 * time.Second))); len(mid) != 0 {
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[writerclass.CommandPullFailureCount] != 0 {
 		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
 	}
 	r.commandPullFailed()
@@ -266,10 +321,36 @@ func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	if _, dup := got[writerclass.CommandPullFailureCount+"#dup"]; dup {
 		t.Error("command-pull-failure-count emitted twice in one window")
 	}
-	quiet := readings(r.take(t0.Add(2 * time.Minute)))
-	if v, ok := quiet[writerclass.CommandPullFailureCount]; !ok || v != 0 {
-		t.Errorf("a window with no failed pull read command-pull-failure-count %v (written %v), want 0: %v", v, ok, quiet)
+	if quiet := readings(r.take(t0.Add(2 * time.Minute))); quiet[writerclass.CommandPullFailureCount] != 0 {
+		t.Errorf("a window with no failed pull sent %v, want 0", quiet)
+	} else if _, ok := quiet[writerclass.CommandPullFailureCount]; !ok {
+		t.Errorf("a window with no failed pull wrote no command-pull-failure-count: %v", quiet)
 	}
 	var none *nodeReport
 	none.commandPullFailed()
+}
+
+// TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely: the command
+// cycle runs on its own goroutine beside the heartbeat (#1634), so a failed
+// pull tallies while the heartbeat takes the report; under -race neither
+// races and no failure is lost.
+func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			r.commandPullFailed()
+		}
+	})
+	var total float64
+	for i := range 50 {
+		total += readings(r.take(t0.Add(time.Duration(i+1) * time.Minute)))[writerclass.CommandPullFailureCount]
+	}
+	wg.Wait()
+	total += readings(r.take(t0.Add(time.Hour)))[writerclass.CommandPullFailureCount]
+	if total != 100 {
+		t.Fatalf("the windows counted %v failed pulls, want 100", total)
+	}
 }

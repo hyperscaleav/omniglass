@@ -46,13 +46,14 @@ refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
      passed over, `schedule-lateness` its latest dispatch, and `schedule-gap-excess` the worst gap
      between two scheduled starts of a task off its interval. With no heartbeat rounding left, a poll
      keeping its interval reads 0.
-  6. **Counts go once per window, every window, zero when quiet.** Overruns, skipped intervals, spool
-     drops and publish failures (refused, not acked, or failed to encode) are tallied over the node's
-     report window and written when it ends, 0 when nothing happened (the architect's ruling of
-     2026-11-10 for every windowed platform count). Written only when nonzero, as first built, the latest value stood on the last event's
-     count long after it, and a rule on it never saw the sample that clears it. The first window runs
-     from the node's start, so it is whole and writes too; there is no windowless first read as the
-     server's queue read has. The each-tick figures go every tick, and
+  6. **Counts go once per window, every window, zero when quiet.** Dues met in flight, skipped
+     intervals, spool drops and publish failures (refused, not acked, or failed to encode) are tallied
+     over the node's report window and written when it ends, 0 when nothing happened (the architect's
+     ruling of 2026-11-10 for every windowed platform count). Written only when nonzero, as first
+     built, the latest value stood on the last event's count long after it, and a rule on it never saw
+     the sample that clears it. The first window runs from the node's start, so it is whole and writes
+     too; there is no windowless first read as the server's queue read has. The each-tick figures go
+     every tick, and
      `session-held-count` sends one sample per session state, zero included, so a state that empties
      reads 0. The drop counts are the node hop of #1641's loss ratio in count form; #1659 folds them
      into its uniform `delivery-*` keys.

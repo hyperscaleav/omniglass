@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -21,16 +22,30 @@ func (f groupFixture) platformComponentOf(t *testing.T, node string) string {
 	return id
 }
 
+// selfInstances is the instances a node reports key under: a session state
+// for session-held-count, every kind for a delivery key (#1659), else none.
+func selfInstances(key string) []string {
+	switch key {
+	case writerclass.SessionHeldCount:
+		return []string{"open"}
+	case writerclass.DeliveryInCount, writerclass.DeliveryOutCount, writerclass.DeliveryLossRatio:
+		out := make([]string, 0, len(delivery.Kinds))
+		for _, k := range delivery.Kinds {
+			out = append(out, string(k))
+		}
+		return out
+	}
+	return []string{""}
+}
+
 // selfReport is a node-self report of every declared node-self key, one
-// sample each, session-held-count under a session state.
+// sample per instance it is reported under (selfInstances).
 func selfReport(node string, ts time.Time) *storage.NodeSelfReport {
 	r := &storage.NodeSelfReport{Node: node}
 	for i, k := range writerclass.NodeSelfKeys() {
-		s := storage.NodeSelfSample{Key: k, Value: float64(i + 1), TS: ts}
-		if k == writerclass.SessionHeldCount {
-			s.Instance = "open"
+		for _, inst := range selfInstances(k) {
+			r.Metrics = append(r.Metrics, storage.NodeSelfSample{Key: k, Instance: inst, Value: float64(i + 1), TS: ts})
 		}
-		r.Metrics = append(r.Metrics, s)
 	}
 	return r
 }
@@ -38,19 +53,21 @@ func selfReport(node string, ts time.Time) *storage.NodeSelfReport {
 // TestNodeSelfReportLandsEveryKeyOnThePlatformComponent is the node-self
 // lane (#1625): a node's tick carries its report of itself beside its task
 // groups, and every node-self key lands on the node's own platform component,
-// observed, with no collector (the process writes it, not a task), the
-// session state kept as the instance.
+// observed, with no collector (the process writes it, not a task), each
+// series under its instance: the session state, and for a delivery key
+// (#1659) one series per kind.
 func TestNodeSelfReportLandsEveryKeyOnThePlatformComponent(t *testing.T) {
 	t.Parallel()
 	f := newGroupFixture(t)
 	ctx := context.Background()
 	platform := f.platformComponentOf(t, "edge-1")
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	report := selfReport("edge-1", ts)
 	res, err := f.gw.LandBatch(ctx, storage.IngestBatch{
 		BatchID:  "tick-self",
 		Writer:   storage.NodeWriter("", ""),
 		Groups:   []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts)},
-		NodeSelf: selfReport("edge-1", ts),
+		NodeSelf: report,
 	})
 	if err != nil {
 		t.Fatalf("land the tick: %v", err)
@@ -65,7 +82,7 @@ func TestNodeSelfReportLandsEveryKeyOnThePlatformComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	got := map[string]string{}
+	got := map[[2]string]int{}
 	for rows.Next() {
 		var key, instance, provenance, source string
 		var noCollector bool
@@ -78,29 +95,22 @@ func TestNodeSelfReportLandsEveryKeyOnThePlatformComponent(t *testing.T) {
 		if source != "node/edge-1" {
 			t.Errorf("%s source = %q, want node/edge-1", key, source)
 		}
-		got[key] = instance
+		got[[2]string{key, instance}]++
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
 	for _, k := range writerclass.NodeSelfKeys() {
-		instance, ok := got[k]
-		if !ok {
-			t.Errorf("%s did not land on the node's platform component", k)
-			continue
-		}
-		want := ""
-		if k == writerclass.SessionHeldCount {
-			want = "open"
-		}
-		if instance != want {
-			t.Errorf("%s instance = %q, want %q", k, instance, want)
+		for _, inst := range selfInstances(k) {
+			if n := got[[2]string{k, inst}]; n != 1 {
+				t.Errorf("%s[%s] landed %d series on the node's platform component, want 1", k, inst, n)
+			}
 		}
 	}
-	if len(got) != len(writerclass.NodeSelfKeys()) {
-		t.Errorf("landed %d keys on the platform component, want the %d node-self keys", len(got), len(writerclass.NodeSelfKeys()))
+	if len(got) != len(report.Metrics) {
+		t.Errorf("landed %d series on the platform component, want the report's %d", len(got), len(report.Metrics))
 	}
-	if want := (landedRows{metric: 1 + len(writerclass.NodeSelfKeys()), property: 1, event: 1, logLine: 1}); f.rows(t) != want {
+	if want := (landedRows{metric: 1 + len(report.Metrics), property: 1, event: 1, logLine: 1}); f.rows(t) != want {
 		t.Errorf("landed %+v, want the task's rows and the report %+v", f.rows(t), want)
 	}
 }
