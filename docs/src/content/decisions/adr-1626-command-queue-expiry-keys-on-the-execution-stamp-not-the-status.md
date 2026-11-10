@@ -2,8 +2,8 @@
 title: "Command queue expiry keys on the execution stamp, not the status"
 date: 2026-11-09
 status: Accepted
-summary: "Accepted: #1626 measures every node's command queue on its platform component. A command keeps its first delivery and its delivery count beside the last delivery. The server reads the whole fleet's queues on a 15 s timer through the pull's own candidate fragment, and counts a command as expired when it ages past the delivery TTL with no execution report, whatever its recorded status, split into undelivered and unexecuted. The wire writes one dispatch and one execution latency sample per command in the stamp's transaction. Two partial indexes serve the read. The loss ratios derive from the counts and the samples and take no key. An idle queue's pending age is written as zero, not left absent as the ticket had it, and the window's redelivery and expiry counts are written every window, zero when quiet."
-refs: [1626, 1625, 1630, 1631, 1641, 1094]
+summary: "Accepted: #1626 measures every node's command queue on its platform component. A command keeps its first delivery and its delivery count beside the last delivery. The server reads the whole fleet's queues on a 15 s timer through the pull's own candidate fragment, and counts a command as expired when it ages past the delivery TTL with no execution report, whatever its recorded status, split into undelivered and unexecuted. The wire writes one dispatch and one execution latency sample per command in the stamp's transaction. Two partial indexes serve the read, and the pull's deliverable index does not replace the first (#1728). The loss ratios derive from the counts and the samples and take no key. An idle queue's pending age is written as zero, not left absent as the ticket had it, and the window's redelivery and expiry counts are written every window, zero when quiet."
+refs: [1626, 1625, 1630, 1631, 1641, 1094, 1728]
 ---
 
 - **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/), [nodes](/architecture/nodes/), [collection](/architecture/collection/)
@@ -27,7 +27,18 @@ refs: [1626, 1625, 1630, 1631, 1641, 1094]
      null` serves the candidate scan, which the existing `status = 'issued'` indexes cannot (a
      fire-and-forget row is not `issued`). `command_redelivered_idx` on `command (dispatched_at)
      where delivery_count > 1` serves the redelivery count, because a command redelivered and then
-     executed has left the candidates. If #1631's deliverable index lands, it replaces the first.
+     executed has left the candidates. This item first said #1631's deliverable index would replace
+     the first; #1728 measured it and keeps both. The deliverable index is narrowed to
+     `status = 'issued'` (#1630), and the health read applies no status term, because its expired
+     counts need the terminal unexecuted rows (a command stamped timed out), so the deliverable
+     predicate is not implied and the read cannot use that index at all. On a seeded fleet of 30
+     nodes, 3,000 components and 303,331 commands (3,331 unexecuted), the read with
+     `command_unexecuted_idx` touches 2,270 buffers in 1.9 ms; without it, the candidate scan walks
+     `command_component_ts_idx` with `ts` as a non-leading condition, 4,980 buffers in 11.1 ms, a
+     cost that grows with history. The pull uses the deliverable index either way (28 buffers for a
+     quiet node, 679 for one with 52 deliveries), so the unexecuted index costs it nothing.
+     `TestCommandHealthReadReachesTheUnexecutedIndex` pins both halves: with competing paths set
+     aside, the read reaches the unexecuted index, and cannot reach the deliverable one.
   5. **The window is the previous read's database time.** The timer holds the last good read's
      `now()` and passes it as the next window's start. The first read writes the gauges and no counts,
      since it cannot know what crossed before it. A failed read keeps the window open; a failed write
