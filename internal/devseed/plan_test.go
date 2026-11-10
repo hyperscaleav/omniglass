@@ -383,11 +383,10 @@ func TestSeedPlanSeedsEachPlatformItsWebhookAndRooms(t *testing.T) {
 		from endpoint e
 		join driver d on d.id = e.driver_id
 		join component c on c.id = e.component
-		join product pr on pr.id = c.product_id
 		join location l on l.id = c.location_id
 		left join secret s on s.name = e.inputs->>'signing-key'
 		left join secret_type t on t.id = s.secret_type
-		where d.name = 'ucc-webhook' and pr.name = 'ucc-platform'`)
+		where d.name = 'ucc-webhook'`)
 	if err != nil {
 		t.Fatal(err)
 	}

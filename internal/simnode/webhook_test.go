@@ -110,14 +110,25 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p := store.Devices["ucc-platform"]; p == nil || p.Webhook == nil || p.Webhook.Provision == "" || p.Webhook.Driver != "ucc-webhook" {
-		t.Fatal("the ucc-platform profile's webhook face names no provision route, or no ucc-webhook driver")
+	// The platform is the profile whose webhook face posts to the ucc-webhook
+	// driver and provisions its rooms, found by that face rather than named.
+	platform := ""
+	for name, p := range store.Devices {
+		if p.Webhook != nil && p.Webhook.Provision != "" && p.Webhook.Driver == "ucc-webhook" {
+			if platform != "" {
+				t.Fatalf("profiles %s and %s both provision rooms for ucc-webhook, want one", platform, name)
+			}
+			platform = name
+		}
+	}
+	if platform == "" {
+		t.Fatal("no profile's webhook face names a provision route and the ucc-webhook driver")
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	ip := simtest.ClaimLoopback(t)
-	snap := sim.DeviceSnapshot{DeviceID: "plat", Hostname: "plat", LoopbackIP: ip, ProfileName: "ucc-platform", Product: "ucc-platform", Version: 1}
+	snap := sim.DeviceSnapshot{DeviceID: "plat", Hostname: "plat", LoopbackIP: ip, ProfileName: platform, Product: platform, Version: 1}
 	if err := engine.Sync([]sim.DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}

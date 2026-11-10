@@ -791,7 +791,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 			seen[sys] = true
 		}
 	}
-	if want := []Count{{"booking-service", len(p.Sites)}, {"ucc-platform", len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
+	if want := []Count{{"booking-service", len(p.Sites)}, {declaredProfile(t, m, "ucc"), len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
 		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
 	}
 	var b bytes.Buffer
@@ -803,15 +803,33 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 	}
 }
 
+// declaredProfile is the emulator profile a manifest's pusher of that name
+// declares. A test reads the profile from the manifest rather than naming it,
+// since a meeting platform's profile shares its name with a seeded product.
+func declaredProfile(t *testing.T, m *Manifest, name string) string {
+	t.Helper()
+	for _, d := range m.Pushers {
+		if d.Name.Name == name {
+			return d.Profile.Name
+		}
+	}
+	t.Fatalf("the manifest declares no pusher %s", name)
+	return ""
+}
+
 // The corporate scenario declares one meeting platform account a site
-// (#1747): the ucc-platform profile's webhook face makes it a signed-webhook
-// sender, not a token pusher, and with systems omitted its rooms are every
-// system of its site.
+// (#1747): its profile's webhook face makes it a signed-webhook sender, not
+// a token pusher, and with systems omitted its rooms are every system of its
+// site.
 func TestCorporateDeclaresAMeetingPlatformASite(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 100)
 	if err != nil {
 		t.Fatal(err)
+	}
+	platform := declaredProfile(t, m, "ucc")
+	if cat.Sender == nil || !cat.Sender(platform) {
+		t.Fatalf("the corporate manifest's ucc pusher declares profile %s, which the catalog names no webhook sender", platform)
 	}
 	for _, s := range p.Sites {
 		var platforms []PusherPlan
@@ -824,8 +842,8 @@ func TestCorporateDeclaresAMeetingPlatformASite(t *testing.T) {
 			t.Fatalf("site %s has %d webhook senders, want one meeting platform", s.Name, len(platforms))
 		}
 		ps := platforms[0]
-		if ps.Name != s.Name+"-ucc-1" || ps.Profile != "ucc-platform" {
-			t.Errorf("site %s sender = %s (%s), want %s-ucc-1 (ucc-platform)", s.Name, ps.Name, ps.Profile, s.Name)
+		if ps.Name != s.Name+"-ucc-1" || ps.Profile != platform {
+			t.Errorf("site %s sender = %s (%s), want %s-ucc-1 (%s)", s.Name, ps.Name, ps.Profile, s.Name, platform)
 		}
 		var want []string
 		for _, sys := range s.Systems {

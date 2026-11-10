@@ -139,9 +139,17 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 	if len(hooks) != res.Senders {
 		t.Fatalf("the node holds %d webhooks to post, want the %d platforms", len(hooks), res.Senders)
 	}
+	// Each platform runs the profile its plan declared, read from the plan
+	// rather than named here.
+	platformProfile := ""
+	for _, ps := range plan.Sites[0].Pushers {
+		if ps.Webhook {
+			platformProfile = ps.Profile
+		}
+	}
 	var platforms []sim.DeviceSnapshot
 	for comp := range hooks {
-		platforms = append(platforms, sim.DeviceSnapshot{DeviceID: comp, Hostname: comp, LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1})
+		platforms = append(platforms, sim.DeviceSnapshot{DeviceID: comp, Hostname: comp, LoopbackIP: "127.0.0.1", ProfileName: platformProfile, Version: 1})
 	}
 	senders := sim.NewEngine(store, profiles.Templates())
 	if err := senders.LoadDevices(platforms); err != nil {
