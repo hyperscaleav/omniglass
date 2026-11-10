@@ -2,6 +2,8 @@ package labfootprint
 
 import (
 	"math"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -177,5 +179,45 @@ func TestBatchRates(t *testing.T) {
 		if !near(per, c.wantPer) || !near(rate, c.wantRate) {
 			t.Errorf("%s: %v per batch, %v a second; want %v and %v", c.name, per, rate, c.wantPer, c.wantRate)
 		}
+	}
+}
+
+// A lab with a node per site (the corporate scenario the footprint measures,
+// #1719) reports its nodes as one node row: their CPU and memory summed, so
+// the report keeps its server, node and database rows whatever the sites.
+func TestFoldNodes(t *testing.T) {
+	w := Window{Containers: map[string]ContainerWindow{
+		"server":           {Millicores: 100, WorkingSetMiB: 200},
+		"db":               {Millicores: 50, WorkingSetMiB: 300},
+		"edge-hq":          {Millicores: 10, WorkingSetMiB: 40},
+		"edge-regional-01": {Millicores: 4, WorkingSetMiB: 36},
+		"edge-branch-01":   {Millicores: 2, WorkingSetMiB: 30},
+	}}
+	got := FoldNodes(w).Containers
+	want := map[string]ContainerWindow{
+		"server": {Millicores: 100, WorkingSetMiB: 200},
+		"db":     {Millicores: 50, WorkingSetMiB: 300},
+		"node":   {Millicores: 16, WorkingSetMiB: 106},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("folded %v, want %v", got, want)
+	}
+	if _, ok := w.Containers["node"]; ok {
+		t.Fatal("FoldNodes changed the window it was given")
+	}
+}
+
+// The footprint brings its lab up at the stated size (#1719): a scale
+// scenario passes --systems, and a dev scenario, which has no size, does not.
+func TestLabRunArgs(t *testing.T) {
+	cfg := Config{Project: "ogfoot-1", Scenario: "corporate", Systems: 20, Cadence: "default"}
+	want := []string{"lab", "run", "--ephemeral", "--project", "ogfoot-1", "--port", "0",
+		"--ready-file", "/r/lab.env", "--while-pid", "7", "--scenario", "corporate", "--cadence", "default", "--systems", "20"}
+	if got := labRunArgs(cfg, "/r/lab.env", 7); !reflect.DeepEqual(got, want) {
+		t.Fatalf("args %q, want %q", got, want)
+	}
+	cfg.Scenario, cfg.Systems = "dev", 0
+	if got := labRunArgs(cfg, "/r/lab.env", 7); slices.Contains(got, "--systems") {
+		t.Fatalf("a dev scenario passed a size: %q", got)
 	}
 }

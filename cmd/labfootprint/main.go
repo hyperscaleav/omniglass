@@ -1,5 +1,6 @@
 // Command labfootprint is `make lab-footprint` (#1277): it brings up a
-// throwaway lab at a cadence profile, lets it warm up, measures each
+// throwaway lab (the corporate scenario at 20 systems unless told otherwise,
+// #1719) at a cadence profile, lets it warm up, measures each
 // container's CPU and memory, the database's growth and the series read
 // latency over N windows, prints the medians, optionally writes them as JSON,
 // and tears the lab down, leaving nothing it created behind.
@@ -36,7 +37,8 @@ func main() {
 func run() error {
 	var (
 		bin      = flag.String("bin", "bin/omniglass", "the omniglass binary make built")
-		scenario = flag.String("scenario", lab.DefaultScenario, "the fleet the lab seeds")
+		scenario = flag.String("scenario", lab.MeasureScenario, "the fleet the lab seeds: a scale scenario, or a dev one with -systems 0")
+		systems  = flag.Int("systems", lab.SmokeSystems, "the size a scale scenario is resolved at (0 for a dev scenario)")
 		cadence  = flag.String("cadence", lab.CadenceLab, "the node's cadence profile ("+lab.CadenceNames()+")")
 		warmup   = flag.Duration("warmup", 2*time.Minute, "how long the lab runs before the first window")
 		window   = flag.Duration("window", time.Minute, "one window's length")
@@ -50,6 +52,9 @@ func run() error {
 	flag.Parse()
 	if _, err := lab.LookupCadence(*cadence, true); err != nil {
 		return err
+	}
+	if *systems < 0 {
+		return fmt.Errorf("-systems %d: a size, or 0 for a dev scenario", *systems)
 	}
 	if *windows < 1 {
 		return fmt.Errorf("-windows %d: at least one window", *windows)
@@ -83,7 +88,7 @@ func run() error {
 	rep, err := labfootprint.Measure(ctx, labfootprint.Config{
 		Binary: *bin, DockerHost: daemon.Host,
 		Project:  fmt.Sprintf("ogfoot-%d-%s", os.Getpid(), hex.EncodeToString(rnd)),
-		Scenario: *scenario, Cadence: *cadence,
+		Scenario: *scenario, Systems: *systems, Cadence: *cadence,
 		Warmup: *warmup, Window: *window, Windows: *windows,
 		ReadHours: readHours, ReadsEach: *reads, ReadCPUs: *cpus,
 		Out: os.Stderr, LabLog: logw,

@@ -36,7 +36,7 @@ func TestIntegrationLabFootprint(t *testing.T) {
 	rep, err := Measure(ctx, Config{
 		Binary: "../../bin/omniglass", DockerHost: daemon.Host,
 		Project:  fmt.Sprintf("ogfoot-it-%d", os.Getpid()),
-		Scenario: lab.DefaultScenario, Cadence: lab.CadenceDefault,
+		Scenario: lab.MeasureScenario, Systems: lab.SmokeSystems, Cadence: lab.CadenceDefault,
 		Warmup: 20 * time.Second, Window: 40 * time.Second, Windows: 2,
 		ReadHours: []int{24, 720}, ReadsEach: 1, ReadCPUs: 1,
 		Out: &progress, LabLog: &labLog,
@@ -45,6 +45,9 @@ func TestIntegrationLabFootprint(t *testing.T) {
 		t.Fatalf("the lab footprint failed: %v\n%s\nthe lab:\n%s", err, progress.String(), labLog.String())
 	}
 	t.Logf("%s\n%s", progress.String(), rep.Table())
+	if rep.Scenario != lab.MeasureScenario {
+		t.Errorf("the footprint ran the %q scenario, want %q (#1719)", rep.Scenario, lab.MeasureScenario)
+	}
 	if rep.Systems == 0 || rep.Tasks == 0 || rep.Build == "" {
 		t.Errorf("the run's conditions are unread: %+v", rep)
 	}
@@ -61,6 +64,49 @@ func TestIntegrationLabFootprint(t *testing.T) {
 	}
 	if len(rep.ReadLatencyMS) != 2 || rep.ReadLatencyMS[0].Stat.N == 0 || rep.ReadLatencyMS[1].Stat.N == 0 {
 		t.Errorf("reads %+v, want the 24 h and 30 d reads timed", rep.ReadLatencyMS)
+	}
+}
+
+// assertScaleFiguresRead fails a scale run at the ladder's smoke size whose
+// report leaves a figure unread, or names a fleet other than the one the lab
+// was brought up as (#1719). It asserts that each figure is read, never what
+// it is.
+func assertScaleFiguresRead(t *testing.T, rep ScaleReport) {
+	t.Helper()
+	if rep.Scenario != lab.MeasureScenario || rep.Systems != lab.SmokeSystems {
+		t.Errorf("the run names %s at %d systems, want %s at %d from the lab's labels",
+			rep.Scenario, rep.Systems, lab.MeasureScenario, lab.SmokeSystems)
+	}
+	if rep.Build == "" || rep.Sites == 0 || rep.Components == 0 || rep.Tasks == 0 {
+		t.Errorf("the run's conditions are unread: build %q, %d sites, %d components, %d tasks",
+			rep.Build, rep.Sites, rep.Components, rep.Tasks)
+	}
+	if rep.MetricRowsPerMinute <= 0 || rep.BatchesLanded == 0 || rep.SamplesLanded == 0 {
+		t.Errorf("metric rows a minute %v, %d batches, %d samples: want ingest read",
+			rep.MetricRowsPerMinute, rep.BatchesLanded, rep.SamplesLanded)
+	}
+	if rep.DatabaseBytesPerDay <= 0 || rep.WALBytesPerDay <= 0 {
+		t.Errorf("database %v, WAL %v a day: want growth", rep.DatabaseBytesPerDay, rep.WALBytesPerDay)
+	}
+	for _, c := range rep.Containers {
+		if c.Millicores <= 0 || c.WorkingSetMiB <= 0 {
+			t.Errorf("%s: cpu %v memory %v, want both read", c.Name, c.Millicores, c.WorkingSetMiB)
+		}
+	}
+	if rep.IngestLagGap != nil {
+		t.Errorf("ingest lag not measured: %+v", rep.IngestLagGap)
+	}
+	if !rep.ConsumerLane.Measured {
+		t.Errorf("the consumer lane is unread: %s", rep.ConsumerLane.Reason)
+	}
+	if rep.FleetView.N == 0 {
+		t.Errorf("fleet view %+v, want the reads timed", rep.FleetView)
+	}
+	if rep.Absolutes.DatabaseBytes <= 0 {
+		t.Errorf("absolutes %+v, want the database's size read", rep.Absolutes)
+	}
+	if rep.DeliveryNotRead != "" {
+		t.Errorf("delivery not read: %s", rep.DeliveryNotRead)
 	}
 }
 
@@ -82,7 +128,7 @@ func TestIntegrationScaleDelivery(t *testing.T) {
 	defer cancel()
 	rep, err := MeasureScale(ctx, ScaleConfig{
 		Binary: "../../bin/omniglass", DockerHost: daemon.Host,
-		Scenario: "corporate", Systems: 3, ReadyTimeout: 5 * time.Minute,
+		Scenario: lab.MeasureScenario, Systems: 3, ReadyTimeout: 5 * time.Minute,
 		Warmup: 30 * time.Second, Window: time.Minute, FleetReads: 1,
 		SettleTimeout: 3 * time.Minute,
 		Out:           &progress, LabLog: &labLog,

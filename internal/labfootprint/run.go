@@ -31,8 +31,12 @@ type Config struct {
 	// DockerHost is the daemon the lab runs on.
 	DockerHost string
 	// Project is the throwaway lab's compose project, its own.
-	Project  string
+	Project string
+	// Scenario and Systems are the fleet the lab seeds: a scale scenario at
+	// a size (corporate at 20, the smoke rung of the measuring ladder,
+	// #1719), or a dev scenario with Systems 0.
 	Scenario string
+	Systems  int
 	Cadence  string
 	Warmup   time.Duration
 	Window   time.Duration
@@ -48,9 +52,6 @@ type Config struct {
 	Out    io.Writer
 	LabLog io.Writer
 }
-
-// The services the harness measures, by their ready-file names.
-var services = map[string]string{"server": "LAB_SERVER", "node": "LAB_NODE", "db": "LAB_DB"}
 
 // harness is one run's live state.
 type harness struct {
@@ -85,10 +86,8 @@ func Measure(ctx context.Context, cfg Config) (rep Report, err error) {
 	ready := filepath.Join(dir, "lab.env")
 	defer func() { _ = os.Remove(ready); _ = os.Remove(dir) }()
 
-	h.say("bringing up the throwaway lab %s (scenario %s, cadence %s)", cfg.Project, cfg.Scenario, cfg.Cadence)
-	cmd := exec.Command(cfg.Binary, "lab", "run", "--ephemeral", "--project", cfg.Project, "--port", "0",
-		"--ready-file", ready, "--while-pid", strconv.Itoa(os.Getpid()),
-		"--scenario", cfg.Scenario, "--cadence", cfg.Cadence)
+	h.say("bringing up the throwaway lab %s (scenario %s at %d systems, cadence %s)", cfg.Project, cfg.Scenario, cfg.Systems, cfg.Cadence)
+	cmd := exec.Command(cfg.Binary, labRunArgs(cfg, ready, os.Getpid())...)
 	cmd.Stdout, cmd.Stderr = cfg.LabLog, cfg.LabLog
 	if err := cmd.Start(); err != nil {
 		return Report{}, fmt.Errorf("start the lab: %w", err)
@@ -105,6 +104,19 @@ func Measure(ctx context.Context, cfg Config) (rep Report, err error) {
 		return Report{}, err
 	}
 	return h.measure(ctx)
+}
+
+// labRunArgs is the `lab run` the footprint brings its throwaway lab up
+// with: ephemeral, on its own project and a free port, bound to this process,
+// at the config's scenario and cadence, and at its size when it has one.
+func labRunArgs(cfg Config, ready string, pid int) []string {
+	args := []string{"lab", "run", "--ephemeral", "--project", cfg.Project, "--port", "0",
+		"--ready-file", ready, "--while-pid", strconv.Itoa(pid),
+		"--scenario", cfg.Scenario, "--cadence", cfg.Cadence}
+	if cfg.Systems > 0 {
+		args = append(args, "--systems", strconv.Itoa(cfg.Systems))
+	}
+	return args
 }
 
 // waitReady waits for the lab's ready file, or for the lab to exit first.
@@ -180,17 +192,27 @@ func (h *harness) leftovers(ctx context.Context) ([]string, error) {
 }
 
 func (h *harness) measure(ctx context.Context) (Report, error) {
-	run := Run{Scenario: h.cfg.Scenario, Cadence: h.cfg.Cadence, Started: time.Now(),
+	// The containers are found by the project's labels: a scale scenario
+	// runs a node per site, which the ready file does not list.
+	l, err := h.discoverScale(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	fleet, err := lab.FleetOf(l.labels)
+	if err != nil {
+		return Report{}, err
+	}
+	run := Run{Scenario: fleet.Scenario, Cadence: h.cfg.Cadence, Started: time.Now(),
 		Warmup: h.cfg.Warmup, Window: h.cfg.Window, Reads: map[int][]time.Duration{}}
 	img, err := h.dc.ImageInspect(ctx, h.env["LAB_IMAGE"])
 	if err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	size, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
 	if err != nil {
 		return Report{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
-	if f := strings.Split(strings.TrimSpace(fleet), "|"); len(f) == 3 {
+	if f := strings.Split(strings.TrimSpace(size), "|"); len(f) == 3 {
 		run.Systems, _ = strconv.Atoi(f[0])
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
@@ -214,7 +236,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 
-	db0, use0, err := h.read(ctx)
+	db0, use0, err := h.readScale(ctx, l)
 	if err != nil {
 		return Report{}, err
 	}
@@ -222,7 +244,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		if err := sleep(ctx, h.cfg.Window); err != nil {
 			return Report{}, err
 		}
-		db1, use1, err := h.read(ctx)
+		db1, use1, err := h.readScale(ctx, l)
 		if err != nil {
 			return Report{}, err
 		}
@@ -230,6 +252,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
+		w = FoldNodes(w)
 		run.Windows = append(run.Windows, w)
 		h.say("window %d of %d: %s metric rows a minute, %.0f millicores in all", i, h.cfg.Windows,
 			count(w.MetricRowsPerMinute), w.Containers["server"].Millicores+w.Containers["node"].Millicores+w.Containers["db"].Millicores)
@@ -240,27 +263,6 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 	return Summarize(run), nil
-}
-
-// read takes one reading of the database and of every container.
-func (h *harness) read(ctx context.Context) (DBCounters, map[string]Usage, error) {
-	out, err := h.psql(ctx, DBCountersQuery)
-	if err != nil {
-		return DBCounters{}, nil, fmt.Errorf("read the database counters: %w", err)
-	}
-	db, err := ParseDBCounters(out)
-	if err != nil {
-		return DBCounters{}, nil, err
-	}
-	use := map[string]Usage{}
-	for name, key := range services {
-		u, err := h.usage(ctx, h.env[key])
-		if err != nil {
-			return DBCounters{}, nil, fmt.Errorf("read the %s container: %w", name, err)
-		}
-		use[name] = u
-	}
-	return db, use, nil
 }
 
 // usage is one container's cgroup, read once through the Engine.
