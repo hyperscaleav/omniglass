@@ -53,6 +53,33 @@ func TestOutletOffHoldsWhatTheOutletFeeds(t *testing.T) {
 	}
 }
 
+// TestOutletOffHoldsHoweverTheOutletIsSpelled: outlet-off's schema types the
+// outlet an integer, which 2.0 and 2e0 both are, and the PDU switches outlet 2
+// for each. The hold set must follow the outlet the PDU switches, so every
+// spelling of 2 holds the codec on outlet 2, not only the bare digits the
+// dependency names it by.
+func TestOutletOffHoldsHoweverTheOutletIsSpelled(t *testing.T) {
+	t.Parallel()
+	f := newDepFixture(t)
+	ctx := context.Background()
+	for _, c := range []string{"pdu-s", "codec-s"} {
+		f.component(t, c)
+	}
+	attachFerritePDUAPI(t, f, "pdu-s")
+	codecAPI := f.endpoint(t, "codec-s", "http", false)
+	f.depend(t, "codec-s", "pdu-s", storage.DependencyPower, "2")
+
+	for _, params := range []string{`{"outlet":2}`, `{"outlet":2.0}`, `{"outlet":2e0}`, `{"outlet":20e-1}`} {
+		if _, err := f.gw.IssueCommand(ctx, f.actor, "component", "pdu-s", "outlet-off", "", nil, json.RawMessage(params)); err != nil {
+			t.Fatalf("issue outlet-off %s: %v", params, err)
+		}
+		d := f.delivery(t, "outlet-off")
+		if !slices.Equal(d.HoldEndpoints, []string{codecAPI}) {
+			t.Errorf("outlet-off %s hold set = %v, want the codec on outlet 2 [%s]", params, d.HoldEndpoints, codecAPI)
+		}
+	}
+}
+
 // TestOutletOnHoldsNothing: switching an outlet on takes nothing down, so its
 // delivery is not disruptive and holds no endpoint, even with a component on
 // that outlet.
