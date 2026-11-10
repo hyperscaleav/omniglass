@@ -136,18 +136,123 @@ type platformNodeBody struct {
 	Component       string                        `json:"component,omitempty" doc:"The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted"`
 	Verdict         string                        `json:"verdict,omitempty" doc:"The node's platform component verdict, which tones the row; absent without a fleet-wide component read"`
 	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
+	Loss            *float64                      `json:"loss,omitempty" doc:"The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read"`
+}
+
+type platformPipelineFigureBody struct {
+	In   uint64   `json:"in" doc:"Items the hop took in over the span (delivery-in-count summed)"`
+	Out  uint64   `json:"out" doc:"Items the hop handed on over the span (delivery-out-count summed)"`
+	Loss *float64 `json:"loss,omitempty" doc:"(in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in"`
+}
+
+type platformPipelineSpanBody struct {
+	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window, summed"`
+	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest of those windows was written"`
+	LastHour platformPipelineFigureBody `json:"last_hour" doc:"Every window over the last hour, summed"`
+}
+
+type platformPipelineKindBody struct {
+	Kind     string                     `json:"kind" enum:"metric,property,event,log" doc:"The kind of item, the series instance"`
+	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window, summed"`
+	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest of those windows was written"`
+	LastHour platformPipelineFigureBody `json:"last_hour" doc:"Every window over the last hour, summed"`
+}
+
+type platformPipelineComponentBody struct {
+	Component string                     `json:"component" doc:"The platform component that recorded this share of the hop, where its series live"`
+	Name      string                     `json:"name" doc:"The component's name"`
+	Kinds     []platformPipelineKindBody `json:"kinds" doc:"The component's figures per kind it carried"`
+	Total     platformPipelineSpanBody   `json:"total" doc:"The component's figures, every kind summed"`
+}
+
+type platformPipelineHopBody struct {
+	ID             string                          `json:"id" enum:"schedule,sim,node,ingest" doc:"The hop's name, as the delivery model names it"`
+	Label          string                          `json:"label" doc:"The hop's title"`
+	Description    string                          `json:"description" doc:"What the hop does and what counts as out and as lost there"`
+	ComponentClass string                          `json:"component_class" enum:"node,server" doc:"Which platform components record the hop"`
+	Keys           []string                        `json:"keys" doc:"The keys the hop's figures are read from, the same three on every hop"`
+	Kinds          []platformPipelineKindBody      `json:"kinds" doc:"The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent"`
+	Total          platformPipelineSpanBody        `json:"total" doc:"The hop's figures, every kind summed"`
+	ByComponent    []platformPipelineComponentBody `json:"by_component" doc:"Each component's share of the hop, in name order; the shares sum to the hop's figures"`
+}
+
+type platformPipelineEndBody struct {
+	Newest   *float64 `json:"newest,omitempty" doc:"The newest windows' end to end loss"`
+	LastHour *float64 `json:"last_hour,omitempty" doc:"The last hour's end to end loss"`
+}
+
+type platformPipelineEndKindBody struct {
+	Kind     string   `json:"kind" enum:"metric,property,event,log" doc:"The kind of item"`
+	Newest   *float64 `json:"newest,omitempty" doc:"The newest windows' end to end loss"`
+	LastHour *float64 `json:"last_hour,omitempty" doc:"The last hour's end to end loss"`
+}
+
+type platformPipelineBody struct {
+	Keys          []platformKeyBody             `json:"keys" doc:"The delivery keys' catalog facts, the explainer the page shows"`
+	Hops          []platformPipelineHopBody     `json:"hops" doc:"The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own"`
+	EndToEnd      []platformPipelineEndKindBody `json:"end_to_end" doc:"Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one"`
+	EndToEndTotal platformPipelineEndBody       `json:"end_to_end_total" doc:"The same over every kind summed per hop"`
 }
 
 type platformViewOutput struct {
 	Body struct {
-		ReadAt      time.Time            `json:"read_at" doc:"The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock"`
-		Lab         bool                 `json:"lab" doc:"True when this server runs as an omniglass lab"`
-		FiguresRead bool                 `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
-		System      *platformSystemBody  `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
-		Servers     []platformServerBody `json:"servers" doc:"Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read"`
-		Groups      []platformGroupBody  `json:"groups" doc:"The node table's column groups, in order: the page renders these and has no key list of its own"`
-		Nodes       []platformNodeBody   `json:"nodes" doc:"One row per node, in name order"`
+		ReadAt      time.Time             `json:"read_at" doc:"The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock"`
+		Lab         bool                  `json:"lab" doc:"True when this server runs as an omniglass lab"`
+		FiguresRead bool                  `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
+		System      *platformSystemBody   `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
+		Servers     []platformServerBody  `json:"servers" doc:"Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read"`
+		Groups      []platformGroupBody   `json:"groups" doc:"The node table's column groups, in order: the page renders these and has no key list of its own"`
+		Nodes       []platformNodeBody    `json:"nodes" doc:"One row per node, in name order"`
+		LossHops    []string              `json:"loss_hops" doc:"The hops a node's loss composes: the ones its own platform component records"`
+		Pipeline    *platformPipelineBody `json:"pipeline,omitempty" doc:"Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read"`
 	}
+}
+
+func toPlatformPipelineFigure(f storage.PlatformPipelineFigure) platformPipelineFigureBody {
+	return platformPipelineFigureBody{In: f.In, Out: f.Out, Loss: f.Loss}
+}
+
+func toPlatformPipelineSpan(c storage.PlatformPipelineCell) platformPipelineSpanBody {
+	return platformPipelineSpanBody{Newest: toPlatformPipelineFigure(c.Newest), NewestAt: c.NewestAt, LastHour: toPlatformPipelineFigure(c.LastHour)}
+}
+
+func toPlatformPipelineKinds(cells []storage.PlatformPipelineCell) []platformPipelineKindBody {
+	out := make([]platformPipelineKindBody, 0, len(cells))
+	for _, c := range cells {
+		out = append(out, platformPipelineKindBody{
+			Kind: string(c.Kind), Newest: toPlatformPipelineFigure(c.Newest), NewestAt: c.NewestAt, LastHour: toPlatformPipelineFigure(c.LastHour),
+		})
+	}
+	return out
+}
+
+func toPlatformPipeline(p *storage.PlatformPipeline) *platformPipelineBody {
+	out := &platformPipelineBody{
+		Keys:          make([]platformKeyBody, 0, len(p.Keys)),
+		Hops:          make([]platformPipelineHopBody, 0, len(p.Hops)),
+		EndToEnd:      make([]platformPipelineEndKindBody, 0, len(p.EndToEnd)),
+		EndToEndTotal: platformPipelineEndBody{Newest: p.EndToEndTotal.Newest, LastHour: p.EndToEndTotal.LastHour},
+	}
+	for _, k := range p.Keys {
+		out.Keys = append(out.Keys, platformKeyBody{Name: k.Name, Label: k.Label, Unit: k.Unit, Description: k.Description})
+	}
+	for _, h := range p.Hops {
+		body := platformPipelineHopBody{
+			ID: string(h.Hop.ID), Label: h.Hop.Label, Description: h.Hop.Description, ComponentClass: h.Hop.ComponentClass,
+			Keys: h.Hop.Keys(), Kinds: toPlatformPipelineKinds(h.Kinds), Total: toPlatformPipelineSpan(h.Total),
+			ByComponent: make([]platformPipelineComponentBody, 0, len(h.ByComponent)),
+		}
+		for _, c := range h.ByComponent {
+			body.ByComponent = append(body.ByComponent, platformPipelineComponentBody{
+				Component: c.ComponentID, Name: c.Name, Kinds: toPlatformPipelineKinds(c.Kinds), Total: toPlatformPipelineSpan(c.Total),
+			})
+		}
+		out.Hops = append(out.Hops, body)
+	}
+	for _, e := range p.EndToEnd {
+		out.EndToEnd = append(out.EndToEnd, platformPipelineEndKindBody{Kind: string(e.Kind), Newest: e.Newest, LastHour: e.LastHour})
+	}
+	return out
 }
 
 func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *platformViewOutput {
@@ -180,6 +285,13 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 		}
 		out.Body.Groups = append(out.Body.Groups, body)
 	}
+	out.Body.LossHops = make([]string, 0, len(v.LossHops))
+	for _, h := range v.LossHops {
+		out.Body.LossHops = append(out.Body.LossHops, string(h))
+	}
+	if v.Pipeline != nil {
+		out.Body.Pipeline = toPlatformPipeline(v.Pipeline)
+	}
 	out.Body.Nodes = make([]platformNodeBody, 0, len(v.Nodes))
 	for _, n := range v.Nodes {
 		body := platformNodeBody{Name: n.Name, Label: n.Label, Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt}
@@ -189,6 +301,7 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 		if n.Verdict != nil {
 			body.Verdict = *n.Verdict
 		}
+		body.Loss = n.Loss
 		if n.Figures != nil {
 			body.Figures = make(map[string]platformFigureBody, len(n.Figures))
 			for k, f := range n.Figures {
@@ -232,7 +345,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/platform",
 		Summary:     "Read Omniglass's own health in one call",
-		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
 	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
 		v, err := gw.PlatformView(ctx,
 			a.scopeFor(ctx, "node", "read"),

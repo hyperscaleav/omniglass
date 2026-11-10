@@ -9767,6 +9767,11 @@
             "format": "date-time",
             "type": "string"
           },
+          "loss": {
+            "description": "The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read",
+            "format": "double",
+            "type": "number"
+          },
           "name": {
             "type": "string"
           },
@@ -9779,6 +9784,291 @@
           "name",
           "label",
           "enrolled"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineBody": {
+        "additionalProperties": false,
+        "properties": {
+          "end_to_end": {
+            "description": "Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPipelineEndKindBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end_to_end_total": {
+            "$ref": "#/components/schemas/PlatformPipelineEndBody",
+            "description": "The same over every kind summed per hop"
+          },
+          "hops": {
+            "description": "The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPipelineHopBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "keys": {
+            "description": "The delivery keys' catalog facts, the explainer the page shows",
+            "items": {
+              "$ref": "#/components/schemas/PlatformKeyBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "keys",
+          "hops",
+          "end_to_end",
+          "end_to_end_total"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineComponentBody": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "description": "The platform component that recorded this share of the hop, where its series live",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "The component's figures per kind it carried",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPipelineKindBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "The component's name",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/PlatformPipelineSpanBody",
+            "description": "The component's figures, every kind summed"
+          }
+        },
+        "required": [
+          "component",
+          "name",
+          "kinds",
+          "total"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineEndBody": {
+        "additionalProperties": false,
+        "properties": {
+          "last_hour": {
+            "description": "The last hour's end to end loss",
+            "format": "double",
+            "type": "number"
+          },
+          "newest": {
+            "description": "The newest windows' end to end loss",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformPipelineEndKindBody": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "The kind of item",
+            "enum": [
+              "metric",
+              "property",
+              "event",
+              "log"
+            ],
+            "type": "string"
+          },
+          "last_hour": {
+            "description": "The last hour's end to end loss",
+            "format": "double",
+            "type": "number"
+          },
+          "newest": {
+            "description": "The newest windows' end to end loss",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineFigureBody": {
+        "additionalProperties": false,
+        "properties": {
+          "in": {
+            "description": "Items the hop took in over the span (delivery-in-count summed)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "loss": {
+            "description": "(in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in",
+            "format": "double",
+            "type": "number"
+          },
+          "out": {
+            "description": "Items the hop handed on over the span (delivery-out-count summed)",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "in",
+          "out"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineHopBody": {
+        "additionalProperties": false,
+        "properties": {
+          "by_component": {
+            "description": "Each component's share of the hop, in name order; the shares sum to the hop's figures",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPipelineComponentBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "component_class": {
+            "description": "Which platform components record the hop",
+            "enum": [
+              "node",
+              "server"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "description": "What the hop does and what counts as out and as lost there",
+            "type": "string"
+          },
+          "id": {
+            "description": "The hop's name, as the delivery model names it",
+            "enum": [
+              "schedule",
+              "sim",
+              "node",
+              "ingest"
+            ],
+            "type": "string"
+          },
+          "keys": {
+            "description": "The keys the hop's figures are read from, the same three on every hop",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kinds": {
+            "description": "The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPipelineKindBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "The hop's title",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/PlatformPipelineSpanBody",
+            "description": "The hop's figures, every kind summed"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "component_class",
+          "keys",
+          "kinds",
+          "total",
+          "by_component"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineKindBody": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "The kind of item, the series instance",
+            "enum": [
+              "metric",
+              "property",
+              "event",
+              "log"
+            ],
+            "type": "string"
+          },
+          "last_hour": {
+            "$ref": "#/components/schemas/PlatformPipelineFigureBody",
+            "description": "Every window over the last hour, summed"
+          },
+          "newest": {
+            "$ref": "#/components/schemas/PlatformPipelineFigureBody",
+            "description": "Each component's newest report window, summed"
+          },
+          "newest_at": {
+            "description": "When the newest of those windows was written",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "newest",
+          "last_hour"
+        ],
+        "type": "object"
+      },
+      "PlatformPipelineSpanBody": {
+        "additionalProperties": false,
+        "properties": {
+          "last_hour": {
+            "$ref": "#/components/schemas/PlatformPipelineFigureBody",
+            "description": "Every window over the last hour, summed"
+          },
+          "newest": {
+            "$ref": "#/components/schemas/PlatformPipelineFigureBody",
+            "description": "Each component's newest report window, summed"
+          },
+          "newest_at": {
+            "description": "When the newest of those windows was written",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "newest",
+          "last_hour"
         ],
         "type": "object"
       },
@@ -9866,6 +10156,16 @@
             "description": "True when this server runs as an omniglass lab",
             "type": "boolean"
           },
+          "loss_hops": {
+            "description": "The hops a node's loss composes: the ones its own platform component records",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "nodes": {
             "description": "One row per node, in name order",
             "items": {
@@ -9875,6 +10175,10 @@
               "array",
               "null"
             ]
+          },
+          "pipeline": {
+            "$ref": "#/components/schemas/PlatformPipelineBody",
+            "description": "Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read"
           },
           "read_at": {
             "description": "The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock",
@@ -9902,7 +10206,8 @@
           "figures_read",
           "servers",
           "groups",
-          "nodes"
+          "nodes",
+          "loss_hops"
         ],
         "type": "object"
       },
@@ -32860,7 +33165,7 @@
     },
     "/views/platform": {
       "get": {
-        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
         "operationId": "get-platform-view",
         "responses": {
           "200": {
