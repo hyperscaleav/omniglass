@@ -40,13 +40,16 @@ listeners as a line is, resumed from its last event id after a drop
 ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)); and a
 websocket or wss endpoint's socket (#1034), held as a session whose upgrade rides that state, its
 frames routed as a line is, a poll's or a command's answer matched by the id the node minted into it,
-kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Also built: a
+kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Every
+held session reconciles the moment its worklist lands, runs supervised (a panic costs that one
+session, never the node), and makes its first dial through node-wide slots (`--session-dials`, #1636,
+[below](#sessions)). Also built: a
 node serving its own simulated components, `omniglass node run --simulate` (#1198,
 [below](#serving-its-own-simulated-components)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 node self-telemetry, the node-down sweep, the
-cascade-resolved buffer knobs, and tick scheduling and concurrency knobs. The credential is a shared
+cascade-resolved buffer knobs, and poll scheduling and its concurrency knobs (#1634). The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
