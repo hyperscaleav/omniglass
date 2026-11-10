@@ -23,6 +23,9 @@ summary: "A driver poll runs on its declared `schedule.every` at heartbeat granu
   schedule (every tick when it is unset), and a task is due on the tick within half a heartbeat of its
   due time rather than the first tick at or after it, so an interval equal to the heartbeat never skips
   a jittered tick ([ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
+  **Amended (#1637):** heartbeat granularity was a step, not the target: a poll runs on its
+  own interval at a stable phase from a scheduler of its own, with a run still in flight at its next due
+  skipped and counted, never burst (#1634, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
   **Amended (#1634):** polls no longer run on the heartbeat tick: a dispatcher with its own timer runs
   each on a stable phase of its interval, skips and counts a due whose run is still in flight, retries
   a failed fetch on a backoff from one second rather than the heartbeat, and runs a poll with no

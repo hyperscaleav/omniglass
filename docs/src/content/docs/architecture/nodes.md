@@ -58,8 +58,9 @@ Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 the node-down sweep (its input, `checkin-age`, is built), the
-cascade-resolved buffer knobs, per-poll intervals (#1634), a probe concurrency apart from the
-worker pool and a per-task deadline. The credential is a shared
+cascade-resolved buffer knobs, a probe concurrency apart from the worker pool, a per-task
+deadline, and the last of the per-kind model that replaced the heartbeat tick, the heartbeat on its
+own and a command run the moment it is issued (#1635, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)). The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
@@ -343,6 +344,31 @@ stamps labels (cascading union + override), keeping the wire bytes as `raw` only
 validation failure (for `collection.failed`) or under dev raw-mode.
 :::
 
+Each kind of work runs on its own timer and its own bounded pool rather than inside one heartbeat
+loop, so a slow device holds only its own endpoint's lane, never the heartbeat or another endpoint's
+work
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)):
+
+| Kind | When it runs | Where it runs |
+|---|---|---|
+| heartbeat | the heartbeat interval | publishes liveness, pulls its commands, ships the spool, takes the dispatcher's window |
+| worklist pull | its own interval ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)) | the pull goroutine |
+| polls and probes | each task's own interval, from the dispatcher (#1634) | the bounded worker pool, through the endpoint's lane (#1249) |
+| commands | pulled on the heartbeat | one at a time, each waiting for its endpoint's lane |
+| held sessions | for as long as the worklist holds them, reconciled the moment it lands | one supervised goroutine each, the first dial through node-wide slots (#1636) |
+| housekeeping | the shorter of the report window and the heartbeat | unclaimed lines, push counts, the collection report window |
+
+Every discrete request rides its endpoint's lane ([the endpoint lane](#the-endpoint-lane)), and
+every job taken off a lane consults the endpoint's gate first ([implicit reachability](#implicit-reachability)).
+How a task's timer fires, skips and reports lateness is under
+[scheduling](#scheduling-concurrency-and-self-observability).
+
+:::design[Target design: the heartbeat on its own and commands on a server wake, tracked in #1635 under #1624 (ADR-1637)]
+The heartbeat publishes liveness and nothing else, and a command runs the moment it is issued: the
+server wakes the node, with a fallback pull, and the command takes a bounded command pool through
+its endpoint's lane, so **no work waits on the heartbeat**.
+:::
+
 The built endpoint types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([endpoint types and their config](/architecture/collection/#endpoint-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the endpoint lane, scheduling.
 
 ## Sessions
@@ -480,7 +506,8 @@ and lands as a log line only where the spec asks (`unmatched: log`).
 ## The endpoint lane
 
 Built (#1634, #1249,
-[ADR-1249](/architecture/decisions/#adr-1249-the-endpoint-lane-runs-one-request-at-a-time-operator-work-first)):
+[ADR-1249](/architecture/decisions/#adr-1249-the-endpoint-lane-runs-one-request-at-a-time-operator-work-first),
+under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)):
 every discrete request the node makes rides **its endpoint's lane** on the node's bounded worker
 pool (`--lane-workers`, default 16, or `OMNIGLASS_LANE_WORKERS`). A lane is the unit of exclusion:
 one request in flight per endpoint, while two endpoints of one component, or of fifty, run side by
@@ -654,9 +681,21 @@ with ICMP fully blocked even that is lost. The ssh probe still tries a params cr
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
 cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
 
-**Listener** (`mode=listen`) tasks run ungated, never pinged; **inline probes** (`icmp`/`tcp` with
-the host on the task) *are* the check, ungated. A down endpoint's gate samples ship in the tick's
-one batch. L5 (socket) and further L7 handshakes
+**One gate, a set of reasons.** Every endpoint has one gate, the layered gate generalized
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time), [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)).
+It holds a set of reasons, each with a kind, a since time, a source and its own release rule, and
+it is **open only when the set is empty**. The reasons above, side by side:
+
+| Reason | Added by | Released by | Built in |
+|---|---|---|---|
+| `refused` | a terminal refusal on a rung | a fingerprint change, an operator's `:retry`, or the rung passing | ADR-0158, into the set with #1650 |
+| `unreachable` | two consecutive down probe verdicts | the next up verdict | #1650 |
+| `disrupted` | a disruptive command, before it is sent, on every endpoint of its hold set | after the quiet period, each endpoint's first up verdict from a probe begun after it; the hold backstop releases the rest and counts the expiry | #1651, the hold set #1648 |
+| `upstream` | a closed gate on the component the endpoint is reached through (a path edge, cycle-guarded) | the upstream opening, then the dependent's own first up verdict | #1652 |
+
+**Poller** tasks run only while the gate is open; **listener** (`mode=listen`) tasks run ungated,
+never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated.
+A down endpoint's gate samples ship in **one** batch. L5 (socket) and further L7 handshakes
 extend the stack as rungs a driver's ladder declares, not as toggles.
 
 :::design[Target design: the ping's rtt and loss as observations, tracked in #1063]
@@ -745,7 +784,7 @@ stamp rather than the status, is on [commands](/architecture/commands/#queue-hea
 
 ## Scheduling, concurrency, and self-observability
 
-Built (#1634): each poll and probe runs on **its own interval**, from a dispatcher with a timer of
+Built (#1634, under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)): each poll and probe runs on **its own interval**, from a dispatcher with a timer of
 its own, not on the heartbeat. Every task sits once in a due-time heap; the dispatcher sleeps until
 the earliest due, hands each due task to its endpoint's lane on the bounded worker pool
 (`--lane-workers`, default 16, [above](#the-endpoint-lane)), and books the task's next due.

@@ -599,7 +599,7 @@ from its own side, is not built
 
 ## Endpoint types and their config
 
-The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
+The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
 ### Poll protocols and their config
 
@@ -1604,7 +1604,8 @@ Reachability probes run on the node's probe interval
 (`--probe-every`, default 30s, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
 and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
 [ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own); the
-[nodes page](/architecture/nodes/#scheduling-concurrency-and-self-observability) has the dispatcher).
+[nodes page](/architecture/nodes/#scheduling-concurrency-and-self-observability) has the dispatcher,
+and [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time) the per-kind model it is one part of).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
 connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
