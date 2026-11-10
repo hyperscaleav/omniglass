@@ -16,6 +16,10 @@ window's ten, highest first. A panel turns amber only while an alarm is open who
 of its keys, such as Ingest lag high or Retention behind. A key never reported reads not reported,
 and a caller without a fleet-wide component read gets no server panels at all.
 
+The page polls, and each poll is a fresh body, so every level (server, panel, key, route, node,
+column) renders through a new `KeyedFor` primitive that keeps a row by its key: an expanded chart,
+an open tooltip and a closed panel set survive the poll.
+
 Walkthroughs gained a `hover` step and an off-camera `ready` wait. Docs shots gained a `wait` step.
 The divergences from the ticket are
 [ADR-1645](/architecture/decisions/#adr-1645-server-panels-rank-in-sql-and-flag-from-the-rule).
