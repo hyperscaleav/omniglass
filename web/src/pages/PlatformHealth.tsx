@@ -6,7 +6,7 @@ import TimeseriesChart from "../components/TimeseriesChart";
 import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
-import { ArrowUpRight, TriangleAlert } from "../components/icons";
+import { ArrowUpRight, ChevronRight, TriangleAlert } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
@@ -261,6 +261,8 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary class="flex cursor-pointer items-center gap-2 px-4 py-3">
+        {/* A flex summary drops the native marker, so the chevron says the set opens. */}
+        <span data-disclosure class="text-base-content/60 transition-transform" classList={{ "rotate-90": open() }}><ChevronRight size={14} /></span>
         <span class="eyebrow">Server</span>
         <A href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</A>
         <HealthBadge verdict={props.server.verdict} size="xs" />

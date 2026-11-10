@@ -215,6 +215,19 @@ describe("PlatformHealth page", () => {
     expect(lanes.map((r) => r.getAttribute("data-instance"))).toEqual(["event", "metric"]);
   });
 
+  it("marks each panel set's heading as a disclosure, its chevron turned while the set is open", () => {
+    emptySeries();
+    mount(twoServers());
+    const first = screen.getByTestId("server-panels-lab-server") as HTMLDetailsElement;
+    const second = screen.getByTestId("server-panels-lab-server-b") as HTMLDetailsElement;
+    const marker = (set: HTMLElement) => set.querySelector(":scope > summary [data-disclosure]");
+    expect(marker(first)).toHaveClass("rotate-90");
+    expect(marker(second)).not.toHaveClass("rotate-90");
+    second.open = true;
+    fireEvent(second, new Event("toggle"));
+    expect(marker(second)).toHaveClass("rotate-90");
+  });
+
   it("renders a server with no samples yet as not reported on every panel, with no series read and no console error", () => {
     const errors = vi.spyOn(console, "error");
     const fetchSpy = emptySeries();
