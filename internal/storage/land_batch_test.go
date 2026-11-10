@@ -459,6 +459,9 @@ func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
 // batch's accounting row (#1641).
 const receiptLedgerVersion = "20261109232007"
 
+// receiptTermedVersion is the migration that marks a Term receipt (#1691).
+const receiptTermedVersion = "20261110140219"
+
 // tallyOf is a tally from a literal, for comparison.
 func tallyOf(m map[delivery.Kind]map[delivery.Outcome]int) delivery.Tally {
 	var t delivery.Tally
@@ -493,14 +496,15 @@ type receiptRow struct {
 	deliveries int
 	ledger     delivery.Declared
 	outcome    delivery.Tally
+	termed     bool
 }
 
 func (f landFixture) receipt(t *testing.T, id string) receiptRow {
 	t.Helper()
 	var r receiptRow
 	var ledger, outcome []byte
-	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome
-		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome)
+	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome, termed
+		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome, &r.termed)
 	if err != nil {
 		t.Fatalf("read receipt %s: %v", id, err)
 	}
@@ -656,6 +660,115 @@ func TestLandBatchRedeliveryCountsADelivery(t *testing.T) {
 	}
 }
 
+// termOf is the Term receipt the consumer records for b, Termed whole with
+// every declared item under cause.
+func termOf(b storage.IngestBatch, cause delivery.Outcome) storage.TermedBatch {
+	return storage.TermedBatch{BatchID: b.BatchID, Node: b.Node, Ledger: *b.Ledger, Outcome: b.Ledger.Kinds.Under(cause)}
+}
+
+// TestTermReceiptRecordsItsCause: a batch the server Terms whole leaves a
+// receipt with its node, its ledger and every declared item under the cause,
+// marked termed (#1691), so the loss table reads it under that cause.
+func TestTermReceiptRecordsItsCause(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := ledgerTick(f, "tick-1", 4, ts, nil)
+	if err := f.gw.RecordTermedBatch(ctx, termOf(b, delivery.Abandoned)); err != nil {
+		t.Fatalf("record the Term: %v", err)
+	}
+	r := f.receipt(t, "tick-1")
+	if !r.termed || r.node != "edge-1" || r.boot != "boot-1" || r.seq != 4 || !r.minted.Equal(ts) || r.resolved != 3 || r.deliveries != 1 {
+		t.Fatalf("receipt = %+v, want the batch's node and ledger, one delivery, termed", r)
+	}
+	if !sameTally(t, r.outcome, b.Ledger.Kinds.Under(delivery.Abandoned)) || r.outcome.Count(delivery.Metric, delivery.Abandoned) != 3 {
+		t.Fatalf("outcome = %+v, want every declared item abandoned", r.outcome)
+	}
+	if got := f.rows(t); got != (landedRows{}) {
+		t.Fatalf("rows = %+v, want none for a Termed batch", got)
+	}
+}
+
+// TestTermReceiptIsNotLandedForDedup: a Term receipt never stops a later
+// copy of the batch from landing (#1691). The landing finds the Term
+// receipt, lands the batch's rows and replaces it: one delivery, the landed
+// outcome, no longer termed. A Term after a landing changes nothing.
+func TestTermReceiptIsNotLandedForDedup(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := ledgerTick(f, "tick-1", 1, ts, nil)
+	if err := f.gw.RecordTermedBatch(ctx, termOf(b, delivery.RefusedTask)); err != nil {
+		t.Fatalf("record the Term: %v", err)
+	}
+	landed, err := f.gw.LandBatch(ctx, b)
+	if err != nil || !landed.Landed {
+		t.Fatalf("land the later copy: %+v, %v; want it landed over the Term receipt", landed, err)
+	}
+	rows := f.rows(t)
+	if rows == (landedRows{}) {
+		t.Fatal("the later copy landed no rows")
+	}
+	r := f.receipt(t, "tick-1")
+	if r.termed || r.deliveries != 1 || !sameTally(t, r.outcome, landed.Outcome) || r.outcome.Count(delivery.Metric, delivery.RefusedTask) != 0 {
+		t.Fatalf("receipt = %+v, want the landing's outcome, one delivery, not termed", r)
+	}
+
+	if err := f.gw.RecordTermedBatch(ctx, termOf(b, delivery.Abandoned)); err != nil {
+		t.Fatalf("record a Term after the landing: %v", err)
+	}
+	if again := f.receipt(t, "tick-1"); again.termed || again.deliveries != 1 || !sameTally(t, again.outcome, landed.Outcome) {
+		t.Fatalf("receipt after a late Term = %+v, want the landing's untouched", again)
+	}
+	if redelivered, err := f.gw.LandBatch(ctx, b); err != nil || redelivered.Landed {
+		t.Fatalf("redelivery = %+v, %v; want the landed receipt to hold it", redelivered, err)
+	}
+	if got := f.rows(t); got != rows {
+		t.Fatalf("rows after the redelivery = %+v, want %+v", got, rows)
+	}
+}
+
+// TestReceiptTermedMigrationOverExistingReceipts: the migration marking a
+// Term receipt applies over receipts already landed, each read as landed
+// (not termed), and applies again as a no-op.
+func TestReceiptTermedMigrationOverExistingReceipts(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, receiptTermedVersion); err != nil {
+		t.Fatalf("roll back below the termed receipt: %v", err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id) values ('old-1'), ('old-2')`); err != nil {
+		t.Fatalf("plant receipts: %v", err)
+	}
+	raw, err := db.FS.ReadFile("migrations/" + receiptTermedVersion + "_telemetry_receipt_termed.sql")
+	if err != nil {
+		t.Fatalf("read the migration: %v", err)
+	}
+	up, _, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("migration missing '-- migrate:down' marker")
+	}
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, up); err != nil {
+			t.Fatalf("apply %d: %v", i+1, err)
+		}
+	}
+	var n, landed int
+	if err := conn.QueryRow(ctx, `select count(*), count(*) filter (where not termed) from telemetry_receipt`).Scan(&n, &landed); err != nil {
+		t.Fatalf("read receipts: %v", err)
+	}
+	if n != 2 || landed != 2 {
+		t.Fatalf("receipts = %d, landed %d; want 2 of each", n, landed)
+	}
+}
+
 // TestReceiptLedgerMigrationOverExistingReceipts: the migration widening
 // the receipt applies over receipts already landed, each read as one
 // delivery with no ledger, and applies again as a no-op.
@@ -742,5 +855,51 @@ func TestLandBatchRecordsTheNodesLoss(t *testing.T) {
 	want, _ := json.Marshal(b.Ledger.Loss)
 	if string(got) != string(want) {
 		t.Fatalf("tick-3 node loss = %s, want %s", got, want)
+	}
+}
+
+// TestATermReceiptKeepsTheNodesLoss: a batch the server Terms whole (#1691)
+// still carries the node's own loss account (#1692), so its Term receipt
+// records it for the node hop's read, and a later copy that lands over the
+// Term receipt writes its own.
+func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := ledgerTick(f, "tick-2", 2, ts, nil)
+	b.Ledger.Loss = delivery.NodeLoss{
+		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 1, To: 1, Items: map[delivery.Kind]uint64{delivery.Metric: 3}}},
+		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 4}},
+	}
+	read := func() string {
+		var raw []byte
+		if err := f.conn.QueryRow(ctx, `select node_loss from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&raw); err != nil {
+			t.Fatalf("receipt: %v", err)
+		}
+		if raw == nil {
+			return ""
+		}
+		var n delivery.NodeLoss
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatalf("node loss %s: %v", raw, err)
+		}
+		got, _ := json.Marshal(n)
+		return string(got)
+	}
+	want, _ := json.Marshal(b.Ledger.Loss)
+	if err := f.gw.RecordTermedBatch(ctx, termOf(b, delivery.RefusedTask)); err != nil {
+		t.Fatalf("record the Term: %v", err)
+	}
+	if got := read(); got != string(want) {
+		t.Fatalf("Term receipt node loss = %q, want %s", got, want)
+	}
+	b.Ledger.Loss.Lost[delivery.SelfLogOverflow][delivery.Log] = 6
+	want, _ = json.Marshal(b.Ledger.Loss)
+	if landed, err := f.gw.LandBatch(ctx, b); err != nil || !landed.Landed {
+		t.Fatalf("land the later copy: %+v, %v", landed, err)
+	}
+	if got := read(); got != string(want) {
+		t.Fatalf("landed receipt node loss = %q, want the landing's %s", got, want)
 	}
 }

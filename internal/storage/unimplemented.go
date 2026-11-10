@@ -460,6 +460,9 @@ func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) erro
 func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult, error) {
 	return LandResult{}, nil
 }
+func (UnimplementedGateway) RecordTermedBatch(context.Context, TermedBatch) error {
+	return nil
+}
 func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }

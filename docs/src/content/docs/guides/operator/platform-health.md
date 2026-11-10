@@ -352,9 +352,10 @@ state, start and end, its gaps with their ratios and readings, its protocols and
 
 ## Walkthroughs
 
-From Home, open the tile and read the header, fold the server's panels to read the node table,
-open them again on the Requests panel, then follow the slowest route's figure from its tooltip onto
-its series on the server's platform component.
+From Home, open the tile and read the header, read each hop under where work is lost as a loss ratio
+and open the node hop's explainer, fold the server's panels to read the node table and the simulator's
+gaps under it, open the panels again on the Requests panel, then follow the slowest route's figure from
+its tooltip onto its series on the server's platform component.
 
 ::walkthrough{#read-platform-health}
 

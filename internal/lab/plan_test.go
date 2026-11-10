@@ -485,6 +485,55 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 }
 
+// A kept scale lab (#1633) tells its seed so, with a hidden --keep: the seed
+// then keeps the fleet a database already holds and re-enrolls its nodes. A
+// throwaway one's seed carries no --keep, so a database holding data stays
+// refused.
+func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
+	for _, tc := range []struct {
+		ephemeral bool
+		want      string
+	}{
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --keep"},
+	} {
+		o := scaleOptions()
+		o.Ephemeral = tc.ephemeral
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(s.Seed.Cmd, " "); got != tc.want {
+			t.Errorf("ephemeral %v: seed command %q, want %q", tc.ephemeral, got, tc.want)
+		}
+	}
+}
+
+// The stop line's restart hint (#1633) is the command that brings this lab
+// back: a bare lab run for a learner's lab, and for a kept scale lab its own
+// scenario, size and --keep (and its cadence, when not the lab's own), which
+// a bare lab run would not bring back.
+func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
+	if got := RestartCommand(testOptions()); got != "omniglass lab run" {
+		t.Errorf("a learner's lab: %q", got)
+	}
+	o := scaleOptions()
+	o.Ephemeral, o.Systems, o.Cadence = false, 3000, CadenceLab
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --keep" {
+		t.Errorf("a kept scale lab: %q", got)
+	}
+	o.Cadence = CadenceDefault
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --cadence default --keep" {
+		t.Errorf("a kept scale lab at the default cadence: %q", got)
+	}
+	// A kept scale lab under a project of its own keeps its data there, so a
+	// restart without that project would start an empty lab beside it.
+	o.Cadence, o.Project = CadenceLab, "omniglass-scale-it-7"
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --project omniglass-scale-it-7 --keep" {
+		t.Errorf("a kept scale lab under its own project: %q", got)
+	}
+}
+
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
 // the ingest lag from (a row's commit time less its probe time). A dev lab's
 // does not: it pays for nothing it does not read.
@@ -526,5 +575,93 @@ func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
 	}
 	if got, err := ParseSiteNodeTokenHashes(""); err != nil || len(got) != 0 {
 		t.Errorf("empty: %v %v", got, err)
+	}
+}
+
+// The induced refusal is off by default and, set, rides to the scale seed
+// (#1698): the seed is what attaches the device that answers the key no
+// catalog holds. A dev lab has no plan for it to ride, so it is refused there.
+func TestPlanScaleLabInducesAnUnregisteredKeyOnlyWhenAsked(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed induces by default: %v", s.Seed.Cmd)
+	}
+	o := scaleOptions()
+	o.InduceUnregistered = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed command %v does not carry the knob", s.Seed.Cmd)
+	}
+	dev := testOptions()
+	dev.InduceUnregistered = true
+	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("a dev lab with the knob: %v, want a refusal naming the scale lab", err)
+	}
+}
+
+// Every service carries the fleet the lab seeded (#1719): the scenario, and
+// for a scale lab its size, so a measurement of the running lab reads them
+// from the lab itself and never from a flag that could disagree with it.
+func TestPlanStampsTheFleetOnEveryService(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    Options
+		want Fleet
+	}{
+		{"dev", testOptions(), Fleet{Scenario: DefaultScenario}},
+		{"scale", scaleOptions(), Fleet{Scenario: "corporate", Systems: 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := Plan(tc.o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, svc := range s.Services() {
+				got, err := FleetOf(svc.Labels)
+				if err != nil {
+					t.Fatalf("%s: %v", svc.Name, err)
+				}
+				if got != tc.want {
+					t.Errorf("%s: fleet %+v, want %+v", svc.Name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// FleetOf reads the fleet back from a container's labels, and refuses a
+// container a build before the labels started, or one whose size label is
+// not a count, rather than guess.
+func TestFleetOf(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		labels  map[string]string
+		want    Fleet
+		wantErr string
+	}{
+		{"scale", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "300"}, Fleet{Scenario: "corporate", Systems: 300}, ""},
+		{"dev", map[string]string{LabelLabScenario: "dev"}, Fleet{Scenario: "dev"}, ""},
+		{"unlabelled", map[string]string{LabelLab: "omniglass-scale"}, Fleet{},
+			"name no scenario: it was brought up by a build before the fleet labels, so stop it and bring it up again with this build's `lab run`"},
+		{"bad size", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "lots"}, Fleet{},
+			`size label omniglass.lab.systems="lots" is not a count of systems`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := FleetOf(tc.labels)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err %v, want it to say %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("FleetOf = %+v, %v; want %+v", got, err, tc.want)
+			}
+		})
 	}
 }

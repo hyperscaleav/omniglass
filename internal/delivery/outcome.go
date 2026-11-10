@@ -39,6 +39,20 @@ const (
 	// Unidentified is an identified sample with no conduit, nothing
 	// resolved, or no valid identity.
 	Unidentified Outcome = "unidentified"
+	// RefusedOwner is an item in a batch the server Termed whole because it
+	// asserted an owner on the node lane, which only the API lane may do.
+	RefusedOwner Outcome = "refused-owner"
+	// RefusedTask is an item in a batch the server Termed whole because it
+	// carried task rows outside its groups.
+	RefusedTask Outcome = "refused-task"
+	// RefusedBatch is an item in a batch the gateway refused whole.
+	RefusedBatch Outcome = "refused-batch"
+	// RefusedMetadata is an item in a batch the server Termed whole because
+	// its delivery metadata was unreadable, so it could not count attempts.
+	RefusedMetadata Outcome = "refused-metadata"
+	// Abandoned is an item in a batch that failed to land on every attempt
+	// the consumer allows and was Termed at the last.
+	Abandoned Outcome = "abandoned"
 	// Missing is an item that never landed at ingest: a gap in its boot's
 	// offsets the node does not account for, or a shortfall between what a
 	// batch declared and what it decoded to.
@@ -70,7 +84,8 @@ const (
 var IngestOutcomes = []Outcome{
 	Stored, Coalesced, Unbound, Deduplicated,
 	RefusedUnregistered, RefusedWriter, RefusedInstance, RefusedInvalid,
-	RefusedEmpty, RefusedWrite, Orphaned, Unidentified, Missing,
+	RefusedEmpty, RefusedWrite, Orphaned, Unidentified,
+	RefusedOwner, RefusedTask, RefusedBatch, RefusedMetadata, Abandoned, Missing,
 }
 
 // NodeOutcomes is every outcome of the node hop, out first, then loss.

@@ -1,16 +1,19 @@
 # Platform health (#1644, #1645): Omniglass watching itself. Home's Platform
 # tile carries the platform system's verdict and how many nodes are not up;
-# the page names the build the server runs and how long it has been up, gives
-# each node a row of its platform figures, and gives each server its panels
-# (Requests, Ingest, Queues, Retention). A key's name teaches it in a tooltip
-# and leads onto its series on the server's platform component, the ordinary
-# component detail, where each figure has its history.
+# the page names the build the server runs and how long it has been up, draws
+# where work is lost hop by hop (#1646), gives each server its panels
+# (Requests, Ingest, Queues, Retention), each node a row of its platform
+# figures and, with a simulator connected, what the devices saw against what
+# was collected (#1647). Every hop and every gap reads as a loss ratio, 0
+# healthy. A key's name teaches it in a tooltip and leads onto its series on
+# the server's platform component, the ordinary component detail, where each
+# figure has its history.
 #
 # The Requests panel fills after the server's first report window (60 s by
 # default), so the script is ready only once it has: that wait is off camera,
 # and the recording never spends its budget on a lab that has just come up.
 title: Read the platform's health
-description: From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
+description: From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the nodes and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
 ready:
   goto: /platform
   wait: { selector: '[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]', timeout: 150000 }
@@ -22,11 +25,22 @@ steps:
   - wait: { selector: '[data-testid=platform-version]' }
     caption: The build, its uptime and the verdict, each read from the platform's own components.
     hold: 1500
+  - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-node] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
+    caption: Where work is lost follows a sample from its run to the store, hop by hop. Each hop reads a loss ratio, the share it took in and did not hand on. 0% is healthy.
+    hold: 2000
+  - click: '[data-testid=pipeline-hop-node]'
+    caption: Open the node hop to read what counts as lost there.
+  - wait: { selector: '[data-testid=pipeline-hop-detail]' }
+    caption: The keys the hop is read from, and each node's own share of it. The same three keys read every hop.
+    hold: 2000
   - click: '[data-testid=server-panels-server] > summary .eyebrow'
     caption: Each server's panels fold to its name and verdict. Close them to reach the node table under them.
   - wait: { selector: '[data-testid=platform-node-edge-hq]' }
     caption: One row per node. A figure the node never reported reads not reported, never 0.
     hold: 1500
+  - wait: { selector: '[data-testid=platform-simulation] [data-testid=platform-sim-gaps]:has([data-testid=platform-sim-gap]) thead', timeout: 30000 }
+    caption: With a simulator connected, each gap is what the devices saw against what the platform collected, a loss ratio where 0 is healthy.
+    hold: 2000
   - click: '[data-testid=server-panels-server] > summary .eyebrow'
     caption: Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.
     hold: 1500

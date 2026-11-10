@@ -165,6 +165,30 @@ func BatchRates(batches, samples int64, dt time.Duration) (samplesPerBatch, batc
 	return samplesPerBatch, batchesPerSecond
 }
 
+// FoldNodes is w with every node container (any but the server and the
+// database) summed into one node row, so a lab with a node per site (the
+// corporate scenario, #1719) reports the server, node and database rows a
+// one-node lab does. CPU and working set add across containers.
+func FoldNodes(w Window) Window {
+	out := w
+	out.Containers = map[string]ContainerWindow{}
+	var node ContainerWindow
+	nodes := 0
+	for name, c := range w.Containers {
+		if name == "server" || name == "db" {
+			out.Containers[name] = c
+			continue
+		}
+		node.Millicores += c.Millicores
+		node.WorkingSetMiB += c.WorkingSetMiB
+		nodes++
+	}
+	if nodes > 0 {
+		out.Containers["node"] = node
+	}
+	return out
+}
+
 // WindowOf turns the readings at a window's start and end into its rates.
 // The working set is the one read at the end.
 func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) {

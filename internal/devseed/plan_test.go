@@ -2,6 +2,7 @@ package devseed_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -283,4 +284,60 @@ func TestSeedPlanPlacesEachSitesEndpointsOnItsNode(t *testing.T) {
 			t.Errorf("%d endpoints on the one node, result says %d", total, res.Endpoints)
 		}
 	})
+}
+
+// inducedTasks counts the tasks whose baked spec names the induced key.
+func inducedTasks(t *testing.T, ctx context.Context, conn *pgx.Conn) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(ctx, `select count(*) from task where spec::text like '%' || $1 || '%'`, devseed.InducedKey).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// The induced refusal (#1698): with the knob on, one simulated device's
+// endpoint is attached through a driver that also answers a key, and that key
+// is then taken out of every catalog. The task still carries it, so the node
+// collects it and the server has no type to land it on: a refusal by design.
+func TestSeedPlanInducesOneUnregisteredKey(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	res, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 3), devseed.PlanOptions{Endpoints: true, InduceUnregistered: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Induced == nil || res.Induced.Key != devseed.InducedKey || res.Induced.Component == "" || res.Induced.Driver == "" {
+		t.Fatalf("induced = %+v, want the component, driver and key named", res.Induced)
+	}
+	t.Logf("induced %+v", *res.Induced)
+	if n := inducedTasks(t, ctx, conn); n != 1 {
+		t.Errorf("%d tasks carry the induced key, want 1", n)
+	}
+	if _, err := gw.GetPropertyType(ctx, devseed.InducedKey); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
+		t.Errorf("the induced key's type: %v, want it in no catalog", err)
+	}
+	var drivers int
+	if err := conn.QueryRow(ctx, `select count(distinct d.name) from endpoint e join driver d on d.id = e.driver_id where not d.official`).Scan(&drivers); err != nil {
+		t.Fatal(err)
+	}
+	if drivers != 1 {
+		t.Errorf("%d custom drivers attached, want the one induced", drivers)
+	}
+}
+
+// Off by default: a plain seed answers no unregistered key.
+func TestSeedPlanInducesNothingByDefault(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	res, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 3), devseed.PlanOptions{Endpoints: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Induced != nil {
+		t.Errorf("induced = %+v by default", res.Induced)
+	}
+	if n := inducedTasks(t, ctx, conn); n != 0 {
+		t.Errorf("%d tasks carry the induced key by default", n)
+	}
 }

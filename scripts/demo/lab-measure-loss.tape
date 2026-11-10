@@ -7,7 +7,8 @@
 # as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641). The
 # node hop comes first: what each node minted against what its spool shipped, with a batch the
 # spool dropped named by the batches after it under its own cause, so the ingest row reads only
-# what was lost after the node shipped it (#1692, ADR-1692).
+# what was lost after the node shipped it (#1692, ADR-1692). A batch the server Terms whole reads
+# under its own cause, not missing (#1691, ADR-1691).
 
 # demo-needs: docker-socket
 
@@ -44,5 +45,11 @@ Type `jq -c '.delivery | group_by(.kind)[] | {kind: .[0].kind, node_out: (map(se
 Enter
 Wait
 Type `jq -c '.delivery_end_to_end' /tmp/lab-measure.json`
+Enter
+Wait
+Type "# A batch the server Terms whole reads under its cause; each is a count on every ingest row, 0 here"
+Enter
+Wait
+Type `jq -c '.delivery[] | select(.hop == "ingest") | {kind, termed: (.outcomes | {"refused-owner", "refused-task", "refused-batch", "refused-metadata", abandoned})}' /tmp/lab-measure.json`
 Enter
 Wait
