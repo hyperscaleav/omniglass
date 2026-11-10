@@ -1,7 +1,7 @@
 {
   "id": "read-platform-health",
   "title": "Read the platform's health",
-  "description": "From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.",
+  "description": "From Home, open Platform health, read the build, the nodes and the server's Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
   "steps": [
     {
       "n": 1,
@@ -29,22 +29,40 @@
     },
     {
       "n": 5,
-      "kind": "click",
-      "caption": "A node is a component of the platform system. Open its row.",
+      "kind": "wait",
+      "caption": "Each server has its own panels. Requests ranks the slowest routes of the newest report window, highest first.",
       "still": "step-05.png"
     },
     {
       "n": 6,
-      "kind": "wait",
-      "caption": "The node's platform component, the same detail as any device. Its check-in age is a series like any other metric.",
+      "kind": "hover",
+      "caption": "A key's name teaches it. Rest on it to read what it measures.",
       "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "wait",
+      "caption": "The figure is a series on the server's platform component, one link away.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Follow it.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "wait",
+      "caption": "The server's platform component, the same detail as any device. Its request timing is a series like any other metric.",
+      "still": "step-09.png"
     }
   ],
-  "poster": "step-06.png",
+  "poster": "step-09.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 26.1,
-    "bytes": 352129,
-    "previewBytes": 215154
+    "seconds": 35.8,
+    "bytes": 588440,
+    "previewBytes": 386524
   }
 }
