@@ -6,6 +6,7 @@ import TimeseriesChart from "../components/TimeseriesChart";
 import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
+import KeyedFor from "../components/KeyedFor";
 import { ArrowUpRight, ChevronRight, TriangleAlert } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -102,9 +103,9 @@ export default function PlatformHealth() {
                 Platform figures need a fleet-wide read: your component read does not reach the platform components, so each node shows only its check-in.
               </div>
             </Show>
-            <For each={v().servers ?? []}>
-              {(s, i) => <ServerPanels server={s} view={v()} open={i() === 0} />}
-            </For>
+            <KeyedFor each={v().servers} by={(s) => s.component}>
+              {(s, i) => <ServerPanels server={s()} view={v()} open={i() === 0} />}
+            </KeyedFor>
             <NodeTable view={v()} />
           </>
         )}
@@ -128,18 +129,18 @@ function Header(props: { view: PlatformView }) {
           )}
         </Show>
       </Fact>
-      <For each={props.view.servers ?? []}>
+      <KeyedFor each={props.view.servers} by={(s) => s.component}>
         {(s) => (
           <>
-            <Fact label="Version" sub={s.name}>
-              <span class="tnum" data-testid="platform-version" classList={{ "text-base-content/30": !s.version }}>{s.version ?? NOT_REPORTED}</span>
+            <Fact label="Version" sub={s().name}>
+              <span class="tnum" data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
             </Fact>
-            <Fact label="Up for" sub={s.started_at ? `since ${fmtTime(s.started_at)}` : "no start time written yet"}>
-              <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s.started_at) ?? NOT_REPORTED}</span>
+            <Fact label="Up for" sub={s().started_at ? `since ${fmtTime(s().started_at!)}` : "no start time written yet"}>
+              <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s().started_at) ?? NOT_REPORTED}</span>
             </Fact>
           </>
         )}
-      </For>
+      </KeyedFor>
     </div>
   );
 }
@@ -165,36 +166,36 @@ function NodeTable(props: { view: PlatformView }) {
         <thead>
           <tr>
             <th colSpan={2} />
-            <For each={groups()}>
-              {(g) => <th colSpan={(g.keys ?? []).length} class="border-l border-base-300 text-center">{g.label}</th>}
-            </For>
+            <KeyedFor each={groups()} by={(g) => g.name}>
+              {(g) => <th colSpan={(g().keys ?? []).length} class="border-l border-base-300 text-center">{g().label}</th>}
+            </KeyedFor>
             <th />
           </tr>
           <tr>
             <th>Node</th>
             <th>Status</th>
-            <For each={columns()}>
+            <KeyedFor each={columns()} by={(c) => c.key}>
               {(c) => (
                 <th class="text-right">
-                  <Show when={c.description} fallback={c.label}>
+                  <Show when={c().description} fallback={c().label}>
                     <InfoTip
-                      text={c.description}
-                      label={c.label}
+                      text={c().description}
+                      label={c().label}
                       class="cursor-help whitespace-nowrap underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary"
                     >
-                      {c.label}
+                      {c().label}
                     </InfoTip>
                   </Show>
                 </th>
               )}
-            </For>
+            </KeyedFor>
             <th />
           </tr>
         </thead>
         <tbody>
-          <For each={props.view.nodes ?? []} fallback={<tr><td colSpan={columns().length + 3} class="text-base-content/50">No nodes yet.</td></tr>}>
-            {(n) => <NodeRow node={n} view={props.view} />}
-          </For>
+          <KeyedFor each={props.view.nodes} by={(n) => n.name} fallback={<tr><td colSpan={columns().length + 3} class="text-base-content/50">No nodes yet.</td></tr>}>
+            {(n) => <NodeRow node={n()} view={props.view} />}
+          </KeyedFor>
         </tbody>
       </table>
     </div>
@@ -231,14 +232,14 @@ function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
           <Show when={verdict()}>{(v) => <HealthBadge verdict={v()} size="xs" />}</Show>
         </div>
       </td>
-      <For each={platformColumns(props.view)}>
+      <KeyedFor each={platformColumns(props.view)} by={(c) => c.key}>
         {(c) => {
-          const text = figureText(props.node, c);
+          const text = () => figureText(props.node, c());
           return (
-            <td class="tnum whitespace-nowrap text-right" data-figure={c.key} classList={{ "text-base-content/30": text === NOT_REPORTED }}>{text}</td>
+            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED }}>{text()}</td>
           );
         }}
-      </For>
+      </KeyedFor>
       <td class="text-right">
         <A href={`/nodes?n=${encodeURIComponent(props.node.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.node.name} in Nodes`} title="Open this node's blade on the Nodes page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />
@@ -271,9 +272,9 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
         </Show>
       </summary>
       <div class="grid gap-4 px-4 pb-4 xl:grid-cols-2">
-        <For each={props.server.groups ?? []}>
-          {(p) => <Panel panel={p} server={props.server} view={props.view} live={open()} />}
-        </For>
+        <KeyedFor each={props.server.groups} by={(p) => p.name}>
+          {(p) => <Panel panel={p()} server={props.server} view={props.view} live={open()} />}
+        </KeyedFor>
       </div>
     </details>
   );
@@ -302,9 +303,9 @@ function Panel(props: { panel: PlatformPanel; server: PlatformServer; view: Plat
         <div class="overflow-x-auto">
           <table class="table table-xs">
             <tbody>
-              <For each={panelSections(props.panel)}>
-                {(sec) => <Section section={sec} server={props.server} view={props.view} live={props.live} />}
-              </For>
+              <KeyedFor each={panelSections(props.panel)} by={(sec) => sec.key.name}>
+                {(sec) => <Section section={sec()} server={props.server} view={props.view} live={props.live} />}
+              </KeyedFor>
             </tbody>
           </table>
         </div>
@@ -357,17 +358,17 @@ function Section(props: { section: PanelSection; server: PlatformServer; view: P
           </Show>
         </th>
       </tr>
-      <For each={props.section.rows}>
+      <KeyedFor each={props.section.rows} by={(r) => r.instance}>
         {(r) => (
-          <Row row={r} server={props.server} view={props.view} live={props.live} indent>
-            <span class="font-mono text-[11px] [overflow-wrap:anywhere]" title={r.instance}>
-              <Show when={r.instance} fallback="owner-level">
-                <PathBreaks text={r.instance} />
+          <Row row={r()} server={props.server} view={props.view} live={props.live} indent>
+            <span class="font-mono text-[11px] [overflow-wrap:anywhere]" title={r().instance}>
+              <Show when={r().instance} fallback="owner-level">
+                <PathBreaks text={r().instance} />
               </Show>
             </span>
           </Row>
         )}
-      </For>
+      </KeyedFor>
     </Show>
   );
 }

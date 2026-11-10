@@ -93,13 +93,14 @@ function mount(view: PlatformView | null) {
   qc.setQueryData([...ME_KEY], viewer);
   // Under the console's own base, so an in-app link proves it routes there.
   window.history.pushState({}, "", "/web/platform");
-  return render(() => (
+  const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="*" component={PlatformHealth} />
       </Router>
     </QueryClientProvider>
   ));
+  return Object.assign(r, { qc });
 }
 
 afterEach(() => {
@@ -267,6 +268,38 @@ describe("PlatformHealth page", () => {
     expect(urls.some((u) => u.includes(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.includes(`instance=${FAST}`) && u.includes("hours=1"))).toBe(true);
     // Only the open set reads its series: the second server's are closed.
     expect(urls.some((u) => u.includes(uuidFor("server-b")))).toBe(false);
+  });
+
+  // The view polls, and every poll is a new body: an operator's place on the
+  // page (a set they opened or closed, a row's chart, a key's tooltip) is the
+  // same server, key and route in the next body, so it survives the poll.
+  it("keeps an opened set, an expanded row and an open tooltip across a poll, with the poll's figures", async () => {
+    emptySeries();
+    const { qc } = mount(twoServers());
+    const first = screen.getByTestId("server-panels-lab-server");
+    const second = screen.getByTestId("server-panels-lab-server-b") as HTMLDetailsElement;
+    second.open = true;
+    fireEvent(second, new Event("toggle"));
+    const slow = () => within(within(screen.getByTestId("server-panels-lab-server")).getByTestId("server-panel-requests")).getAllByTestId("panel-row-http-request-duration-max").find((r) => r.getAttribute("data-instance") === SLOW)!;
+    const row = slow();
+    fireEvent.click(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    const trigger = within(within(first).getByTestId("server-panel-ingest")).getByRole("button", { name: "Ingest Lag" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    trigger.focus();
+    expect(await screen.findByText("How far ingest runs behind.")).toBeInTheDocument();
+
+    const next = twoServers();
+    next.servers![0].groups![0].figures![0].value = 900;
+    qc.setQueryData([...PLATFORM_VIEW_KEY], next);
+    await waitFor(() => expect(slow()).toHaveTextContent("900 ms"));
+
+    expect(slow()).toBe(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("server-panels-lab-server-b")).toBe(second);
+    expect(second.open).toBe(true);
+    expect(screen.getByTestId("server-panels-lab-server")).toBe(first);
+    expect(screen.getByText("How far ingest runs behind.")).toBeInTheDocument();
   });
 
   it("teaches each key through its catalog description, with a way onto its series on the server's platform component", async () => {
