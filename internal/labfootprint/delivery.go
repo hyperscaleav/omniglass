@@ -51,9 +51,21 @@ type DeliveryRow struct {
 	Loss         *float64                    `json:"loss,omitempty"`
 	Deduplicated uint64                      `json:"deduplicated"`
 	Outcomes     map[delivery.Outcome]uint64 `json:"outcomes"`
-	// Cause is the largest outcome behind the loss, empty when nothing was
-	// lost. The JSON reader has the outcomes themselves.
-	Cause delivery.Outcome `json:"-"`
+}
+
+// Cause is the largest outcome behind the row's loss, empty when nothing was
+// lost. It is read from the outcomes, so a row read back from a run's JSON
+// names the same cause it did when measured.
+func (d DeliveryRow) Cause() delivery.Outcome {
+	return delivery.Total{Outcomes: d.Outcomes}.Cause()
+}
+
+// Lost is how many items the row lost: in less out.
+func (d DeliveryRow) Lost() uint64 {
+	if d.Out >= d.In {
+		return 0
+	}
+	return d.In - d.Out
 }
 
 // UnsettledBoot is a node boot whose batches were not all known when the
@@ -89,7 +101,7 @@ func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
 			continue
 		}
 		row := DeliveryRow{Hop: delivery.Ingest, Kind: k, In: t.In, Out: t.Out, Deduplicated: t.Deduplicated,
-			Outcomes: map[delivery.Outcome]uint64{}, Cause: t.Cause()}
+			Outcomes: map[delivery.Outcome]uint64{}}
 		for _, o := range delivery.Outcomes {
 			row.Outcomes[o] = t.Outcomes[o]
 		}
@@ -254,9 +266,9 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		if d.Loss != nil {
 			loss = ratio(*d.Loss)
 		}
-		if d.Cause != "" {
-			cause = string(d.Cause)
-			missing = missing || d.Cause == delivery.Missing
+		if c := d.Cause(); c != "" {
+			cause = string(c)
+			missing = missing || c == delivery.Missing
 		}
 		row(string(d.Kind), string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss,
 			strconv.FormatUint(d.Deduplicated, 10), cause)
