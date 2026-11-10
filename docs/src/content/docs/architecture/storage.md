@@ -48,7 +48,9 @@ Built today, the ingest consumer writes a batch's every sink (`metric`, `propert
 all or nothing, and a batch id that already landed lands no rows and only counts one more delivery on
 its receipt, so a redelivery lands each row once, raw log lines included, though a log line has no key
 of its own. The receipt also carries the batch's delivery ledger and what became of each of its items,
-written in the same transaction
+written in the same transaction. A batch the consumer Terms whole leaves a **Term receipt** marked
+`termed`, its items under the cause; it is not a landing, so a later copy of the batch lands over it
+and replaces it (#1691)
 ([accounting](/architecture/messaging/#accounting-every-item-the-loss-ratio), [ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio)).
 Receipts are pruned past a day by the server
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).

@@ -569,13 +569,17 @@ end to end  metric 0  property 0  event -  log -
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
   instance refused, a value invalid or empty, a group the gateway refused), `orphaned`,
-  `unidentified`, or `missing`. An `unbound` identity is not loss: the operator has not assigned it,
+  `unidentified`, a cause the server Termed a whole batch for, or `missing`. A Termed batch reads
+  `refused-owner` (it asserted an owner on the node lane), `refused-task` (task rows outside its
+  groups), `refused-batch` (the gateway refused it whole), `refused-metadata` (its delivery metadata
+  was unreadable) or `abandoned` (its fifth delivery failed); a later copy of it that lands replaces
+  that reading with its own. An `unbound` identity is not loss: the operator has not assigned it,
   and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
   only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
   outcome's count on every row, with the same keys for every kind.
-- **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
-  from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
-  Termed at ingest, dropped at the node, or lost in between`.
+- **missing** is a batch that never landed and left no receipt: a hole in a node boot's batch
+  sequence, its items read from its neighbors' offsets. It cannot say why; the footer reads `never
+  landed: undecodable at ingest, dropped at the node, or lost in between`.
 - **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`; with one hop it
   equals the ingest row.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`

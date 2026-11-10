@@ -173,8 +173,9 @@ every window as platform metrics, 0 when nothing came in (#1659,
   the transition guard skipped on purpose), and `unbound` (an identified sample whose identity no
   binding places). Loss: `refused-unregistered`, `refused-writer`, `refused-instance`,
   `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway refused while its siblings
-  landed), `orphaned` (its task's owner gone), `unidentified`, and `missing` (a hole in a boot's
-  offsets).
+  landed), `orphaned` (its task's owner gone), `unidentified`, the causes the consumer Terms a
+  batch whole for (`refused-owner`, `refused-task`, `refused-batch`, `refused-metadata`,
+  `abandoned`; below), and `missing` (a hole in a boot's offsets).
 - **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
   samples read 0, and only someone who knew to look at the refusal counts would notice. The read
   names the largest outcome behind a loss as its **cause** instead.
@@ -195,9 +196,17 @@ every window as platform metrics, 0 when nothing came in (#1659,
 - **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`; with the
   one hop today it equals the ingest row.
 
-A batch the consumer Terms whole (undecodable, an owner or a task row it may not assert, refused
-whole, unreadable metadata, its fifth delivery) leaves no receipt, so its items read as `missing`
-for now; naming each under its own cause is #1691. The push lane's batches carry no ledger and read
+A batch the consumer Terms whole records a **Term receipt** (#1691): the batch's ledger, with every
+item it declared under the cause, so the loss names why it never landed. An owner asserted on the
+node lane reads `refused-owner`, task rows outside the groups `refused-task`, a batch the gateway
+refused whole `refused-batch`, unreadable delivery metadata `refused-metadata`, and a batch that
+failed its fifth delivery `abandoned`. The receipt is marked `termed`, so it never counts as a
+landing: a later copy of the batch (a node's retry past the stream's duplicate window) that lands
+replaces it with its own ledger and outcome, and the closed loop's receipt count skips it. A Term
+receipt that fails to record is warned and the batch Terms anyway. An undecodable batch has no
+ledger the server can read, so it records nothing: its items stay `missing`, and the Term is warned
+([ADR-1691](/architecture/decisions/#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
+The push lane's batches carry no ledger and read
 no row yet (#1696). `omniglass lab measure` prints the table
 ([lab](/guides/lab/#reading-the-delivery-table)).
 
