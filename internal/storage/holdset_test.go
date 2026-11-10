@@ -137,7 +137,9 @@ func TestHoldSetPowerWithoutOutletHoldsNothing(t *testing.T) {
 
 // The outlet comes off the command's params under the type's
 // power_outlet_param, as a string whether the schema typed it a string or a
-// number; anything else is no outlet.
+// number; a whole number reads as its digits however it is spelled (an
+// integer schema admits 2.0, and the PDU switches outlet 2 for it, #1653);
+// anything else is no outlet.
 func TestOutletParamReadsStringOrNumber(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -145,6 +147,11 @@ func TestOutletParamReadsStringOrNumber(t *testing.T) {
 	}{
 		{`{"outlet":"2"}`, "outlet", "2"},
 		{`{"outlet":12}`, "outlet", "12"},
+		{`{"outlet":2.0}`, "outlet", "2"},
+		{`{"outlet":20e-1}`, "outlet", "2"},
+		{`{"outlet":-3.00}`, "outlet", "-3"},
+		{`{"outlet":2.5}`, "outlet", "2.5"},
+		{`{"outlet":1e400}`, "outlet", "1e400"},
 		{`{"outlet":true}`, "outlet", ""},
 		{`{"port":"2"}`, "outlet", ""},
 		{``, "outlet", ""},

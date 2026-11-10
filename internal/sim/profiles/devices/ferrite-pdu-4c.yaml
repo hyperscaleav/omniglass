@@ -14,8 +14,11 @@
 #
 # It also answers a read-only JSON document, the same state in the shape
 # a networked PDU publishes it (an agent block, a global measure, an
-# array of outputs). Outlet control is not modeled: neither face can
-# switch an outlet.
+# array of outputs). Its http-api face switches an outlet (#1653): a
+# POST names the outlet by id and the state, behind the same login. The
+# document and the SNMP face stay read only, and switching an outlet off
+# models only the outlet: no sim device is wired to it, so what it feeds
+# keeps answering.
 
 name: ferrite-pdu-4c
 manufacturer: Ferrite
@@ -28,13 +31,13 @@ doc:
   description: |
     Four-outlet rack power conditioner. Monitored over SNMP (mains voltage,
     total current, and per-outlet name, state and current) and a read-only
-    JSON document; outlets are not switchable.
+    JSON document; each outlet is switched on or off over the http-api face.
 
 interfaces:
   - name: http-api
     protocol: http
     port: 80
-    doc: { summary: "Ferrite read-only JSON status", tags: [management, api] }
+    doc: { summary: "Ferrite JSON status and outlet control", tags: [management, api] }
     auth:
       type: basic
       default_user: ferrite
@@ -46,6 +49,21 @@ interfaces:
       - match: "GET /pdu.json"
         template: api/ferrite-pdu/status.json.gotempl
         doc: { summary: "Agent, mains measure and outputs", tags: [api, status] }
+
+      # Switch one outlet (#1653). The outlet is named by its id (1 to 4),
+      # which the path resolves to its state index by finding the outlet
+      # with that id: an id the PDU does not have renders no index and the
+      # write is refused, as is a state other than on or off. The current
+      # follows on the next load_drift step (an off outlet draws nothing).
+      - match: "POST /api/outlets/state"
+        template: api/ferrite-pdu/outlet-ack.json.gotempl
+        doc: { summary: "Switch an outlet on or off by its id", tags: [api, control] }
+        example: |
+          {"outlet": 2, "state": "off"}
+        mutations:
+          - path: 'status.outlets.{{ range $i, $o := .State.status.outlets }}{{ if eq (print $o.id) (print $.Request.Body.outlet) }}{{ $i }}{{ end }}{{ end }}.state'
+            value: "{{ .Request.Body.state }}"
+            enum: ["on", "off"]
 
   - name: snmp
     protocol: snmp
