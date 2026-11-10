@@ -12,9 +12,10 @@ import (
 // insertReceipt writes the batch's receipt, the row its delivery accounting
 // lives on (#1641, ADR-1641), and reports whether this delivery is its first.
 // A batch id already landed counts one more delivery on its receipt and lands
-// nothing: the count is what a read reports as deduplicated. A batch with a
-// ledger records the ledger on it; one without (the push lane) leaves those
-// columns empty.
+// nothing: the count is what a read reports as deduplicated. A Term receipt
+// (#1691) is not a landing: this delivery replaces it, as the batch's first,
+// with its own ledger and landing time. A batch with a ledger records the
+// ledger on it; one without (the push lane) leaves those columns empty.
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
 	var node, boot, ledger *string
 	var seq, resolved *int64
@@ -30,15 +31,30 @@ func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, e
 		s, r, j := int64(l.Seq), int64(l.Resolved), string(raw)
 		boot, seq, resolved, ledger, minted = &l.Boot, &s, &r, &j, l.Minted
 	}
-	err = tx.QueryRow(ctx, `insert into telemetry_receipt (batch_id, node, boot, seq, minted, resolved, ledger)
-		values ($1, $2, $3, $4, $5, $6, $7::jsonb)
-		on conflict (batch_id) do update set deliveries = telemetry_receipt.deliveries + 1
-		returning (xmax = 0)`, b.BatchID, node, boot, seq, minted, resolved, ledger).Scan(&first)
+	err = tx.QueryRow(ctx, insertReceiptSQL, b.BatchID, node, boot, seq, minted, resolved, ledger).Scan(&first)
 	if err != nil {
 		return false, fmt.Errorf("storage: land batch %s: receipt: %w", b.BatchID, err)
 	}
 	return first, nil
 }
+
+// insertReceiptSQL is insertReceipt's statement. Only a landing leaves
+// deliveries at 1 (an insert, or the replace of a Term receipt), so that is
+// the first flag; a redelivery counts on.
+const insertReceiptSQL = `insert into telemetry_receipt as r (batch_id, node, boot, seq, minted, resolved, ledger)
+	values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+	on conflict (batch_id) do update set
+		deliveries = case when r.termed then 1 else r.deliveries + 1 end,
+		node = case when r.termed then excluded.node else r.node end,
+		boot = case when r.termed then excluded.boot else r.boot end,
+		seq = case when r.termed then excluded.seq else r.seq end,
+		minted = case when r.termed then excluded.minted else r.minted end,
+		resolved = case when r.termed then excluded.resolved else r.resolved end,
+		ledger = case when r.termed then excluded.ledger else r.ledger end,
+		landed_at = case when r.termed then excluded.landed_at else r.landed_at end,
+		outcome = case when r.termed then null else r.outcome end,
+		termed = false
+	returning deliveries = 1`
 
 // recordBatchOutcome writes the batch's outcome on its receipt, in the
 // transaction that landed it, so the receipt never names an outcome the batch
