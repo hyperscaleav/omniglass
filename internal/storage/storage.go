@@ -904,6 +904,10 @@ type Gateway interface {
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's daily partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
+	// RetentionStatus is what the retention pass reports of storage after
+	// it runs (#1629): the metric partitions and the stored tables' and the
+	// database's on-disk bytes.
+	RetentionStatus(ctx context.Context) (RetentionStatus, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
@@ -932,6 +936,10 @@ type Gateway interface {
 	// NodeCheckins reads every claimed node's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// CommandQueueHealth reads every node's command queue (#1626): the
+	// pending, oldest and stuck now, and the redelivered and expired since the
+	// previous read's Now (none for a zero since).
+	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
@@ -961,6 +969,15 @@ type Gateway interface {
 	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
 	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
 	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
+
+	// Component dependencies (#1648): an edge from a dependent to its upstream,
+	// of kind power (with the outlet), host or path. A write resolves the
+	// dependent in read then update and the upstream in read; a cycle within a
+	// kind is refused. A disruptive command's hold set follows the power and
+	// host edges (ResolveHoldSet).
+	CreateComponentDependency(ctx context.Context, actorID, component string, spec ComponentDependencySpec, read, update scope.Set) (*ComponentDependency, error)
+	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
+	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
@@ -1041,6 +1058,18 @@ type Gateway interface {
 	// three different permissions: a principal who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// PlatformView is the read behind the Platform health page (#1644): the
+	// platform system's verdict, each server's identity, and one row per node
+	// with its platform component's latest figure per PlatformViewGroups key,
+	// in a fixed number of statements. The three sets answer three
+	// permissions: node:read for the rows (all-scope, else ErrNodeForbidden),
+	// system:read for the platform verdict, component:read for the figures,
+	// verdicts and server identity; short of all-scope, each is omitted.
+	PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	// RecordServerIdentity writes the server's version and boot start time on
+	// its platform component (#1644).
+	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

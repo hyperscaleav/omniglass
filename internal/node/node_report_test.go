@@ -49,8 +49,8 @@ func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 		r.dispatch(dispatchWindow{passes: 4, passMax: 2 * time.Second}, t0.Add(time.Duration(i)*30*time.Second))
 	}
 	got := readings(r.take(t0.Add(time.Minute)))
-	if _, ok := got[writerclass.TickOverrunCount]; ok {
-		t.Fatalf("a punctual dispatcher reported overruns: %v", got)
+	if v, ok := got[writerclass.TickOverrunCount]; !ok || v != 0 {
+		t.Fatalf("a punctual dispatcher's window read tick-overrun-count %v (written %v), want 0: %v", v, ok, got)
 	}
 	if got[writerclass.TickDuration] != 2000 {
 		t.Fatalf("tick-duration = %v ms, want 2000", got[writerclass.TickDuration])
@@ -63,11 +63,11 @@ func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 	r := newNodeReport(time.Minute, t0)
 	r.dispatch(dispatchWindow{}, t0)
 	if got := readings(r.take(t0)); len(got) != 0 {
-		t.Fatalf("an empty window read %v", got)
+		t.Fatalf("an empty dispatch window read %v", got)
 	}
 }
 
-func TestNodeReportEmitsEachWindowedCountOncePerWindowAndNoZeroNoise(t *testing.T) {
+func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
 	r := newNodeReport(time.Minute, t0)
@@ -107,11 +107,50 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowAndNoZeroNoise(t *testing.
 		}
 	}
 
-	// A quiet window emits no windowed count at all, not a zero.
+	// A quiet window emits each windowed count once, as zero.
 	quiet := readings(r.take(t0.Add(2 * time.Minute)))
 	for _, k := range windowed {
-		if _, ok := quiet[k]; ok {
-			t.Errorf("a quiet window emitted %s = %v", k, quiet[k])
+		if v, ok := quiet[k]; !ok || v != 0 {
+			t.Errorf("a quiet window read %s = %v (written %v), want 0", k, v, ok)
+		}
+		if _, dup := quiet[k+"#dup"]; dup {
+			t.Errorf("%s emitted twice in a quiet window", k)
+		}
+	}
+}
+
+// TestNodeReportCountsReturnToZeroAfterAQuietWindow: the node's first window
+// runs from its start, so it is whole and writes every count, zero included;
+// a window with an overrun, a skip, a drop and a failure follows, then a
+// quiet one, and each key's latest value is 0 again at the quiet window's end
+// rather than the event's count left standing as current.
+func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	t1, t2, t3 := t0.Add(time.Minute), t0.Add(2*time.Minute), t0.Add(3*time.Minute)
+	r := newNodeReport(time.Minute, t0)
+	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount, writerclass.SpoolDropCount, writerclass.PublishFailureCount}
+
+	first := readings(r.take(t1))
+	for _, k := range windowed {
+		if v, ok := first[k]; !ok || v != 0 {
+			t.Errorf("the first window read %s = %v (written %v), want 0", k, v, ok)
+		}
+	}
+
+	r.dispatch(dispatchWindow{overruns: 1, skips: 1}, t1.Add(time.Second))
+	r.spool(spoolFigures{drops: 1, failures: 1}, t1.Add(time.Second))
+	event := r.take(t2)
+	quiet := r.take(t3)
+
+	latest := map[string]*ogv1.MetricSample{}
+	for _, m := range append(event, quiet...) {
+		latest[m.GetName()] = m
+	}
+	for _, k := range windowed {
+		m, ok := latest[k]
+		if !ok || !m.GetTs().AsTime().Equal(t3) || m.GetValue() != 0 {
+			t.Errorf("%s latest = %v (written %v), want 0 at the quiet window's end %v", k, m, ok, t3)
 		}
 	}
 }
@@ -171,7 +210,7 @@ func TestNodeReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
 	got := readings(r.take(t0))
 	for _, k := range []string{writerclass.ScheduleLateness, writerclass.ScheduleGapExcess} {
 		if _, ok := got[k]; ok {
-			t.Errorf("a tick that ran no task read %s", k)
+			t.Errorf("a window that ran no task read %s", k)
 		}
 	}
 }
@@ -205,4 +244,32 @@ func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 	if got := readings(r.take(t0.Add(30 * time.Second)))[writerclass.ProcessCPUSeconds]; got != 1.5 {
 		t.Errorf("cpu = %v, want the 1.5 s spent since the last tick", got)
 	}
+}
+
+// TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
+// pull of the command queue is tallied, and the window's tally is sent once
+// when it ends; a window with no failure sends zero, so the count returns to
+// zero after the window that had it.
+func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	r.commandPullFailed()
+	if mid := readings(r.take(t0.Add(30 * time.Second))); len(mid) != 0 {
+		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
+	}
+	r.commandPullFailed()
+	got := readings(r.take(t0.Add(time.Minute)))
+	if got[writerclass.CommandPullFailureCount] != 2 {
+		t.Errorf("command-pull-failure-count = %v, want the window's 2: %v", got[writerclass.CommandPullFailureCount], got)
+	}
+	if _, dup := got[writerclass.CommandPullFailureCount+"#dup"]; dup {
+		t.Error("command-pull-failure-count emitted twice in one window")
+	}
+	quiet := readings(r.take(t0.Add(2 * time.Minute)))
+	if v, ok := quiet[writerclass.CommandPullFailureCount]; !ok || v != 0 {
+		t.Errorf("a window with no failed pull read command-pull-failure-count %v (written %v), want 0: %v", v, ok, quiet)
+	}
+	var none *nodeReport
+	none.commandPullFailed()
 }

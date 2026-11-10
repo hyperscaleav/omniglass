@@ -133,6 +133,12 @@
       "setup": []
     },
     {
+      "id": "read-platform-health",
+      "title": "Read the platform's health",
+      "description": "From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+      "setup": []
+    },
+    {
       "id": "sample-simulation",
       "title": "Read a simulated component's status",
       "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",

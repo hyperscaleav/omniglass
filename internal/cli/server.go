@@ -68,6 +68,21 @@ func labBootGate(ctx context.Context, gw labStater, lab bool) error {
 	return storage.CheckLabMark(lab, st.Marked, st.HoldsData)
 }
 
+// identityRecorder is the gateway's server identity write.
+type identityRecorder interface {
+	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
+}
+
+// bootServerIdentity writes the build this server runs and the instant it
+// started on its platform component (#1644), what the Platform health page
+// reads its header from. A failure is logged, not fatal: the identity is a
+// reading, never a reason to refuse to serve.
+func bootServerIdentity(ctx context.Context, gw identityRecorder, log *slog.Logger, componentID, version string, startedAt time.Time) {
+	if err := gw.RecordServerIdentity(ctx, componentID, version, startedAt); err != nil {
+		log.Warn("server identity not recorded", "component", componentID, "err", err)
+	}
+}
+
 // runServer boots the control plane: apply migrations, open the Storage
 // Gateway, serve the HTTP API, and shut down gracefully on SIGINT/SIGTERM.
 func runServer(ctx context.Context, version string, lab bool) error {
@@ -126,17 +141,18 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	self.applySlowQuery(ctx, gw)
 
 	// The server's own platform component, named by its identity, carries
-	// its request, query and pool figures; a restart finds the one it had.
-	serverComponentID, err := gw.EnsureServerComponent(ctx, c.ServerName)
-	if err != nil {
-		return err
+	// its request, query and pool figures and its retention pass's; a restart
+	// finds the one it had. It is ensured before the bus starts, so the pass
+	// the bus runs at boot already reports (#1671).
+	serverComponentID := serverComponent(ctx, gw, c.ServerName, log)
+	if serverComponentID != "" {
+		bootServerIdentity(ctx, gw, log, serverComponentID, version, time.Now())
 	}
-	log.Info("server platform component", "server", c.ServerName, "component", serverComponentID)
 
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
-	busSrv, err := startBus(c, gw, self.rec)
+	busSrv, err := startBus(c, gw, serverComponentID, self.rec)
 	if err != nil {
 		return err
 	}
@@ -169,8 +185,11 @@ func runServer(ctx context.Context, version string, lab bool) error {
 
 	// Catch the stop signals before reporting ready: a supervisor that stops
 	// the server the moment the ready file lands gets a graceful shutdown.
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	// The stop is the boot's context ending or one of them; the handler is
+	// released on return, so a process that outlives the server (a test)
+	// keeps its own signal handling.
+	stopCtx, releaseSignals := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer releaseSignals()
 
 	removeReady, err := writeReadyFile(c.ReadyFile, readyReport{
 		Addr: ln.Addr().String(), NatsAddr: busSrv.Addr().String(), NatsURL: natsURL,
@@ -188,7 +207,8 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	defer stopNotify()
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
-	// shutdown cancels it.
+	// shutdown cancels it. A server with no component writes nothing, and
+	// still re-reads its slow-query setting each window.
 	go self.reporter(gw, serverComponentID, log, busSrv.Sampler()).Run(notifyCtx)
 
 	errc := make(chan error, 1)
@@ -201,7 +221,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	select {
 	case err := <-errc:
 		return err
-	case <-sig:
+	case <-stopCtx.Done():
 		log.Info("shutting down")
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -209,10 +229,32 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	}
 }
 
+// serverComponenter ensures the platform component a server reports on.
+type serverComponenter interface {
+	EnsureServerComponent(ctx context.Context, identity string) (string, error)
+}
+
+// serverComponent is the platform component the server booting under
+// identity reports on. A failed ensure is a warning, never a refused boot:
+// the server serves and prunes as before and lands no platform figure until a
+// boot whose ensure succeeds (#1671).
+func serverComponent(ctx context.Context, gw serverComponenter, identity string, log *slog.Logger) string {
+	id, err := gw.EnsureServerComponent(ctx, identity)
+	if err != nil {
+		log.Warn("server platform component not ensured; the server reports no platform metrics",
+			"server", identity, "error", err.Error())
+		return ""
+	}
+	log.Info("server platform component", "server", identity, "component", id)
+	return id
+}
+
 // startBus parses the configured NATS listen address and starts the embedded
-// server. A "host:" or bare port resolves through net.SplitHostPort; a parse
-// failure is a config error surfaced at boot.
-func startBus(c config.Config, gw *storage.PG, rec *platformmetric.Recorder) (*bus.Server, error) {
+// server, its retention pass reporting on componentID (empty, it reports
+// nothing) and its pipeline figures recorded on rec. A "host:" or bare port
+// resolves through net.SplitHostPort; a parse failure is a config error
+// surfaced at boot.
+func startBus(c config.Config, gw *storage.PG, componentID string, rec *platformmetric.Recorder) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -223,7 +265,7 @@ func startBus(c config.Config, gw *storage.PG, rec *platformmetric.Recorder) (*b
 	}
 	// The worklist pool is held under the database pool, keeping one
 	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), Metrics: rec}, gw)
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID, Metrics: rec}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

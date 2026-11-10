@@ -38,6 +38,7 @@ type endpointBody struct {
 	Driver      *string              `json:"driver,omitempty" doc:"The driver this endpoint was attached through (#813); absent for a bare probe endpoint"`
 	DriverID    *string              `json:"driver_id,omitempty" doc:"The attached driver's id; the stable form of driver"`
 	Inputs      json.RawMessage      `json:"inputs,omitempty" doc:"The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values"`
+	OutOfBand   bool                 `json:"out_of_band" doc:"A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it"`
 	Webhook     *endpointWebhookBody `json:"webhook,omitempty" doc:"A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list"`
 }
 
@@ -99,7 +100,7 @@ func toEndpointBody(it *storage.Endpoint) endpointBody {
 	b := endpointBody{
 		ID: it.ID, Name: it.Name, Label: it.Label, Transport: it.Transport,
 		Component: it.Component, ComponentID: it.ComponentID,
-		Node: it.Node, NodeID: it.NodeID,
+		Node: it.Node, NodeID: it.NodeID, OutOfBand: it.OutOfBand,
 	}
 	if len(it.Params) > 0 {
 		b.Params = json.RawMessage(it.Params)
@@ -141,6 +142,7 @@ type createEndpointInput struct {
 		Params    json.RawMessage   `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
 		Driver    *string           `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
 		Inputs    map[string]string `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
+		OutOfBand bool              `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open"`
 	}
 }
 
@@ -152,6 +154,7 @@ type updateEndpointInput struct {
 		Params    json.RawMessage   `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
 		Inputs    map[string]string `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"`
 		Transport *string           `json:"transport,omitempty" doc:"The transport: a driver-attached endpoint takes only one its driver speaks"`
+		OutOfBand *bool             `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone"`
 	}
 }
 
@@ -241,6 +244,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Params:    []byte(in.Body.Params),
 			Driver:    in.Body.Driver,
 			Inputs:    in.Body.Inputs,
+			OutOfBand: in.Body.OutOfBand,
 			// An attach resolves its secret references under the caller's own
 			// secret read scope and admin tier, so it can only bind a secret the
 			// operator could themselves read (never another tenant's, never an
@@ -260,7 +264,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Update an endpoint",
-		Description: "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "update"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
 		it, err := gw.UpdateEndpoint(ctx, actorID(ctx), in.Endpoint, storage.EndpointPatch{
 			Node:      in.Body.Node,
@@ -268,6 +272,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Label:     in.Body.Label,
 			Inputs:    in.Body.Inputs,
 			Transport: in.Body.Transport,
+			OutOfBand: in.Body.OutOfBand,
 			// An edit re-resolves every attached secret under the caller's own
 			// secret scope and admin tier, as an attach does.
 			SecretRead: a.scopeFor(ctx, "secret", "read"),

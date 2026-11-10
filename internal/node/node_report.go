@@ -1,6 +1,7 @@
 package node
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -11,18 +12,21 @@ import (
 )
 
 // nodeReport is the node's account of itself (#1625): how long the
-// dispatcher's passes take and the dues it could not meet, how late its
-// tasks run against their intervals, how deep its spool is and what it drops, the
+// dispatcher's passes take and the dues it could not meet (#1634), how late
+// its tasks run against their intervals, how deep its spool is and what it drops, the
 // sessions it holds, and what its process costs. They are platform metrics
 // on the node's own platform component, sent in the node-self block of the
 // batch the tick publishes; the server lands them under the platform writer.
 //
 // Two shapes, per the key table. The each-tick figures are one observation
 // per sample, taken every heartbeat tick. The windowed counts (dues met in
-// flight, skipped intervals, spool drops, publish failures) are tallied over the node's
+// flight, skipped intervals, spool drops, publish failures, failed command
+// pulls) are tallied over the node's
 // report window, the collection report's (report.go), and emitted once when
-// it ends, only when nonzero: the poll-failure-count convention, no zero
-// noise. Pure: the run loop feeds it and sends what it takes.
+// it ends, every window, a quiet window's as zero: a count written only when
+// nonzero would leave the last event's count standing as the series' latest
+// value long after it. The first window runs from the node's start, so it is
+// whole and writes too. Pure: the run loop feeds it and sends what it takes.
 type nodeReport struct {
 	every time.Duration
 	since time.Time
@@ -31,6 +35,11 @@ type nodeReport struct {
 	skipped  int
 	drops    int
 	failures int
+	// pullFailures is the command queue pulls that failed in the window
+	// (#1626): no answer from the bus, or one the node could not read.
+	// Atomic because the command cycle runs off the heartbeat goroutine
+	// (#1634) while the heartbeat takes the window.
+	pullFailures atomic.Int64
 
 	// rt is the runtime sampler the server shares, so the node's CPU time
 	// reads as the time between two of its ticks.
@@ -118,6 +127,14 @@ func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
 	}
 }
 
+// commandPullFailed tallies one failed pull of the command queue toward the
+// window.
+func (r *nodeReport) commandPullFailed() {
+	if r != nil {
+		r.pullFailures.Add(1)
+	}
+}
+
 // worklist records the size of a worklist the node just installed.
 func (r *nodeReport) worklist(tasks int, at time.Time) {
 	if r == nil {
@@ -127,8 +144,8 @@ func (r *nodeReport) worklist(tasks int, at time.Time) {
 }
 
 // take returns what the report holds: the each-tick samples since the last
-// take, and, once the window has run its length, the window's nonzero counts
-// stamped at now, the window's end, the next window starting there.
+// take, and, once the window has run its length, the window's counts, zero
+// included, stamped at now, the window's end, the next window starting there.
 func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 	if r == nil {
 		return nil
@@ -142,10 +159,9 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			{writerclass.ScheduleSkipCount, r.skipped},
 			{writerclass.SpoolDropCount, r.drops},
 			{writerclass.PublishFailureCount, r.failures},
+			{writerclass.CommandPullFailureCount, int(r.pullFailures.Swap(0))},
 		} {
-			if c.n > 0 {
-				r.sample(c.key, float64(c.n), now, "")
-			}
+			r.sample(c.key, float64(c.n), now, "")
 		}
 		r.overruns, r.skipped, r.drops, r.failures = 0, 0, 0, 0
 		r.since = now

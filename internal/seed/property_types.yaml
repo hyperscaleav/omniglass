@@ -138,6 +138,18 @@ property_types:
       it broke and when it came back, not a sample per check. incomplete ranks
       between healthy and degraded and means a commissioning gap: a role short
       because its hardware was never installed, which no alarm will ever fire for.
+  # The server's identity (#1644), on the server's own platform component:
+  # its boot writes both, the version when it changes and the start time on
+  # every boot. The platform writer class reserves them to the boot.
+  - name: server-version
+    data_type: string
+    label: Server Version
+    description: The Omniglass build this server runs, written by its boot and rewritten when an upgrade changes it.
+  - name: server-started-at
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" }
+    label: Server Started At
+    description: When this server last booted, an RFC 3339 UTC timestamp its boot writes; the server's uptime is the time since.
   - name: video-input
     data_type: string
     validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }

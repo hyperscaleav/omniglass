@@ -2,7 +2,7 @@
 title: "A node reports itself on its platform component, and platform keys take no prefix"
 date: 2026-11-09
 status: Accepted
-summary: "Accepted: the first slice of #1094 builds the platform primitive. The boot seed creates one reserved, unplaced `platform` system; registering a node gives it an `omniglass-node` component there, named on the node row, which an operator may relabel and never reshape (a typed refusal, 409). A node reports itself in the node-self block of its tick batch, which names no owner and lands on its own platform component under the platform writer class, for its declared keys only; the server writes every claimed node's `checkin-age` on a 15 s timer. Platform keys take no prefix (amending ADR-0161 point 6). Only an all-scope read sees the platform rows. Each #1094 slice ships its own PR."
+summary: "Accepted: the first slice of #1094 builds the platform primitive. The boot seed creates one reserved, unplaced `platform` system; registering a node gives it an `omniglass-node` component there, named on the node row, which an operator may relabel and never reshape (a typed refusal, 409). A node reports itself in the node-self block of its tick batch, which names no owner and lands on its own platform component under the platform writer class, for its declared keys only; the server writes every claimed node's `checkin-age` on a 15 s timer. Platform keys take no prefix (amending ADR-0161 point 6). Only an all-scope read sees the platform rows. The windowed counts are written every window, zero when quiet. Each #1094 slice ships its own PR."
 refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
 ---
 
@@ -46,9 +46,13 @@ refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
      passed over, `schedule-lateness` its latest dispatch, and `schedule-gap-excess` the worst gap
      between two scheduled starts of a task off its interval. With no heartbeat rounding left, a poll
      keeping its interval reads 0.
-  6. **Counts go once per window and only when nonzero.** Overruns, skipped intervals, spool drops and
-     publish failures (refused, not acked, or failed to encode) follow the `poll-failure-count`
-     convention on the node's report window; the each-tick figures go every tick, and
+  6. **Counts go once per window, every window, zero when quiet.** Overruns, skipped intervals, spool
+     drops and publish failures (refused, not acked, or failed to encode) are tallied over the node's
+     report window and written when it ends, 0 when nothing happened (the architect's ruling of
+     2026-11-10 for every windowed platform count). Written only when nonzero, as first built, the latest value stood on the last event's
+     count long after it, and a rule on it never saw the sample that clears it. The first window runs
+     from the node's start, so it is whole and writes too; there is no windowless first read as the
+     server's queue read has. The each-tick figures go every tick, and
      `session-held-count` sends one sample per session state, zero included, so a state that empties
      reads 0. The drop counts are the node hop of #1641's loss ratio in count form; #1659 folds them
      into its uniform `delivery-*` keys.

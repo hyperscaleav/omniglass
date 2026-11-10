@@ -119,6 +119,14 @@ type retentionReport struct {
 	Trends storage.TrendCompaction
 	// Blocks is what the pass's block fold did (#1528).
 	Blocks storage.BlockCompaction
+	// Compacted says the pass ran both compactions, which it does only on a
+	// metric window in range, MetricDays that window; Failures counts the
+	// steps that returned an error, each one of the joined errors (#1629).
+	Compacted  bool
+	MetricDays int
+	Failures   int
+	// Duration is the pass's wall time, stamped by the loop that times it.
+	Duration time.Duration
 }
 
 // retentionPass prunes each lane to its window once (retentionLanes): the metric
@@ -145,6 +153,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	w, err := store.RetentionWindows(wctx)
 	done()
 	if err != nil {
+		rep.Failures = 1
 		return rep, err
 	}
 	var errs []error
@@ -169,6 +178,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	// The hours past the late-data horizon close into trends (#1276) before
 	// any prune, which never removes a sample of an hour still open.
 	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {
+		rep.Compacted, rep.MetricDays = true, w.MetricDays
 		cctx, cdone := bounded()
 		trends, err := store.CompactMetricTrends(cctx, trendCompactHours, w.MetricDays)
 		cdone()
@@ -225,6 +235,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		}
 		done()
 	}
+	rep.Failures = len(errs)
 	return rep, errors.Join(errs...)
 }
 
@@ -239,9 +250,16 @@ func (s *Server) startSampleRetention() {
 	go func() {
 		defer s.sweepDone.Done()
 		for {
-			rep, err := retentionPass(ctx, s.store, time.Now(), sampleRetentionChunk, sampleRetentionMaxChunks, sampleRetentionTimeout)
+			start := time.Now()
+			rep, err := retentionPass(ctx, s.store, start, sampleRetentionChunk, sampleRetentionMaxChunks, sampleRetentionTimeout)
+			rep.Duration = time.Since(start)
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("sample retention pass failed", "facility", "retention", "error", err.Error())
+			}
+			// The pass's figures land on the server's platform component
+			// (#1629); a failed write loses one pass's points, logged.
+			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
+				slog.Warn("retention figures not recorded", "facility", "retention", "error", err.Error())
 			}
 			var total int64
 			for _, n := range rep.Deleted {

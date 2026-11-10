@@ -560,5 +560,8 @@ against, masked of the secret it used; a secret input must be one you may reveal
 hands it to the target you name. A preview runs a poll that is its own request (http, https, snmp, a
 tcp line); a poll riding a held session (telnet, ssh, a websocket, a tls line, a login session) is
 attached first and run now (`endpoint:run`), which lands its samples and is refused, with the reason,
-while the endpoint is gated. Both are operator grants, audited
+while the endpoint is gated. A preview aimed at a device already attached takes its turn with that
+endpoint's own work, never sending beside it, and is refused the same way (409, naming the reason)
+while the endpoint is gated; a node too busy to queue another answers 429, so retry in a moment.
+Both are operator grants, audited
 ([collection](/architecture/collection/#on-demand-validate-preview-and-run-a-poll-now)).

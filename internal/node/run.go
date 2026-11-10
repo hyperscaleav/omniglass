@@ -57,9 +57,10 @@ type Config struct {
 	// dispatcher's timer, never the heartbeat (#1634). Zero is
 	// DefaultProbeEvery.
 	ProbeEvery time.Duration
-	// PollWorkers is how many tasks the node runs at once (#1634), one at a
-	// time per endpoint. Zero is DefaultPollWorkers.
-	PollWorkers int
+	// LaneWorkers is how many endpoint lanes run at once (#1634, #1249):
+	// each runs one request to its endpoint at a time, an operator's ahead
+	// of the scheduled. Zero is DefaultLaneWorkers.
+	LaneWorkers int
 	// WorklistEvery is how often the node pulls its worklist, on a goroutine
 	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
 	// the heartbeat's interval; `node run` defaults it to DefaultWorklistEvery.
@@ -257,6 +258,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				d.kick()
 			}
 		},
+		gateMoved: func() {
+			// A disruptive delivery closed its endpoints' gates (#1651): a
+			// pass defers their probes and re-arms the timer for the hold
+			// backstop.
+			if d != nil {
+				d.kick()
+			}
+		},
 		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
 			// The auth step's verdict is the endpoint-authenticated rung, the
 			// ladder's own vocabulary, published when it changes.
@@ -370,7 +379,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	d = newDispatcher(dispatchConfig{workers: cfg.PollWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
+	d = newDispatcher(dispatchConfig{workers: cfg.LaneWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})
 	coll.every, coll.wake = d.interval, d.kick
 	// Shutdown waits for the runs in flight before the sessions close
@@ -382,7 +391,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if cfg.Once {
 		d.settle()
 	}
-	runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands, self)
 	// A heartbeat the connection cannot take right now (a reconnect in
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
@@ -402,10 +411,12 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return wl, nil
 	}
 
-	// The server's on-demand runs (#1163): a preview runs on its request's
-	// goroutine, a run now waits for the loop below, which owns the sessions.
-	runJobs := make(chan runJob, 1)
-	runSub, err := subscribeRuns(ctx, nc, cfg.Name, runner, sessions.gates, runJobs)
+	// The server's on-demand runs (#1163) are operator work on the endpoint
+	// lanes (#1249): a run now on its endpoint's, a preview on the lane of
+	// the endpoint it resolves to (off-lane when none), each answered from
+	// the worker that ran it.
+	runSub, err := subscribeRuns(ctx, nc, runRoute{out: spool, node: cfg.Name, runner: runner,
+		sessions: sessions, sched: sched, report: report, pool: d.pool})
 	if err != nil {
 		return wl, fmt.Errorf("node: subscribe runs: %w", err)
 	}
@@ -430,10 +441,6 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	var commands sync.WaitGroup
 	var commandsBusy atomic.Bool
 	defer commands.Wait()
-	// A run now waits for its endpoint's lane, ahead of the scheduled tasks
-	// queued there, and answers from the worker that ran it.
-	var runNows sync.WaitGroup
-	defer runNows.Wait()
 
 	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
@@ -467,18 +474,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			d.pass(ctx, time.Now())
 		case <-d.wake:
 			d.pass(ctx, time.Now())
-		case job := <-runJobs:
-			if time.Now().Before(job.deadline) {
-				runNows.Go(func() {
-					d.pool.do(laneKey(job.task), laneOperator, func() {
-						job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
-					})
-				})
-			}
 		case next := <-worklists:
 			// Sessions and the dispatcher take the new worklist at once: a
 			// new task runs now, one gone stops, the rest keep their dues.
 			wl = next
+			self.worklist(len(wl.Tasks), time.Now())
 			sessions.reconcile(wl.Tasks)
 			d.sync(wl, time.Now())
 			d.pass(ctx, time.Now())
@@ -507,7 +507,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if commandsBusy.CompareAndSwap(false, true) {
 				commands.Go(func() {
 					defer commandsBusy.Store(false)
-					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
+					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands, self)
 				})
 			}
 			// Report the inbound lines no listener claimed this tick.
@@ -535,17 +535,20 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 // logDispatchWindow self-logs the dispatcher's account of the heartbeat
 // window just ended (#1634): the longest pass, the dues that met their run
 // still in flight, the dues passed over, the latest dispatch, and the most
-// workers busy and dispatches waiting at once. Said only for a window that
-// passed a due over, so a node keeping its schedule logs nothing.
+// workers busy and dispatches waiting at once, and the operator work offered
+// to the lanes against the offers refused at the operator queue's cap
+// (#1249). Said only for a window that passed a due over or refused
+// operator work, so a node keeping its schedule logs nothing.
 func logDispatchWindow(logger *slog.Logger, w dispatchWindow) {
-	if w.overruns == 0 && w.skips == 0 {
+	if w.overruns == 0 && w.skips == 0 && w.operatorRefusals == 0 {
 		return
 	}
 	logger.Warn("dispatch window", "facility", "collection",
 		"passes", w.passes, "tick-duration-ms", w.passMax.Milliseconds(),
 		"tick-overrun-count", w.overruns, "schedule-skip-count", w.skips,
 		"dispatch-late-ms", w.lateMax.Milliseconds(),
-		"worker-busy-count", w.busyMax, "dispatch-queue-depth", w.queueMax)
+		"worker-busy-count", w.busyMax, "dispatch-queue-depth", w.queueMax,
+		"operator-offer-count", w.operatorOffers, "operator-refused-count", w.operatorRefusals)
 }
 
 // reconnectWait and reconnectJitter space the node's reconnect attempts
