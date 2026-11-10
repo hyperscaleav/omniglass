@@ -144,6 +144,38 @@ message DeliveryLedger {
   uint64 resolved = 4;
   // kinds is one count per telemetry kind the boot has minted any of.
   repeated KindCount kinds = 5;
+  // dropped is each run of this boot's batches the spool gave up on (#1692),
+  // carried by every batch minted after the drop until one of them is acked:
+  // the server reads a gap those runs cover as the node hop's loss, under
+  // their cause, and not as missing at ingest.
+  repeated DroppedRun dropped = 6;
+  // lost is the items this boot lost before any batch carried them (#1692),
+  // running totals from the boot's start by cause and kind, so any landed
+  // batch says what was lost up to it.
+  repeated LostCount lost = 7;
+}
+
+// DroppedRun is a run of consecutive seqs of one boot the node's spool
+// dropped for one cause, and the items of each kind they carried.
+message DroppedRun {
+  // cause is spool-overflow, spool-expired or bus-refused.
+  string cause = 1;
+  // from_seq and to_seq bound the run, both included.
+  uint64 from_seq = 2;
+  uint64 to_seq = 3;
+  // kinds is the items of each kind the run carried; before is unset.
+  repeated KindCount kinds = 4;
+}
+
+// LostCount is one cause's running count of one kind's items a boot lost
+// before minting them into a batch.
+message LostCount {
+  // cause is self-log-overflow or encode-failed.
+  string cause = 1;
+  // kind is metric, property, event or log.
+  string kind = 2;
+  // count is the items lost since the boot began.
+  uint64 count = 3;
 }
 
 // KindCount is one telemetry kind's count on a DeliveryLedger.

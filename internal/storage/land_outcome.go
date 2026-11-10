@@ -13,10 +13,11 @@ import (
 // lives on (#1641, ADR-1641), and reports whether this delivery is its first.
 // A batch id already landed counts one more delivery on its receipt and lands
 // nothing: the count is what a read reports as deduplicated. A batch with a
-// ledger records the ledger on it; one without (the push lane) leaves those
+// ledger records the ledger on it, and the node's own loss account when the
+// node lost anything (#1692); one without (the push lane) leaves those
 // columns empty.
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
-	var node, boot, ledger *string
+	var node, boot, ledger, nodeLoss *string
 	var seq, resolved *int64
 	var minted any
 	if b.Node != "" {
@@ -29,11 +30,19 @@ func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, e
 		}
 		s, r, j := int64(l.Seq), int64(l.Resolved), string(raw)
 		boot, seq, resolved, ledger, minted = &l.Boot, &s, &r, &j, l.Minted
+		if !l.Loss.Empty() {
+			raw, err := json.Marshal(l.Loss)
+			if err != nil {
+				return false, fmt.Errorf("storage: land batch %s: receipt node loss: %w", b.BatchID, err)
+			}
+			n := string(raw)
+			nodeLoss = &n
+		}
 	}
-	err = tx.QueryRow(ctx, `insert into telemetry_receipt (batch_id, node, boot, seq, minted, resolved, ledger)
-		values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+	err = tx.QueryRow(ctx, `insert into telemetry_receipt (batch_id, node, boot, seq, minted, resolved, ledger, node_loss)
+		values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
 		on conflict (batch_id) do update set deliveries = telemetry_receipt.deliveries + 1
-		returning (xmax = 0)`, b.BatchID, node, boot, seq, minted, resolved, ledger).Scan(&first)
+		returning (xmax = 0)`, b.BatchID, node, boot, seq, minted, resolved, ledger, nodeLoss).Scan(&first)
 	if err != nil {
 		return false, fmt.Errorf("storage: land batch %s: receipt: %w", b.BatchID, err)
 	}

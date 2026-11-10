@@ -6322,6 +6322,11 @@
       "name": "outcome",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "node_loss",
+      "type": "jsonb",
+      "nullable": true
      }
     ]
    }
