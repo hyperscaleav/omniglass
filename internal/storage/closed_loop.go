@@ -32,14 +32,15 @@ type ClosedLoopPollTarget struct {
 // CountTelemetryReceipts counts the receipts whose batch id begins with
 // batchPrefix (a node's telemetry subject and a space) landed in [from,
 // next], split by start and end. starts_with keeps the prefix's own
-// characters literal, so a node named edge-1 never counts edge-10's.
+// characters literal, so a node named edge-1 never counts edge-10's. A Term
+// receipt (#1691) landed nothing, so it never counts.
 func (p *PG) CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error) {
 	var w ReceiptWindow
 	err := p.pool.QueryRow(ctx, `select count(*),
 			count(*) filter (where landed_at < $3),
 			count(*) filter (where landed_at > $4)
 		from telemetry_receipt
-		where starts_with(batch_id, $1) and landed_at >= $2 and landed_at <= $5`,
+		where starts_with(batch_id, $1) and landed_at >= $2 and landed_at <= $5 and not termed`,
 		batchPrefix, from, start, end, next).Scan(&w.Landed, &w.Margin, &w.AfterEnd)
 	if err != nil {
 		return ReceiptWindow{}, fmt.Errorf("storage: count telemetry receipts: %w", err)

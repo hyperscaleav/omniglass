@@ -85,3 +85,14 @@ func (d Declared) Against(decoded map[Kind]int) (short, over map[Kind]int) {
 	}
 	return short, over
 }
+
+// Under counts every item the ledger declared under the one outcome, kind by
+// kind: the tally of a batch the server Termed whole, whose items all share
+// its cause. Pure.
+func (d Declared) Under(o Outcome) Tally {
+	var t Tally
+	for _, k := range Kinds {
+		t.Add(k, o, int(d[k].Count))
+	}
+	return t
+}

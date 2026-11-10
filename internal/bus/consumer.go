@@ -164,13 +164,15 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
-		// Its items read as missing at the ledger's next read (#1641); the
+		// No ledger can be read from it, so it records no receipt: its items
+		// read as missing at the ledger's next read (#1641, ADR-1691); the
 		// warning says why.
 		slog.Warn(undecodableLog, "facility", "ingest", "subject", msg.Subject(), "bytes", len(msg.Data()), "error", err.Error())
 		s.drop(msg, nil) // undecodable: it will never succeed, stop redelivery
 		return
 	}
 	id := s.batchID(msg)
+	b := termed{id: id, ledger: ev.GetLedger()}
 
 	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
 	// carries an owner the route already authorized; the node lane's owner is the
@@ -182,7 +184,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			return
 		}
 		if err := s.land(ctx, id, &ev, bind); err != nil {
-			s.failed(msg, delivery.BatchItems(&ev), err)
+			s.failed(msg, b, delivery.BatchItems(&ev), err)
 			return
 		}
 		s.ack(msg)
@@ -193,13 +195,14 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// node extracted from the subject is trusted, the same trust the heartbeat sink
 	// relies on.
 	node := collection.NodeFromSubject(msg.Subject())
+	b.node = node
 
 	// A node does not get to assert its own owner. Populating owner on this lane is a
 	// protocol error, not something to quietly ignore: ignoring it would leave a
 	// field that looks authoritative and is not, so say so and stop redelivery.
 	if ev.GetOwner() != nil {
 		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
-		s.drop(msg, delivery.BatchItems(&ev))
+		s.term(msg, b, delivery.RefusedOwner, delivery.BatchItems(&ev))
 		return
 	}
 
@@ -210,13 +213,13 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// redelivery. The batch's self-logs are the only top-level rows it carries.
 	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
 		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
-		s.drop(msg, delivery.BatchItems(&ev))
+		s.term(msg, b, delivery.RefusedTask, delivery.BatchItems(&ev))
 		return
 	}
 
 	stamp, err := s.landNode(ctx, id, node, &ev)
 	if err != nil {
-		s.failed(msg, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
+		s.failed(msg, b, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
@@ -786,14 +789,15 @@ func tallySamples(t *delivery.Tally, ev *ogv1.TelemetryBatch, o delivery.Outcome
 // outright (storage.IsRefusedWrite: its owner gone, its key's writer class
 // refusing the writer, a value Postgres refuses as data or by a CHECK) is Term'd at once,
 // since one batch in flight means every batch behind it waits on it; any
-// other failure is redelivered, bounded (nakOrTerm).
-func (s *Server) failed(msg jetstream.Msg, items map[delivery.Kind]int, err error) {
+// other failure is redelivered, bounded (nakOrTerm). A refused batch's items
+// read refused-batch.
+func (s *Server) failed(msg jetstream.Msg, b termed, items map[delivery.Kind]int, err error) {
 	if storage.IsRefusedWrite(err) {
-		s.drop(msg, items)
+		s.term(msg, b, delivery.RefusedBatch, items)
 		slog.Warn("telemetry batch refused, dropped", "subject", msg.Subject(), "error", err.Error())
 		return
 	}
-	s.nakOrTerm(msg, items)
+	s.nakOrTerm(msg, b, items)
 }
 
 // nakOrTerm redelivers a telemetry message that failed for a transient reason
@@ -805,20 +809,48 @@ func (s *Server) failed(msg jetstream.Msg, items map[delivery.Kind]int, err erro
 // leaves a work-queue-retention stream on its own, so this is what actually
 // bounds the redelivery loop; ConsumerConfig.MaxDeliver is the JetStream-side
 // backstop for the same bound. With one batch in flight, the redelivery comes
-// before anything behind it.
-func (s *Server) nakOrTerm(msg jetstream.Msg, items map[delivery.Kind]int) {
+// before anything behind it. A batch Term'd for unreadable metadata reads
+// refused-metadata, one Term'd at the bound abandoned.
+func (s *Server) nakOrTerm(msg jetstream.Msg, b termed, items map[delivery.Kind]int) {
 	meta, err := msg.Metadata()
 	if err != nil {
-		s.drop(msg, items)
+		s.term(msg, b, delivery.RefusedMetadata, items)
 		slog.Warn("telemetry message dropped: could not read delivery metadata", "subject", msg.Subject(), "error", err)
 		return
 	}
 	if meta.NumDelivered >= maxTelemetryDeliveries {
-		s.drop(msg, items)
+		s.term(msg, b, delivery.Abandoned, items)
 		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
 		return
 	}
 	_ = msg.NakWithDelay(time.Duration(meta.NumDelivered) * telemetryNakDelay)
+}
+
+// termed is what the consumer knows of a batch it may Term whole: its id,
+// the node that sent it ("" on the API lane), and the ledger it carried (nil
+// on the API lane, which carries none).
+type termed struct {
+	id, node string
+	ledger   *ogv1.DeliveryLedger
+}
+
+// term Terms a batch whole and records its Term receipt (#1691): every item
+// its ledger declared, under cause, so the loss table names why the batch
+// never landed instead of reading it missing. A batch with no id or no ledger
+// has nothing to record against. The receipt is best effort: one that fails
+// to record is warned and the batch is Term'd anyway, its items then reading
+// missing, since holding it would stall every batch behind it.
+func (s *Server) term(msg jetstream.Msg, b termed, cause delivery.Outcome, items map[delivery.Kind]int) {
+	if b.id != "" && b.ledger != nil {
+		stamp := delivery.FromProto(b.ledger)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := s.store.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: b.id, Node: b.node, Ledger: stamp, Outcome: stamp.Kinds.Under(cause)})
+		cancel()
+		if err != nil {
+			slog.Warn("telemetry Term receipt not recorded, its items read missing", "facility", "ingest", "subject", msg.Subject(), "cause", string(cause), "error", err.Error())
+		}
+	}
+	s.drop(msg, items)
 }
 
 // logLineWrites turns a push batch's raw log lines into component-owned

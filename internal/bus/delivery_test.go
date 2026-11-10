@@ -27,6 +27,8 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -855,9 +857,10 @@ func (s *failSeq) LandBatch(ctx context.Context, b storage.IngestBatch) (storage
 	return landed, err
 }
 
-// TestMaxDeliveredBatchReadsAsMissing: a batch that fails every delivery is
-// dropped at the bound with no receipt, so its items read as missing.
-func TestMaxDeliveredBatchReadsAsMissing(t *testing.T) {
+// TestMaxDeliveredBatchReadsAsAbandoned: a batch that fails every delivery
+// is dropped at the bound, and the receipt it leaves names its items
+// abandoned, not missing (#1691).
+func TestMaxDeliveredBatchReadsAsAbandoned(t *testing.T) {
 	restore := bus.SetTelemetryNakDelay(20 * time.Millisecond)
 	defer restore()
 	r := newLedgerRig(t)
@@ -869,9 +872,9 @@ func TestMaxDeliveredBatchReadsAsMissing(t *testing.T) {
 	defer srv.Shutdown()
 	nc := r.connect(t, srv)
 	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1), r.ledgered(3, 2), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
-	r.waitReceipts(t, srv, 5)
-	if n := store.attempts.Load(); n < 2 {
-		t.Fatalf("batch 3 was tried %d times, want it redelivered to the bound", n)
+	r.waitReceipts(t, srv, 6)
+	if n := store.attempts.Load(); n != 5 {
+		t.Fatalf("batch 3 was tried %d times, want it redelivered to the bound of 5", n)
 	}
 
 	rows, unsettled := r.read(t)
@@ -879,8 +882,87 @@ func TestMaxDeliveredBatchReadsAsMissing(t *testing.T) {
 		t.Fatalf("unsettled %v", unsettled)
 	}
 	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
-		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Missing: 1})
+		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Abandoned: 1})
 	}
+}
+
+// TestTermedBatchLandsALaterCopy: a batch the server Termed leaves a receipt
+// naming its cause, and a later copy of it (a node's retry past the stream's
+// duplicate window, here a fresh stream) still lands its rows: the landing
+// replaces the Term receipt, and the batch reads stored, loss 0 (#1691).
+func TestTermedBatchLandsALaterCopy(t *testing.T) {
+	restore := bus.SetTelemetryNakDelay(20 * time.Millisecond)
+	defer restore()
+	r := newLedgerRig(t)
+	const id = "batch-ledger-3"
+	third := r.ledgered(3, 2)
+
+	first, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, &failSeq{PG: r.gw, seq: 3})
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	nc := r.connect(t, first)
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1))
+	publishBatchID(t, nc, third, id)
+	r.publish(t, nc, r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, first, 6)
+	nc.Close()
+	first.Shutdown()
+	if n := r.logLines(t, "ledger-3"); n != 0 {
+		t.Fatalf("batch 3 landed %d log lines while it failed, want none", n)
+	}
+
+	second, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start the second bus: %v", err)
+	}
+	defer second.Shutdown()
+	publishBatchID(t, r.connect(t, second), third, id)
+	deadline := time.Now().Add(15 * time.Second)
+	for r.logLines(t, "ledger-3") == 0 {
+		if time.Now().After(deadline) {
+			var termed bool
+			var deliveries int
+			var outcome string
+			_ = r.conn.QueryRow(r.ctx, `select termed, deliveries, coalesce(outcome::text, '') from telemetry_receipt where boot = $1 and seq = 3`, ledgerBoot).Scan(&termed, &deliveries, &outcome)
+			t.Fatalf("the later copy of batch 3 never landed its rows: receipt termed=%v deliveries=%d outcome=%q", termed, deliveries, outcome)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	r.waitDrained(t, second)
+
+	rows, _ := r.read(t)
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Stored: 5})
+	}
+}
+
+// publishBatchID publishes ev on the rig's node subject under the
+// Nats-Msg-Id id, as a node's spool does, and waits for the stream's ack.
+func publishBatchID(t *testing.T, nc *nats.Conn, ev *ogv1.TelemetryBatch, id string) {
+	t.Helper()
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal batch: %v", err)
+	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		t.Fatalf("jetstream: %v", err)
+	}
+	if _, err := collection.PublishBatch(context.Background(), js, collection.TelemetrySubject(ledgerNode), b, id, 5*time.Second); err != nil {
+		t.Fatalf("publish batch %s: %v", id, err)
+	}
+}
+
+// logLines is how many of the node's self-log lines with message msg the
+// store holds.
+func (r ledgerRig) logLines(t *testing.T, msg string) int {
+	t.Helper()
+	var n int
+	if err := r.conn.QueryRow(r.ctx, `select count(*) from node_log where message = $1`, msg).Scan(&n); err != nil {
+		t.Fatalf("count log lines: %v", err)
+	}
+	return n
 }
 
 // TestRedeliveredBatchReadsAsDeduplicated: a batch landed, its ack lost, and
