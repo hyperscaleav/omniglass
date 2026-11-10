@@ -28,8 +28,9 @@ const DefaultPollWorkers = 16
 // still in flight at its next due is skipped and counted, never queued
 // behind itself. A poll the endpoint's gate holds is decided here, in the
 // pass, so it never takes a lane: counted held once per due, released the
-// moment the gate opens. The heartbeat keeps the node's housekeeping and
-// sets no task's cadence.
+// moment the gate opens. A probe of an endpoint a path upstream holds
+// (#1652) is held the same way, released when the upstream opens. The
+// heartbeat keeps the node's housekeeping and sets no task's cadence.
 
 // phaseOf is where on its interval a task's slots fall: a function of its
 // id alone, so a restarted node keeps each task's slots and a fleet of tasks
@@ -157,7 +158,11 @@ type dispatcher struct {
 	tasks    map[string]collection.TaskSpec
 	inflight map[string]bool
 	held     map[string]string // held poll id to its endpoint
-	window   dispatchWindow
+	// heldProbes is each probe a path upstream holds (#1652) to its
+	// endpoint: released when the upstream opens, as its polls stay held
+	// until the probe reads the endpoint up.
+	heldProbes map[string]string
+	window     dispatchWindow
 }
 
 func newDispatcher(cfg dispatchConfig) *dispatcher {
@@ -175,7 +180,7 @@ func newDispatcher(cfg dispatchConfig) *dispatcher {
 	}
 	return &dispatcher{cfg: cfg, pool: newLanePool(cfg.workers), wake: make(chan struct{}, 1),
 		entries: map[string]*dueEntry{}, tasks: map[string]collection.TaskSpec{},
-		inflight: map[string]bool{}, held: map[string]string{}}
+		inflight: map[string]bool{}, held: map[string]string{}, heldProbes: map[string]string{}}
 }
 
 // interval is how often a task runs: a driver poll at its declared
@@ -222,6 +227,7 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 			delete(d.entries, id)
 			delete(d.tasks, id)
 			delete(d.held, id)
+			delete(d.heldProbes, id)
 		}
 	}
 	for _, t := range wl.Tasks {
@@ -313,6 +319,15 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 		extra := e.extra
 		e.at, e.slot, e.fresh, e.extra = next, next, false, false
 		heap.Fix(&d.due, e.idx)
+		if !poll && d.cfg.sessions.upstreamHeld(t.EndpointID) {
+			// A path upstream holds the endpoint (#1652): its probe is not
+			// run, so the endpoint gives no verdict while the cause is
+			// upstream, and nothing failed. It counts held once per due and
+			// runs the moment the upstream opens.
+			d.cfg.report.heldPoll(t.EndpointID)
+			d.heldProbes[e.id] = t.EndpointID
+			continue
+		}
 		if poll {
 			for range missed {
 				d.cfg.report.pollDue(t.EndpointID)
@@ -337,6 +352,7 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			}
 		}
 		delete(d.held, e.id)
+		delete(d.heldProbes, e.id)
 		d.inflight[e.id] = true
 		jobs = append(jobs, t)
 	}
@@ -359,8 +375,8 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 
 // releaseLocked makes due at once what was waiting on a gate that opened: a
 // refused poll whose held session reads up again (#1049), and a held poll
-// whose endpoint's gate no longer holds it (#1650). Neither is a due of its
-// own.
+// whose endpoint's gate no longer holds it (#1650), and a held probe whose
+// path upstream opened (#1652). None is a due of its own.
 func (d *dispatcher) releaseLocked(now time.Time) {
 	for _, id := range d.cfg.sched.refusedIDs() {
 		t, ok := d.tasks[id]
@@ -376,6 +392,12 @@ func (d *dispatcher) releaseLocked(now time.Time) {
 	for id, ep := range d.held {
 		if _, holding := d.cfg.sessions.holding(ep); !holding {
 			delete(d.held, id)
+			d.runNowLocked(id, now)
+		}
+	}
+	for id, ep := range d.heldProbes {
+		if !d.cfg.sessions.upstreamHeld(ep) {
+			delete(d.heldProbes, id)
 			d.runNowLocked(id, now)
 		}
 	}

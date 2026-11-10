@@ -710,10 +710,36 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
-	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
+	m := &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
 		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
 		streamResumes: map[string]heldResume{}, now: time.Now}
+	// A new upstream reason is since the manager's clock, so a test that
+	// moves the clock moves it too.
+	m.gates.clock = func() time.Time { return m.now() }
+	return m
+}
+
+// settle publishes every endpoint whose upstream reason moved (#1652) and
+// wakes the dispatcher, which holds or releases their probes and polls: one
+// endpoint's gate moving can close or open every endpoint reached through it.
+func (m *sessionManager) settle() {
+	moved := m.gates.takeMoved()
+	for _, ep := range moved {
+		m.syncRejection(ep)
+	}
+	if len(moved) > 0 && m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// upstreamHeld is whether the endpoint is held by a path upstream (#1652):
+// its probes are not run.
+func (m *sessionManager) upstreamHeld(endpointID string) bool {
+	if m == nil {
+		return false
+	}
+	return m.gates.upstreamHeld(endpointID)
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -845,6 +871,7 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	if m.gates.record(endpointID, fingerprint, terr) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // refuseOver gates an endpoint for a terminal refusal met over a transport,
@@ -861,6 +888,7 @@ func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint strin
 	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // currentFingerprint is the fingerprint the endpoint is connected with now.
@@ -878,6 +906,7 @@ func (m *sessionManager) pass(endpointID string) {
 	}
 	m.gates.clear(endpointID)
 	m.syncRejection(endpointID)
+	m.settle()
 }
 
 // refusedAt is the refused reason that holds rung r for the endpoint, if any.
@@ -906,6 +935,7 @@ func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Tim
 	if m.gates.verdict(endpointID, taskID, up, at) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // disrupt closes the gate of every endpoint a disruptive delivery holds
@@ -923,6 +953,7 @@ func (m *sessionManager) disrupt(d collection.CommandDelivery) {
 	}
 	slog.Info("disruptive command closed its endpoints' gates", "facility", "command", "command", d.ID,
 		"command_type", d.CommandType, "endpoints", d.HoldEndpoints, "quiet_seconds", d.QuietSeconds, "hold_seconds", d.HoldSeconds)
+	m.settle()
 	if m.hooks.gateMoved != nil {
 		m.hooks.gateMoved()
 	}
@@ -951,6 +982,7 @@ func (m *sessionManager) expireHolds(now time.Time) []string {
 			"command", x.source, "endpoint", x.endpoint)
 		expired = append(expired, x.endpoint)
 	}
+	m.settle()
 	return expired
 }
 
@@ -965,7 +997,9 @@ func (m *sessionManager) nextHoldExpiry() (time.Time, bool) {
 
 // observe takes each endpoint's fingerprint and published rejection off the
 // worklist: a gate under another fingerprint lifts, one carried back from
-// before a restart is adopted.
+// before a restart is adopted. The path dependencies it carries (#1652) are
+// the gates' topology, taken before the endpoints that left are dropped, so an
+// adopted upstream reason is derived against them.
 func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	// The publishing task is chosen afresh from this worklist (a re-derived
 	// driver deletes old task ids, and a sample under one is an orphan).
@@ -988,6 +1022,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 			m.gates.place(t.EndpointID, p.Target)
 		}
 	}
+	m.gates.topology(topologyOf(tasks), m.now())
 	m.gates.retain(endpoints, taskIDs)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
@@ -1004,6 +1039,42 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	for id := range reflected {
 		m.syncRejection(id)
 	}
+	m.settle()
+}
+
+// topologyOf is the path dependencies a worklist carries (#1652): each
+// endpoint's component, its path upstreams, and whether it has a probe (a
+// task that is not a baked poll) to wait for once its upstream opens. Only a
+// dependent's task carries its component; an upstream's is read off the edge
+// that names it.
+func topologyOf(tasks []collection.TaskSpec) upstreamTopology {
+	t := upstreamTopology{componentOf: map[string]string{}, edges: map[string][]pathUpstream{}, probed: map[string]bool{}}
+	for _, task := range tasks {
+		ep := task.EndpointID
+		if ep == "" {
+			continue
+		}
+		if task.ComponentID != "" {
+			t.componentOf[ep] = task.ComponentID
+		}
+		if !driver.IsBaked(task.Spec) {
+			t.probed[ep] = true
+		}
+		if _, ok := t.edges[ep]; ok || len(task.PathUpstreams) == 0 {
+			continue
+		}
+		ups := make([]pathUpstream, len(task.PathUpstreams))
+		for i, pu := range task.PathUpstreams {
+			ups[i] = pathUpstream{component: pu.ComponentID, name: pu.ComponentName, endpoints: pu.EndpointIDs}
+			for _, u := range pu.EndpointIDs {
+				if _, ok := t.componentOf[u]; !ok {
+					t.componentOf[u] = pu.ComponentID
+				}
+			}
+		}
+		t.edges[ep] = ups
+	}
+	return t
 }
 
 // reconcile brings the held set to what the worklist asks for.
