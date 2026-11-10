@@ -303,20 +303,6 @@ var platform = map[string]string{
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
 
-	// The server's identity (#1644).
-	ServerVersion:   serverBootWriter,
-	ServerStartedAt: serverBootWriter,
-
-	// A node's command queue (#1626).
-	CommandPendingCount:     "the server's command queue timer",
-	CommandPendingAge:       "the server's command queue timer",
-	CommandDispatchLatency:  "the command wire, at a command's first dispatch",
-	CommandExecutionLatency: "the command wire, at a command's execution report",
-	CommandRedeliveryCount:  "the server's command queue timer",
-	CommandStuckCount:       "the server's command queue timer",
-	CommandExpiredCount:     "the server's command queue timer",
-	CommandPullFailureCount: nodeSelfWriter,
-
 	// The server's pipeline (#1628).
 	IngestLag:                   serverPipelineWriter,
 	IngestLagMax:                serverPipelineWriter,
@@ -340,6 +326,20 @@ var platform = map[string]string{
 	SweepDuration:               serverPipelineWriter,
 	SweepCount:                  serverPipelineWriter,
 	SweepFailureCount:           serverPipelineWriter,
+
+	// The server's identity (#1644).
+	ServerVersion:   serverBootWriter,
+	ServerStartedAt: serverBootWriter,
+
+	// A node's command queue (#1626).
+	CommandPendingCount:     "the server's command queue timer",
+	CommandPendingAge:       "the server's command queue timer",
+	CommandDispatchLatency:  "the command wire, at a command's first dispatch",
+	CommandExecutionLatency: "the command wire, at a command's execution report",
+	CommandRedeliveryCount:  "the server's command queue timer",
+	CommandStuckCount:       "the server's command queue timer",
+	CommandExpiredCount:     "the server's command queue timer",
+	CommandPullFailureCount: nodeSelfWriter,
 }
 
 // NodeSelf reports a platform key a node may report of itself on the

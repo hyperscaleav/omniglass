@@ -127,8 +127,11 @@ func (p *PG) CommandQueueHealth(ctx context.Context, since time.Time) (CommandQu
 // written every read, an idle queue's pending age as zero: an age written
 // only while something waits would leave a drained queue's last age standing
 // as its latest sample, and a rule on it would never clear. The window
-// counts are written only when nonzero, and never for a read with no window
-// (a zero since): a first read cannot know what crossed before it.
+// counts are written every read with a window, a quiet window's as zero, for
+// the same reason: a count written only when nonzero would leave the last
+// event's count standing as the latest value long after it. A read with no
+// window (a zero since) writes none: a first read cannot know what crossed
+// before it.
 func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetric {
 	var out []PlatformMetric
 	for _, q := range read.Nodes {
@@ -153,9 +156,7 @@ func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetri
 			{writerclass.CommandExpiredCount, writerclass.CommandExpiredUndelivered, q.ExpiredUndelivered},
 			{writerclass.CommandExpiredCount, writerclass.CommandExpiredUnexecuted, q.ExpiredUnexecuted},
 		} {
-			if c.n > 0 {
-				add(c.key, c.instance, float64(c.n))
-			}
+			add(c.key, c.instance, float64(c.n))
 		}
 	}
 	return out

@@ -36,15 +36,21 @@ type recordingRunner struct {
 	previews [][]storage.WorklistTask
 	runs     []string
 	release  chan struct{}
+	// held, when set, is the node's answer to every ask: its gates held the
+	// endpoint or the target's host, so it sent nothing.
+	held *collection.RunReply
 }
 
 func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []storage.WorklistTask, _ []string, _ time.Duration) (collection.RunReply, error) {
 	r.mu.Lock()
 	r.previews = append(r.previews, tasks)
-	rel := r.release
+	rel, held := r.release, r.held
 	r.mu.Unlock()
 	if rel != nil {
 		<-rel
+	}
+	if held != nil {
+		return *held, nil
 	}
 	return collection.RunReply{Results: []collection.RunResult{{TaskID: tasks[0].ID, Function: "identity",
 		Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}},
@@ -54,7 +60,11 @@ func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []sto
 func (r *recordingRunner) RunTaskNow(_ context.Context, node, taskID string, _ time.Duration) (collection.RunReply, error) {
 	r.mu.Lock()
 	r.runs = append(r.runs, node+"/"+taskID)
+	held := r.held
 	r.mu.Unlock()
+	if held != nil {
+		return *held, nil
+	}
 	return collection.RunReply{Results: []collection.RunResult{{TaskID: taskID, Function: "identity", Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}}}}}, nil
 }
 
@@ -119,6 +129,76 @@ func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
 	}
 	if len(s.runner.previews) != 1 || s.runner.previews[0][0].Secrets["login"]["password"] != nodeRunSecret {
 		t.Errorf("the node was asked %+v", s.runner.previews)
+	}
+}
+
+// A node whose probe reads the endpoint, or the preview's target host,
+// unreachable answers at once, gated with that reason (#1650): the route
+// answers 409 naming it, never a 502 as though the node had failed, and a
+// run now's answer is not a refusal's (no retry-endpoint lifts it).
+func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-held", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-held", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	s.runner.mu.Lock()
+	s.runner.held = &collection.RunReply{Gated: true, GateReason: "unreachable",
+		Error: "node: the endpoint is unreachable since 2026-11-09T14:03:00Z (probe t1); it reopens on the probe's next up verdict"}
+	s.runner.mu.Unlock()
+	code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-held%2F"+ep.Name+"/polls/identity:run", nil)
+	if code != http.StatusConflict || !strings.Contains(string(raw), "unreachable since 2026-11-09T14:03:00Z") || strings.Contains(string(raw), "retry-endpoint") {
+		t.Errorf("a held run now = %d %s, want 409 naming unreachable", code, raw)
+	}
+	s.runner.mu.Lock()
+	s.runner.held = &collection.RunReply{Gated: true, GateReason: "unreachable",
+		Error: "node: the host is unreachable since 2026-11-09T14:03:00Z (probe t1), so the preview was not sent; it reopens on the probe's next up verdict"}
+	s.runner.mu.Unlock()
+	if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusConflict || !strings.Contains(string(raw), "unreachable since") {
+		t.Errorf("a held preview = %d %s, want 409 naming unreachable, not 502", code, raw)
+	}
+	// A preview that resolved to an inventoried endpoint (#1249) is held by
+	// that endpoint's gate, a disruption or a refusal included.
+	for reason, text := range map[string]string{
+		"disrupted": "node: the endpoint at 10.20.4.31:443 is disrupted by reboot (command 42) since 2026-11-09T14:03:00Z, so the preview was not sent",
+		"refused":   "node: the endpoint at 10.20.4.31:443 is gated: auth: 401, so the preview was not sent",
+	} {
+		s.runner.mu.Lock()
+		s.runner.held = &collection.RunReply{Gated: true, GateReason: reason, Error: text}
+		s.runner.mu.Unlock()
+		if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusConflict || !strings.Contains(string(raw), text) {
+			t.Errorf("a preview held %s = %d %s, want 409 naming the reason", reason, code, raw)
+		}
+	}
+}
+
+// Operator work past the node's operator lane cap (#1249) is refused there
+// unrun: a 429 for a run now and a preview alike, never a gateway fault.
+func TestFullOperatorLanesAnswerTooManyRequests(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-full", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-full", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.32", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	full := "the node's operator lanes are full; retry in a moment"
+	s.runner.mu.Lock()
+	s.runner.held = &collection.RunReply{Full: true, Error: full}
+	s.runner.mu.Unlock()
+	if code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-full%2F"+ep.Name+"/polls/identity:run", nil); code != http.StatusTooManyRequests || !strings.Contains(string(raw), full) {
+		t.Errorf("a run now on full lanes = %d %s, want 429", code, raw)
+	}
+	if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusTooManyRequests || !strings.Contains(string(raw), full) {
+		t.Errorf("a preview on full lanes = %d %s, want 429", code, raw)
 	}
 }
 

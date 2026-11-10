@@ -564,7 +564,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). The `rejection` is served whether or not a session is
+  session pill and ladder render (#1059). Every other reason the gate holds (the gate is a set,
+  [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)) is served as
+  `gate_reasons`, each with its `kind`, `since` and `source`, absent when none holds (#1650). The `rejection` is served whether or not a session is
   held, since a reachability probe's refusal gates an endpoint too, with its `reason` (the
   `endpoint-rejection-reason` the node publishes beside the gate, cut to 500 characters like a
   session's) and `ts` (when the gate was last published), so the console's refusal notice and its

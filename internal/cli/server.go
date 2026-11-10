@@ -152,7 +152,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
-	busSrv, err := startBus(c, gw, self.rec, serverComponentID)
+	busSrv, err := startBus(c, gw, serverComponentID, self.rec)
 	if err != nil {
 		return err
 	}
@@ -250,11 +250,11 @@ func serverComponent(ctx context.Context, gw serverComponenter, identity string,
 }
 
 // startBus parses the configured NATS listen address and starts the embedded
-// server, recording its pipeline into rec and its retention pass reporting on
-// componentID (empty, it reports nothing). A "host:" or bare port resolves
-// through net.SplitHostPort; a parse failure is a config error surfaced at
-// boot.
-func startBus(c config.Config, gw *storage.PG, rec *platformmetric.Recorder, componentID string) (*bus.Server, error) {
+// server, its retention pass reporting on componentID (empty, it reports
+// nothing) and its pipeline figures recorded on rec. A "host:" or bare port
+// resolves through net.SplitHostPort; a parse failure is a config error
+// surfaced at boot.
+func startBus(c config.Config, gw *storage.PG, componentID string, rec *platformmetric.Recorder) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -265,8 +265,7 @@ func startBus(c config.Config, gw *storage.PG, rec *platformmetric.Recorder, com
 	}
 	// The worklist pool is held under the database pool, keeping one
 	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), Metrics: rec,
-		PlatformComponentID: componentID}, gw)
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID, Metrics: rec}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

@@ -127,6 +127,15 @@ var bornUnderTheRuling = map[string]bool{
 	"poll-failure-count":   true,
 	"push-message-count":   true,
 	"push-unclaimed-count": true,
+	// Each endpoint's held polls (#1650), declared after the backfill.
+	"poll-held-count": true,
+	// Each endpoint's due and skipped polls (#1634), declared after the
+	// backfill.
+	"poll-due-count":     true,
+	"poll-skipped-count": true,
+	// Each endpoint's hold backstop expiries (#1651), declared after the
+	// backfill.
+	"hold-expiry-count": true,
 }
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to

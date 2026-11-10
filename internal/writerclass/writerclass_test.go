@@ -352,6 +352,33 @@ func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 	}
 }
 
+// TestServerPipelineKeysAreTheProcesssAlone: the server's pipeline keys
+// (#1628) are platform keys only the process writes, and a node naming one on
+// its node-self lane is refused.
+func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
+	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
+		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
+		BusTelemetryDropCount, BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
+		BusRequestFailureCount, CalcPendingDepth, CalcServedCount, CalcPassDuration, OutboxQueuedDepth,
+		OutboxDueAge, SweepDuration, SweepCount, SweepFailureCount}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a pipeline key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
+		if !NodeSelf(key) {
+			t.Errorf("%s is a generic process key a node reports of itself", key)
+		}
+	}
+}
+
 // A node's command queue (#1626) is platform keys the process writes. The
 // server measures the queue and the wire, so only the pull-failure count, the
 // one fact the node alone sees, rides the node-self lane.
@@ -403,33 +430,6 @@ func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
 		}
 		if NodeSelf(key) {
 			t.Errorf("the node-self lane admits %s", key)
-		}
-	}
-}
-
-// TestServerPipelineKeysAreTheProcesssAlone: the server's pipeline keys
-// (#1628) are platform keys only the process writes, and a node naming one on
-// its node-self lane is refused.
-func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
-	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
-		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
-		BusTelemetryDropCount, BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
-		BusRequestFailureCount, CalcPendingDepth, CalcServedCount, CalcPassDuration, OutboxQueuedDepth,
-		OutboxDueAge, SweepDuration, SweepCount, SweepFailureCount}
-	for _, key := range keys {
-		if c, ok := Reserved(key); !ok || c != Platform {
-			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
-		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
-			t.Errorf("%s: only the process writes a pipeline key", key)
-		}
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
-		}
-	}
-	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
-		if !NodeSelf(key) {
-			t.Errorf("%s is a generic process key a node reports of itself", key)
 		}
 	}
 }

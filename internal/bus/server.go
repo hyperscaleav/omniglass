@@ -218,6 +218,7 @@ func (s *Server) subscribe() error {
 			reply.Commands = append(reply.Commands, collection.CommandDelivery{
 				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
 				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
+				Disruptive: d.Disruptive, QuietSeconds: d.QuietSeconds, HoldSeconds: d.HoldSeconds, HoldEndpoints: d.HoldEndpoints,
 			})
 		}
 		b, err := json.Marshal(reply)

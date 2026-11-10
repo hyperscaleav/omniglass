@@ -2057,6 +2057,24 @@ role_assignments:
     role: touch-control
     component: lab-b-touch
 
+# Dependency edges (#1648): what a component needs from another, a different
+# fact from where it sits. Boardroom A's rack power conditioner feeds the video
+# bar from outlet 1 and the amplifier from outlet 2, so cycling outlet 1 holds
+# the bar, and the touch panel is hosted by the bar, so a reboot of the bar
+# holds the panel's endpoints too. All four sit in the same room, which is
+# containment, and says nothing of either. The huddle's touch panel is paired
+# to its bar the same way, and the huddle is a room a large scenario copies,
+# so every copy carries its own edge. The panel is also reached through the
+# bar (#1652): its traffic rides the bar's switch port, so a bar that stops
+# answering holds the panel's polls and probes under the upstream reason
+# naming the bar, rather than raising a second outage behind the first.
+component_dependencies:
+  - { component: bar-a, upstream: power, kind: power, outlet: "1" }
+  - { component: div-amp, upstream: power, kind: power, outlet: "2" }
+  - { component: touch-a, upstream: bar-a, kind: host }
+  - { component: touch-a, upstream: bar-a, kind: path }
+  - { component: huddle-touch, upstream: huddle-bar, kind: host }
+
 alarms:
   - component: aud-dsp
     severity: high
@@ -2104,6 +2122,12 @@ sim_secrets:
     label: Simulated Boreal display login
     secret_type: basic-auth
     fields: { username: admin, password: boreal }
+  # The simulated Ferrite PDU's control login (its http-api face, #1653),
+  # for the boardroom PDU's switching endpoint below.
+  - name: sim-ferrite-login
+    label: Simulated Ferrite PDU login
+    secret_type: basic-auth
+    fields: { username: ferrite, password: ferrite }
   # The key the simulated UCC service signs its webhooks with (#1024).
   - name: sim-ucc-signing
     label: Simulated UCC webhook signing key
@@ -2215,6 +2239,14 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel Telnet
     inputs: { login: sim-panel-login-rotated }
+  # The boardroom PDU's control face (#1653): its JSON API behind basic auth,
+  # beside the SNMP agent its product attaches. It carries outlet-off and
+  # outlet-on; a component given a power dependency on one of its outlets is
+  # held while that outlet is switched off.
+  - component: power
+    driver: ferrite-pdu-api
+    label: PDU control
+    inputs: { login: sim-ferrite-login }
   # A bare ping: icmp has no device API, so it is the one method that counts
   # on its connection tier alone.
   - component: touch-a

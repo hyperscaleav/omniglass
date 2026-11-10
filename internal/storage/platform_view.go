@@ -428,21 +428,17 @@ func (p *PG) componentVerdicts(ctx context.Context, ids []string) (map[string]st
 }
 
 // PlatformWindowKeys are the PlatformViewGroups keys a writer reports once a
-// window and only when nonzero (the node's report window, the server's
-// command pass). Their last sample is the last window that counted
-// something, not a current reading: a later window that counted nothing
-// writes no row. So the view shows one only while it is the newest window's
-// and leaves it absent after (platformWindowHorizon). Every other key is a
-// gauge written whether or not it moved, whose latest sample is current
-// however old. The catalog describes exactly these as "reported only when
-// nonzero" (TestPlatformWindowKeysAreTheNonzeroCounts).
-var PlatformWindowKeys = map[string]bool{
-	writerclass.TickOverrunCount:    true,
-	writerclass.ScheduleSkipCount:   true,
-	writerclass.SpoolDropCount:      true,
-	writerclass.PublishFailureCount: true,
-	writerclass.CommandExpiredCount: true,
-}
+// window and only when nonzero. Such a key's last sample is the last window
+// that counted something, not a current reading: a later window that counted
+// nothing writes no row. So the view shows one only while it is the newest
+// window's and leaves it absent after (platformWindowHorizon). Every other key
+// is written whether or not it moved, whose latest sample is current however
+// old. Since the 2026-11-10 ruling every windowed platform count is written
+// every window, zero when quiet (ADR-1625), so no grouped key is one and the
+// set is empty; it stays as the guard for a count written only when nonzero.
+// The catalog describes exactly these as "reported only when nonzero"
+// (TestPlatformWindowKeysAreTheNonzeroCounts).
+var PlatformWindowKeys = map[string]bool{}
 
 // platformWindowHorizon is how far back a window count still reads as the
 // current window: two report windows, so the newest window has ended and a
@@ -470,7 +466,9 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 	if err != nil {
 		return nil, err
 	}
-	var windowKeys []string
+	// Never nil: a nil slice binds as NULL, and "name = any(NULL)" would
+	// drop every row older than the horizon, gauges too.
+	windowKeys := []string{}
 	for _, k := range platformViewKeys() {
 		if PlatformWindowKeys[k] {
 			windowKeys = append(windowKeys, k)
