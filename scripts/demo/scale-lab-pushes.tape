@@ -62,7 +62,7 @@ Wait
 Type `omniglass secret list | jq -c '.secrets[] | select(.name | endswith("-signing")) | {name, secret_type, owner_kind}'`
 Enter
 Wait
-Type "# Each site's systems are bound as the platform's rooms, so every signed post lands on a system"
+Type "# Each site's systems are bound as the platform's rooms, so each room's post lands on its system"
 Enter
 Wait
 Type `for id in $(omniglass endpoint list | jq -r '.endpoints[] | select(.driver == "ucc-webhook") | .component_id'); do omniglass component identity-binding list "$id" | jq -c '[.bindings[] | {room: .value, system: .owner_name}]'; done`

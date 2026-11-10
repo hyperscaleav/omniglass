@@ -554,7 +554,8 @@ The platform also reports on its own: a `rooms_report` behavior posts the same b
 subscription, the identity values bound on the component, and the simulator adds each one it has
 not added yet through the provision route, so a room bound later is added on the next pull and a
 restarted device has every room added again. That is how a scale scenario's meeting platform comes
-to speak for exactly its site's systems ([the lab guide](/guides/lab/#scale-lab-scenarios)).
+to speak for every system of its site ([the lab guide](/guides/lab/#scale-lab-scenarios)); it keeps
+the profile's five demo rooms beside them, which land in its unbound inbox until #1756 retires them.
 The lab's per-room UCC services stay beside it until #1390 retires them.
 
 ### A pusher pushes on its own cadence

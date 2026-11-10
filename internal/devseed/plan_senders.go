@@ -20,9 +20,11 @@ import (
 // driver its simulator profile names (server hosted, so on no node), a
 // signing secret minted for this seed alone, and one identity binding per
 // system, named for the system, on the driver's room identity. The simulator
-// learns the bound names from the bindings and adds each as a room, so every
-// post it makes names a room that lands on a system. Everything is read from
-// the profile and the driver spec: nothing here knows the platform by name.
+// learns the bound names from the bindings and adds each as a room, so its
+// report names every system. The account keeps the rooms its profile ships
+// with too, and those land in the conduit's unbound inbox (#1756). Everything
+// is read from the profile and the driver spec: nothing here knows the
+// platform by name.
 
 // senderRow is a sender of a plan: the index of its component in the plan's
 // components, and the systems it speaks for.

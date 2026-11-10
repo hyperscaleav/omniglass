@@ -13,5 +13,5 @@ speaks for every system of its site. The seed reads the platform's webhook face 
 rooms through the device list, subscribes, adds each room, and the platform's new `rooms_report`
 behavior posts every room's state, signed, every 30 seconds. `omniglass lab seed` reports the senders
 it seeded and never the key. A measured corporate lab reads the platform's posts on the push lane at
-loss 0, the five demo rooms the profile ships with arriving unbound as out, not lost. The decision is
+loss 0, the five demo rooms the profile ships with arriving unbound as out, not lost, until #1756 retires them. The decision is
 [ADR-1747](/architecture/decisions/#adr-1747-a-webhook-sender-is-a-component-whose-signing-key-the-seed-mints).

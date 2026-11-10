@@ -110,7 +110,7 @@ archetypes:
 # push lane.
 #
 # And one meeting platform account a site (#1747), a webhook sender: systems
-# omitted, so its rooms are every one of the site's systems. The lab seeds
+# omitted, so it speaks for every one of the site's systems. The lab seeds
 # its webhook endpoint, mints the endpoint's signing key per run and binds
 # each room to its system, so the account's signed posts land on the push
 # lane beside the booking service's.
