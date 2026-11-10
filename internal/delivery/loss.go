@@ -39,6 +39,8 @@ type Receipt struct {
 	Deliveries int
 	Declared   Declared
 	Outcome    Tally
+	// Loss is the node's own account the batch carried (#1692).
+	Loss NodeLoss
 }
 
 // Window is a stretch of node time, (From, To]: a receipt is in it when its
@@ -119,9 +121,12 @@ func boots(receipts []Receipt) [][]Receipt {
 }
 
 // Reconcile is the ingest hop over a window: per kind, in is the declared
-// items of the window's receipts plus the items of the gaps the window owns,
-// out is their stored, coalesced and unbound items, and missing is the gap items plus
-// any shortfall the ingest counted between declared and decoded.
+// items of the window's receipts plus the items of the gaps the window owns
+// that the node shipped, out is their stored, coalesced and unbound items,
+// and missing is those gap items plus any shortfall the ingest counted
+// between declared and decoded. A gap's items the node's runs account for
+// (dropped at the spool, refused by the bus) are the node hop's loss
+// (ReconcileNode), never the ingest's.
 //
 // Every gap has exactly one owner whatever order its batches arrived in: a
 // gap between two present receipts belongs to the window of its lower
@@ -142,6 +147,7 @@ func Reconcile(w Window, receipts []Receipt) map[Kind]Total {
 		out[k] = t
 	}
 	for _, rs := range boots(receipts) {
+		runs := bootDrops(rs)
 		for i, r := range rs {
 			if !w.Contains(r.Minted) {
 				continue
@@ -154,7 +160,7 @@ func Reconcile(w Window, receipts []Receipt) map[Kind]Total {
 						out[k] = Total{}
 					}
 				}
-				for _, o := range Outcomes {
+				for _, o := range IngestOutcomes {
 					if !o.Deduplicated() {
 						add(k, o, r.Outcome.Count(k, o))
 					}
@@ -167,10 +173,7 @@ func Reconcile(w Window, receipts []Receipt) map[Kind]Total {
 				if r.Deliveries > 1 {
 					add(k, Deduplicated, uint64(r.Deliveries-1)*max(declared, counted))
 				}
-				add(k, Missing, gapAbove(rs, i, k))
-				if i == 0 {
-					add(k, Missing, r.Declared[k].Before)
-				}
+				add(k, Missing, gapMissing(rs, runs, i, k))
 			}
 		}
 	}

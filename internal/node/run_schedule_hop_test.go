@@ -69,7 +69,7 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 			t.Fatal(err)
 		}
 		var ingest []labfootprint.DeliveryRow
-		ingest, unsettled = labfootprint.DeliveryOf(labfootprint.DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: true})
+		ingest, unsettled, _ = labfootprint.DeliveryOf(labfootprint.DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: true})
 		rows = labfootprint.WithSchedule(labfootprint.ScheduleRowsOf(counts), ingest)
 		if len(unsettled) == 0 && len(ingest) > 0 && len(counts) > 0 {
 			break

@@ -531,8 +531,8 @@ dispatcher writes that hop too, runs due in and runs made out per kind at the in
 the instance, `delivery-in-count` is the items that settled at the spool in the window,
 `delivery-out-count` the ones the stream acked, and `delivery-loss-ratio` their `(in - out) / in`,
 written as 0 when nothing came in, so all three land every window and a past window's loss never
-stands as the latest reading. A batch dropped at a spool cap, refused by the bus or never encoded is
-in and not out; one held for a retry counts in the window it settles. The `process-*` figures come from one runtime sampler
+stands as the latest reading. A batch dropped at a spool cap, refused by the bus or never encoded,
+and a self-log line the bounded log buffer drops (#1692), is in and not out; one held for a retry counts in the window it settles. The `process-*` figures come from one runtime sampler
 (`internal/platformmetric`), the same one the server reports its own through.
 
 ### Self-monitoring: the server's account of itself

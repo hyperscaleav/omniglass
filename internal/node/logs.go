@@ -90,10 +90,18 @@ func (h *logSink) WithGroup(name string) slog.Handler {
 // instead of silently short. The notice is built here, not emitted through slog,
 // so reporting a drop cannot itself feed the buffer.
 func (h *logSink) drain() []capturedLog {
+	out, _ := h.drainCounted()
+	return out
+}
+
+// drainCounted is drain, and how many lines the cap dropped since the last
+// drain: the lines the node lost before any batch carried them (#1692).
+func (h *logSink) drainCounted() ([]capturedLog, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := *h.buf
-	if *h.dropped > 0 {
+	dropped := *h.dropped
+	if dropped > 0 {
 		var ts time.Time // an empty batch leaves it zero, and storage stamps now()
 		if len(out) > 0 {
 			ts = out[0].ts
@@ -108,7 +116,7 @@ func (h *logSink) drain() []capturedLog {
 		*h.dropped = 0
 	}
 	*h.buf = nil
-	return out
+	return out, dropped
 }
 
 // severityOf maps an slog level to the stored severity vocabulary.

@@ -202,7 +202,7 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	if err != nil {
 		items := map[delivery.Kind]int{}
 		delivery.GroupItems(items, g)
-		s.lost(items)
+		s.lost(delivery.EncodeFailed, items)
 		return fmt.Errorf("node: marshal task group: %w", err)
 	}
 	field := protowire.AppendBytes(protowire.AppendTag(nil, groupsField, protowire.BytesType), b)
@@ -238,10 +238,7 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 // overflow.
 func (s *telemetrySpool) queueLocked(data []byte, kinds map[delivery.Kind]int) bool {
 	started := s.expireLocked()
-	if s.ledger == nil {
-		s.ledger = delivery.NewLedger(collection.NewBatchID())
-	}
-	resolved := s.ledger.Last()
+	resolved := s.ledgerLocked().Last()
 	if len(s.queue) > 0 {
 		resolved = s.queue[0].seq - 1
 	}
@@ -321,6 +318,7 @@ func (s *telemetrySpool) flushLocked() bool {
 	if err != nil {
 		// Only a node id that is not UTF-8 fails here; config refuses one.
 		slog.Warn("telemetry batch header did not encode, groups dropped", "facility", "delivery", "groups", len(groups), "error", err.Error())
+		s.ledgerLocked().Lose(delivery.EncodeFailed, kinds)
 		s.flow.Lost(kinds)
 		return false
 	}
@@ -345,7 +343,7 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	stampMetricMillis(ev)
 	b, err := proto.Marshal(ev)
 	if err != nil {
-		s.lost(delivery.BatchItems(ev))
+		s.lost(delivery.EncodeFailed, delivery.BatchItems(ev))
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
 	kinds := delivery.BatchItems(ev)
@@ -404,11 +402,13 @@ func (s *telemetrySpool) tellOverflowStart() {
 		"batches", s.maxBatches, "bytes", s.maxBytes, "age", s.maxAge.String())
 }
 
-// dropLocked drops the queued batch at i (never one with the stream) and
-// counts it, reporting whether this drop began an overflow.
-func (s *telemetrySpool) dropLocked(i int) bool {
+// dropLocked drops the queued batch at i (never one with the stream) for
+// cause and counts it, on the ledger so the next batch minted names the drop
+// (#1692), reporting whether this drop began an overflow.
+func (s *telemetrySpool) dropLocked(i int, cause delivery.Outcome) bool {
 	s.bytes -= len(s.queue[i].data)
 	s.flow.Lost(s.queue[i].kinds)
+	s.ledgerLocked().Drop(cause, s.queue[i].seq, s.queue[i].kinds)
 	s.queue = append(s.queue[:i], s.queue[i+1:]...)
 	s.dropped++
 	s.tally.BatchDropped()
@@ -427,7 +427,7 @@ func (s *telemetrySpool) expireLocked() bool {
 	started := false
 	cutoff := s.now().Add(-s.maxAge)
 	for s.sent < len(s.queue) && s.queue[s.sent].queued.Before(cutoff) {
-		if s.dropLocked(s.sent) {
+		if s.dropLocked(s.sent, delivery.SpoolExpired) {
 			started = true
 		}
 	}
@@ -440,7 +440,7 @@ func (s *telemetrySpool) expireLocked() bool {
 func (s *telemetrySpool) enqueueLocked(b spooledBatch) bool {
 	started := false
 	for s.sent < len(s.queue) && (len(s.queue)+1 > s.maxBatches || s.bytes+len(b.data) > s.maxBytes) {
-		if s.dropLocked(s.sent) {
+		if s.dropLocked(s.sent, delivery.SpoolOverflow) {
 			started = true
 		}
 	}
@@ -514,8 +514,10 @@ func (s *telemetrySpool) ship() {
 			s.bytes -= len(s.queue[0].data)
 			if err == nil {
 				s.flow.Delivered(s.queue[0].kinds)
+				s.ledgerLocked().Stored(s.queue[0].seq)
 			} else {
 				s.flow.Lost(s.queue[0].kinds)
+				s.ledgerLocked().Drop(delivery.BusRefused, s.queue[0].seq, s.queue[0].kinds)
 			}
 			s.queue[0] = spooledBatch{}
 			s.queue = s.queue[1:]
@@ -619,11 +621,23 @@ func (s *telemetrySpool) pending() int {
 	return len(s.queue)
 }
 
-// lost counts items that never reached a batch, outside the lock.
-func (s *telemetrySpool) lost(items map[delivery.Kind]int) {
+// lost counts items that never reached a batch, for cause, outside the
+// lock: in the self-report's flow and on the ledger, so the next batch
+// minted carries the boot's running total (#1692).
+func (s *telemetrySpool) lost(cause delivery.Outcome, items map[delivery.Kind]int) {
 	s.mu.Lock()
 	s.flow.Lost(items)
+	s.ledgerLocked().Lose(cause, items)
 	s.mu.Unlock()
+}
+
+// ledgerLocked is the boot's ledger, started on first use for a spool a test
+// built without one.
+func (s *telemetrySpool) ledgerLocked() *delivery.Ledger {
+	if s.ledger == nil {
+		s.ledger = delivery.NewLedger(collection.NewBatchID())
+	}
+	return s.ledger
 }
 
 // takeFigures is the spool's part of the node's self-report (#1625, #1659):
