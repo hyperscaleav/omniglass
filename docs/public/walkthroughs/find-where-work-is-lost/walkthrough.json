@@ -72,7 +72,7 @@
     {
       "n": 12,
       "kind": "wait",
-      "caption": "The node hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
+      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
       "still": "step-12.png"
     },
     {
@@ -97,8 +97,8 @@
   "poster": "step-12.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 55.2,
-    "bytes": 956019,
-    "previewBytes": 674784
+    "seconds": 52.4,
+    "bytes": 961247,
+    "previewBytes": 684008
   }
 }
