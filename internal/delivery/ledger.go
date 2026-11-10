@@ -91,6 +91,21 @@ func (d Declared) Against(decoded map[Kind]int) (short, over map[Kind]int) {
 	return short, over
 }
 
+// Withdraw takes the last stamp's items back off the running offsets, for a
+// batch that never left: the next stamp's before then counts as if it had
+// not been minted. The seq stays spent, so a copy that left after all lands
+// under its own seq, never a later batch's. Only the last stamp minted can be
+// withdrawn; any other is a no-op, since a later stamp's offsets already
+// counted it.
+func (l *Ledger) Withdraw(s Stamp) {
+	if s.Boot != l.boot || s.Seq != l.seq {
+		return
+	}
+	for k, c := range s.Kinds {
+		l.minted[k] -= min(c.Count, l.minted[k])
+	}
+}
+
 // Under counts every item the ledger declared under the one outcome, kind by
 // kind: the tally of a batch the server Termed whole, whose items all share
 // its cause. Pure.

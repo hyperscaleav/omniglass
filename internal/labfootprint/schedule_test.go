@@ -38,19 +38,21 @@ func TestParseSchedule(t *testing.T) {
 }
 
 // A kind's schedule row is its dues in and its runs made out, absent when
-// nothing fell due; the rows lead each kind's other hops.
+// nothing fell due; the rows lead each kind's other hops on the node lane,
+// and the push lane's rows, which no schedule produced, follow the node lane's.
 func TestScheduleRowsLeadTheirKind(t *testing.T) {
 	sched := ScheduleRowsOf([]ScheduleCount{{Kind: delivery.Property, Due: 5, Made: 5}, {Kind: delivery.Log}})
 	if len(sched) != 1 || sched[0].Loss == nil || *sched[0].Loss != 0 || sched[0].Cause != "" {
 		t.Fatalf("rows = %+v, want one property row reading 0, no cause", sched)
 	}
-	ingest := []DeliveryRow{{Hop: delivery.Ingest, Kind: delivery.Metric}, {Hop: delivery.Ingest, Kind: delivery.Property}}
+	ingest := []DeliveryRow{{Lane: LaneNode, Hop: delivery.Ingest, Kind: delivery.Metric}, {Lane: LaneNode, Hop: delivery.Ingest, Kind: delivery.Property},
+		{Lane: LanePush, Hop: delivery.Ingest, Kind: delivery.Metric}}
 	rows := WithSchedule(sched, ingest)
 	var order []string
 	for _, r := range rows {
-		order = append(order, string(r.Kind)+"/"+string(r.Hop))
+		order = append(order, string(r.Lane)+"/"+string(r.Kind)+"/"+string(r.Hop))
 	}
-	if got := strings.Join(order, " "); got != "metric/ingest property/schedule property/ingest" {
+	if got := strings.Join(order, " "); got != "node/metric/ingest node/property/schedule node/property/ingest push/metric/ingest" {
 		t.Errorf("rows in order %s", got)
 	}
 }

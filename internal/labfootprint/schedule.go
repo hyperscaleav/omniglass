@@ -85,7 +85,7 @@ func ScheduleRowsOf(counts []ScheduleCount) []DeliveryRow {
 			continue
 		}
 		made := min(counts[i].Made, counts[i].Due)
-		row := DeliveryRow{Hop: delivery.Schedule, Kind: k, In: counts[i].Due, Out: made,
+		row := DeliveryRow{Lane: LaneNode, Hop: delivery.Schedule, Kind: k, In: counts[i].Due, Out: made,
 			Outcomes: map[delivery.Outcome]uint64{delivery.Made: made, delivery.Skipped: counts[i].Due - made}}
 		if made < row.In {
 			row.Cause = delivery.Skipped
@@ -99,17 +99,20 @@ func ScheduleRowsOf(counts []ScheduleCount) []DeliveryRow {
 }
 
 // WithSchedule is rows with each kind's schedule row ahead of that kind's
-// other hops, as an item crosses them: kind order, then hop order.
+// other hops, as an item crosses them: lane order (#1696), then kind order,
+// then hop order. The schedule rows are the node lane's.
 func WithSchedule(schedule, rows []DeliveryRow) []DeliveryRow {
 	if len(schedule) == 0 {
 		return rows
 	}
 	var out []DeliveryRow
-	for _, k := range delivery.Kinds {
-		for _, set := range [][]DeliveryRow{schedule, rows} {
-			for _, r := range set {
-				if r.Kind == k {
-					out = append(out, r)
+	for _, lane := range []DeliveryLane{LaneNode, LanePush} {
+		for _, k := range delivery.Kinds {
+			for _, set := range [][]DeliveryRow{schedule, rows} {
+				for _, r := range set {
+					if r.Lane == lane && r.Kind == k {
+						out = append(out, r)
+					}
 				}
 			}
 		}

@@ -118,13 +118,14 @@ type TelemetryBatch struct {
 	// lands each sample under the platform writer. A sample whose name is not a
 	// declared node-self platform key is refused. Set only on a node's lane.
 	NodeSelf *NodeSelf `protobuf:"bytes,15,opt,name=node_self,json=nodeSelf,proto3" json:"node_self,omitempty"`
-	// ledger is the node's delivery accounting for this batch (#1641): which
-	// boot of the node's spool minted it, its dense sequence in that boot, and
-	// how many items of each kind it carries and the boot minted before it. The
-	// server reads a gap in a boot's sequence as items that never landed, and
-	// the offsets say how many of each kind. Stamped under the spool's lock and
-	// encoded once, so every retry carries it unchanged. Set only on a node's
-	// lane; the API push lane carries none.
+	// ledger is the publisher's delivery accounting for this batch (#1641):
+	// which boot minted it, its dense sequence in that boot, and how many items
+	// of each kind it carries and the boot minted before it. The server reads a
+	// gap in a boot's sequence as items that never landed, and the offsets say
+	// how many of each kind. On a node's lane the boot is the node's spool's,
+	// stamped under its lock and encoded once, so every retry carries it
+	// unchanged; on the API push lane it is the server's own, minted as the
+	// server publishes each batch (#1696).
 	Ledger        *DeliveryLedger `protobuf:"bytes,16,opt,name=ledger,proto3" json:"ledger,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -265,19 +266,22 @@ func (x *TelemetryBatch) GetLedger() *DeliveryLedger {
 	return nil
 }
 
-// DeliveryLedger is one node batch's place in its boot's delivery count
-// (#1641). A boot is one start of the node's spool.
+// DeliveryLedger is one batch's place in its boot's delivery count (#1641).
+// A boot is one start of a node's spool, or of the server's push lane
+// publisher (#1696).
 type DeliveryLedger struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// boot is a UUIDv7 minted once when the node's spool starts.
+	// boot is a UUIDv7 minted once when the node's spool, or the server's push
+	// lane publisher, starts.
 	Boot string `protobuf:"bytes,1,opt,name=boot,proto3" json:"boot,omitempty"`
 	// seq is dense from 1 per boot, minted when the batch is flushed.
 	Seq uint64 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
-	// minted is the node's clock when seq was minted.
+	// minted is the publisher's clock when seq was minted.
 	Minted *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=minted,proto3" json:"minted,omitempty"`
 	// resolved is the highest seq of this boot at or below which every batch
-	// had left the spool (acked or dropped) when this one was minted: a gap at
-	// or below it can no longer fill from the spool.
+	// had its answer (left the spool, acked or dropped; on the push lane, the
+	// stream's ack or refusal) when this one was minted: a gap at or below it
+	// can no longer fill.
 	Resolved uint64 `protobuf:"varint,4,opt,name=resolved,proto3" json:"resolved,omitempty"`
 	// kinds is one count per telemetry kind the boot has minted any of.
 	Kinds []*KindCount `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`

@@ -24,7 +24,7 @@ The delivery contract on that stream is built: every publish waits for the strea
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
 under its receipt ([below](#delivery-a-batch-lands-once)), and that receipt accounts for every item
 the batch carried, so a lab run reads each telemetry kind's loss across the node hop and the ingest
-hop ([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
+hop, the node lane and the push lane apart ([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
 inside, its ingest lag, backlog, drops and request failures, on its own platform component
 ([below](#measuring-the-pipeline)).
 :::
@@ -238,8 +238,23 @@ a Termed batch still reads on the node row. A Term receipt that fails to record 
 batch Terms anyway. An undecodable batch has no
 ledger the server can read, so it records nothing: its items stay `missing`, and the Term is warned
 ([ADR-1691](/architecture/decisions/#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
-The push lane's batches carry no ledger and read
-no row yet (#1696). `omniglass lab measure` prints the table
+
+- **The push lane keeps its own ledger.** The push route and the webhook listener publish through
+  the server's bus, which stamps each batch with the same `DeliveryLedger` as it publishes: one
+  `boot` per server process, a dense `seq`, and `resolved` the seq below, since publishes go one at
+  a time and the one ahead already had the stream's answer. Its receipts carry no node, so the read
+  reconciles the push lane apart from the node lane and gives it its own rows: one hop, ingest, so
+  its row is its own end to end, and the end-to-end line composes the node lane alone
+  ([ADR-1696](/architecture/decisions/#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row), #1696).
+- **A refused publish is not the push lane's loss.** A publish the stream never acks answers the
+  pusher `503` and the pusher still holds its items, so the server takes them back off the offsets.
+  The seq stays spent (a copy the stream stored with its ack lost lands under it), and the hole it
+  leaves holds nothing to read as missing. A pushed batch the ingest Terms whole records its Term
+  receipt as a node's does, under the server's boot, so it reads under its cause on the push row; a
+  hole that does hold items is one the stream stored and the ingest could not decode, read as
+  `missing` as on the node lane.
+
+`omniglass lab measure` prints the table
 ([lab](/guides/lab/#reading-the-delivery-table)).
 
 :::design[Target design, tracked in #430]

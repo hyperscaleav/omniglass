@@ -46,7 +46,9 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
   - The outcome is tallied per batch from the committed pass (`IngestBatch.outcome` over the live and
     refused groups and the consumer's own tally), not from per-group written and coalesced counts on
     `LandResult` as the issue proposed; the coalesced count comes from the property write directly.
-  - The push lane records no ledger and reads no row (#1696); a whole-batch Term leaves no receipt
+  - The push lane recorded no ledger and read no row (**closed by #1696**,
+    [ADR-1696](#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row));
+    a whole-batch Term leaves no receipt
     and reads as `missing` (#1691); a node's spool drops and a killed boot's tail read as ingest
     `missing` or not at all until the node hop (#1692).
     **Amended (#1691):** a whole-batch Term now records a Term receipt and reads under its own cause;

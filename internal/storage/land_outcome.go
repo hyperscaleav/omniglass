@@ -16,8 +16,9 @@ import (
 // (#1691) is not a landing: this delivery replaces it, as the batch's first,
 // with its own ledger, node loss and landing time. A batch with a ledger
 // records the ledger on it, and the node's own loss account when the node
-// lost anything (#1692); one without (the push lane) leaves those columns
-// empty.
+// lost anything (#1692); one without (a publisher that stamps none) leaves
+// those columns empty. A pushed batch's ledger has no node: the push lane's
+// boot is the server's own (#1696).
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
 	var node, boot, ledger, nodeLoss *string
 	var seq, resolved *int64

@@ -597,27 +597,34 @@ figure is still reported.
 
 Below the endpoints block, the delivery table says how much telemetry the lab lost on the way in, as a
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
-([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). A healthy lab reads
-exactly 0 for every kind:
+([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
+`node` is what the nodes collected and shipped, `push` what was pushed to the server (`POST
+/telemetry:push` and the webhook receivers). The scale lab runs no pusher of its own yet (#1743), so its
+push rows appear only when something pushes to the lab's server during the window, as `omniglass
+telemetry push` against it does. A healthy lab reads exactly 0 for every kind on both:
 
 ```
-delivery    hop       in       out      loss     dedup  cause
-http        sim       540      540      0        -      -
-snmp        sim       310      310      0        -      -
-metric      schedule  4100     4100     0        0      -
-metric      node      1275     1275     0        0      -
-metric      ingest    1275     1275     0        0      -
-property    schedule  3020     3020     0        0      -
-property    node      166      166      0        0      -
-property    ingest    166      166      0        0      -
-event       node      0        0        -        0      -
-event       ingest    0        0        -        0      -
-log         node      0        0        -        0      -
-log         ingest    0        0        -        0      -
-end to end  metric 0  property 0  event -  log -
+delivery    lane  hop       in       out      loss     dedup  cause
+http        node  sim       540      540      0        -      -
+snmp        node  sim       310      310      0        -      -
+metric      node  schedule  4100     4100     0        0      -
+metric      node  node      1275     1275     0        0      -
+metric      node  ingest    1275     1275     0        0      -
+property    node  schedule  3020     3020     0        0      -
+property    node  node      166      166      0        0      -
+property    node  ingest    166      166      0        0      -
+event       node  node      0        0        -        0      -
+event       node  ingest    0        0        -        0      -
+log         node  node      0        0        -        0      -
+log         node  ingest    0        0        -        0      -
+metric      push  ingest    12       12       0        0      -
+property    push  ingest    24       24       0        0      -
+event       push  ingest    3        3        0        0      -
+end to end  node  metric 0  property 0  event -  log -
 ```
 
-The rows read in the order the work crosses the hops, each kind's own in turn:
+The node lane's rows read in the order the work crosses the hops, each kind's own in turn, and the
+push lane's follow:
 
 - The **sim** rows come first, one per protocol the nodes tally (`http`, `snmp`), read from the same
   marks as the endpoints block. They count **requests**, not items, since a simulator cannot know which
@@ -639,10 +646,10 @@ The rows read in the order the work crosses the hops, each kind's own in turn:
   and ingest rows, and a kind no scheduled task produces (events and logs, today) has none:
 
   ```
-  delivery    hop       in       out      loss     dedup  cause
-  metric      schedule  4100     3690     0.1      0      skipped
-  metric      node      1275     1275     0        0      -
-  metric      ingest    1275     1275     0        0      -
+  delivery    lane  hop       in       out      loss     dedup  cause
+  metric      node  schedule  4100     3690     0.1      0      skipped
+  metric      node  node      1275     1275     0        0      -
+  metric      node  ingest    1275     1275     0        0      -
   ```
 
   A skipped due made no item, so it never reaches the node or ingest rows: a lab whose devices answer
@@ -654,12 +661,16 @@ The rows read in the order the work crosses the hops, each kind's own in turn:
   spool), `spool-expired` (a batch aged out at 12 hours), `bus-refused` (the bus refused the batch for
   good, too large or a bad subject), `self-log-overflow` (the node's self-log buffer dropped lines
   before it could ship them) and `encode-failed`.
-- The **ingest** row is what the node shipped against what the server accounted for: its **in** is
-  exactly the node row's **out**. **out** is the items accounted for (`stored`; for properties
-  `coalesced`, an unchanged value skipped on purpose; and `unbound`, an identity no binding places,
-  which the conduit's unbound inbox holds for the operator to assign).
+- The **ingest** row is what was shipped against what the server accounted for. On the node lane its
+  **in** is exactly the node row's **out**; on the push lane it is the items the server minted as it
+  published each push (the batches' ledgers, plus the items of any batch that never landed), and it
+  is the push lane's only row: a push crosses no sim, schedule or node hop. **out** is the items
+  accounted for (`stored`; for properties `coalesced`, an unchanged value skipped on purpose; and
+  `unbound`, an identity no binding places, which the conduit's unbound inbox holds for the operator
+  to assign).
 
-A kind with nothing in reads `-`, never 0.
+A kind with nothing in reads `-`, never 0, and the push lane shows a kind only once its boot has
+carried one (the sample's push lane has pushed no log line).
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -672,24 +683,33 @@ A kind with nothing in reads `-`, never 0.
   and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
   only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
   outcome's count on every row, with the same keys for every kind.
-- **missing** is a batch the node shipped that never landed and left no receipt: a hole in a node
-  boot's batch sequence the node did not account for, its items read from its neighbors' offsets. A
+- **missing** is a batch that was shipped and never landed and left no receipt: a hole in a boot's
+  batch sequence its publisher did not account for, its items read from its neighbors' offsets. A
   batch the node dropped leaves the same hole, but the batches after it name it, so it reads on the
-  node row under its cause and never as `missing`; a batch the server Terms whole leaves a Term
-  receipt and reads under its own cause. What is left cannot say why; the footer reads `shipped by
-  the node, never landed: undecodable at ingest, or lost between the stream and the store`.
-- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`: a third lost at
-  the node and nothing at ingest reads 0.3333 end to end, and in the schedule example above metrics
-  read 0.1, the schedule hop's. A hop with nothing in loses nothing, so a schedule that skipped every
-  due of a kind reads that kind's end to end as 1 though its later rows read `-`. A kind with no
-  ingest row (every boot unsettled) reads `-`: the schedule hop alone does not stand for the end to
-  end. The sim hop enters as one loss pooled over every protocol's requests, composed into each kind
-  with an ingest row: an approximation, since a lost request carried some kinds and not others. With
-  no sim rows it is the product of the kind's own hops.
-- **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
-  ran out (no later batch said the spool had cleared past them, or the stream still held batches),
-  with no ratio for it rather than a guess. A note under the table gives the stream's pending and
-  unacked counts when the stream was the cause.
+  node row under its cause and never as `missing`; a batch the server Terms whole, on either lane,
+  leaves a Term receipt and reads under its own cause. What is left cannot say why; the footer names
+  the lane and what a hole on it can be. On the node lane it reads `shipped by the node, never landed:
+  undecodable at ingest, or lost between the stream and the store`; on the push lane, `published by
+  the server, never landed: undecodable at ingest, or dropped by the stream before it was read`. A
+  push the stream refused is not one: the pusher was answered `503` and still holds its items, so
+  the server took them back off its ledger.
+- **end to end** is each kind's loss over every hop the node lane carries it across,
+  `1 - prod(1 - loss)`: a third lost at the node and nothing at ingest reads 0.3333 end to end, and in
+  the schedule example above metrics read 0.1, the schedule hop's. A hop with nothing in loses
+  nothing, so a schedule that skipped every due of a kind reads that kind's end to end as 1 though its
+  later rows read `-`. A kind with no ingest row (every boot unsettled) reads `-`: the schedule hop
+  alone does not stand for the end to end. The sim hop enters as one loss pooled over every
+  protocol's requests, composed into each kind with an ingest row: an approximation, since a lost
+  request carried some kinds and not others. With no sim rows it is the product of the kind's own
+  hops. The push lane crosses the ingest hop alone, so its row is its own end to end and the line
+  leaves it out.
+- **unsettled** names a boot whose window's batches were not all known when `--settle-timeout`
+  ran out (no later batch said its publisher had cleared past them, or the stream still held
+  batches), with no ratio for it rather than a guess. A node boot reads `node <name>, boot <id>`;
+  the push lane's boot is the server process's, and reads `push lane, boot <id>`. The push lane
+  settles on the next push, so a lab whose pushers stopped before the window ended, or whose
+  server restarted after it, reads its push lane unsettled. A note under the table gives the
+  stream's pending and unacked counts when the stream was the cause.
 
 - **unshipped** names a node boot that will never settle because its node started again while its spool
   still held batches: the spool is memory, so they went with the process. The boot is read as far as
