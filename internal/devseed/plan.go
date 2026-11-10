@@ -44,7 +44,10 @@ type PlanPhase struct {
 // PlanResult is what a SeedPlan wrote and where the time went.
 type PlanResult struct {
 	Locations, Systems, Components, Roles, Endpoints int
-	Phases                                           []PlanPhase
+	// Pushers is the outside actors seeded (#1743): one service principal
+	// each, granted the pusher role on its systems, holding no token.
+	Pushers int
+	Phases  []PlanPhase
 }
 
 // locationRow is one location of a plan; Parent is the key of another, empty
@@ -128,11 +131,17 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	}
 	run.done("standards")
 	rows := rowsOf(p)
-	compIDs, err := seedRows(ctx, gw, actorID, rows, run) // by creation order, parallel to rows.Components
+	sysIDs, compIDs, err := seedRows(ctx, gw, actorID, rows, run) // compIDs by creation order, parallel to rows.Components
 	if err != nil {
 		return res, err
 	}
 	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)
+	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
+	if err != nil {
+		return res, err
+	}
+	res.Pushers = n
+	run.done("pushers")
 	if opts.Endpoints {
 		n, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
@@ -143,9 +152,33 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	return res, nil
 }
 
+// seedPlanPushers seeds each pusher the plan declares as its own service
+// principal, granted the pusher role on exactly its systems (GrantPusher,
+// the shape the dev fleet's pusher takes). Its token is the lab's to mint
+// per run, so none is set here.
+func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p *scenario.Plan, sysIDs map[string]string) (int, error) {
+	n := 0
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			for _, sys := range ps.Systems {
+				id, ok := sysIDs[sys]
+				if !ok {
+					return n, fmt.Errorf("devseed: pusher %s is scoped to system %q, which the plan does not seed", ps.Name, sys)
+				}
+				if err := GrantPusher(ctx, gw, actorID, ps.Name, id); err != nil {
+					return n, err
+				}
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
 // seedRows creates the plan's rows through the Gateway's Create methods, one
-// transaction each, and returns the component ids in creation order.
-func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows planRows, run *planRun) ([]string, error) {
+// transaction each, and returns the system ids by key and the component ids
+// in creation order.
+func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows planRows, run *planRun) (map[string]string, []string, error) {
 	all := scope.Set{All: true}
 	locIDs := make(map[string]string, len(rows.Locations))
 	for _, l := range rows.Locations {
@@ -156,7 +189,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		}
 		created, err := gw.CreateLocation(ctx, actorID, spec, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create location %q: %w", l.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}
 		locIDs[l.Key] = created.ID
 	}
@@ -168,7 +201,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 			Name: s.Name, Label: s.Label, StandardID: &std, SystemTypeID: &st, LocationName: &loc,
 		}, all, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create system %q: %w", s.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create system %q: %w", s.Key, err)
 		}
 		sysIDs[s.Key] = created.ID
 	}
@@ -178,16 +211,16 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		prod, loc := c.Product, locIDs[c.Room]
 		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
 		compIDs = append(compIDs, created.ID)
 	}
 	run.done("components")
 	for i, c := range rows.Components {
 		if err := gw.AssignRole(ctx, actorID, sysIDs[c.System], c.Role, compIDs[i], all, all, all, all); err != nil {
-			return nil, fmt.Errorf("devseed: staff %s of %q: %w", c.Role, c.System, err)
+			return nil, nil, fmt.Errorf("devseed: staff %s of %q: %w", c.Role, c.System, err)
 		}
 	}
 	run.done("roles")
-	return compIDs, nil
+	return sysIDs, compIDs, nil
 }

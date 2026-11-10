@@ -9,15 +9,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// SimPusher is the simulated fleet's first-party pusher (#1370): a service
-// principal holding telemetry:push alone, on one system, through which the
-// simulator's booking service posts the room's bookings to POST
-// /telemetry:push, as a scheduling platform's integration would. A push has
-// no endpoint, so it counts on its collected tier alone. Service names the
-// principal; System is a fixture system key.
+// SimPusher is one of the simulated fleet's outside actors (#1370, #1743),
+// declared as a scale scenario declares its pushers: Name is its service
+// principal, holding telemetry:push alone on Systems (fixture system keys),
+// and Profile the emulator profile with a push face that pushes as it. A
+// push has no endpoint, so it counts on its collected tier alone.
 type SimPusher struct {
-	Service string `yaml:"service"`
-	System  string `yaml:"system"`
+	Name    string   `yaml:"name"`
+	Profile string   `yaml:"profile"`
+	Systems []string `yaml:"systems"`
 }
 
 // PusherRole is the role the simulated pusher holds: telemetry:push and

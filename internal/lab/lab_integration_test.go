@@ -59,7 +59,8 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		return Config{
 			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: DefaultScenario,
 				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
-				PushToken: "lab-it-push-token", PushTokenHash: tokenHash("lab-it-push-token"), PushTokenPrefix: "labitpsh",
+				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+					Token: "lab-it-push-token", TokenHash: tokenHash("lab-it-push-token"), TokenPrefix: "labitpsh"}},
 				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
 			Image:         SelectImage(labels[VersionLabel], ""),
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
