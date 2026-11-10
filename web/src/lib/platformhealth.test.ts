@@ -238,7 +238,7 @@ describe("panelRowText", () => {
         instance: "",
         unit: "bytes",
         value: 1_048_576,
-        of: { key: "total-bytes", label: "Total", unit: "bytes", value: 4_194_304 },
+        of: { key: "total-bytes", unit: "bytes", value: 4_194_304 },
       }),
     ).toBe("1.0 MB / 4.0 MB");
   });

@@ -120,7 +120,7 @@ export type PanelRow = {
   // null when the key has never been sampled here: not reported, never 0.
   value: number | null;
   observedAt?: string;
-  of?: { key: string; label: string; unit: string; value: number | null };
+  of?: { key: string; unit: string; value: number | null };
 };
 
 export type PanelSection = { key: PlatformPanelKey; ranked: boolean; rows: PanelRow[] };
@@ -147,7 +147,7 @@ export function panelSections(panel: PlatformPanel): PanelSection[] {
       const ofValue = (instance: string): number | null =>
         (ofFigures.find((f) => f.instance === instance) ?? (ofFigures.length === 1 ? ofFigures[0] : undefined))?.value ?? null;
       const pair = (instance: string) =>
-        k.of ? { of: { key: k.of, label: of?.label ?? k.of, unit: of?.unit ?? "", value: ofValue(instance) } } : {};
+        k.of ? { of: { key: k.of, unit: of?.unit ?? "", value: ofValue(instance) } } : {};
       const own = byKey.get(k.name) ?? [];
       const rows: PanelRow[] = own.length
         ? own.map((f) => ({ key: k.name, instance: f.instance, unit: k.unit ?? "", value: f.value, observedAt: f.observed_at, ...pair(f.instance) }))
