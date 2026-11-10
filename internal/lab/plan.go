@@ -237,6 +237,11 @@ type Options struct {
 	// each site's node with its token's hash.
 	Systems   int
 	SiteNodes []SiteNode
+	// InduceUnregistered makes one simulated device of a scale lab answer a
+	// property key no driver registers (#1698), so the delivery table reads
+	// a property loss caused by refused-unregistered. Off by default; the
+	// seed does the work.
+	InduceUnregistered bool
 }
 
 // SiteNode is one site's node in a scale lab: its name, the enrollment
@@ -381,6 +386,9 @@ func Plan(o Options) (Spec, error) {
 	if o.Scale() && (o.NoNode || o.Systems <= 0) {
 		return Spec{}, fmt.Errorf("a scale lab runs a node per site at a size: it needs --systems and cannot run with --no-node")
 	}
+	if o.InduceUnregistered && !o.Scale() {
+		return Spec{}, fmt.Errorf("--induce-unregistered is a scale lab's: it needs --systems")
+	}
 	if o.NoNode && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
 	}
@@ -453,6 +461,9 @@ func Plan(o Options) (Spec, error) {
 	if o.Scale() {
 		seedCmd = []string{"lab", "seed", "--scenario", o.Scenario, "--systems", strconv.Itoa(o.Systems),
 			"--user", LoginUser, "--password", LoginPassword}
+		if o.InduceUnregistered {
+			seedCmd = append(seedCmd, "--induce-unregistered")
+		}
 		seedEnv = append(append([]string{}, appEnv...), SiteNodeTokenHashesEnv+"="+FormatSiteNodeTokenHashes(o.SiteNodes))
 	}
 	spec.Seed = Service{

@@ -114,3 +114,62 @@ func TestIntegrationScaleDelivery(t *testing.T) {
 		t.Errorf("receipts a day %v, want the receipts' growth read", rep.ReceiptBytesPerDay)
 	}
 }
+
+// TestIntegrationScaleDeliveryInducedUnregistered is the refusal read end to
+// end (#1698): a scale lab brought up with one device answering a key no
+// driver registers loses property samples at the ingest hop, the table names
+// refused-unregistered as the cause, and metrics, which the induced poll does
+// not touch, still lose nothing.
+func TestIntegrationScaleDeliveryInducedUnregistered(t *testing.T) {
+	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
+		t.Skip("the induced refusal's integration test runs through make test-lab (it needs the image make builds)")
+	}
+	home, _ := os.UserHomeDir()
+	daemon, err := lab.ResolveDaemon(lab.Env{Getenv: os.Getenv, ReadFile: os.ReadFile, Home: home, GOOS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var progress, labLog bytes.Buffer
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	rep, err := MeasureScale(ctx, ScaleConfig{
+		Binary: "../../bin/omniglass", DockerHost: daemon.Host,
+		Scenario: "corporate", Systems: 3, ReadyTimeout: 5 * time.Minute,
+		InduceUnregistered: true,
+		Warmup:             30 * time.Second, Window: time.Minute, FleetReads: 1,
+		SettleTimeout: 3 * time.Minute,
+		Out:           &progress, LabLog: &labLog,
+	})
+	if err != nil {
+		t.Fatalf("the scale run failed: %v\n%s\nthe lab:\n%s", err, progress.String(), labLog.String())
+	}
+	table := rep.Table()
+	t.Logf("%s\n%s", progress.String(), table)
+	if rep.DeliveryNotRead != "" || len(rep.DeliveryUnsettled) > 0 {
+		t.Fatalf("delivery not read (%q) or unsettled %+v", rep.DeliveryNotRead, rep.DeliveryUnsettled)
+	}
+	var property, metric bool
+	for _, d := range rep.Delivery {
+		if d.Loss == nil {
+			continue
+		}
+		switch d.Kind {
+		case delivery.Property:
+			property = true
+			if *d.Loss <= 0 || d.Cause != delivery.RefusedUnregistered || d.Outcomes[delivery.RefusedUnregistered] == 0 {
+				t.Errorf("property across %s: loss %v, cause %q, outcomes %v; want a loss caused by refused-unregistered", d.Hop, *d.Loss, d.Cause, d.Outcomes)
+			}
+		case delivery.Metric:
+			metric = true
+			if *d.Loss != 0 {
+				t.Errorf("metric across %s: loss %v, outcomes %v; the induced poll emits no metric", d.Hop, *d.Loss, d.Outcomes)
+			}
+		}
+	}
+	if !property || !metric {
+		t.Errorf("property read %v, metric read %v: want both kinds carrying a ratio: %+v", property, metric, rep.Delivery)
+	}
+	if !strings.Contains(table, string(delivery.RefusedUnregistered)) {
+		t.Errorf("the table does not name the cause:\n%s", table)
+	}
+}

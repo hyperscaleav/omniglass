@@ -119,7 +119,9 @@ func newLabRunCmd(version string) *cobra.Command {
 	// the refusal without a small machine, and the bring-up's bound.
 	cmd.Flags().StringVar(&scale.hostMemory, "host-memory", "", "a scale lab: plan against this much host memory (e.g. 4g) instead of what Docker reports")
 	cmd.Flags().DurationVar(&scale.timeout, "ready-timeout", defaultScaleTimeout, "a scale lab: how long its bring-up may take before it is removed, naming what is not up")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence", "host-memory", "ready-timeout"} {
+	// The delivery table's proof that a refusal reads as loss (#1698).
+	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -200,7 +202,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
 			Systems: plan.Totals.Systems, SiteNodes: nodes,
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
-			Ephemeral: true, Cadence: cadence,
+			Ephemeral: true, Cadence: cadence, InduceUnregistered: f.scale.induce,
 		},
 		Image: choice, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 		ScaleRun: scale,
@@ -257,6 +259,9 @@ const defaultScaleTimeout = 20 * time.Minute
 type labScale struct {
 	hostMemory string
 	timeout    time.Duration
+	// induce makes one simulated device answer a property key no driver
+	// registers (#1698), so the delivery table shows a refusal as loss.
+	induce bool
 }
 
 // parseByteSize reads a size like 512m or 4g (binary units; a bare number is
@@ -320,6 +325,9 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if f.systems != 0 || f.plan {
 		return fmt.Errorf("--systems and --plan size a scale lab scenario (%s); %q is a seeded fleet, which has its own size",
 			strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	if f.scale.induce {
+		return fmt.Errorf("--induce-unregistered is a scale lab's (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
 	faults, err := devseed.PlantedFaults(sc)
 	if err != nil {
@@ -428,7 +436,7 @@ func dialDaemon(host string) error {
 
 func newLabSeedCmd() *cobra.Command {
 	var scenario, node, user, password string
-	var noNode bool
+	var noNode, induce bool
 	var systems, reportSeconds int
 	cmd := &cobra.Command{
 		Use:    "seed",
@@ -437,7 +445,10 @@ func newLabSeedCmd() *cobra.Command {
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if systems > 0 {
-				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv))
+				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv), induce)
+			}
+			if induce {
+				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
 				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")}, reportSeconds)
@@ -450,6 +461,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noNode, "no-node", false, "seed the fleet without the simulated wiring and enroll no node, so the lab runs none")
 	cmd.Flags().IntVar(&reportSeconds, "report-seconds", 0, "set the platform's collection report window (collection.report_seconds) to this many seconds; 0 leaves it as it is")
 	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with a node per site")
+	cmd.Flags().BoolVar(&induce, "induce-unregistered", false, "with --systems: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	return cmd
 }
 
@@ -582,7 +594,9 @@ func bootstrapLabOwner(ctx context.Context, gw storage.Gateway, user string, pwH
 // resolved at systems, laid down by devseed.SeedPlan (the one function the
 // bulk seed, #1555, replaces) on a throwaway lab's empty database, and each
 // site's node enrolled with the hash of the token the lab minted for it.
-func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string) error {
+// With induce (#1698), one device answers a property key no driver
+// registers, named in the summary.
+func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string, induce bool) error {
 	m, err := labscenario.Shipped(scenario)
 	if err != nil {
 		return err
@@ -633,7 +647,8 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return fmt.Errorf("lab seed: create site node %s: %w", node, err)
 		}
 	}
-	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: labscenario.SiteNode}); err != nil {
+	seeded, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: labscenario.SiteNode, InduceUnregistered: induce})
+	if err != nil {
 		return err
 	}
 	for _, site := range plan.Sites {
@@ -645,9 +660,12 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return err
 		}
 	}
-	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: true, Summary: fmt.Sprintf(
-		"scenario %s at %d systems: %d sites, %d components, seeded in %s",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, time.Since(start).Round(time.Second))}))
+	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, seeded in %s",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, time.Since(start).Round(time.Second))
+	if in := seeded.Induced; in != nil {
+		summary += fmt.Sprintf("; %s answers %s through %s, refused-unregistered", in.Component, in.Key, in.Driver)
+	}
+	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: true, Summary: summary}))
 	return nil
 }
 
