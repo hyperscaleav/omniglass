@@ -6,6 +6,11 @@
 import { api } from "../api/client";
 import type { ChartBucket } from "./chart";
 
+// SERIES_POLL_MS is a sparkline's cadence (the Data table, the platform
+// panels): a line over hours moves too little in the leaf's five seconds to be
+// worth a request per series, so a sparkline polls on its own, slower clock.
+export const SERIES_POLL_MS = 30_000;
+
 export type MetricPoint = { ts: string; value: number; instance?: string; provenance: string; source?: string };
 export type PropertyPoint = { ts: string; value: string; instance?: string; provenance: string; source?: string };
 
