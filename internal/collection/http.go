@@ -71,7 +71,7 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 		timeout = 5 * time.Second
 	}
 	var res HTTPResult
-	call := p.tally.call(TallyHTTP)
+	call := p.tally.call(t.Tally)
 	dialer := &net.Dialer{Timeout: timeout}
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialStart := time.Now()

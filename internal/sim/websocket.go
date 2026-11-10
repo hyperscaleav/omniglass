@@ -183,7 +183,11 @@ func (f *wsFace) drop() int {
 func (f *wsFace) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d := f.d
 	if r.URL.Path != f.cfg.Path {
+		// Off the face's path (a reachability probe's GET /): a request
+		// received and answered, counted so the closed loop pairs it.
+		tok := d.observe.begin(obsWebSocket, f.face)
 		http.NotFound(w, r)
+		tok.end(OutcomeAnswered)
 		return
 	}
 	f.attempts.Add(1)

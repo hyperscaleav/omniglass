@@ -414,6 +414,16 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 	return collectTask(ctx, runner, task)
 }
 
+// probeTally is the transport an http probe counts under (#1647): a
+// websocket endpoint's GET / lands on the face's own listener, which the sim
+// counts as websocket.
+func probeTally(transport string) collection.TallyTransport {
+	if transport == "websocket" || transport == "wss" {
+		return collection.TallyWebSocket
+	}
+	return collection.TallyHTTP
+}
+
 // collectHTTPSProbe runs the https probe on the gate (#902), as the tls
 // probe does: with the transport rung gated (a changed key, a certificate
 // that failed verification) only the TCP connect runs, so no handshake
@@ -437,7 +447,7 @@ func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task coll
 	if trust.Mode == driver.TLSModePin {
 		trust.Pin = sessions.certPinOf(task)
 	}
-	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust})
+	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust, Tally: probeTally(task.Transport)})
 	if err != nil {
 		return nil, err
 	}
@@ -619,6 +629,7 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 		if err != nil {
 			return nil, err
 		}
+		t.Tally = probeTally(task.Transport)
 		return runner.CollectHTTP(ctx, t)
 	case "telnet":
 		t, err := parseTCPTask(task)
