@@ -10,6 +10,7 @@ import {
   PLATFORM_SIM_KEY,
   deviceReceived,
   gapName,
+  gapProtocolText,
   gapTone,
   platformSimulation,
   ratioText,
@@ -184,7 +185,7 @@ function GapTable(props: { gaps: PlatformSimGap[] | null }) {
               return (
                 <tr class={ROW_TONE[tone]} data-testid="platform-sim-gap" data-gap={g.gap} data-protocol={g.protocol} data-tone={tone} data-ratio={g.ratio ?? ""}>
                   <td class="whitespace-nowrap">{gapName(g.gap)}</td>
-                  <td>{g.protocol || <span class="text-base-content/40">batches</span>}</td>
+                  <td classList={{ "text-base-content/40": !g.protocol }}>{gapProtocolText(g)}</td>
                   <td class={`tnum text-right ${RATIO_TONE[tone]}`}>{ratioText(g.ratio)}</td>
                   <td class="tnum whitespace-nowrap text-right text-base-content/60">{g.count} / {g.in}</td>
                   <td><span class={`badge badge-sm ${READING_BADGE[g.reading] ?? ""}`}>{g.reading}</span></td>

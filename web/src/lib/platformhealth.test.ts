@@ -3,6 +3,7 @@ import {
   deviceReceived,
   figureText,
   gapName,
+  gapProtocolText,
   gapTone,
   NOT_WIRED,
   ratioText,
@@ -194,6 +195,13 @@ describe("gap words", () => {
     expect(ratioText(0.125)).toBe("12.5%");
     expect(ratioText(0.0004)).toBe("0.04%");
     expect(ratioText(null)).toBe("-");
+  });
+
+  it("names what a gap with no protocol counts: every listener for a connect, batches for the telemetry hops", () => {
+    expect(gapProtocolText({ gap: "sent-not-received", protocol: "snmp" })).toBe("snmp");
+    expect(gapProtocolText({ gap: "connect-not-accepted", protocol: "" })).toBe("any listener");
+    expect(gapProtocolText({ gap: "published-not-landed", protocol: "" })).toBe("batches");
+    expect(gapProtocolText({ gap: "spool-dropped", protocol: "" })).toBe("batches");
   });
 });
 

@@ -136,6 +136,14 @@ export function gapName(gap: string): string {
   return gap.replace("-not-", ", not ").replaceAll("-", " ");
 }
 
+// gapProtocolText names what a gap row counts. A connect gap with no protocol
+// pools every listener on the node (the node knows the transport it dialed,
+// the sim the listener that accepted); the telemetry hops count batches.
+export function gapProtocolText(g: Pick<PlatformSimGap, "gap" | "protocol">): string {
+  if (g.protocol) return g.protocol;
+  return g.gap === "connect-not-accepted" ? "any listener" : "batches";
+}
+
 // ratioText is a loss ratio as a percent; a gap with no ratio has no number.
 export function ratioText(ratio: number | null | undefined): string {
   if (ratio == null) return "-";

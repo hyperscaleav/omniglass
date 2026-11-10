@@ -163,7 +163,7 @@ const connected: SimFleet = { connected: true, nodes: [] };
 const measured: PlatformSimNode = {
   node: "edge-alpha", state: "measured", start: ago(600_000), end: ago(60_000), brackets: 11, error: "",
   gaps: [
-    { gap: "connect-not-accepted", protocol: "tcp", count: 0, in: 40, ratio: 0, masked: 0, masked_by: "connections still in the kernel backlog at the end read", answered_late: 0, reading: "loss" },
+    { gap: "connect-not-accepted", protocol: "", count: 0, in: 40, ratio: 0, masked: 0, masked_by: "connections still in the kernel backlog at the end read", answered_late: 0, reading: "loss" },
     { gap: "sent-not-received", protocol: "http", count: 30, in: 120, ratio: 0.25, masked: 0, masked_by: "requests in flight at the node's end read", answered_late: 0, reading: "impaired" },
     { gap: "published-not-landed", protocol: "", count: 2, in: 40, ratio: 0.05, masked: 1, masked_by: "receipts landed in the margin before the window", answered_late: 0, reading: "loss" },
     { gap: "sent-not-received", protocol: "icmp", count: 0, in: 0, ratio: null, masked: 0, masked_by: "", answered_late: 0, reading: "not observed by the sim" },
@@ -197,6 +197,7 @@ describe("PlatformHealth with a simulator", () => {
     expect(rows[0]).toHaveTextContent("25.0%");
     expect(rows[1]).toHaveTextContent("1 in receipts landed in the margin before the window");
     expect(rows[2]).toHaveTextContent("connections still in the kernel backlog at the end read");
+    expect(rows[2]).toHaveTextContent("any listener");
     expect(rows[2].className).toBe("");
   });
 
