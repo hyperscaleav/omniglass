@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
 )
 
@@ -197,7 +198,7 @@ func newLabMeasureCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.Int("systems", 0, "bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running")
-	f.String("scenario", "corporate", "the scale scenario a --systems lab runs")
+	f.String("scenario", lab.MeasureScenario, "the scale scenario a --systems lab runs")
 	f.Duration("warmup", 2*time.Minute, "how long the lab runs before the window starts (once, before the first sample)")
 	f.Duration("window", 5*time.Minute, "the window the rates, growth and usage are read over")
 	f.Int("fleet-reads", 20, "how many timed fleet view reads, spread over the window")
