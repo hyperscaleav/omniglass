@@ -91,7 +91,8 @@ chosen endpoint is placed on. Every node with a platform component gets, at each
 - `command-stuck-count`: the ones it took and has been silent on past the redelivery wait, still
   inside the delivery TTL.
 
-Over the window since the previous read, and only when nonzero (a first read has no window):
+Over the window since the previous read, written every read and zero for a quiet window, so the
+latest value never stands on a past event's count (a first read has no window and writes neither):
 
 - `command-redelivery-count`: commands taken again in the window, read 5 s behind it: a take is
   stamped at its transaction's start, so a read that runs before it commits cannot see it, and a

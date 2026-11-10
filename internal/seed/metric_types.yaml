@@ -136,7 +136,7 @@ metric_types:
   - name: command-redelivery-count
     data_type: int
     label: Command Redeliveries
-    description: Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; reported only when nonzero.
+    description: Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; written every tick, zero when none.
   - name: command-stuck-count
     data_type: int
     label: Stuck Commands
@@ -144,7 +144,7 @@ metric_types:
   - name: command-expired-count
     data_type: int
     label: Expired Commands
-    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); reported only when nonzero.
+    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); written every tick, zero when none.
   - name: command-pull-failure-count
     data_type: int
     label: Command Pull Failures
