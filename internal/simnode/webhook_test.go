@@ -94,3 +94,66 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 		t.Fatalf("with no subscription: %d calls (%v), want none more", calls, errs)
 	}
 }
+
+// A platform account speaks for every room bound on its webhook endpoint
+// (#1747): the server hands the simulator those bound values beside the
+// subscription, and the simulator adds each to the service through its
+// profile's provision route, as the account's admin would, so its periodic
+// report names every one. A room the service already knows keeps its state,
+// a re-pull with nothing changed sends nothing, and a newly bound room is
+// added on the next pull.
+func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
+	if testing.Short() {
+		t.Skip("serves a simulated device")
+	}
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := store.Devices["ucc-platform"]; p == nil || p.Webhook == nil || p.Webhook.Provision == "" || p.Webhook.Driver != "ucc-webhook" {
+		t.Fatal("the ucc-platform profile's webhook face names no provision route, or no ucc-webhook driver")
+	}
+	engine := sim.NewEngine(store, profiles.Templates())
+	engine.SetPortMap(sim.EphemeralPorts)
+	t.Cleanup(engine.StopAll)
+	ip := simtest.ClaimLoopback(t)
+	snap := sim.DeviceSnapshot{DeviceID: "plat", Hostname: "plat", LoopbackIP: ip, ProfileName: "ucc-platform", Product: "ucc-platform", Version: 1}
+	if err := engine.Sync([]sim.DeviceSnapshot{snap}); err != nil {
+		t.Fatal(err)
+	}
+	listed := []collection.SimDevice{{ComponentID: "plat", Name: "plat", Address: ip,
+		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key",
+			Identities: []string{"hq-conf-1", "zr-huddle-north"}}}}
+	calls := 0
+	s := newSubscriber("http://server:8080", store)
+	op := s.operate
+	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
+	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {
+		t.Fatalf("subscribe: %v", errs)
+	}
+	room := func(id string) map[string]any {
+		st, _ := engine.Devices()[0].State()["status"].(map[string]any)
+		rooms, _ := st["rooms"].(map[string]any)
+		r, _ := rooms[id].(map[string]any)
+		return r
+	}
+	if r := room("hq-conf-1"); r == nil || r["state"] != "idle" {
+		t.Fatalf("bound room hq-conf-1 = %v, want it on the account, idle", r)
+	}
+	if r := room("zr-huddle-north"); r["state"] != "in-call" || r["meeting"] != "m-1001" {
+		t.Fatalf("a room the account already knew = %v, want its call kept", r)
+	}
+	if calls != 3 {
+		t.Fatalf("%d calls, want the subscribe and one per bound room", calls)
+	}
+	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 || calls != 3 {
+		t.Fatalf("a re-pull with nothing changed: %d calls (%v), want 3", calls, errs)
+	}
+	listed[0].Webhook.Identities = append(listed[0].Webhook.Identities, "hq-conf-2")
+	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {
+		t.Fatalf("a newly bound room: %v", errs)
+	}
+	if r := room("hq-conf-2"); r == nil || r["state"] != "idle" {
+		t.Fatalf("newly bound room hq-conf-2 = %v, want it added", r)
+	}
+}

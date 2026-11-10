@@ -88,6 +88,16 @@ func validatePush(p *DeviceProfile) error {
 // webhook endpoint (ADR-1370), so its posts flow from the start.
 type WebhookSubscribe struct {
 	Subscribe string `yaml:"subscribe"`
+	// Driver names the shipped driver whose endpoint receives the service's
+	// posts, for a lab that seeds the service as a webhook sender (#1747):
+	// the plan reads the endpoint's signing input and the room identity
+	// from it. Empty when the service is only ever subscribed by hand.
+	Driver string `yaml:"driver"`
+	// Provision is the path of a POST route taking a JSON body of id that
+	// adds one room to the service's account, as its admin would. The
+	// simulator calls it for each identity bound on the service's webhook
+	// endpoint, so the service's reports name every bound room.
+	Provision string `yaml:"provision"`
 }
 
 // ProductVariant is one more product a profile simulates.

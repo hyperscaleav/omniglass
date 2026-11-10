@@ -99,6 +99,11 @@ type SimWebhook struct {
 	Path   string `json:"path"`
 	Scheme string `json:"scheme"`
 	Secret string `json:"secret,omitempty"`
+	// Identities are the values bound on the endpoint's component (#1747):
+	// a platform account's room ids, each bound to the system it stands
+	// for. The simulator adds each to the service through its profile's
+	// provision route, so the service's reports name every bound room.
+	Identities []string `json:"identities,omitempty"`
 }
 
 // SimImpairment is what is wrong with a simulated device: unplugged (dark

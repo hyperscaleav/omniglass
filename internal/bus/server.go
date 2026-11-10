@@ -556,7 +556,7 @@ func (s *Server) subscribeSim() error {
 				sd.Impairment = &imp
 			}
 			if h, ok := hooks[d.ComponentID]; ok {
-				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret}
+				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret, Identities: h.Identities}
 			}
 			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)
