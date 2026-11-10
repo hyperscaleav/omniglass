@@ -43,6 +43,9 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	if wantSystems != 20 || wantComponents != p.Totals.Components {
 		t.Fatalf("plan has %d systems and %d role fills, want 20 and %d components", wantSystems, wantComponents, p.Totals.Components)
 	}
+	// Each platform (#1747) is a component of its own, staffing no role.
+	senders, _ := senderSites(p)
+	wantComponents += len(senders)
 	if res.Systems != wantSystems || res.Components != wantComponents || res.Roles != wantRoles {
 		t.Fatalf("result = %d systems, %d components, %d roles; want %d, %d, %d", res.Systems, res.Components, res.Roles, wantSystems, wantComponents, wantRoles)
 	}
@@ -120,8 +123,8 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Errorf("%d components (want %d), %d staffing a system from another room, %d staffing without membership", components, wantComponents, misplaced, unmembered)
 	}
 
-	// Endpoints: the count the seed reports is the count in the database, and
-	// every one sits on a planned component.
+	// Endpoints: the simulated fleet's and one webhook per platform are the
+	// count in the database, and every one sits on a planned component.
 	var endpoints, orphaned int
 	if err := conn.QueryRow(ctx, `select count(*) from endpoint`).Scan(&endpoints); err != nil {
 		t.Fatal(err)
@@ -129,8 +132,8 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from endpoint e where not exists (select 1 from component c where c.id = e.component)`).Scan(&orphaned); err != nil {
 		t.Fatal(err)
 	}
-	if res.Endpoints == 0 || endpoints != res.Endpoints || orphaned != 0 {
-		t.Errorf("%d endpoints in the database, result says %d, %d on no component; want equal, non-zero, none", endpoints, res.Endpoints, orphaned)
+	if res.Endpoints == 0 || endpoints != res.Endpoints+res.Senders || orphaned != 0 {
+		t.Errorf("%d endpoints in the database, result says %d and %d webhooks, %d on no component; want equal, non-zero, none", endpoints, res.Endpoints, res.Senders, orphaned)
 	}
 }
 
@@ -193,7 +196,9 @@ func planNodes(t *testing.T, ctx context.Context, gw storage.Gateway, names ...s
 }
 
 // endpointNodes reads the node every endpoint of a seeded plan is on, by the
-// site its component is in (the root of the component's location chain).
+// site its component is in (the root of the component's location chain). A
+// platform's webhook (#1747) is server hosted, on no node by design, so it is
+// left out.
 func endpointNodes(t *testing.T, ctx context.Context, conn *pgx.Conn) map[string]map[string]int {
 	t.Helper()
 	rows, err := conn.Query(ctx, `
@@ -207,6 +212,7 @@ func endpointNodes(t *testing.T, ctx context.Context, conn *pgx.Conn) map[string
 		join component c on c.id = e.component
 		join up site on site.start_id = c.location_id and site.parent_id is null
 		left join node n on n.principal_id = e.node_name
+		where not exists (select 1 from webhook_token w where w.endpoint_id = e.id)
 		group by 1, 2`)
 	if err != nil {
 		t.Fatal(err)
@@ -295,6 +301,9 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	want := map[string][]string{}
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
+			if ps.Webhook {
+				continue // a platform posts as its component, holding no grant (#1747)
+			}
 			want[ps.Name] = append([]string(nil), ps.Systems...)
 			sort.Strings(want[ps.Name])
 		}
@@ -346,5 +355,92 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	}
 	if tokens != 0 {
 		t.Errorf("the seeded pushers hold %d tokens, want none until the lab mints them", tokens)
+	}
+}
+
+// SeedPlan seeds each planned platform (#1747) as a component at its site
+// holding one webhook endpoint (server hosted, so on no node), signing with a
+// secret of its own minted for this seed, and bound to every system of its
+// site by name, so its posts land on the system each names.
+func TestSeedPlanSeedsEachPlatformItsWebhookAndRooms(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	p := corporatePlan(t, 20)
+	wantSite, systems := senderSites(p)
+	res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Senders != len(wantSite) {
+		t.Errorf("result = %d senders, want %d", res.Senders, len(wantSite))
+	}
+
+	// One ucc-webhook endpoint per platform component, at its site, on no
+	// node, with a token minted and a signing secret no other endpoint holds.
+	rows, err := conn.Query(ctx, `
+		select c.id::text, l.name, e.node_name is null, e.inputs->>'signing-key', t.name,
+		       exists (select 1 from webhook_token w where w.endpoint_id = e.id)
+		from endpoint e
+		join driver d on d.id = e.driver_id
+		join component c on c.id = e.component
+		join product pr on pr.id = c.product_id
+		join location l on l.id = c.location_id
+		left join secret s on s.name = e.inputs->>'signing-key'
+		left join secret_type t on t.id = s.secret_type
+		where d.name = 'ucc-webhook' and pr.name = 'ucc-platform'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conduitSite := map[string]string{}
+	secrets := map[string]bool{}
+	for rows.Next() {
+		var comp, site, secretName string
+		var noNode, tokened bool
+		var secretType *string
+		if err := rows.Scan(&comp, &site, &noNode, &secretName, &secretType, &tokened); err != nil {
+			t.Fatal(err)
+		}
+		conduitSite[comp] = site
+		if !noNode || !tokened || secretType == nil || *secretType != "hmac-key" || secrets[secretName] {
+			t.Errorf("platform at %s: no node %v, token %v, secret %q of type %v (seen before %v); want no node, a token, its own hmac-key",
+				site, noNode, tokened, secretName, secretType, secrets[secretName])
+		}
+		secrets[secretName] = true
+	}
+	rows.Close()
+	if len(conduitSite) != len(wantSite) {
+		t.Fatalf("%d platform webhook endpoints, want %d", len(conduitSite), len(wantSite))
+	}
+
+	// Each platform binds every system of its site, by name, on ucc-room-id.
+	got := map[string][]string{}
+	rows, err = conn.Query(ctx, `
+		select b.conduit_id::text, b.value, s.name, pt.name
+		from identity_binding b
+		join system s on s.id = b.system_id
+		join property_type pt on pt.id = b.property_type_id
+		order by s.name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var conduit, value, sys, key string
+		if err := rows.Scan(&conduit, &value, &sys, &key); err != nil {
+			t.Fatal(err)
+		}
+		if value != sys || key != "ucc-room-id" {
+			t.Errorf("binding %s=%s owned by %s, want ucc-room-id named for its system", key, value, sys)
+		}
+		got[conduitSite[conduit]] = append(got[conduitSite[conduit]], sys)
+	}
+	rows.Close()
+	for site, want := range systems {
+		g := append([]string(nil), got[site]...)
+		w := append([]string(nil), want...)
+		sort.Strings(g)
+		sort.Strings(w)
+		if fmt.Sprint(g) != fmt.Sprint(w) {
+			t.Errorf("site %s binds %v, want %v", site, g, w)
+		}
 	}
 }

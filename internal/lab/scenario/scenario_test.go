@@ -664,6 +664,7 @@ func fakeCatalog() Catalog {
 		Within:     func(have, accepted string) bool { return within(parents, have, accepted) },
 		SystemType: func(name string) bool { return name == "sign" || name == "meeting" },
 		Pusher:     func(profile string) bool { return profile == "t-pusher" },
+		Sender:     func(profile string) bool { return profile == "t-platform" },
 	}
 }
 
@@ -762,10 +763,16 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range p.Sites {
-		if len(s.Pushers) != 1 {
-			t.Fatalf("site %s has %d pushers, want one booking service", s.Name, len(s.Pushers))
+		var booking []PusherPlan
+		for _, ps := range s.Pushers {
+			if !ps.Webhook {
+				booking = append(booking, ps)
+			}
 		}
-		ps := s.Pushers[0]
+		if len(booking) != 1 {
+			t.Fatalf("site %s has %d token pushers, want one booking service", s.Name, len(booking))
+		}
+		ps := booking[0]
 		if ps.Name != s.Name+"-booking-1" || ps.Profile != "booking-service" {
 			t.Errorf("site %s pusher = %s (%s), want %s-booking-1 (booking-service)", s.Name, ps.Name, ps.Profile, s.Name)
 		}
@@ -784,7 +791,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 			seen[sys] = true
 		}
 	}
-	if want := []Count{{"booking-service", len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
+	if want := []Count{{"booking-service", len(p.Sites)}, {"ucc-platform", len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
 		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
 	}
 	var b bytes.Buffer
@@ -793,6 +800,76 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 	}
 	if out := b.String(); !strings.Contains(out, "PUSHER") || !strings.Contains(out, "booking-service") {
 		t.Errorf("plan output does not list the pushers:\n%s", out)
+	}
+}
+
+// The corporate scenario declares one meeting platform account a site
+// (#1747): the ucc-platform profile's webhook face makes it a signed-webhook
+// sender, not a token pusher, and with systems omitted its rooms are every
+// system of its site.
+func TestCorporateDeclaresAMeetingPlatformASite(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range p.Sites {
+		var platforms []PusherPlan
+		for _, ps := range s.Pushers {
+			if ps.Webhook {
+				platforms = append(platforms, ps)
+			}
+		}
+		if len(platforms) != 1 {
+			t.Fatalf("site %s has %d webhook senders, want one meeting platform", s.Name, len(platforms))
+		}
+		ps := platforms[0]
+		if ps.Name != s.Name+"-ucc-1" || ps.Profile != "ucc-platform" {
+			t.Errorf("site %s sender = %s (%s), want %s-ucc-1 (ucc-platform)", s.Name, ps.Name, ps.Profile, s.Name)
+		}
+		var want []string
+		for _, sys := range s.Systems {
+			want = append(want, sys.Name)
+		}
+		if !reflect.DeepEqual(ps.Systems, want) {
+			t.Errorf("sender %s rooms = %d systems, want every one of the site's %d", ps.Name, len(ps.Systems), len(want))
+		}
+	}
+}
+
+// A declaration whose systems are omitted is scoped to every system of its
+// site, and a profile with a webhook face places as a webhook sender.
+func TestResolveOmittedSystemsScopesEverySystem(t *testing.T) {
+	m, err := Parse("t.yaml", []byte(`name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+`+oneArchetype+`pushers:
+  - name: book
+    profile: t-pusher
+    per_site: 1
+    systems: 2
+  - name: plat
+    profile: t-platform
+    per_site: 1
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Resolve(m, fakeCatalog(), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := p.Sites[0].Pushers
+	if len(ps) != 2 || ps[0].Webhook || !ps[1].Webhook {
+		t.Fatalf("pushers = %+v, want a token pusher then a webhook sender", ps)
+	}
+	want := []string{"a-sign-55-1", "a-sign-55-2", "a-sign-55-3", "a-sign-55-4", "a-sign-55-5"}
+	if !reflect.DeepEqual(ps[1].Systems, want) {
+		t.Errorf("sender systems = %v, want %v", ps[1].Systems, want)
 	}
 }
 
@@ -844,15 +921,17 @@ standards:
 	pusher := func(name, prof string, perSite, systems int) string {
 		return fmt.Sprintf("  - name: %s\n    profile: %s\n    per_site: %d\n    systems: %d\n", name, prof, perSite, systems)
 	}
-	ok := base + pusher("book", "t-pusher", 1, 4)
-	if m, err := Parse("t.yaml", []byte(ok)); err != nil {
-		t.Fatal(err)
-	} else if err := Validate(m, fakeCatalog()); err != nil {
-		t.Fatalf("a pusher declaration is refused: %v", err)
+	sender := "  - name: plat\n    profile: t-platform\n    per_site: 1\n"
+	for _, ok := range []string{base + pusher("book", "t-pusher", 1, 4), base + sender} {
+		if m, err := Parse("t.yaml", []byte(ok)); err != nil {
+			t.Fatal(err)
+		} else if err := Validate(m, fakeCatalog()); err != nil {
+			t.Fatalf("a pusher declaration is refused: %v", err)
+		}
 	}
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"no systems", base + pusher("book", "t-pusher", 1, 0), `t.yaml:17: pusher "book" has no systems to scope it to`},
-		{"no push face", base + pusher("book", "t-panel", 1, 2), `t.yaml:18: profile "t-panel" of pusher "book" has no push face`},
+		{"no push face", base + pusher("book", "t-panel", 1, 2), `t.yaml:18: profile "t-panel" of pusher "book" has no push face and no webhook face`},
 		{"unknown profile", base + pusher("book", "t-nope", 1, 2), `t.yaml:18: profile "t-nope" of pusher "book" has no push face`},
 		{"none a site", base + pusher("book", "t-pusher", 0, 2), `t.yaml:17: pusher "book" has per_site 0`},
 		{"bad name", base + pusher("Book_1", "t-pusher", 1, 2), `t.yaml:17: pusher name "Book_1" is not a name`},

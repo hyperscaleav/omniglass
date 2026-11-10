@@ -37,21 +37,26 @@ type Manifest struct {
 	Standards   []Standard  `yaml:"standards"`
 	Archetypes  []Archetype `yaml:"archetypes"`
 	// Pushers are the outside actors each site has (#1743), declared like
-	// its devices: an emulator profile with a push face, how many a site,
-	// and how many of the site's systems each is scoped to.
+	// its devices: an emulator profile with a push face (a token pusher) or
+	// a webhook face (a signed-webhook sender, #1747), how many a site, and
+	// how many of the site's systems each is scoped to.
 	Pushers []Pusher `yaml:"pushers"`
 }
 
-// Pusher is one outside actor a scenario places at every site: an emulator
-// device whose profile has a push face (a booking service, say), PerSite of
-// them a site, each granted telemetry:push on Systems of the site's systems.
-// The lab seeds each one's principal and mints its token per run.
+// Pusher is one outside actor a scenario places at every site, PerSite of
+// them a site, each scoped to Systems of the site's systems, or to every one
+// when Systems is omitted. Its profile's face says what kind it is: a push
+// face (a booking service, say) makes a token pusher, whose principal the
+// lab seeds and whose token it mints per run, granted telemetry:push on its
+// systems; a webhook face (the meeting platform's account, #1747) makes a
+// signed-webhook sender, a component the lab seeds with a webhook endpoint
+// and a signing secret minted per run, its rooms bound to its systems.
 type Pusher struct {
-	Name    Ref `yaml:"name"`
-	Profile Ref `yaml:"profile"`
-	PerSite int `yaml:"per_site"`
-	Systems int `yaml:"systems"`
-	Line    int `yaml:"-"`
+	Name    Ref  `yaml:"name"`
+	Profile Ref  `yaml:"profile"`
+	PerSite int  `yaml:"per_site"`
+	Systems *int `yaml:"systems"`
+	Line    int  `yaml:"-"`
 }
 
 // UnmarshalYAML decodes a pusher and keeps its line.

@@ -3,8 +3,12 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -12,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 	labscenario "github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -146,7 +151,9 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 // A scale lab's seed (#1554), against a real database: the scenario's plan
 // goes down with a node per site, each enrolled with the token the lab
 // minted for it, each declared pusher (#1743) holding the token minted for
-// it, and the report tells the lab its nodes are present. A missing site
+// it, each site's meeting platform (#1747) simulated on its node with a
+// webhook to post to and every system of its site to name, and the report
+// tells the lab its nodes are present. A missing site
 // hash or pusher token is refused before the database is touched, and a
 // database that already holds data is refused.
 func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
@@ -154,6 +161,9 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	t.Setenv("OMNIGLASS_DSN", dsn)
 	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	// A known key, so this test reads back the webhook secrets the seed sealed.
+	kek := bytes.Repeat([]byte{0x7}, 32)
+	t.Setenv("OMNIGLASS_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(kek))
 	plan := corporateScalePlan(t, 3)
 	tokens := map[string][]byte{}
 	var nodes []lab.SiteNode
@@ -191,10 +201,22 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), pushers); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
-	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") {
-		t.Fatalf("seed result %+v, want the nodes present and the size named", res)
+	senders := map[string]int{} // site -> its platforms
+	for _, site := range plan.Sites {
+		for _, p := range site.Pushers {
+			if p.Webhook {
+				senders[site.Name]++
+			}
+		}
 	}
-	gw, err := storage.NewPG(ctx, dsn)
+	if len(senders) != len(plan.Sites) {
+		t.Fatalf("corporate at 3 declares platforms at %d of %d sites, want every one", len(senders), len(plan.Sites))
+	}
+	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") ||
+		!strings.Contains(res.Summary, fmt.Sprintf("%d webhook senders", len(plan.Sites))) {
+		t.Fatalf("seed result %+v, want the nodes present, the size and the webhook senders named", res)
+	}
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,8 +258,26 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(devices) != site.Totals.Components {
-			t.Errorf("node %s simulates %d components, want the site's %d", name, len(devices), site.Totals.Components)
+		if want := site.Totals.Components + senders[site.Name]; len(devices) != want {
+			t.Errorf("node %s simulates %d components, want the site's %d and its platform", name, len(devices), want)
+		}
+		hooks, err := gw.NodeSimWebhooks(ctx, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rooms []string
+		for _, s := range site.Systems {
+			rooms = append(rooms, s.Name)
+		}
+		sort.Strings(rooms)
+		if len(hooks) != senders[site.Name] {
+			t.Errorf("node %s holds %d webhooks to post, want its site's %d platforms", name, len(hooks), senders[site.Name])
+		}
+		for comp, h := range hooks {
+			if h.Path == "" || h.Secret == "" || !reflect.DeepEqual(h.Identities, rooms) {
+				t.Errorf("platform %s posts to %q (secret set %v) naming %v, want a path, a secret and its site's systems %v",
+					comp, h.Path, h.Secret != "", h.Identities, rooms)
+			}
 		}
 		for _, d := range devices {
 			if !strings.HasPrefix(d.Address, "127.") {
@@ -249,8 +289,8 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 			addresses[d.Address] = d.ComponentID
 		}
 	}
-	if len(addresses) != plan.Totals.Components {
-		t.Errorf("%d addresses for %d components", len(addresses), plan.Totals.Components)
+	if want := plan.Totals.Components + len(plan.Sites); len(addresses) != want {
+		t.Errorf("%d addresses for %d components and platforms", len(addresses), want)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
 		lab.FormatSiteNodeTokenHashes(nodes), pushers); err == nil || !strings.Contains(err.Error(), "holds data") {

@@ -38,6 +38,9 @@ func scaleLabPushers(plan *labscenario.Plan, mint minter) ([]lab.Pusher, error) 
 	var out []lab.Pusher
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
+			if p.Webhook {
+				continue // a webhook sender signs with the secret its seed mints
+			}
 			lp, err := mintPusher(p.Name, p.Profile, labscenario.SiteNode(site.Name), mint)
 			if err != nil {
 				return nil, err

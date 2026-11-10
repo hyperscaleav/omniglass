@@ -617,6 +617,9 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return fmt.Errorf("lab seed: %s carries no token hash for the node %s", lab.SiteNodeTokenHashesEnv, node)
 		}
 		for _, p := range site.Pushers {
+			if p.Webhook {
+				continue // a webhook sender signs its posts, and needs no bearer token
+			}
 			if _, ok := pushers[p.Name]; !ok {
 				return fmt.Errorf("lab seed: %s carries no token for the pusher %s", lab.PusherTokensEnv, p.Name)
 			}
@@ -667,8 +670,8 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 		return err
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: true, Summary: fmt.Sprintf(
-		"scenario %s at %d systems: %d sites, %d components, %d pushers, seeded in %s",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, res.Pushers, time.Since(start).Round(time.Second))}))
+		"scenario %s at %d systems: %d sites, %d components, %d pushers, %d webhook senders, seeded in %s",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, res.Pushers, res.Senders, time.Since(start).Round(time.Second))}))
 	return nil
 }
 

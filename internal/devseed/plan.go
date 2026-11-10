@@ -47,6 +47,11 @@ type PlanResult struct {
 	// Pushers is the outside actors seeded (#1743): one service principal
 	// each, granted the pusher role on its systems, holding no token.
 	Pushers int
+	// Senders is the webhook senders seeded (#1747): one component each,
+	// counted in Components, with one webhook endpoint (not counted in
+	// Endpoints, which is the simulated fleet's), its own signing secret and
+	// a binding per system it speaks for.
+	Senders int
 	Phases  []PlanPhase
 }
 
@@ -58,7 +63,8 @@ type locationRow struct{ Key, Name, Label, Type, Parent string }
 type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 
 // componentRow is one component of a plan: a product placed in a room of Site,
-// filling Role of System. Its name is the platform's to mint.
+// filling Role of System. Its name is the platform's to mint. A webhook
+// sender's component (#1747) is placed at its site and fills no role.
 type componentRow struct{ Key, Product, Site, Room, System, Role string }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -69,6 +75,7 @@ type planRows struct {
 	Locations  []locationRow
 	Systems    []systemRow
 	Components []componentRow
+	Senders    []senderRow
 }
 
 // rowsOf flattens a plan. Pure.
@@ -104,6 +111,13 @@ func rowsOf(p *scenario.Plan) planRows {
 				}
 			}
 		}
+		for _, ps := range site.Pushers {
+			if !ps.Webhook {
+				continue
+			}
+			r.Components = append(r.Components, componentRow{Key: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+		}
 	}
 	return r
 }
@@ -131,17 +145,25 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	}
 	run.done("standards")
 	rows := rowsOf(p)
+	senders, err := shippedSenders(rows)
+	if err != nil {
+		return res, err
+	}
 	sysIDs, compIDs, err := seedRows(ctx, gw, actorID, rows, run) // compIDs by creation order, parallel to rows.Components
 	if err != nil {
 		return res, err
 	}
-	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)
+	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)
 	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
 	if err != nil {
 		return res, err
 	}
 	res.Pushers = n
 	run.done("pushers")
+	if res.Senders, err = seedPlanSenders(ctx, gw, actorID, senders, compIDs, sysIDs); err != nil {
+		return res, err
+	}
+	run.done("senders")
 	if opts.Endpoints {
 		n, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
@@ -160,6 +182,9 @@ func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p 
 	n := 0
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
+			if ps.Webhook {
+				continue // a sender speaks as its component (seedPlanSenders)
+			}
 			for _, sys := range ps.Systems {
 				id, ok := sysIDs[sys]
 				if !ok {
@@ -217,6 +242,9 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 	}
 	run.done("components")
 	for i, c := range rows.Components {
+		if c.Role == "" {
+			continue // a sender fills no role
+		}
 		if err := gw.AssignRole(ctx, actorID, sysIDs[c.System], c.Role, compIDs[i], all, all, all, all); err != nil {
 			return nil, nil, fmt.Errorf("devseed: staff %s of %q: %w", c.Role, c.System, err)
 		}

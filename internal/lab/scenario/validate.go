@@ -330,8 +330,10 @@ func checkArchetype(a Archetype, standards, seen map[string]int) []Problem {
 }
 
 // checkPushers checks each pusher declaration (#1743): a name, unique, an
-// emulator profile with a push face, at least one a site, and at least one
-// system to scope each to, since a pusher granted nothing pushes nothing.
+// emulator profile with a push face or a webhook sender's face (#1747), at
+// least one a site, and at least one system to scope each to when systems are
+// given, since a pusher granted nothing pushes nothing. Omitted, they are
+// every system of the site.
 func checkPushers(m *Manifest, cat Catalog) []Problem {
 	var probs []Problem
 	add := func(line int, format string, args ...any) {
@@ -348,13 +350,15 @@ func checkPushers(m *Manifest, cat Catalog) []Problem {
 		default:
 			seen[name] = lineOr(p.Name.Line, p.Line)
 		}
-		if cat.Pusher == nil || !cat.Pusher(p.Profile.Name) {
-			add(lineOr(p.Profile.Line, p.Line), "profile %q of pusher %q has no push face, so it cannot push", p.Profile.Name, name)
+		pusher := cat.Pusher != nil && cat.Pusher(p.Profile.Name)
+		sender := cat.Sender != nil && cat.Sender(p.Profile.Name)
+		if !pusher && !sender {
+			add(lineOr(p.Profile.Line, p.Line), "profile %q of pusher %q has no push face and no webhook face, so it cannot push", p.Profile.Name, name)
 		}
 		if p.PerSite < 1 {
 			add(p.Line, "pusher %q has per_site %d; a declared pusher places at least one a site", name, p.PerSite)
 		}
-		if p.Systems < 1 {
+		if p.Systems != nil && *p.Systems < 1 {
 			add(p.Line, "pusher %q has no systems to scope it to; give it systems of at least 1", name)
 		}
 	}
