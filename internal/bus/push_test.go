@@ -123,9 +123,9 @@ func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
 	}
 	arc := sampleArc{Kind: "system", ID: "boardroom-a"}
 	w := storage.PushWriter()
-	m := deriveMetrics(ev, arc, storage.TaskOwner{}, reg, w)
-	p := deriveProperties(ev, arc, storage.TaskOwner{}, reg, w)
-	e := deriveEvents(ev, arc, storage.TaskOwner{}, reg, w)
+	m := deriveMetrics(ev, arc, storage.TaskOwner{}, reg, w, nil)
+	p := deriveProperties(ev, arc, storage.TaskOwner{}, reg, w, nil)
+	e := deriveEvents(ev, arc, storage.TaskOwner{}, reg, w, nil)
 	if len(m) != 1 || m[0].OwnerKind != "system" || m[0].OwnerID != "boardroom-a" || m[0].Instance != "" {
 		t.Fatalf("metric = %+v, want one on system boardroom-a at the owner level", m)
 	}
@@ -146,7 +146,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Source:  "webex-cloud",
 			Metrics: []*ogv1.MetricSample{{Name: "audio-level", Instance: "mic-1", Value: 12.4}},
-		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter())
+		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter(), nil)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}
@@ -158,7 +158,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("a push never carries a native probe key", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: 12.4}},
-		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter())
+		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter(), nil)
 		if len(metrics) != 0 {
 			t.Fatalf("a pushed icmp-rtt-avg derived %+v, want it dropped", metrics)
 		}
@@ -167,7 +167,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
-		}, componentArc(nodeOwner()), nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName))
+		}, componentArc(nodeOwner()), nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName), nil)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}

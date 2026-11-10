@@ -666,6 +666,49 @@ omniglass component command issue disp-1 --command-type set-input --value '"hdmi
 A target must be a key a command may write: a native probe key, `health` or a calc rule's output is
 refused (422) naming the key.
 
+A **disruptive** type takes its device down (`reboot` ships as one): its delivery closes the gates
+of its hold set on that node (the target's in-band endpoints and those of what it hosts), nothing
+runs against them for `--quiet-seconds`, and each reopens on its own first up verdict after that, or at `--hold-seconds` as a counted backstop. The
+hold must be greater than the quiet, and neither is the settle window; a run against a held endpoint
+answers 409 naming the command
+([nodes](/architecture/nodes/#implicit-reachability)):
+
+```sh
+omniglass command-type create --name power-cycle --disruptive --quiet-seconds 20 --hold-seconds 300
+omniglass component reachability list disp-1 | jq -c '.endpoints[] | {endpoint, gate_reasons}'
+# {"endpoint":"http","gate_reasons":[{"kind":"disrupted","since":"...","source":"command-42"}]}
+```
+
+The hold set follows **dependency edges**, recorded per component: a `host` edge says the upstream
+must be up for the dependent to work (a codec hosting its touch panel), so a reboot of the codec holds
+the panel too; a `power` edge names the PDU outlet that feeds the dependent, so a type created with
+`--power-outlet-param` holds what that outlet feeds rather than the PDU. An endpoint created with
+`--out-of-band` (a BMC) stays open through a reboot of its device. Writing an edge needs
+`component:update` on the dependent and read on the upstream; the list counts an edge whose other end
+you cannot read without naming it
+([the hold set](/architecture/commands/#the-hold-set-follows-dependency-edges)):
+
+```sh
+omniglass component dependency create touch-1 --upstream codec-1 --kind host
+omniglass component dependency create codec-1 --upstream pdu-1 --kind power --outlet 3
+omniglass component dependency list codec-1   # upstreams, dependents, hidden
+omniglass command-type create --name outlet-cycle --disruptive --quiet-seconds 10 --hold-seconds 300 --power-outlet-param outlet
+```
+
+A `path` edge says the dependent is reached through the upstream (a peripheral behind a codec, a
+device behind a gateway). It holds without a command: while any in-band endpoint of the upstream has
+a closed gate on the same node, the dependent's in-band endpoints carry an `upstream` reason naming
+it, so their polls are held and their probes are not run, and the gateway alone raises an alarm.
+Once the upstream opens, each dependent waits for its own probe to read up. The reason's `source` is
+the upstream's uuid and `component` its name, when you can read it
+([implicit reachability](/architecture/nodes/#implicit-reachability)):
+
+```sh
+omniglass component dependency create touch-1 --upstream gateway-1 --kind path
+omniglass component reachability list touch-1 | jq -c '.endpoints[] | {endpoint, gate_reasons}'
+# {"endpoint":"http","gate_reasons":[{"kind":"upstream","since":"...","source":"...","component":"gateway-1"}]}
+```
+
 ### A command's status, from issue to settlement
 
 The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in

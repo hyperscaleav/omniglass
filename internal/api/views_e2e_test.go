@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,6 +217,28 @@ type platformViewWire struct {
 		Version   string     `json:"version"`
 		StartedAt *time.Time `json:"started_at"`
 		Verdict   string     `json:"verdict"`
+		Groups    []struct {
+			Name  string `json:"name"`
+			Label string `json:"label"`
+			Keys  []struct {
+				Name        string `json:"name"`
+				Label       string `json:"label"`
+				Description string `json:"description"`
+				Of          string `json:"of"`
+				Rank        int    `json:"rank"`
+			} `json:"keys"`
+			Figures []struct {
+				Key        string    `json:"key"`
+				Instance   string    `json:"instance"`
+				Value      float64   `json:"value"`
+				ObservedAt time.Time `json:"observed_at"`
+			} `json:"figures"`
+		} `json:"groups"`
+		Alarms []struct {
+			Rule     string `json:"rule"`
+			Key      string `json:"key"`
+			Severity string `json:"severity"`
+		} `json:"alarms"`
 	} `json:"servers"`
 	Groups []struct {
 		Name  string `json:"name"`
@@ -235,8 +258,51 @@ type platformViewWire struct {
 			Value      float64   `json:"value"`
 			ObservedAt time.Time `json:"observed_at"`
 		} `json:"figures"`
+		Loss *float64 `json:"loss"`
 	} `json:"nodes"`
+	LossHops []string              `json:"loss_hops"`
+	Pipeline *platformPipelineWire `json:"pipeline"`
 }
+
+type pipelineFigureWire struct {
+	In   uint64   `json:"in"`
+	Out  uint64   `json:"out"`
+	Loss *float64 `json:"loss"`
+}
+
+type pipelineCellWire struct {
+	Kind     string             `json:"kind"`
+	Newest   pipelineFigureWire `json:"newest"`
+	LastHour pipelineFigureWire `json:"last_hour"`
+}
+
+type platformPipelineWire struct {
+	Keys []struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	} `json:"keys"`
+	Hops []struct {
+		ID             string             `json:"id"`
+		Label          string             `json:"label"`
+		Description    string             `json:"description"`
+		ComponentClass string             `json:"component_class"`
+		Keys           []string           `json:"keys"`
+		Kinds          []pipelineCellWire `json:"kinds"`
+		Total          pipelineCellWire   `json:"total"`
+		ByComponent    []struct {
+			Component string             `json:"component"`
+			Name      string             `json:"name"`
+			Kinds     []pipelineCellWire `json:"kinds"`
+		} `json:"by_component"`
+	} `json:"hops"`
+	EndToEnd []struct {
+		Kind     string   `json:"kind"`
+		LastHour *float64 `json:"last_hour"`
+	} `json:"end_to_end"`
+}
+
+// platformRigRoute is the slowest route the rig's server sampled.
+const platformRigRoute = "GET /api/v1/components/{name} 2xx"
 
 // platformViewRig is a seeded platform with one node carrying a figure and a
 // server carrying its boot identity, served by a lab handler.
@@ -246,6 +312,8 @@ type platformViewRig struct {
 	c         *apiClient
 	owner     string
 	startedAt time.Time
+	node      string
+	server    string
 }
 
 func newPlatformViewRig(t *testing.T) *platformViewRig {
@@ -280,9 +348,18 @@ func newPlatformViewRig(t *testing.T) *platformViewRig {
 	if err != nil {
 		t.Fatalf("ensure server component: %v", err)
 	}
+	r.node, r.server = *nodes[0].PlatformComponentID, server
 	r.startedAt = time.Date(2026, 11, 9, 9, 30, 0, 0, time.UTC)
 	if err := gw.RecordServerIdentity(ctx, server, "v9.9.9", r.startedAt); err != nil {
 		t.Fatalf("record server identity: %v", err)
+	}
+	window := time.Now().UTC().Truncate(time.Second)
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: server, Key: writerclass.IngestLag, Value: 2.5, TS: window},
+		{ComponentID: server, Key: writerclass.HTTPRequestDurationMax, Instance: platformRigRoute, Value: 40, TS: window},
+		{ComponentID: server, Key: writerclass.HTTPRequestDurationMax, Instance: "GET /api/v1/fast 2xx", Value: 3, TS: window},
+	}); err != nil {
+		t.Fatalf("record the server's figures: %v", err)
 	}
 	return r
 }
@@ -373,6 +450,32 @@ func TestPlatformViewAPIServesTheSeededViewer(t *testing.T) {
 	if n.Verdict == "" {
 		t.Error("edge-alpha verdict missing for an all-scope component read")
 	}
+
+	// The server's panels (#1645): every server group, in order, with its
+	// keys' catalog facts and the server's latest figures, the slowest route
+	// first.
+	s := w.Servers[0]
+	if len(s.Groups) != len(storage.PlatformServerGroups) {
+		t.Fatalf("server groups = %+v, want %d", s.Groups, len(storage.PlatformServerGroups))
+	}
+	for i, g := range storage.PlatformServerGroups {
+		if s.Groups[i].Name != g.Name || len(s.Groups[i].Keys) != len(g.Keys) {
+			t.Errorf("server group %d = %s with %d keys, want %s with %d", i, s.Groups[i].Name, len(s.Groups[i].Keys), g.Name, len(g.Keys))
+		}
+	}
+	requests, ingest := s.Groups[0], s.Groups[1]
+	if k := requests.Keys[0]; k.Name != writerclass.HTTPRequestDurationMax || k.Rank != 10 || k.Description == "" {
+		t.Errorf("requests key 0 = %+v, want http-request-duration-max ranked 10 with its description", k)
+	}
+	if len(requests.Figures) != 2 || requests.Figures[0].Instance != platformRigRoute || requests.Figures[0].Value != 40 {
+		t.Errorf("requests figures = %+v, want the slowest route first", requests.Figures)
+	}
+	if len(ingest.Figures) != 1 || ingest.Figures[0].Key != writerclass.IngestLag || ingest.Figures[0].Value != 2.5 {
+		t.Errorf("ingest figures = %+v, want ingest-lag 2.5", ingest.Figures)
+	}
+	if s.Alarms == nil || len(s.Alarms) != 0 {
+		t.Errorf("alarms = %+v, want an empty list on a server with none open", s.Alarms)
+	}
 }
 
 // TestPlatformViewAPIOmitsWhatTheCallerCannotRead: a fleet-wide node:read
@@ -399,7 +502,11 @@ func TestPlatformViewAPIOmitsWhatTheCallerCannotRead(t *testing.T) {
 		t.Errorf("system = %+v, want it absent for a location-scoped system read", w.System)
 	}
 	if len(w.Servers) != 0 {
-		t.Errorf("servers = %+v, want none", w.Servers)
+		t.Errorf("servers = %+v, want none, and so no server groups", w.Servers)
+	}
+	raw := string(r.c.do(tok, http.MethodGet, "/views/platform", nil, http.StatusOK))
+	if strings.Contains(raw, platformRigRoute) || strings.Contains(raw, writerclass.IngestLag) {
+		t.Errorf("a location-scoped component read carries a server figure: %s", raw)
 	}
 	if len(w.Nodes) != 1 || w.Nodes[0].Name != "edge-alpha" {
 		t.Fatalf("nodes = %+v, want the edge-alpha row", w.Nodes)
@@ -427,6 +534,84 @@ func TestPlatformViewAPIRefusesWithoutAFleetWideNodeRead(t *testing.T) {
 
 	located := principalWithGrants(t, r.ctx, r.dsn, "hq-viewer", []grant{{role: "viewer", scopeKind: "location", scopeID: hq}})
 	r.c.do(located, http.MethodGet, "/views/platform", nil, http.StatusForbidden)
+}
+
+// TestPlatformViewAPIServesThePipelineHopByHop (#1646): the page's pipeline
+// comes back in the order an item crosses the hops (storage's
+// PlatformPipelineHops, the one declaration), each hop carrying its catalog
+// keys and its per-kind in, out and loss; edge-alpha's row carries its Loss
+// over the node hop, and loss_hops names the hop it composes. A kind no hop
+// carried is absent, never a 0.
+func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	r := newPlatformViewRig(t)
+	gw, err := storage.NewPG(r.ctx, r.dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	at := time.Now().UTC().Add(-time.Minute)
+	var ms []storage.PlatformMetric
+	for _, w := range []struct {
+		id      string
+		in, out float64
+	}{{r.node, 20, 19}, {r.server, 19, 19}} {
+		ms = append(ms,
+			storage.PlatformMetric{ComponentID: w.id, Key: writerclass.DeliveryInCount, Instance: "metric", Value: w.in, TS: at},
+			storage.PlatformMetric{ComponentID: w.id, Key: writerclass.DeliveryOutCount, Instance: "metric", Value: w.out, TS: at},
+			storage.PlatformMetric{ComponentID: w.id, Key: writerclass.DeliveryLossRatio, Instance: "metric", Value: (w.in - w.out) / w.in, TS: at})
+	}
+	if err := gw.RecordPlatformMetrics(r.ctx, ms); err != nil {
+		t.Fatalf("record delivery windows: %v", err)
+	}
+	w := r.read(t, setupAllViewer(t, r.ctx, r.dsn, "pipeline-viewer"))
+	if w.Pipeline == nil {
+		t.Fatal("pipeline absent for an all-scope viewer")
+	}
+	if len(w.Pipeline.Hops) != len(storage.PlatformPipelineHops) {
+		t.Fatalf("hops = %+v, want %d", w.Pipeline.Hops, len(storage.PlatformPipelineHops))
+	}
+	for i, h := range storage.PlatformPipelineHops {
+		got := w.Pipeline.Hops[i]
+		if got.ID != string(h.ID) || got.Label != h.Label || got.Description == "" || got.ComponentClass != h.ComponentClass || len(got.Keys) != 3 {
+			t.Errorf("hop %d = %+v, want %s in declared order with its three keys", i, got, h.ID)
+		}
+	}
+	if len(w.Pipeline.Keys) != 3 || w.Pipeline.Keys[0].Description == "" {
+		t.Errorf("pipeline keys = %+v, want the three delivery keys with their catalog descriptions", w.Pipeline.Keys)
+	}
+	node := w.Pipeline.Hops[0]
+	if len(node.Kinds) != 1 || node.Kinds[0].Kind != "metric" || node.Kinds[0].LastHour.In != 20 || node.Kinds[0].LastHour.Out != 19 ||
+		node.Kinds[0].LastHour.Loss == nil || *node.Kinds[0].LastHour.Loss != 0.05 {
+		t.Errorf("node hop kinds = %+v, want metric 20 in, 19 out, 0.05 over the hour", node.Kinds)
+	}
+	if len(node.ByComponent) != 1 || node.ByComponent[0].Component != r.node || node.ByComponent[0].Name == "" {
+		t.Errorf("node hop components = %+v, want edge-alpha's platform component", node.ByComponent)
+	}
+	if ingest := w.Pipeline.Hops[1]; len(ingest.ByComponent) != 1 || ingest.ByComponent[0].Component != r.server {
+		t.Errorf("ingest hop components = %+v, want the server's", ingest.ByComponent)
+	}
+	if len(w.Pipeline.EndToEnd) != 1 || w.Pipeline.EndToEnd[0].Kind != "metric" || w.Pipeline.EndToEnd[0].LastHour == nil {
+		t.Errorf("end to end = %+v, want the metric kind alone: no other kind was carried", w.Pipeline.EndToEnd)
+	}
+	if len(w.LossHops) != 1 || w.LossHops[0] != "node" {
+		t.Errorf("loss_hops = %v, want [node]", w.LossHops)
+	}
+	if l := w.Nodes[0].Loss; l == nil || *l != 0.05 {
+		t.Errorf("edge-alpha loss = %v, want 0.05", l)
+	}
+
+	hq := r.location(t, "hq")
+	scoped := r.read(t, principalWithGrants(t, r.ctx, r.dsn, "fleet-node-reader", []grant{
+		{role: "node-reader", scopeKind: "all"},
+		{role: "placed-reader", scopeKind: "location", scopeID: hq},
+	}))
+	if scoped.Pipeline != nil || scoped.Nodes[0].Loss != nil {
+		t.Errorf("a location-scoped component read got pipeline %+v, loss %v; want both omitted", scoped.Pipeline, scoped.Nodes[0].Loss)
+	}
 }
 
 // TestPlatformViewIsStampedNodeRead: the generated reference names the

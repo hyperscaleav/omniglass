@@ -909,6 +909,10 @@ type Gateway interface {
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's daily partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
+	// RetentionStatus is what the retention pass reports of storage after
+	// it runs (#1629): the metric partitions and the stored tables' and the
+	// database's on-disk bytes.
+	RetentionStatus(ctx context.Context) (RetentionStatus, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
@@ -970,6 +974,15 @@ type Gateway interface {
 	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
 	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
 	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
+
+	// Component dependencies (#1648): an edge from a dependent to its upstream,
+	// of kind power (with the outlet), host or path. A write resolves the
+	// dependent in read then update and the upstream in read; a cycle within a
+	// kind is refused. A disruptive command's hold set follows the power and
+	// host edges (ResolveHoldSet).
+	CreateComponentDependency(ctx context.Context, actorID, component string, spec ComponentDependencySpec, read, update scope.Set) (*ComponentDependency, error)
+	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
+	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's

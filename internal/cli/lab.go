@@ -429,7 +429,7 @@ func dialDaemon(host string) error {
 func newLabSeedCmd() *cobra.Command {
 	var scenario, node, user, password string
 	var noNode bool
-	var systems int
+	var systems, reportSeconds int
 	cmd := &cobra.Command{
 		Use:    "seed",
 		Short:  "The lab's one-off: migrate, mark the database as a lab's, seed it on the first run, and enroll the node",
@@ -440,7 +440,7 @@ func newLabSeedCmd() *cobra.Command {
 				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv))
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
-				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")})
+				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")}, reportSeconds)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -448,6 +448,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", lab.LoginUser, "the owner's username")
 	cmd.Flags().StringVar(&password, "password", lab.LoginPassword, "the owner's password")
 	cmd.Flags().BoolVar(&noNode, "no-node", false, "seed the fleet without the simulated wiring and enroll no node, so the lab runs none")
+	cmd.Flags().IntVar(&reportSeconds, "report-seconds", 0, "set the platform's collection report window (collection.report_seconds) to this many seconds; 0 leaves it as it is")
 	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with a node per site")
 	return cmd
 }
@@ -464,7 +465,11 @@ func newLabSeedCmd() *cobra.Command {
 // hash and non-secret prefix, never the token itself. Empty, none is set.
 type pushCredential struct{ Hash, Prefix string }
 
-func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, push pushCredential) error {
+// reportSeconds, when above zero, sets the platform's collection report
+// window (#1646) before the server and the node start, so both read it for
+// their first window: a walkthrough lab's 10s, where the platform's 60s would
+// land the first figures as its recording ends.
+func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, push pushCredential, reportSeconds int) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -491,6 +496,11 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		return err
 	} else if !ok {
 		return fmt.Errorf("this lab has no user %q to sign in as; start over with omniglass lab run --fresh", user)
+	}
+	if reportSeconds > 0 {
+		if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": reportSeconds}); err != nil {
+			return err
+		}
 	}
 	all := scope.Set{All: true}
 	// With no node to run, none is enrolled.

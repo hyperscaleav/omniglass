@@ -23,11 +23,16 @@ renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit 
 place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
 (`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
-verdict and a row per node of its platform figures, each row opening onto the node's platform
-component. Its columns are the groups the view returns, headed with each key's catalog
-description, so the page holds no key list. With a simulator connected the page gains a closed-loop
-section (#1647, `GET /views/platform/simulation`): each node's hops as loss ratios over a sliding
-window, with impaired, restarted and warming-up readings, its protocols and its simulated devices. The views model, the renderer library, and composable
+verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
+figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
+alarm on its keys) and a row per node of its platform figures, each row opening onto the node's
+platform component. Its panels and columns are the groups the view returns, named with each key's
+catalog description, so the page holds no key list. Above the table it draws **where work is lost**
+(#1646): the hops the view returns, each read from the same three delivery keys with one loss rule,
+and a hop's explainer naming its keys and its components (`components/PipelineFlow.tsx`). With a
+simulator connected the page gains a closed-loop section (#1647, `GET /views/platform/simulation`):
+each node's hops as loss ratios over a sliding window, with impaired, restarted and warming-up
+readings, its protocols and its simulated devices. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the

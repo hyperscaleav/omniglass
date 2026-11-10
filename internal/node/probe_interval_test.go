@@ -3,147 +3,109 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// countingDialer is the tcp probe primitive, counting its probes.
-type countingDialer struct{ dials int }
+// countingDialer is the tcp probe primitive, counting its probes. Workers
+// dial from their own goroutines, so the count is locked.
+type countingDialer struct {
+	mu    sync.Mutex
+	dials int
+}
 
 func (d *countingDialer) Dial(context.Context, string, time.Duration) (float64, collection.Reachability, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.dials++
 	return 1, collection.Responded, nil
 }
 
-// TestProbeIntervalGatesReachabilityProbes is #1273: a node probes each
-// endpoint at its probe interval, not on every heartbeat tick, so a lab can
-// check in every 2 s for responsiveness and probe every 10 s. Unset, the
-// interval is the heartbeat and every tick probes, as before.
-func TestProbeIntervalGatesReachabilityProbes(t *testing.T) {
-	t.Parallel()
-	wl := collection.WorklistReply{Tasks: []collection.TaskSpec{{
-		ID: "t-tcp", Mode: "poll", Transport: "tcp",
-		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
-	}}}
-	start := time.Date(2026, 10, 28, 3, 0, 0, 0, time.UTC)
-	ticks := 6 // one second apart
+func (d *countingDialer) count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.dials
+}
 
+func tcpProbeTask(fingerprint string) collection.TaskSpec {
+	return collection.TaskSpec{ID: "t-tcp", Mode: "poll", Transport: "tcp", Fingerprint: fingerprint,
+		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`)}
+}
+
+// A node probes each endpoint on its probe interval (#1273), from the
+// dispatcher's own timer, never the heartbeat (#1634): unset, the interval is
+// DefaultProbeEvery however often the node checks in, and a set interval is
+// honored as given. The run loop here passes every second.
+func TestAProbeRunsOnItsProbeIntervalNotTheHeartbeat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		probeEvery time.Duration
-		want       int
+		every      time.Duration
+		ticks      int
+		want       []time.Duration
 	}{
-		{"unset probes every tick", 0, 6},
-		{"a 3s interval probes on ticks 0 and 3", 3 * time.Second, 2},
+		{"unset probes at the default", 0, DefaultProbeEvery, 91,
+			[]time.Duration{0, 30 * time.Second, 60 * time.Second, 90 * time.Second}},
+		{"a 3s interval probes every 3s", 3 * time.Second, 3 * time.Second, 10,
+			[]time.Duration{0, 3 * time.Second, 6 * time.Second, 9 * time.Second}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dialer := &countingDialer{}
-			runner := &collection.Runner{TCP: dialer}
-			spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
-				return func(context.Context) error { return nil }, nil
-			})
-			sessions := newSessionManager(nil, sessionHooks{})
-			sched := newPollSchedule(time.Second)
-			sched.probeEvery = tc.probeEvery
-			verdicts, faultseen := map[string]string{}, map[string]string{}
-			for i := 0; i < ticks; i++ {
-				now := start.Add(time.Duration(i) * time.Second)
-				if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
-					t.Fatalf("tick %d: %v", i, err)
+			l := newReasonLoop(t, &collection.Runner{TCP: dialer})
+			l.probeEvery = tc.probeEvery
+			start := aligned(gateT0, "t-tcp", tc.every)
+			l.now = start
+			var got []time.Duration
+			for range tc.ticks {
+				at, before := l.now, dialer.count()
+				l.tick(tcpProbeTask("fp"))
+				if dialer.count() > before {
+					got = append(got, at.Sub(start))
 				}
 			}
-			if dialer.dials != tc.want {
-				t.Fatalf("%d ticks probed %d times, want %d", ticks, dialer.dials, tc.want)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("probed at %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
 // A probe whose endpoint's connection fingerprint moves (an address edited in
-// place, a secret rotated, an operator's :retry) runs at the next tick, as a
-// driver poll does (#1061): its booking belongs to inputs that are gone, and
-// an operator who fixed the endpoint never waits out the probe interval.
+// place, a secret rotated, an operator's :retry) runs at once, as a driver
+// poll does (#1061): its booking belongs to inputs that are gone, and an
+// operator who fixed the endpoint never waits out the probe interval.
 func TestProbeRunsAtOnceWhenItsFingerprintMoves(t *testing.T) {
 	t.Parallel()
-	task := collection.TaskSpec{
-		ID: "t-tcp", Mode: "poll", Transport: "tcp", Fingerprint: "fp-wrong-port",
-		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
-	}
 	dialer := &countingDialer{}
-	runner := &collection.Runner{TCP: dialer}
-	spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
-		return func(context.Context) error { return nil }, nil
-	})
-	sessions := newSessionManager(nil, sessionHooks{})
-	sched := newPollSchedule(time.Second)
-	sched.probeEvery = 10 * time.Second
-	verdicts, faultseen := map[string]string{}, map[string]string{}
-	now := time.Date(2026, 10, 28, 3, 0, 0, 0, time.UTC)
-	tick := func(fp string) {
-		t.Helper()
-		task.Fingerprint = fp
-		wl := collection.WorklistReply{Tasks: []collection.TaskSpec{task}}
-		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
-			t.Fatal(err)
-		}
-		now = now.Add(time.Second)
+	l := newReasonLoop(t, &collection.Runner{TCP: dialer})
+	l.probeEvery = 10 * time.Second
+	l.now = aligned(gateT0, "t-tcp", l.probeEvery)
+	l.tick(tcpProbeTask("fp-wrong-port"))
+	l.tick(tcpProbeTask("fp-wrong-port"))
+	if n := dialer.count(); n != 1 {
+		t.Fatalf("an unchanged probe inside its interval: %d probes, want 1", n)
 	}
-	tick("fp-wrong-port")
-	tick("fp-wrong-port")
-	if dialer.dials != 1 {
-		t.Fatalf("an unchanged probe inside its interval: %d probes, want 1", dialer.dials)
+	l.tick(tcpProbeTask("fp-fixed-port"))
+	if n := dialer.count(); n != 2 {
+		t.Fatalf("a moved fingerprint: %d probes, want the probe run at once (2)", n)
 	}
-	tick("fp-fixed-port")
-	if dialer.dials != 2 {
-		t.Fatalf("a moved fingerprint: %d probes, want the probe run at once (2)", dialer.dials)
-	}
-	tick("fp-fixed-port")
-	if dialer.dials != 2 {
-		t.Fatalf("after the rerun: %d probes, want it booked a full interval again (2)", dialer.dials)
-	}
-}
-
-// A probe whose interval equals the heartbeat runs on every tick, however the
-// work before it in each tick (the heartbeat publish, the worklist pull)
-// jitters the time it is judged at. The schedule books from that judged time,
-// so without a tolerance a tick that reached the probe a few milliseconds
-// sooner than the last found it not yet due and skipped it, doubling the gap.
-func TestAProbeAtTheHeartbeatRunsEveryJitteredTick(t *testing.T) {
-	t.Parallel()
-	wl := collection.WorklistReply{Tasks: []collection.TaskSpec{{
-		ID: "t-tcp", Mode: "poll", Transport: "tcp", Fingerprint: "fp",
-		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
-	}}}
-	dialer := &countingDialer{}
-	runner := &collection.Runner{TCP: dialer}
-	spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
-		return func(context.Context) error { return nil }, nil
-	})
-	sessions := newSessionManager(nil, sessionHooks{})
-	sched := newPollSchedule(2 * time.Second)
-	sched.probeEvery = 2 * time.Second
-	verdicts, faultseen := map[string]string{}, map[string]string{}
-	start := time.Date(2026, 10, 28, 3, 0, 0, 0, time.UTC)
-	offsets := []time.Duration{12, 9, 14, 8, 15, 11} // ms of work before the probe, per tick
-	for i, off := range offsets {
-		now := start.Add(time.Duration(i)*2*time.Second + off*time.Millisecond)
-		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if dialer.dials != len(offsets) {
-		t.Fatalf("%d jittered ticks at a 2s heartbeat probed %d times, want every tick", len(offsets), dialer.dials)
+	l.tick(tcpProbeTask("fp-fixed-port"))
+	if n := dialer.count(); n != 2 {
+		t.Fatalf("after the rerun: %d probes, want it booked on its interval again (2)", n)
 	}
 }
 
 // A task that leaves the worklist leaves nothing behind in the schedule, even
-// one that was never booked (a probe at the heartbeat, a poll with no
-// schedule): retain sweeps every map by its own keys.
+// one that was never booked: retain sweeps every map by its own keys.
 func TestRetainForgetsATaskThatWasNeverBooked(t *testing.T) {
 	t.Parallel()
-	s := newPollSchedule(2 * time.Second)
+	s := newPollSchedule()
 	s.rebook("p1", "fp")
 	s.refusedRun("p1")
 	s.retain(map[string]bool{})

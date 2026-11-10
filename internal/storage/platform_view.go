@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -46,11 +47,6 @@ var PlatformViewGroups = []PlatformViewGroup{
 	{Name: "schedule", Label: "Schedule", Keys: []string{
 		writerclass.ScheduleLateness, writerclass.TickOverrunCount, writerclass.ScheduleSkipCount,
 	}},
-	// The node's own delivery counts, until #1646 folds them into its Loss
-	// group: this slice prints no loss figure.
-	{Name: "delivery", Label: "Delivery", Keys: []string{
-		writerclass.SpoolDropCount, writerclass.PublishFailureCount,
-	}},
 	{Name: "commands", Label: "Commands", Keys: []string{
 		writerclass.CommandPendingCount, writerclass.CommandPendingAge,
 		writerclass.CommandStuckCount, writerclass.CommandExpiredCount,
@@ -64,6 +60,88 @@ func platformViewKeys() []string {
 		out = append(out, g.Keys...)
 	}
 	return out
+}
+
+// PlatformServerKey is one key of a server panel. Of names the key it is read
+// against, a pair the page prints as "a / b" (connections in use against the
+// pool's size). Rank above zero makes it a ranked list: the view returns only
+// the Rank highest instances of the key's newest window, highest first,
+// sorted in SQL, so a large route table never reaches the browser. Window
+// marks a key the server writes only for a report window that observed
+// something (a request, a landed batch, a slow query): its last
+// sample is that window's figure, not a current reading, so the view leaves
+// it out once platformWindowHorizon has passed, as PlatformWindowKeys does
+// for a node. Every other key is a gauge sampled each window or a retention
+// fact its hourly pass writes, current however old.
+type PlatformServerKey struct {
+	Name   string
+	Of     string
+	Rank   int
+	Window bool
+}
+
+// PlatformServerGroup is one panel of a server's figures.
+type PlatformServerGroup struct {
+	Name  string
+	Label string
+	Keys  []PlatformServerKey
+}
+
+// platformRouteRank is how many routes a ranked request key lists.
+const platformRouteRank = 10
+
+// PlatformServerGroups is each server's panels, in order (#1645): the one
+// place their key set is written, as PlatformViewGroups is the node table's.
+// The page renders the panels the view returns and has no list of its own.
+// Each key is a seeded platform metric (TestPlatformServerGroupKeysAreSeeded).
+// The request keys are ranked: the ten slowest and the ten busiest routes of
+// the newest window. Every other split key (a retention lane,
+// a table) reads back its latest sample per instance, a set as small as the
+// code that names it.
+var PlatformServerGroups = []PlatformServerGroup{
+	{Name: "requests", Label: "Requests", Keys: []PlatformServerKey{
+		{Name: writerclass.HTTPRequestDurationMax, Rank: platformRouteRank, Window: true},
+		{Name: writerclass.HTTPRequestCount, Rank: platformRouteRank, Window: true},
+		{Name: writerclass.DBSlowQueryCount, Window: true},
+		{Name: writerclass.DBPoolAcquired, Of: writerclass.DBPoolMax},
+		{Name: writerclass.DBPoolMax},
+		{Name: writerclass.DBPoolWaitCount},
+	}},
+	{Name: "ingest", Label: "Ingest", Keys: []PlatformServerKey{
+		{Name: writerclass.IngestLag, Window: true},
+		{Name: writerclass.IngestLagMax, Window: true},
+		{Name: writerclass.IngestBatchCount, Window: true},
+		{Name: writerclass.IngestSampleCount, Window: true},
+	}},
+	{Name: "queues", Label: "Queues", Keys: []PlatformServerKey{
+		{Name: writerclass.BusConsumerPending},
+		{Name: writerclass.BusConsumerAckPending},
+		{Name: writerclass.CalcPendingDepth},
+		{Name: writerclass.OutboxQueuedDepth},
+		{Name: writerclass.OutboxDueAge},
+		{Name: writerclass.IngestLaneBusy},
+	}},
+	{Name: "retention", Label: "Retention", Keys: []PlatformServerKey{
+		{Name: writerclass.RetentionBehind},
+		{Name: writerclass.RetentionDeletedCount},
+		{Name: writerclass.MetricOldestDayAge, Of: writerclass.RetentionWindowDays},
+		{Name: writerclass.RetentionWindowDays},
+		{Name: writerclass.DatabaseBytes},
+		{Name: writerclass.TableBytes},
+	}},
+}
+
+// platformServerKeys is every key in PlatformServerGroups, in order, with
+// each one's rank and whether it is a window figure.
+func platformServerKeys() (names []string, ranks []int, windows []bool) {
+	for _, g := range PlatformServerGroups {
+		for _, k := range g.Keys {
+			names = append(names, k.Name)
+			ranks = append(ranks, k.Rank)
+			windows = append(windows, k.Window)
+		}
+	}
+	return names, ranks, windows
 }
 
 // PlatformKey is one column's catalog facts: its metric type's label, unit
@@ -84,6 +162,44 @@ type PlatformFigure struct {
 	ObservedAt time.Time
 }
 
+// PlatformInstanceFigure is one (key, instance) figure on a server panel: the
+// latest sample of that series, unsummed, so a split key reads per instance.
+type PlatformInstanceFigure struct {
+	Key        string
+	Instance   string
+	Value      float64
+	ObservedAt time.Time
+}
+
+// PlatformPanelKey is a server panel key with its catalog facts.
+type PlatformPanelKey struct {
+	PlatformKey
+	Of   string
+	Rank int
+}
+
+// PlatformPanel is one server group as one server reads it: its keys' catalog
+// facts and its figures, in key order and then, for a ranked key, highest
+// first, otherwise by instance. A key never sampled has no figure.
+type PlatformPanel struct {
+	Name    string
+	Label   string
+	Keys    []PlatformPanelKey
+	Figures []PlatformInstanceFigure
+}
+
+// PlatformAlarm is an open alarm on a server's platform component: the rule
+// that raised it and the key that rule samples (Key nil for a hand-raised
+// alarm or one whose rule is gone), so the page flags the panel holding that
+// key from the rule's own verdict rather than a threshold of its own.
+type PlatformAlarm struct {
+	Rule     string
+	Key      *string
+	Severity string
+	Message  string
+	RaisedAt time.Time
+}
+
 // PlatformSystem is the platform system and its recorded verdict.
 type PlatformSystem struct {
 	ID      string
@@ -100,12 +216,16 @@ type PlatformServer struct {
 	Version     *string
 	StartedAt   *time.Time
 	Verdict     string
+	Groups      []PlatformPanel
+	Alarms      []PlatformAlarm
 }
 
 // PlatformNode is one node's row. ComponentID is nil for a node the boot has
 // not yet given a platform component. Verdict and Figures are the
 // component's, nil without an all-scope component read; a key the node has
-// never reported is absent from Figures, never zero.
+// never reported is absent from Figures, never zero. Loss is the last hour's
+// end to end over the hops the node's own component records (LossHops), nil
+// without the read or when nothing went in on any of them.
 type PlatformNode struct {
 	Name            string
 	Label           string
@@ -114,12 +234,15 @@ type PlatformNode struct {
 	ComponentID     *string
 	Verdict         *string
 	Figures         map[string]PlatformFigure
+	Loss            *float64
 }
 
 // PlatformView is the whole projection. FiguresRead says whether the caller's
 // component read reached the platform components: false means Servers is
 // empty and every node's Verdict and Figures are nil because the caller may
-// not read them, not because nothing was reported.
+// not read them, not because nothing was reported. Pipeline is the hop by
+// hop delivery read (#1646), nil without that read; LossHops names the hops a
+// node's Loss composes.
 type PlatformView struct {
 	System      *PlatformSystem
 	Servers     []PlatformServer
@@ -127,6 +250,8 @@ type PlatformView struct {
 	Keys        []PlatformKey
 	Nodes       []PlatformNode
 	FiguresRead bool
+	Pipeline    *PlatformPipeline
+	LossHops    []delivery.Hop
 }
 
 // PlatformView reads the platform as the Platform health page shows it. A
@@ -137,11 +262,12 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 		return nil, err
 	}
 	view := &PlatformView{
-		Servers: []PlatformServer{},
-		Groups:  PlatformViewGroups,
-		Nodes:   make([]PlatformNode, 0, len(nodes)),
+		Servers:  []PlatformServer{},
+		Groups:   PlatformViewGroups,
+		Nodes:    make([]PlatformNode, 0, len(nodes)),
+		LossHops: nodeLossHops(),
 	}
-	if view.Keys, err = p.platformKeys(ctx); err != nil {
+	if view.Keys, err = p.platformKeys(ctx, platformViewKeys()); err != nil {
 		return nil, err
 	}
 	var componentIDs []string
@@ -166,12 +292,18 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 	if view.Servers, err = p.platformServers(ctx); err != nil {
 		return nil, err
 	}
+	if err := p.platformServerPanels(ctx, view.Servers); err != nil {
+		return nil, err
+	}
 	verdicts, err := p.componentVerdicts(ctx, componentIDs)
 	if err != nil {
 		return nil, err
 	}
 	figures, err := p.platformFigures(ctx, componentIDs)
 	if err != nil {
+		return nil, err
+	}
+	if view.Pipeline, err = p.platformPipeline(ctx); err != nil {
 		return nil, err
 	}
 	for i := range view.Nodes {
@@ -182,6 +314,7 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 		if v, ok := verdicts[*id]; ok {
 			view.Nodes[i].Verdict = &v
 		}
+		view.Nodes[i].Loss = nodeLoss(*view.Pipeline, *id)
 		view.Nodes[i].Figures = figures[*id]
 		if view.Nodes[i].Figures == nil {
 			view.Nodes[i].Figures = map[string]PlatformFigure{}
@@ -190,14 +323,14 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 	return view, nil
 }
 
-// platformKeys reads the catalog facts of every key in PlatformViewGroups, in
-// group order. A key the catalog does not hold is left out.
-func (p *PG) platformKeys(ctx context.Context) ([]PlatformKey, error) {
+// platformKeys reads the catalog facts of names, in their order. A key the
+// catalog does not hold is left out.
+func (p *PG) platformKeys(ctx context.Context, names []string) ([]PlatformKey, error) {
 	rows, err := p.pool.Query(ctx, `
 		select mt.name, coalesce(mt.label, ''), coalesce(mt.unit, ''), coalesce(mt.description, '')
 		from unnest($1::text[]) with ordinality as k(name, ord)
 		join metric_type mt on mt.namespace = 'og' and mt.name = k.name
-		order by k.ord`, platformViewKeys())
+		order by k.ord`, names)
 	if err != nil {
 		return nil, fmt.Errorf("storage: platform view keys: %w", err)
 	}
@@ -296,21 +429,17 @@ func (p *PG) componentVerdicts(ctx context.Context, ids []string) (map[string]st
 }
 
 // PlatformWindowKeys are the PlatformViewGroups keys a writer reports once a
-// window and only when nonzero (the node's report window, the server's
-// command pass). Their last sample is the last window that counted
-// something, not a current reading: a later window that counted nothing
-// writes no row. So the view shows one only while it is the newest window's
-// and leaves it absent after (platformWindowHorizon). Every other key is a
-// gauge written whether or not it moved, whose latest sample is current
-// however old. The catalog describes exactly these as "reported only when
-// nonzero" (TestPlatformWindowKeysAreTheNonzeroCounts).
-var PlatformWindowKeys = map[string]bool{
-	writerclass.TickOverrunCount:    true,
-	writerclass.ScheduleSkipCount:   true,
-	writerclass.SpoolDropCount:      true,
-	writerclass.PublishFailureCount: true,
-	writerclass.CommandExpiredCount: true,
-}
+// window and only when nonzero. Such a key's last sample is the last window
+// that counted something, not a current reading: a later window that counted
+// nothing writes no row. So the view shows one only while it is the newest
+// window's and leaves it absent after (platformWindowHorizon). Every other key
+// is written whether or not it moved, whose latest sample is current however
+// old. Since the 2026-11-10 ruling every windowed platform count is written
+// every window, zero when quiet (ADR-1625), so no grouped key is one and the
+// set is empty; it stays as the guard for a count written only when nonzero.
+// The catalog describes exactly these as "reported only when nonzero"
+// (TestPlatformWindowKeysAreTheNonzeroCounts).
+var PlatformWindowKeys = map[string]bool{}
 
 // platformWindowHorizon is how far back a window count still reads as the
 // current window: two report windows, so the newest window has ended and a
@@ -338,7 +467,9 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 	if err != nil {
 		return nil, err
 	}
-	var windowKeys []string
+	// Never nil: a nil slice binds as NULL, and "name = any(NULL)" would
+	// drop every row older than the horizon, gauges too.
+	windowKeys := []string{}
 	for _, k := range platformViewKeys() {
 		if PlatformWindowKeys[k] {
 			windowKeys = append(windowKeys, k)
@@ -380,6 +511,150 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 			out[id] = map[string]PlatformFigure{}
 		}
 		out[id][key] = f
+	}
+	return out, rows.Err()
+}
+
+// platformServerPanels fills each server's Groups and Alarms (#1645) in three
+// statements however many servers there are: the catalog facts of every
+// server key, every server's figures, and every server's open alarms.
+func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer) error {
+	names, ranks, windows := platformServerKeys()
+	catalog, err := p.platformKeys(ctx, names)
+	if err != nil {
+		return err
+	}
+	facts := make(map[string]PlatformKey, len(catalog))
+	for _, k := range catalog {
+		facts[k.Name] = k
+	}
+	ids := make([]string, len(servers))
+	for i, s := range servers {
+		ids[i] = s.ComponentID
+	}
+	figures, err := p.serverFigures(ctx, ids, names, ranks, windows)
+	if err != nil {
+		return err
+	}
+	alarms, err := p.serverAlarms(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range servers {
+		id := servers[i].ComponentID
+		servers[i].Groups = make([]PlatformPanel, 0, len(PlatformServerGroups))
+		for _, g := range PlatformServerGroups {
+			panel := PlatformPanel{Name: g.Name, Label: g.Label, Figures: []PlatformInstanceFigure{}}
+			for _, k := range g.Keys {
+				f, ok := facts[k.Name]
+				if !ok {
+					continue
+				}
+				panel.Keys = append(panel.Keys, PlatformPanelKey{PlatformKey: f, Of: k.Of, Rank: k.Rank})
+				panel.Figures = append(panel.Figures, figures[id][k.Name]...)
+			}
+			servers[i].Groups = append(servers[i].Groups, panel)
+		}
+		servers[i].Alarms = alarms[id]
+		if servers[i].Alarms == nil {
+			servers[i].Alarms = []PlatformAlarm{}
+		}
+	}
+	return nil
+}
+
+// serverFigures reads, in one statement, the latest sample of every
+// (key, instance) series of the named keys on every component in ids, across
+// the provenances that report reality, as platformFigures does but unsummed.
+// A ranked key (rank above zero) keeps only the instances written at its
+// newest time, the newest window, cut to its rank highest first; the cut
+// and the order are the database's, so the page ranks nothing. Every other
+// key is returned in instance order. A window key's (PlatformServerKey.Window)
+// sample older than platformWindowHorizon is left out, instance by instance:
+// its window is over and the ones since observed nothing on that instance,
+// so an instance last seen an hour ago is not read beside this window's.
+func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int, windows []bool) (map[string]map[string][]PlatformInstanceFigure, error) {
+	out := map[string]map[string][]PlatformInstanceFigure{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	collection, err := p.CollectionSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := p.pool.Query(ctx, `
+		with k as (
+			select * from unnest($2::text[], $3::int[], $4::bool[]) as k(name, rank, win)
+		), latest as (
+			select distinct on (s.component_id, mt.name, s.instance)
+			       s.component_id, mt.name, s.instance, n.value, n.ts
+			from metric_series s
+			join metric_type mt on mt.id = s.metric_type_id
+			cross join lateral (`+metricNewestSQL("s.id")+`) n
+			where s.owner_kind = 'component' and s.component_id = any($1::uuid[])
+			  and mt.namespace = 'og' and mt.name = any($2::text[])
+			  and s.provenance in ('observed', 'calculated')
+			order by s.component_id, mt.name, s.instance, n.ts desc, n.id desc
+		), placed as (
+			select l.*, k.rank, k.win, max(l.ts) over (partition by l.component_id, l.name) as newest
+			from latest l join k on k.name = l.name
+		), ordered as (
+			select p.*, row_number() over (
+				partition by p.component_id, p.name
+				order by (p.ts = p.newest) desc, p.value desc, p.instance) as rn
+			from placed p
+		)
+		select component_id::text, name, instance, value, ts
+		from ordered
+		where (rank = 0 or (ts = newest and rn <= rank))
+		  and not (win and ts < now() - $5::interval)
+		order by component_id, name, case when rank > 0 then rn end, instance`,
+		ids, names, ranks, windows, platformWindowHorizon(collection.ReportSeconds))
+	if err != nil {
+		return nil, fmt.Errorf("storage: platform view server figures: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id string
+			f  PlatformInstanceFigure
+		)
+		if err := rows.Scan(&id, &f.Key, &f.Instance, &f.Value, &f.ObservedAt); err != nil {
+			return nil, fmt.Errorf("storage: platform view server figures: %w", err)
+		}
+		if out[id] == nil {
+			out[id] = map[string][]PlatformInstanceFigure{}
+		}
+		out[id][f.Key] = append(out[id][f.Key], f)
+	}
+	return out, rows.Err()
+}
+
+// serverAlarms reads the open alarms on every component in ids, newest first,
+// each with the rule that raised it and the key that rule samples.
+func (p *PG) serverAlarms(ctx context.Context, ids []string) (map[string][]PlatformAlarm, error) {
+	out := map[string][]PlatformAlarm{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		select a.component_id::text, coalesce(r.name, ''), r.sample_key, a.severity, a.message, a.raised_at
+		from alarm a left join event_rule r on r.id = a.raised_by_rule_id
+		where a.component_id = any($1::uuid[]) and a.cleared_at is null
+		order by a.raised_at desc, a.id desc`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: platform view server alarms: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id string
+			a  PlatformAlarm
+		)
+		if err := rows.Scan(&id, &a.Rule, &a.Key, &a.Severity, &a.Message, &a.RaisedAt); err != nil {
+			return nil, fmt.Errorf("storage: platform view server alarms: %w", err)
+		}
+		out[id] = append(out[id], a)
 	}
 	return out, rows.Err()
 }

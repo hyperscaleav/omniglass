@@ -454,22 +454,37 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		CommandTypes []struct {
-			Name                string `yaml:"name"`
-			Label               string `yaml:"label"`
-			Description         string `yaml:"description"`
-			TargetPropertyType  string `yaml:"target_property_type"`
-			TargetMetricType    string `yaml:"target_metric_type"`
-			SettleWindowSeconds int    `yaml:"settle_window_seconds"`
+			Name                string         `yaml:"name"`
+			Label               string         `yaml:"label"`
+			Description         string         `yaml:"description"`
+			TargetPropertyType  string         `yaml:"target_property_type"`
+			TargetMetricType    string         `yaml:"target_metric_type"`
+			SettleWindowSeconds int            `yaml:"settle_window_seconds"`
+			Disruptive          bool           `yaml:"disruptive"`
+			QuietSeconds        int            `yaml:"quiet_seconds"`
+			HoldSeconds         int            `yaml:"hold_seconds"`
+			PowerOutletParam    string         `yaml:"power_outlet_param"`
+			ParamsSchema        map[string]any `yaml:"params_schema"`
 		} `yaml:"command_types"`
 	}
 	if err := yaml.Unmarshal(commandTypesYAML, &doc); err != nil {
 		return fmt.Errorf("seed: parse command_types: %w", err)
 	}
 	for _, c := range doc.CommandTypes {
+		var params []byte
+		if len(c.ParamsSchema) > 0 {
+			b, err := json.Marshal(c.ParamsSchema)
+			if err != nil {
+				return fmt.Errorf("seed: command type %q: marshal params_schema: %w", c.Name, err)
+			}
+			params = b
+		}
 		if err := gw.UpsertCommandType(ctx, storage.CommandType{
-			Name: c.Name, Label: c.Label, Description: c.Description,
+			Name: c.Name, Label: c.Label, Description: c.Description, ParamsSchema: params,
 			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
 			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
+			Disruptive: c.Disruptive, QuietSeconds: c.QuietSeconds, HoldSeconds: c.HoldSeconds,
+			PowerOutletParam: c.PowerOutletParam,
 		}); err != nil {
 			return err
 		}

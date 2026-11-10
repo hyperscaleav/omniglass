@@ -90,6 +90,10 @@ var Registry = []Var{
 		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
 	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
 		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
+	{Key: "OMNIGLASS_NODE_SESSION_DIALS", Default: "16", Scope: "node",
+		Doc: "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"},
+	{Key: "OMNIGLASS_LANE_WORKERS", Scope: "node",
+		Doc: "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"},
 	// omniglass lab run finds its Docker daemon the way the docker CLI does
 	// (#1194): these three, then the platform's default socket or pipe.
 	{Key: "DOCKER_HOST", Scope: "cli",

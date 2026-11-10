@@ -442,7 +442,9 @@ and where each command stands, newest first. A command in flight wears its phase
 for its node to take it), **delivered** (its node has it, and the next observation settles it),
 **awaiting reply** or **awaiting observation**, with its settle window counting down beside it; a
 terminal one reads **settled**, **failed** or **timed out**, with why. Hover the phase for what it
-means for that command. The list refreshes every second while anything is in flight.
+means for that command. A fire-and-forget command such as a reboot has nothing to observe, so its
+node's report decides it: **settled** once the node carried it out, **failed** when it could not,
+and **timed out** when no report arrives within ten minutes of its issue. The list refreshes every second while anything is in flight.
 
 The arrow at a row's end opens the command in place: its **arc**, the issue's time and each later
 step (delivered to its node, answered, settled) as how long after the issue it came; **why** it

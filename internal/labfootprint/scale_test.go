@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"regexp"
 	"strings"
 	"testing"
@@ -489,4 +490,250 @@ func TestLaneOf(t *testing.T) {
 	if got := SummarizeScale(ScaleRun{Lane: LaneOf(nil, at(0), at(600))}).Table(); !regexp.MustCompile(`consumer lane busy +not measured\n`).MatchString(got) || !strings.Contains(got, "consumer lane not measured: the server logged 0 lane tallies") {
 		t.Errorf("an unmeasured lane does not say so in the table:\n%s", got)
 	}
+}
+
+// receipt is one landed batch of boot b on node "edge-hq", minted at second
+// s, declaring counts by kind from the running offsets before, with every
+// declared item stored unless outcome says otherwise.
+func receipt(b string, seq uint64, s int, declared delivery.Declared, outcome func(*delivery.Tally)) delivery.Receipt {
+	var t delivery.Tally
+	for k, c := range declared {
+		t.Add(k, delivery.Stored, int(c.Count))
+	}
+	if outcome != nil {
+		t = delivery.Tally{}
+		outcome(&t)
+	}
+	return delivery.Receipt{Node: "edge-hq", Boot: b, Seq: seq, Minted: at(s), Resolved: seq - 1, Deliveries: 1, Declared: declared, Outcome: t}
+}
+
+// deliveryRun is a run whose delivery read covers (0 s, 600 s] and found
+// receipts, with a later receipt per boot so each one has settled.
+func deliveryRun(receipts ...delivery.Receipt) ScaleRun {
+	db0, db1, use0, use1 := scaleWindowFixture()
+	w, _ := WindowOf(db0, db1, use0, use1)
+	return ScaleRun{Window: 10 * time.Minute, Measured: w, Lag: []float64{1}, FleetView: []time.Duration{time.Millisecond},
+		Delivery: DeliveryRead{Window: delivery.Window{From: at(0), To: at(600)}, Receipts: receipts, Read: true, StreamClear: true}}
+}
+
+// The delivery table has one row per kind the window's batches carried
+// across the ingest hop, and none for a kind that crossed nothing: a row
+// that would read 0 of 0 is absent, not a fake healthy 0.
+func TestScaleDeliveryRowPerKindCrossed(t *testing.T) {
+	d := func(m, p uint64, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: m, Before: before * m}, delivery.Property: {Count: p, Before: before * p}}
+	}
+	rep := SummarizeScale(deliveryRun(
+		receipt("b1", 1, 100, d(40, 4, 0), nil),
+		receipt("b1", 2, 200, d(40, 4, 1), nil),
+		receipt("b1", 3, 700, d(40, 4, 2), nil),
+	))
+	if len(rep.Delivery) != 2 {
+		t.Fatalf("delivery rows = %+v, want metric and property only", rep.Delivery)
+	}
+	for i, k := range []delivery.Kind{delivery.Metric, delivery.Property} {
+		r := rep.Delivery[i]
+		if r.Kind != k || r.Hop != delivery.Ingest || r.In != uint64(80/(1+9*i)) || r.Out != r.In || r.Loss == nil || *r.Loss != 0 {
+			t.Errorf("row %d = %+v, want %s ingest with 0 loss", i, r, k)
+		}
+	}
+	table := rep.Table()
+	for _, want := range []string{"delivery    hop     in       out      loss     dedup  cause", "metric      ingest  80       80       0        0      -",
+		"property    ingest  8        8        0        0      -", "end to end  metric 0  property 0  event -  log -"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	for _, absent := range []string{"event       ingest", "log         ingest"} {
+		if strings.Contains(table, absent) {
+			t.Errorf("the table has a row for a kind that crossed nothing, %q:\n%s", absent, table)
+		}
+	}
+}
+
+// A loss shows its largest outcome as the cause, and every JSON row carries
+// the same keys for every kind, with every outcome counted (0 included), and
+// no loss key for a kind with nothing in.
+func TestScaleDeliveryCauseAndJSON(t *testing.T) {
+	rep := SummarizeScale(deliveryRun(
+		receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 10}, delivery.Property: {Count: 10}, delivery.Event: {Count: 0}}, func(t *delivery.Tally) {
+			t.Add(delivery.Metric, delivery.Stored, 10)
+			t.Add(delivery.Property, delivery.Stored, 5)
+			t.Add(delivery.Property, delivery.RefusedUnregistered, 4)
+			t.Add(delivery.Property, delivery.RefusedInvalid, 1)
+		}),
+		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
+	))
+	table := rep.Table()
+	if !strings.Contains(table, "property    ingest  10       5        0.5      0      refused-unregistered") {
+		t.Errorf("the property row does not name its largest outcome as the cause:\n%s", table)
+	}
+	if !strings.Contains(table, "end to end  metric 0  property 0.5  event -  log -") {
+		t.Errorf("the end-to-end line does not carry the property loss:\n%s", table)
+	}
+	b, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Delivery []map[string]json.RawMessage `json:"delivery"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if len(back.Delivery) != 3 {
+		t.Fatalf("delivery JSON = %s, want metric, property and event rows", b)
+	}
+	for _, row := range back.Delivery {
+		kind := string(row["kind"])
+		for _, key := range []string{"hop", "kind", "in", "out", "deduplicated", "outcomes"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("the %s row has no %q key: %s", kind, key, b)
+			}
+		}
+		_, hasLoss := row["loss"]
+		if want := kind != `"event"`; hasLoss != want {
+			t.Errorf("the %s row has a loss key %v, want %v (event had nothing in): %s", kind, hasLoss, want, b)
+		}
+		var outcomes map[string]uint64
+		if err := json.Unmarshal(row["outcomes"], &outcomes); err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range delivery.Outcomes {
+			if _, ok := outcomes[string(o)]; !ok {
+				t.Errorf("the %s row's outcomes has no %q: %s", kind, o, row["outcomes"])
+			}
+		}
+		if kind == `"property"` && (outcomes["refused-unregistered"] != 4 || outcomes["refused-invalid"] != 1 || outcomes["stored"] != 5) {
+			t.Errorf("property outcomes = %v", outcomes)
+		}
+	}
+	if !strings.Contains(string(b), `"delivery_end_to_end":{"metric":0,"property":0.5}`) {
+		t.Errorf("the JSON end to end is not per kind with a ratio: %s", b)
+	}
+}
+
+// An unbound sample (an identity no binding places, which the conduit's
+// inbox surfaces) is accounted for, not lost: the row reads 0 and names no
+// cause, while a refusal beside it still reads as loss.
+func TestScaleDeliveryUnboundIsNotLoss(t *testing.T) {
+	rep := SummarizeScale(deliveryRun(
+		receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 10}, delivery.Property: {Count: 10}}, func(t *delivery.Tally) {
+			t.Add(delivery.Metric, delivery.Stored, 8)
+			t.Add(delivery.Metric, delivery.Unbound, 2)
+			t.Add(delivery.Property, delivery.Stored, 6)
+			t.Add(delivery.Property, delivery.Unbound, 2)
+			t.Add(delivery.Property, delivery.RefusedWriter, 2)
+		}),
+		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
+	))
+	table := rep.Table()
+	for _, want := range []string{"metric      ingest  10       10       0        0      -",
+		"property    ingest  10       8        0.2      0      refused-writer"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	if rep.Delivery[0].Outcomes[delivery.Unbound] != 2 {
+		t.Errorf("metric outcomes %v, want the 2 unbound still counted", rep.Delivery[0].Outcomes)
+	}
+}
+
+// A boot whose batches are not all known when the read gives up prints as
+// unsettled, with its node, and no ratio comes from it: the ratios are only
+// the settled boots'. A stream still holding batches leaves every boot
+// unsettled, since any of them could still land.
+func TestScaleDeliveryUnsettled(t *testing.T) {
+	m := func(n, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: n, Before: before}}
+	}
+	run := deliveryRun(
+		receipt("b1", 1, 100, m(10, 0), nil),
+		receipt("b1", 2, 700, m(10, 10), nil),
+		// b2 has nothing landed after the window: its tail could be in a spool.
+		delivery.Receipt{Node: "edge-west", Boot: "b2", Seq: 1, Minted: at(100), Deliveries: 1, Declared: m(7, 0), Outcome: tallyOf(delivery.Metric, delivery.Stored, 7)},
+	)
+	rep := SummarizeScale(run)
+	if len(rep.Delivery) != 1 || rep.Delivery[0].In != 10 {
+		t.Errorf("rows = %+v, want metric over the settled boot alone (10 in)", rep.Delivery)
+	}
+	table := rep.Table()
+	if !strings.Contains(table, "unsettled   node edge-west, boot b2: no ratio") {
+		t.Errorf("the table does not name the unsettled boot:\n%s", table)
+	}
+	b, _ := json.Marshal(rep)
+	if !strings.Contains(string(b), `"delivery_unsettled":[{"node":"edge-west","boot":"b2"}]`) {
+		t.Errorf("the JSON does not name the unsettled boot: %s", b)
+	}
+
+	run.Delivery.StreamClear = false
+	rep = SummarizeScale(run)
+	if len(rep.Delivery) != 0 || len(rep.DeliveryUnsettled) != 2 {
+		t.Errorf("with the stream still holding batches: rows %+v, unsettled %+v; want no rows and both boots", rep.Delivery, rep.DeliveryUnsettled)
+	}
+	if table := rep.Table(); !strings.Contains(table, "node edge-hq, boot b1: no ratio") || strings.Contains(table, "end to end") {
+		t.Errorf("an unsettled stream still prints a ratio:\n%s", table)
+	}
+}
+
+// A run that read no receipts says so, not a table of nothing.
+func TestScaleDeliveryNotRead(t *testing.T) {
+	run := deliveryRun()
+	run.Delivery = DeliveryRead{Reason: "the window is over 23 h"}
+	table := SummarizeScale(run).Table()
+	if !strings.Contains(table, "delivery    not measured: the window is over 23 h") {
+		t.Errorf("an unread delivery:\n%s", table)
+	}
+}
+
+// The receipts read parses one JSON object a line, the shape the query
+// writes, into receipts the reconcile reads.
+func TestParseReceipts(t *testing.T) {
+	out := `{"node":"edge-hq","boot":"b1","seq":3,"minted":"2026-11-09T12:00:01.25+00:00","resolved":2,"deliveries":2,"ledger":{"metric":{"count":4,"before":8}},"outcome":{"metric":{"stored":4}}}
+{"node":null,"boot":"b2","seq":1,"minted":"2026-11-09T12:00:02+00:00","resolved":0,"deliveries":1,"ledger":{},"outcome":null}
+`
+	rs, err := ParseReceipts(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 2 {
+		t.Fatalf("receipts = %+v", rs)
+	}
+	r := rs[0]
+	if r.Node != "edge-hq" || r.Boot != "b1" || r.Seq != 3 || r.Resolved != 2 || r.Deliveries != 2 ||
+		!r.Minted.Equal(time.Date(2026, 11, 9, 12, 0, 1, 250e6, time.UTC)) ||
+		r.Declared[delivery.Metric] != (delivery.Count{Count: 4, Before: 8}) || r.Outcome.Count(delivery.Metric, delivery.Stored) != 4 {
+		t.Errorf("receipt = %+v", r)
+	}
+	if !rs[1].Outcome.Empty() || rs[1].Node != "" {
+		t.Errorf("a receipt with no outcome yet = %+v", rs[1])
+	}
+	if _, err := ParseReceipts("not json\n"); err == nil {
+		t.Error("a line that is not a receipt parsed")
+	}
+}
+
+// The backlog read is the consumer's latest pending and ack-pending gauges
+// published after the settle began; a gauge not yet published is unknown,
+// never a clear stream.
+func TestParseBacklog(t *testing.T) {
+	for _, c := range []struct {
+		out   string
+		clear bool
+	}{
+		{"bus-consumer-ack-pending|0\nbus-consumer-pending|0\n", true},
+		{"bus-consumer-ack-pending|3\nbus-consumer-pending|0\n", false},
+		{"bus-consumer-pending|0\n", false},
+		{"", false},
+	} {
+		if got := ParseBacklog(c.out).Clear(); got != c.clear {
+			t.Errorf("backlog %q clear = %v, want %v", c.out, got, c.clear)
+		}
+	}
+}
+
+func tallyOf(k delivery.Kind, o delivery.Outcome, n int) delivery.Tally {
+	var t delivery.Tally
+	t.Add(k, o, n)
+	return t
 }

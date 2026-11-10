@@ -118,13 +118,39 @@ const (
 	ScheduleGapExcess     = "schedule-gap-excess"
 	ScheduleSkipCount     = "schedule-skip-count"
 	SpoolBatchCount       = "spool-batch-count"
-	SpoolDropCount        = "spool-drop-count"
-	PublishFailureCount   = "publish-failure-count"
 	SessionHeldCount      = "session-held-count"
 	ProcessGoroutineCount = "process-goroutine-count"
 	ProcessHeapSize       = "process-heap-size"
 	ProcessGCPause        = "process-gc-pause"
+	ProcessCPUSeconds     = "process-cpu-seconds"
+	ProcessFDCount        = "process-fd-count"
 )
+
+// The retention pass's figures (#1629), landed by the process on the
+// server's own platform component after each pass: per lane, the rows it
+// removed and whether it stopped short of the window (behind, a 0 or 1 flag,
+// keyed by the lane's name as the instance); per pass, its duration, its
+// failed steps and its partition roll; the trend and block compactions' lag
+// behind now; and the storage read after it, the partitions held, the oldest
+// day's age and each stored table's and the database's bytes.
+const (
+	RetentionDeletedCount       = "retention-deleted-count"
+	RetentionBehind             = "retention-behind"
+	RetentionPassDuration       = "retention-pass-duration"
+	RetentionPassFailureCount   = "retention-pass-failure-count"
+	RetentionWindowDays         = "retention-window-days"
+	MetricPartitionCreatedCount = "metric-partition-created-count"
+	MetricPartitionDroppedCount = "metric-partition-dropped-count"
+	MetricPartitionCount        = "metric-partition-count"
+	MetricOldestDayAge          = "metric-oldest-day-age"
+	MetricTrendMarkLag          = "metric-trend-mark-lag"
+	MetricBlockMarkLag          = "metric-block-mark-lag"
+	TableBytes                  = "table-bytes"
+	DatabaseBytes               = "database-bytes"
+)
+
+// retentionWriter is what writes the retention figures.
+const retentionWriter = "the server's retention pass"
 
 // The server's request and database keys (#1627): what the server's HTTP
 // surface served and how its database pool held up, over a report window,
@@ -143,6 +169,40 @@ const (
 	DBPoolWaitCount        = "db-pool-wait-count"
 	DBPoolWaitDuration     = "db-pool-wait-duration"
 )
+
+// The server's pipeline keys (#1628): how far behind ingest is, how deep the
+// telemetry consumer, the calc queue and the notification outbox stand, and
+// whether the bus request-reply paths and the sweeps are failing, over a
+// report window, landed by the server on its own platform component. Every
+// failure count has the count it is a share of: a drop or an ack failure of
+// ingest-batch-count, a request failure of bus-request-count, a sweep failure
+// of sweep-count, so each loss reads as a ratio where zero is healthy.
+const (
+	IngestLag                   = "ingest-lag"
+	IngestLagMax                = "ingest-lag-max"
+	IngestBatchCount            = "ingest-batch-count"
+	IngestSampleCount           = "ingest-sample-count"
+	IngestLaneBusy              = "ingest-lane-busy"
+	BusConsumerPending          = "bus-consumer-pending"
+	BusConsumerAckPending       = "bus-consumer-ack-pending"
+	BusConsumerRedelivered      = "bus-consumer-redelivered"
+	BusTelemetryAckFailureCount = "bus-telemetry-ack-failure-count"
+	BusWorklistPullCount        = "bus-worklist-pull-count"
+	BusWorklistReplyBytesMax    = "bus-worklist-reply-bytes-max"
+	BusRequestCount             = "bus-request-count"
+	BusRequestFailureCount      = "bus-request-failure-count"
+	CalcPendingDepth            = "calc-pending-depth"
+	CalcServedCount             = "calc-served-count"
+	CalcPassDuration            = "calc-pass-duration"
+	OutboxQueuedDepth           = "outbox-queued-depth"
+	OutboxDueAge                = "outbox-due-age"
+	SweepDuration               = "sweep-duration"
+	SweepCount                  = "sweep-count"
+	SweepFailureCount           = "sweep-failure-count"
+)
+
+// serverPipelineWriter is what writes the server's pipeline keys.
+const serverPipelineWriter = "the server's pipeline recorder"
 
 // serverSelfWriter is what writes the server's request and database keys.
 const serverSelfWriter = "the server's request and database recorder"
@@ -181,9 +241,30 @@ const (
 // serverBootWriter is what writes the server's identity properties.
 const serverBootWriter = "the server boot"
 
+// A hop's delivery (#1659): the items per kind that arrived at it and the
+// items it handed on, and the loss between them, each one series per
+// telemetry kind (the kind is the instance), written every window, zero when
+// quiet. The node writes its spool's side on its node-self report; the
+// server writes its ingest's side on its own component.
+const (
+	DeliveryInCount   = "delivery-in-count"
+	DeliveryOutCount  = "delivery-out-count"
+	DeliveryLossRatio = "delivery-loss-ratio"
+)
+
+// deliveryWriter is what writes a hop's delivery keys: any Omniglass process
+// that is a hop, of itself. A node reports them on its node-self lane, so they
+// are node-self keys too.
+const deliveryWriter = "a hop, of itself (a node's spool on its node-self report, the server's ingest on its own component)"
+
 // nodeSelfWriter is what writes a node's self-report: the node, of itself,
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
+
+// processSelfWriter is what writes the generic process-* keys: any Omniglass
+// process, of itself. A node reports them on its node-self lane, so they are
+// node-self keys too; the server lands them on its own component.
+const processSelfWriter = "a process, of itself (a node on its node-self report, the server on its own component)"
 
 // platform maps each platform key to the part of the process that writes it.
 // A key only the Omniglass process writes about itself joins here with its
@@ -200,12 +281,29 @@ var platform = map[string]string{
 	ScheduleGapExcess:     nodeSelfWriter,
 	ScheduleSkipCount:     nodeSelfWriter,
 	SpoolBatchCount:       nodeSelfWriter,
-	SpoolDropCount:        nodeSelfWriter,
-	PublishFailureCount:   nodeSelfWriter,
 	SessionHeldCount:      nodeSelfWriter,
-	ProcessGoroutineCount: nodeSelfWriter,
-	ProcessHeapSize:       nodeSelfWriter,
-	ProcessGCPause:        nodeSelfWriter,
+	ProcessGoroutineCount: processSelfWriter,
+	ProcessHeapSize:       processSelfWriter,
+	ProcessGCPause:        processSelfWriter,
+	ProcessCPUSeconds:     processSelfWriter,
+	ProcessFDCount:        processSelfWriter,
+	DeliveryInCount:       deliveryWriter,
+	DeliveryOutCount:      deliveryWriter,
+	DeliveryLossRatio:     deliveryWriter,
+
+	RetentionDeletedCount:       retentionWriter,
+	RetentionBehind:             retentionWriter,
+	RetentionPassDuration:       retentionWriter,
+	RetentionPassFailureCount:   retentionWriter,
+	RetentionWindowDays:         retentionWriter,
+	MetricPartitionCreatedCount: retentionWriter,
+	MetricPartitionDroppedCount: retentionWriter,
+	MetricPartitionCount:        retentionWriter,
+	MetricOldestDayAge:          retentionWriter,
+	MetricTrendMarkLag:          retentionWriter,
+	MetricBlockMarkLag:          retentionWriter,
+	TableBytes:                  retentionWriter,
+	DatabaseBytes:               retentionWriter,
 
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
@@ -218,6 +316,29 @@ var platform = map[string]string{
 	DBPoolMax:              serverSelfWriter,
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
+
+	// The server's pipeline (#1628).
+	IngestLag:                   serverPipelineWriter,
+	IngestLagMax:                serverPipelineWriter,
+	IngestBatchCount:            serverPipelineWriter,
+	IngestSampleCount:           serverPipelineWriter,
+	IngestLaneBusy:              serverPipelineWriter,
+	BusConsumerPending:          serverPipelineWriter,
+	BusConsumerAckPending:       serverPipelineWriter,
+	BusConsumerRedelivered:      serverPipelineWriter,
+	BusTelemetryAckFailureCount: serverPipelineWriter,
+	BusWorklistPullCount:        serverPipelineWriter,
+	BusWorklistReplyBytesMax:    serverPipelineWriter,
+	BusRequestCount:             serverPipelineWriter,
+	BusRequestFailureCount:      serverPipelineWriter,
+	CalcPendingDepth:            serverPipelineWriter,
+	CalcServedCount:             serverPipelineWriter,
+	CalcPassDuration:            serverPipelineWriter,
+	OutboxQueuedDepth:           serverPipelineWriter,
+	OutboxDueAge:                serverPipelineWriter,
+	SweepDuration:               serverPipelineWriter,
+	SweepCount:                  serverPipelineWriter,
+	SweepFailureCount:           serverPipelineWriter,
 
 	// The server's identity (#1644).
 	ServerVersion:   serverBootWriter,
@@ -238,13 +359,26 @@ var platform = map[string]string{
 // node-self lane (#1625), exactly (the wire carries the declared name). A
 // node's self-report never speaks for another writer's key: a node naming
 // health or checkin-age on the lane is refused like any undeclared key.
-func NodeSelf(key string) bool { return platform[key] == nodeSelfWriter }
+func NodeSelf(key string) bool { return nodeSelf(platform[key]) }
+
+// nodeSelf reports a writer whose keys a node reports of itself.
+func nodeSelf(by string) bool {
+	return by == nodeSelfWriter || by == processSelfWriter || by == deliveryWriter
+}
 
 // NodeSelfKeys is every key a node reports of itself, sorted.
-func NodeSelfKeys() []string {
+func NodeSelfKeys() []string { return platformKeysWhere(nodeSelf) }
+
+// RetentionKeys is every key the retention pass reports, sorted (#1629).
+func RetentionKeys() []string {
+	return platformKeysWhere(func(by string) bool { return by == retentionWriter })
+}
+
+// platformKeysWhere is every platform key whose writer keep admits, sorted.
+func platformKeysWhere(keep func(by string) bool) []string {
 	var out []string
 	for k, by := range platform {
-		if by == nodeSelfWriter {
+		if keep(by) {
 			out = append(out, k)
 		}
 	}

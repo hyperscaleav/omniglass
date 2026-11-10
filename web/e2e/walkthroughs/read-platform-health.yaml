@@ -1,11 +1,19 @@
-# Platform health (#1644): Omniglass watching itself. Home's Platform tile
-# carries the platform system's verdict and how many nodes are not up; the
-# page names the build the server runs and how long it has been up, and gives
-# each node a row of its platform figures. A row opens onto the node's
-# platform component, the ordinary component detail, where each figure has
-# its history.
+# Platform health (#1644, #1645): Omniglass watching itself. Home's Platform
+# tile carries the platform system's verdict and how many nodes are not up;
+# the page names the build the server runs and how long it has been up, gives
+# each node a row of its platform figures, and gives each server its panels
+# (Requests, Ingest, Queues, Retention). A key's name teaches it in a tooltip
+# and leads onto its series on the server's platform component, the ordinary
+# component detail, where each figure has its history.
+#
+# The Requests panel fills after the server's first report window (60 s by
+# default), so the script is ready only once it has: that wait is off camera,
+# and the recording never spends its budget on a lab that has just come up.
 title: Read the platform's health
-description: From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.
+description: From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
+ready:
+  goto: /platform
+  wait: { selector: '[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]', timeout: 150000 }
 steps:
   - goto: /
     caption: Home's Platform tile carries the platform's verdict and how many nodes are not up.
@@ -14,12 +22,22 @@ steps:
   - wait: { selector: '[data-testid=platform-version]' }
     caption: The build, its uptime and the verdict, each read from the platform's own components.
     hold: 1500
+  - click: '[data-testid=server-panels-server] > summary .eyebrow'
+    caption: Each server's panels fold to its name and verdict. Close them to reach the node table under them.
   - wait: { selector: '[data-testid=platform-node-edge-hq]' }
     caption: One row per node. A figure the node never reported reads not reported, never 0.
-    hold: 2000
-  - click: '[data-testid=platform-node-edge-hq] a >> nth=0'
-    caption: A node is a component of the platform system. Open its row.
-  - wait: { selector: '[data-testid=vital-checkin-age]' }
-    caption: The node's platform component, the same detail as any device. Its check-in age is a series like any other metric.
+    hold: 1500
+  - click: '[data-testid=server-panels-server] > summary .eyebrow'
+    caption: Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.
+    hold: 1500
+  - hover: '[data-testid=server-panel-requests] button[aria-label="HTTP Request Time (max)"] >> nth=0'
+    caption: A key's name teaches it. Rest on it to read what it measures.
+  - wait: { role: link, name: Open its series on }
+    caption: The figure is a series on the server's platform component, one link away.
+    hold: 1500
+  - click: { role: link, name: Open its series on }
+    caption: Follow it.
+  - wait: { selector: '[data-testid=vital-http-request-duration-max]' }
+    caption: The server's platform component, the same detail as any device. Its request timing is a series like any other metric.
     poster: true
     hold: 2000

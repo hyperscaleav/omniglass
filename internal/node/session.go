@@ -28,7 +28,8 @@ import (
 // pull: a new listen task starts a session, a removed one (or a change to
 // what the connection depends on) tears it down, node shutdown tears down
 // them all. It runs on the run loop's goroutine; what a session's goroutines
-// read back (where to publish, the listeners) sits behind locks.
+// and the dispatcher's workers read back (where to publish, the listeners,
+// the held set) sits behind locks.
 
 // sessionHooks is where a session's facts go: its transitions, the samples
 // its listeners land, the faults they meet, and the arm conversation.
@@ -46,6 +47,10 @@ type sessionHooks struct {
 	// certificate hears a tls public key the endpoint trusted on first use
 	// (#1035), and republishes it while the server lacks it.
 	certificate func(taskID, endpoint, fingerprint string)
+	// gateMoved hears a disruptive delivery close its endpoints' gates
+	// (#1651), off the run loop: the dispatcher's next pass defers their
+	// probes and arms the hold backstop's wake.
+	gateMoved func()
 }
 
 // sessionConn is what a held connection depends on: the transport, the
@@ -535,6 +540,14 @@ func (h *heldSession) publishTo() (string, string) {
 type sessionManager struct {
 	dialers map[string]collection.SessionDialer
 	hooks   sessionHooks
+	// dials bounds how many of the node's sessions dial and handshake at
+	// once (#1636), shared by every session it starts; nil is unbounded.
+	dials collection.DialSlots
+	// mapsMu guards held, certPins, datagrams, datagramRefused and
+	// httpEndpoints (#1634): the run loop alone writes them, under the write
+	// lock, and the dispatcher's workers read them, under the read lock, while
+	// a task runs. The run loop's own reads take no lock.
+	mapsMu  sync.RWMutex
 	held    map[string]*heldSession
 	refused map[string]string // last refusal per endpoint, so it logs once
 	// pins carries each ssh endpoint's trusted host key across a session's
@@ -556,12 +569,12 @@ type sessionManager struct {
 	// trusts a key the other refused. It outlives a session's recycle (a key
 	// trusted on first use stays the pin while the server does not yet hold
 	// it) and is replaced only when the worklist delivers another pin (an
-	// operator's :retry with certificate). Touched on the run loop only; the
-	// pin itself is safe across goroutines.
+	// operator's :retry with certificate). Behind mapsMu; the pin itself is
+	// safe across goroutines.
 	certPins map[string]*collection.HostKeyPin
 	// datagrams is each udp endpoint's bound socket (#1037), and
 	// datagramRefused the last reason each endpoint has none, so it logs
-	// once. Touched on the run loop only.
+	// once. Behind mapsMu.
 	datagrams       map[string]*heldDatagram
 	datagramRefused map[string]string
 	// leftPushes is the claimed and unclaimed counts of the routers torn
@@ -570,8 +583,7 @@ type sessionManager struct {
 	leftPushes map[string][2]int
 	// httpEndpoints is each http or https endpoint's credential and trust,
 	// read off its worklist tasks (#902): what an http command, which the
-	// delivery carries without either, actuates with. Touched on the run
-	// loop only.
+	// delivery carries without either, actuates with. Behind mapsMu.
 	httpEndpoints map[string]httpEndpoint
 	// httpAuth is each http endpoint's learned auth (#1114): its cookie
 	// jar, its digest challenge and its login session, under the
@@ -588,6 +600,10 @@ type sessionManager struct {
 	streamResumes map[string]heldResume
 	// httpFetch sends a stream login's steps; nil is the real fetcher.
 	httpFetch collection.HTTPFetcher
+	// now is the node's clock for a disruption's quiet and hold (#1651):
+	// when a disruptive delivery adds disrupted, and what a held session's
+	// dial waits on. The wall clock unless a test sets it.
+	now func() time.Time
 }
 
 // heldResume is an endpoint's stream resume and the target it was learned
@@ -640,7 +656,9 @@ func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
 		}
 		eps[t.EndpointID] = ep
 	}
+	m.mapsMu.Lock()
 	m.httpEndpoints = eps
+	m.mapsMu.Unlock()
 	// A websocket's upgrade keeps its learned auth too (#1034): its login's
 	// session and cookies, under the fingerprint they were learned with.
 	authed := map[string]string{}
@@ -688,15 +706,43 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 	if m == nil {
 		return httpEndpoint{}, false
 	}
+	m.mapsMu.RLock()
+	defer m.mapsMu.RUnlock()
 	ep, ok := m.httpEndpoints[endpointID]
 	return ep, ok
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
-	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
+	m := &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
 		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
-		streamResumes: map[string]heldResume{}}
+		streamResumes: map[string]heldResume{}, now: time.Now}
+	// A new upstream reason is since the manager's clock, so a test that
+	// moves the clock moves it too.
+	m.gates.clock = func() time.Time { return m.now() }
+	return m
+}
+
+// settle publishes every endpoint whose upstream reason moved (#1652) and
+// wakes the dispatcher, which holds or releases their probes and polls: one
+// endpoint's gate moving can close or open every endpoint reached through it.
+func (m *sessionManager) settle() {
+	moved := m.gates.takeMoved()
+	for _, ep := range moved {
+		m.syncRejection(ep)
+	}
+	if len(moved) > 0 && m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// upstreamHeld is whether the endpoint is held by a path upstream (#1652):
+// its probes are not run.
+func (m *sessionManager) upstreamHeld(endpointID string) bool {
+	if m == nil {
+		return false
+	}
+	return m.gates.upstreamHeld(endpointID)
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -715,22 +761,29 @@ func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
 			delivered[t.EndpointID] = t.CertificatePin
 		}
 	}
+	m.mapsMu.Lock()
 	for id := range m.certPins {
 		if _, ok := delivered[id]; !ok {
 			delete(m.certPins, id)
 		}
 	}
+	m.mapsMu.Unlock()
+	setPin := func(id string, pin *collection.HostKeyPin) {
+		m.mapsMu.Lock()
+		m.certPins[id] = pin
+		m.mapsMu.Unlock()
+	}
 	for id, pin := range delivered {
 		held := m.certPins[id]
 		switch {
 		case held == nil, pin != "" && pin != held.Get():
-			m.certPins[id] = m.newCertPin(id, pin)
+			setPin(id, m.newCertPin(id, pin))
 		case pin == "" && held.Get() != "" && !held.Learned():
 			// A pin the server delivered and now withdraws (a declared pin
 			// the writer ruling retired, ADR-0161): forgotten, so the next
 			// connection trusts on first use; a session held under it
 			// redials, its pin no longer the endpoint's.
-			m.certPins[id] = m.newCertPin(id, "")
+			setPin(id, m.newCertPin(id, ""))
 		case pin == "" && held.Get() != "":
 			m.publishCertificate(id, held.Get())
 		}
@@ -761,7 +814,10 @@ func (m *sessionManager) publishCertificate(endpointID, fp string) {
 // delivered key alone when the node holds none (no session manager).
 func (m *sessionManager) certPinOf(task collection.TaskSpec) *collection.HostKeyPin {
 	if m != nil {
-		if pin, ok := m.certPins[task.EndpointID]; ok {
+		m.mapsMu.RLock()
+		pin, ok := m.certPins[task.EndpointID]
+		m.mapsMu.RUnlock()
+		if ok {
 			return pin
 		}
 	}
@@ -818,6 +874,7 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	if m.gates.record(endpointID, fingerprint, terr) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // refuseOver gates an endpoint for a terminal refusal met over a transport,
@@ -834,6 +891,7 @@ func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint strin
 	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
 		m.syncRejection(endpointID)
 	}
+	m.settle()
 }
 
 // currentFingerprint is the fingerprint the endpoint is connected with now.
@@ -851,36 +909,125 @@ func (m *sessionManager) pass(endpointID string) {
 	}
 	m.gates.clear(endpointID)
 	m.syncRejection(endpointID)
+	m.settle()
 }
 
-// blocked is the gate that blocks rung r for the endpoint, if any.
-func (m *sessionManager) blocked(endpointID string, r rung) (gate, bool) {
+// refusedAt is the refused reason that holds rung r for the endpoint, if any.
+func (m *sessionManager) refusedAt(endpointID string, r rung) (gate, bool) {
 	if m == nil {
 		return gate{}, false
 	}
-	return m.gates.blocked(endpointID, r)
+	return m.gates.refusedAt(endpointID, r)
+}
+
+// holding is the most causal reason that holds the whole endpoint, if any
+// (#1650): every reason but a rung-scoped refusal.
+func (m *sessionManager) holding(endpointID string) (reason, bool) {
+	if m == nil {
+		return reason{}, false
+	}
+	return m.gates.holding(endpointID)
+}
+
+// verdict feeds the endpoint's probe verdict to its gate and publishes the
+// gate when the verdict moved it.
+func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Time) {
+	if m == nil || endpointID == "" {
+		return
+	}
+	if m.gates.verdict(endpointID, taskID, up, at) {
+		m.syncRejection(endpointID)
+	}
+	m.settle()
+}
+
+// disrupt closes the gate of every endpoint a disruptive delivery holds
+// (#1651), before the command is sent: disrupted since now, naming the
+// command, with the delivery's quiet period and hold backstop. Each is
+// published, and the dispatcher is woken to defer their probes.
+func (m *sessionManager) disrupt(d collection.CommandDelivery) {
+	if m == nil || !d.Disruptive || len(d.HoldEndpoints) == 0 {
+		return
+	}
+	m.gates.disrupt(d.HoldEndpoints, d.CommandType, d.ID, m.now(),
+		time.Duration(d.QuietSeconds)*time.Second, time.Duration(d.HoldSeconds)*time.Second)
+	for _, ep := range d.HoldEndpoints {
+		m.syncRejection(ep)
+	}
+	slog.Info("disruptive command closed its endpoints' gates", "facility", "command", "command", d.ID,
+		"command_type", d.CommandType, "endpoints", d.HoldEndpoints, "quiet_seconds", d.QuietSeconds, "hold_seconds", d.HoldSeconds)
+	m.settle()
+	if m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// quietUntil is when the endpoint's quiet period ends; false when it is not
+// in one at now.
+func (m *sessionManager) quietUntil(endpointID string, now time.Time) (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.quietUntil(endpointID, now)
+}
+
+// expireHolds releases every disrupted endpoint whose hold backstop came
+// with no up verdict, publishes each, and returns them for the report to
+// count (hold-expiry-count).
+func (m *sessionManager) expireHolds(now time.Time) []string {
+	if m == nil {
+		return nil
+	}
+	var expired []string
+	for _, x := range m.gates.expire(now) {
+		m.syncRejection(x.endpoint)
+		slog.Warn("disrupted endpoint released at its hold backstop with no up verdict", "facility", "command",
+			"command", x.source, "endpoint", x.endpoint)
+		expired = append(expired, x.endpoint)
+	}
+	m.settle()
+	return expired
+}
+
+// nextHoldExpiry is the earliest hold backstop held, for the dispatcher's
+// wake.
+func (m *sessionManager) nextHoldExpiry() (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.nextExpiry()
 }
 
 // observe takes each endpoint's fingerprint and published rejection off the
 // worklist: a gate under another fingerprint lifts, one carried back from
-// before a restart is adopted.
+// before a restart is adopted. The path dependencies it carries (#1652) are
+// the gates' topology, taken before the endpoints that left are dropped, so an
+// adopted upstream reason is derived against them.
 func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	// The publishing task is chosen afresh from this worklist (a re-derived
 	// driver deletes old task ids, and a sample under one is an orphan).
 	pubTask := map[string][2]string{}
 	reflected := map[string]string{}
+	endpoints, taskIDs := map[string]bool{}, map[string]bool{}
 	for _, t := range tasks {
 		if t.EndpointID == "" {
 			continue
 		}
+		endpoints[t.EndpointID], taskIDs[t.ID] = true, true
 		if cur, ok := pubTask[t.EndpointID]; !ok || t.ID < cur[0] {
 			pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
 		}
 		if _, ok := reflected[t.EndpointID]; !ok {
 			reflected[t.EndpointID] = t.Rejection
 			m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
+			var p endpointParams
+			_ = json.Unmarshal(t.EndpointParams, &p)
+			m.gates.place(t.EndpointID, p.Target)
 		}
 	}
+	m.gates.topology(topologyOf(tasks), m.now())
+	m.gates.retain(endpoints, taskIDs)
+	m.gates.route(tasks)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
 	// What the server reflects back is what is published: a gate the node
@@ -896,6 +1043,42 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	for id := range reflected {
 		m.syncRejection(id)
 	}
+	m.settle()
+}
+
+// topologyOf is the path dependencies a worklist carries (#1652): each
+// endpoint's component, its path upstreams, and whether it has a probe (a
+// task that is not a baked poll) to wait for once its upstream opens. Only a
+// dependent's task carries its component; an upstream's is read off the edge
+// that names it.
+func topologyOf(tasks []collection.TaskSpec) upstreamTopology {
+	t := upstreamTopology{componentOf: map[string]string{}, edges: map[string][]pathUpstream{}, probed: map[string]bool{}}
+	for _, task := range tasks {
+		ep := task.EndpointID
+		if ep == "" {
+			continue
+		}
+		if task.ComponentID != "" {
+			t.componentOf[ep] = task.ComponentID
+		}
+		if !driver.IsBaked(task.Spec) {
+			t.probed[ep] = true
+		}
+		if _, ok := t.edges[ep]; ok || len(task.PathUpstreams) == 0 {
+			continue
+		}
+		ups := make([]pathUpstream, len(task.PathUpstreams))
+		for i, pu := range task.PathUpstreams {
+			ups[i] = pathUpstream{component: pu.ComponentID, name: pu.ComponentName, endpoints: pu.EndpointIDs}
+			for _, u := range pu.EndpointIDs {
+				if _, ok := t.componentOf[u]; !ok {
+					t.componentOf[u] = pu.ComponentID
+				}
+			}
+		}
+		t.edges[ep] = ups
+	}
+	return t
 }
 
 // reconcile brings the held set to what the worklist asks for.
@@ -1009,7 +1192,9 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			t.Pin = m.certPins[id]
 			if t.Pin == nil {
 				t.Pin = m.newCertPin(id, "")
+				m.mapsMu.Lock()
 				m.certPins[id] = t.Pin
+				m.mapsMu.Unlock()
 			}
 			h.certPin = t.Pin
 		}
@@ -1035,7 +1220,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		// A refusal a poll or a command met holds the stream's reconnects
 		// too, under the same fingerprint.
 		a.Gate = func() *collection.TerminalError {
-			if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+			if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 				return gt.refusal()
 			}
 			return nil
@@ -1043,16 +1228,23 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		w.auth = &collection.SessionAuth{HTTP: &a}
 	}
 	var rejected *collection.TerminalError
-	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+	if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 		// A gate this node holds for this fingerprint, or carried back from
 		// before a restart: the session starts rejected and dials nothing.
 		rejected = gt.refusal()
 	}
 	h.sess = collection.StartSession(collection.SessionConfig{
+		// A disruptive command's quiet period (#1651) holds the dial: a
+		// recover after the device drops waits it out.
+		Quiet: func() time.Time {
+			until, _ := m.gates.quietUntil(id, m.now())
+			return until
+		},
 		Rejected: rejected,
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,
 		Dialer:   m.dialers[w.conn.transport],
+		Dials:    m.dials,
 		Inbound:  h.router,
 		Arm:      arm,
 		Auth:     w.auth,
@@ -1091,21 +1283,25 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			}
 		},
 	})
+	m.mapsMu.Lock()
 	m.held[id] = h
+	m.mapsMu.Unlock()
 }
 
 func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	h.sess.Close()
+	m.mapsMu.Lock()
 	delete(m.held, id)
+	m.mapsMu.Unlock()
 	m.keepPushes(id, h.router)
 	taskID, endpoint := h.publishTo()
 	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
 
-// flushUnclaimed reports, once per tick, the inbound lines no listener
-// claimed: a self-log with the count and the last, and, when the spec's
-// policy is collection-failed, one collection-failed under the session's
-// listen task.
+// flushUnclaimed reports, once per housekeeping pass, the inbound lines no
+// listener claimed: a self-log with the count and the last, and, when the
+// spec's policy is collection-failed, one collection-failed under the
+// session's listen task.
 func (m *sessionManager) flushUnclaimed() {
 	if m == nil {
 		return
@@ -1122,7 +1318,7 @@ func (m *sessionManager) flushUnclaimed() {
 		}
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
-			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
+			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last flush, last: %q", n, last))
 		}
 	}
 }
@@ -1185,7 +1381,9 @@ func (m *sessionManager) streamPending(endpointID string) bool {
 	if m == nil || endpointID == "" {
 		return false
 	}
+	m.mapsMu.RLock()
 	h, ok := m.held[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok || !driver.IsHTTP(h.conn.transport) {
 		return false
 	}
@@ -1203,7 +1401,7 @@ func (m *sessionManager) streamPending(endpointID string) bool {
 
 // authGated reports an endpoint gated at the session rung.
 func (m *sessionManager) authGated(endpointID string) bool {
-	_, ok := m.gates.blocked(endpointID, rungAuthenticated)
+	_, ok := m.gates.refusedAt(endpointID, rungAuthenticated)
 	return ok
 }
 
@@ -1219,6 +1417,8 @@ func (m *sessionManager) lookup(endpointID string) collection.HeldExchanger {
 	if m == nil || endpointID == "" {
 		return nil
 	}
+	m.mapsMu.RLock()
+	defer m.mapsMu.RUnlock()
 	if h, ok := m.held[endpointID]; ok {
 		return h.sess
 	}
@@ -1230,7 +1430,9 @@ func (m *sessionManager) isUp(endpointID string) bool {
 	if m == nil || endpointID == "" {
 		return false
 	}
+	m.mapsMu.RLock()
 	h, ok := m.held[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok {
 		return false
 	}

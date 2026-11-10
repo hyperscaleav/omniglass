@@ -45,6 +45,10 @@ refs: [1644, 1643, 523, 1625, 1627, 1646]
      so expired commands are undelivered plus unexecuted, not whichever row sorted first.
      `storage.PlatformWindowKeys` names the window keys, held to the catalog's "reported only when
      nonzero" by test.
+     Since the 2026-11-10 ruling every windowed platform count is written every window, zero when
+     quiet ([ADR-1625](/architecture/decisions/#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)),
+     so no grouped key ages out any more: the window key set is empty and stays as the guard for a
+     count written only when nonzero. The instance sum still holds.
   8. **A node opens two ways.** A row opens the node's platform component, the ordinary component
      detail, where each figure has its history. A secondary link opens the node's blade on the Nodes
      page through a new `?n=<name>` deep link, so editing stays where it lives.

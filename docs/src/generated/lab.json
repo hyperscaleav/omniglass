@@ -74,6 +74,12 @@
       "setup": []
     },
     {
+      "id": "find-where-work-is-lost",
+      "title": "Find where work is lost",
+      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.",
+      "setup": []
+    },
+    {
       "id": "fix-a-refused-probe",
       "title": "Fix a refused probe",
       "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
@@ -135,7 +141,7 @@
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
-      "description": "From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.",
+      "description": "From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
       "setup": []
     },
     {
@@ -211,22 +217,25 @@
       "heartbeat": "2s",
       "probe_every": "10s",
       "worklist_every": "5s",
+      "report_every": "",
       "closed_loop_bracket": "10s",
       "for": "a learner's lab: a change in the console shows within seconds"
     },
     {
       "name": "walkthrough",
       "heartbeat": "2s",
-      "probe_every": "every check-in",
+      "probe_every": "2s",
       "worklist_every": "2s",
+      "report_every": "10s",
       "closed_loop_bracket": "1s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
       "name": "default",
       "heartbeat": "30s",
-      "probe_every": "every check-in",
+      "probe_every": "30s",
       "worklist_every": "30s",
+      "report_every": "",
       "closed_loop_bracket": "1m",
       "for": "the product's own defaults: what a deployment's node runs at"
     }

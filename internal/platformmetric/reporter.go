@@ -37,7 +37,8 @@ type Reporter struct {
 }
 
 // NewReporter reports rec's windows onto componentID through store, every
-// window, after the samplers. A nil log is slog.Default.
+// window, after the samplers; an empty componentID writes nothing. A nil log
+// is slog.Default.
 func NewReporter(rec *Recorder, store Store, componentID string, window func(context.Context) time.Duration, log *slog.Logger, samplers ...Sampler) *Reporter {
 	if log == nil {
 		log = slog.Default()
@@ -63,13 +64,14 @@ func (rp *Reporter) Run(ctx context.Context) {
 }
 
 // Report closes one window: samples, flushes and writes. A window with
-// nothing to say writes nothing.
+// nothing to say writes nothing, and neither does a reporter with no
+// component, which still samples and drains its window (#1671).
 func (rp *Reporter) Report(ctx context.Context) error {
 	for _, s := range rp.samplers {
 		s(ctx, rp.rec)
 	}
 	rows := rp.rec.Flush(rp.componentID)
-	if len(rows) == 0 {
+	if len(rows) == 0 || rp.componentID == "" {
 		return nil
 	}
 	wctx, cancel := context.WithTimeout(ctx, reportTimeout)

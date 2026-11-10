@@ -572,7 +572,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). The `rejection` is served whether or not a session is
+  session pill and ladder render (#1059). Every other reason the gate holds (the gate is a set,
+  [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)) is served as
+  `gate_reasons`, each with its `kind`, `since` and `source`, absent when none holds (#1650). The `rejection` is served whether or not a session is
   held, since a reachability probe's refusal gates an endpoint too, with its `reason` (the
   `endpoint-rejection-reason` the node publishes beside the gate, cut to 500 characters like a
   session's) and `ts` (when the gate was last published), so the console's refusal notice and its
@@ -1171,13 +1173,20 @@ earns its own tier only when composing the entity reads in the browser would be 
   the wire is pinned by test against being widened back into a component list.
 - `GET /views/platform` (`node:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
-  server's build and start time, the node table's column groups with each key's catalog facts,
-  and one row per node with its current figure per key (a gauge's latest sample, a
+  server's build and start time with its panel groups (each key's current figure, a key written
+  only for a window that saw something only while that window is current, a ranked key's
+  instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
+  the node table's column groups with each key's catalog facts, and one row per node with its current figure per key (a gauge's latest sample, a
   window count only while its window is the newest), in a fixed number of statements however
   many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
   `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are
-  omitted, never zeroed, and `figures_read` says which.
+  omitted, never zeroed, and `figures_read` says which. With the figures come `pipeline`, each
+  hop's delivery in, out and loss per kind and per component (newest window and last hour) and the
+  end to end, a newest window counted only while it is current (two report windows, as a window
+  count is), so a node that stopped reporting adds its last window to the hour and not the newest,
+  and each node's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
+  node with nothing in has no loss, never 0.
 - `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
   [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per node with a
   connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
@@ -53,6 +54,10 @@ const (
 // groupsField is the TelemetryBatch field the task groups ride, read from
 // the generated descriptor so the hand-built encoding cannot drift from it.
 var groupsField = protowire.Number((&ogv1.TelemetryBatch{}).ProtoReflect().Descriptor().Fields().ByName("groups").Number())
+
+// ledgerField is the TelemetryBatch field the delivery ledger rides (#1641),
+// appended to a batch's bytes as they are queued.
+var ledgerField = protowire.Number((&ogv1.TelemetryBatch{}).ProtoReflect().Descriptor().Fields().ByName("ledger").Number())
 
 // stopper is a pending flush timer: Stop cancels it.
 type stopper interface{ Stop() bool }
@@ -99,11 +104,13 @@ func refused(err error) bool {
 	return errors.Is(err, nats.ErrMaxPayload) || errors.Is(err, nats.ErrBadSubject)
 }
 
-// spooledBatch is one encoded batch, the Nats-Msg-Id it was minted with, and
-// when it was queued.
+// spooledBatch is one encoded batch, the Nats-Msg-Id it was minted with, its
+// delivery seq, its items per kind, and when it was queued.
 type spooledBatch struct {
 	id     string
+	seq    uint64
 	data   []byte
+	kinds  map[delivery.Kind]int
 	queued time.Time
 }
 
@@ -131,6 +138,12 @@ type spooledBatch struct {
 // flushBytes, ahead of a whole batch sent, and at a drain. The flush mints the
 // batch's id and encodes its bytes once, so every retry ships the same bytes
 // under the same id.
+//
+// Every batch is stamped, as it is queued, with the boot's delivery ledger
+// (#1641): a dense seq, its items per kind and the boot's running offsets,
+// and resolved, the highest seq below which nothing is still queued. All of
+// it is minted under mu, so seq and the offsets are dense in queue order, and
+// encoded into the batch's bytes once, so every retry carries it unchanged.
 type telemetrySpool struct {
 	subject    string
 	node       string
@@ -149,19 +162,20 @@ type telemetrySpool struct {
 	queue      []spooledBatch // queue[:sent] are with the stream: never dropped
 	sent       int
 	bytes      int
-	shipping   bool          // a shipper goroutine is running
-	idle       chan struct{} // closed when the running shipper stops
-	held       bool          // a publish failed since the last tick: sends only queue
-	lastErr    error         // the publish error that held the spool
-	dropped    int           // batches dropped since the last notice
-	dropping   bool          // the current overflow has been told at its start
-	overflowed bool          // batches dropped since the run loop last asked
-	groups     [][]byte      // the pending groups, each encoded as its batch field
-	groupBytes int           // the encoded bytes of groups
-	timer      stopper       // the armed flush timer, nil while nothing is pending
-	timerGen   int           // the flush count, so a timer that lost a race is a no-op
-	drops      int           // batches dropped as full or aged since the last takeFigures
-	failures   int           // publishes refused, not acked, or not encoded since the last takeFigures
+	shipping   bool                  // a shipper goroutine is running
+	idle       chan struct{}         // closed when the running shipper stops
+	held       bool                  // a publish failed since the last tick: sends only queue
+	lastErr    error                 // the publish error that held the spool
+	dropped    int                   // batches dropped since the last notice
+	dropping   bool                  // the current overflow has been told at its start
+	overflowed bool                  // batches dropped since the run loop last asked
+	groups     [][]byte              // the pending groups, each encoded as its batch field
+	kinds      map[delivery.Kind]int // the pending groups' items per kind
+	ledger     *delivery.Ledger      // this boot's delivery count
+	groupBytes int                   // the encoded bytes of groups
+	timer      stopper               // the armed flush timer, nil while nothing is pending
+	timerGen   int                   // the flush count, so a timer that lost a race is a no-op
+	flow       delivery.Counts       // the items settled since the last takeFigures: acked, or lost here
 }
 
 // newTelemetrySpool is node's spool shipping to subject through publish, at
@@ -169,7 +183,8 @@ type telemetrySpool struct {
 func newTelemetrySpool(subject, node string, publish publishFunc) *telemetrySpool {
 	return &telemetrySpool{subject: subject, node: node, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
 		maxAge: maxSpoolAge, window: spoolWindow, now: time.Now,
-		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc}
+		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc,
+		ledger: delivery.NewLedger(collection.NewBatchID())}
 }
 
 // add holds a task's group for the next batch. A group with nothing in it is
@@ -185,7 +200,9 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	stampGroupMillis(g)
 	b, err := proto.Marshal(g)
 	if err != nil {
-		s.failed()
+		items := map[delivery.Kind]int{}
+		delivery.GroupItems(items, g)
+		s.lost(items)
 		return fmt.Errorf("node: marshal task group: %w", err)
 	}
 	field := protowire.AppendBytes(protowire.AppendTag(nil, groupsField, protowire.BytesType), b)
@@ -196,6 +213,10 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	}
 	s.groups = append(s.groups, field)
 	s.groupBytes += len(field)
+	if s.kinds == nil {
+		s.kinds = map[delivery.Kind]int{}
+	}
+	delivery.GroupItems(s.kinds, g)
 	if s.groupBytes >= s.flushBytes {
 		if s.flushLocked() {
 			started = true
@@ -208,6 +229,36 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 		s.tellOverflowStart()
 	}
 	return nil
+}
+
+// queueLocked stamps the batch data with the boot's next ledger and queues
+// it under a fresh id, after dropping what has aged out: resolved is read
+// once the aged batches are gone and before this one joins the queue, so it
+// names exactly what had left the spool. It reports whether a drop began an
+// overflow.
+func (s *telemetrySpool) queueLocked(data []byte, kinds map[delivery.Kind]int) bool {
+	started := s.expireLocked()
+	if s.ledger == nil {
+		s.ledger = delivery.NewLedger(collection.NewBatchID())
+	}
+	resolved := s.ledger.Last()
+	if len(s.queue) > 0 {
+		resolved = s.queue[0].seq - 1
+	}
+	stamp := s.ledger.Mint(kinds, s.now().UTC(), resolved)
+	l, err := proto.Marshal(stamp.Proto())
+	if err != nil {
+		// A ledger is numbers and a UUID; it cannot fail to encode. Should
+		// it, the batch still ships: its items read as missing, not lost
+		// silently.
+		slog.Warn("telemetry batch ledger did not encode", "facility", "delivery", "seq", stamp.Seq, "error", err.Error())
+	} else {
+		data = protowire.AppendBytes(protowire.AppendTag(data, ledgerField, protowire.BytesType), l)
+	}
+	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), seq: stamp.Seq, data: data, kinds: kinds, queued: s.now()}) {
+		started = true
+	}
+	return started
 }
 
 // groupEmpty reports whether g carries no sample on any lane.
@@ -264,24 +315,21 @@ func (s *telemetrySpool) flushLocked() bool {
 	if len(s.groups) == 0 {
 		return false
 	}
-	groups, size := s.groups, s.groupBytes
-	s.groups, s.groupBytes = nil, 0
+	groups, size, kinds := s.groups, s.groupBytes, s.kinds
+	s.groups, s.groupBytes, s.kinds = nil, 0, nil
 	head, err := proto.Marshal(&ogv1.TelemetryBatch{NodeId: s.node, Ts: timestamppb.New(s.now().UTC())})
 	if err != nil {
 		// Only a node id that is not UTF-8 fails here; config refuses one.
 		slog.Warn("telemetry batch header did not encode, groups dropped", "facility", "delivery", "groups", len(groups), "error", err.Error())
-		s.failures++
+		s.flow.Lost(kinds)
 		return false
 	}
-	b := make([]byte, 0, len(head)+size)
+	b := make([]byte, 0, len(head)+size+64)
 	b = append(b, head...)
 	for _, g := range groups {
 		b = append(b, g...)
 	}
-	started := s.expireLocked()
-	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
-		started = true
-	}
+	started := s.queueLocked(b, kinds)
 	if !s.held {
 		s.shipLocked()
 	}
@@ -297,15 +345,13 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	stampMetricMillis(ev)
 	b, err := proto.Marshal(ev)
 	if err != nil {
-		s.failed()
+		s.lost(delivery.BatchItems(ev))
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
+	kinds := delivery.BatchItems(ev)
 	s.mu.Lock()
 	started := s.flushLocked()
-	if s.expireLocked() {
-		started = true
-	}
-	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
+	if s.queueLocked(b, kinds) {
 		started = true
 	}
 	if !s.held {
@@ -362,9 +408,9 @@ func (s *telemetrySpool) tellOverflowStart() {
 // counts it, reporting whether this drop began an overflow.
 func (s *telemetrySpool) dropLocked(i int) bool {
 	s.bytes -= len(s.queue[i].data)
+	s.flow.Lost(s.queue[i].kinds)
 	s.queue = append(s.queue[:i], s.queue[i+1:]...)
 	s.dropped++
-	s.drops++
 	s.tally.BatchDropped()
 	s.overflowed = true
 	if !s.dropping {
@@ -466,13 +512,17 @@ func (s *telemetrySpool) ship() {
 			// The head was with the stream, so nothing dropped it: it is
 			// still queue[0].
 			s.bytes -= len(s.queue[0].data)
+			if err == nil {
+				s.flow.Delivered(s.queue[0].kinds)
+			} else {
+				s.flow.Lost(s.queue[0].kinds)
+			}
 			s.queue[0] = spooledBatch{}
 			s.queue = s.queue[1:]
 			s.sent--
 			if err != nil {
 				s.dropped++
 				s.overflowed = true
-				s.failures++
 				s.tally.BatchDropped()
 			} else {
 				s.tally.BatchAcknowledged()
@@ -485,7 +535,6 @@ func (s *telemetrySpool) ship() {
 		}
 		wasHeld := s.held
 		s.held = true
-		s.failures++
 		s.lastErr = err
 		n := len(s.queue)
 		s.stopLocked()
@@ -570,22 +619,24 @@ func (s *telemetrySpool) pending() int {
 	return len(s.queue)
 }
 
-// failed counts a publish that failed outside the lock.
-func (s *telemetrySpool) failed() {
+// lost counts items that never reached a batch, outside the lock.
+func (s *telemetrySpool) lost(items map[delivery.Kind]int) {
 	s.mu.Lock()
-	s.failures++
+	s.flow.Lost(items)
 	s.mu.Unlock()
 }
 
-// takeFigures is the spool's part of the node's self-report (#1625): the
-// batches it holds now, and the batches it dropped (at a cap, or aged out)
-// and the publishes that failed (refused by the bus, not acked, or not
-// encoded) since the last call, each counted once.
+// takeFigures is the spool's part of the node's self-report (#1625, #1659):
+// the batches it holds now, and the items settled since the last call, each
+// counted once as it settles. An acked batch's items went in and out; a batch
+// dropped (at a cap, aged out, refused by the bus) or never encoded went in
+// alone. A batch held for a retry has not settled, so it counts in neither
+// until its retry is acked or it is dropped: a retry is not loss.
 func (s *telemetrySpool) takeFigures() spoolFigures {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f := spoolFigures{batches: len(s.queue), drops: s.drops, failures: s.failures}
-	s.drops, s.failures = 0, 0
+	f := spoolFigures{batches: len(s.queue), flow: s.flow}
+	s.flow = delivery.Counts{}
 	return f
 }
 

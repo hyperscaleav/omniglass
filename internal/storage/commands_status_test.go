@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func commandStatus(t *testing.T, conn *pgx.Conn, id int64) (string, *time.Time) 
 
 // TestCommandStatusRecording drives the settle-check write path over the
 // gateway: a command records its terminal outcome (settled/failed/timed-out)
-// with the moment it settled, a fire-and-forget command settles at issue, a
+// with the moment it settled, a fire-and-forget command reads issued, a
 // pending command stays issued until the settle window expires, and the
 // intended row a command opens names it (command_id) beside the caused event.
 func TestCommandStatusRecording(t *testing.T) {
@@ -77,7 +78,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 	}
 
-	t.Run("fire-and-forget settles at issue", func(t *testing.T) {
+	t.Run("fire-and-forget reads issued until its report", func(t *testing.T) {
 		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: "ff-cmd"}); err != nil {
 			t.Fatalf("create command type: %v", err)
 		}
@@ -85,9 +86,21 @@ func TestCommandStatusRecording(t *testing.T) {
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
-		status, settledAt := commandStatus(t, conn, cmd.ID)
-		if status != "settled" || settledAt == nil {
-			t.Errorf("fire-and-forget: status=%q settled_at=%v, want settled with a moment", status, settledAt)
+		if cmd.Status != "issued" {
+			t.Errorf("issue answered %q, want issued", cmd.Status)
+		}
+		var (
+			status            string
+			settledAt         *time.Time
+			settledBy, reason *string
+		)
+		if err := conn.QueryRow(ctx, `select status, settled_at, settled_by, reason from command where id = $1`, cmd.ID).
+			Scan(&status, &settledAt, &settledBy, &reason); err != nil {
+			t.Fatalf("read command: %v", err)
+		}
+		if status != "issued" || settledAt != nil || settledBy != nil || reason != nil {
+			t.Errorf("fire-and-forget at issue: status=%q settled_at=%v settled_by=%v reason=%v, want issued with all three null",
+				status, settledAt, settledBy, reason)
 		}
 		// The computed verdict is unchanged: no target means nothing to settle.
 		verdict, err := gw.CommandSettlement(ctx, "component", "disp-1", "ff-cmd", "")
@@ -96,6 +109,10 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 		if verdict != storage.SettlementNone {
 			t.Errorf("fire-and-forget verdict = %q, want none", verdict)
+		}
+		// A settle-check inside the delivery window leaves it issued.
+		if status, _ := commandStatus(t, conn, cmd.ID); status != "issued" {
+			t.Errorf("after a settle-check inside its delivery window: %q, want issued", status)
 		}
 	})
 
@@ -285,6 +302,109 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 		if after != before {
 			t.Errorf("refused command still recorded: %d commands, want %d", after, before)
+		}
+	})
+}
+
+// TestFireAndForgetSettlesOnItsReport: a command that sets nothing is decided
+// by its node's execution report (#1630). A clean report settles it, an
+// execution error fails it with the masked error as its reason, each by the
+// reply and each with one lifecycle event.
+func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	all := scope.Set{All: true}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-ff"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-ff"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "reboot-proto", Label: "Reboot Proto", Version: "1.0.0", Spec: []byte(`{
+		"version": 1, "transport": "tcp",
+		"inputs": [{"name": "host", "kind": "string", "required": true}, {"name": "port", "kind": "number", "default": "4998"}],
+		"commands": [{"command_type": "reboot", "request": {"line": "REBOOT"}}]}`)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv, node := "disp-ff", "reboot-proto", "edge-ff"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.4.70"},
+	}, all); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+
+	report := func(t *testing.T, execErr string) (status, by, reason string, events []string) {
+		t.Helper()
+		cmd, err := gw.IssueCommand(ctx, actor, "component", comp, "reboot", "", nil, nil)
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
+		got, err := gw.PendingNodeCommands(ctx, node)
+		if err != nil || len(got) != 1 || got[0].ID != cmd.ID {
+			t.Fatalf("pull = %+v (%v), want command %d", got, err, cmd.ID)
+		}
+		if err := gw.RecordCommandExecution(ctx, node, cmd.ID, execErr, ""); err != nil {
+			t.Fatalf("report: %v", err)
+		}
+		if err := conn.QueryRow(ctx, `select status, coalesce(settled_by, ''), coalesce(reason, '') from command where id = $1`, cmd.ID).
+			Scan(&status, &by, &reason); err != nil {
+			t.Fatalf("read command: %v", err)
+		}
+		rows, err := conn.Query(ctx, `select et.name from event e join event_type et on et.id = e.event_type_id
+			where e.attributes->>'command_id' = $1::bigint::text order by e.id`, cmd.ID)
+		if err != nil {
+			t.Fatalf("lifecycle events: %v", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var n string
+			if err := rows.Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			events = append(events, n)
+		}
+		return status, by, reason, events
+	}
+
+	t.Run("a clean report settles it", func(t *testing.T) {
+		status, by, reason, events := report(t, "")
+		if status != "settled" || by != storage.SettledByReply || reason != "the node carried it out" {
+			t.Errorf("clean report = %s by %q (%q), want settled by reply", status, by, reason)
+		}
+		if len(events) != 1 || events[0] != "command-settled" {
+			t.Errorf("lifecycle events = %v, want one command-settled", events)
+		}
+	})
+	t.Run("an execution error fails it", func(t *testing.T) {
+		status, by, reason, events := report(t, "dial tcp 10.20.4.70:4998: connection refused password=hunter2")
+		if status != "failed" || by != storage.SettledByReply || !strings.HasPrefix(reason, "the execution failed: dial tcp") {
+			t.Errorf("exec-error report = %s by %q (%q), want failed by reply naming the error", status, by, reason)
+		}
+		if strings.Contains(reason, "hunter2") {
+			t.Errorf("reason %q carries the credential, want it masked", reason)
+		}
+		if len(events) != 1 || events[0] != "command-failed" {
+			t.Errorf("lifecycle events = %v, want one command-failed", events)
 		}
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -44,6 +45,9 @@ type FactCadence struct {
 	Heartbeat     string `json:"heartbeat"`
 	ProbeEvery    string `json:"probe_every"`
 	WorklistEvery string `json:"worklist_every"`
+	// ReportEvery is the collection report window the profile's seed sets
+	// (#1646), empty when it leaves the platform's own setting.
+	ReportEvery string `json:"report_every"`
 	// ClosedLoopBracket is how often the server brackets the node for
 	// Platform health's closed loop.
 	ClosedLoopBracket string `json:"closed_loop_bracket"`
@@ -139,11 +143,11 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		f.Volumes = append(f.Volumes, FactVolume{Name: v.Name, Holds: v.Holds})
 	}
 	for _, c := range CadenceProfiles() {
-		probe := c.ProbeEvery
-		if probe == "" {
-			probe = "every check-in"
+		report := ""
+		if c.ReportSeconds > 0 {
+			report = (time.Duration(c.ReportSeconds) * time.Second).String()
 		}
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, WorklistEvery: c.WorklistEvery, ClosedLoopBracket: c.ClosedLoopBracket, For: c.For})
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, ReportEvery: report, ClosedLoopBracket: c.ClosedLoopBracket, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {

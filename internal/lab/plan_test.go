@@ -220,9 +220,10 @@ func TestPlanVolumes(t *testing.T) {
 
 // A learner's lab probes every 10s (#1273): it checks in every 2s so a change
 // in the console shows within seconds, but it may run for days, and a probe
-// on every check-in writes most of its rows. A script's throwaway lab sets no
-// probe interval, so it probes on every 2s check-in: it lives for minutes, and
-// a walkthrough that waits on a probe's verdict is recorded against a budget.
+// on every check-in writes most of its rows. A script's throwaway lab probes
+// every 2s: it lives for minutes, and a walkthrough that waits on a probe's
+// verdict is recorded against a budget. Since #1634 a probe runs on the node's
+// own timer, never the check-in, so every lab names its interval.
 func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	flag := func(cmd []string, name string) string {
 		i := slices.Index(cmd, name)
@@ -246,8 +247,8 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(s.Node.Cmd, "--probe-every") {
-		t.Fatalf("a throwaway lab: %v sets a probe interval, want none (every check-in)", s.Node.Cmd)
+	if got := flag(s.Node.Cmd, "--probe-every"); got != "2s" {
+		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s", got, s.Node.Cmd)
 	}
 	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
@@ -279,6 +280,45 @@ func TestPlanNoNode(t *testing.T) {
 	}
 }
 
+// A throwaway lab's collection report window (#1646): a walkthrough has a
+// minute of video, and the platform's own 60s window would land the first
+// delivery and poll figures as the recording ends, so the walkthrough
+// profile's seed sets collection.report_seconds to 10. A learner's lab keeps
+// the platform's setting (an operator's change to it survives a restart), as
+// does a throwaway lab with no node, which has no collection to report and
+// whose pages hold still for the docs shots.
+func TestPlanWalkthroughLabReportsEvery10s(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a learner's lab: the seed runs %v, want the platform's report window left as it is", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.Project, o.Ephemeral = "demo-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if got := flag(s.Seed.Cmd, "--report-seconds"); got != "10" {
+		t.Fatalf("a throwaway lab: --report-seconds %q in %v, want 10", got, s.Seed.Cmd)
+	}
+	o.NoNode = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a throwaway lab with no node: the seed runs %v, want the report window left as it is", s.Seed.Cmd)
+	}
+}
+
 // A cadence profile (#1277) names how often the lab's node checks in and
 // probes, so the lab footprint can measure a lab at the product's default
 // cadence beside the lab's own. A lab given none keeps the cadence it has
@@ -296,18 +336,18 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		cadence   string
 		ephemeral bool
 		heartbeat string
-		probe     string // "" probes on every check-in
+		probe     string
 		worklist  string
 		simPoll   string
 		bracket   string
 	}{
 		{"", false, "2s", "10s", "5s", "2s", "10s"},
-		{"", true, "2s", "", "2s", "2s", "1s"},
+		{"", true, "2s", "2s", "2s", "2s", "1s"},
 		{"lab", true, "2s", "10s", "5s", "2s", "10s"},
-		{"walkthrough", false, "2s", "", "2s", "2s", "1s"},
+		{"walkthrough", false, "2s", "2s", "2s", "2s", "1s"},
 		// The product's own: the node's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
-		{"default", true, node.DefaultHeartbeat.String(), "", node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},
+		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},
 	}
 	for _, c := range cases {
 		o := testOptions()

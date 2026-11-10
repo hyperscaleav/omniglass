@@ -58,6 +58,9 @@ type harness struct {
 	dc   *client.Client
 	env  map[string]string
 	http *http.Client
+	// tokens, when set, is the token reads carry and re-mint on a 401;
+	// otherwise they carry env's LAB_TOKEN.
+	tokens *tokenSource
 }
 
 func (h *harness) say(format string, a ...any) { fmt.Fprintf(h.cfg.Out, format+"\n", a...) }
@@ -379,25 +382,17 @@ func (h *harness) pickSeries(ctx context.Context) ([]Series, error) {
 // get reads a URL with the lab's owner token, decoding JSON into v (nil
 // drains the body).
 func (h *harness) get(ctx context.Context, u string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	code, status, body, err := h.fetch(ctx, u)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+h.env["LAB_TOKEN"])
-	resp, err := h.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
+	if code != http.StatusOK {
+		return statusError(status, body)
 	}
 	if v == nil {
-		_, err = io.Copy(io.Discard, resp.Body)
-		return err
+		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(v)
+	return json.Unmarshal(body, v)
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

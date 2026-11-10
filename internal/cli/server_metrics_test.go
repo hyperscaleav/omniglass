@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -20,6 +21,8 @@ type fakeSelfStore struct {
 	database      settings.DatabaseSettings
 	databaseErr   error
 	pool          storage.PoolStat
+	outbox        storage.OutboxStatus
+	outboxErr     error
 	written       []storage.PlatformMetric
 }
 
@@ -37,6 +40,10 @@ func (f *fakeSelfStore) DatabaseSettings(context.Context) (settings.DatabaseSett
 }
 
 func (f *fakeSelfStore) PoolStat() storage.PoolStat { return f.pool }
+
+func (f *fakeSelfStore) OutboxStatus(context.Context) (storage.OutboxStatus, error) {
+	return f.outbox, f.outboxErr
+}
 
 // TestServerReportWindowFollowsTheCollectionWindow: the server's self-report
 // arms on collection.report_seconds as the webhook receiver does, and on a
@@ -83,8 +90,10 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
-	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900}}
-	rp := m.reporter(gw, "server-1", nil)
+	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900},
+		outbox: storage.OutboxStatus{Queued: 7, DueAge: 45 * time.Second}}
+	sampled := false
+	rp := m.reporter(gw, "server-1", nil, func(context.Context, *platformmetric.Recorder) { sampled = true })
 	gw.pool = storage.PoolStat{Acquired: 3, Max: 12, EmptyAcquireCount: 4}
 	if err := rp.Report(ctx); err != nil {
 		t.Fatalf("report: %v", err)
@@ -101,5 +110,48 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	}
 	if got[writerclass.DBPoolAcquired] != 3 || got[writerclass.DBPoolMax] != 12 || got[writerclass.DBPoolWaitCount] != 4 {
 		t.Errorf("pool gauges = %v", got)
+	}
+	if got[writerclass.OutboxQueuedDepth] != 7 || got[writerclass.OutboxDueAge] != 45 {
+		t.Errorf("outbox gauges = %v, want depth 7 and due age 45 s", got)
+	}
+	if _, ok := got[writerclass.ProcessGoroutineCount]; !ok {
+		t.Errorf("the window read no runtime: %v", got)
+	}
+	if !sampled {
+		t.Error("the bus sampler the reporter was handed never ran")
+	}
+}
+
+// TestServerReporterSaysNothingOfAnUnreadOutbox: an outbox read that fails
+// costs its window's outbox figures, not a zero depth that was never read.
+func TestServerReporterSaysNothingOfAnUnreadOutbox(t *testing.T) {
+	t.Parallel()
+	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
+	gw := &fakeSelfStore{outboxErr: errors.New("down")}
+	if err := m.reporter(gw, "server-1", nil).Report(context.Background()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	for _, r := range gw.written {
+		if r.Key == writerclass.OutboxQueuedDepth || r.Key == writerclass.OutboxDueAge {
+			t.Errorf("an unread outbox reported %s = %v", r.Key, r.Value)
+		}
+	}
+}
+
+// TestAServerWithNoComponentStillFollowsTheSlowQuerySetting (#1671): a server
+// whose component was not ensured re-reads database.slow_query_ms each window
+// as any server does, and lands no platform figure.
+func TestAServerWithNoComponentStillFollowsTheSlowQuerySetting(t *testing.T) {
+	t.Parallel()
+	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
+	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900}, pool: storage.PoolStat{Max: 12}}
+	if err := m.reporter(gw, "", nil).Report(context.Background()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if got := m.tracer.Threshold(); got != 900*time.Millisecond {
+		t.Errorf("threshold after a window = %v, want the setting's 900ms", got)
+	}
+	if len(gw.written) != 0 {
+		t.Errorf("wrote %+v with no component, want nothing", gw.written)
 	}
 }

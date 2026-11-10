@@ -204,3 +204,24 @@ func timeoutWords(commandType, target, window string, delivered, executed, carri
 		return fmt.Sprintf("no endpoint of this component has a driver that binds %s, and no observation of %s arrived within its %s settle window", commandType, target, window)
 	}
 }
+
+// deliveryTimeoutWords says where a fire-and-forget command stopped when its
+// delivery window closed with no execution report (#1630): delivered with no
+// report, queued for a node that never took it, queued on an endpoint no node
+// holds, or carried by no endpoint at all. Such a command told nothing to a
+// series, so no sentence mentions an observation. Pure.
+func deliveryTimeoutWords(commandType string, delivered, carried bool, endpoint, node string) string {
+	window := fmt.Sprintf("%d minute", int(CommandDeliveryWindow.Minutes()))
+	switch {
+	case delivered && node != "":
+		return fmt.Sprintf("delivered to node %s, which sent no execution report within its %s delivery window", node, window)
+	case delivered:
+		return fmt.Sprintf("delivered, but no execution report arrived within its %s delivery window", window)
+	case carried && node != "":
+		return fmt.Sprintf("queued for node %s, which did not take it within its %s delivery window", node, window)
+	case carried:
+		return fmt.Sprintf("queued on endpoint %s, which is placed on no node", endpoint)
+	default:
+		return fmt.Sprintf("no endpoint of this component has a driver that binds %s", commandType)
+	}
+}

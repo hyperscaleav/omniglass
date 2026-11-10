@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
@@ -70,15 +71,23 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	var res HTTPResult
 	call := p.tally.call(t.Tally)
+	// The dial runs on the transport's own goroutine, which can outlive a
+	// request that timed out, so what it learns lands in dialed under mu and
+	// the probe reads a copy once the request returns.
+	var (
+		mu     sync.Mutex
+		dialed HTTPResult
+	)
 	dialer := &net.Dialer{Timeout: timeout}
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialStart := time.Now()
 		conn, err := dialer.DialContext(ctx, network, addr)
 		if err == nil {
-			res.Dialed = true
-			res.DialMS = float64(time.Since(dialStart)) / float64(time.Millisecond)
+			mu.Lock()
+			dialed.Dialed = true
+			dialed.DialMS = float64(time.Since(dialStart)) / float64(time.Millisecond)
+			mu.Unlock()
 			call.connected()
 		}
 		return conn, err
@@ -100,16 +109,18 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 				return nil, err
 			}
 			tc, facts, err := HandshakeTLS(ctx, conn, trust, timeout)
-			res.Facts, res.HandshakeMS = facts, facts.HandshakeMS
+			mu.Lock()
+			defer mu.Unlock()
+			dialed.Facts, dialed.HandshakeMS = facts, facts.HandshakeMS
 			if err != nil {
 				if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassCertificate {
 					// The protocol answered with a certificate; it is the
 					// certificate that is refused.
-					res.Handshaken, res.Refusal = true, terr
+					dialed.Handshaken, dialed.Refusal = true, terr
 				}
 				return nil, err
 			}
-			res.Handshaken, res.Accepted = true, true
+			dialed.Handshaken, dialed.Accepted = true, true
 			call.begin()
 			return tc, nil
 		}
@@ -128,6 +139,9 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	req.Header.Set("User-Agent", "omniglass-node")
 	start := time.Now()
 	resp, err := client.Do(req)
+	mu.Lock()
+	res := dialed
+	mu.Unlock()
 	if err != nil {
 		call.settle(errOutcome(err))
 		if !res.Dialed {

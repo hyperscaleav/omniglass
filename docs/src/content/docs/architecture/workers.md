@@ -13,6 +13,8 @@ Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
 which does owner confinement and persistence inline, each batch (a tick of a node's task groups) landing once, in one transaction under
 its receipt, a refused group skipped and its siblings landed
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+The consumer and the calc, notification and settlement ticks report their depth, pace and failures
+as platform metrics on the server's component ([below](#measuring-the-ticks)).
 :::
 
 Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)), and notifications (webhook and email rows alike; an inbox entry is delivered by its own commit) are sent by a tick that drains the `notification` rows an alarm transition writes in its own transaction ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)), which stands in for the action sender below until the CDC publisher (#430) lands; the same tick ends alarm snoozes past their deadline, each under `FOR UPDATE SKIP LOCKED` ([ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)). All three are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
@@ -52,6 +54,33 @@ built; nodes already publish the heartbeat the sweep will read, the sweep itself
 :::
 
 There is no separate projector: a current value is the latest series row, derived on read ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus); [storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
+
+## Measuring the ticks
+
+The telemetry consumer and the server's ticks report how they keep up on the server's own platform
+component each report window (#1628), beside the consumer figures
+([messaging](/architecture/messaging/#measuring-the-pipeline)). Every failure count sits beside its
+attempts, so a loss reads as a ratio where 0 is healthy.
+
+- **The calc tick** (every second, up to 500 marks a pass): **`calc-pending-depth`** is the deepest
+  the `calc_pending` set stood at any pass in the window, every mark counted, the ones still waiting
+  out their debounce included; **`calc-served-count`** the calc rows the window's passes computed;
+  **`calc-pass-duration`** a pass's mean milliseconds. Healthy is a depth that falls back toward 0
+  between bursts and a pass well under the second it repeats on; a depth that grows window over
+  window while passes run long is a calc load the tick is not clearing.
+- **The notification tick** (every 2 s): **`outbox-queued-depth`** is the `notification` rows still
+  queued at the window's close, due or waiting out a retry backoff; **`outbox-due-age`** how long the
+  oldest due one has waited past its send time, 0 when nothing is due. A backoff is not a wait: a
+  failing webhook holds the depth up while the due age stays near 0. Healthy is a due age of a tick or
+  two; one that grows says the sender is not reaching its rows.
+- **The settlement tick** (every 5 s) runs two sweeps, the instances of **`sweep-duration`**,
+  **`sweep-count`** and **`sweep-failure-count`**: `command-settlement` (the commands past their
+  settle window) and `event-rule` (the rule streaks held for their sustain). Healthy is no failures
+  and a duration well under the 5 s it repeats on.
+
+These are all the server's own clock against its own database, so unlike ingest lag no node clock is
+in them and no skew moves them. The definitions are
+[ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
 
 :::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
 

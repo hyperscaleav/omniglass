@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Update a command type
-         * @description Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         * @description Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
          */
         patch: operations["update-command-type"];
         trace?: never;
@@ -995,6 +995,50 @@ export interface paths {
          */
         post: operations["issue-component-command"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List what a component depends on and what depends on it
+         * @description This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+         */
+        get: operations["list-component-dependencies"];
+        put?: never;
+        /**
+         * Record that a component depends on another
+         * @description Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+         */
+        post: operations["create-component-dependency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies/{kind}/{upstream}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a component's dependency on another
+         * @description Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+         */
+        delete: operations["delete-component-dependency"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1675,7 +1719,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a driver spec's polls through a node
-         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
          */
         post: operations["preview-driver"];
         delete?: never;
@@ -1751,7 +1795,7 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
         trace?: never;
@@ -1767,7 +1811,7 @@ export interface paths {
         put?: never;
         /**
          * Run an endpoint's poll now
-         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
          */
         post: operations["run-endpoint-poll"];
         delete?: never;
@@ -5549,7 +5593,7 @@ export interface paths {
         };
         /**
          * Read Omniglass's own health in one call
-         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
          */
         get: operations["get-platform-view"];
         put?: never;
@@ -6306,7 +6350,7 @@ export interface components {
             component_id: string;
             /**
              * Format: date-time
-             * @description When its settle window closes; a command still issued past it is timed out by the next sweep
+             * @description When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep
              */
             deadline: string;
             /**
@@ -6362,7 +6406,7 @@ export interface components {
             /** @description The invocation params */
             params?: unknown;
             /**
-             * @description Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+             * @description Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
              * @enum {string}
              */
             phase: "queued" | "delivered" | "awaiting-reply" | "awaiting-observation" | "settled" | "failed" | "timed-out";
@@ -6371,7 +6415,7 @@ export interface components {
             /** @description The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
             reply?: string;
             /**
-             * @description How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)
+             * @description How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)
              * @enum {string}
              */
             settle_mode: "reply" | "observation" | "none";
@@ -6386,7 +6430,7 @@ export interface components {
              */
             settled_at?: string;
             /**
-             * @description What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence
+             * @description What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
              * @enum {string}
              */
             settled_by?: "issue" | "reply" | "observation" | "window";
@@ -6430,6 +6474,13 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
+            disruptive: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive
+             */
+            hold_seconds: number;
             /** @description The command type's uuid, the stable form of name */
             id: string;
             label?: string;
@@ -6437,6 +6488,13 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment for the invocation params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive
+             */
+            quiet_seconds: number;
             /**
              * Format: int64
              * @description How long the device is given to actuate before a mismatch is a failed command
@@ -6494,6 +6552,34 @@ export interface components {
             system_count: number;
             /** @description The primary system's id, the canonical handle */
             system_id?: string;
+        };
+        ComponentDependencyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentDependencyBody.json
+             */
+            readonly $schema?: string;
+            /** @description Name of the dependent component, the one that goes down with the upstream */
+            component: string;
+            /** @description The dependent component's uuid */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When the edge was recorded
+             */
+            created_at: string;
+            /**
+             * @description How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /** @description The upstream's outlet that feeds the component; set on a power edge only */
+            outlet?: string;
+            /** @description Name of the component it depends on */
+            upstream: string;
+            /** @description The upstream component's uuid */
+            upstream_id: string;
         };
         ComponentMetricsOutputBody: {
             /**
@@ -6664,12 +6750,26 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description The command type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.
@@ -6679,6 +6779,30 @@ export interface components {
             target_metric_type?: string;
             /** @description The property this command sets, for settlement (at most one target arm) */
             target_property_type?: string;
+        };
+        CreateComponentDependencyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentDependencyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description How it depends: power, host or path
+             * @example power
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /**
+             * @description The upstream's outlet that feeds this component: required on a power edge, refused on any other
+             * @example 3
+             */
+            outlet?: string;
+            /**
+             * @description Name or uuid of the component this one depends on, or a dotted address
+             * @example pdu-1
+             */
+            upstream: string;
         };
         CreateComponentFromTemplateInputBody: {
             /**
@@ -6804,6 +6928,8 @@ export interface components {
             label?: string;
             /** @description Node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
+            out_of_band?: boolean;
             /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
             params?: unknown;
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
@@ -7748,6 +7874,8 @@ export interface components {
             node?: string;
             /** @description The placed node's id; the stable form of node */
             node_id?: string;
+            /** @description A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
+            out_of_band: boolean;
             /** @description The address/target settings (jsonb) */
             params?: unknown;
             /** @description The transport name (the wire this endpoint speaks over), from the code registry */
@@ -8599,6 +8727,25 @@ export interface components {
             commands: components["schemas"]["CommandBody"][] | null;
             /** @description The component, by name */
             component: string;
+        };
+        ListComponentDependenciesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentDependenciesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The component, as addressed */
+            component: string;
+            /** @description What depends on this component, ordered by kind then dependent name */
+            dependents: components["schemas"]["ComponentDependencyBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more edges this component has whose other end is outside the caller's component:read: counted, never named
+             */
+            hidden: number;
+            /** @description What this component depends on, ordered by kind then upstream name */
+            upstreams: components["schemas"]["ComponentDependencyBody"][] | null;
         };
         ListComponentMembershipsOutputBody: {
             /**
@@ -9679,6 +9826,16 @@ export interface components {
             /** @description The predicate over the alarm facts (the action expression site); absent always holds */
             when?: string;
         };
+        PlatformAlarmBody: {
+            /** @description The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
+            key?: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            /** @description The name of the rule that raised the alarm; absent for a hand-raised alarm */
+            rule?: string;
+            severity: string;
+        };
         PlatformBindingInputBody: {
             /**
              * Format: uri
@@ -9706,6 +9863,19 @@ export interface components {
             /** @description The group's stable handle */
             name: string;
         };
+        PlatformInstanceFigureBody: {
+            /** @description The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key */
+            instance: string;
+            /** @description The key the figure is a sample of */
+            key: string;
+            /**
+             * Format: date-time
+             * @description When the sample was taken
+             */
+            observed_at: string;
+            /** Format: double */
+            value: number;
+        };
         PlatformKeyBody: {
             /** @description The metric type's catalog description, the column's tooltip */
             description?: string;
@@ -9730,13 +9900,166 @@ export interface components {
              * @description The node's last heartbeat; absent when it has never sent one
              */
             last_heartbeat_at?: string;
+            /**
+             * Format: double
+             * @description The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read
+             */
+            loss?: number;
             name: string;
             /** @description The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
             verdict?: string;
         };
+        PlatformPanelBody: {
+            /** @description The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure */
+            figures: components["schemas"]["PlatformInstanceFigureBody"][] | null;
+            /** @description The panel's keys, in order, each with its catalog facts */
+            keys: components["schemas"]["PlatformPanelKeyBody"][] | null;
+            /** @description The panel's title */
+            label: string;
+            /** @description The panel's stable handle */
+            name: string;
+        };
+        PlatformPanelKeyBody: {
+            /** @description The metric type's catalog description, the row's tooltip */
+            description?: string;
+            /** @description The metric type's label, the row's title */
+            label: string;
+            /** @description The metric type's name: the key the panel's figures carry */
+            name: string;
+            /** @description The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone */
+            of?: string;
+            /**
+             * Format: int64
+             * @description Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first
+             */
+            rank?: number;
+            /** @description The metric type's unit, when it has one */
+            unit?: string;
+        };
+        PlatformPipelineBody: {
+            /** @description Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one */
+            end_to_end: components["schemas"]["PlatformPipelineEndKindBody"][] | null;
+            /** @description The same over every kind summed per hop */
+            end_to_end_total: components["schemas"]["PlatformPipelineEndBody"];
+            /** @description The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own */
+            hops: components["schemas"]["PlatformPipelineHopBody"][] | null;
+            /** @description The delivery keys' catalog facts, the explainer the page shows */
+            keys: components["schemas"]["PlatformKeyBody"][] | null;
+        };
+        PlatformPipelineComponentBody: {
+            /** @description The platform component that recorded this share of the hop, where its series live */
+            component: string;
+            /** @description The component's figures per kind it carried */
+            kinds: components["schemas"]["PlatformPipelineKindBody"][] | null;
+            /** @description The component's name */
+            name: string;
+            /** @description The component's figures, every kind summed */
+            total: components["schemas"]["PlatformPipelineSpanBody"];
+        };
+        PlatformPipelineEndBody: {
+            /**
+             * Format: double
+             * @description The last hour's end to end loss
+             */
+            last_hour?: number;
+            /**
+             * Format: double
+             * @description The current newest windows' end to end loss
+             */
+            newest?: number;
+        };
+        PlatformPipelineEndKindBody: {
+            /**
+             * @description The kind of item
+             * @enum {string}
+             */
+            kind: "metric" | "property" | "event" | "log";
+            /**
+             * Format: double
+             * @description The last hour's end to end loss
+             */
+            last_hour?: number;
+            /**
+             * Format: double
+             * @description The current newest windows' end to end loss
+             */
+            newest?: number;
+        };
+        PlatformPipelineFigureBody: {
+            /**
+             * Format: int64
+             * @description Items the hop took in over the span (delivery-in-count summed)
+             */
+            in: number;
+            /**
+             * Format: double
+             * @description (in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in
+             */
+            loss?: number;
+            /**
+             * Format: int64
+             * @description Items the hop handed on over the span (delivery-out-count summed)
+             */
+            out: number;
+        };
+        PlatformPipelineHopBody: {
+            /** @description Each component's share of the hop, in name order; the shares sum to the hop's figures */
+            by_component: components["schemas"]["PlatformPipelineComponentBody"][] | null;
+            /**
+             * @description Which platform components record the hop
+             * @enum {string}
+             */
+            component_class: "node" | "server";
+            /** @description What the hop does and what counts as out and as lost there */
+            description: string;
+            /**
+             * @description The hop's name, as the delivery model names it
+             * @enum {string}
+             */
+            id: "schedule" | "sim" | "node" | "ingest";
+            /** @description The keys the hop's figures are read from, the same three on every hop */
+            keys: string[] | null;
+            /** @description The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent */
+            kinds: components["schemas"]["PlatformPipelineKindBody"][] | null;
+            /** @description The hop's title */
+            label: string;
+            /** @description The hop's figures, every kind summed */
+            total: components["schemas"]["PlatformPipelineSpanBody"];
+        };
+        PlatformPipelineKindBody: {
+            /**
+             * @description The kind of item, the series instance
+             * @enum {string}
+             */
+            kind: "metric" | "property" | "event" | "log";
+            /** @description Every window over the last hour, summed */
+            last_hour: components["schemas"]["PlatformPipelineFigureBody"];
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+            newest: components["schemas"]["PlatformPipelineFigureBody"];
+            /**
+             * Format: date-time
+             * @description When the newest window was written, current or not
+             */
+            newest_at?: string;
+        };
+        PlatformPipelineSpanBody: {
+            /** @description Every window over the last hour, summed */
+            last_hour: components["schemas"]["PlatformPipelineFigureBody"];
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+            newest: components["schemas"]["PlatformPipelineFigureBody"];
+            /**
+             * Format: date-time
+             * @description When the newest window was written, current or not
+             */
+            newest_at?: string;
+        };
         PlatformServerBody: {
+            /** @description The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries */
+            alarms: components["schemas"]["PlatformAlarmBody"][] | null;
             /** @description The server's platform component uuid */
             component: string;
+            /** @description The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own */
+            groups: components["schemas"]["PlatformPanelBody"][] | null;
             /** @description The server's platform component name */
             name: string;
             /**
@@ -9942,14 +10265,18 @@ export interface components {
             groups: components["schemas"]["PlatformGroupBody"][] | null;
             /** @description True when this server runs as an omniglass lab */
             lab: boolean;
+            /** @description The hops a node's loss composes: the ones its own platform component records */
+            loss_hops: string[] | null;
             /** @description One row per node, in name order */
             nodes: components["schemas"]["PlatformNodeBody"][] | null;
+            /** @description Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read */
+            pipeline?: components["schemas"]["PlatformPipelineBody"];
             /**
              * Format: date-time
              * @description The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock
              */
             read_at: string;
-            /** @description Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read */
+            /** @description Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read */
             servers: components["schemas"]["PlatformServerBody"][] | null;
             /** @description The platform system and its verdict; absent without a fleet-wide system read */
             system?: components["schemas"]["PlatformSystemBody"];
@@ -10477,6 +10804,8 @@ export interface components {
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
+            /** @description Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection */
+            gate_reasons?: components["schemas"]["ReachGateReasonBody"][] | null;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry) */
@@ -10506,6 +10835,19 @@ export interface components {
             verdict: components["schemas"]["ReachVerdictBody"];
             /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
             webhook?: components["schemas"]["EndpointWebhookBody"];
+        };
+        ReachGateReasonBody: {
+            /** @description An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
+            component?: string;
+            /** @description The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+            kind: string;
+            /**
+             * Format: date-time
+             * @description When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's
+             */
+            since: string;
+            /** @description What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe */
+            source: string;
         };
         ReachHistoryBody: {
             /** Format: date-time */
@@ -12508,10 +12850,24 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             params_schema?: unknown;
+            /** @description The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
@@ -12583,6 +12939,8 @@ export interface components {
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
+            out_of_band?: boolean;
             /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
             /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -15257,6 +15615,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommandBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentDependenciesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentDependencyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentDependencyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The edge's kind */
+                kind: "power" | "host" | "path";
+                /** @description Name or uuid of the upstream component, or a dotted address */
+                upstream: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

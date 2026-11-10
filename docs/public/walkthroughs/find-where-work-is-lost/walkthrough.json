@@ -1,0 +1,104 @@
+{
+  "id": "find-where-work-is-lost",
+  "title": "Find where work is lost",
+  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Platform health draws the path a sample takes from its run to the store, one hop at a time.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "wait",
+      "caption": "Each hop shows what it took in, what it handed on, and the share it lost. 0% is healthy.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Open the ingest hop. It says what counts as lost there, the keys it is read from, and the server component that records it.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "Every hop is read from the same three keys, one series per kind, so one rule reads them all.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "goto",
+      "caption": "Touch Panel 2 is simulated, so it can be broken on purpose.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Open its simulation.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Unplug it. Every poll of it now fails.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Save. The simulator applies it on its next pull.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "press",
+      "caption": "Close the simulation.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The failed polls land on the panel's own component, as its poll failures.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "goto",
+      "caption": "Back on Platform health.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Open the node hop. Each node's own share is a row.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "click",
+      "caption": "Follow the node's row to its platform component.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "wait",
+      "caption": "The node's delivery series live on its component, one per kind, like any other metric.",
+      "still": "step-15.png"
+    }
+  ],
+  "poster": "step-12.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 52.4,
+    "bytes": 961247,
+    "previewBytes": 684008
+  }
+}

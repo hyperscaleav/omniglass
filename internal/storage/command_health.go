@@ -54,18 +54,21 @@ const redeliveryCountLag = "5 seconds"
 // window's start, null for none). The candidates are the pull's own resolution
 // (commandCandidates), widened to the commands live at the window's start so
 // a command that expired in the window is still resolved to its node. Each
-// command is attributed to the node its chosen endpoint is placed on.
+// command is attributed to the node its chosen endpoint is placed on. The
+// live queue (pending, oldest, stuck) counts only the commands still issued,
+// as the pull delivers only those (#1630); the expired counts take every
+// unexecuted command, whatever status its settlement stamped after.
 // Redeliveries are read apart: a command redelivered and then executed has
 // left the candidates, and the redelivered rows are few
 // (command_redelivered_idx). Their window is the same one shifted back by
 // redeliveryCountLag.
 var commandHealthSQL = `
-	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'") + `),
+	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'", "", false) + `),
 	queue as (
 		select k.node_name,
-			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `') as pending,
-			min(k.ts) filter (where k.ts > now() - interval '` + deliveryTTL + `') as oldest,
-			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `'
+			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued') as pending,
+			min(k.ts) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued') as oldest,
+			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued'
 				and k.dispatched_at < now() - interval '` + redeliverAfter + `') as stuck,
 			count(*) filter (where k.ts <= now() - interval '` + deliveryTTL + `' and k.first_dispatched_at is null) as expired_undelivered,
 			count(*) filter (where k.ts <= now() - interval '` + deliveryTTL + `' and k.first_dispatched_at is not null) as expired_unexecuted
@@ -127,8 +130,11 @@ func (p *PG) CommandQueueHealth(ctx context.Context, since time.Time) (CommandQu
 // written every read, an idle queue's pending age as zero: an age written
 // only while something waits would leave a drained queue's last age standing
 // as its latest sample, and a rule on it would never clear. The window
-// counts are written only when nonzero, and never for a read with no window
-// (a zero since): a first read cannot know what crossed before it.
+// counts are written every read with a window, a quiet window's as zero, for
+// the same reason: a count written only when nonzero would leave the last
+// event's count standing as the latest value long after it. A read with no
+// window (a zero since) writes none: a first read cannot know what crossed
+// before it.
 func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetric {
 	var out []PlatformMetric
 	for _, q := range read.Nodes {
@@ -153,9 +159,7 @@ func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetri
 			{writerclass.CommandExpiredCount, writerclass.CommandExpiredUndelivered, q.ExpiredUndelivered},
 			{writerclass.CommandExpiredCount, writerclass.CommandExpiredUnexecuted, q.ExpiredUnexecuted},
 		} {
-			if c.n > 0 {
-				add(c.key, c.instance, float64(c.n))
-			}
+			add(c.key, c.instance, float64(c.n))
 		}
 	}
 	return out

@@ -16,13 +16,30 @@ import {
   wiredText,
   type PlatformSimDevice,
   type PlatformSimGap,
+  hopFigure,
+  lossPercent,
+  lossTinted,
+  nodeLossHint,
+  nodeLossText,
   nodePill,
+  pipelineKinds,
+  endToEndFigure,
+  PANEL_SERIES_HOURS,
+  PANEL_SERIES_RESOLUTION_S,
+  panelAlarms,
+  panelFlagged,
+  panelRowText,
+  panelSections,
+  panelSeriesRequest,
+  type PlatformServer,
   notUpCount,
   PLATFORM_REFUSED,
   platformColumns,
   platformRefusal,
   retryPlatformView,
   serverUptime,
+  type PlatformPipeline,
+  type PlatformPipelineHop,
   type PlatformView,
 } from "./platformhealth";
 import { NODE_DOWN_AFTER_MS } from "./nodes";
@@ -50,6 +67,7 @@ const view = (over: Partial<PlatformView> = {}): PlatformView => ({
     },
   ],
   nodes: [],
+  loss_hops: ["node"],
   ...over,
 });
 
@@ -240,5 +258,240 @@ describe("devices", () => {
   it("lists unhit, then impaired, then the rest by name", () => {
     const got = sortDevices([dev({ component: "b" }), dev({ component: "a" }), dev({ component: "z", impaired: true }), dev({ component: "y", unhit: true })]).map((d) => d.component);
     expect(got).toEqual(["y", "z", "a", "b"]);
+  });
+});
+
+// Where work is lost (#1646): every figure is a loss ratio, 0 is healthy, and
+// nothing in is no ratio at all, never a fake 0.
+describe("lossPercent", () => {
+  it("reads a zero ratio as 0%", () => {
+    expect(lossPercent(0)).toBe("0%");
+  });
+
+  it("keeps two significant figures, so a small loss is never rounded to 0", () => {
+    expect(lossPercent(0.01)).toBe("1%");
+    expect(lossPercent(0.0002)).toBe("0.02%");
+    expect(lossPercent(1 / 3)).toBe("33%");
+    expect(lossPercent(1)).toBe("100%");
+  });
+});
+
+describe("lossTinted", () => {
+  it("tints a ratio above 0 only", () => {
+    expect(lossTinted(0)).toBe(false);
+    expect(lossTinted(undefined)).toBe(false);
+    expect(lossTinted(0.0001)).toBe(true);
+  });
+});
+
+const fig = (inn: number, out: number) => ({ in: inn, out, ...(inn > 0 ? { loss: (inn - out) / inn } : {}) });
+const span = (inn: number, out: number) => ({ newest: fig(inn, out), last_hour: fig(inn, out) });
+const hop = (over: Partial<PlatformPipelineHop> = {}): PlatformPipelineHop => ({
+  id: "node",
+  label: "Node",
+  description: "The node's spool.",
+  component_class: "node",
+  keys: ["delivery-in-count", "delivery-out-count", "delivery-loss-ratio"],
+  kinds: [
+    { kind: "metric", ...span(100, 99) },
+    { kind: "log", ...span(0, 0) },
+  ],
+  total: span(100, 99),
+  by_component: [],
+  ...over,
+});
+
+describe("hopFigure", () => {
+  it("reads every kind as the hop's total and one kind as its row, over the last hour", () => {
+    expect(hopFigure(hop(), "all")).toEqual(fig(100, 99));
+    expect(hopFigure(hop(), "metric")).toEqual(fig(100, 99));
+    expect(hopFigure(hop(), "log")).toEqual({ in: 0, out: 0 });
+  });
+
+  it("is absent for a kind the hop carried nothing of, and for a hop with no rows", () => {
+    expect(hopFigure(hop(), "event")).toBeUndefined();
+    expect(hopFigure(hop({ kinds: [], total: span(0, 0) }), "all")).toBeUndefined();
+  });
+});
+
+describe("pipelineKinds and endToEndFigure", () => {
+  const p: PlatformPipeline = {
+    keys: [],
+    hops: [hop(), hop({ id: "ingest", label: "Ingest", component_class: "server", kinds: [{ kind: "event", ...span(4, 2) }, { kind: "metric", ...span(99, 99) }] })],
+    end_to_end: [{ kind: "metric", newest: 0.01, last_hour: 0.01 }, { kind: "event", newest: 0.5, last_hour: 0.5 }],
+    end_to_end_total: { newest: 0.02, last_hour: 0.03 },
+  };
+
+  it("lists the kinds any hop carried, in the delivery model's order", () => {
+    expect(pipelineKinds(p)).toEqual(["metric", "event", "log"]);
+  });
+
+  it("reads the end to end for every kind or one kind, over the last hour", () => {
+    expect(endToEndFigure(p, "all")).toBe(0.03);
+    expect(endToEndFigure(p, "event")).toBe(0.5);
+    expect(endToEndFigure(p, "property")).toBeUndefined();
+  });
+});
+
+// A node's Loss group is its composed ratio over its own hops; a node that
+// recorded nothing reads not reported, never 0.
+describe("nodeLossText", () => {
+  const node = { name: "edge-a", label: "", enrolled: true };
+
+  it("shows the node's composed ratio", () => {
+    expect(nodeLossText({ ...node, loss: 0 })).toBe("0%");
+    expect(nodeLossText({ ...node, loss: 0.03 })).toBe("3%");
+  });
+
+  it("reads a node with no loss figure as not reported", () => {
+    expect(nodeLossText(node)).toBe("not reported");
+  });
+
+  it("names the hops the figure composes in its hint", () => {
+    expect(nodeLossHint(view())).toMatch(/node hop/);
+    expect(nodeLossHint(view({ loss_hops: ["node", "sim"] }))).toMatch(/node and sim hops/);
+  });
+});
+
+// A server's panels (#1645): Requests, Ingest, Queues and Retention, each the
+// keys the view returns in the order it returns them. The page ranks nothing
+// and filters nothing: a ranked key's rows are the instances the server cut
+// and ordered, and a key read against another prints as a pair.
+const server = (over: Partial<PlatformServer> = {}): PlatformServer => ({
+  component: "c0ffee00-0000-4000-8000-000000000001",
+  name: "lab-server",
+  verdict: "healthy",
+  alarms: [],
+  groups: [
+    {
+      name: "requests",
+      label: "Requests",
+      keys: [
+        { name: "http-request-duration-max", label: "Slowest Request", unit: "ms", description: "The slowest request in the window.", rank: 10 },
+        { name: "db-pool-acquired", label: "Pool In Use", unit: "", description: "Connections in use.", of: "db-pool-max" },
+        { name: "db-pool-max", label: "Pool Size", unit: "", description: "The pool's size." },
+        { name: "db-slow-query-count", label: "Slow Queries", unit: "", description: "Slow queries in the window." },
+      ],
+      figures: [
+        { key: "http-request-duration-max", instance: "GET /api/v1/components/{name} 2xx", value: 812.5, observed_at: readAt },
+        { key: "http-request-duration-max", instance: "GET /api/v1/fast 2xx", value: 3, observed_at: readAt },
+        { key: "db-pool-acquired", instance: "", value: 4, observed_at: readAt },
+        { key: "db-pool-max", instance: "", value: 20, observed_at: readAt },
+      ],
+    },
+    {
+      name: "retention",
+      label: "Retention",
+      keys: [
+        { name: "retention-behind", label: "Retention Behind", unit: "d", description: "Days past due." },
+        { name: "metric-oldest-day-age", label: "Oldest Metric Day", unit: "d", description: "Age of the oldest day.", of: "retention-window-days" },
+        { name: "retention-window-days", label: "Retention Window", unit: "d", description: "The window." },
+      ],
+      figures: [
+        { key: "retention-behind", instance: "event", value: 0, observed_at: readAt },
+        { key: "retention-behind", instance: "metric", value: 1, observed_at: readAt },
+        { key: "metric-oldest-day-age", instance: "", value: 6, observed_at: readAt },
+        { key: "retention-window-days", instance: "metric", value: 7, observed_at: readAt },
+      ],
+    },
+  ],
+  ...over,
+});
+
+describe("panelSections", () => {
+  it("renders the keys and the ranked instances the view returns, in order, folding a pair's second key into the first", () => {
+    const [requests] = server().groups!;
+    const sections = panelSections(requests);
+    expect(sections.map((s) => s.key.name)).toEqual(["http-request-duration-max", "db-pool-acquired", "db-slow-query-count"]);
+    const ranked = sections[0];
+    expect(ranked.ranked).toBe(true);
+    expect(ranked.rows.map((r) => r.instance)).toEqual(["GET /api/v1/components/{name} 2xx", "GET /api/v1/fast 2xx"]);
+    expect(ranked.rows.map((r) => r.value)).toEqual([812.5, 3]);
+  });
+
+  it("gives an unsplit key one row and a key never sampled one not-reported row", () => {
+    const sections = panelSections(server().groups![0]);
+    expect(sections[1].rows).toHaveLength(1);
+    expect(sections[1].rows[0]).toMatchObject({ instance: "", value: 4, of: { value: 20 } });
+    expect(sections[2].rows).toEqual([expect.objectContaining({ key: "db-slow-query-count", instance: "", value: null })]);
+  });
+
+  it("splits a key by instance and reads a pair's second figure from the sole series it has", () => {
+    const sections = panelSections(server().groups![1]);
+    expect(sections[0].rows.map((r) => r.instance)).toEqual(["event", "metric"]);
+    expect(sections[1].rows[0].of).toMatchObject({ value: 7, unit: "d" });
+  });
+
+  it("is a not-reported row per key for a server with no samples yet", () => {
+    const bare = { ...server().groups![0], figures: [] };
+    const sections = panelSections(bare);
+    expect(sections.flatMap((s) => s.rows.map((r) => r.value))).toEqual([null, null, null]);
+  });
+});
+
+describe("panelRowText", () => {
+  it("prints a figure with its unit, a pair as a / b, and a missing figure as not reported", () => {
+    const sections = panelSections(server().groups![0]);
+    expect(panelRowText(sections[0].rows[0])).toBe("812.5 ms");
+    expect(panelRowText(sections[1].rows[0])).toBe("4 / 20");
+    expect(panelRowText(sections[2].rows[0])).toBe("not reported");
+  });
+
+  it("prints a byte figure in the largest unit that keeps it short, each side of a pair alike", () => {
+    expect(panelRowText({ key: "database-size", instance: "", unit: "bytes", value: 18_192_863 })).toBe("17.4 MB");
+    expect(panelRowText({ key: "table-bytes", instance: "metric", unit: "bytes", value: 512 })).toBe("512 B");
+    expect(
+      panelRowText({
+        key: "used-bytes",
+        instance: "",
+        unit: "bytes",
+        value: 1_048_576,
+        of: { key: "total-bytes", unit: "bytes", value: 4_194_304 },
+      }),
+    ).toBe("1.0 MB / 4.0 MB");
+  });
+});
+
+describe("panelSeriesRequest", () => {
+  it("asks for a ranked row's own instance on the server's platform component, over the last hour", () => {
+    const s = server();
+    const row = panelSections(s.groups![0])[0].rows[1];
+    expect(panelSeriesRequest(s, row)).toEqual({
+      kind: "components",
+      owner: s.component,
+      metric: "http-request-duration-max",
+      hours: PANEL_SERIES_HOURS,
+      resolutionSeconds: PANEL_SERIES_RESOLUTION_S,
+      instance: "GET /api/v1/fast 2xx",
+    });
+    expect(PANEL_SERIES_HOURS).toBe(1);
+  });
+
+  it("names the owner-level series (the empty instance) for an unsplit key, never leaving it to the server to pick", () => {
+    const s = server();
+    expect(panelSeriesRequest(s, panelSections(s.groups![0])[1].rows[0]).instance).toBe("");
+  });
+});
+
+describe("panelFlagged", () => {
+  const alarm = (key: string | undefined) => ({ rule: "ingest-lag-high", key, severity: "warning", message: "lag high", raised_at: readAt });
+
+  it("flags a panel only when an open alarm names one of its keys", () => {
+    const s = server({ alarms: [alarm("retention-behind")] });
+    const [requests, retention] = s.groups!;
+    expect(panelFlagged(s, requests)).toBe(false);
+    expect(panelFlagged(s, retention)).toBe(true);
+    expect(panelAlarms(s, retention).map((a) => a.message)).toEqual(["lag high"]);
+  });
+
+  it("does not flag for an alarm on another key, a hand-raised alarm, or no alarms at all", () => {
+    expect(panelFlagged(server({ alarms: [alarm("ingest-lag-max")] }), server().groups![0])).toBe(false);
+    expect(panelFlagged(server({ alarms: [alarm(undefined)] }), server().groups![0])).toBe(false);
+    expect(panelFlagged(server({ alarms: null }), server().groups![0])).toBe(false);
+  });
+
+  it("flags on the second key of a pair, which the panel carries though it prints no row of its own", () => {
+    const s = server({ alarms: [alarm("retention-window-days")] });
+    expect(panelFlagged(s, s.groups![1])).toBe(true);
   });
 });

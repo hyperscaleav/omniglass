@@ -91,11 +91,11 @@ const (
 // costs beside what a lab does.
 type Cadence struct {
 	Name string
-	// Heartbeat is the node's check-in interval: every collection task runs
-	// at it unless its driver declares a slower schedule.
+	// Heartbeat is the node's check-in interval, and the interval of a
+	// driver poll that declares no schedule of its own (#1634).
 	Heartbeat string
-	// ProbeEvery is the reachability probe interval; empty probes on every
-	// check-in.
+	// ProbeEvery is the reachability probe interval, on the node's own
+	// timer, apart from its check-in (#1634).
 	ProbeEvery string
 	// WorklistEvery is how often the node pulls its worklist (#1577), apart
 	// from its check-in, so a short check-in does not rebuild every
@@ -107,10 +107,16 @@ type Cadence struct {
 	// measurement of the product's cadence carries as little of the
 	// simulator's own traffic as it can.
 	SimPoll string
+	// ReportSeconds is the platform's collection report window the lab's
+	// seed sets (collection.report_seconds, #1646), so the node's delivery
+	// and poll figures and the server's land within a walkthrough's minute.
+	// Zero leaves the platform's own setting, as a learner's lab and a
+	// measurement at the product's defaults do.
+	ReportSeconds int
 	// ClosedLoopBracket is how often the lab's server brackets its node for
 	// Platform health's closed loop (#1647), its window ten of them: a
 	// learner's lab every 10s, so the window fills in under two minutes; a
-	// script's every 2s, so a walkthrough sees an impairment open a gap and
+	// script's every 1s, so a walkthrough sees an impairment open a gap and
 	// clear inside its recorded budget; `default` the server's own minute.
 	ClosedLoopBracket string
 	// For says who runs at it, in the lab guide's words.
@@ -135,14 +141,17 @@ func CadenceProfiles() []Cadence {
 		// rebuilding every site's worklist every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
-		// A script's throwaway lab lives for minutes and probes on every
-		// check-in, so a walkthrough waiting on a probe's verdict keeps its
-		// recorded budget. Its closed loop brackets every second, a 10s
-		// window, so a walkthrough sees an impairment's attribution clear
-		// inside its budget (#1647).
-		{Name: CadenceWalkthrough, Heartbeat: "2s", WorklistEvery: "2s", SimPoll: "2s", ClosedLoopBracket: "1s",
+		// A script's throwaway lab lives for minutes and probes every 2s, so
+		// a walkthrough waiting on a probe's verdict keeps its recorded
+		// budget.
+		// Its report window is 10s, the setting's floor: at the platform's
+		// 60s the first delivery and poll figures land as a minute's
+		// recording ends (#1646). Its closed loop brackets every second, a
+		// 10s window, so a walkthrough sees an impairment's attribution
+		// clear inside its budget (#1647).
+		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s", ReportSeconds: 10, ClosedLoopBracket: "1s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(), ClosedLoopBracket: "1m",
+		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(), ClosedLoopBracket: "1m",
 			For: "the product's own defaults: what a deployment's node runs at"},
 	}
 }
@@ -433,6 +442,11 @@ func Plan(o Options) (Spec, error) {
 		"--user", LoginUser, "--password", LoginPassword}
 	if o.NoNode {
 		seedCmd = append(seedCmd, "--no-node")
+	} else if cadence.ReportSeconds > 0 {
+		// A lab with no node has no collection to report, and its pages
+		// hold still for the docs shots, so only a lab with its node sets
+		// the window.
+		seedCmd = append(seedCmd, "--report-seconds", strconv.Itoa(cadence.ReportSeconds))
 	}
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash,
 		"OMNIGLASS_LAB_PUSH_TOKEN_HASH="+o.PushTokenHash, "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX="+o.PushTokenPrefix)
@@ -479,11 +493,8 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the node.",
 	}
-	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat}
-	if cadence.ProbeEvery != "" {
-		nodeCmd = append(nodeCmd, "--probe-every", cadence.ProbeEvery)
-	}
-	nodeCmd = append(nodeCmd, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll)
+	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
+		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
 	nodeService := func(service, name, token, pushToken, role string) Service {
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,
