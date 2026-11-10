@@ -49,6 +49,8 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 		delivery.RefusedUnregistered, delivery.RefusedWriter, delivery.RefusedInstance,
 		delivery.RefusedInvalid, delivery.RefusedEmpty, delivery.RefusedWrite,
 		delivery.Orphaned, delivery.Unbound, delivery.Unidentified, delivery.Missing,
+		delivery.RefusedOwner, delivery.RefusedTask, delivery.RefusedBatch, delivery.RefusedMetadata,
+		delivery.Abandoned,
 	} {
 		if !seen[o] {
 			t.Errorf("outcome %q missing from Outcomes", o)
@@ -57,7 +59,11 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 	if !delivery.Stored.Out() || !delivery.Coalesced.Out() || !delivery.Unbound.Out() || !delivery.Deduplicated.Deduplicated() || !delivery.Missing.Lost() {
 		t.Fatal("stored, coalesced and unbound are out, deduplicated is beside the ratio, missing is loss")
 	}
-	for _, o := range []delivery.Outcome{delivery.RefusedWriter, delivery.Orphaned, delivery.Unidentified, delivery.Missing} {
+	for _, o := range []delivery.Outcome{
+		delivery.RefusedWriter, delivery.Orphaned, delivery.Unidentified, delivery.Missing,
+		delivery.RefusedOwner, delivery.RefusedTask, delivery.RefusedBatch, delivery.RefusedMetadata,
+		delivery.Abandoned,
+	} {
 		if !o.Lost() {
 			t.Errorf("outcome %q is not loss", o)
 		}
@@ -264,4 +270,30 @@ func TestDeclaredAgainst(t *testing.T) {
 	if len(over) != 1 || over[delivery.Event] != 4 {
 		t.Errorf("over = %v, want event 4", over)
 	}
+}
+
+// TestDeclaredUnder: a batch the server Terms whole counts every item its
+// ledger declared under the one cause, kind by kind, and a kind declared at
+// 0 counts nothing.
+func TestDeclaredUnder(t *testing.T) {
+	d := delivery.Declared{delivery.Metric: {Count: 5, Before: 9}, delivery.Log: {Count: 2}, delivery.Event: {Before: 3}}
+	got := d.Under(delivery.Abandoned)
+	if got.Count(delivery.Metric, delivery.Abandoned) != 5 || got.Count(delivery.Log, delivery.Abandoned) != 2 {
+		t.Fatalf("under = %s, want metric 5 and log 2 abandoned", mustMarshal(t, got))
+	}
+	if got.Items(delivery.Event) != 0 || got.Items(delivery.Property) != 0 {
+		t.Fatalf("under = %s, counts a kind the batch carries none of", mustMarshal(t, got))
+	}
+	if !(delivery.Declared{}).Under(delivery.Abandoned).Empty() {
+		t.Fatal("an empty ledger counts something")
+	}
+}
+
+func mustMarshal(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

@@ -80,6 +80,10 @@ type Store interface {
 	// the insert (#455). A node tick's groups land or drop one by one
 	// (#1582): a refused group is reported in the result, its siblings land.
 	LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error)
+	// RecordTermedBatch writes the receipt of a batch the consumer Terms
+	// whole (#1691), its declared items under the Term's cause, so they read
+	// as that cause rather than missing. A later copy that lands replaces it.
+	RecordTermedBatch(ctx context.Context, b storage.TermedBatch) error
 	// PruneTelemetryReceipts deletes the receipts of batches landed before
 	// before, past the horizon a copy of the batch could still arrive in.
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
