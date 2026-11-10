@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
@@ -78,4 +79,44 @@ func TestHTTPProberReal(t *testing.T) {
 			t.Fatalf("reason = %s, want refused", res.Reason)
 		}
 	})
+}
+
+// A probe whose request times out before its TLS dial finishes returns while
+// the transport's dial goroutine is still handshaking; that goroutine then
+// writes the result it shares with the probe (#1552). Run under -race: the
+// probe must not read what the dial goroutine writes without a lock.
+func TestHTTPProberTimeoutDuringTheHandshakeDoesNotRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+
+	res, err := collection.NewHTTPProber().Probe(context.Background(), collection.HTTPTask{
+		Target: ln.Addr().String(), Timeout: 300 * time.Millisecond,
+		TLS: &collection.TLSTrust{Mode: driver.TLSModeSkip},
+	})
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if res.Responded {
+		t.Fatalf("a server that never answered the handshake responded: %+v", res)
+	}
+
+	// The server hangs up now, so the handshake still running behind the
+	// returned probe fails and writes its result; give that write a beat to
+	// land while the test, and the race detector, still run.
+	conn := <-accepted
+	_ = conn.Close()
+	time.Sleep(200 * time.Millisecond)
 }
