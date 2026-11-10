@@ -50,6 +50,14 @@ describe("risenHits", () => {
   });
 });
 
+describe("draftOf", () => {
+  it("leaves a zero field empty, so typing a value replaces it rather than trailing a 0", () => {
+    expect(draftOf(HEALTHY)).toEqual({ unplugged: false, latency_ms: "", jitter_ms: "", loss_pct: "", rate_kbit: "" });
+    expect(draftOf({ ...HEALTHY, latency_ms: 120, loss_pct: 2.5 })).toMatchObject({ latency_ms: "120", jitter_ms: "", loss_pct: "2.5" });
+    expect(parseImpairment(draftOf(HEALTHY)).value).toEqual(HEALTHY);
+  });
+});
+
 describe("parseImpairment", () => {
   it("returns the full body, empty fields reading as zero", () => {
     const r = parseImpairment({ unplugged: false, latency_ms: "120", jitter_ms: "", loss_pct: "2.555", rate_kbit: "" });
