@@ -463,6 +463,12 @@ func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult,
 func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (UnimplementedGateway) CountTelemetryReceipts(context.Context, string, time.Time, time.Time, time.Time, time.Time) (ReceiptWindow, error) {
+	return ReceiptWindow{}, nil
+}
+func (UnimplementedGateway) ListClosedLoopPollTargets(context.Context) ([]ClosedLoopPollTarget, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListComponentLogSources(context.Context, string, time.Duration) ([]string, error) {
 	return nil, nil
 }
