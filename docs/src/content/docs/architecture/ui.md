@@ -24,7 +24,7 @@ place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platfo
 (`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
 verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
-figure beside its last hour, ranked routes as the server cut them, a panel flagged only by an open
+figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
 alarm on its keys) and a row per node of its platform figures, each row opening onto the node's
 platform component. Its panels and columns are the groups the view returns, named with each key's
 catalog description, so the page holds no key list. The views model, the renderer library, and composable

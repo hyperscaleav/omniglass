@@ -302,6 +302,47 @@ describe("PlatformHealth page", () => {
     expect(screen.getByText("How far ingest runs behind.")).toBeInTheDocument();
   });
 
+  // The first set opens once, on mount: a server that later sorts ahead of
+  // it moves the index, not the set the operator is reading, which stays open.
+  it("keeps the set the operator is reading open when a new server sorts ahead of it", async () => {
+    emptySeries();
+    const { qc } = mount(twoServers());
+    const first = screen.getByTestId("server-panels-lab-server") as HTMLDetailsElement;
+    expect(first.open).toBe(true);
+    const next = twoServers();
+    next.servers = [
+      { component: uuidFor("server-a"), name: "aa-server", version: "v9.9.9", started_at: ago(1000), verdict: "healthy", groups: panels(true), alarms: [] },
+      ...next.servers!,
+    ];
+    qc.setQueryData([...PLATFORM_VIEW_KEY], next);
+    await waitFor(() => expect(screen.getByTestId("server-panels-aa-server")).toBeInTheDocument());
+    expect(screen.getByTestId("server-panels-lab-server")).toBe(first);
+    expect(first.open).toBe(true);
+    expect(first.querySelector(":scope > summary [data-disclosure]")).toHaveClass("rotate-90");
+  });
+
+  // A row's chart is a disclosure, so the keyboard reaches it as the pointer
+  // does: a reported row takes focus and Enter or Space opens and closes it;
+  // a not-reported row has no chart to open and is not a stop.
+  it("opens a reported row's chart from the keyboard, and skips a row with nothing reported", () => {
+    emptySeries();
+    const v = twoServers();
+    v.servers![0].groups![1].figures = [];
+    mount(v);
+    const set = screen.getByTestId("server-panels-lab-server");
+    const row = within(within(set).getByTestId("server-panel-requests")).getAllByTestId("panel-row-http-request-duration-max")[0];
+    expect(row).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(row, { key: " " });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    const lag = within(within(set).getByTestId("server-panel-ingest")).getByTestId("panel-row-ingest-lag");
+    expect(lag).toHaveTextContent("not reported");
+    expect(lag).not.toHaveAttribute("tabindex");
+    fireEvent.keyDown(lag, { key: "Enter" });
+    expect(lag).not.toHaveAttribute("aria-expanded");
+  });
+
   it("teaches each key through its catalog description, with a way onto its series on the server's platform component", async () => {
     emptySeries();
     mount(twoServers());

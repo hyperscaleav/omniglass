@@ -70,11 +70,18 @@ func platformViewKeys() []string {
 // against, a pair the page prints as "a / b" (connections in use against the
 // pool's size). Rank above zero makes it a ranked list: the view returns only
 // the Rank highest instances of the key's newest window, highest first,
-// sorted in SQL, so a large route table never reaches the browser.
+// sorted in SQL, so a large route table never reaches the browser. Window
+// marks a key the server writes only for a report window that observed
+// something (a request, a landed batch, a drop, a slow query): its last
+// sample is that window's figure, not a current reading, so the view leaves
+// it out once platformWindowHorizon has passed, as PlatformWindowKeys does
+// for a node. Every other key is a gauge sampled each window or a retention
+// fact its hourly pass writes, current however old.
 type PlatformServerKey struct {
-	Name string
-	Of   string
-	Rank int
+	Name   string
+	Of     string
+	Rank   int
+	Window bool
 }
 
 // PlatformServerGroup is one panel of a server's figures.
@@ -97,19 +104,19 @@ const platformRouteRank = 10
 // code that names it.
 var PlatformServerGroups = []PlatformServerGroup{
 	{Name: "requests", Label: "Requests", Keys: []PlatformServerKey{
-		{Name: writerclass.HTTPRequestDurationMax, Rank: platformRouteRank},
-		{Name: writerclass.HTTPRequestCount, Rank: platformRouteRank},
-		{Name: writerclass.DBSlowQueryCount},
+		{Name: writerclass.HTTPRequestDurationMax, Rank: platformRouteRank, Window: true},
+		{Name: writerclass.HTTPRequestCount, Rank: platformRouteRank, Window: true},
+		{Name: writerclass.DBSlowQueryCount, Window: true},
 		{Name: writerclass.DBPoolAcquired, Of: writerclass.DBPoolMax},
 		{Name: writerclass.DBPoolMax},
 		{Name: writerclass.DBPoolWaitCount},
 	}},
 	{Name: "ingest", Label: "Ingest", Keys: []PlatformServerKey{
-		{Name: writerclass.IngestLag},
-		{Name: writerclass.IngestLagMax},
-		{Name: writerclass.IngestBatchCount},
-		{Name: writerclass.IngestSampleCount},
-		{Name: writerclass.BusTelemetryDropCount},
+		{Name: writerclass.IngestLag, Window: true},
+		{Name: writerclass.IngestLagMax, Window: true},
+		{Name: writerclass.IngestBatchCount, Window: true},
+		{Name: writerclass.IngestSampleCount, Window: true},
+		{Name: writerclass.BusTelemetryDropCount, Window: true},
 	}},
 	{Name: "queues", Label: "Queues", Keys: []PlatformServerKey{
 		{Name: writerclass.BusConsumerPending},
@@ -130,15 +137,16 @@ var PlatformServerGroups = []PlatformServerGroup{
 }
 
 // platformServerKeys is every key in PlatformServerGroups, in order, with
-// each one's rank.
-func platformServerKeys() (names []string, ranks []int) {
+// each one's rank and whether it is a window figure.
+func platformServerKeys() (names []string, ranks []int, windows []bool) {
 	for _, g := range PlatformServerGroups {
 		for _, k := range g.Keys {
 			names = append(names, k.Name)
 			ranks = append(ranks, k.Rank)
+			windows = append(windows, k.Window)
 		}
 	}
-	return names, ranks
+	return names, ranks, windows
 }
 
 // PlatformKey is one column's catalog facts: its metric type's label, unit
@@ -512,7 +520,7 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 // statements however many servers there are: the catalog facts of every
 // server key, every server's figures, and every server's open alarms.
 func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer) error {
-	names, ranks := platformServerKeys()
+	names, ranks, windows := platformServerKeys()
 	catalog, err := p.catalogKeys(ctx, names)
 	if err != nil {
 		return err
@@ -525,7 +533,7 @@ func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer)
 	for i, s := range servers {
 		ids[i] = s.ComponentID
 	}
-	figures, err := p.serverFigures(ctx, ids, names, ranks)
+	figures, err := p.serverFigures(ctx, ids, names, ranks, windows)
 	if err != nil {
 		return err
 	}
@@ -562,15 +570,22 @@ func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer)
 // A ranked key (rank above zero) keeps only the instances written at its
 // newest time, the newest window, cut to its rank highest first; the cut
 // and the order are the database's, so the page ranks nothing. Every other
-// key is returned in instance order.
-func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int) (map[string]map[string][]PlatformInstanceFigure, error) {
+// key is returned in instance order. A window key's (PlatformServerKey.Window)
+// sample older than platformWindowHorizon is left out, instance by instance:
+// its window is over and the ones since observed nothing on that instance,
+// so a drop reason last seen an hour ago is not read beside this window's.
+func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int, windows []bool) (map[string]map[string][]PlatformInstanceFigure, error) {
 	out := map[string]map[string][]PlatformInstanceFigure{}
 	if len(ids) == 0 {
 		return out, nil
 	}
+	collection, err := p.CollectionSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		with k as (
-			select * from unnest($2::text[], $3::int[]) as k(name, rank)
+			select * from unnest($2::text[], $3::int[], $4::bool[]) as k(name, rank, win)
 		), latest as (
 			select distinct on (s.component_id, mt.name, s.instance)
 			       s.component_id, mt.name, s.instance, n.value, n.ts
@@ -582,7 +597,7 @@ func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int
 			  and s.provenance in ('observed', 'calculated')
 			order by s.component_id, mt.name, s.instance, n.ts desc, n.id desc
 		), placed as (
-			select l.*, k.rank, max(l.ts) over (partition by l.component_id, l.name) as newest
+			select l.*, k.rank, k.win, max(l.ts) over (partition by l.component_id, l.name) as newest
 			from latest l join k on k.name = l.name
 		), ordered as (
 			select p.*, row_number() over (
@@ -592,9 +607,10 @@ func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int
 		)
 		select component_id::text, name, instance, value, ts
 		from ordered
-		where rank = 0 or (ts = newest and rn <= rank)
+		where (rank = 0 or (ts = newest and rn <= rank))
+		  and not (win and ts < now() - $5::interval)
 		order by component_id, name, case when rank > 0 then rn end, instance`,
-		ids, names, ranks)
+		ids, names, ranks, windows, platformWindowHorizon(collection.ReportSeconds))
 	if err != nil {
 		return nil, fmt.Errorf("storage: platform view server figures: %w", err)
 	}

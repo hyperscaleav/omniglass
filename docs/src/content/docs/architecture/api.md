@@ -1163,7 +1163,8 @@ earns its own tier only when composing the entity reads in the browser would be 
   the wire is pinned by test against being widened back into a component list.
 - `GET /views/platform` (`node:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
-  server's build and start time with its panel groups (each key's current figure, a ranked key's
+  server's build and start time with its panel groups (each key's current figure, a key written
+  only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
   the node table's column groups with each key's catalog facts, and one row per node with its current figure per key (a gauge's latest sample, a
   window count only while its window is the newest), in a fixed number of statements however

@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626 and #1644 reviews, open again from the #1629 review as #1673)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626, #1644 and #1645 reviews, open again from the #1629 review as #1673)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -49,3 +49,11 @@
   metric window out of range for the compaction flags) keeps a pending fire streak: the rule sweep
   fires it with no fresh sample, and the clear only runs at ingest, so the warning never clears.
   Cue: a flag written per member of a set that can shrink, read by a rule whose clear needs a sample.
+- **Eighth instance (#1645, fixed in review):** the sixth's read, again, on a sibling surface. The
+  Platform health server panels read each (key, instance)'s latest sample with no horizon, so a
+  key the server writes only for a window that observed something (ingest lag when a batch lands,
+  a drop reason, a slow query, a route's timing) kept its last figure once the fleet went quiet,
+  and the page never shows a figure's time. Fix: `PlatformServerKey.Window` marks those keys and
+  `serverFigures` leaves out such a sample, per instance, past `platformWindowHorizon`; the gauges
+  and the hourly retention facts stay. Cue: a new read of a platform key set that does not reuse
+  the horizon the first read of the same writers needed.

@@ -269,8 +269,8 @@ func figuresOf(p storage.PlatformPanel, key string) []storage.PlatformInstanceFi
 func TestPlatformViewRanksTheSlowestRoutesOfTheNewestWindow(t *testing.T) {
 	t.Parallel()
 	f := newPlatformViewFixture(t)
-	earlier := time.Date(2026, 11, 9, 11, 0, 0, 0, time.UTC)
-	newest := earlier.Add(30 * time.Second)
+	newest := time.Now().UTC().Truncate(time.Second).Add(-5 * time.Second)
+	earlier := newest.Add(-30 * time.Second)
 	samples := []storage.PlatformMetric{
 		{ComponentID: f.server, Key: writerclass.HTTPRequestDurationMax, Instance: "GET /api/v1/old 2xx", Value: 9999, TS: earlier},
 	}
@@ -401,5 +401,63 @@ func TestPlatformViewServerPanelsCarryTheirCatalogAndAlarms(t *testing.T) {
 	a := s.Alarms[0]
 	if a.Rule != "ingest-lag-high" || a.Key == nil || *a.Key != writerclass.IngestLagMax || a.Severity != "warning" || a.Message != "ingest is behind" {
 		t.Errorf("alarm = %+v, want ingest-lag-high on ingest-lag-max", a)
+	}
+}
+
+// TestPlatformViewAgesOutAServerWindowFigure (#1645): a server key written
+// only for a window that observed something (a request, a landed batch, a
+// drop, a slow query) is that window's figure, not a current reading; a
+// later window that saw nothing writes no row. So once two report windows
+// have passed it is absent, instance by instance, as a node's window count is (#1644), and the
+// panel reads not reported instead of the last lag as current. A gauge the
+// server samples every window, and a retention fact its hourly pass writes,
+// stay however old.
+func TestPlatformViewAgesOutAServerWindowFigure(t *testing.T) {
+	t.Parallel()
+	f := newPlatformViewFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	window, gone := now.Add(-5*time.Second), now.Add(-10*time.Minute)
+	if err := f.gw.RecordPlatformMetrics(f.ctx, []storage.PlatformMetric{
+		{ComponentID: f.server, Key: writerclass.IngestLag, Value: 4, TS: gone},
+		{ComponentID: f.server, Key: writerclass.IngestLagMax, Value: 9, TS: gone},
+		{ComponentID: f.server, Key: writerclass.IngestSampleCount, Value: 80, TS: gone},
+		{ComponentID: f.server, Key: writerclass.BusTelemetryDropCount, Instance: "malformed", Value: 3, TS: gone},
+		{ComponentID: f.server, Key: writerclass.HTTPRequestDurationMax, Instance: "GET /api/v1/old 2xx", Value: 50, TS: gone},
+		{ComponentID: f.server, Key: writerclass.HTTPRequestCount, Instance: "GET /api/v1/old 2xx", Value: 6, TS: gone},
+		{ComponentID: f.server, Key: writerclass.DBSlowQueryCount, Value: 2, TS: gone},
+		{ComponentID: f.server, Key: writerclass.IngestBatchCount, Value: 4, TS: window},
+		{ComponentID: f.server, Key: writerclass.BusTelemetryDropCount, Instance: "refused", Value: 1, TS: window},
+		{ComponentID: f.server, Key: writerclass.OutboxQueuedDepth, Value: 7, TS: gone},
+		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric", Value: 0, TS: gone},
+	}); err != nil {
+		t.Fatalf("record platform metrics: %v", err)
+	}
+	v, err := f.gw.PlatformView(f.ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	for panel, keys := range map[string][]string{
+		"requests": {writerclass.HTTPRequestDurationMax, writerclass.HTTPRequestCount, writerclass.DBSlowQueryCount},
+		"ingest":   {writerclass.IngestLag, writerclass.IngestLagMax, writerclass.IngestSampleCount},
+	} {
+		for _, key := range keys {
+			if got := figuresOf(serverPanel(t, v, panel), key); len(got) != 0 {
+				t.Errorf("%s = %+v, want absent: its window ended ten minutes ago", key, got)
+			}
+		}
+	}
+	if got := figuresOf(serverPanel(t, v, "ingest"), writerclass.IngestBatchCount); len(got) != 1 || got[0].Value != 4 {
+		t.Errorf("ingest-batch-count = %+v, want this window's 4", got)
+	}
+	// A drop reason is aged out on its own: this window's refused is read,
+	// the malformed batches of ten minutes ago are not read beside it.
+	if got := figuresOf(serverPanel(t, v, "ingest"), writerclass.BusTelemetryDropCount); len(got) != 1 || got[0].Instance != "refused" || got[0].Value != 1 {
+		t.Errorf("bus-telemetry-drop-count = %+v, want only this window's refused 1", got)
+	}
+	if got := figuresOf(serverPanel(t, v, "queues"), writerclass.OutboxQueuedDepth); len(got) != 1 || got[0].Value != 7 {
+		t.Errorf("outbox-queued-depth = %+v, want the gauge's latest, 7, however old", got)
+	}
+	if got := figuresOf(serverPanel(t, v, "retention"), writerclass.RetentionBehind); len(got) != 1 || got[0].Value != 0 {
+		t.Errorf("retention-behind = %+v, want the hourly pass's 0, however old", got)
 	}
 }

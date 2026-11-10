@@ -258,7 +258,9 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
     <details
       class="rounded-box border border-base-300 bg-base-100"
       data-testid={`server-panels-${props.server.name}`}
-      open={props.open}
+      // The set's own state, seeded once from props.open: a server that later
+      // sorts ahead moves the index, not the set the operator is reading.
+      open={open()}
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary class="flex cursor-pointer items-center gap-2 px-4 py-3">
@@ -419,9 +421,16 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
       <tr
         data-testid={`panel-row-${props.row.key}`}
         data-instance={props.row.instance}
-        classList={{ "cursor-pointer hover:bg-base-content/5": reported() }}
+        classList={{ "cursor-pointer outline-none hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary": reported() }}
         aria-expanded={reported() ? expanded() : undefined}
+        tabIndex={reported() ? 0 : undefined}
         onClick={() => reported() && setExpanded(!expanded())}
+        onKeyDown={(e) => {
+          // The row's own keys only: a tooltip trigger inside it keeps its Enter.
+          if (e.target !== e.currentTarget || !reported() || (e.key !== "Enter" && e.key !== " ")) return;
+          e.preventDefault();
+          setExpanded(!expanded());
+        }}
       >
         <td classList={{ "pl-5": !!props.indent }}>{props.children}</td>
         <td class="hidden w-40 sm:table-cell">

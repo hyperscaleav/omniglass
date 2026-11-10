@@ -70,11 +70,16 @@ alarms are open on it, the first one open. The name links to the server's platfo
 four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the keys in each are the
 groups the platform view returns for a server, so the page holds no key list of its own.
 
-A panel row is one key: its last hour as a sparkline beside its current figure. Click a row to open
-the full chart beneath it, and click again to close it. Hover a key's name, or tab to it, for what
+A panel row is one key: its last hour as a sparkline beside its current figure. Click a row, or tab
+to it and press Enter or Space, to open the full chart beneath it, and again to close it. Hover a key's name, or tab to it, for what
 it measures, the description from the [metrics catalog](/guides/admin/metrics/); the tooltip links
 onto the key's series on the server's platform component, the same component view any device has.
-A key the server has not reported reads **not reported**, never 0, and has no sparkline. A pair
+A key the server has not reported reads **not reported**, never 0, and has no sparkline. A key the
+server writes only for a window that saw something (a request, a landed batch, a drop, a slow query)
+is that window's figure, so it reads **not reported** again once two report windows pass with
+nothing new, a drop reason on its own: an ingest lag from before the fleet went quiet is not shown as
+today's. The gauges the server samples every window, and the retention facts its hourly pass
+writes, read their latest however old. A pair
 that only reads against its bound (a pool's connections in use against its size, the oldest
 partition's age against the retention window) reads `a / b`, and byte sizes read in KB, MB or GB.
 
