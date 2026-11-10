@@ -44,7 +44,29 @@ const (
 	Missing Outcome = "missing"
 )
 
-// Outcomes is every outcome, out first, then the dedup count, then loss.
+// The sim hop's outcomes (#1694). The sim hop counts requests a simulated
+// endpoint settled, not telemetry items (the sim cannot know which kinds an
+// answer would have carried), so it has its own set, never mixed into the
+// ingest rows. A refusal or an error the endpoint sent back is returned: it
+// reached the node's task, which reports it; it is not the hop's loss.
+const (
+	// Returned is a request whose reply reached the node's task.
+	Returned Outcome = "returned"
+	// Withheld is a request the sim chose not to answer: a credential it
+	// does not accept, or its own configured datagram loss.
+	Withheld Outcome = "withheld"
+	// Dropped is a reply the sim could not write to its socket.
+	Dropped Outcome = "dropped"
+	// NotReturned is a reply the sim sent that never reached the node's
+	// task: lost on the way back, or late past the task's timeout.
+	NotReturned Outcome = "not-returned"
+)
+
+// SimOutcomes is every sim hop outcome, out first, then loss.
+var SimOutcomes = []Outcome{Returned, Withheld, Dropped, NotReturned}
+
+// Outcomes is every ingest outcome, out first, then the dedup count, then
+// loss.
 var Outcomes = []Outcome{
 	Stored, Coalesced, Unbound, Deduplicated,
 	RefusedUnregistered, RefusedWriter, RefusedInstance, RefusedInvalid,
@@ -52,8 +74,9 @@ var Outcomes = []Outcome{
 }
 
 // Out reports whether the outcome counts as out: accounted for, in the store
-// or, for an unbound sample, in its conduit's unbound inbox.
-func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound }
+// or, for an unbound sample, in its conduit's unbound inbox, or, on the sim
+// hop, back at the node.
+func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound || o == Returned }
 
 // Deduplicated reports whether the outcome is the redelivery count, reported
 // beside the ratio.

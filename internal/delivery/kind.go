@@ -26,9 +26,10 @@ var Kinds = []Kind{Metric, Property, Event, Log}
 // Hop is a stretch of the pipeline a kind crosses, measured on its own.
 type Hop string
 
-// The hops #1641 names. Only ingest is read from the
-// receipts; the node and the server write their own hop's delivery as platform
-// metrics (#1659), and the schedule and sim hops follow (#1693, #1694).
+// The hops #1641 names. Ingest is read from the receipts; the node and the
+// server write their own hop's delivery as platform metrics (#1659); the sim
+// hop is read from the lab's closed-loop brackets, per protocol (#1694); the
+// schedule hop follows (#1693).
 const (
 	// Schedule is the hop from a run falling due to the run being made.
 	Schedule Hop = "schedule"

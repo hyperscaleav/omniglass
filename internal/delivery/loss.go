@@ -60,11 +60,11 @@ type Total struct {
 func (t Total) Loss() (float64, bool) { return Loss(t.In, t.Out) }
 
 // Cause is the largest loss outcome behind the total, "" when nothing was
-// lost. A tie goes to the outcome listed first in Outcomes.
+// lost. A tie goes to the outcome listed first in Outcomes, then SimOutcomes.
 func (t Total) Cause() Outcome {
 	var cause Outcome
 	var most uint64
-	for _, o := range Outcomes {
+	for _, o := range slices.Concat(Outcomes, SimOutcomes) {
 		if o.Lost() && t.Outcomes[o] > most {
 			cause, most = o, t.Outcomes[o]
 		}
