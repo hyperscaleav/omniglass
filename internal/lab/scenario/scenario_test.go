@@ -663,6 +663,7 @@ func fakeCatalog() Catalog {
 		Simulated:  func(product string) bool { return product != "t-horn" },
 		Within:     func(have, accepted string) bool { return within(parents, have, accepted) },
 		SystemType: func(name string) bool { return name == "sign" || name == "meeting" },
+		Pusher:     func(profile string) bool { return profile == "t-pusher" },
 	}
 }
 
@@ -748,5 +749,124 @@ func TestSiteNodeIsNamedForItsSite(t *testing.T) {
 	}
 	if got := SiteNode("regional-01"); got != "edge-regional-01" {
 		t.Fatalf("SiteNode(regional-01) = %q, want edge-regional-01", got)
+	}
+}
+
+// The corporate scenario declares its pushers like its devices (#1743): one
+// booking service a site, each scoped to four of the site's systems, named
+// for its site, and the plan prints how many without a token.
+func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range p.Sites {
+		if len(s.Pushers) != 1 {
+			t.Fatalf("site %s has %d pushers, want one booking service", s.Name, len(s.Pushers))
+		}
+		ps := s.Pushers[0]
+		if ps.Name != s.Name+"-booking-1" || ps.Profile != "booking-service" {
+			t.Errorf("site %s pusher = %s (%s), want %s-booking-1 (booking-service)", s.Name, ps.Name, ps.Profile, s.Name)
+		}
+		if len(ps.Systems) != min(4, len(s.Systems)) {
+			t.Errorf("pusher %s is scoped to %d systems, want %d", ps.Name, len(ps.Systems), min(4, len(s.Systems)))
+		}
+		own := map[string]bool{}
+		for _, sys := range s.Systems {
+			own[sys.Name] = true
+		}
+		seen := map[string]bool{}
+		for _, sys := range ps.Systems {
+			if !own[sys] || seen[sys] {
+				t.Errorf("pusher %s is scoped to %s, which is not a distinct system of site %s", ps.Name, sys, s.Name)
+			}
+			seen[sys] = true
+		}
+	}
+	if want := []Count{{"booking-service", len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
+		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
+	}
+	var b bytes.Buffer
+	if err := WritePlan(&b, p); err != nil {
+		t.Fatal(err)
+	}
+	if out := b.String(); !strings.Contains(out, "PUSHER") || !strings.Contains(out, "booking-service") {
+		t.Errorf("plan output does not list the pushers:\n%s", out)
+	}
+}
+
+// Two pushers at a site take different systems while the site has enough.
+func TestResolveSharesASitesSystemsAmongItsPushers(t *testing.T) {
+	m, err := Parse("t.yaml", []byte(`name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+`+oneArchetype+`pushers:
+  - name: book
+    profile: t-pusher
+    per_site: 2
+    systems: 2
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Resolve(m, fakeCatalog(), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := p.Sites[0].Pushers
+	if len(ps) != 2 || ps[0].Name != "a-book-1" || ps[1].Name != "a-book-2" {
+		t.Fatalf("pushers = %+v, want a-book-1 and a-book-2", ps)
+	}
+	got := append(append([]string{}, ps[0].Systems...), ps[1].Systems...)
+	want := []string{"a-sign-55-1", "a-sign-55-2", "a-sign-55-3", "a-sign-55-4"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("pusher systems = %v, want %v", got, want)
+	}
+}
+
+// A pusher declaration is refused, at its line, when it could not push: no
+// systems to scope it to, a profile with no push face or none at all, no
+// pushers a site, or a name that is not one.
+func TestValidateChecksPushers(t *testing.T) {
+	base := `name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+` + oneArchetype + "pushers:\n"
+	pusher := func(name, prof string, perSite, systems int) string {
+		return fmt.Sprintf("  - name: %s\n    profile: %s\n    per_site: %d\n    systems: %d\n", name, prof, perSite, systems)
+	}
+	ok := base + pusher("book", "t-pusher", 1, 4)
+	if m, err := Parse("t.yaml", []byte(ok)); err != nil {
+		t.Fatal(err)
+	} else if err := Validate(m, fakeCatalog()); err != nil {
+		t.Fatalf("a pusher declaration is refused: %v", err)
+	}
+	for _, tc := range []struct{ name, yaml, want string }{
+		{"no systems", base + pusher("book", "t-pusher", 1, 0), `t.yaml:17: pusher "book" has no systems to scope it to`},
+		{"no push face", base + pusher("book", "t-panel", 1, 2), `t.yaml:18: profile "t-panel" of pusher "book" has no push face`},
+		{"unknown profile", base + pusher("book", "t-nope", 1, 2), `t.yaml:18: profile "t-nope" of pusher "book" has no push face`},
+		{"none a site", base + pusher("book", "t-pusher", 0, 2), `t.yaml:17: pusher "book" has per_site 0`},
+		{"bad name", base + pusher("Book_1", "t-pusher", 1, 2), `t.yaml:17: pusher name "Book_1" is not a name`},
+		{"twice", base + pusher("book", "t-pusher", 1, 2) + pusher("book", "t-pusher", 1, 2), `t.yaml:21: pusher "book" is declared twice (first on line 17)`},
+		{"unknown field", base + pusher("book", "t-pusher", 1, 2) + "    token: x\n", `unknown field "token"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := Parse("t.yaml", []byte(tc.yaml))
+			if err == nil {
+				err = Validate(m, fakeCatalog())
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want an error containing %q", err, tc.want)
+			}
+		})
 	}
 }

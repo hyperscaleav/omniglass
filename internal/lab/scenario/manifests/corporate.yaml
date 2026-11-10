@@ -102,3 +102,14 @@ archetypes:
       mr65: 25
       mr75: 8
       ds55: 5
+
+# The outside actors each site has, declared like its devices (#1743): one
+# booking service a site, an emulator device with a push face, scoped to four
+# of the site's systems. The lab seeds its telemetry:push principal and mints
+# its token per run, so every corporate lab pushes and lab measure reads the
+# push lane.
+pushers:
+  - name: booking
+    profile: booking-service
+    per_site: 1
+    systems: 4
