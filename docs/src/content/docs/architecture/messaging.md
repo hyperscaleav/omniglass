@@ -152,7 +152,7 @@ operator to place). A healthy
 pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
-Only the ingest hop is read today; the node, schedule and sim hops follow (#1692, #1693, #1694).
+The schedule and ingest hops are read today; the node and sim hops follow (#1692, #1694).
 Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
 every window as platform metrics, 0 when nothing came in (#1659,
 [below](#measuring-the-pipeline)).
@@ -192,8 +192,17 @@ every window as platform metrics, 0 when nothing came in (#1659,
   that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
   can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
   there yet reads **unsettled**, with no ratio.
-- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`; with the
-  one hop today it equals the ingest row.
+- **The schedule hop counts runs, not items.** Upstream of every item is a run that makes it: a node's
+  dispatcher counts each due on a task's schedule in and each run it makes out, per kind the run
+  produces (a reachability probe's metric and property, a driver poll's the lanes its emits
+  declare), so a due it passes over (a run still in flight on the lane, a late pass) is that hop's
+  loss and its cause is `skipped` (#1693). A probe an upstream holds counts made: it runs the moment
+  the upstream opens. A run off the schedule (an operator's offer) is no due. The node writes the
+  three keys every window at the instance `schedule/{kind}` on its own component, beside its spool's
+  per-kind instances.
+- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`: a node
+  that skips a fifth of its dues and lands every item it made reads 0.2 end to end, the schedule
+  hop's.
 
 A batch the consumer Terms whole (undecodable, an owner or a task row it may not assert, refused
 whole, unreadable metadata, its fifth delivery) leaves no receipt, so its items read as `missing`

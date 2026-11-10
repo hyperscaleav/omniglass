@@ -563,8 +563,22 @@ end to end  metric 0  property 0  event -  log -
 - **in** is the items the node minted in the window (the batches' ledgers, plus the items of any batch
   that never landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
   unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
-  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
-  is read today; the node, schedule and sim hops follow.
+  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. The node and sim
+  hops follow (#1692, #1694).
+- **schedule** is the hop upstream of every item, the nodes' dispatchers: **in** is the runs due on
+  the schedule that produce the kind and **out** the runs made, so its counts are runs, not items, and
+  its cause is `skipped`, a due passed over because the lane's last run was still in flight or the
+  pass came late. A healthy lab reads 0. The row comes before the kind's ingest row, and a kind no
+  scheduled task produces (events and logs, today) has none:
+
+  ```
+  delivery    hop       in       out      loss     dedup  cause
+  metric      schedule  4100     3690     0.1      0      skipped
+  metric      ingest    1275     1275     0        0      -
+  ```
+
+  A skipped due made no item, so it never reaches the ingest row: a lab whose devices answer slower
+  than their poll interval reads 0 at ingest and its loss here.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -576,8 +590,8 @@ end to end  metric 0  property 0  event -  log -
 - **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
   from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
   Termed at ingest, dropped at the node, or lost in between`.
-- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`; with one hop it
-  equals the ingest row.
+- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`: in the example
+  above, 0.1 for metrics, the schedule hop's.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and
