@@ -21,6 +21,21 @@ rules:
     severity: high
     fire_event_type: condition-started
     clear_event_type: condition-ended
+  # The server falling behind its fleet (#1094, #1628): the oldest sample
+  # landed in a report window is past the threshold for a sustained stretch,
+  # so one slow window (a burst, a restart's catch-up) does not page. Raised
+  # on the server's own platform component; it clears when the window's
+  # oldest landing reads back under the threshold.
+  - name: ingest-lag-high
+    label: Ingest lag high
+    description: The server is landing telemetry more than 30 seconds behind its sample timestamps.
+    sample_key: ingest-lag-max
+    fire: 'value > 30'
+    fire_sustain: 2m
+    clear: 'value <= 30'
+    severity: warning
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
   # A retention lane, or a compaction, that stops short of its window pass
   # after pass opens a warning on the server's platform component (#1629):
   # one alarm per lane, once the flag has read 1 for the sustain. A pass left

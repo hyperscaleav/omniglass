@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -46,6 +48,10 @@ type Config struct {
 	// DBPoolSize is the database pool's size, the cap on WorklistWorkers;
 	// zero means no cap.
 	DBPoolSize int
+	// Metrics is the process's platform metric recorder (#1627), which the
+	// pipeline records into (#1628); nil means a recorder of the Server's own,
+	// which nothing reports.
+	Metrics *platformmetric.Recorder
 	// PlatformComponentID is the server's own component in the platform
 	// system, where its retention figures land (#1629); empty writes none.
 	PlatformComponentID string
@@ -53,37 +59,41 @@ type Config struct {
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
 type Server struct {
-	ns              *server.Server
-	nc              *nats.Conn
-	store           Store
-	subs            []*nats.Subscription
-	consumeCtx      jetstream.ConsumeContext // the telemetry durable consumer's pull loop
-	js              jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
-	streamEpoch     string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
-	internalToken   string
-	sims            *simhub.Registry   // the simulators beside this server's nodes
-	stopSweep       chan struct{}      // ends the settlement sweep
-	stopReconcile   context.CancelFunc // ends the rule reconcile loop
-	stopCalc        context.CancelFunc // ends the calc tick
-	stopPrune       context.CancelFunc // ends the receipt retention pass
-	stopCheckinAge  context.CancelFunc // ends the check-in age timer (#1625)
-	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
-	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
-	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
-	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
-	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
-	lane            laneTally          // the consumer lane's batches and busy time (#1517)
-	stopLaneLog     context.CancelFunc // ends the lane tally's log line
-	sweepStop       sync.Once
-	sweepDone       sync.WaitGroup
-	worklistSizes   worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
-	worklistCounts  worklistCounts     // how worklist pulls ended (#1577)
-	worklistWorkers int                // how many pulls the pool builds at once (#1577)
-	worklistQueue   chan worklistPull  // pulls waiting for a worker
-	worklistCtx     context.Context    // the pool's life; a pull's build runs under it
-	stopWorklist    context.CancelFunc // ends the pool and cancels builds in flight
-	worklistDone    sync.WaitGroup     // the pool's workers
-	ownStoreDir     string             // non-empty when the Server created (and must clean) it
+	ns                *server.Server
+	nc                *nats.Conn
+	store             Store
+	subs              []*nats.Subscription
+	consumeCtx        jetstream.ConsumeContext // the telemetry durable consumer's pull loop
+	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
+	internalToken     string
+	sims              *simhub.Registry   // the simulators beside this server's nodes
+	stopSweep         chan struct{}      // ends the settlement sweep
+	stopReconcile     context.CancelFunc // ends the rule reconcile loop
+	stopCalc          context.CancelFunc // ends the calc tick
+	stopPrune         context.CancelFunc // ends the receipt retention pass
+	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
+	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
+	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
+	orphans           *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
+	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
+	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
+	lane              laneTally          // the consumer lane's batches and busy time (#1517)
+	stopLaneLog       context.CancelFunc // ends the lane tally's log line
+	sweepStop         sync.Once
+	sweepDone         sync.WaitGroup
+	worklistSizes     worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
+	worklistCounts    worklistCounts     // how worklist pulls ended (#1577)
+	worklistWorkers   int                // how many pulls the pool builds at once (#1577)
+	worklistQueue     chan worklistPull  // pulls waiting for a worker
+	worklistCtx       context.Context    // the pool's life; a pull's build runs under it
+	stopWorklist      context.CancelFunc // ends the pool and cancels builds in flight
+	worklistDone      sync.WaitGroup     // the pool's workers
+	ownStoreDir       string             // non-empty when the Server created (and must clean) it
+	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
+	cons              jetstream.Consumer // the telemetry durable, read for its backlog
+	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
 	// platformComponentID is the server's own platform component, where the
 	// retention pass lands its figures (#1629); empty writes none.
 	platformComponentID string
@@ -98,7 +108,11 @@ func New(cfg Config, store Store) (*Server, error) {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
-		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), platformComponentID: cfg.PlatformComponentID}
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
+		platformComponentID: cfg.PlatformComponentID}
+	if s.metrics.rec == nil {
+		s.metrics.rec = platformmetric.NewRecorder(time.Now)
+	}
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -180,7 +194,7 @@ func (s *Server) subscribe() error {
 		node := collection.NodeFromSubject(msg.Subject)
 		// The subject grant guarantees this node published only its own subject,
 		// so the extracted name is trusted.
-		_ = s.store.RecordHeartbeat(context.Background(), node)
+		s.recordHeartbeat(context.Background(), node)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
@@ -195,6 +209,7 @@ func (s *Server) subscribe() error {
 			return
 		}
 		pending, err := s.store.PendingNodeCommands(context.Background(), node)
+		s.request(requestCommandPull, err)
 		if err != nil {
 			return // read failed; drop, the node re-pulls next tick
 		}
@@ -203,6 +218,7 @@ func (s *Server) subscribe() error {
 			reply.Commands = append(reply.Commands, collection.CommandDelivery{
 				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
 				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
+				Disruptive: d.Disruptive, QuietSeconds: d.QuietSeconds, HoldSeconds: d.HoldSeconds, HoldEndpoints: d.HoldEndpoints,
 			})
 		}
 		b, err := json.Marshal(reply)
@@ -227,7 +243,9 @@ func (s *Server) subscribe() error {
 		// different node, or already stamped) is logged, never silently
 		// dropped: it is either a race or a misbehaving node, and both want a
 		// trail.
-		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply); err != nil {
+		err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply)
+		s.request(requestCommandReport, err)
+		if err != nil {
 			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
 		}
 	})
@@ -241,6 +259,7 @@ func (s *Server) subscribe() error {
 	}
 	s.startSettlementSweep()
 	s.startCheckinAge()
+	s.startCommandHealth()
 	s.startRuleReconcile()
 	s.startCalcTick()
 
@@ -325,6 +344,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopCheckinAge != nil {
 		s.stopCheckinAge()
+	}
+	if s.stopCommandHealth != nil {
+		s.stopCommandHealth()
 	}
 	if s.stopRetention != nil {
 		s.stopRetention()
@@ -602,13 +624,17 @@ func (s *Server) startSettlementSweep() {
 			case <-stop:
 				return
 			case <-t.C:
-				if err := s.store.SweepCommandSettlements(context.Background()); err != nil {
+				if err := s.sweep(sweepCommandSettlement, func() error {
+					return s.store.SweepCommandSettlements(context.Background())
+				}); err != nil {
 					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
 				}
 				// The same tick acts on event rule streaks held for their
 				// sustain (#920): the clock for an input that sends no
 				// further sample.
-				if err := s.store.SweepEventRules(context.Background(), time.Now()); err != nil {
+				if err := s.sweep(sweepEventRule, func() error {
+					return s.store.SweepEventRules(context.Background(), time.Now())
+				}); err != nil {
 					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
 				}
 			}
@@ -699,9 +725,15 @@ func (s *Server) calcPass(ctx context.Context) {
 	}()
 	pass, done := context.WithTimeout(ctx, calcTickTimeout)
 	defer done()
+	start := time.Now()
 	d, err := s.store.DrainCalcPending(pass, calcTickBatch)
 	if err != nil && ctx.Err() == nil {
 		slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
+	}
+	if err == nil {
+		s.metrics.max(writerclass.CalcPendingDepth, "", float64(d.Depth))
+		s.metrics.count(writerclass.CalcServedCount, "", float64(d.Served))
+		s.metrics.mean(writerclass.CalcPassDuration, "", float64(time.Since(start))/float64(time.Millisecond))
 	}
 	attrs := []any{"facility", "rules", "served", d.Served, "deferred", d.Deferred, "pending", d.Depth}
 	switch {

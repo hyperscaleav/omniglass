@@ -55,6 +55,9 @@ func (f fakeStore) NodeCheckins(context.Context) ([]storage.NodeCheckin, error) 
 func (f fakeStore) RecordPlatformMetrics(context.Context, []storage.PlatformMetric) error {
 	return nil
 }
+func (f fakeStore) CommandQueueHealth(context.Context, time.Time) (storage.CommandQueueRead, error) {
+	return storage.CommandQueueRead{}, nil
+}
 func (f fakeStore) ResolveTaskOwners(context.Context, string, []string) (map[string]storage.TaskOwner, error) {
 	return map[string]storage.TaskOwner{}, nil
 }

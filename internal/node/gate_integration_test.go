@@ -297,7 +297,7 @@ func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
 			t.Fatalf("the adopted gate published %+v, want its value with no reason", p)
 		}
 	}
-	if _, ok := m2.blocked("ep-1", rungAuthenticated); !ok {
+	if _, ok := m2.refusedAt("ep-1", rungAuthenticated); !ok {
 		t.Fatal("the adopted gate does not hold")
 	}
 }
@@ -371,7 +371,7 @@ func TestARefusalUnderAnOldFingerprintIsDropped(t *testing.T) {
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`), Spec: json.RawMessage(`{}`)}, "fp-new", "")
 	m.reconcile([]collection.TaskSpec{task})
 	m.refuse("ep-1", "fp-old", &collection.TerminalError{Class: "auth", Reason: "late"})
-	if _, ok := m.blocked("ep-1", rungAuthenticated); ok {
+	if _, ok := m.refusedAt("ep-1", rungAuthenticated); ok {
 		t.Fatal("a refusal from the old fingerprint's attempt gated the new fingerprint")
 	}
 }

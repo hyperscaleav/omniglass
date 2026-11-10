@@ -202,6 +202,11 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
                   {i() === 0 ? clockTime(s.at!) : offsetWords(props.c.issued_at, s.at!)}
                 </span>
               </Show>
+              <Show when={s.note}>
+                <span class="text-base-content/55" data-testid="command-delivery-note" title={props.c.first_delivered_at ? `First delivered ${fmtTime(props.c.first_delivered_at)}` : undefined}>
+                  {s.note}
+                </span>
+              </Show>
             </li>
           )}
         </For>

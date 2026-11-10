@@ -936,6 +936,10 @@ type Gateway interface {
 	// NodeCheckins reads every claimed node's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// CommandQueueHealth reads every node's command queue (#1626): the
+	// pending, oldest and stuck now, and the redelivered and expired since the
+	// previous read's Now (none for a zero since).
+	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
@@ -965,6 +969,15 @@ type Gateway interface {
 	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
 	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
 	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
+
+	// Component dependencies (#1648): an edge from a dependent to its upstream,
+	// of kind power (with the outlet), host or path. A write resolves the
+	// dependent in read then update and the upstream in read; a cycle within a
+	// kind is refused. A disruptive command's hold set follows the power and
+	// host edges (ResolveHoldSet).
+	CreateComponentDependency(ctx context.Context, actorID, component string, spec ComponentDependencySpec, read, update scope.Set) (*ComponentDependency, error)
+	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
+	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's

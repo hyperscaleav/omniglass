@@ -20,6 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
@@ -133,7 +134,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
-	busSrv, err := startBus(c, gw, serverComponentID)
+	busSrv, err := startBus(c, gw, serverComponentID, self.rec)
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.
-	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
+	go self.reporter(gw, serverComponentID, log, busSrv.Sampler()).Run(notifyCtx)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -232,9 +233,10 @@ func serverComponent(ctx context.Context, gw serverComponenter, identity string,
 
 // startBus parses the configured NATS listen address and starts the embedded
 // server, its retention pass reporting on componentID (empty, it reports
-// nothing). A "host:" or bare port resolves through net.SplitHostPort; a
-// parse failure is a config error surfaced at boot.
-func startBus(c config.Config, gw *storage.PG, componentID string) (*bus.Server, error) {
+// nothing) and its pipeline figures recorded on rec. A "host:" or bare port
+// resolves through net.SplitHostPort; a parse failure is a config error
+// surfaced at boot.
+func startBus(c config.Config, gw *storage.PG, componentID string, rec *platformmetric.Recorder) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -245,7 +247,7 @@ func startBus(c config.Config, gw *storage.PG, componentID string) (*bus.Server,
 	}
 	// The worklist pool is held under the database pool, keeping one
 	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID}, gw)
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID, Metrics: rec}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

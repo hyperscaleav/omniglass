@@ -282,8 +282,8 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 // server's checkin-age, so a node cannot speak for another writer.
 func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 	keys := NodeSelfKeys()
-	if len(keys) != 13 {
-		t.Fatalf("node-self keys %v, want the 13 a node reports of itself", keys)
+	if len(keys) != 16 {
+		t.Fatalf("node-self keys %v, want the 16 a node reports of itself", keys)
 	}
 	for _, key := range append(keys, CheckinAge) {
 		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
@@ -349,5 +349,61 @@ func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 		if NodeSelf(key) {
 			t.Errorf("the node-self lane admits %s", key)
 		}
+	}
+}
+
+// TestServerPipelineKeysAreTheProcesssAlone: the server's pipeline keys
+// (#1628) are platform keys only the process writes, and a node naming one on
+// its node-self lane is refused.
+func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
+	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
+		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
+		BusTelemetryDropCount, BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
+		BusRequestFailureCount, CalcPendingDepth, CalcServedCount, CalcPassDuration, OutboxQueuedDepth,
+		OutboxDueAge, SweepDuration, SweepCount, SweepFailureCount}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a pipeline key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
+		if !NodeSelf(key) {
+			t.Errorf("%s is a generic process key a node reports of itself", key)
+		}
+	}
+}
+
+// A node's command queue (#1626) is platform keys the process writes. The
+// server measures the queue and the wire, so only the pull-failure count, the
+// one fact the node alone sees, rides the node-self lane.
+func TestTheCommandQueueKeysArePlatformKeys(t *testing.T) {
+	server := []string{CommandPendingCount, CommandPendingAge, CommandDispatchLatency, CommandExecutionLatency,
+		CommandRedeliveryCount, CommandStuckCount, CommandExpiredCount}
+	for _, key := range append(server, CommandPullFailureCount) {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) {
+			t.Errorf("the process may not write %s", key)
+		}
+		for _, w := range []Writer{Node, Push, Operator, CalcRule} {
+			if Admits(Platform, w, key) {
+				t.Errorf("%s may write %s", w, key)
+			}
+		}
+	}
+	for _, key := range server {
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s, which the server measures", key)
+		}
+	}
+	if !NodeSelf(CommandPullFailureCount) {
+		t.Errorf("the node-self lane refuses %s", CommandPullFailureCount)
 	}
 }

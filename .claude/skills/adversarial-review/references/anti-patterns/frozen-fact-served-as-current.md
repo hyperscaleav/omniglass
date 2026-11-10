@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456 and #1297 reviews, open again from the #1629 review as #1673)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297 and #1626 reviews, open again from the #1629 review as #1673)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -29,7 +29,12 @@
   leave the reserved family (`writerclass.ReservedNames`) out of a read that is not their own
   surface (`seriesKeysSQL`, internal/storage/current_values.go); the reachability read stays the
   one place a probe key reads, gated.
-- **Fifth instance (#1629, open as #1673):** a rule's pending streak on a series that stops
+- **Fifth instance (#1626):** a gauge written only while it has a value. The command queue's
+  pending age was written only while a command waited, so a drained queue's last age stood as the
+  key's latest sample and a rule on it never cleared. Fix: write the zero reading when nothing
+  waits (`CommandQueueMetrics`, internal/storage/command_health.go), as the sibling check-in age
+  does.
+- **Sixth instance (#1629, open as #1673):** a rule's pending streak on a series that stops
   arriving. The retention pass writes `retention-behind` only for the lanes it ran, so a lane that
   read 1 and then left the report (its type override removed, its window stored out of range, the
   metric window out of range for the compaction flags) keeps a pending fire streak: the rule sweep
