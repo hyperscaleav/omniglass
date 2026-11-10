@@ -228,6 +228,20 @@ describe("panelRowText", () => {
     expect(panelRowText(sections[1].rows[0])).toBe("4 / 20");
     expect(panelRowText(sections[2].rows[0])).toBe("not reported");
   });
+
+  it("prints a byte figure in the largest unit that keeps it short, each side of a pair alike", () => {
+    expect(panelRowText({ key: "database-size", instance: "", unit: "bytes", value: 18_192_863 })).toBe("17.4 MB");
+    expect(panelRowText({ key: "table-bytes", instance: "metric", unit: "bytes", value: 512 })).toBe("512 B");
+    expect(
+      panelRowText({
+        key: "used-bytes",
+        instance: "",
+        unit: "bytes",
+        value: 1_048_576,
+        of: { key: "total-bytes", label: "Total", unit: "bytes", value: 4_194_304 },
+      }),
+    ).toBe("1.0 MB / 4.0 MB");
+  });
 });
 
 describe("panelSeriesRequest", () => {

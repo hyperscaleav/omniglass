@@ -3,6 +3,7 @@ import type { components } from "../api/schema.gen";
 import { nodeStatus, type Node, type NodeStatus } from "./nodes";
 import { durationText } from "./timeline";
 import { describeError } from "./format";
+import { humanSize } from "./files";
 
 // The Platform health data layer (#1644): the one read behind the page, and the
 // pure derivations it renders. Every figure is a sample on a platform component
@@ -83,6 +84,7 @@ export function figureText(n: PlatformNode, col: Pick<PlatformColumn, "key" | "u
 // valueText is a figure with its unit: an integer as is, anything else trimmed
 // to two places.
 function valueText(value: number, unit: string): string {
+  if (unit === "bytes") return humanSize(value);
   const v = Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
   return unit ? `${v} ${unit}` : v;
 }
@@ -159,8 +161,10 @@ export function panelSections(panel: PlatformPanel): PanelSection[] {
 export function panelRowText(row: PanelRow): string {
   if (row.value === null) return NOT_REPORTED;
   if (!row.of) return valueText(row.value, row.unit);
-  const b = row.of.value === null ? "?" : valueText(row.of.value, "");
-  const unit = row.unit && row.unit === row.of.unit ? row.unit : "";
+  // A shared unit is said once, after both, unless it scales each side on
+  // its own (bytes): "4 / 20", "1.0 MB / 4.0 MB".
+  const unit = row.unit && row.unit === row.of.unit && row.unit !== "bytes" ? row.unit : "";
+  const b = row.of.value === null ? "?" : valueText(row.of.value, row.of.unit === unit ? "" : row.of.unit);
   const a = valueText(row.value, row.unit === unit ? "" : row.unit);
   return unit ? `${a} / ${b} ${unit}` : `${a} / ${b}`;
 }

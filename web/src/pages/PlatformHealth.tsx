@@ -297,13 +297,15 @@ function Panel(props: { panel: PlatformPanel; server: PlatformServer; view: Plat
             </div>
           )}
         </For>
-        <table class="table table-xs">
-          <tbody>
-            <For each={panelSections(props.panel)}>
-              {(sec) => <Section section={sec} server={props.server} view={props.view} live={props.live} />}
-            </For>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <tbody>
+              <For each={panelSections(props.panel)}>
+                {(sec) => <Section section={sec} server={props.server} view={props.view} live={props.live} />}
+              </For>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );
@@ -352,11 +354,31 @@ function Section(props: { section: PanelSection; server: PlatformServer; view: P
       <For each={props.section.rows}>
         {(r) => (
           <Row row={r} server={props.server} view={props.view} live={props.live} indent>
-            <span class="break-all font-mono text-[11px]" title={r.instance}>{r.instance || "owner-level"}</span>
+            <span class="font-mono text-[11px] [overflow-wrap:anywhere]" title={r.instance}>
+              <Show when={r.instance} fallback="owner-level">
+                <PathBreaks text={r.instance} />
+              </Show>
+            </span>
           </Row>
         )}
       </For>
     </Show>
+  );
+}
+
+// PathBreaks lets a route template wrap after a slash, not mid-segment.
+function PathBreaks(props: { text: string }) {
+  const parts = () => props.text.split("/");
+  return (
+    <For each={parts()}>
+      {(seg, i) => (
+        <>
+          {seg}
+          {i() < parts().length - 1 ? "/" : ""}
+          <wbr />
+        </>
+      )}
+    </For>
   );
 }
 
@@ -395,7 +417,7 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
         onClick={() => reported() && setExpanded(!expanded())}
       >
         <td classList={{ "pl-5": !!props.indent }}>{props.children}</td>
-        <td class="w-40">
+        <td class="hidden w-40 sm:table-cell">
           <Show when={reported() && props.live}>{chart(true)}</Show>
         </td>
         <td class="tnum whitespace-nowrap text-right" classList={{ "text-base-content/30": !reported() }}>{text()}</td>
