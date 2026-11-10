@@ -41,6 +41,7 @@ describe("walkthrough script validation", () => {
         { goto: "/simulation", caption: "a" },
         { click: '[data-testid="sim-row"] >> nth=0', caption: "b" },
         { click: { role: "button", name: "Close", exact: true }, caption: "c" },
+        { hover: { role: "button", name: "Latency" }, caption: "i" },
         { type: { target: "#q", text: "display" }, caption: "d" },
         { select: { target: { role: "combobox", name: "Product" }, value: "x" }, caption: "e" },
         { press: "Escape", caption: "f", hold: 500 },
@@ -51,12 +52,13 @@ describe("walkthrough script validation", () => {
     );
     expect(w.title).toBe("T");
     expect(w.description).toBe("D");
-    expect(w.steps.map((s) => s.kind)).toEqual(["goto", "click", "click", "type", "select", "press", "wait", "wait"]);
+    expect(w.steps.map((s) => s.kind)).toEqual(["goto", "click", "click", "hover", "type", "select", "press", "wait", "wait"]);
     expect(w.steps[0].path).toBe("/simulation");
-    expect(w.steps[3]).toMatchObject({ n: 4, target: "#q", text: "display", hold: 0 });
-    expect(w.steps[5]).toMatchObject({ key: "Escape", hold: 500 });
-    expect(w.steps[6]).toMatchObject({ target: { text: "Hits" }, timeout: 5000 });
-    expect(w.steps[7].timeout).toBe(10_000);
+    expect(w.steps[3]).toMatchObject({ n: 4, target: { role: "button", name: "Latency" } });
+    expect(w.steps[4]).toMatchObject({ n: 5, target: "#q", text: "display", hold: 0 });
+    expect(w.steps[6]).toMatchObject({ key: "Escape", hold: 500 });
+    expect(w.steps[7]).toMatchObject({ target: { text: "Hits" }, timeout: 5000 });
+    expect(w.steps[8].timeout).toBe(10_000);
   });
 
   it("rejects an unknown top-level key and a missing title, naming the file", () => {
@@ -66,8 +68,8 @@ describe("walkthrough script validation", () => {
   });
 
   it("rejects an unknown kind, naming the step", () => {
-    expect(bad({ title: "T", steps: [{ press: "Enter", caption: "a" }, { hover: "#x", caption: "b" }] })).toContain(
-      'w.yaml: step 2 has no kind: one of goto, click, type, select, press, wait (unknown kind or key "hover")',
+    expect(bad({ title: "T", steps: [{ press: "Enter", caption: "a" }, { drag: "#x", caption: "b" }] })).toContain(
+      'w.yaml: step 2 has no kind: one of goto, click, hover, type, select, press, wait (unknown kind or key "drag")',
     );
   });
 
@@ -107,7 +109,7 @@ describe("walkthrough script validation", () => {
   });
 
   it("refuses a script that ends on an action, since nothing proves the action worked", () => {
-    for (const last of [{ click: "#x" }, { press: "Escape" }, { type: { target: "#q", text: "a" } }, { select: { target: "#p", value: "v" } }]) {
+    for (const last of [{ click: "#x" }, { hover: "#x" }, { press: "Escape" }, { type: { target: "#q", text: "a" } }, { select: { target: "#p", value: "v" } }]) {
       const kind = Object.keys(last)[0];
       expect(bad({ title: "T", steps: [{ goto: "/a", caption: "a" }, { ...last, caption: "b" }] })).toBe(
         `w.yaml: step 2 (${kind}) is the last step: end on a wait for the result it should produce, or the walkthrough proves nothing`,
@@ -122,7 +124,7 @@ describe("walkthrough script validation", () => {
   });
 
   it("lists every problem at once", () => {
-    const m = bad({ title: "T", steps: [{ hover: 1 }, { wait: { text: "x" } }] });
+    const m = bad({ title: "T", steps: [{ drag: 1 }, { wait: { text: "x" } }] });
     expect(m.split("\n")).toHaveLength(2);
   });
 });
@@ -197,12 +199,13 @@ describe("walkthrough failure and budget messages", () => {
           { type: { target: "#q", text: "ab" }, caption: "c" },
           { select: { target: "#p", value: "v" }, caption: "d" },
           { press: "Escape", caption: "e" },
-          { wait: { text: "y" }, caption: "f" },
+          { hover: "#t", caption: "f" },
+          { wait: { text: "y" }, caption: "g" },
         ],
       },
       F,
     );
-    const [go, click, type, select, press] = w.steps;
+    const [go, click, type, select, press, hover] = w.steps;
     expect(stepFailure("d", go, { name: "load", timeoutMs: 10_000 })).toBe("walkthrough d: step 1 (goto) failed at load: waited 10s for the console path /sim to load");
     expect(stepFailure("d", click, { name: "scroll", timeoutMs: 10_000 })).toBe('walkthrough d: step 2 (click) failed at scroll: waited 10s to scroll selector "#x" into view');
     expect(stepFailure("d", click, { name: "act", timeoutMs: 10_000 })).toBe('walkthrough d: step 2 (click) failed at act: waited 10s to click selector "#x"');
@@ -212,6 +215,7 @@ describe("walkthrough failure and budget messages", () => {
       'walkthrough d: step 5 (press) failed at act: could not press the key Escape (Unknown key: "Escpe")',
     );
     expect(stepFailure("d", press, { name: "still", timeoutMs: null })).toBe("walkthrough d: step 5 (press) failed at still: could not take its still");
+    expect(stepFailure("d", hover, { name: "act", timeoutMs: 10_000 })).toBe('walkthrough d: step 6 (hover) failed at act: waited 10s to hover over selector "#t"');
   });
 
   it("holds the ruled budget: under 60 seconds and 10 MB of mp4, under 5 MB of preview", () => {

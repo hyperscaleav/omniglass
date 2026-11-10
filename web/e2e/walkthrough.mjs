@@ -23,7 +23,8 @@
 //
 // What the viewer sees is drawn into the page by an init script, in a shadow
 // root above everything (pointer-events none, so it never takes a click): a
-// cursor that glides to each target before acting and ripples where it clicks,
+// cursor that glides to each target before acting and ripples where it clicks
+// (a hover rests there, the real pointer with it, and does not ripple),
 // a highlight ring on the target, and a caption bar at the bottom carrying the
 // step's caption. A title card (title and description) opens the video. The
 // pace is a person's: a beat to read the caption, the glide, the action, a beat
@@ -261,7 +262,9 @@ async function play(page, base, step, total, cursor, phase) {
       return;
     }
   }
-  // click, type, select: a single target (strict), visible, scrolled to, glided to.
+  // click, hover, type, select: a single target (strict), visible, scrolled to,
+  // glided to. The real pointer moves with the drawn one, so a hover is the
+  // glide itself, held there: no ripple, since nothing is pressed.
   const el = locate(page, step.target);
   at('visible', ACT_TIMEOUT);
   await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
@@ -271,14 +274,19 @@ async function play(page, base, step, total, cursor, phase) {
   const box = await el.boundingBox();
   if (!box) throw new Error(`${describeTarget(step.target)} has no box on screen`);
   const to = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  if (step.kind !== 'click') to.x = Math.min(box.x + 24, to.x);
+  if (step.kind !== 'click' && step.kind !== 'hover') to.x = Math.min(box.x + 24, to.x);
   await overlay(page, 'ring', box);
   await overlay(page, 'cursor', { ...to, ms: PACE.glide });
   await page.mouse.move(to.x, to.y, { steps: 12 });
   await page.waitForTimeout(PACE.glide + PACE.settle);
   Object.assign(cursor, to);
-  await overlay(page, 'ripple', to);
   at('act', ACT_TIMEOUT);
+  if (step.kind === 'hover') {
+    await el.hover({ position: { x: to.x - box.x, y: to.y - box.y }, timeout: ACT_TIMEOUT });
+    await overlay(page, 'ring', null);
+    return;
+  }
+  await overlay(page, 'ripple', to);
   if (step.kind === 'click') {
     await el.click({ timeout: ACT_TIMEOUT });
   } else if (step.kind === 'type') {

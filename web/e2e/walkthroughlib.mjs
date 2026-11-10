@@ -15,13 +15,15 @@
 //       caption: ...
 //     - click: { role: button, name: Close }        # an accessible role and name
 //       caption: ...
+//     - hover: { role: button, name: Latency }      # the pointer rests on it, no
+//       caption: ...                                # click (a tooltip opens)
 //     - type: { target: '#login-username', text: dev }
 //     - select: { target: '#product', value: generic-display }
 //     - press: Escape
 //     - wait: { text: Hits, timeout: 10000 }        # a visible result: text, a
 //       caption: ...                                # selector, or a role and name
 //
-// A script may not end on an action (click, type, select, press): its last step
+// A script may not end on an action (click, hover, type, select, press): its last step
 // is a wait for the result the action should produce, or nothing proves it.
 //
 // An optional `setup` makes what the scene needs that the walkthrough does not
@@ -41,7 +43,7 @@
 import { load } from 'js-yaml';
 import { PREVIEW } from './walkthroughcore.mjs';
 
-/** @typedef {'goto' | 'click' | 'type' | 'select' | 'press' | 'wait'} Kind */
+/** @typedef {'goto' | 'click' | 'hover' | 'type' | 'select' | 'press' | 'wait'} Kind */
 /**
  * A selector string, an accessible role and name, or (wait only) text or a
  * selector. `exact` applies to a name or text match only.
@@ -71,10 +73,10 @@ import { PREVIEW } from './walkthroughcore.mjs';
  */
 
 /** @type {Kind[]} */
-export const KINDS = ['goto', 'click', 'type', 'select', 'press', 'wait'];
+export const KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait'];
 // The kinds that do something; a script may not end on one.
 /** @type {string[]} */
-const ACTIONS = ['click', 'type', 'select', 'press'];
+const ACTIONS = ['click', 'hover', 'type', 'select', 'press'];
 /** @type {string[]} */
 const KIND_NAMES = KINDS;
 
@@ -172,6 +174,7 @@ function validateStep(raw, n) {
       step.path = v;
       break;
     case 'click':
+    case 'hover':
       problems.push(...targetProblems(v, where, false));
       step.target = v;
       break;
@@ -371,6 +374,8 @@ function describePhase(step, { name, timeoutMs }) {
           return `${waited} to type into ${target}`;
         case 'select':
           return `${waited} to select ${JSON.stringify(step.value)} in ${target}`;
+        case 'hover':
+          return `${waited} to hover over ${target}`;
         default:
           return `${waited} to click ${target}`;
       }

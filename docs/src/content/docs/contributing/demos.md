@@ -128,8 +128,8 @@ Write it the way an operator would work:
 
 - **One flow, the shortest honest path.** No detour, no repeated step, no step the operator would
   not take; follow the order the console invites.
-- **End every action on its result.** After a click, a typed value or a key press, wait for what
-  the console shows in answer (the drawer open, the row added, the status changed). That wait is
+- **End every action on its result.** After a click, a hover, a typed value or a key press, wait for what
+  the console shows in answer (the drawer open, the tooltip shown, the row added, the status changed). That wait is
   the assertion that makes the walkthrough a test.
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
   (component, place, system), short enough to read in the caption bar.
