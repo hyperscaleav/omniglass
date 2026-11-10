@@ -316,7 +316,7 @@ components of each product) and the [preflight](#how-big-a-lab-your-machine-can-
 ### Which fleet each level measures
 
 A figure from one lab level compares with a figure from the next only when both read the same fleet
-shape, so **every level that measures runs the `corporate` scenario at a stated size**, and a size's
+shape, so **every lab level that measures runs the `corporate` scenario at a stated size**, and a size's
 figures are compared only with the same size
 ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)). The `dev` fleet is the showcase:
 the `make lab` default, the docs screenshots, the demos and the console end-to-end tests. It carries
@@ -329,8 +329,8 @@ with a corporate fleet, and it is never a measurement basis.
 | `make lab-footprint` | corporate, 20 systems | the per-container footprint on a developer machine |
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
-| the perf gate ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640)) | corporate, at its baseline's size on the ladder | refuses a run of another scenario or size as invalid |
-| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633)) | corporate, 3,000 systems | the goal size, held for hours |
+| the perf gate ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640), not built yet) | corporate, at its baseline's size on the ladder | will refuse a run of another scenario or size as invalid |
+| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
 16 and 17 drop the headquarters' divisible conference room and its three products, and every size from

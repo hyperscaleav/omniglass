@@ -4,7 +4,7 @@ date: 2026-11-10
 refs: [1719, 1623, 1640, 1633]
 ---
 
-A figure from one lab level now compares with the next: every level that measures runs the `corporate`
+A figure from one lab level now compares with the next: every lab level that measures runs the `corporate`
 scenario at a stated size, on a ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
 fleet stays the showcase, never a measurement basis. `make test-lab`'s footprint and scale measure, and
 `make lab-footprint` with no arguments, run corporate at 20 (`lab.MeasureScenario`, `lab.SmokeSystems`),

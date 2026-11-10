@@ -193,7 +193,7 @@ bytes a sample, the ingest lag at p50, p95 and p99, consumer redeliveries, and t
 lane's busy fraction and service time a batch) for a scale lab
 ([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
 when the slice's pull request records it. A figure here is always quoted with the scenario and size it
-was read at, and compares only with the same scenario at the same size: every level that measures runs
+was read at, and compares only with the same scenario at the same size: every lab level that measures runs
 the `corporate` scenario on the ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
 fleet is the showcase, never a measurement basis
 ([which fleet each level measures](/guides/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the

@@ -74,40 +74,8 @@ func TestIntegrationLabFootprint(t *testing.T) {
 // it is.
 func assertScaleFiguresRead(t *testing.T, rep ScaleReport) {
 	t.Helper()
-	if rep.Scenario != lab.MeasureScenario || rep.Systems != lab.SmokeSystems {
-		t.Errorf("the run names %s at %d systems, want %s at %d from the lab's labels",
-			rep.Scenario, rep.Systems, lab.MeasureScenario, lab.SmokeSystems)
-	}
-	if rep.Build == "" || rep.Sites == 0 || rep.Components == 0 || rep.Tasks == 0 {
-		t.Errorf("the run's conditions are unread: build %q, %d sites, %d components, %d tasks",
-			rep.Build, rep.Sites, rep.Components, rep.Tasks)
-	}
-	if rep.MetricRowsPerMinute <= 0 || rep.BatchesLanded == 0 || rep.SamplesLanded == 0 {
-		t.Errorf("metric rows a minute %v, %d batches, %d samples: want ingest read",
-			rep.MetricRowsPerMinute, rep.BatchesLanded, rep.SamplesLanded)
-	}
-	if rep.DatabaseBytesPerDay <= 0 || rep.WALBytesPerDay <= 0 {
-		t.Errorf("database %v, WAL %v a day: want growth", rep.DatabaseBytesPerDay, rep.WALBytesPerDay)
-	}
-	for _, c := range rep.Containers {
-		if c.Millicores <= 0 || c.WorkingSetMiB <= 0 {
-			t.Errorf("%s: cpu %v memory %v, want both read", c.Name, c.Millicores, c.WorkingSetMiB)
-		}
-	}
-	if rep.IngestLagGap != nil {
-		t.Errorf("ingest lag not measured: %+v", rep.IngestLagGap)
-	}
-	if !rep.ConsumerLane.Measured {
-		t.Errorf("the consumer lane is unread: %s", rep.ConsumerLane.Reason)
-	}
-	if rep.FleetView.N == 0 {
-		t.Errorf("fleet view %+v, want the reads timed", rep.FleetView)
-	}
-	if rep.Absolutes.DatabaseBytes <= 0 {
-		t.Errorf("absolutes %+v, want the database's size read", rep.Absolutes)
-	}
-	if rep.DeliveryNotRead != "" {
-		t.Errorf("delivery not read: %s", rep.DeliveryNotRead)
+	for _, unread := range unreadScaleFigures(rep, lab.MeasureScenario, lab.SmokeSystems) {
+		t.Error(unread)
 	}
 }
 

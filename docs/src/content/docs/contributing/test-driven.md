@@ -297,10 +297,10 @@ run. `make lab-footprint` does
 It builds the image, brings up a throwaway lab of its own project, the `corporate` scenario at
 20 systems (`-scenario` and `-systems` change it), at a
 [cadence profile](/guides/lab/#what-runs-with-which-privilege), warms it up, and measures N
-back-to-back windows. Every level that measures runs the corporate scenario at a stated size, so
+back-to-back windows. Every lab level that measures runs the corporate scenario at a stated size, so
 a figure from here compares with the same size on the
-[scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev fleet is the showcase,
-never a measurement basis, and the report names the scenario and size it read from the lab's
+[scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev lab is the showcase,
+never a lab measurement's basis, and the report names the scenario and size it read from the lab's
 labels ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)).
 
 - **CPU per container** (server, the nodes summed into one row, Postgres), in millicores, from
