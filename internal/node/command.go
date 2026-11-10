@@ -21,7 +21,8 @@ import (
 // touching the device again.
 
 // commandMemoryTTL bounds how long a command's remembered outcome is kept. The
-// server's redelivery window is deliveryTTL (10 minutes, internal/storage); once
+// server's delivery window is deliveryTTL (storage.CommandDeliveryWindow, 10
+// minutes); once
 // a command can no longer be redelivered its remembered outcome is dead weight,
 // so the map is pruned past a margin over that window rather than growing for the
 // life of the run.
@@ -45,40 +46,70 @@ func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
 	}
 }
 
-// runCommands runs one pull-execute-report cycle. A pull failure is silent
-// (the next tick re-pulls, the server redelivers); a report publish failure is
-// also survivable, since the redelivered command finds its outcome remembered.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, executed map[int64]commandOutcome) {
+// commandState is what the command loop carries from one tick to the next:
+// each command's remembered outcome (the idempotence a redelivery relies on),
+// and whether the last pull failed, so a pull that keeps failing is logged on
+// the transition, not on every tick.
+type commandState struct {
+	executed    map[int64]commandOutcome
+	pullFailing bool
+}
+
+func newCommandState() *commandState {
+	return &commandState{executed: map[int64]commandOutcome{}}
+}
+
+// runCommands runs one pull-execute-report cycle. A pull failure is logged at
+// WARN on the transition into failing and at INFO on the first pull that
+// succeeds after (#1630), never on every tick: the next tick re-pulls and the
+// server redelivers, but a node that cannot reach its queue leaves every
+// command it carries to time out, and its log must say why. A pull reply it
+// cannot parse, and a report it cannot encode or publish, are logged at WARN
+// every time; a lost report is survivable, since the redelivered command finds
+// its outcome remembered.
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, st *commandState) {
 	now := time.Now()
-	pruneCommandMemory(executed, now)
+	pruneCommandMemory(st.executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
 	if err != nil {
+		if !st.pullFailing {
+			slog.Warn("command pull failed", "facility", "command", "node", name, "error", err.Error())
+		}
+		st.pullFailing = true
 		return
+	}
+	if st.pullFailing {
+		slog.Info("command pull recovered", "facility", "command", "node", name)
+		st.pullFailing = false
 	}
 	var reply collection.CommandPullReply
 	if err := json.Unmarshal(msg.Data, &reply); err != nil {
+		slog.Warn("command pull reply could not be parsed", "facility", "command", "node", name, "error", err.Error())
 		return
 	}
 	for _, d := range reply.Commands {
 		if commandWaits(d, sessions) {
 			continue
 		}
-		o, done := executed[d.ID]
+		o, done := st.executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
 			reply, outcome = executeDelivery(ctx, runner, d, sessions)
-			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
+			st.executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
 			} else {
 				slog.Warn("command failed", "facility", "command", "command", d.ID, "type", d.CommandType, "error", outcome)
 			}
 		}
-		st, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome, Reply: reply})
+		report, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome, Reply: reply})
 		if err != nil {
+			slog.Warn("command report could not be encoded", "facility", "command", "node", name, "command", d.ID, "error", err.Error())
 			continue
 		}
-		_ = nc.Publish(collection.CommandStatusSubject(name), st)
+		if err := nc.Publish(collection.CommandStatusSubject(name), report); err != nil {
+			slog.Warn("command report could not be published", "facility", "command", "node", name, "command", d.ID, "error", err.Error())
+		}
 	}
 }
 

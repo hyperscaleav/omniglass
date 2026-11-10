@@ -346,11 +346,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
 	sessions.reconcile(wl.Tasks)
-	// executedCommands remembers each pulled command's outcome across ticks:
+	// commands remembers each pulled command's outcome across ticks:
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
-	executedCommands := map[int64]commandOutcome{}
+	// It also carries whether the last pull failed, so a failing pull is logged
+	// on the transition only (#1630).
+	commands := newCommandState()
 	// report accumulates each endpoint's collection telemetry over a report
 	// window (#1369), published when the window is due.
 	report := newCollectionReport(cfg.ReportEvery, time.Now())
@@ -360,7 +362,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now()); err != nil {
 		return wl, err
 	}
-	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, commands)
 	// A heartbeat the connection cannot take right now (a reconnect in
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
@@ -448,7 +450,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now())
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			runCommands(ctx, nc, cfg.Name, runner, sessions, commands)
 			// Report the inbound lines no listener claimed this tick.
 			sessions.flushUnclaimed()
 			// Count this tick's pushes into the collection report, and
