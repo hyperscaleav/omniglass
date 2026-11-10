@@ -24,13 +24,13 @@ Wait
 Type "grep -E '^(ready|measuring|delivery|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: each kind across the schedule hop (runs) and the ingest hop (items), and its cause"
+Type "# The delivery table: each kind's schedule hop (runs) and ingest hop (items), loss and cause"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"
 Enter
 Wait
-Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0 at every hop"
+Type "# The same figures in the JSON a second run compares against: each kind with items reads 0"
 Enter
 Wait
 Type `jq -c '.delivery[] | {kind, hop, in, out, loss, deduplicated, outcomes}' /tmp/lab-measure.json`
