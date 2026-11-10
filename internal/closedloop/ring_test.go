@@ -64,7 +64,7 @@ func (f *fakeSource) Receipts(_ context.Context, node string, from, start, end, 
 
 // ringAt is a ring over src whose clock reads the source's tick.
 func ringAt(src *fakeSource, span int) *Ring {
-	return NewRing(src, func() time.Time { return windowStart.Add(time.Duration(src.tick) * time.Minute) }, span)
+	return NewRing(src, func() time.Time { return windowStart.Add(time.Duration(src.tick) * time.Minute) }, span, time.Minute)
 }
 
 // take advances the source to tick and takes a bracket of edge.
@@ -224,11 +224,40 @@ func TestRingFailedReadAndDroppedNode(t *testing.T) {
 // A full window with its margin is far inside the horizon the server keeps
 // receipts for, so its earliest receipts are never pruned before it is read.
 func TestRingWindowIsInsideTheReceiptHorizon(t *testing.T) {
-	r := NewRing(&fakeSource{}, time.Now, RingSpan)
-	if w := r.Length() + RingEvery + ReceiptMargin; w >= bus.ReceiptHorizon {
+	r := NewRing(&fakeSource{}, time.Now, RingSpan, RingEvery)
+	if w := r.Length() + r.Every() + ReceiptMargin; w >= bus.ReceiptHorizon {
 		t.Fatalf("a full window reads %s back, past the %s receipt horizon", w, bus.ReceiptHorizon)
 	}
 	if r.Length() != RingSpan*RingEvery {
 		t.Fatalf("Length = %s, want %d brackets of %s", r.Length(), RingSpan, RingEvery)
+	}
+}
+
+// A ring bracketed faster than each minute (a lab's) is the same number of
+// brackets over a shorter window; a bracket past a minute is held to one, so
+// the window never reads past the receipt horizon.
+func TestRingBracketInterval(t *testing.T) {
+	r := NewRing(&fakeSource{}, time.Now, RingSpan, 2*time.Second)
+	if r.Every() != 2*time.Second || r.Length() != RingSpan*2*time.Second {
+		t.Fatalf("every %s, length %s, want 2s and %d brackets of it", r.Every(), r.Length(), RingSpan)
+	}
+	if r := NewRing(&fakeSource{}, time.Now, RingSpan, time.Hour); r.Every() != RingEvery {
+		t.Fatalf("every = %s, want held to %s", r.Every(), RingEvery)
+	}
+	if r := NewRing(&fakeSource{}, time.Now, RingSpan, 0); r.Every() != RingEvery {
+		t.Fatalf("every = %s, want the default %s", r.Every(), RingEvery)
+	}
+}
+
+// Run takes a bracket at once and then each bracket interval.
+func TestRingRunTicksAtItsBracket(t *testing.T) {
+	src := &fakeSource{}
+	r := NewRing(src, time.Now, RingSpan, 20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	calls := 0
+	r.Run(ctx, func() []string { calls++; return nil })
+	if calls < 4 {
+		t.Fatalf("Run listed nodes %d times in 150ms at a 20ms bracket, want at least 4", calls)
 	}
 }

@@ -205,6 +205,7 @@
       "heartbeat": "2s",
       "probe_every": "10s",
       "worklist_every": "5s",
+      "closed_loop_bracket": "10s",
       "for": "a learner's lab: a change in the console shows within seconds"
     },
     {
@@ -212,6 +213,7 @@
       "heartbeat": "2s",
       "probe_every": "every check-in",
       "worklist_every": "2s",
+      "closed_loop_bracket": "2s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
@@ -219,6 +221,7 @@
       "heartbeat": "30s",
       "probe_every": "every check-in",
       "worklist_every": "30s",
+      "closed_loop_bracket": "1m",
       "for": "the product's own defaults: what a deployment's node runs at"
     }
   ]

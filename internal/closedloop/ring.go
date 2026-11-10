@@ -11,9 +11,11 @@ import (
 )
 
 // The server's closed loop reads a sliding window rather than a since-start
-// total (ADR-1647): a bracket of every node with a simulator each RingEvery,
-// RingSpan intervals of them making the window, and one more after its end
-// to count the window's receipts at.
+// total (ADR-1647): a bracket of every node with a simulator each bracket
+// interval, RingSpan intervals of them making the window, and one more after
+// its end to count the window's receipts at. RingEvery is the default bracket
+// interval and the longest a ring takes; a lab brackets faster
+// (OMNIGLASS_CLOSED_LOOP_BRACKET), so its window fills in seconds.
 const (
 	RingEvery = time.Minute
 	RingSpan  = 10
@@ -88,27 +90,36 @@ type ringBracket struct {
 // Ring holds each node's most recent brackets and the window read off them.
 // Safe for concurrent use.
 type Ring struct {
-	src  Source
-	now  func() time.Time
-	span int
+	src   Source
+	now   func() time.Time
+	span  int
+	every time.Duration
 
 	mu       sync.Mutex
 	brackets map[string][]ringBracket
 	windows  map[string]NodeWindow
 }
 
-// NewRing is a ring over src, its window span brackets long.
-func NewRing(src Source, now func() time.Time, span int) *Ring {
-	return &Ring{src: src, now: now, span: max(span, 1), brackets: map[string][]ringBracket{}, windows: map[string]NodeWindow{}}
+// NewRing is a ring over src, its window span brackets of every long. An
+// every of zero or past RingEvery is RingEvery, so a window never reads past
+// the receipt horizon.
+func NewRing(src Source, now func() time.Time, span int, every time.Duration) *Ring {
+	if every <= 0 || every > RingEvery {
+		every = RingEvery
+	}
+	return &Ring{src: src, now: now, span: max(span, 1), every: every, brackets: map[string][]ringBracket{}, windows: map[string]NodeWindow{}}
 }
 
-// Length is a full window's length.
-func (r *Ring) Length() time.Duration { return time.Duration(r.span) * RingEvery }
+// Every is how often the ring brackets each node.
+func (r *Ring) Every() time.Duration { return r.every }
 
-// Run takes a bracket of the nodes listed now, then every RingEvery, until
-// ctx ends.
+// Length is a full window's length.
+func (r *Ring) Length() time.Duration { return time.Duration(r.span) * r.every }
+
+// Run takes a bracket of the nodes listed now, then every bracket interval,
+// until ctx ends.
 func (r *Ring) Run(ctx context.Context, nodes func() []string) {
-	t := time.NewTicker(RingEvery)
+	t := time.NewTicker(r.every)
 	defer t.Stop()
 	for {
 		r.Take(ctx, nodes())

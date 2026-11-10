@@ -72,6 +72,16 @@ var Registry = []Var{
 		Doc: "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
 	{Key: "OMNIGLASS_SERVER_NAME", Default: "the hostname", Scope: "server",
 		Doc: "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"},
+	// The closed loop on Platform health (#1647, ADR-1647): how often the
+	// server brackets each node with a simulator, and the cadence it assumes
+	// for those nodes, which it is not told. omniglass lab run sets all three
+	// from its cadence profile.
+	{Key: "OMNIGLASS_CLOSED_LOOP_BRACKET", Default: "1m", Scope: "server",
+		Doc: "how often the server brackets each node with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"},
+	{Key: "OMNIGLASS_CLOSED_LOOP_HEARTBEAT", Default: "30s", Scope: "server",
+		Doc: "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"},
+	{Key: "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY", Default: "every check-in", Scope: "server",
+		Doc: "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",

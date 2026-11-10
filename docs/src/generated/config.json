@@ -93,6 +93,24 @@
    "doc": "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"
   },
   {
+   "key": "OMNIGLASS_CLOSED_LOOP_BRACKET",
+   "default": "1m",
+   "scope": "server",
+   "doc": "how often the server brackets each node with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"
+  },
+  {
+   "key": "OMNIGLASS_CLOSED_LOOP_HEARTBEAT",
+   "default": "30s",
+   "scope": "server",
+   "doc": "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"
+  },
+  {
+   "key": "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY",
+   "default": "every check-in",
+   "scope": "server",
+   "doc": "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"
+  },
+  {
    "key": "OMNIGLASS_SERVER",
    "scope": "cli",
    "doc": "server base URL the CLI and the node use when --server is omitted, read when the command runs"

@@ -7,7 +7,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -19,22 +18,22 @@ func WithClosedLoopRing(r *closedloop.Ring) Option {
 	return func(o *options) { o.ring = r }
 }
 
-// serverCadence is the cadence the server assumes for every node: it is not
-// told a node's flags, so a node run faster than its defaults has targets due
-// more often than the server counts (#1647's thin cut).
-var serverCadence = closedloop.NodeCadence{Heartbeat: node.DefaultHeartbeat}
-
 // simLoopSource is the server's closedloop.Source: the bracketed reads and
 // device hits through its line to the simulators, the poll targets and
-// receipts from the Gateway.
+// receipts from the Gateway. cadence is the one the server assumes for every
+// node: it is not told a node's flags, so a node run faster than cadence has
+// targets due more often than the server counts. A lab tells its server its
+// nodes' cadence (OMNIGLASS_CLOSED_LOOP_HEARTBEAT, _PROBE_EVERY).
 type simLoopSource struct {
-	hub SimHub
-	gw  storage.Gateway
+	hub     SimHub
+	gw      storage.Gateway
+	cadence closedloop.NodeCadence
 }
 
-// NewSimLoopSource is the ring's source on a server.
-func NewSimLoopSource(hub SimHub, gw storage.Gateway) closedloop.Source {
-	return simLoopSource{hub: hub, gw: gw}
+// NewSimLoopSource is the ring's source on a server, assuming cadence for
+// every node.
+func NewSimLoopSource(hub SimHub, gw storage.Gateway, cadence closedloop.NodeCadence) closedloop.Source {
+	return simLoopSource{hub: hub, gw: gw, cadence: cadence}
 }
 
 // Observe brackets the node and reads its simulator's device hits: every
@@ -49,7 +48,7 @@ func (s simLoopSource) Observe(ctx context.Context, node string) (collection.End
 }
 
 // Targets is every enabled poll target by node, at the interval it runs
-// under the server's assumed cadence.
+// under the assumed cadence.
 func (s simLoopSource) Targets(ctx context.Context) (map[string][]closedloop.PollTarget, error) {
 	rows, err := s.gw.ListClosedLoopPollTargets(ctx)
 	if err != nil {
@@ -58,7 +57,7 @@ func (s simLoopSource) Targets(ctx context.Context) (map[string][]closedloop.Pol
 	out := map[string][]closedloop.PollTarget{}
 	for _, r := range rows {
 		out[r.Node] = append(out[r.Node], closedloop.PollTarget{
-			ComponentID: r.ComponentID, Transport: r.Transport, Interval: serverCadence.Interval(r.Every)})
+			ComponentID: r.ComponentID, Transport: r.Transport, Interval: s.cadence.Interval(r.Every)})
 	}
 	return out, nil
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
+	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -170,6 +171,12 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return fmt.Errorf("server: %w", err)
 	}
 	log.Info("trusted proxies", "networks", trust.String())
+	loop, err := closedloop.ParseSettings(closedloop.RawSettings{
+		Bracket: c.ClosedLoopBracket, Heartbeat: c.ClosedLoopHeartbeat, ProbeEvery: c.ClosedLoopProbeEvery,
+	}, node.DefaultHeartbeat)
+	if err != nil {
+		return fmt.Errorf("server: %w", err)
+	}
 
 	// Bind before serving, so the address the listener got (the kernel's
 	// pick, for port 0) is known and can be reported.
@@ -178,9 +185,9 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	// The closed loop over each node with a connected simulator (#1647,
-	// ADR-1647): a bracket a minute, read as a sliding window on the
-	// Platform health page.
-	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw), time.Now, closedloop.RingSpan)
+	// ADR-1647): a bracket a minute (a lab's faster), read as a sliding
+	// window on the Platform health page.
+	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw, loop.Cadence), time.Now, closedloop.RingSpan, loop.Every)
 	srv := &http.Server{
 		Handler:           api.NewHandler(gw, api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
 		ReadHeaderTimeout: 5 * time.Second,

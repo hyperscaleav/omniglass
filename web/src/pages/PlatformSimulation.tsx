@@ -18,6 +18,7 @@ import {
   sortDevices,
   sortGaps,
   wiredText,
+  windowText,
   type GapTone,
   type PlatformSimGap,
   type PlatformSimNode,
@@ -28,7 +29,7 @@ import {
 // the one witness outside the platform, so it is the one place the page can
 // count a loss rather than infer one: each gap is a hop a request or a batch
 // travels, read as a loss ratio over a sliding window the server brackets each
-// minute (internal/closedloop), 0 healthy.
+// minute, a lab faster (internal/closedloop), 0 healthy.
 //
 // The section keys on the nav's "simulator" condition, the same one the
 // sidebar's Simulation door waits on, so they appear and disappear together.
@@ -71,7 +72,6 @@ export default function PlatformSimulation() {
     retry: retryPlatformView,
     refetchInterval: LEAF_POLL_MS,
   }));
-  const minutes = () => Math.round((sim.data?.window_seconds ?? 600) / 60);
   return (
     <Show when={on()}>
       <section class="flex flex-col gap-4" data-testid="platform-simulation">
@@ -79,7 +79,7 @@ export default function PlatformSimulation() {
           <h2 class="text-lg font-semibold">With a simulator</h2>
           <p class="max-w-3xl text-sm text-base-content/60">
             The simulator counts what each device saw; the platform counts what it collected. Each gap below is one hop a request or a
-            batch travels, read as a loss ratio over the last {minutes()} minutes: what was lost at the hop over what went into it, 0 healthy.
+            batch travels, read as a loss ratio over the last {windowText(sim.data?.window_seconds)}: what was lost at the hop over what went into it, 0 healthy.
             An impaired device loses traffic on purpose, so its gap reads as expected, not as a fault.
           </p>
         </div>

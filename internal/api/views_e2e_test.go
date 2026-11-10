@@ -570,7 +570,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		}
 		hub.Report("site-a", collection.SimHitBatch{Hits: hits})
 	}
-	ring := closedloop.NewRing(api.NewSimLoopSource(hub, gw), func() time.Time { return at(tick) }, 2)
+	ring := closedloop.NewRing(api.NewSimLoopSource(hub, gw, closedloop.NodeCadence{Heartbeat: 30 * time.Second}), func() time.Time { return at(tick) }, 2, time.Minute)
 
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub), api.WithClosedLoopRing(ring)))
 	defer srv.Close()

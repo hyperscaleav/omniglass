@@ -80,6 +80,10 @@ type Config struct {
 	// on one database reports its request and query timing as itself.
 	// Defaults to the hostname. Set OMNIGLASS_SERVER_NAME.
 	ServerName string
+	// ClosedLoop is the raw closed-loop settings (#1647): the ring's bracket
+	// and the node cadence the server assumes. The server parses them at boot
+	// (closedloop.ParseSettings), so a bad value fails the boot, not this Load.
+	ClosedLoopBracket, ClosedLoopHeartbeat, ClosedLoopProbeEvery string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -103,6 +107,10 @@ func Load() Config {
 		SettingsFile:   firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
 		ReadyFile:      Get("OMNIGLASS_READY_FILE"),
 		ServerName:     firstNonEmpty(Get("OMNIGLASS_SERVER_NAME"), hostname()),
+
+		ClosedLoopBracket:    Get("OMNIGLASS_CLOSED_LOOP_BRACKET"),
+		ClosedLoopHeartbeat:  Get("OMNIGLASS_CLOSED_LOOP_HEARTBEAT"),
+		ClosedLoopProbeEvery: Get("OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"),
 	}
 }
 

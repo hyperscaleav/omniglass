@@ -44,7 +44,10 @@ type FactCadence struct {
 	Heartbeat     string `json:"heartbeat"`
 	ProbeEvery    string `json:"probe_every"`
 	WorklistEvery string `json:"worklist_every"`
-	For           string `json:"for"`
+	// ClosedLoopBracket is how often the server brackets the node for
+	// Platform health's closed loop.
+	ClosedLoopBracket string `json:"closed_loop_bracket"`
+	For               string `json:"for"`
 }
 
 // FactVolume is one named volume the lab keeps.
@@ -140,7 +143,7 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		if probe == "" {
 			probe = "every check-in"
 		}
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, WorklistEvery: c.WorklistEvery, For: c.For})
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, WorklistEvery: c.WorklistEvery, ClosedLoopBracket: c.ClosedLoopBracket, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {

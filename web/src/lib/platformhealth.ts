@@ -91,8 +91,8 @@ export function notUpCount(v: PlatformView): number {
 // ---- With a simulator (#1647) ----
 //
 // The simulation section reads what each node's simulator saw against what the
-// platform collected, over the sliding window the server brackets each minute
-// (internal/closedloop). Every gap is a loss ratio, 0 healthy. The derivations
+// platform collected, over the sliding window the server brackets each minute,
+// a lab faster (internal/closedloop). Every gap is a loss ratio, 0 healthy. The derivations
 // below decide only order and tone; every count is the server's.
 
 export type PlatformSimulation = components["schemas"]["PlatformSimulationViewOutputBody"];
@@ -142,6 +142,16 @@ export function ratioText(ratio: number | null | undefined): string {
   if (ratio === 0) return "0%";
   const pct = ratio * 100;
   return `${pct < 0.1 ? pct.toFixed(2) : pct.toFixed(1)}%`;
+}
+
+// windowText is the window's length in words: whole minutes, or seconds for a
+// lab's short window that is not a whole number of them. Unread, it is the
+// server's default ten minutes.
+export function windowText(seconds: number | null | undefined): string {
+  const s = seconds ?? 600;
+  if (s % 60 !== 0) return `${s} seconds`;
+  const m = s / 60;
+  return m === 1 ? "1 minute" : `${m} minutes`;
 }
 
 export const WARMING_UP =

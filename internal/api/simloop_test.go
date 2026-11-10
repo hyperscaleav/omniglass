@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 )
@@ -41,7 +42,7 @@ func TestSimLoopSourceObservesDevices(t *testing.T) {
 		},
 		Impairments: &collection.SimImpairmentStatus{Available: true, Impaired: []string{"c-hit"}},
 	})
-	_, devices, err := api.NewSimLoopSource(hub, nil).Observe(context.Background(), "site-a")
+	_, devices, err := api.NewSimLoopSource(hub, nil, closedloop.NodeCadence{}).Observe(context.Background(), "site-a")
 	if err != nil {
 		t.Fatalf("observe: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestSimLoopSourceObservesDevices(t *testing.T) {
 func TestSimLoopSourceNoSimulator(t *testing.T) {
 	t.Parallel()
 	hub := &fakeHub{Registry: simhub.New()}
-	if _, _, err := api.NewSimLoopSource(hub, nil).Observe(context.Background(), "site-z"); err == nil {
+	if _, _, err := api.NewSimLoopSource(hub, nil, closedloop.NodeCadence{}).Observe(context.Background(), "site-z"); err == nil {
 		t.Fatal("observe of a node with no simulator answered no error")
 	}
 }

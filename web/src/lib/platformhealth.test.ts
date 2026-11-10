@@ -7,6 +7,7 @@ import {
   NOT_WIRED,
   ratioText,
   RESTARTED,
+  windowText,
   simStateNote,
   sortDevices,
   sortGaps,
@@ -193,6 +194,16 @@ describe("gap words", () => {
     expect(ratioText(0.125)).toBe("12.5%");
     expect(ratioText(0.0004)).toBe("0.04%");
     expect(ratioText(null)).toBe("-");
+  });
+});
+
+describe("windowText", () => {
+  it("names the window in minutes, or in seconds for a lab's short one", () => {
+    expect(windowText(600)).toBe("10 minutes");
+    expect(windowText(60)).toBe("1 minute");
+    expect(windowText(100)).toBe("100 seconds");
+    expect(windowText(20)).toBe("20 seconds");
+    expect(windowText(undefined)).toBe("10 minutes");
   });
 });
 
