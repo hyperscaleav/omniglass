@@ -48,6 +48,7 @@ func kindOf(cells []PlatformPipelineCell, kind delivery.Kind) (PlatformPipelineC
 // 0.5; the ratio is (in - out) / in over the summed counts, both for the
 // newest window and the last hour.
 func TestPipelineComposesAHopFromItsCountsNeverItsRatios(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
 	samples = append(samples, pipelineWindow("c1", "edge-alpha", PlatformClassNode, "metric", 2, 1, 2, 1, at)...)
@@ -89,6 +90,7 @@ func TestPipelineComposesAHopFromItsCountsNeverItsRatios(t *testing.T) {
 // kind is delivery.EndToEnd over the hops the kind crosses, 1 - prod(1 - l),
 // not the sum of the hops' ratios.
 func TestPipelineEndToEndComposesEveryHopsSurvival(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
 	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 9, 10, 9, at)...)
@@ -112,6 +114,7 @@ func TestPipelineEndToEndComposesEveryHopsSurvival(t *testing.T) {
 // no row there and contributes nothing to the end to end; a kind with series
 // but nothing in has a row and no ratio, never a fake 0.
 func TestPipelineReadsAnAbsentKindAsAbsent(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
 	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 10, 10, 10, at)...)
@@ -147,6 +150,7 @@ func TestPipelineReadsAnAbsentKindAsAbsent(t *testing.T) {
 // hop's form on its component's class (an earlier hop's, or a stray) is not a
 // row: the hop's instance form is what selects it.
 func TestPipelineIgnoresAnInstanceNoHopSelects(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	samples := pipelineWindow("n1", "edge-alpha", PlatformClassNode, "widget", 10, 1, 10, 1, at)
 	p := composePipeline(PlatformPipelineHops, samples)
@@ -161,6 +165,7 @@ func TestPipelineIgnoresAnInstanceNoHopSelects(t *testing.T) {
 // the last hour, of the hops its own component records, all kinds summed per
 // hop; a node with no samples on any node-recorded hop has none.
 func TestNodeLossComposesTheNodesOwnHops(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
 	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 3, 3, 30, 27, at)...)
