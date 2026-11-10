@@ -549,9 +549,10 @@ figure is still reported.
 Below the endpoints block, the delivery table says how much telemetry the lab lost on the way in, as a
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
-`node` is what the nodes collected and shipped, `push` what was pushed to the server (the booking
-service's `POST /telemetry:push` and the meeting service's webhooks). A healthy lab reads exactly 0
-for every kind on both:
+`node` is what the nodes collected and shipped, `push` what was pushed to the server (`POST
+/telemetry:push` and the webhook receivers). The scale lab runs no pusher of its own yet (#1743), so its
+push rows appear only when something pushes to the lab's server during the window, as `omniglass
+telemetry push` against it does. A healthy lab reads exactly 0 for every kind on both:
 
 ```
 delivery    lane  hop     in       out      loss     dedup  cause
@@ -562,7 +563,6 @@ log         node  ingest  0        0        -        0      -
 metric      push  ingest  12       12       0        0      -
 property    push  ingest  24       24       0        0      -
 event       push  ingest  3        3        0        0      -
-log         push  ingest  0        0        -        0      -
 end to end  node  metric 0  property 0  event -  log -
 ```
 
@@ -570,7 +570,7 @@ end to end  node  metric 0  property 0  event -  log -
   published a push on the push lane (the batches' ledgers, plus the items of any batch that never
   landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
   unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
-  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
+  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0, and a lane shows a kind only once its boot has carried one (the sample's push lane has pushed no log line). Only the ingest hop
   is read today; the node, schedule and sim hops follow.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
