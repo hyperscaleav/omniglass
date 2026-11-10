@@ -128,7 +128,7 @@ func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 		t.Fatalf("add a component on the first run: %d", code)
 	}
 	first := stop()
-	restart := "omniglass lab run --scenario corporate --systems 3 --keep"
+	restart := "omniglass lab run --scenario corporate --systems 3 --project " + project + " --keep"
 	if !strings.Contains(first, "so `"+restart+"` picks up where you left off") {
 		t.Errorf("the first run's stop line does not name its restart:\n%s", first)
 	}

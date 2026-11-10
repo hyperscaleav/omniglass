@@ -606,7 +606,9 @@ func SortedKeys[V any](m map[string]V) []string {
 // RestartCommand is the command that brings this lab back with its data, for
 // the stop line's hint. A learner's lab comes back with a bare lab run; a
 // kept scale lab (#1633) needs its own scenario, size and --keep (and its
-// cadence, when not the lab's own), or a bare run would start the dev fleet.
+// cadence, when not the lab's own, and its project, when not the scale lab's
+// own, since the data lives in that project's volumes), or a bare run would
+// start the dev fleet.
 func RestartCommand(o Options) string {
 	cmd := "omniglass lab run"
 	if !o.Scale() {
@@ -615,6 +617,9 @@ func RestartCommand(o Options) string {
 	cmd += " --scenario " + o.Scenario + " --systems " + strconv.Itoa(o.Systems)
 	if o.Cadence != "" && o.Cadence != CadenceLab {
 		cmd += " --cadence " + o.Cadence
+	}
+	if o.Project != "" && o.Project != ScaleProject {
+		cmd += " --project " + o.Project
 	}
 	if !o.Ephemeral {
 		cmd += " --keep"

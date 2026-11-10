@@ -644,7 +644,7 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 	}
 	if st.HoldsData {
 		if !keep {
-			return errors.New("lab seed: a throwaway scale lab seeds an empty database, and this one holds data; start it again, or keep it with --keep")
+			return errors.New("lab seed: a throwaway scale lab seeds an empty database, and this one holds data; start it again with --keep to keep that data, or with --fresh to start over")
 		}
 		return reenrollKeptScaleLab(ctx, out, gw, plan, hashes, user, pwHash)
 	}
@@ -702,10 +702,16 @@ func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway
 	}
 	for _, site := range plan.Sites {
 		node := labscenario.SiteNode(site.Name)
-		if _, err := gw.GetNode(ctx, node, all); errors.Is(err, storage.ErrNodeNotFound) {
+		n, err := gw.GetNode(ctx, node, all)
+		if errors.Is(err, storage.ErrNodeNotFound) {
 			return notThisPlan("it has no node " + node)
 		} else if err != nil {
 			return err
+		}
+		// A first run stopped between seeding the fleet and placing its
+		// nodes leaves a node at no site.
+		if n.LocationName == nil || *n.LocationName != site.Name {
+			return notThisPlan(fmt.Sprintf("%s is not placed at its site %s", node, site.Name))
 		}
 		devices, err := gw.NodeSimDevices(ctx, node, all)
 		if err != nil {

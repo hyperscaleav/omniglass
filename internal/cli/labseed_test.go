@@ -309,8 +309,10 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	}
 
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false); err == nil ||
-		!strings.Contains(err.Error(), "holds data") {
-		t.Fatalf("a throwaway seed on the kept database: %v, want the refusal of a database holding data", err)
+		!strings.Contains(err.Error(), "holds data") || !strings.Contains(err.Error(), "--fresh") {
+		// The kept volumes outlive a throwaway run, so starting it again
+		// throwaway never clears them: the refusal names --fresh.
+		t.Fatalf("a throwaway seed on the kept database: %v, want the refusal of a database holding data, naming --fresh", err)
 	}
 	other := corporateScalePlan(t, 20)
 	var otherNodes []lab.SiteNode
@@ -320,6 +322,16 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 20, lab.LoginUser, lab.LoginPassword,
 		lab.FormatSiteNodeTokenHashes(otherNodes), true); err == nil || !strings.Contains(err.Error(), "--fresh") {
 		t.Fatalf("a kept seed at another size: %v, want a refusal naming --fresh", err)
+	}
+	// A first run stopped after the fleet was seeded and before its nodes
+	// were placed leaves a node at no site: not this plan's fleet.
+	unplaced, nowhere := labscenario.SiteNode(plan.Sites[0].Name), ""
+	if _, err := gw.UpdateNode(ctx, "", unplaced, storage.NodePatch{LocationName: &nowhere}, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, true); err == nil ||
+		!strings.Contains(err.Error(), "--fresh") || !strings.Contains(err.Error(), unplaced) {
+		t.Fatalf("a kept seed with %s at no site: %v, want a refusal naming the node and --fresh", unplaced, err)
 	}
 	if c, n := counts(); c != components || n != nodes {
 		t.Fatalf("after the refusals: %d components and %d nodes, want %d and %d", c, n, components, nodes)

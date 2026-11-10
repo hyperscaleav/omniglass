@@ -311,9 +311,10 @@ omniglass lab run --scenario corporate --systems 100
 A scale lab is its own Docker project, `omniglass-scale`, so it runs beside your learning lab, and
 it is throwaway: Ctrl-C removes every container, network and volume it started. With `--keep` it
 keeps its two volumes instead, the way the learning lab does, and the stop line names the command
-that picks it up again: the same scenario, size and `--keep`. The next run re-attaches the volumes,
-keeps the fleet it seeded rather than seeding again, and enrolls each site's node afresh; a kept lab
-started at another scenario or size is refused, naming `--fresh` to start over. Add `--plan` to
+that picks it up again: the same scenario, size and `--keep` (and its `--project`, when not
+`omniglass-scale`). The next run re-attaches the volumes, keeps the fleet it seeded rather than
+seeding again, and enrolls each site's node afresh; a kept lab started at another scenario or size,
+or without `--keep`, is refused, naming `--fresh` to start over. Add `--plan` to
 print what a size would build without starting anything: three tables (each archetype's sites,
 floors per site, systems of each standard and totals; each site's systems and components; the
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
@@ -695,15 +696,41 @@ curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: B
 
 The setting lives in the kept database, so it survives the lab's restarts.
 
-**Reading the series.** Each line reads at the same paths as one measurement:
+**Reading the series.** Each line reads at the same paths as one measurement. One row a sample (a
+failed sample's `error` line skipped): when, the build, ingest lag p95, system page p95 (ms), database
+bytes, metric partitions and the server's memory (MiB):
 
 ```bash
-jq -r '[.seq, .at, .uptime_seconds, .ingest_lag_ms.p95, .system_page_ms.p95, .absolutes.dead_tuples.property] | @tsv' series.jsonl
+jq -r 'select(.error == null) | [.at, .build, .ingest_lag_ms.p95, .system_page_ms.p95,
+  .absolutes.database_bytes, .absolutes.metric_partitions,
+  (.containers[] | select(.name == "server") | .working_set_mib)] | @tsv' series.jsonl
 ```
 
-**Upgrading mid-soak** ends one series and starts another: stop the sampler and the lab, install the
-new binary and its pinned image, point the lab unit at the new tag, start the lab (the kept fleet
-carries over), then start the sampler on a new series file.
+The first sample beside the last states the growth over the run:
+
+```bash
+jq -s 'map(select(.error == null)) | first, last | {at, build, lag_p95: .ingest_lag_ms.p95,
+  page_p95: .system_page_ms.p95, database_bytes: .absolutes.database_bytes,
+  metric_partitions: .absolutes.metric_partitions,
+  server_mib: (.containers[] | select(.name == "server") | .working_set_mib)}' series.jsonl
+```
+
+With the metric window at 2 days, retention drops its first partition on day 3, and from then the
+partition count should stop growing.
+
+**Upgrading mid-soak** keeps the data and the series: stop the sampler and the lab, install the new
+binary and its pinned image, point the lab unit at the new tag, and start both again. The kept fleet
+carries over (the seed migrates the database on every start), and the sampler appends to the same
+file, so the series goes on under a new `build`. To split it at upgrades, list the builds in order
+with how many samples each took:
+
+```bash
+jq -r 'select(.error == null) | .build' series.jsonl | uniq -c
+```
+
+A build whose scenario plan differs at the soak's size (its manifest or catalog changed) is refused by
+the kept check, and so is a rollback across a schema change, since migrations only move forward: both
+need one run with `--fresh`, which seeds the fleet over, so start a new series file with it.
 
 **Looking at it.** The lab publishes its console on the host's loopback only; reach it from your own
 machine through a tunnel, then open `http://127.0.0.1:8080/web`:

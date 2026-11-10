@@ -526,6 +526,12 @@ func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
 	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --cadence default --keep" {
 		t.Errorf("a kept scale lab at the default cadence: %q", got)
 	}
+	// A kept scale lab under a project of its own keeps its data there, so a
+	// restart without that project would start an empty lab beside it.
+	o.Cadence, o.Project = CadenceLab, "omniglass-scale-it-7"
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --project omniglass-scale-it-7 --keep" {
+		t.Errorf("a kept scale lab under its own project: %q", got)
+	}
 }
 
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
