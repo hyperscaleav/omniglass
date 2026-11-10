@@ -401,6 +401,10 @@ type ScaleRun struct {
 	Lane      Lane
 	FleetView []time.Duration
 	Drain     Drain
+	// Endpoints is each node's bracketed endpoint observation; when none was
+	// read, EndpointsGap says why.
+	Endpoints    []NodeBracket
+	EndpointsGap string
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -448,6 +452,10 @@ type ScaleReport struct {
 	ConsumerLane Lane         `json:"consumer_lane"`
 	FleetView    Quantiles    `json:"fleet_view_ms"`
 	Drain        Drain        `json:"retention_drain"`
+	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
+	// then says why.
+	Endpoints    *EndpointReport `json:"endpoints,omitempty"`
+	EndpointsGap string          `json:"endpoints_not_measured,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -475,6 +483,11 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
+		EndpointsGap:          r.EndpointsGap,
+	}
+	if len(r.Endpoints) > 0 {
+		e := SummarizeEndpoints(r.Endpoints)
+		out.Endpoints = &e
 	}
 	ms := make([]float64, len(r.Lag))
 	for i, s := range r.Lag {
@@ -559,6 +572,11 @@ func (r ScaleReport) Table() string {
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
 	line("retention drain", r.Drain.describe())
+	if r.Endpoints != nil {
+		r.Endpoints.table(&b)
+	} else if r.EndpointsGap != "" {
+		b.WriteString("\nendpoints not measured: " + r.EndpointsGap + "\n")
+	}
 	if r.IngestLagGap != nil {
 		b.WriteString("\n" + r.IngestLagGap.footer())
 	}

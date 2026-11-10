@@ -5162,6 +5162,30 @@ func generatedCommands() []*cobra.Command {
 				}
 				return cmd
 			}()
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "observation",
+					Short: "Commands for the observation resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list <name>",
+							Short:   "Get a node's endpoint observation",
+							Long:    "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
+							Example: "  omniglass node simulation observation list <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/nodes/%s/simulation/observation", pathSegment(args[0]))
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // profileProtocols is the interface protocols the simulator's device profile
@@ -88,5 +89,33 @@ func TestSimProtocolsIsACopy(t *testing.T) {
 	a[0] = "mutated"
 	if SimProtocols()[0] == "mutated" || IsSimProtocol("mutated") {
 		t.Error("SimProtocols shares its backing array")
+	}
+}
+
+// Every transport a node dials reaches the simulator as one of its protocols,
+// except icmp, which the kernel answers so the simulator never sees it, and a
+// push transport, which no node dials. A transport added to the registry fails
+// here until it is placed.
+func TestSimProtocolOfPlacesEveryDialedTransport(t *testing.T) {
+	want := map[string]string{
+		"http": "http", "https": "http", "websocket": "websocket", "wss": "websocket",
+		"tcp": "tcp", "tls": "tcp", "ssh": "ssh", "telnet": "telnet", "udp": "udp", "snmp": "snmp",
+	}
+	for _, tr := range transport.All() {
+		got, ok := SimProtocolOf(tr.Name)
+		switch {
+		case tr.Name == "icmp" || tr.Push:
+			if ok {
+				t.Errorf("SimProtocolOf(%q) = %q, want none", tr.Name, got)
+			}
+		case !ok || got != want[tr.Name]:
+			t.Errorf("SimProtocolOf(%q) = %q, %v, want %q", tr.Name, got, ok, want[tr.Name])
+		}
+		if ok && !IsSimProtocol(got) {
+			t.Errorf("SimProtocolOf(%q) = %q, not a protocol the simulator counts", tr.Name, got)
+		}
+	}
+	if _, ok := SimProtocolOf("made-up"); ok {
+		t.Error("an unknown transport maps to a protocol")
 	}
 }

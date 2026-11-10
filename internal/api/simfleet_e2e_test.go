@@ -31,6 +31,21 @@ type fakeHub struct {
 		op   collection.SimOperation
 	}
 	fireErr error
+	// observation answers EndpointObservation by node; a node absent from it
+	// has no simulator. observeErr, when set, answers every node.
+	observation map[string]collection.EndpointObservation
+	observeErr  error
+}
+
+func (h *fakeHub) EndpointObservation(_ context.Context, node string) (collection.EndpointObservation, error) {
+	if h.observeErr != nil {
+		return collection.EndpointObservation{}, h.observeErr
+	}
+	o, ok := h.observation[node]
+	if !ok {
+		return o, collection.ErrNoSimulator
+	}
+	return o, nil
 }
 
 func (h *fakeHub) SimStatus(node string) (simhub.Status, bool) { return h.Status(node) }

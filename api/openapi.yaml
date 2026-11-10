@@ -3730,6 +3730,27 @@ components:
         - name
         - transport
       type: object
+    EndpointObservation:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EndpointObservation.json
+          format: uri
+          readOnly: true
+          type: string
+        node:
+          $ref: "#/components/schemas/RequestTallySnapshot"
+        sim_after:
+          $ref: "#/components/schemas/SimObservation"
+        sim_before:
+          $ref: "#/components/schemas/SimObservation"
+      required:
+        - sim_before
+        - node
+        - sim_after
+      type: object
     EndpointWebhookBody:
       additionalProperties: false
       properties:
@@ -3833,6 +3854,19 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    EpochHigh:
+      additionalProperties: false
+      properties:
+        e:
+          format: int64
+          type: integer
+        m:
+          format: int64
+          type: integer
+      required:
+        - e
+        - m
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -4511,6 +4545,21 @@ components:
       required:
         - locations
         - systems
+      type: object
+    GaugeReading:
+      additionalProperties: false
+      properties:
+        current:
+          format: int64
+          type: integer
+        high_water:
+          items:
+            $ref: "#/components/schemas/EpochHigh"
+          type:
+            - array
+            - "null"
+      required:
+        - current
       type: object
     GrantBody:
       additionalProperties: false
@@ -8694,6 +8743,40 @@ components:
           description: "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row."
           type: string
       type: object
+    RequestTallySnapshot:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        batches_acknowledged:
+          format: int64
+          type: integer
+        batches_dropped:
+          format: int64
+          type: integer
+        busy_workers:
+          $ref: "#/components/schemas/GaugeReading"
+        node:
+          type: string
+        queue_depth:
+          $ref: "#/components/schemas/GaugeReading"
+        started:
+          format: date-time
+          type: string
+        transports:
+          items:
+            $ref: "#/components/schemas/TallyCounters"
+          type:
+            - array
+            - "null"
+      required:
+        - node
+        - at
+        - started
+        - batches_acknowledged
+        - batches_dropped
+      type: object
     ResetPasswordInputBody:
       additionalProperties: false
       properties:
@@ -9957,6 +10040,31 @@ components:
         - hits_by_protocol
         - impaired
       type: object
+    SimFaceOverlap:
+      additionalProperties: false
+      properties:
+        component:
+          type: string
+        component_id:
+          type: string
+        face:
+          type: string
+        overlapped:
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        received:
+          format: int64
+          type: integer
+      required:
+        - component_id
+        - component
+        - face
+        - protocol
+        - received
+        - overlapped
+      type: object
     SimFleetOutputBody:
       additionalProperties: false
       properties:
@@ -10040,6 +10148,46 @@ components:
         - oid
         - path
       type: object
+    SimObservation:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        devices:
+          format: int64
+          type: integer
+        faces:
+          items:
+            $ref: "#/components/schemas/SimFaceOverlap"
+          type:
+            - array
+            - "null"
+        faces_overlapped:
+          format: int64
+          type: integer
+        impaired:
+          format: int64
+          type: integer
+        node:
+          type: string
+        protocols:
+          items:
+            $ref: "#/components/schemas/SimProtocolObservation"
+          type:
+            - array
+            - "null"
+        started:
+          format: date-time
+          type: string
+      required:
+        - node
+        - at
+        - started
+        - devices
+        - impaired
+        - protocols
+      type: object
     SimOperationResult:
       additionalProperties: false
       properties:
@@ -10120,6 +10268,76 @@ components:
             - "null"
       required:
         - profiles
+      type: object
+    SimProtocolObservation:
+      additionalProperties: false
+      properties:
+        accepted:
+          format: int64
+          type: integer
+        answered:
+          format: int64
+          type: integer
+        dropped:
+          format: int64
+          type: integer
+        error:
+          format: int64
+          type: integer
+        in_flight:
+          format: int64
+          type: integer
+        in_flight_high:
+          items:
+            $ref: "#/components/schemas/EpochHigh"
+          type:
+            - array
+            - "null"
+        latency:
+          items:
+            format: int64
+            minimum: 0
+            type: integer
+          type:
+            - array
+            - "null"
+        open_connections:
+          format: int64
+          type: integer
+        open_streams:
+          format: int64
+          type: integer
+        overlapped:
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        received:
+          format: int64
+          type: integer
+        refused:
+          format: int64
+          type: integer
+        served:
+          format: int64
+          type: integer
+        streams_opened:
+          format: int64
+          type: integer
+        unhit:
+          format: int64
+          type: integer
+        unhit_sample:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        withheld:
+          format: int64
+          type: integer
+      required:
+        - protocol
       type: object
     SimRoleFillBody:
       additionalProperties: false
@@ -11021,6 +11239,42 @@ components:
             - "null"
       required:
         - values
+      type: object
+    TallyCounters:
+      additionalProperties: false
+      properties:
+        answered:
+          format: int64
+          type: integer
+        connections:
+          format: int64
+          type: integer
+        error:
+          format: int64
+          type: integer
+        in_flight:
+          format: int64
+          type: integer
+        refused:
+          format: int64
+          type: integer
+        sent:
+          format: int64
+          type: integer
+        timed_out:
+          format: int64
+          type: integer
+        transport:
+          type: string
+      required:
+        - transport
+        - connections
+        - sent
+        - in_flight
+        - answered
+        - refused
+        - error
+        - timed_out
       type: object
     TaskBody:
       additionalProperties: false
@@ -17792,6 +18046,33 @@ paths:
           description: Error
       summary: Add a simulated component
       x-omniglass-permission: simulation:update
+  /nodes/{name}/simulation/observation:
+    get:
+      description: "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503."
+      operationId: get-node-simulation-observation
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointObservation"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a node's endpoint observation
+      x-omniglass-permission: simulation:read
   /nodes/{name}/simulation/systems:
     post:
       description: "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422."

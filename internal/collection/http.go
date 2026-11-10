@@ -53,14 +53,25 @@ type HTTPResult struct {
 // rung.
 func NewHTTPProber() HTTPProber { return httpProber{} }
 
-type httpProber struct{}
+// NewTalliedHTTPProber is the real HTTP probe counting its connection and its
+// request on the node's tally (#1639).
+func NewTalliedHTTPProber(tally *RequestTally) HTTPProber { return httpProber{tally: tally} }
 
-func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
+type httpProber struct{ tally *RequestTally }
+
+// probeTransport is the probe's transport: one request per connection, so a
+// connection the node opens is one the component accepts for one request.
+func probeTransport(dial func(context.Context, string, string) (net.Conn, error)) *http.Transport {
+	return &http.Transport{DialContext: dial, DisableKeepAlives: true}
+}
+
+func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	timeout := t.Timeout
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
 	var res HTTPResult
+	call := p.tally.call(TallyHTTP)
 	dialer := &net.Dialer{Timeout: timeout}
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialStart := time.Now()
@@ -68,10 +79,17 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 		if err == nil {
 			res.Dialed = true
 			res.DialMS = float64(time.Since(dialStart)) / float64(time.Millisecond)
+			call.connected()
 		}
 		return conn, err
 	}
-	transport := &http.Transport{DialContext: dial, DisableKeepAlives: true}
+	transport := probeTransport(func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err == nil {
+			call.begin()
+		}
+		return conn, err
+	})
 	scheme := "http"
 	if t.TLS != nil {
 		scheme = "https"
@@ -92,6 +110,7 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 				return nil, err
 			}
 			res.Handshaken, res.Accepted = true, true
+			call.begin()
 			return tc, nil
 		}
 	}
@@ -110,6 +129,7 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
+		call.settle(errOutcome(err))
 		if !res.Dialed {
 			// The L4 rung failed: classify like the tcp probe does. A failure
 			// that classifies is data; one that does not (resolve/setup) is
@@ -134,6 +154,7 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 		return res, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+	call.settle(statusOutcome(resp.StatusCode))
 	res.Responded = true
 	res.Status = resp.StatusCode
 	res.ResponseMS = float64(time.Since(start)) / float64(time.Millisecond)
