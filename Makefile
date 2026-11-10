@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab scale-lab scale-measure footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -36,7 +36,7 @@ lab: all
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
-	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -p 1 -timeout 30m -v -run Integration ./internal/lab/ ./internal/labfootprint/
+	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run Integration ./internal/lab/ ./internal/labfootprint/
 
 # The scale lab (#1554): a scale lab scenario at a size, one node per site,
 # checked by scripts/scale-lab.sh (a node container per site, every simulated
@@ -59,6 +59,22 @@ scale-lab: all
 # (SCALE_MEASURE_ARGS="--window 10m --json out.json").
 scale-measure: all
 	./bin/omniglass lab measure --scenario $(SCENARIO) --systems $(SYSTEMS) $(SCALE_MEASURE_ARGS)
+
+# The perf gate (#1640, ADR-1640): PERF_RUNS throwaway scale labs at SIZE (ci
+# or laptop) measured one after another and compared with the committed
+# baseline under internal/labfootprint/baseline. perf-check prints one row a
+# figure and fails on any regression past it; perf-baseline rewrites the
+# size's baseline from fresh runs, a reviewed change the PR states the reason
+# for. Outside make test and never a required check: each run stands up a
+# real scale lab for minutes. PERF_ARGS passes flags (PERF_ARGS="--image
+# omniglass:mine"); CI runs it on the run:perf label.
+SIZE      ?= ci
+PERF_RUNS ?= 3
+perf-check: all
+	./bin/omniglass lab perf check --size $(SIZE) --runs $(PERF_RUNS) $(PERF_ARGS)
+
+perf-baseline: all
+	./bin/omniglass lab perf baseline --size $(SIZE) --runs $(PERF_RUNS) $(PERF_ARGS)
 
 # Build the single binary with the Go toolchain (no console embedded; serves
 # the build-the-console placeholder under /web), stamped with the build id.
