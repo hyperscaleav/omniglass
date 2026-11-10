@@ -269,6 +269,42 @@ func TestAHeldRedeliveryCountsNoLanding(t *testing.T) {
 	r.wantDelivery(t, 2, 2, 0)
 }
 
+// TestAPushsRefusedSampleReadsAsTheServersLoss: a push's sample the server
+// refuses at derivation (a key the catalog does not hold) came in and never
+// went out, so the API lane reads it as the server hop's loss the way a node
+// batch's refusal reads (#1659); the push's other kinds read no loss.
+func TestAPushsRefusedSampleReadsAsTheServersLoss(t *testing.T) {
+	r := newPipelineRig(t)
+	srv := r.start(t, r.gw)
+	push := pushBatch("refused")
+	push.Metrics = append(push.Metrics, &ogv1.MetricSample{Name: "no-such-metric", Value: 1})
+	if err := srv.PublishTelemetry(r.ctx, push); err != nil {
+		t.Fatalf("publish the push: %v", err)
+	}
+	r.waitLanded(t, "refused")
+	r.waitDrained(t, srv)
+	r.report(t, srv)
+
+	got := [3]float64{
+		r.latest(t, writerclass.DeliveryInCount, string(delivery.Metric)),
+		r.latest(t, writerclass.DeliveryOutCount, string(delivery.Metric)),
+		r.latest(t, writerclass.DeliveryLossRatio, string(delivery.Metric)),
+	}
+	if want := [3]float64{2, 1, 0.5}; got != want {
+		t.Fatalf("metric delivery in/out/loss = %v, want %v: the refused sample in, the stored one in and out", got, want)
+	}
+	for _, k := range []delivery.Kind{delivery.Property, delivery.Event, delivery.Log} {
+		got := [3]float64{
+			r.latest(t, writerclass.DeliveryInCount, string(k)),
+			r.latest(t, writerclass.DeliveryOutCount, string(k)),
+			r.latest(t, writerclass.DeliveryLossRatio, string(k)),
+		}
+		if want := [3]float64{1, 1, 0}; got != want {
+			t.Errorf("%s delivery in/out/loss = %v, want %v", k, got, want)
+		}
+	}
+}
+
 // wantDelivery fails unless the server's delivery figures (#1659) read in,
 // out and loss for every kind.
 func (r pipelineRig) wantDelivery(t *testing.T, in, out, loss float64) {
