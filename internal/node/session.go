@@ -989,6 +989,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 		}
 	}
 	m.gates.retain(endpoints, taskIDs)
+	m.gates.route(tasks)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
 	// What the server reflects back is what is published: a gate the node
