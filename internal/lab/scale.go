@@ -16,6 +16,17 @@ import (
 // a learner's lab, and every container and network it creates carries it.
 const ScaleProject = "omniglass-scale"
 
+// The measuring ladder (#1719): every lab that measures runs the corporate
+// scenario at a stated size, so two figures compare only when the fleet they
+// were read from is the same. SmokeSystems is the smoke rung (make test-lab
+// and make lab-footprint), the smallest size that seeds every product the
+// manifest names; the scale levels are 300, 1,000 and 3,000 systems. The dev
+// scenario is the showcase, never a measurement basis.
+const (
+	MeasureScenario = "corporate"
+	SmokeSystems    = 20
+)
+
 // Footprint is what a part of the lab takes of the host at steady state:
 // resident memory in MiB, and CPU in cores.
 type Footprint struct {

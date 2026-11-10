@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -748,5 +749,53 @@ func TestSiteNodeIsNamedForItsSite(t *testing.T) {
 	}
 	if got := SiteNode("regional-01"); got != "edge-regional-01" {
 		t.Fatalf("SiteNode(regional-01) = %q, want edge-regional-01", got)
+	}
+}
+
+// missingProducts is every product the manifest's standards name that the
+// plan seeds none of, in name order.
+func missingProducts(m *Manifest, p *Plan) []string {
+	seeded := map[string]bool{}
+	for _, c := range p.Totals.Products {
+		if c.Count > 0 {
+			seeded[c.Name] = true
+		}
+	}
+	named := map[string]bool{}
+	for _, st := range m.Standards {
+		for _, ref := range st.Products {
+			named[ref.Name] = true
+		}
+	}
+	var missing []string
+	for name := range named {
+		if !seeded[name] {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+// The smoke rung of the measuring ladder (#1719) is corporate at 20 systems:
+// the smallest size that seeds every product the manifest names, so the
+// smoke run exercises every simulator profile the scale levels do. At 16 the
+// headquarters is too small to place a divisible conference room, and its
+// microphone, DSP and amplifier are never seeded.
+func TestCorporateSmokeSizeSeedsEveryProduct(t *testing.T) {
+	m, cat := corporate(t)
+	at := func(n int) []string {
+		t.Helper()
+		p, err := Resolve(m, cat, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return missingProducts(m, p)
+	}
+	if missing := at(20); len(missing) > 0 {
+		t.Fatalf("corporate at 20 seeds none of %v", missing)
+	}
+	if missing := at(16); len(missing) == 0 {
+		t.Fatal("corporate at 16 seeds every product: the smoke size is no longer the smallest that does, so revisit it")
 	}
 }

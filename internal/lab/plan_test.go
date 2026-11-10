@@ -528,3 +528,65 @@ func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
 		t.Errorf("empty: %v %v", got, err)
 	}
 }
+
+// Every service carries the fleet the lab seeded (#1719): the scenario, and
+// for a scale lab its size, so a measurement of the running lab reads them
+// from the lab itself and never from a flag that could disagree with it.
+func TestPlanStampsTheFleetOnEveryService(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    Options
+		want Fleet
+	}{
+		{"dev", testOptions(), Fleet{Scenario: DefaultScenario}},
+		{"scale", scaleOptions(), Fleet{Scenario: "corporate", Systems: 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := Plan(tc.o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, svc := range s.Services() {
+				got, err := FleetOf(svc.Labels)
+				if err != nil {
+					t.Fatalf("%s: %v", svc.Name, err)
+				}
+				if got != tc.want {
+					t.Errorf("%s: fleet %+v, want %+v", svc.Name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// FleetOf reads the fleet back from a container's labels, and refuses a
+// container a build before the labels started, or one whose size label is
+// not a count, rather than guess.
+func TestFleetOf(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		labels  map[string]string
+		want    Fleet
+		wantErr string
+	}{
+		{"scale", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "300"}, Fleet{Scenario: "corporate", Systems: 300}, ""},
+		{"dev", map[string]string{LabelLabScenario: "dev"}, Fleet{Scenario: "dev"}, ""},
+		{"unlabelled", map[string]string{LabelLab: "omniglass-scale"}, Fleet{},
+			"name no scenario: it was brought up by a build before the fleet labels, so stop it and bring it up again with this build's `lab run`"},
+		{"bad size", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "lots"}, Fleet{},
+			`size label omniglass.lab.systems="lots" is not a count of systems`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := FleetOf(tc.labels)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err %v, want it to say %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("FleetOf = %+v, %v; want %+v", got, err, tc.want)
+			}
+		})
+	}
+}
