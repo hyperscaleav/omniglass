@@ -46,6 +46,9 @@ type Config struct {
 	// DBPoolSize is the database pool's size, the cap on WorklistWorkers;
 	// zero means no cap.
 	DBPoolSize int
+	// PlatformComponentID is the server's own component in the platform
+	// system, where its retention figures land (#1629); empty writes none.
+	PlatformComponentID string
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
@@ -82,6 +85,9 @@ type Server struct {
 	stopWorklist      context.CancelFunc // ends the pool and cancels builds in flight
 	worklistDone      sync.WaitGroup     // the pool's workers
 	ownStoreDir       string             // non-empty when the Server created (and must clean) it
+	// platformComponentID is the server's own platform component, where the
+	// retention pass lands its figures (#1629); empty writes none.
+	platformComponentID string
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -93,7 +99,7 @@ func New(cfg Config, store Store) (*Server, error) {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
-		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize)}
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), platformComponentID: cfg.PlatformComponentID}
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {

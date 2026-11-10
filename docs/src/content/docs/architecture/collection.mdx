@@ -506,7 +506,9 @@ own failed pulls of the queue, on its node-self lane
 node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
 its claim, before its first). It keeps growing while a node is silent, which is the series a
 node-silent rule reads. The webhook counts are the receiver's
-([above](#collection-telemetry-every-endpoints-account-of-itself)).
+([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
+`metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
+([storage](/architecture/storage/#what-a-retention-pass-reports)).
 
 **How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's

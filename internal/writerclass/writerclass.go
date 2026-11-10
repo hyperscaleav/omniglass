@@ -126,6 +126,32 @@ const (
 	ProcessGCPause        = "process-gc-pause"
 )
 
+// The retention pass's figures (#1629), landed by the process on the
+// server's own platform component after each pass: per lane, the rows it
+// removed and whether it stopped short of the window (behind, a 0 or 1 flag,
+// keyed by the lane's name as the instance); per pass, its duration, its
+// failed steps and its partition roll; the trend and block compactions' lag
+// behind now; and the storage read after it, the partitions held, the oldest
+// day's age and each stored table's and the database's bytes.
+const (
+	RetentionDeletedCount       = "retention-deleted-count"
+	RetentionBehind             = "retention-behind"
+	RetentionPassDuration       = "retention-pass-duration"
+	RetentionPassFailureCount   = "retention-pass-failure-count"
+	RetentionWindowDays         = "retention-window-days"
+	MetricPartitionCreatedCount = "metric-partition-created-count"
+	MetricPartitionDroppedCount = "metric-partition-dropped-count"
+	MetricPartitionCount        = "metric-partition-count"
+	MetricOldestDayAge          = "metric-oldest-day-age"
+	MetricTrendMarkLag          = "metric-trend-mark-lag"
+	MetricBlockMarkLag          = "metric-block-mark-lag"
+	TableBytes                  = "table-bytes"
+	DatabaseBytes               = "database-bytes"
+)
+
+// retentionWriter is what writes the retention figures.
+const retentionWriter = "the server's retention pass"
+
 // The server's request and database keys (#1627): what the server's HTTP
 // surface served and how its database pool held up, over a report window,
 // landed by the server on its own platform component. An http-request-* key
@@ -196,6 +222,20 @@ var platform = map[string]string{
 	ProcessHeapSize:       nodeSelfWriter,
 	ProcessGCPause:        nodeSelfWriter,
 
+	RetentionDeletedCount:       retentionWriter,
+	RetentionBehind:             retentionWriter,
+	RetentionPassDuration:       retentionWriter,
+	RetentionPassFailureCount:   retentionWriter,
+	RetentionWindowDays:         retentionWriter,
+	MetricPartitionCreatedCount: retentionWriter,
+	MetricPartitionDroppedCount: retentionWriter,
+	MetricPartitionCount:        retentionWriter,
+	MetricOldestDayAge:          retentionWriter,
+	MetricTrendMarkLag:          retentionWriter,
+	MetricBlockMarkLag:          retentionWriter,
+	TableBytes:                  retentionWriter,
+	DatabaseBytes:               retentionWriter,
+
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
 	HTTPRequestDuration:    serverSelfWriter,
@@ -226,10 +266,16 @@ var platform = map[string]string{
 func NodeSelf(key string) bool { return platform[key] == nodeSelfWriter }
 
 // NodeSelfKeys is every key a node reports of itself, sorted.
-func NodeSelfKeys() []string {
+func NodeSelfKeys() []string { return platformKeysBy(nodeSelfWriter) }
+
+// RetentionKeys is every key the retention pass reports, sorted (#1629).
+func RetentionKeys() []string { return platformKeysBy(retentionWriter) }
+
+// platformKeysBy is every platform key one writer writes, sorted.
+func platformKeysBy(writer string) []string {
 	var out []string
 	for k, by := range platform {
-		if by == nodeSelfWriter {
+		if by == writer {
 			out = append(out, k)
 		}
 	}
