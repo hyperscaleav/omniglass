@@ -8,7 +8,7 @@
 Type "# The node's knobs: the heartbeat is its check-in; probes and polls keep their own time"
 Enter
 Wait
-Type `omniglass node run --help | grep -E -- '--(heartbeat|probe-every|poll-workers) '`
+Type `omniglass node run --help | grep -E -- '--(heartbeat|probe-every|lane-workers) '`
 Enter
 Wait
 Type "# A probe interval of zero meant 'every check-in'; it now has no meaning, so it is refused"
