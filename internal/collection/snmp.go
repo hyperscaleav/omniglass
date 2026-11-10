@@ -35,7 +35,11 @@ type SNMPGetter interface {
 // NewSNMPGetter returns the real gosnmp-backed getter.
 func NewSNMPGetter() SNMPGetter { return &snmpGetter{} }
 
-type snmpGetter struct{}
+// NewTalliedSNMPGetter is the real getter counting each datagram it sends on
+// the node's tally (#1639).
+func NewTalliedSNMPGetter(tally *RequestTally) SNMPGetter { return &snmpGetter{tally: tally} }
+
+type snmpGetter struct{ tally *RequestTally }
 
 func (g *snmpGetter) Get(ctx context.Context, target, community string, oids []string, timeout time.Duration) (map[string]string, error) {
 	host, portStr, err := net.SplitHostPort(target)
@@ -60,12 +64,35 @@ func (g *snmpGetter) Get(ctx context.Context, target, community string, oids []s
 		Retries:   0,
 		Context:   ctx,
 	}
+	// A datagram is sent when the socket takes it: each send is a request,
+	// and a send that follows an open one (a library retry) means the open
+	// one drew no answer in time. The hooks run on this goroutine.
+	var tok TallyToken
+	open := false
+	if g.tally != nil {
+		client.OnSent = func(*gosnmp.GoSNMP) {
+			if open {
+				tok.End(TallyTimedOut)
+			}
+			tok, open = g.tally.Begin(TallySNMP), true
+		}
+	}
 	if err := client.Connect(); err != nil {
 		return nil, fmt.Errorf("collection: snmp connect %s: %w", target, err)
 	}
 	defer func() { _ = client.Conn.Close() }()
 
 	res, err := client.Get(oids)
+	if open {
+		switch {
+		case err != nil:
+			tok.End(errOutcome(err))
+		case res.Error == gosnmp.AuthorizationError:
+			tok.End(TallyRefused)
+		default:
+			tok.End(TallyAnswered)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("collection: snmp get %s: %w", target, err)
 	}

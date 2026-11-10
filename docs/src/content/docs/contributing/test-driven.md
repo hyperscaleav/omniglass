@@ -324,6 +324,17 @@ make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.jso
 [cadence profiles](/guides/lab/#what-runs-with-which-privilege); `-json` writes the report for a
 generator to render.
 
+A scale lab's figures are diagnostic, but one thing it reads is not a cost and is held: whether
+every request a node sent reached its simulated endpoint and was answered. `omniglass lab measure`
+reconciles each node's tally against what its simulators observed and what landed, hop by hop
+(`connect-not-accepted`, `sent-not-received`, `received-not-settled`, `answered-not-returned`,
+`published-not-landed`, `spool-dropped`, `unhit-endpoint`), each a lower bound with its masking
+term beside it ([how to read them](/guides/lab/#every-request-reached-its-endpoint-and-was-answered)).
+The arithmetic is pure and unit-tested gap by gap; `make test-lab` brings up a 20-system corporate
+scale lab and fails on any loss, any face that saw two requests at once, any polled protocol that
+drew no request, or a restart inside the window. It needs the image `make` builds, so it is outside
+`make test` and CI.
+
 ### Comparing metric compression formats
 
 `make compress-bench` answers one question the instruments above cannot: what a metric

@@ -14,8 +14,10 @@ refs: [1636, 1637, 1624, 1634, 1094, 1625, 1700, 816, 1588]
      pull plus a heartbeat. A reconcile on its own timer, at the heartbeat interval, stays as the
      safety net for a gate or a retry that changed between worklists.
   2. **One owner.** Every reconcile, the heartbeat's work and the housekeeping pass run on the one
-     run-loop goroutine, which owns the session maps (ADR-1637). The loop is a `select` over
-     channels, so a test drives it with clocks it owns and a heartbeat that never fires.
+     run-loop goroutine, the session maps' one writer (ADR-1637); the lane workers that borrow a
+     session read the maps under their lock ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)).
+     The loop is a `select` over channels, so a test drives it with clocks it owns and a heartbeat
+     that never fires.
   3. **Supervision.** A `Supervise` primitive in `internal/collection` wraps each session-layer
      goroutine: the session machine, each connection's reader (line, http stream, udp, websocket,
      ssh), the arm conversation, the node's hooks, and the datagram arm. A recovered panic is logged

@@ -100,7 +100,7 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 	}
 
 	pctx, stop := context.WithCancel(ctx)
-	p := exec.CommandContext(pctx, binPath, "node", "run", "--simulate", "--impairments", "--poll", "300ms", "--heartbeat", "1s", "--worklist-every", "1s")
+	p := exec.CommandContext(pctx, binPath, "node", "run", "--simulate", "--impairments", "--poll", "300ms", "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s")
 	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-n", "OMNIGLASS_NODE_TOKEN="+nodeTok)
 	p.Stdout, p.Stderr = os.Stderr, os.Stderr
 	p.Cancel = func() error { return p.Process.Signal(os.Interrupt) }

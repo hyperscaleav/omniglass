@@ -86,8 +86,32 @@ const (
 	// PollFailureCount is how many of an endpoint's polls failed in a report
 	// window (#1369): a run that faulted and landed nothing, or a due poll
 	// the endpoint's gate refused, as the scheduler books a failure. Landed
-	// only when nonzero.
+	// only when nonzero. A poll held because the endpoint's probe reads it
+	// unreachable is not one: it is counted apart, in PollHeldCount.
 	PollFailureCount = "poll-failure-count"
+	// PollHeldCount is how many of an endpoint's due polls its gate held in
+	// a report window (#1650) because the endpoint's own probe reads it
+	// unreachable, a disruptive command it was sent holds it (#1651), or a
+	// path upstream holds it (#1652, which holds its due probes too, counted
+	// here): never sent, so not a failure and no backoff, counted once in
+	// each interval it waits through. Landed only when nonzero.
+	PollHeldCount = "poll-held-count"
+	// HoldExpiryCount is how many disruptions (#1651) of an endpoint the
+	// hold backstop released in a report window: a disruptive command (a
+	// reboot) closed its gate, and no up verdict came between the quiet
+	// period's end and hold_seconds. Landed only when nonzero; any is a
+	// device that did not come back in time, or a hold set too short.
+	HoldExpiryCount = "hold-expiry-count"
+	// PollDueCount is how many of an endpoint's polls fell due in a report
+	// window (#1634), each on its own interval: held, refused and skipped
+	// dues included. Landed only when nonzero. It is the denominator of the
+	// endpoint's schedule loss.
+	PollDueCount = "poll-due-count"
+	// PollSkippedCount is how many of those dues the node skipped because
+	// the poll's last run was still in flight (#1634): counted, never
+	// queued behind it. Landed only when nonzero; skipped over due is the
+	// endpoint's schedule loss.
+	PollSkippedCount = "poll-skipped-count"
 	// PushMessageCount is how many messages an endpoint's held session or
 	// udp socket delivered that a listener claimed, over a report window
 	// (#1369). Landed every window while the endpoint is held, zero
@@ -118,7 +142,8 @@ var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
-	CollectionFailed, PollDuration, PollFailureCount, PushMessageCount, PushUnclaimedCount,
+	CollectionFailed, PollDuration, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
+	HoldExpiryCount,
 }
 
 // pushable are the native keys a push may write too, each mapped to the

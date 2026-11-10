@@ -13,26 +13,34 @@ import (
 // drives the loop with clocks it owns and a nil channel never fires:
 //
 //   - a worklist reconciles sessions the moment it arrives, so a held
-//     endpoint added, removed or re-keyed does not wait for a tick;
+//     endpoint added, removed or re-keyed does not wait for a tick, then
+//     hands the dispatcher the new worklist (onWorklist, #1634);
+//   - due and wake are the dispatcher's: its earliest due, and a run that
+//     ended or a gate that moved (onDue);
 //   - reconcile is the safety net, for a gate or a retry that changed
 //     between worklists;
 //   - heartbeat runs the heartbeat's own work (liveness, the spool, the
-//     tasks and commands);
+//     commands, the node's account of itself);
 //   - housekeep flushes what the sessions accumulated (unclaimed lines,
 //     pushes into the collection report) and publishes the report when due.
 //
-// Every handler runs on this goroutine; none may block on another.
+// After every case, settle re-arms what the case moved (the dispatcher's
+// due timer). Every handler runs on this goroutine; none may block on
+// another.
 type runLoop struct {
 	worklists <-chan collection.WorklistReply
-	jobs      <-chan runJob
+	due       <-chan time.Time
+	wake      <-chan struct{}
 	heartbeat <-chan time.Time
 	reconcile <-chan time.Time
 	housekeep <-chan time.Time
 	sessions  *sessionManager
 
-	onJob       func(runJob)
+	onWorklist  func(collection.WorklistReply)
+	onDue       func()
 	onHeartbeat func(collection.WorklistReply)
 	onHousekeep func(collection.WorklistReply)
+	settle      func()
 }
 
 // run serves the loop until ctx ends and returns the last worklist it took.
@@ -41,14 +49,21 @@ func (l *runLoop) run(ctx context.Context, wl collection.WorklistReply) collecti
 		select {
 		case <-ctx.Done():
 			return wl
-		case job := <-l.jobs:
-			if l.onJob != nil {
-				l.onJob(job)
-			}
 		case next := <-l.worklists:
 			// A failed pull sends nothing, so the last good worklist stays.
 			wl = next
 			l.reconcileSessions(wl)
+			if l.onWorklist != nil {
+				l.onWorklist(wl)
+			}
+		case <-l.due:
+			if l.onDue != nil {
+				l.onDue()
+			}
+		case <-l.wake:
+			if l.onDue != nil {
+				l.onDue()
+			}
 		case <-l.reconcile:
 			l.reconcileSessions(wl)
 		case <-l.heartbeat:
@@ -59,6 +74,9 @@ func (l *runLoop) run(ctx context.Context, wl collection.WorklistReply) collecti
 			if l.onHousekeep != nil {
 				l.onHousekeep(wl)
 			}
+		}
+		if l.settle != nil {
+			l.settle()
 		}
 	}
 }

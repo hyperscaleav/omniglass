@@ -2,11 +2,16 @@ package storage_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/db"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
+	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -447,5 +452,248 @@ func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("the batch never landed once the edit let go")
+	}
+}
+
+// receiptLedgerVersion is the migration that widens the receipt into the
+// batch's accounting row (#1641).
+const receiptLedgerVersion = "20261109232007"
+
+// tallyOf is a tally from a literal, for comparison.
+func tallyOf(m map[delivery.Kind]map[delivery.Outcome]int) delivery.Tally {
+	var t delivery.Tally
+	for k, os := range m {
+		for o, n := range os {
+			t.Add(k, o, n)
+		}
+	}
+	return t
+}
+
+// sameTally reports whether two tallies count the same, as their JSON.
+func sameTally(t *testing.T, got, want delivery.Tally) bool {
+	t.Helper()
+	g, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(g) == string(w)
+}
+
+// receiptRow is one receipt's accounting columns.
+type receiptRow struct {
+	node, boot string
+	seq        int64
+	minted     time.Time
+	resolved   int64
+	deliveries int
+	ledger     delivery.Declared
+	outcome    delivery.Tally
+}
+
+func (f landFixture) receipt(t *testing.T, id string) receiptRow {
+	t.Helper()
+	var r receiptRow
+	var ledger, outcome []byte
+	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome
+		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome)
+	if err != nil {
+		t.Fatalf("read receipt %s: %v", id, err)
+	}
+	if err := json.Unmarshal(ledger, &r.ledger); err != nil {
+		t.Fatalf("receipt %s ledger %s: %v", id, ledger, err)
+	}
+	if err := json.Unmarshal(outcome, &r.outcome); err != nil {
+		t.Fatalf("receipt %s outcome %s: %v", id, outcome, err)
+	}
+	return r
+}
+
+// ledgerTick is a node's tick under its ledger: task-a's rows on disp-1,
+// task-b's (refuse decides how) on disp-2, a node self-log, and an item the
+// consumer counted orphaned before the gateway saw the batch.
+func ledgerTick(f groupFixture, id string, seq uint64, ts time.Time, refuse func(storage.IngestGroup) storage.IngestGroup) storage.IngestBatch {
+	b := storage.IngestBatch{
+		BatchID: id,
+		Writer:  storage.NodeWriter("", ""),
+		Node:    "edge-1",
+		Ledger: &delivery.Stamp{Boot: "boot-1", Seq: seq, Minted: ts, Resolved: seq - 1, Kinds: delivery.Declared{
+			delivery.Metric:   {Count: 3, Before: 3 * (seq - 1)},
+			delivery.Property: {Count: 2, Before: 2 * (seq - 1)},
+			delivery.Event:    {Count: 2, Before: 2 * (seq - 1)},
+			delivery.Log:      {Count: 3, Before: 3 * (seq - 1)},
+		}},
+		NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: ts}},
+		Groups:   []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts)},
+	}
+	if refuse != nil {
+		b.Groups = append(b.Groups, refuse(taskGroup("task-b", f.disp2, f.node, "on", ts)))
+	}
+	b.Tally.Add(delivery.Metric, delivery.Orphaned, 1)
+	return b
+}
+
+// TestLandBatchRecordsItsOutcome is the receipt as the batch's accounting
+// row (#1641): a landed tick records its node, its ledger and every item's
+// outcome, the consumer's tally plus what the gateway stored, coalesced and
+// refused. A refused group's items read refused-write and its sibling's
+// stored, counted from the pass that commits alone: a refusal Postgres
+// decides lands the batch three times, and only the last counts.
+func TestLandBatchRecordsItsOutcome(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		refuse func(f groupFixture) func(storage.IngestGroup) storage.IngestGroup
+	}{
+		{"refused before any row is written", func(f groupFixture) func(storage.IngestGroup) storage.IngestGroup {
+			return func(g storage.IngestGroup) storage.IngestGroup { g.Metrics[0].OwnerID = f.disp1; return g }
+		}},
+		{"refused by Postgres as the rows land", func(groupFixture) func(storage.IngestGroup) storage.IngestGroup {
+			return func(g storage.IngestGroup) storage.IngestGroup {
+				g.Events[0].Attributes = []byte("{not json")
+				return g
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newGroupFixture(t)
+			ctx := context.Background()
+			ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+			b := ledgerTick(f, "tick-1", 1, ts, tc.refuse(f))
+			res, err := f.gw.LandBatch(ctx, b)
+			if err != nil || !res.Landed {
+				t.Fatalf("land the tick: %+v, %v", res, err)
+			}
+			want := tallyOf(map[delivery.Kind]map[delivery.Outcome]int{
+				delivery.Metric:   {delivery.Stored: 1, delivery.RefusedWrite: 1, delivery.Orphaned: 1},
+				delivery.Property: {delivery.Stored: 1, delivery.RefusedWrite: 1},
+				delivery.Event:    {delivery.Stored: 1, delivery.RefusedWrite: 1},
+				delivery.Log:      {delivery.Stored: 2, delivery.RefusedWrite: 1},
+			})
+			if !sameTally(t, res.Outcome, want) {
+				g, _ := json.Marshal(res.Outcome)
+				w, _ := json.Marshal(want)
+				t.Fatalf("outcome = %s, want %s", g, w)
+			}
+			r := f.receipt(t, "tick-1")
+			if r.node != "edge-1" || r.boot != "boot-1" || r.seq != 1 || !r.minted.Equal(ts) || r.resolved != 0 || r.deliveries != 1 {
+				t.Fatalf("receipt = %+v, want edge-1 boot-1 seq 1 minted %v resolved 0, one delivery", r, ts)
+			}
+			if r.ledger[delivery.Metric] != (delivery.Count{Count: 3}) || r.ledger[delivery.Log] != (delivery.Count{Count: 3}) || len(r.ledger) != 4 {
+				t.Fatalf("receipt ledger = %+v, want the batch's declared counts", r.ledger)
+			}
+			if !sameTally(t, r.outcome, want) {
+				t.Fatalf("receipt outcome = %+v, want the landed outcome", r.outcome)
+			}
+		})
+	}
+}
+
+// TestLandBatchCountsACoalescedProperty: an unchanged property value the
+// transition guard holds back is coalesced, not stored and not lost, and
+// the receipt says so.
+func TestLandBatchCountsACoalescedProperty(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	if _, err := f.gw.LandBatch(ctx, ledgerTick(f, "tick-1", 1, ts, nil)); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.gw.LandBatch(ctx, ledgerTick(f, "tick-2", 2, ts.Add(time.Second), nil))
+	if err != nil || !res.Landed {
+		t.Fatalf("land the second tick: %+v, %v", res, err)
+	}
+	want := tallyOf(map[delivery.Kind]map[delivery.Outcome]int{
+		delivery.Metric:   {delivery.Stored: 1, delivery.Orphaned: 1},
+		delivery.Property: {delivery.Coalesced: 1},
+		delivery.Event:    {delivery.Stored: 1},
+		delivery.Log:      {delivery.Stored: 2},
+	})
+	if !sameTally(t, res.Outcome, want) {
+		g, _ := json.Marshal(res.Outcome)
+		t.Fatalf("outcome = %s, want the unchanged power-state coalesced", g)
+	}
+	if r := f.receipt(t, "tick-2"); !sameTally(t, r.outcome, want) {
+		t.Fatalf("receipt outcome = %+v, want the landed outcome", r.outcome)
+	}
+}
+
+// TestLandBatchRedeliveryCountsADelivery: the same batch id again writes no
+// row and changes no outcome, and the receipt counts the delivery, so the
+// read can say how many items the receipt absorbed. An upsert read by its
+// rows affected would land the redelivery's rows a second time.
+func TestLandBatchRedeliveryCountsADelivery(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := ledgerTick(f, "tick-1", 1, ts, nil)
+	first, err := f.gw.LandBatch(ctx, b)
+	if err != nil || !first.Landed {
+		t.Fatalf("land the tick: %+v, %v", first, err)
+	}
+	rows := f.rows(t)
+	again, err := f.gw.LandBatch(ctx, b)
+	if err != nil || again.Landed || !again.Outcome.Empty() {
+		t.Fatalf("redelivery = %+v, %v; want nothing landed and no outcome", again, err)
+	}
+	if got := f.rows(t); got != rows {
+		t.Fatalf("after the redelivery %+v, want %+v (no row twice)", got, rows)
+	}
+	r := f.receipt(t, "tick-1")
+	if r.deliveries != 2 {
+		t.Fatalf("deliveries = %d, want 2", r.deliveries)
+	}
+	if !sameTally(t, r.outcome, first.Outcome) {
+		t.Fatalf("receipt outcome after the redelivery = %+v, want the first landing's", r.outcome)
+	}
+}
+
+// TestReceiptLedgerMigrationOverExistingReceipts: the migration widening
+// the receipt applies over receipts already landed, each read as one
+// delivery with no ledger, and applies again as a no-op.
+func TestReceiptLedgerMigrationOverExistingReceipts(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, receiptLedgerVersion); err != nil {
+		t.Fatalf("roll back below the receipt ledger: %v", err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id) values ('old-1'), ('old-2')`); err != nil {
+		t.Fatalf("plant receipts: %v", err)
+	}
+	raw, err := db.FS.ReadFile("migrations/" + receiptLedgerVersion + "_telemetry_receipt_ledger.sql")
+	if err != nil {
+		t.Fatalf("read the migration: %v", err)
+	}
+	up, _, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("migration missing '-- migrate:down' marker")
+	}
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, up); err != nil {
+			t.Fatalf("apply %d: %v", i+1, err)
+		}
+	}
+	var n, one, bare int
+	if err := conn.QueryRow(ctx, `select count(*), count(*) filter (where deliveries = 1),
+		count(*) filter (where node is null and boot is null and seq is null and minted is null
+			and resolved is null and ledger is null and outcome is null)
+		from telemetry_receipt`).Scan(&n, &one, &bare); err != nil {
+		t.Fatalf("read receipts: %v", err)
+	}
+	if n != 2 || one != 2 || bare != 2 {
+		t.Fatalf("receipts = %d, one delivery %d, no ledger %d; want 2 of each", n, one, bare)
 	}
 }

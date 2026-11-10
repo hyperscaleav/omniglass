@@ -275,3 +275,184 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 		}
 	}
 }
+
+// The platform's self-monitoring keys (#1625) are platform keys with no
+// prefix, written by the process alone. A node's self-report lane admits only
+// the keys a node reports of itself: never health, a webhook count, or the
+// server's checkin-age, so a node cannot speak for another writer.
+func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
+	keys := NodeSelfKeys()
+	if len(keys) != 17 {
+		t.Fatalf("node-self keys %v, want the 17 a node reports of itself", keys)
+	}
+	for _, key := range append(keys, CheckinAge) {
+		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
+			t.Errorf("%s carries a prefix; platform keys carry none", key)
+		}
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a platform key", key)
+		}
+	}
+	for _, key := range keys {
+		if !NodeSelf(key) {
+			t.Errorf("%s is not admitted on the node-self lane", key)
+		}
+	}
+	for _, key := range []string{Health, WebhookPostCount, CheckinAge, "poll-duration", "TICK-DURATION", "made-up"} {
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
+// TestTheRetentionKeysArePlatformKeys (#1629): the retention pass's figures
+// are platform keys with no prefix, written by the process alone, and none is
+// a key a node reports of itself.
+func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
+	keys := RetentionKeys()
+	want := []string{DatabaseBytes, MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
+		MetricPartitionCreatedCount, MetricPartitionDroppedCount, MetricTrendMarkLag, RetentionBehind,
+		RetentionDeletedCount, RetentionPassDuration, RetentionPassFailureCount, RetentionWindowDays, TableBytes}
+	slices.Sort(want)
+	if !slices.Equal(keys, want) {
+		t.Fatalf("retention keys %v, want the 13 the pass reports %v", keys, want)
+	}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) || Admits(Platform, Operator, key) {
+			t.Errorf("%s: only the process writes a retention key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
+// TestServerKeysAreTheProcesssAlone: the server's request and database keys
+// (#1627) are platform keys only the process writes, and a node naming one on
+// its node-self lane is refused like any key not its own.
+func TestServerKeysAreTheProcesssAlone(t *testing.T) {
+	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
+		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a server key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
+// TestServerPipelineKeysAreTheProcesssAlone: the server's pipeline keys
+// (#1628) are platform keys only the process writes, and a node naming one on
+// its node-self lane is refused.
+func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
+	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
+		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
+		BusWorklistPullCount, BusWorklistReplyBytesMax, BusRequestCount,
+		BusRequestFailureCount, CalcPendingDepth, CalcServedCount, CalcPassDuration, OutboxQueuedDepth,
+		OutboxDueAge, SweepDuration, SweepCount, SweepFailureCount}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a pipeline key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
+		if !NodeSelf(key) {
+			t.Errorf("%s is a generic process key a node reports of itself", key)
+		}
+	}
+}
+
+// A node's command queue (#1626) is platform keys the process writes. The
+// server measures the queue and the wire, so only the pull-failure count, the
+// one fact the node alone sees, rides the node-self lane.
+func TestTheCommandQueueKeysArePlatformKeys(t *testing.T) {
+	server := []string{CommandPendingCount, CommandPendingAge, CommandDispatchLatency, CommandExecutionLatency,
+		CommandRedeliveryCount, CommandStuckCount, CommandExpiredCount}
+	for _, key := range append(server, CommandPullFailureCount) {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) {
+			t.Errorf("the process may not write %s", key)
+		}
+		for _, w := range []Writer{Node, Push, Operator, CalcRule} {
+			if Admits(Platform, w, key) {
+				t.Errorf("%s may write %s", w, key)
+			}
+		}
+	}
+	for _, key := range server {
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s, which the server measures", key)
+		}
+	}
+	if !NodeSelf(CommandPullFailureCount) {
+		t.Errorf("the node-self lane refuses %s", CommandPullFailureCount)
+	}
+}
+
+// TestTheServerIdentityKeysAreTheBootsAlone: the server's build and start
+// time (#1644) are platform keys only the server's boot writes, so a node's
+// probe lane or a push naming either is refused with the platform-key reason,
+// which names the boot as the key's writer.
+func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
+	for _, key := range []string{ServerVersion, ServerStartedAt} {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) {
+			t.Errorf("the process may not write %s", key)
+		}
+		for _, w := range []Writer{Node, Push, Fanout, Operator, CalcRule} {
+			if Admits(Platform, w, key) {
+				t.Errorf("%s may write %s", w, key)
+			}
+			if got := Refusal(Platform, key, w, ""); got != key+" is a platform key: only the server boot writes it" {
+				t.Errorf("Refusal(%s by %s) = %q", key, w, got)
+			}
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
+// TestTheDeliveryKeysAreEveryHopsOwn: a hop's delivery keys (#1659) are
+// platform keys the process alone writes, of itself: a node on its node-self
+// lane, the server on its own component. They replace the folded drop and
+// failure counts, which are no longer declared.
+func TestTheDeliveryKeysAreEveryHopsOwn(t *testing.T) {
+	for _, key := range []string{DeliveryInCount, DeliveryOutCount, DeliveryLossRatio} {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a delivery key", key)
+		}
+		if !NodeSelf(key) {
+			t.Errorf("the node-self lane refuses %s", key)
+		}
+	}
+	for _, key := range []string{"spool-drop-count", "publish-failure-count", "bus-telemetry-drop-count"} {
+		if _, ok := Reserved(key); ok {
+			t.Errorf("%s is still declared; the delivery keys fold it", key)
+		}
+	}
+}

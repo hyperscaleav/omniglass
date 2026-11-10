@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/cli"
 	"github.com/hyperscaleav/omniglass/internal/config"
+	"github.com/spf13/cobra"
 )
 
 // The CLI reference renders every flag's default, so a default read from the
@@ -62,5 +63,24 @@ func TestTheCommittedReferenceCarriesNoToken(t *testing.T) {
 	}
 	if m := bearerShape.Find(page); m != nil {
 		t.Errorf("%s carries a bearer token (%s...); regenerate it with no token exported", dst, m[:12])
+	}
+}
+
+// TestARunnableGroupKeepsItsArguments renders a command that runs on its own
+// argument and also has subcommands (`omniglass node simulation <name>` beside
+// `node simulation observation`), and requires the usage line to keep the
+// argument: the reference had printed such a group as taking flags only.
+func TestARunnableGroupKeepsItsArguments(t *testing.T) {
+	root := &cobra.Command{Use: "omniglass"}
+	get := &cobra.Command{Use: "simulation <name>", Args: cobra.ExactArgs(1), RunE: func(*cobra.Command, []string) error { return nil }}
+	get.AddCommand(&cobra.Command{Use: "observation", RunE: func(*cobra.Command, []string) error { return nil }})
+	root.AddCommand(get)
+
+	page := string(reference(root))
+	if !strings.Contains(page, "```\nomniglass simulation <name>") {
+		t.Errorf("the runnable group's usage line lost its argument:\n%s", page)
+	}
+	if strings.Contains(page, "[command]") {
+		t.Errorf("a usage line names [command]:\n%s", page)
 	}
 }

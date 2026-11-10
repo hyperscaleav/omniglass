@@ -1141,9 +1141,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
+				var fDisruptive bool
+				var fHoldSeconds int
 				var fLabel string
 				var fName string
 				var fParamsSchema string
+				var fPowerOutletParam string
+				var fQuietSeconds int
 				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
@@ -1159,6 +1163,12 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
 						}
+						if cmd.Flags().Changed("disruptive") {
+							body["disruptive"] = fDisruptive
+						}
+						if cmd.Flags().Changed("hold-seconds") {
+							body["hold_seconds"] = fHoldSeconds
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
@@ -1167,6 +1177,12 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("params-schema") {
 							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("power-outlet-param") {
+							body["power_outlet_param"] = fPowerOutletParam
+						}
+						if cmd.Flags().Changed("quiet-seconds") {
+							body["quiet_seconds"] = fQuietSeconds
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = fSettleWindowSeconds
@@ -1181,10 +1197,14 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again")
+				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
+				cmd.Flags().StringVar(&fPowerOutletParam, "power-outlet-param", "", "Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type")
+				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type")
 				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
@@ -1246,15 +1266,19 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
+				var fDisruptive bool
+				var fHoldSeconds int
 				var fLabel string
 				var fParamsSchema string
+				var fPowerOutletParam string
+				var fQuietSeconds int
 				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a command type",
-					Long:    "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+					Long:    "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 					Example: "  omniglass command-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1263,11 +1287,23 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
 						}
+						if cmd.Flags().Changed("disruptive") {
+							body["disruptive"] = fDisruptive
+						}
+						if cmd.Flags().Changed("hold-seconds") {
+							body["hold_seconds"] = fHoldSeconds
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("params-schema") {
 							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("power-outlet-param") {
+							body["power_outlet_param"] = fPowerOutletParam
+						}
+						if cmd.Flags().Changed("quiet-seconds") {
+							body["quiet_seconds"] = fQuietSeconds
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = fSettleWindowSeconds
@@ -1282,8 +1318,12 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row")
+				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().StringVar(&fPowerOutletParam, "power-outlet-param", "", "The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row")
+				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds")
 				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
@@ -1732,6 +1772,82 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "dependency",
+				Short: "Commands for the dependency resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fKind string
+					var fOutlet string
+					var fUpstream string
+					cmd := &cobra.Command{
+						Use:     "create <name>",
+						Short:   "Record that a component depends on another",
+						Long:    "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).",
+						Example: "  omniglass component dependency create codec-1 --kind kind --upstream upstream",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/dependencies", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("kind") {
+								body["kind"] = fKind
+							}
+							if cmd.Flags().Changed("outlet") {
+								body["outlet"] = fOutlet
+							}
+							if cmd.Flags().Changed("upstream") {
+								body["upstream"] = fUpstream
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fKind, "kind", "", "How it depends: power, host or path")
+					_ = cmd.MarkFlagRequired("kind")
+					cmd.Flags().StringVar(&fOutlet, "outlet", "", "The upstream's outlet that feeds this component: required on a power edge, refused on any other")
+					cmd.Flags().StringVar(&fUpstream, "upstream", "", "Name or uuid of the component this one depends on, or a dotted address")
+					_ = cmd.MarkFlagRequired("upstream")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <name> <kind> <upstream>",
+						Short:   "Remove a component's dependency on another",
+						Long:    "Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.",
+						Example: "  omniglass component dependency delete codec-1 power pdu-1",
+						Args:    pathArgs(3),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/dependencies/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List what a component depends on and what depends on it",
+						Long:    "This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.",
+						Example: "  omniglass component dependency list codec-1",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/dependencies", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
@@ -2899,7 +3015,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "preview",
 					Short:   "Preview a driver spec's polls through a node",
-					Long:    "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+					Long:    "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
 					Example: "  omniglass driver preview --node node",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3032,6 +3148,7 @@ func generatedCommands() []*cobra.Command {
 				var fInputs string
 				var fLabel string
 				var fNode string
+				var fOutOfBand bool
 				var fParams string
 				var fTransport string
 				cmd := &cobra.Command{
@@ -3058,6 +3175,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
 						}
+						if cmd.Flags().Changed("out-of-band") {
+							body["out_of_band"] = fOutOfBand
+						}
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
 						}
@@ -3072,6 +3192,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
+				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open")
 				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb); an attach derives them from the inputs instead")
 				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
 				return cmd
@@ -3140,7 +3261,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "run <endpoint> <poll>",
 						Short:   "Run an endpoint's poll now",
-						Long:    "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+						Long:    "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
 						Example: "  omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.panel-1/telnet' status",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3212,12 +3333,13 @@ func generatedCommands() []*cobra.Command {
 				var fInputs string
 				var fLabel string
 				var fNode string
+				var fOutOfBand bool
 				var fParams string
 				var fTransport string
 				cmd := &cobra.Command{
 					Use:     "update <endpoint>",
 					Short:   "Update an endpoint",
-					Long:    "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass endpoint update 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3232,6 +3354,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
 						}
+						if cmd.Flags().Changed("out-of-band") {
+							body["out_of_band"] = fOutOfBand
+						}
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
 						}
@@ -3244,6 +3369,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
+				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone")
 				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs")
 				cmd.Flags().StringVar(&fTransport, "transport", "", "The transport: a driver-attached endpoint takes only one its driver speaks")
 				return cmd
@@ -4989,7 +5115,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a node",
-					Long:    "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
+					Long:    "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
 					Example: "  omniglass node delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5162,6 +5288,30 @@ func generatedCommands() []*cobra.Command {
 				}
 				return cmd
 			}()
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "observation",
+					Short: "Commands for the observation resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list <name>",
+							Short:   "Get a node's endpoint observation",
+							Long:    "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
+							Example: "  omniglass node simulation observation list <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/nodes/%s/simulation/observation", pathSegment(args[0]))
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -9868,6 +10018,30 @@ func generatedCommands() []*cobra.Command {
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/views/fleet")
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "platform",
+				Short: "Commands for the platform resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list",
+						Short:   "Read Omniglass's own health in one call",
+						Long:    "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+						Example: "  omniglass view platform list",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/views/platform")
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}

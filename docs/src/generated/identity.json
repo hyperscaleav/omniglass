@@ -89,6 +89,12 @@
       "labelled": true
     },
     {
+      "table": "component_dependency",
+      "shape": "id only",
+      "reason": "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named",
+      "labelled": false
+    },
+    {
       "table": "component_type",
       "shape": "key-bearing",
       "labelled": true
@@ -290,6 +296,13 @@
       "shape": "key-bearing",
       "reason": "alarm-raised, a message shape an action rule sends",
       "labelled": true
+    },
+    {
+      "table": "platform_server",
+      "shape": "human identifier, not a name",
+      "reason": "the identity a server boots under (OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a kebab token, and the server's component carries the operator-facing name (#1627)",
+      "labelled": false,
+      "no_label": "no operator surface of its own: the server is shown through its platform component, which carries the label"
     },
     {
       "table": "principal",

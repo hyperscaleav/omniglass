@@ -218,7 +218,9 @@ func (m *sessionManager) reconcileDatagrams(tasks []collection.TaskSpec) {
 			slog.Warn("udp socket refused", "facility", "session", "endpoint_id", id, "reason", reason)
 		}
 	}
+	m.mapsMu.Lock()
 	m.datagramRefused = refused
+	m.mapsMu.Unlock()
 }
 
 // openDatagram binds an endpoint's socket and arms its listeners. A bind
@@ -236,7 +238,9 @@ func (m *sessionManager) openDatagram(id string, w datagramWant) error {
 		return err
 	}
 	h := &heldDatagram{conn: w.conn, sock: sock, router: router, taskID: w.taskID, endpoint: w.endpoint, arm: w.arm, timeout: w.timeout}
+	m.mapsMu.Lock()
 	m.datagrams[id] = h
+	m.mapsMu.Unlock()
 	slog.Info("udp socket bound", "facility", "session", "task", w.taskID, "endpoint", w.endpoint, "target", w.conn.target, "local", sock.LocalAddr().String())
 	m.armDatagram(id, h)
 	return nil
@@ -253,7 +257,9 @@ func socketEnded(sock *collection.DatagramConn) bool {
 
 func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 	_ = h.sock.Close()
+	m.mapsMu.Lock()
 	delete(m.datagrams, id)
+	m.mapsMu.Unlock()
 	m.keepPushes(id, h.router)
 	taskID, endpoint := h.publishTo()
 	slog.Info("udp socket closed", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
@@ -270,7 +276,7 @@ func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 // waits: the rung reads down until the gate lifts, and its first answer then
 // arms, as a recovery does.
 func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
-	if _, gated := m.blocked(id, rungResponsive); gated {
+	if _, gated := m.refusedAt(id, rungResponsive); gated {
 		down := false
 		h.mu.Lock()
 		h.up = &down
@@ -326,6 +332,8 @@ func (m *sessionManager) datagramOf(endpointID string) collection.DatagramExchan
 	if m == nil || endpointID == "" {
 		return nil
 	}
+	m.mapsMu.RLock()
+	defer m.mapsMu.RUnlock()
 	if h, ok := m.datagrams[endpointID]; ok {
 		return h.sock
 	}
@@ -338,7 +346,9 @@ func (m *sessionManager) datagramTimeout(endpointID string) time.Duration {
 	if m == nil {
 		return 0
 	}
+	m.mapsMu.RLock()
 	h, ok := m.datagrams[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok {
 		return 0
 	}
@@ -352,7 +362,10 @@ func (m *sessionManager) datagramRefusal(endpointID string) string {
 	if m == nil {
 		return "no session manager"
 	}
-	if r := m.datagramRefused[endpointID]; r != "" {
+	m.mapsMu.RLock()
+	r := m.datagramRefused[endpointID]
+	m.mapsMu.RUnlock()
+	if r != "" {
 		return r
 	}
 	return "the endpoint is not in the worklist"
@@ -364,7 +377,9 @@ func (m *sessionManager) datagramVerdict(endpointID string, up bool) {
 	if m == nil {
 		return
 	}
+	m.mapsMu.RLock()
 	h, ok := m.datagrams[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok {
 		return
 	}
@@ -419,8 +434,8 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok {
-		return []collection.Sample{responsive(collection.VerdictDown, "rejected: "+gt.class)}, nil
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok {
+		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+gt.class)}, nil
 	}
 	var timeout time.Duration
 	var p endpointParams
@@ -442,7 +457,7 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	if terr, ok := collection.AsTerminal(err); ok {
 		sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
 		sessions.datagramVerdict(task.EndpointID, false)
-		return []collection.Sample{responsive(collection.VerdictDown, "rejected: "+terr.Class)}, nil
+		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+terr.Class)}, nil
 	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("node: task %s: %w", task.ID, ctx.Err())

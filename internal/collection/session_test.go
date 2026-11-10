@@ -1096,3 +1096,34 @@ func (d *blockingDialer) peakInFlight() int {
 	defer d.mu.Unlock()
 	return d.peak
 }
+
+// A session in its endpoint's quiet period (a disruptive command, #1651)
+// dials nothing until the period ends: the connection the reboot dropped is
+// redialed at the end of the quiet, not on the backoff.
+func TestSessionDialsNothingDuringItsQuietPeriod(t *testing.T) {
+	d, r, clock := &fakeSessionDialer{}, newRecorder(), newFakeClock()
+	var mu sync.Mutex
+	var quietUntil time.Time
+	s := startTestSessionWith(t, d, r, collection.SessionConfig{After: clock.After, Now: clock.Now,
+		Quiet: func() time.Time {
+			mu.Lock()
+			defer mu.Unlock()
+			return quietUntil
+		}})
+	r.waitStates(t, establishing, up)
+	mu.Lock()
+	quietUntil = clock.Now().Add(15 * time.Second)
+	mu.Unlock()
+	d.last().kill(errors.New("connection reset by peer"))
+	r.waitStates(t, establishing, up, recovering)
+	clock.Advance(14*time.Second, time.Second)
+	if n := d.dialCount(); n != 1 {
+		t.Fatalf("dialed %d times during the quiet period, want only the first dial", n)
+	}
+	clock.Advance(2*time.Second, time.Second)
+	r.waitStates(t, establishing, up, recovering, up)
+	if n := d.dialCount(); n != 2 {
+		t.Fatalf("dialed %d times, want one redial after the quiet period", n)
+	}
+	_ = s
+}

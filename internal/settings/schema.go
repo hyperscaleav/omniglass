@@ -23,6 +23,9 @@ type Settings struct {
 	// domain and NOT client-visible, since it names where the platform may send
 	// (an admin's business) rather than how anything renders.
 	Notification NotificationSettings `json:"notification" settings:"platform"`
+	// Database is how the server watches its own queries (#1627): platform
+	// domain and not client-visible, an admin's tuning of the server's log.
+	Database DatabaseSettings `json:"database" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -139,6 +142,17 @@ type RetentionSettings struct {
 // driver polls. The node reads it off its worklist, at heartbeat granularity.
 type CollectionSettings struct {
 	ReportSeconds int `json:"report_seconds" minimum:"10" maximum:"3600" default:"60" doc:"Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window"`
+}
+
+// DatabaseSettings is the database namespace (#1627): how the server watches
+// its own queries.
+//
+// SlowQueryMS is the threshold past which a query logs a WARN with its
+// statement's fingerprint and duration (never its arguments) and counts
+// toward the server's db-slow-query-count. Zero turns the log off. The server
+// re-reads it each report window, so a change takes without a restart.
+type DatabaseSettings struct {
+	SlowQueryMS int `json:"slow_query_ms" minimum:"0" maximum:"600000" default:"500" doc:"Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off"`
 }
 
 // LogDays is the window for one log retention band; 0 for an unknown band.

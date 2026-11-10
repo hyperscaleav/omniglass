@@ -90,7 +90,9 @@ platform-domain namespace is admin-write by definition, and `label` is `platform
 console renders a label from the same dictionary the server did, which an ordinary viewer has to be
 able to read. `retention` is `platform,client` too: a window is no secret, and a chart of a series'
 history can say how far back it reaches ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). Omitting `client` on a platform namespace
-makes it admin-only-read as well (`integrations`).
+makes it admin-only-read as well (`integrations`, and `database`, whose `slow_query_ms` is the
+threshold past which the server logs and counts a query as slow, re-read each report window:
+[the server's account of itself](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 
 ## Storage: one override table, unscoped
 

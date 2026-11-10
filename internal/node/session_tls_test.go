@@ -277,7 +277,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 			t.Fatal("a refused key landed its certificate's expiry")
 		}
 	}
-	gt, ok := m.blocked("ep-1", rungResponsive)
+	gt, ok := m.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.rung != rungResponsive || gt.class != driver.ClassCertificate {
 		t.Fatalf("gate = %+v, %v, want responsive certificate", gt, ok)
 	}
@@ -311,7 +311,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 	if prober.calls() != 1 {
 		t.Fatal("a restarted node ran a handshake against an unchanged fingerprint")
 	}
-	gt, ok = restarted.blocked("ep-1", rungResponsive)
+	gt, ok = restarted.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.refusal().Pinned != keyFirst || gt.refusal().Offered != keySecond {
 		t.Fatalf("the carried gate = %+v, want both keys kept", gt)
 	}
@@ -357,7 +357,7 @@ func TestGateRendersAndParsesTheRefusedKeys(t *testing.T) {
 	}
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", published)
-	gt, ok := restarted.blocked("ep-1", rungResponsive)
+	gt, ok := restarted.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.pinned != keyFirst || gt.offered != keySecond {
 		t.Fatalf("parsed back %+v", gt)
 	}
