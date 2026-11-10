@@ -43,3 +43,9 @@
   the sum of its instances at its newest time (`platformFigures`, `PlatformWindowKeys`,
   internal/storage/platform_view.go), the window set held to the catalog's "reported only when
   nonzero" by test.
+- **Seventh instance (#1647):** a since-start counter difference served as a window's loss. The
+  closed loop's received-not-settled gap read the sim's lifetime residual (received less settled
+  less in flight) at the window's end, so one request the sim once left unsettled read as a fault
+  in every window after, over a cumulative received count. Fix: subtract the residual already
+  standing at the window's start, and take the in figure from the start's read
+  (`startUnsettled`, internal/closedloop/reconcile.go; `Ratios`, internal/closedloop/ratio.go).

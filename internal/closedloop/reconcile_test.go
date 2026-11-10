@@ -152,6 +152,29 @@ func TestReconcileNamesEachHopsGap(t *testing.T) {
 	}
 }
 
+// A request the sim left unsettled before the window is that window's loss,
+// not this one's: the counters only grow, so a since-start residual would
+// read one old leak in every window after it. Of the start's two sim reads,
+// the larger residual is subtracted.
+func TestReconcileAResidualUnsettledBeforeTheWindowIsNoGap(t *testing.T) {
+	b := balanced()
+	// 3 http requests went unsettled before the window; the start's first
+	// read caught one of them still in flight.
+	before := protocol(&b.Start.SimBefore, "http")
+	before.Answered, before.InFlight = 97, 1
+	protocol(&b.Start.SimAfter, "http").Answered = 97
+	endSims(&b, func(o *collection.SimObservation) { protocol(o, "http").Answered = 157 })
+	if l := losses(Reconcile(b)); len(l) != 0 {
+		t.Fatalf("a leak from before the window read as this window's: %s", describe(l))
+	}
+	// Two more left unsettled inside the window are the gap.
+	endSims(&b, func(o *collection.SimObservation) { protocol(o, "http").Answered = 155 })
+	want := ClosedLoopGap{Gap: GapReceivedNotSettled, Node: "edge", Protocol: "http", Count: 2, Reading: ReadingLoss}
+	if l := losses(Reconcile(b)); len(l) != 1 || l[0] != want {
+		t.Fatalf("gaps = %s, want only %+v", describe(l), want)
+	}
+}
+
 // When every hop carried everything there is nothing to report.
 func TestReconcileBalancedFiguresYieldNoGap(t *testing.T) {
 	if got := Reconcile(balanced()); len(got) != 0 {

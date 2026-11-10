@@ -177,10 +177,13 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 			Count: residual - late, Masked: n2.InFlight + late + untallied, AnsweredLate: late})
 	}
 
-	// Inside the sim, at its last read: a request received is settled or in
-	// flight.
+	// Inside the sim: a request received is settled or in flight, so what
+	// is neither at the last read and was not already at the start is the
+	// window's loss. The counters only grow, so a residual left from before
+	// the window is that window's, never this one's.
 	for _, p := range s2.Protocols {
-		add(ClosedLoopGap{Gap: GapReceivedNotSettled, Protocol: p.Protocol, Count: p.Received - p.Settled() - p.InFlight})
+		add(ClosedLoopGap{Gap: GapReceivedNotSettled, Protocol: p.Protocol,
+			Count: unsettled(p) - startUnsettled(b, p.Protocol)})
 	}
 
 	// The telemetry hops.
@@ -263,6 +266,20 @@ func simAccepted(from, to collection.SimObservation) int64 {
 		n += p.Accepted - from.Protocol(p.Protocol).Accepted
 	}
 	return n
+}
+
+// unsettled is the requests a sim read holds neither settled nor in flight.
+func unsettled(p collection.SimProtocolObservation) int64 {
+	return p.Received - p.Settled() - p.InFlight
+}
+
+// startUnsettled is a protocol's unsettled residual at the window's start:
+// the larger of the start's two sim reads, never below 0. A read can only
+// understate it (the sim raises in flight before received and an outcome
+// before leaving flight, and the reader takes received, in flight, then the
+// outcomes), so the larger is the nearer.
+func startUnsettled(b NodeBracket, protocol string) int64 {
+	return max(unsettled(b.Start.SimBefore.Protocol(protocol)), unsettled(b.Start.SimAfter.Protocol(protocol)), 0)
 }
 
 // tallyRow is a transport's row in a node read, zero when it has none.

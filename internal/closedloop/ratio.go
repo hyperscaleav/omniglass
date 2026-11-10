@@ -61,9 +61,11 @@ func Ratios(b NodeBracket) []GapRatio {
 		// answers are what could have been lost on the way back.
 		put(GapAnsweredNotReturned, p, replied(s2b.Protocol(p))-replied(s1a.Protocol(p)))
 	}
-	// Reconcile's settled count is cumulative at the last read, so its figure is too.
+	// Reconcile counts what went unsettled after the start's residual, so
+	// what the sim received from the start's second read is what it could
+	// have left unsettled.
 	for _, p := range s2.Protocols {
-		put(GapReceivedNotSettled, p.Protocol, p.Received)
+		put(GapReceivedNotSettled, p.Protocol, p.Received-s1a.Protocol(p.Protocol).Received)
 	}
 	acknowledged := b.End.Node.BatchesAcknowledged - b.Start.Node.BatchesAcknowledged
 	put(GapPublishedNotLanded, "", acknowledged)

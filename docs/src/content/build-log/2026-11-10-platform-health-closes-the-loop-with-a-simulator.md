@@ -21,4 +21,6 @@ restart, or not yet full, says so and shows no number. The read is `GET /views/p
 A new walkthrough drops an snmp device's packets from its drawer and watches the gap open and clear, and
 an end-to-end check holds a whole lab to every gap at 0 and every polled protocol reached. A simulated
 device's drawer now opens from `/simulation?c=<component>`, and a zero impairment field starts empty, so
-a typed value replaces it.
+a typed value replaces it. `received-not-settled` now counts only what went unsettled inside the window,
+in `lab measure` as on the page, so a request a simulator left unsettled an hour ago no longer reads in
+every window after it.
