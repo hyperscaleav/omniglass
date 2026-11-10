@@ -145,7 +145,7 @@ function LossFigure(props: { ratio: number | undefined; absent: boolean; testid:
 function HopDetail(props: { hop: PlatformPipelineHop; pipeline: PlatformPipeline; kind: PipelineKindChoice }) {
   const keyFacts = () => {
     const byName = new Map((props.pipeline.keys ?? []).map((k) => [k.name, k]));
-    return (props.hop.keys ?? []).map((name) => ({ name, label: byName.get(name)?.label ?? name, description: byName.get(name)?.description ?? "" }));
+    return (props.hop.keys ?? []).map((name) => ({ name, description: byName.get(name)?.description ?? "" }));
   };
   return (
     <div data-testid="pipeline-hop-detail" class="grid gap-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm md:grid-cols-2">
