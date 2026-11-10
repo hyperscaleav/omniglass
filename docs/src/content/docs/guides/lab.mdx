@@ -548,20 +548,27 @@ figure is still reported.
 
 Below the endpoints block, the delivery table says how much telemetry the lab lost on the way in, as a
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
-([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). A healthy lab reads
-exactly 0 for every kind:
+([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
+`node` is what the nodes collected and shipped, `push` what was pushed to the server (the booking
+service's `POST /telemetry:push` and the meeting service's webhooks). A healthy lab reads exactly 0
+for every kind on both:
 
 ```
-delivery    hop     in       out      loss     dedup  cause
-metric      ingest  1275     1275     0        0      -
-property    ingest  166      166      0        0      -
-event       ingest  0        0        -        0      -
-log         ingest  0        0        -        0      -
-end to end  metric 0  property 0  event -  log -
+delivery    lane  hop     in       out      loss     dedup  cause
+metric      node  ingest  1275     1275     0        0      -
+property    node  ingest  166      166      0        0      -
+event       node  ingest  0        0        -        0      -
+log         node  ingest  0        0        -        0      -
+metric      push  ingest  12       12       0        0      -
+property    push  ingest  24       24       0        0      -
+event       push  ingest  3        3        0        0      -
+log         push  ingest  0        0        -        0      -
+end to end  node  metric 0  property 0  event -  log -
 ```
 
-- **in** is the items the node minted in the window (the batches' ledgers, plus the items of any batch
-  that never landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
+- **in** is the items minted in the window, by the node on the node lane and by the server as it
+  published a push on the push lane (the batches' ledgers, plus the items of any batch that never
+  landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
   unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
   conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
   is read today; the node, schedule and sim hops follow.
@@ -573,17 +580,24 @@ end to end  metric 0  property 0  event -  log -
   and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
   only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
   outcome's count on every row, with the same keys for every kind.
-- **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
-  from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
-  Termed at ingest, dropped at the node, or lost in between`.
-- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`; with one hop it
-  equals the ingest row.
-- **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
-  ran out (no later batch said the spool had cleared past them, or the stream still held batches),
-  with no ratio for it rather than a guess. A note under the table gives the stream's pending and
+- **missing** is a batch that never landed: a hole in a boot's batch sequence, its items read
+  from its neighbors' offsets. At this stage it cannot say why; the footer names the lane and what a
+  hole on it can be. On the node lane it reads `never landed: Termed at ingest, dropped at the node,
+  or lost in between`; on the push lane, `never landed: Termed at ingest, or dropped by the stream
+  before it was read`. A push the stream refused is not one: the pusher was answered `503` and still
+  holds its items, so the server took them back off its ledger.
+- **end to end** is each kind's loss over every hop the node lane carries it across,
+  `1 - prod(1 - loss)`; with one hop it equals the node lane's ingest row. The push lane crosses the
+  ingest hop alone, so its row is its own end to end.
+- **unsettled** names a boot whose window's batches were not all known when `--settle-timeout`
+  ran out (no later batch said its publisher had cleared past them, or the stream still held
+  batches), with no ratio for it rather than a guess. A node boot reads `node <name>, boot <id>`;
+  the push lane's boot is the server process's, and reads `push lane, boot <id>`. The push lane
+  settles on the next push, so a lab whose pushers stopped before the window ended, or whose
+  server restarted after it, reads its push lane unsettled. A note under the table gives the stream's pending and
   unacked counts when the stream was the cause.
 
-Two limitations, both closed by the node hop (#1692):
+Two limitations of the node lane, both closed by the node hop (#1692):
 
 - A node killed while it still holds unshipped batches loses its old boot's tail, and nothing later
   in that boot reveals it.
