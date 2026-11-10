@@ -8,8 +8,9 @@ A figure from one lab level now compares with the next: every level that measure
 scenario at a stated size, on a ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
 fleet stays the showcase, never a measurement basis. `make test-lab`'s footprint and scale measure, and
 `make lab-footprint` with no arguments, run corporate at 20 (`lab.MeasureScenario`, `lab.SmokeSystems`),
-the smallest round size that seeds every product the manifest names; a unit test pins that 20 does and
-16 does not. The footprint takes `-systems`, and since a corporate lab runs a node per site it reads the
+the smallest round size past the last one that drops a product the manifest names; a unit test pins
+that 16 and 17 drop one and that 18 to 20 and every rung of the ladder seed them all. The footprint's
+report names the size from the lab's labels too, not the database's count. The footprint takes `-systems`, and since a corporate lab runs a node per site it reads the
 lab's containers by label and sums the nodes into one row, so its table keeps its server, node and
 Postgres rows. `make scale-lab` and `make scale-measure` default to 300, the ladder's first level.
 

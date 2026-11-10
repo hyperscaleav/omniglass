@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
@@ -777,11 +778,12 @@ func missingProducts(m *Manifest, p *Plan) []string {
 	return missing
 }
 
-// The smoke rung of the measuring ladder (#1719) is corporate at 20 systems:
-// the smallest size that seeds every product the manifest names, so the
-// smoke run exercises every simulator profile the scale levels do. At 16 the
-// headquarters is too small to place a divisible conference room, and its
-// microphone, DSP and amplifier are never seeded.
+// The smoke rung of the measuring ladder (#1719) is corporate at
+// lab.SmokeSystems: the smallest round size past the last one that drops a
+// product, so the smoke run exercises every simulator profile the scale
+// levels do. At 16 and 17 the headquarters is too small to place a divisible
+// conference room, and its microphone, DSP and amplifier are never seeded;
+// from 18 on, through every rung of the ladder, every product is.
 func TestCorporateSmokeSizeSeedsEveryProduct(t *testing.T) {
 	m, cat := corporate(t)
 	at := func(n int) []string {
@@ -792,10 +794,19 @@ func TestCorporateSmokeSizeSeedsEveryProduct(t *testing.T) {
 		}
 		return missingProducts(m, p)
 	}
-	if missing := at(20); len(missing) > 0 {
-		t.Fatalf("corporate at 20 seeds none of %v", missing)
+	for _, n := range []int{lab.SmokeSystems, 300, 1000, 3000} {
+		if missing := at(n); len(missing) > 0 {
+			t.Errorf("corporate at %d seeds none of %v", n, missing)
+		}
 	}
-	if missing := at(16); len(missing) == 0 {
-		t.Fatal("corporate at 16 seeds every product: the smoke size is no longer the smallest that does, so revisit it")
+	for n := 18; n < lab.SmokeSystems; n++ {
+		if missing := at(n); len(missing) > 0 {
+			t.Errorf("corporate at %d seeds none of %v: the last size that drops a product moved, so revisit the smoke size", n, missing)
+		}
+	}
+	for _, n := range []int{16, 17} {
+		if missing := at(n); len(missing) == 0 {
+			t.Errorf("corporate at %d seeds every product: the gap the smoke size clears closed, so revisit it", n)
+		}
 	}
 }

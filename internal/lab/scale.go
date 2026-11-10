@@ -19,8 +19,9 @@ const ScaleProject = "omniglass-scale"
 // The measuring ladder (#1719): every lab that measures runs the corporate
 // scenario at a stated size, so two figures compare only when the fleet they
 // were read from is the same. SmokeSystems is the smoke rung (make test-lab
-// and make lab-footprint), the smallest size that seeds every product the
-// manifest names; the scale levels are 300, 1,000 and 3,000 systems. The dev
+// and make lab-footprint), the smallest round size past the last one that
+// drops a product the manifest names (16 and 17 do, every size from 18 up
+// does not); the scale levels are 300, 1,000 and 3,000 systems. The dev
 // scenario is the showcase, never a measurement basis.
 const (
 	MeasureScenario = "corporate"

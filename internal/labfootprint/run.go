@@ -191,6 +191,17 @@ func (h *harness) leftovers(ctx context.Context) ([]string, error) {
 	return left, nil
 }
 
+// footprintSystems is the size a footprint report names: the size the lab
+// was brought up at, read from its labels like its scenario (#1719), so a
+// figure is quoted at its ladder size. A dev lab has no stated size, so it
+// names the systems the database counted.
+func footprintSystems(fleet lab.Fleet, counted int) int {
+	if fleet.Systems > 0 {
+		return fleet.Systems
+	}
+	return counted
+}
+
 func (h *harness) measure(ctx context.Context) (Report, error) {
 	// The containers are found by the project's labels: a scale scenario
 	// runs a node per site, which the ready file does not list.
@@ -213,7 +224,11 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		return Report{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
 	if f := strings.Split(strings.TrimSpace(size), "|"); len(f) == 3 {
-		run.Systems, _ = strconv.Atoi(f[0])
+		counted, _ := strconv.Atoi(f[0])
+		run.Systems = footprintSystems(fleet, counted)
+		if run.Systems != counted {
+			h.say("note: the lab was brought up at %d systems and its database now holds %d", run.Systems, counted)
+		}
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
 	}

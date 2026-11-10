@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/moby/moby/api/types/container"
+
+	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
@@ -219,5 +221,24 @@ func TestLabRunArgs(t *testing.T) {
 	cfg.Scenario, cfg.Systems = "dev", 0
 	if got := labRunArgs(cfg, "/r/lab.env", 7); slices.Contains(got, "--systems") {
 		t.Fatalf("a dev scenario passed a size: %q", got)
+	}
+}
+
+// The footprint's report names the size the lab was brought up at, read from
+// its labels like its scenario (#1719), so a figure is quoted at its ladder
+// size; a dev lab has no stated size and reports the systems it seeded.
+func TestFootprintSystems(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		fleet         lab.Fleet
+		counted, want int
+	}{
+		{"corporate at its label", lab.Fleet{Scenario: "corporate", Systems: 20}, 20, 20},
+		{"the label over a drifted count", lab.Fleet{Scenario: "corporate", Systems: 20}, 23, 20},
+		{"dev, which has no size", lab.Fleet{Scenario: "dev"}, 7, 7},
+	} {
+		if got := footprintSystems(c.fleet, c.counted); got != c.want {
+			t.Errorf("%s: footprintSystems = %d, want %d", c.name, got, c.want)
+		}
 	}
 }

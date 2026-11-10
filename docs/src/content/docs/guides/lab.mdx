@@ -318,7 +318,7 @@ components of each product) and the [preflight](#how-big-a-lab-your-machine-can-
 A figure from one lab level compares with a figure from the next only when both read the same fleet
 shape, so **every level that measures runs the `corporate` scenario at a stated size**, and a size's
 figures are compared only with the same size
-([#1719](https://github.com/hyperscaleav/omniglass/issues/1719)). The `dev` fleet is the showcase:
+([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)). The `dev` fleet is the showcase:
 the `make lab` default, the docs screenshots, the demos and the console end-to-end tests. It carries
 broken devices and unassigned identities on purpose, so its rows, its cost and its loss share no shape
 with a corporate fleet, and it is never a measurement basis.
@@ -332,10 +332,11 @@ with a corporate fleet, and it is never a measurement basis.
 | the perf gate ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640)) | corporate, at its baseline's size on the ladder | refuses a run of another scenario or size as invalid |
 | the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633)) | corporate, 3,000 systems | the goal size, held for hours |
 
-20 is the smallest round size that seeds every product the corporate manifest names: 16 and 17 drop
-the headquarters' divisible conference room and its three products, and every size from 18 up seeds
-them all. A unit test (`TestCorporateSmokeSizeSeedsEveryProduct`) pins it, so a manifest edit that
-breaks the coverage fails there rather than in a lab.
+20 is the smallest round size past the last one that drops a product the corporate manifest names:
+16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
+18 up, through each rung of the ladder, seeds them all. A unit test
+(`TestCorporateSmokeSizeSeedsEveryProduct`) pins it, so a manifest edit that breaks the coverage fails
+there rather than in a lab.
 
 A scale lab stamps its scenario and size on its containers as labels (`omniglass.lab.scenario`,
 `omniglass.lab.systems`), and every measure reads them from the lab rather than from its own flags, so

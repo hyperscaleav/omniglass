@@ -45,10 +45,11 @@ func TestIntegrationLabFootprint(t *testing.T) {
 		t.Fatalf("the lab footprint failed: %v\n%s\nthe lab:\n%s", err, progress.String(), labLog.String())
 	}
 	t.Logf("%s\n%s", progress.String(), rep.Table())
-	if rep.Scenario != lab.MeasureScenario {
-		t.Errorf("the footprint ran the %q scenario, want %q (#1719)", rep.Scenario, lab.MeasureScenario)
+	if rep.Scenario != lab.MeasureScenario || rep.Systems != lab.SmokeSystems {
+		t.Errorf("the footprint names %s at %d systems, want %s at %d (#1719)",
+			rep.Scenario, rep.Systems, lab.MeasureScenario, lab.SmokeSystems)
 	}
-	if rep.Systems == 0 || rep.Tasks == 0 || rep.Build == "" {
+	if rep.Tasks == 0 || rep.Build == "" {
 		t.Errorf("the run's conditions are unread: %+v", rep)
 	}
 	if rep.MetricRowsPerMinute.N != 2 || rep.MetricRowsPerMinute.Median <= 0 {

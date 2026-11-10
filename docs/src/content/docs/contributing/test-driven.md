@@ -301,7 +301,7 @@ back-to-back windows. Every level that measures runs the corporate scenario at a
 a figure from here compares with the same size on the
 [scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev fleet is the showcase,
 never a measurement basis, and the report names the scenario and size it read from the lab's
-labels.
+labels ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)).
 
 - **CPU per container** (server, the nodes summed into one row, Postgres), in millicores, from
   each cgroup's CPU time as the Engine reports it.
