@@ -73,7 +73,7 @@ func (h PlatformPipelineHop) kindOf(instance string) (delivery.Kind, bool) {
 var PlatformPipelineHops = []PlatformPipelineHop{
 	{
 		ID: delivery.Node, Label: "Node",
-		Description:    "The node's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, or it never encodes (lost).",
+		Description:    "The node's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, it never encodes, or (a self-log line) the bounded log buffer drops it (lost).",
 		ComponentClass: PlatformClassNode, InstanceForm: pipelineKindToken,
 	},
 	{

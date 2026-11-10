@@ -773,7 +773,7 @@ The node hop's **delivery** goes the same way (#1659): per item kind as the inst
 `delivery-in-count` (items that settled at the spool this window), `delivery-out-count` (the ones the
 stream acked) and `delivery-loss-ratio`, `(in - out) / in`, 0 when nothing came in. An item settles
 when the stream acks its batch (in and out), or when the spool drops it at a cap, the bus refuses it,
-or it never encodes (in only); a batch held for a retry has not settled and counts in the window it
+it never encodes, or (a self-log line) the bounded log buffer drops it (in only, #1692); a batch held for a retry has not settled and counts in the window it
 does. These three replace the old spool-drop and publish-failure counts, so every hop's loss reads
 as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)), and
 [Platform health](/guides/operator/platform-health/#where-work-is-lost) draws this hop beside the
