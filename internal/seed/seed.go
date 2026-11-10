@@ -455,6 +455,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			Disruptive          bool   `yaml:"disruptive"`
 			QuietSeconds        int    `yaml:"quiet_seconds"`
 			HoldSeconds         int    `yaml:"hold_seconds"`
+			PowerOutletParam    string `yaml:"power_outlet_param"`
 		} `yaml:"command_types"`
 	}
 	if err := yaml.Unmarshal(commandTypesYAML, &doc); err != nil {
@@ -466,6 +467,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
 			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
 			Disruptive: c.Disruptive, QuietSeconds: c.QuietSeconds, HoldSeconds: c.HoldSeconds,
+			PowerOutletParam: c.PowerOutletParam,
 		}); err != nil {
 			return err
 		}

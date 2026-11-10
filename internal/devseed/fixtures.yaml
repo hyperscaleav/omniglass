@@ -2057,6 +2057,20 @@ role_assignments:
     role: touch-control
     component: lab-b-touch
 
+# Dependency edges (#1648): what a component needs from another, a different
+# fact from where it sits. Boardroom A's rack power conditioner feeds the video
+# bar from outlet 1 and the amplifier from outlet 2, so cycling outlet 1 holds
+# the bar, and the touch panel is hosted by the bar, so a reboot of the bar
+# holds the panel's endpoints too. All four sit in the same room, which is
+# containment, and says nothing of either. The huddle's touch panel is paired
+# to its bar the same way, and the huddle is a room a large scenario copies,
+# so every copy carries its own edge.
+component_dependencies:
+  - { component: bar-a, upstream: power, kind: power, outlet: "1" }
+  - { component: div-amp, upstream: power, kind: power, outlet: "2" }
+  - { component: touch-a, upstream: bar-a, kind: host }
+  - { component: huddle-touch, upstream: huddle-bar, kind: host }
+
 alarms:
   - component: aud-dsp
     severity: high

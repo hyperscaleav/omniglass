@@ -503,7 +503,10 @@ gone device.
 **A disruptive command closes its endpoints' gates** (built, #1651,
 [ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)).
 A command whose type is [disruptive](/architecture/commands/#the-command_type-registry) (`reboot`)
-arrives with its **hold set**, every endpoint of its component on this node, and the node adds a
+arrives with its **hold set**, the endpoints on this node the command takes down (its target's
+in-band endpoints and those of what it hosts, or every endpoint of what a power command's outlet
+feeds; [the hold set follows dependency edges](/architecture/commands/#the-hold-set-follows-dependency-edges)),
+and the node adds a
 `disrupted` reason to each one's gate **before it sends**, dated at the delivery and naming the
 command (`disrupted by reboot (command 42) since <time>`). For the type's quiet period nothing runs
 against a held endpoint: polls are held and counted as `poll-held-count`, never as failures; the

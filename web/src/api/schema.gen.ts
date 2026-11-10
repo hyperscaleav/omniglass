@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Update a command type
-         * @description Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         * @description Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
          */
         patch: operations["update-command-type"];
         trace?: never;
@@ -995,6 +995,50 @@ export interface paths {
          */
         post: operations["issue-component-command"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List what a component depends on and what depends on it
+         * @description This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+         */
+        get: operations["list-component-dependencies"];
+        put?: never;
+        /**
+         * Record that a component depends on another
+         * @description Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream; recorded, and not yet followed by a hold). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+         */
+        post: operations["create-component-dependency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies/{kind}/{upstream}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a component's dependency on another
+         * @description Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+         */
+        delete: operations["delete-component-dependency"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1751,7 +1795,7 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
         trace?: never;
@@ -6360,7 +6404,7 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
-            /** @description The command takes its device down (reboot): its delivery closes the gates of every endpoint of the component on the delivering node until each reads up again */
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
             disruptive: boolean;
             /**
              * Format: int64
@@ -6374,6 +6418,8 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment for the invocation params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
+            power_outlet_param?: string;
             /**
              * Format: int64
              * @description A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive
@@ -6436,6 +6482,34 @@ export interface components {
             system_count: number;
             /** @description The primary system's id, the canonical handle */
             system_id?: string;
+        };
+        ComponentDependencyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentDependencyBody.json
+             */
+            readonly $schema?: string;
+            /** @description Name of the dependent component, the one that goes down with the upstream */
+            component: string;
+            /** @description The dependent component's uuid */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When the edge was recorded
+             */
+            created_at: string;
+            /**
+             * @description How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /** @description The upstream's outlet that feeds the component; set on a power edge only */
+            outlet?: string;
+            /** @description Name of the component it depends on */
+            upstream: string;
+            /** @description The upstream component's uuid */
+            upstream_id: string;
         };
         ComponentMetricsOutputBody: {
             /**
@@ -6606,7 +6680,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
-            /** @description The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again */
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
             disruptive?: boolean;
             /**
              * Format: int64
@@ -6619,6 +6693,8 @@ export interface components {
             name: string;
             /** @description A JSON Schema fragment for the params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type */
+            power_outlet_param?: string;
             /**
              * Format: int64
              * @description A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type
@@ -6633,6 +6709,30 @@ export interface components {
             target_metric_type?: string;
             /** @description The property this command sets, for settlement (at most one target arm) */
             target_property_type?: string;
+        };
+        CreateComponentDependencyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentDependencyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description How it depends: power, host or path
+             * @example power
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /**
+             * @description The upstream's outlet that feeds this component: required on a power edge, refused on any other
+             * @example 3
+             */
+            outlet?: string;
+            /**
+             * @description Name or uuid of the component this one depends on, or a dotted address
+             * @example pdu-1
+             */
+            upstream: string;
         };
         CreateComponentFromTemplateInputBody: {
             /**
@@ -6758,6 +6858,8 @@ export interface components {
             label?: string;
             /** @description Node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
+            out_of_band?: boolean;
             /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
             params?: unknown;
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
@@ -7694,6 +7796,8 @@ export interface components {
             node?: string;
             /** @description The placed node's id; the stable form of node */
             node_id?: string;
+            /** @description A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
+            out_of_band: boolean;
             /** @description The address/target settings (jsonb) */
             params?: unknown;
             /** @description The transport name (the wire this endpoint speaks over), from the code registry */
@@ -8523,6 +8627,25 @@ export interface components {
             commands: components["schemas"]["CommandBody"][] | null;
             /** @description The component, by name */
             component: string;
+        };
+        ListComponentDependenciesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentDependenciesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The component, as addressed */
+            component: string;
+            /** @description What depends on this component, ordered by kind then dependent name */
+            dependents: components["schemas"]["ComponentDependencyBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more edges this component has whose other end is outside the caller's component:read: counted, never named
+             */
+            hidden: number;
+            /** @description What this component depends on, ordered by kind then upstream name */
+            upstreams: components["schemas"]["ComponentDependencyBody"][] | null;
         };
         ListComponentMembershipsOutputBody: {
             /**
@@ -12090,6 +12213,8 @@ export interface components {
             label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             params_schema?: unknown;
+            /** @description The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row */
+            power_outlet_param?: string;
             /**
              * Format: int64
              * @description A disruptive type's quiet period in seconds
@@ -12166,6 +12291,8 @@ export interface components {
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
+            out_of_band?: boolean;
             /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
             /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -14840,6 +14967,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommandBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentDependenciesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentDependencyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentDependencyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The edge's kind */
+                kind: "power" | "host" | "path";
+                /** @description Name or uuid of the upstream component, or a dotted address */
+                upstream: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

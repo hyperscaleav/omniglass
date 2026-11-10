@@ -25,6 +25,11 @@ import (
 // delivering node. QuietSeconds is how long the node runs nothing against
 // them; after it each reopens on its own first up verdict, and HoldSeconds is
 // the counted backstop. Neither is the settle window.
+//
+// PowerOutletParam marks a power command (#1648): it names the param that
+// carries the outlet, and the command's hold set is what that outlet feeds
+// (its power dependents) rather than the target itself. Empty on every other
+// type; set only on a disruptive one.
 type CommandType struct {
 	ID                  string
 	Name                string
@@ -37,6 +42,7 @@ type CommandType struct {
 	Disruptive          bool
 	QuietSeconds        int
 	HoldSeconds         int
+	PowerOutletParam    string
 	Official            bool
 }
 
@@ -56,13 +62,13 @@ var (
 const commandTypeCols = `id, name, coalesce(label, ''), description, params_schema, settle_window_seconds,
 	coalesce((select pt.name from property_type pt where pt.id = command_type.target_property_type_id), '') as target,
 	coalesce((select mt.name from metric_type mt where mt.id = command_type.target_metric_type_id), '') as metric_target,
-	disruptive, quiet_seconds, hold_seconds, official`
+	disruptive, quiet_seconds, hold_seconds, coalesce(power_outlet_param, ''), official`
 
 func scanCommandType(row pgx.Row) (*CommandType, error) {
 	var ct CommandType
 	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Description, &ct.ParamsSchema,
 		&ct.SettleWindowSeconds, &ct.TargetPropertyType, &ct.TargetMetricType,
-		&ct.Disruptive, &ct.QuietSeconds, &ct.HoldSeconds, &ct.Official); err != nil {
+		&ct.Disruptive, &ct.QuietSeconds, &ct.HoldSeconds, &ct.PowerOutletParam, &ct.Official); err != nil {
 		return nil, err
 	}
 	return &ct, nil
@@ -87,6 +93,9 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 	if err := checkDisruption(ct.Disruptive, ct.QuietSeconds, ct.HoldSeconds); err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
+	if err := checkPowerOutletParam(ct.Disruptive, ct.PowerOutletParam); err != nil {
+		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
+	}
 	// A shipped command type targets a shipped key (#1432).
 	ns := ""
 	if ct.Official {
@@ -98,16 +107,17 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 	}
 	_, err = p.pool.Exec(ctx, `
 		insert into command_type (namespace, name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official,
-			disruptive, quiet_seconds, hold_seconds)
-		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			disruptive, quiet_seconds, hold_seconds, power_outlet_param)
+		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, nullif($12, ''))
 		on conflict (namespace, name) do update set
 			label = excluded.label, description = excluded.description,
 			params_schema = excluded.params_schema, settle_window_seconds = excluded.settle_window_seconds,
 			target_property_type_id = excluded.target_property_type_id,
 			target_metric_type_id = excluded.target_metric_type_id, official = excluded.official,
-			disruptive = excluded.disruptive, quiet_seconds = excluded.quiet_seconds, hold_seconds = excluded.hold_seconds`,
+			disruptive = excluded.disruptive, quiet_seconds = excluded.quiet_seconds, hold_seconds = excluded.hold_seconds,
+			power_outlet_param = excluded.power_outlet_param`,
 		ct.Name, labelOrNull(ct.Label), ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, propID, metricID, ct.Official,
-		ct.Disruptive, ct.QuietSeconds, ct.HoldSeconds)
+		ct.Disruptive, ct.QuietSeconds, ct.HoldSeconds, ct.PowerOutletParam)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
@@ -160,6 +170,7 @@ type CommandTypeSpec struct {
 	Disruptive          bool
 	QuietSeconds        int
 	HoldSeconds         int
+	PowerOutletParam    string
 }
 
 // CommandTypePatch carries the mutable fields; a nil field is unchanged. The name is
@@ -176,6 +187,8 @@ type CommandTypePatch struct {
 	Disruptive          *bool
 	QuietSeconds        *int
 	HoldSeconds         *int
+	// PowerOutletParam: the empty string clears it.
+	PowerOutletParam *string
 }
 
 func guardCommandTypeMutable(ctx context.Context, q querier, name string) error {
@@ -237,6 +250,23 @@ func checkDisruption(disruptive bool, quiet, hold int) error {
 		return fmt.Errorf("%w: hold_seconds is only for a disruptive type (got %d on one that is not)", ErrCommandTypeInvalid, hold)
 	case disruptive && hold <= quiet:
 		return fmt.Errorf("%w: hold_seconds (%d) must be greater than quiet_seconds (%d): the backstop has to outlast the quiet", ErrCommandTypeInvalid, hold, quiet)
+	}
+	return nil
+}
+
+// checkPowerOutletParam refuses a power-command marker on a type that
+// disrupts nothing (#1648): a power command takes down what its outlet feeds,
+// so a non-disruptive one would name an outlet no gate ever closes for. A
+// param name is a key, so it is bounded like one. The schema's CHECK is the
+// backstop, this is the message.
+func checkPowerOutletParam(disruptive bool, param string) error {
+	switch {
+	case param == "":
+		return nil
+	case !disruptive:
+		return fmt.Errorf("%w: power_outlet_param is only for a disruptive type (got %q on one that is not)", ErrCommandTypeInvalid, param)
+	case len(param) > 64:
+		return fmt.Errorf("%w: power_outlet_param is a param name of at most 64 characters", ErrCommandTypeInvalid)
 	}
 	return nil
 }
@@ -309,6 +339,9 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	if err := checkDisruption(spec.Disruptive, spec.QuietSeconds, spec.HoldSeconds); err != nil {
 		return nil, err
 	}
+	if err := checkPowerOutletParam(spec.Disruptive, spec.PowerOutletParam); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create command type: %w", err)
@@ -324,11 +357,11 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	var ctID string
 	if err := tx.QueryRow(ctx,
 		`insert into command_type (name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official,
-			disruptive, quiet_seconds, hold_seconds)
-		 values ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10)
+			disruptive, quiet_seconds, hold_seconds, power_outlet_param)
+		 values ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, nullif($11, ''))
 		 returning id`,
 		spec.Name, labelOrNull(spec.Label), spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, propTarget, metricTarget,
-		spec.Disruptive, spec.QuietSeconds, spec.HoldSeconds).Scan(&ctID); err != nil {
+		spec.Disruptive, spec.QuietSeconds, spec.HoldSeconds, spec.PowerOutletParam).Scan(&ctID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrCommandTypeExists
 		}
@@ -369,13 +402,14 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		}
 		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
-	// The disruption check spans three columns, so it reads the merged row: a
-	// patch of one is refused by what the other two already hold.
-	if patch.Disruptive != nil || patch.QuietSeconds != nil || patch.HoldSeconds != nil {
+	// The disruption check spans four columns, so it reads the merged row: a
+	// patch of one is refused by what the others already hold.
+	if patch.Disruptive != nil || patch.QuietSeconds != nil || patch.HoldSeconds != nil || patch.PowerOutletParam != nil {
 		var disruptive bool
 		var quiet, hold int
-		if err := tx.QueryRow(ctx, `select disruptive, quiet_seconds, hold_seconds from command_type_in_effect() command_type where name = $1`, name).
-			Scan(&disruptive, &quiet, &hold); err != nil {
+		var powerParam string
+		if err := tx.QueryRow(ctx, `select disruptive, quiet_seconds, hold_seconds, coalesce(power_outlet_param, '') from command_type_in_effect() command_type where name = $1`, name).
+			Scan(&disruptive, &quiet, &hold, &powerParam); err != nil {
 			return nil, fmt.Errorf("storage: load command type %q: %w", name, err)
 		}
 		if patch.Disruptive != nil {
@@ -387,7 +421,13 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		if patch.HoldSeconds != nil {
 			hold = *patch.HoldSeconds
 		}
+		if patch.PowerOutletParam != nil {
+			powerParam = *patch.PowerOutletParam
+		}
 		if err := checkDisruption(disruptive, quiet, hold); err != nil {
+			return nil, err
+		}
+		if err := checkPowerOutletParam(disruptive, powerParam); err != nil {
 			return nil, err
 		}
 	}
@@ -429,11 +469,12 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 				else target_metric_type_id end,
 			disruptive    = coalesce($11, disruptive),
 			quiet_seconds = coalesce($12, quiet_seconds),
-			hold_seconds  = coalesce($13, hold_seconds)
+			hold_seconds  = coalesce($13, hold_seconds),
+			power_outlet_param = case when $14::text is null then power_outlet_param else nullif($14, '') end
 		where id = (select id from command_type_in_effect() command_type where name = $1)`,
 		name, labelVal, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
 		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget, setLabel,
-		patch.Disruptive, patch.QuietSeconds, patch.HoldSeconds); err != nil {
+		patch.Disruptive, patch.QuietSeconds, patch.HoldSeconds, patch.PowerOutletParam); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
