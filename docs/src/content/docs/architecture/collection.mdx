@@ -1264,7 +1264,11 @@ the server asks the node and waits for its one answer. A poll's request is whate
 POST, any line), so a preview reaches the component as a command does; its MCP tool says so
 (destructive, open-world). Both hold a request open while a node works, so they are bounded by a
 stricter class than the API's own (#962 is the API-wide limit): a few runs in flight across the
-server, fewer per caller, a run past either refused (429) before anything is asked. Each asking is
+server, fewer per caller, a run past either refused (429) before anything is asked. On the node
+both are operator work on the [endpoint lane](/architecture/nodes/#the-endpoint-lane): a run now, and
+a preview whose transport and target name an attached endpoint, wait for that endpoint's request in
+flight and go ahead of its scheduled polls, and answer 409 naming the reason while its gate is
+closed; a node whose operator lanes are full answers 429 at once. Each asking is
 audited: a preview on the node (and on each secret it used), a run now on the endpoint.
 
 ## Shared-API collection: one component, many owners

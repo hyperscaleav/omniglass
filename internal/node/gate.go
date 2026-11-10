@@ -235,12 +235,15 @@ type gates struct {
 	hosts   map[string]string
 	// quiet is each disrupted endpoint's quiet and hold clock (#1651).
 	quiet map[string]disruption
+	// routes resolves a preview to an endpoint's lane (#1249): transport
+	// and target to endpoint id, rebuilt from each worklist.
+	routes map[string]string
 }
 
 func newGates() *gates {
 	return &gates{held: map[string]gate{}, current: map[string]string{},
 		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{},
-		quiet: map[string]disruption{}}
+		quiet: map[string]disruption{}, routes: map[string]string{}}
 }
 
 // observe records the endpoint's fingerprint from the worklist and the

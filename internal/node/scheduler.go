@@ -16,20 +16,21 @@ import (
 // heartbeat.
 const DefaultProbeEvery = 30 * time.Second
 
-// DefaultPollWorkers is how many tasks a node runs at once when it is given
-// no worker count (#1634).
-const DefaultPollWorkers = 16
+// DefaultLaneWorkers is how many endpoint lanes a node runs at once when it
+// is given no worker count (#1634, #1249).
+const DefaultLaneWorkers = 16
 
 // The dispatcher (#1634) runs each poll and probe on its own interval, from
 // a timer of its own, not on the heartbeat tick. Every task sits once in a
 // due-time heap; the run loop sleeps until the earliest due and calls pass,
-// which hands each due task to a lane pool (one lane per endpoint, a fixed
-// set of workers) and books its next due on the task's phase grid. A task
-// still in flight at its next due is skipped and counted, never queued
-// behind itself. A poll the endpoint's gate holds is decided here, in the
-// pass, so it never takes a lane: counted held once per due, released the
-// moment the gate opens. The heartbeat keeps the node's housekeeping and
-// sets no task's cadence.
+// which hands each due task to its endpoint's lane (#1249: one request in
+// flight per endpoint, a fixed set of workers) and books its next due on the
+// task's phase grid. A task still in flight at its next due is skipped and
+// counted, never queued behind itself. The endpoint's gate is asked when
+// the job is taken off its lane (admit), not when it is queued, so a poll
+// queued behind a command that closed the gate (a reboot) is held, not
+// sent: counted held once per due, released the moment the gate opens. The
+// heartbeat keeps the node's housekeeping and sets no task's cadence.
 
 // phaseOf is where on its interval a task's slots fall: a function of its
 // id alone, so a restarted node keeps each task's slots and a fleet of tasks
@@ -104,6 +105,11 @@ type dispatchWindow struct {
 	lateMax  time.Duration // the latest a task was dispatched past its due
 	busyMax  int           // worker-busy-count: most workers busy at once
 	queueMax int           // dispatch-queue-depth: most dispatches waiting at once
+	// operatorOffers and operatorRefusals are operator work offered to the
+	// endpoint lanes (operator-offer-count) and refused at the operator
+	// queue's cap (operator-refused-count), #1249.
+	operatorOffers   int
+	operatorRefusals int
 }
 
 type dueEntry struct {
@@ -162,7 +168,7 @@ type dispatcher struct {
 
 func newDispatcher(cfg dispatchConfig) *dispatcher {
 	if cfg.workers <= 0 {
-		cfg.workers = DefaultPollWorkers
+		cfg.workers = DefaultLaneWorkers
 	}
 	if cfg.probeEvery <= 0 {
 		cfg.probeEvery = DefaultProbeEvery
@@ -321,20 +327,6 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			if !extra {
 				d.cfg.report.pollDue(t.EndpointID)
 			}
-			ownRequest := d.cfg.sessions.lookup(t.EndpointID) == nil || driver.IsHTTP(t.Transport)
-			_, refused := d.cfg.sessions.refusedAt(t.EndpointID, statelessRung(t))
-			if !(refused && ownRequest) {
-				if _, holding := d.cfg.sessions.holding(t.EndpointID); holding {
-					// The gate holds the endpoint for a reason other than a
-					// refusal (#1650): nothing is sent and nothing booked
-					// beyond the next due, so it is no failure and starts
-					// no backoff. It counts held once per due and runs the
-					// moment the gate opens.
-					d.cfg.report.heldPoll(t.EndpointID)
-					d.held[e.id] = t.EndpointID
-					continue
-				}
-			}
 		}
 		delete(d.held, e.id)
 		d.inflight[e.id] = true
@@ -344,6 +336,9 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	for _, t := range jobs {
 		id := t.ID
 		d.pool.submit(laneKey(t), laneScheduled, func() {
+			if !d.admit(t) {
+				return
+			}
 			d.cfg.work(ctx, t)
 			d.finished(id)
 		})
@@ -355,6 +350,47 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	}
 	d.mu.Unlock()
 	return len(jobs)
+}
+
+// admit asks the endpoint's gate as a job is taken off its lane (#1249):
+// whatever ran ahead of it on the lane (a reboot) may have closed it since
+// the pass. A poll the gate holds for a reason other than its own refusal
+// (#1650, #1651) sends nothing and books nothing beyond the next due, so it
+// is no failure and starts no backoff: counted held, and run again the
+// moment the gate opens. A refusal at the rung a poll sends its own request
+// at is runPoll's to count. A probe in a disruptive command's quiet period
+// waits it out. false when the job ends here.
+func (d *dispatcher) admit(t collection.TaskSpec) bool {
+	if !driver.IsBaked(t.Spec) {
+		if until, quiet := d.cfg.sessions.quietUntil(t.EndpointID, d.cfg.clock()); quiet {
+			d.deferTo(t.ID, until)
+			return false
+		}
+		return true
+	}
+	c, closed := d.cfg.sessions.consult(t.EndpointID, statelessRung(t), sendsOwnRequest(d.cfg.sessions, t))
+	if !closed || c.reason.kind == reasonRefused {
+		return true
+	}
+	d.mu.Lock()
+	d.held[t.ID] = t.EndpointID
+	d.mu.Unlock()
+	d.cfg.report.heldPoll(t.EndpointID)
+	d.finished(t.ID)
+	return false
+}
+
+// deferTo ends a job that did not run and makes its task due at until, off
+// the schedule unless until is its slot.
+func (d *dispatcher) deferTo(id string, until time.Time) {
+	d.mu.Lock()
+	delete(d.inflight, id)
+	if e, ok := d.entries[id]; ok {
+		e.at, e.fresh, e.extra = until, false, until.Before(e.slot)
+		heap.Fix(&d.due, e.idx)
+	}
+	d.mu.Unlock()
+	d.kick()
 }
 
 // releaseLocked makes due at once what was waiting on a gate that opened: a
@@ -374,7 +410,7 @@ func (d *dispatcher) releaseLocked(now time.Time) {
 		}
 	}
 	for id, ep := range d.held {
-		if _, holding := d.cfg.sessions.holding(ep); !holding {
+		if c, closed := d.cfg.sessions.consult(ep, statelessRung(d.tasks[id]), sendsOwnRequest(d.cfg.sessions, d.tasks[id])); !closed || c.reason.kind == reasonRefused {
 			delete(d.held, id)
 			d.runNowLocked(id, now)
 		}
@@ -439,6 +475,8 @@ func (d *dispatcher) takeWindow() dispatchWindow {
 	w := d.window
 	d.window = dispatchWindow{}
 	d.mu.Unlock()
-	w.busyMax, w.queueMax = d.pool.takeWindow()
+	lw := d.pool.takeWindow()
+	w.busyMax, w.queueMax = lw.busy, lw.queued
+	w.operatorOffers, w.operatorRefusals = lw.offers, lw.refused
 	return w
 }
