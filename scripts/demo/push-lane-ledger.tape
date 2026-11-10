@@ -4,7 +4,8 @@
 # push lane lost was invisible. Now the server mints one as it publishes: a boot per server process,
 # a dense seq, and each kind's count, and the receipt carries it with a null node. omniglass lab
 # measure reconciles the push lane apart from the nodes', one ingest row per kind, 0 healthy (#1696).
-# A scale lab runs no pusher of its own yet (#1743), so this one pushes to it by hand.
+# A corporate lab runs a booking service a site, which pushes on its own (#1743); this one also pushes by hand,
+# an event besides, so every push kind reads.
 
 # demo-needs: docker-socket
 
