@@ -338,7 +338,7 @@
    "name": "endpoint-rejection",
    "data_type": "string",
    "label": "Endpoint Rejection",
-   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only. A refusal of a changed key (class host-key) appends its evidence, the pinned key and the key the component offered instead, each a SHA256 fingerprint."
+   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only. A refusal of a changed key (class host-key) appends its evidence, the pinned key and the key the component offered instead, each a SHA256 fingerprint. The gate is a set of reasons: beside that refusal, which comes first, each other reason is an entry of its kind, since when (RFC 3339) and the task that added it, the entries joined by a semicolon (unreachable 2026-11-09T14:03:00Z task-1, from the endpoint's own probe reading down twice in a row, lifted by its next up)."
   },
   {
    "name": "endpoint-rejection-reason",
@@ -544,6 +544,30 @@
    "description": "The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero."
   },
   {
+   "name": "poll-held-count",
+   "data_type": "int",
+   "label": "Held Polls",
+   "description": "The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here); never sent, so not failures; reported only when nonzero."
+  },
+  {
+   "name": "hold-expiry-count",
+   "data_type": "int",
+   "label": "Hold Expiries",
+   "description": "Disruptions of the endpoint (a reboot closed its gate) released in the report window by the command type's hold backstop because no up verdict came after the quiet period; reported only when nonzero."
+  },
+  {
+   "name": "poll-due-count",
+   "data_type": "int",
+   "label": "Due Polls",
+   "description": "The endpoint's driver polls that fell due in the report window, each on its own interval, held, refused and skipped ones included; reported only when nonzero."
+  },
+  {
+   "name": "poll-skipped-count",
+   "data_type": "int",
+   "label": "Skipped Polls",
+   "description": "The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero."
+  },
+  {
    "name": "push-message-count",
    "data_type": "int",
    "label": "Pushed Messages",
@@ -585,33 +609,33 @@
    "data_type": "float",
    "unit": "ms",
    "label": "Tick Duration",
-   "description": "Time one pass of the node's heartbeat loop took, sampled each pass; describes today's serial loop and is redefined when the loop changes (#1634)."
+   "description": "The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat."
   },
   {
    "name": "tick-overrun-count",
    "data_type": "int",
    "label": "Tick Overruns",
-   "description": "Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported only when nonzero."
+   "description": "Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "schedule-lateness",
    "data_type": "float",
    "unit": "ms",
    "label": "Schedule Lateness",
-   "description": "The worst gap between a task's due time and its actual start over one tick's due runs."
+   "description": "The worst gap between a task's due time and its dispatch over one heartbeat window's scheduled runs."
   },
   {
    "name": "schedule-gap-excess",
    "data_type": "float",
    "unit": "ms",
    "label": "Schedule Gap Excess",
-   "description": "The worst deviation between a task's actual gap since its previous run and its configured interval over one tick; a 45 s poll on a 30 s heartbeat reads 15 s every run."
+   "description": "The worst deviation between a task's gap since its previous scheduled start and its interval over one heartbeat window; a poll keeping its interval reads 0, a skipped slot a whole interval."
   },
   {
    "name": "schedule-skip-count",
    "data_type": "int",
    "label": "Schedule Skips",
-   "description": "Whole task intervals the schedule skipped because a run came late, over the report window; reported only when nonzero."
+   "description": "Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "spool-batch-count",
@@ -623,13 +647,13 @@
    "name": "spool-drop-count",
    "data_type": "int",
    "label": "Spool Drops",
-   "description": "Batches the spool dropped as full or overflowed, over the report window; reported only when nonzero."
+   "description": "Batches the spool dropped as full or overflowed, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "publish-failure-count",
    "data_type": "int",
    "label": "Publish Failures",
-   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported only when nonzero."
+   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "session-held-count",
@@ -719,6 +743,57 @@
    "unit": "ms",
    "label": "Pool Wait Time",
    "description": "Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window."
+  },
+  {
+   "name": "command-pending-count",
+   "data_type": "int",
+   "label": "Pending Commands",
+   "description": "Commands waiting for the node, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick."
+  },
+  {
+   "name": "command-pending-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Oldest Pending Command",
+   "description": "Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits."
+  },
+  {
+   "name": "command-dispatch-latency",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Command Dispatch Latency",
+   "description": "Time from a command's issue to the first time a node took it, one sample per command at that take; a command no node takes writes none and counts as expired."
+  },
+  {
+   "name": "command-execution-latency",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Command Execution Latency",
+   "description": "Time from a command's first take to the node's execution report, one sample per command at the report."
+  },
+  {
+   "name": "command-redelivery-count",
+   "data_type": "int",
+   "label": "Command Redeliveries",
+   "description": "Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; written every tick, zero when none."
+  },
+  {
+   "name": "command-stuck-count",
+   "data_type": "int",
+   "label": "Stuck Commands",
+   "description": "Commands the node took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick."
+  },
+  {
+   "name": "command-expired-count",
+   "data_type": "int",
+   "label": "Expired Commands",
+   "description": "Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); written every tick, zero when none."
+  },
+  {
+   "name": "command-pull-failure-count",
+   "data_type": "int",
+   "label": "Command Pull Failures",
+   "description": "Pulls of the node's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "room-temperature",
@@ -982,7 +1057,17 @@
   {
    "name": "reboot",
    "label": "Reboot",
-   "description": "Tell a component to restart. A fire-and-forget command: it records the invocation and a caused event, with no intended value to settle."
+   "description": "Tell a component to restart. A fire-and-forget command: it records the invocation and a caused event, with no intended value to settle. A disruptive one: its delivery closes the gates of its hold set on that node (the component's in-band endpoints and those of what it hosts), the node runs nothing against them for the quiet period, then each reopens on its own first up verdict, with the hold as the backstop for one that never reads up."
+  },
+  {
+   "name": "outlet-off",
+   "label": "Outlet Off",
+   "description": "Switch one outlet of a PDU off. A fire-and-forget command and a power command: its delivery closes the gates of what that outlet feeds on the node (every endpoint of a component with a power dependency on the outlet, its out-of-band ones included, and the in-band endpoints of what those host), never the PDU's own, so the node sends nothing to a component while its power is cut. Each reopens on its own first up verdict after the quiet period, with the hold as the backstop for one that stays dark."
+  },
+  {
+   "name": "outlet-on",
+   "label": "Outlet On",
+   "description": "Switch one outlet of a PDU on. A fire-and-forget command that disrupts nothing: restoring power holds no gate, and what the outlet feeds reads up again on its own probes as it boots."
   },
   {
    "name": "set-volume",
@@ -3077,6 +3162,14 @@
    "version": "1.0.0",
    "transport": "snmp",
    "polls": 2
+  },
+  {
+   "id": "ferrite-pdu-api",
+   "label": "Ferrite PDU API",
+   "version": "1.0.0",
+   "transport": "http",
+   "polls": 1,
+   "commands": 2
   },
   {
    "id": "kestrel-api",

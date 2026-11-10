@@ -10,8 +10,8 @@ component there, named on `node.platform_component_id`; the Storage Gateway refu
 retype, move, delete or membership change of either with a typed error the API answers as 409. Each
 tick the node sends a node-self block (`TelemetryBatch.node_self`) with its pass duration, the worst
 lateness and gap excess of its due runs, its spool depth, its held sessions by state and its Go
-process figures, and once per report window its nonzero overrun, skip, drop and publish-failure
-counts; the server lands the block on the node's platform component under the platform writer class,
+process figures, and once per report window its overrun, skip, drop and publish-failure counts,
+zero when quiet; the server lands the block on the node's platform component under the platform writer class,
 refusing any key the node does not own. `pollSchedule.due` now reports the due time it booked and the
 intervals it skipped instead of rebooking silently, so a 45 s poll on a 30 s heartbeat reads a 15 s
 gap excess. The server writes every claimed node's `checkin-age` every 15 s through a new

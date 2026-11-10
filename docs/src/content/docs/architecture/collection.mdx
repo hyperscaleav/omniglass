@@ -19,7 +19,7 @@ component's endpoints (each an **API named by the protocol it speaks**, typed by
 target component: its **state** as a transition-only property (`tcp-open` is `open` or `closed`,
 `icmp-reachable` is `up` or `down`; a steady fleet writes each once,
 [ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row))
-and its **timing** as a metric row every tick (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
+and its **timing** as a metric row each probe (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
 **server-side** from the task's endpoint (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
 unregistered sample names per lane. An orphan drop is never silent and never a flood (#1200): the
@@ -148,6 +148,12 @@ endpoints:
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
 - **Node placement is not declared here**; it is server-assigned from the component's location.
+- **`out_of_band`** marks an endpoint that answers through a reboot of its own device: a BMC, a
+  management port on its own controller. It is set on create or PATCH (`out_of_band: true`) and
+  read by the [hold set](/architecture/commands/#the-hold-set-follows-dependency-edges): a reboot
+  leaves an out-of-band endpoint's gate open, so the operator can still watch the device come back,
+  while a power command on the outlet feeding the device holds it like any other, since the whole
+  box goes dark. Every endpoint is in-band until marked.
 
 :::design[Historical: functions as a trigger plus a step DAG, superseded by the driver spec (ADR-0827)]
 What shipped is [the driver spec](#drivers-the-declarative-menu) ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)): its three function families, poll functions on a `schedule`, listeners that
@@ -333,11 +339,31 @@ the ladder, the ssh and tls pins an operator declared, and the `:retry` counter)
 verification mode is one of its driver's inputs, so editing it moves the fingerprint too. The rungs below keep running, so reachability
 stays observed while auth is rejected, except where the transport rung itself carries the credential:
 an snmp get carries the community, so beneath an snmp auth gate nothing is sent and the rung reads
-down, rejected ([snmp](#snmp)). The gate is published as `endpoint-rejection` (`<rung>
-<class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
-its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
+down, rejected ([snmp](#snmp)), a reading that is the refusal's echo and so no reachability
+verdict. **The gate is a set of reasons** (#1650,
+[ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
+refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
+the reachability probe reads down twice running and removed on its next up verdict, is another,
+holding the whole host's polls ([nodes](/architecture/nodes/#implicit-reachability)), and
+`upstream` (#1652) is the gate a component inherits from what it is reached through: while any
+endpoint of a `path` upstream has a closed gate, the dependent's in-band endpoints are held, polls
+and probes alike, naming the root of the closure (a chain A to B to C reads `upstream A` all the way
+down), and once the upstream opens each dependent waits for its own probe to read up before it is
+released. Upstream ranks first, so a dependent that is also refused or unreachable is named for the
+gateway that caused it. The gate is
+closed while any reason holds, each kind keeps its own release rule, and removing one leaves the
+others; a query that asks only about refusals (the rung checks, the ssh probe's credential, a held
+session's start, a datagram listener) sees only `refused`, so an unreachable endpoint keeps its probe
+credential and starts its session unrejected when the device returns. The gate is published as
+`endpoint-rejection` (`<rung> <class> <fingerprint>`, or `none`; a refusal of a changed key appends
+`<pinned-key> <offered-key>`, its evidence,
+[ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered);
+every other reason follows after a `;` as `<kind> <since> <source>`, which the reachability read serves as
+`gate_reasons`, an `upstream` reason with the name of the component it names when the caller may read it)
 and carried back on the worklist, so a restarted node makes no attempt against an unchanged
-fingerprint and keeps the evidence it adopts. Beside it, in the same batch, the node publishes why:
+fingerprint and keeps the evidence it adopts; it adopts the refusal, and an `upstream` reason,
+which it re-derives at once from the live gates (held while the upstream is still closed, else
+waiting on the endpoint's own probe), but not `unreachable`, which is the probe's to re-earn. Beside it, in the same batch, the node publishes why:
 `endpoint-rejection-reason`, the refusal's class and the component's own text, scrubbed of anything
 the node sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
 says why it holds. A gate adopted after a restart publishes no reason, since the node never saw that
@@ -404,7 +430,11 @@ of its own:
 | Key | Written by | What it counts, per report window | Lands |
 |---|---|---|---|
 | `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
-| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll the endpoint's gate refused | when nonzero |
+| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
+| `poll-held-count` | the node | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running) or `disrupted` (a disruptive command such as a reboot is in flight): not loss, so never a failure, and no backoff booked | when nonzero |
+| `hold-expiry-count` | the node | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up verdict since its quiet period, a device that did not come back in time | when nonzero |
+| `poll-due-count` | the node | the polls that fell due, each on its own interval, held, refused and skipped ones included | when nonzero |
+| `poll-skipped-count` | the node | the due polls skipped because the poll's last run was still in flight: counted, never queued behind it, so skipped over due is the endpoint's schedule loss | when nonzero |
 | `push-message-count` | the node | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
 | `push-unclaimed-count` | the node | the messages no listener claimed | when nonzero |
 | `webhook-post-count` | the server | the webhook posts it accepted for the endpoint | when nonzero, then one zero after a stream stops |
@@ -458,33 +488,41 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports its own keys (every node key but `checkin-age` and the two
-webhook counts, and none of the [server's](#self-monitoring-the-servers-account-of-itself)), in the
-**node-self block** of the batch
+**Who writes them.** A node reports its own keys (every node key but `checkin-age`, the two webhook
+counts and the command queue figures the server measures, and none of the
+[server's](#self-monitoring-the-servers-account-of-itself)), in the **node-self block** of the batch
 its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
 task: the server takes the node from the subject it published on, lands the rows on that node's
 platform component as the process, and holds every row to the node-self keys, so a node writes no
 other platform key (`health`, `checkin-age`, the webhook counts) and no other component's. A node-self
 sample that names an identity, or a batch that names an owner, never lands; a refused block drops
 alone and the tick's task groups still land. A platform key in a task group, a push, a command or a
-calc is refused like any reserved key. `checkin-age` is the server's: a timer writes every claimed
+calc is refused like any reserved key. The node's command queue figures are the server's but one: the
+wire writes the per-command dispatch and execution latencies as it stamps them, a 15 s timer writes
+the queue's depth, oldest age, stuck commands, redeliveries and expiries, and the node counts only its
+own failed pulls of the queue, on its node-self lane
+([commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured)).
+`checkin-age` is the server's: a timer writes every claimed
 node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
 its claim, before its first). It keeps growing while a node is silent, which is the series a
 node-silent rule reads. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)).
 
-**How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the pass's
-duration, the tick's worst lateness and gap excess, the spool's depth, the sessions held by state,
-the process figures) are one observation per sample, never a stored average. The counts (overruns,
-skipped intervals, spool drops, publish failures) are tallied over the node's report window and land
-once when it ends, only when nonzero, the `poll-failure-count` convention. The schedule figures are
-measured per task start, not per tick: each run's lateness is its actual start against its due time,
-and its gap excess is how far its gap since its own previous start strays from its interval, early or
-late, so a 45 s poll on a 30 s heartbeat reads 15 s every run and heartbeat rounding is visible. An
-overrun is a pass longer than the heartbeat, plus each tick the ticker dropped meanwhile (a gap
-between fires past one and a half heartbeats). `tick-duration` and `tick-overrun-count` describe
-today's serial loop; #1634 redefines them when the loop changes. Every count is a loss count, 0
-healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
+**How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
+dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
+depth, the sessions held by state, the process figures) are one observation per sample, never a
+stored average. The counts (dues met in flight, skipped intervals, spool drops, publish failures) are
+tallied over the node's report window and land once when it ends, every window, 0 when quiet, so a
+count's latest value returns to 0 after the window that had it rather than standing on the last
+event; the first window runs from the node's start and lands too. The schedule figures come from the
+dispatcher's window, taken each heartbeat
+([nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability)), and are measured per
+scheduled start: a run's lateness is its dispatch against its due time, and its gap excess is how far
+the gap since the task's own previous scheduled start strays from its interval, early or late, so a
+poll keeping its interval reads 0 and a skipped slot reads a whole interval. A task's first run, and a
+run off the schedule (a held or refused poll released), reads no gap. `tick-duration` is the longest
+dispatch pass of the window and `tick-overrun-count` the dues that met their own run still in flight.
+Every count is a loss count, 0 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
 later slice folds them into it. The `process-*` figures come from one runtime sampler
 (`internal/platformmetric`); the server reports none of them yet, and #1628 adds that sampler to its
 own component.
@@ -1330,7 +1368,11 @@ the server asks the node and waits for its one answer. A poll's request is whate
 POST, any line), so a preview reaches the component as a command does; its MCP tool says so
 (destructive, open-world). Both hold a request open while a node works, so they are bounded by a
 stricter class than the API's own (#962 is the API-wide limit): a few runs in flight across the
-server, fewer per caller, a run past either refused (429) before anything is asked. Each asking is
+server, fewer per caller, a run past either refused (429) before anything is asked. On the node
+both are operator work on the [endpoint lane](/architecture/nodes/#the-endpoint-lane): a run now, and
+a preview whose transport and target name an attached endpoint, wait for that endpoint's request in
+flight and go ahead of its scheduled polls, and answer 409 naming the reason while its gate is
+closed; a node whose operator lanes are full answers 429 at once. Each asking is
 audited: a preview on the node (and on each secret it used), a run now on the endpoint.
 
 ## Shared-API collection: one component, many owners
@@ -1522,11 +1564,15 @@ create offers both moves (a bare probe endpoint, or attach a driver and fill its
 Drivers page renders each spec as the menu it is.
 
 **The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
-`schedule.every` is honored at heartbeat granularity, the node running it on the first tick within
-half a heartbeat of its due time (a new task at once, and a run whose fetch failed retried on a backoff from the
-heartbeat, doubling, capped at the interval), while reachability probes run on the node's probe interval
-(`--probe-every`, every tick when unset, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
-and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+`schedule.every` is its interval, on the node's own dispatcher rather than the heartbeat (#1634), the
+node running a new task at once and each later run on a stable phase of its interval, skipping a due
+whose last run is still in flight, and retrying a run whose fetch failed on a backoff from one second,
+doubling, capped at the interval; a poll that declares no schedule runs at the heartbeat interval.
+Reachability probes run on the node's probe interval
+(`--probe-every`, default 30s, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
+and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
+[ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own); the
+[nodes page](/architecture/nodes/#scheduling-concurrency-and-self-observability) has the dispatcher).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
 connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
