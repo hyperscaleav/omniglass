@@ -40,7 +40,9 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	ep := s.attachHTTP("sensor-1", "sensor-fast", "edge-held", map[string]string{
 		"host": s.ips[sensorProfile], "port": fmt.Sprint(s.httpPort(sensorProfile)), "key": "census-key"})
-	s.runNodeReporting("edge-held", time.Second)
+	// The probe runs every 1.5s, so a poll or two comes due and fails while
+	// the gone device's two down verdicts are still landing (#1704's CI).
+	s.runNodeProbing("edge-held", time.Second, 1500*time.Millisecond)
 
 	s.waitMetric("sensor-1", ep.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")
 
@@ -54,13 +56,23 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A report window's counts are stamped at its end, so the window the gate
+	// closed in can carry the failures of polls run before it closed, stamped
+	// after it closed. The first window to count a held poll is that one or
+	// a later one; a failure in any window after it is a held poll counted as
+	// a failure.
 	s.waitFor("sensor-1", ep.Name, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, "unreachable ") }, "the gate holding unreachable")
-	heldAt := time.Now().UTC()
+	s.waitMetric("sensor-1", ep.Name, probekeys.PollHeldCount, func(float64) bool { return true }, "held polls counted")
+	firstHeld := s.earliestAt("sensor-1", ep.Name, probekeys.PollHeldCount)
 	s.waitMetric("sensor-1", ep.Name, probekeys.PollHeldCount, func(float64) bool {
-		return s.latestAt("sensor-1", ep.Name, probekeys.PollHeldCount).After(heldAt.Add(time.Second))
-	}, "held polls counted a window after the gate closed")
-	if failedAt := s.latestAt("sensor-1", ep.Name, probekeys.PollFailureCount); failedAt.After(heldAt) {
-		t.Errorf("a poll failure landed at %v, after the gate held unreachable at %v; a held poll is not a failure", failedAt, heldAt)
+		return s.latestAt("sensor-1", ep.Name, probekeys.PollHeldCount).After(firstHeld.Add(time.Second))
+	}, "held polls counted windows after the first")
+	failedAt := s.latestAt("sensor-1", ep.Name, probekeys.PollFailureCount)
+	if failedAt.IsZero() {
+		t.Error("no poll failed while the device was gone and the gate still open")
+	}
+	if failedAt.After(firstHeld) {
+		t.Errorf("a poll failure landed at %v, after the first window that held polls (%v); a held poll is not a failure", failedAt, firstHeld)
 	}
 
 	// A run now answers at once with the reason, sending nothing.
