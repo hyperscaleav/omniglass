@@ -279,6 +279,45 @@ metric_types:
     data_type: int
     label: Sweep Failures
     description: Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count.
+  # A node's command queue (#1626), on the node's platform component: the
+  # server writes all but the pull failures, which the node counts of itself.
+  # Each is one observation per sample; a percentile derives from the
+  # per-command latencies, never a stored average.
+  - name: command-pending-count
+    data_type: int
+    label: Pending Commands
+    description: Commands waiting for the node, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick.
+  - name: command-pending-age
+    data_type: float
+    unit: s
+    label: Oldest Pending Command
+    description: Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits.
+  - name: command-dispatch-latency
+    data_type: float
+    unit: ms
+    label: Command Dispatch Latency
+    description: Time from a command's issue to the first time a node took it, one sample per command at that take; a command no node takes writes none and counts as expired.
+  - name: command-execution-latency
+    data_type: float
+    unit: ms
+    label: Command Execution Latency
+    description: Time from a command's first take to the node's execution report, one sample per command at the report.
+  - name: command-redelivery-count
+    data_type: int
+    label: Command Redeliveries
+    description: Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; reported only when nonzero.
+  - name: command-stuck-count
+    data_type: int
+    label: Stuck Commands
+    description: Commands the node took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick.
+  - name: command-expired-count
+    data_type: int
+    label: Expired Commands
+    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); reported only when nonzero.
+  - name: command-pull-failure-count
+    data_type: int
+    label: Command Pull Failures
+    description: Pulls of the node's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

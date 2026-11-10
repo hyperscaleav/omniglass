@@ -1,6 +1,7 @@
 package node
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -243,5 +244,58 @@ func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 	r.process(platformmetric.Process{CPU: 5500 * time.Millisecond, FDs: 12}, t0.Add(30*time.Second))
 	if got := readings(r.take(t0.Add(30 * time.Second)))[writerclass.ProcessCPUSeconds]; got != 1.5 {
 		t.Errorf("cpu = %v, want the 1.5 s spent since the last tick", got)
+	}
+}
+
+// TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
+// pull of the command queue is tallied, and the window's tally is sent once
+// when it ends; a window with no failure sends it as zero.
+func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	r.commandPullFailed()
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[writerclass.CommandPullFailureCount] != 0 {
+		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
+	}
+	r.commandPullFailed()
+	got := readings(r.take(t0.Add(time.Minute)))
+	if got[writerclass.CommandPullFailureCount] != 2 {
+		t.Errorf("command-pull-failure-count = %v, want the window's 2: %v", got[writerclass.CommandPullFailureCount], got)
+	}
+	if _, dup := got[writerclass.CommandPullFailureCount+"#dup"]; dup {
+		t.Error("command-pull-failure-count emitted twice in one window")
+	}
+	if quiet := readings(r.take(t0.Add(2 * time.Minute))); quiet[writerclass.CommandPullFailureCount] != 0 {
+		t.Errorf("a window with no failed pull sent %v, want 0", quiet)
+	} else if _, ok := quiet[writerclass.CommandPullFailureCount]; !ok {
+		t.Errorf("a window with no failed pull wrote no command-pull-failure-count: %v", quiet)
+	}
+	var none *nodeReport
+	none.commandPullFailed()
+}
+
+// TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely: the command
+// cycle runs on its own goroutine beside the heartbeat (#1634), so a failed
+// pull tallies while the heartbeat takes the report; under -race neither
+// races and no failure is lost.
+func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			r.commandPullFailed()
+		}
+	})
+	var total float64
+	for i := range 50 {
+		total += readings(r.take(t0.Add(time.Duration(i+1) * time.Minute)))[writerclass.CommandPullFailureCount]
+	}
+	wg.Wait()
+	total += readings(r.take(t0.Add(time.Hour)))[writerclass.CommandPullFailureCount]
+	if total != 100 {
+		t.Fatalf("the windows counted %v failed pulls, want 100", total)
 	}
 }

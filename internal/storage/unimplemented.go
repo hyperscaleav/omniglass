@@ -796,6 +796,9 @@ func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMet
 func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CommandQueueHealth(context.Context, time.Time) (CommandQueueRead, error) {
+	return CommandQueueRead{}, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }
@@ -971,6 +974,14 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duratio
 
 func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Set, scope.Set) (*FleetView, error) {
 	return nil, nil
+}
+
+func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string, time.Time) error {
+	return nil
 }
 
 func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {

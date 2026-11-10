@@ -133,6 +133,12 @@
       "setup": []
     },
     {
+      "id": "read-platform-health",
+      "title": "Read the platform's health",
+      "description": "From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.",
+      "setup": []
+    },
+    {
       "id": "sample-simulation",
       "title": "Read a simulated component's status",
       "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",

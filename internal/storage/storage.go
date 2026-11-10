@@ -932,6 +932,10 @@ type Gateway interface {
 	// NodeCheckins reads every claimed node's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// CommandQueueHealth reads every node's command queue (#1626): the
+	// pending, oldest and stuck now, and the redelivered and expired since the
+	// previous read's Now (none for a zero since).
+	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
@@ -1041,6 +1045,18 @@ type Gateway interface {
 	// three different permissions: a principal who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// PlatformView is the read behind the Platform health page (#1644): the
+	// platform system's verdict, each server's identity, and one row per node
+	// with its platform component's latest figure per PlatformViewGroups key,
+	// in a fixed number of statements. The three sets answer three
+	// permissions: node:read for the rows (all-scope, else ErrNodeForbidden),
+	// system:read for the platform verdict, component:read for the figures,
+	// verdicts and server identity; short of all-scope, each is omitted.
+	PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	// RecordServerIdentity writes the server's version and boot start time on
+	// its platform component (#1644).
+	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

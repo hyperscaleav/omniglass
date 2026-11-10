@@ -91,3 +91,23 @@ func (p *PG) NodeCheckins(ctx context.Context) ([]NodeCheckin, error) {
 	}
 	return out, nil
 }
+
+// RecordServerIdentity writes the server's identity on its platform
+// component (#1644): the build it runs (server-version) and the instant this
+// boot started it (server-started-at, RFC 3339 in UTC, a string because the
+// property lane has no timestamp type). Observed, written by the process (the
+// platform writer class), so no node, push or operator can write either.
+// Transition-only: a restart moves the start time forward, and the version
+// lands again only when the build changes. A component gone since the boot
+// ensured it is ErrComponentNotFound, which the boot logs and does not fail
+// on, the rule RecordPlatformMetrics keeps.
+func (p *PG) RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error {
+	at := startedAt.UTC()
+	writes := []PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: componentID, Key: writerclass.ServerVersion, Value: version, TS: at},
+		{OwnerKind: "component", OwnerID: componentID, Key: writerclass.ServerStartedAt, Value: at.Format(time.RFC3339Nano), TS: at},
+	}
+	return p.sampleWrite(ctx, "record server identity", func(ctx context.Context, tx pgx.Tx) error {
+		return p.writePropertySamples(ctx, tx, gatewayWriter(writerclass.Process), writes, true)
+	})
+}

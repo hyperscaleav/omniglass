@@ -5520,6 +5520,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/views/platform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Omniglass's own health in one call
+         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+         */
+        get: operations["get-platform-view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/{token}": {
         parameters: {
             query?: never;
@@ -6254,6 +6274,11 @@ export interface components {
              * @description When a node last took it from its queue
              */
             delivered_at?: string;
+            /**
+             * Format: int64
+             * @description How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again
+             */
+            delivery_count: number;
             /** @description The driver whose binding renders and settles it, by name */
             driver?: string;
             /** @description The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
@@ -6267,6 +6292,11 @@ export interface components {
              * @description When its node's execution report landed
              */
             executed_at?: string;
+            /**
+             * Format: date-time
+             * @description When a node first took it from its queue; a redelivery moves delivered_at, not this
+             */
+            first_delivered_at?: string;
             /**
              * Format: int64
              * @description The command's id: with its component, its address (a command has no name)
@@ -9596,6 +9626,98 @@ export interface components {
             readonly $schema?: string;
             /** @description The bound value */
             value: string;
+        };
+        PlatformFigureBody: {
+            /**
+             * Format: date-time
+             * @description When the sample was taken
+             */
+            observed_at: string;
+            /** Format: double */
+            value: number;
+        };
+        PlatformGroupBody: {
+            /** @description The group's columns, in order, each with its catalog facts */
+            keys: components["schemas"]["PlatformKeyBody"][] | null;
+            /** @description The group's title over its columns */
+            label: string;
+            /** @description The group's stable handle */
+            name: string;
+        };
+        PlatformKeyBody: {
+            /** @description The metric type's catalog description, the column's tooltip */
+            description?: string;
+            /** @description The metric type's label, the column header */
+            label: string;
+            /** @description The metric type's name: the key a node's figures are indexed by */
+            name: string;
+            /** @description The metric type's unit, when it has one */
+            unit?: string;
+        };
+        PlatformNodeBody: {
+            /** @description The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted */
+            component?: string;
+            enrolled: boolean;
+            /** @description The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
+            figures?: {
+                [key: string]: components["schemas"]["PlatformFigureBody"];
+            };
+            label: string;
+            /**
+             * Format: date-time
+             * @description The node's last heartbeat; absent when it has never sent one
+             */
+            last_heartbeat_at?: string;
+            name: string;
+            /** @description The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
+            verdict?: string;
+        };
+        PlatformServerBody: {
+            /** @description The server's platform component uuid */
+            component: string;
+            /** @description The server's platform component name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When the server's current boot started (server-started-at); uptime is read_at minus this
+             */
+            started_at?: string;
+            /** @description The server component's recorded verdict */
+            verdict: string;
+            /** @description The build the server runs, as its boot wrote it (server-version); absent before a boot has written it */
+            version?: string;
+        };
+        PlatformSystemBody: {
+            /** @description The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
+            id: string;
+            name: string;
+            /** @description The platform system's recorded verdict, the same one its health read serves */
+            verdict: string;
+        };
+        PlatformViewOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PlatformViewOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
+            figures_read: boolean;
+            /** @description The node table's column groups, in order: the page renders these and has no key list of its own */
+            groups: components["schemas"]["PlatformGroupBody"][] | null;
+            /** @description True when this server runs as an omniglass lab */
+            lab: boolean;
+            /** @description One row per node, in name order */
+            nodes: components["schemas"]["PlatformNodeBody"][] | null;
+            /**
+             * Format: date-time
+             * @description The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock
+             */
+            read_at: string;
+            /** @description Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read */
+            servers: components["schemas"]["PlatformServerBody"][] | null;
+            /** @description The platform system and its verdict; absent without a fleet-wide system read */
+            system?: components["schemas"]["PlatformSystemBody"];
         };
         PollRunBody: {
             /** @description What the fetch answered, before any emit read it, bounded and masked of every secret the preview used */
@@ -24457,6 +24579,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetViewOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-platform-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformViewOutputBody"];
                 };
             };
             /** @description Error */

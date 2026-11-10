@@ -4374,6 +4374,17 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event.id"
+     },
+     {
+      "name": "first_dispatched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "delivery_count",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
      }
     ],
     "checks": [
