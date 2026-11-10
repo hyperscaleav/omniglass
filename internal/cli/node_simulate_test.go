@@ -53,11 +53,11 @@ func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
 		want string
 	}{
 		{[]string{"--probe-every", "0s"}, "", "--probe-every"},
-		{[]string{"--poll-workers", "0"}, "", "--poll-workers"},
-		{nil, "many", "OMNIGLASS_POLL_WORKERS"},
-		{nil, "0", "--poll-workers"},
+		{[]string{"--lane-workers", "0"}, "", "--lane-workers"},
+		{nil, "many", "OMNIGLASS_LANE_WORKERS"},
+		{nil, "0", "--lane-workers"},
 	} {
-		t.Setenv("OMNIGLASS_POLL_WORKERS", tc.env)
+		t.Setenv("OMNIGLASS_LANE_WORKERS", tc.env)
 		root := Root("test")
 		var out bytes.Buffer
 		root.SetOut(&out)
@@ -65,7 +65,7 @@ func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
 		root.SetArgs(append([]string{"node", "run", "--server", "http://127.0.0.1:1", "--name", "edge", "--token", "t"}, tc.args...))
 		err := root.Execute()
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("node run %v (OMNIGLASS_POLL_WORKERS=%q): %v, want a refusal naming %s", tc.args, tc.env, err, tc.want)
+			t.Errorf("node run %v (OMNIGLASS_LANE_WORKERS=%q): %v, want a refusal naming %s", tc.args, tc.env, err, tc.want)
 		}
 	}
 }
