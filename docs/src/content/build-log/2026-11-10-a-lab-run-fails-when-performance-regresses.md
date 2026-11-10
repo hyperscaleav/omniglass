@@ -16,7 +16,7 @@ size, window, warm-up or device set, a restarted node or an active impairment is
 before any figure is read. `make perf-baseline` generates a baseline from the same runs and refuses
 one that is noisy or nonzero on an exact figure; `--append` keeps each run as a #1632 series line,
 and `--samples` reads a series' last runs in place of fresh labs. The class tables render into the lab
-guide from `make gen`, and #1695's 3000 size extends them by a row. The `perf` workflow runs the
+guide from `make gen`, and #1719's 3000 size extends them by a row. The `perf` workflow runs the
 check on the opt-in `run:perf` label, never as a required check, and its dispatch regenerates the `ci`
 baseline as an artifact. A lab's fleet size no longer counts the platform system the boot seed plants
 (#1625), so a lab at 20 systems reads 20 and the gate does not refuse its own baseline as another size.

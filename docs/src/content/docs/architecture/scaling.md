@@ -204,7 +204,7 @@ batch carries on its receipt
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
 delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
 above 0 instead of a win, and the [perf gate](/guides/lab/#checking-against-the-baseline) fails such a
-run (#1640). The accounting rides on the receipt
+run, naming the kind, the hop and the cause, with no tolerance (#1640, #1695). The accounting rides on the receipt
 rather than on new rows, and its cost shows in the receipts' own figure: on a three-system corporate
 lab the receipt grew from about 290 to about 675 bytes a batch (receipts a day 56 to 129 MiB at about
 2.3 batches a second, WAL a sample 400 to 474 B), part of it the dead tuple the outcome update leaves
