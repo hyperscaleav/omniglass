@@ -19,13 +19,19 @@ type laneJob struct {
 	fn  func()
 }
 
+// operatorQueueCap bounds the operator work waiting across every lane
+// (#1249): an offer past it is refused and counted, never queued without
+// bound behind a slow device.
+const operatorQueueCap = 64
+
 // lanePool runs work on a fixed number of workers, one job per lane at a
-// time (#1634, folding in #1249's lane executor). A lane is an endpoint: two
-// tasks on one endpoint never talk to it at once, while two endpoints of one
+// time (#1634, #1249's endpoint lane). A lane is an endpoint: two tasks on
+// one endpoint never talk to it at once, while two endpoints of one
 // component run side by side. A job whose lane is busy waits in its class's
 // queue, and a free worker takes the first waiting job whose lane is idle,
-// operator work first. The pool keeps the high-water marks of its busy
-// workers and its waiting jobs for the dispatch window.
+// operator work first; a job in flight is never preempted. The pool keeps
+// the high-water marks of its busy workers and its waiting jobs, and its
+// operator offers against the ones refused, for the dispatch window.
 type lanePool struct {
 	mu        sync.Mutex
 	idle      *sync.Cond
@@ -35,6 +41,15 @@ type lanePool struct {
 	queues    [laneClasses][]laneJob
 	maxBusy   int
 	maxQueued int
+	offers    int
+	refusals  int
+}
+
+// laneWindow is the pool's share of a dispatch window: the busy and waiting
+// high-water marks, and the operator offers made against those refused.
+type laneWindow struct {
+	busy, queued    int
+	offers, refused int
 }
 
 func newLanePool(workers int) *lanePool {
@@ -52,6 +67,29 @@ func (p *lanePool) submit(key string, class laneClass, fn func()) {
 	defer p.mu.Unlock()
 	p.queues[class] = append(p.queues[class], laneJob{key: key, fn: fn})
 	p.dispatchLocked()
+}
+
+// offer queues fn on lane key as submit does, unless it is operator work
+// and the operator queue is at its cap: then it is refused, counted, and
+// false. A nil pool (a node run with no dispatcher) runs fn at once on its
+// own goroutine.
+func (p *lanePool) offer(key string, class laneClass, fn func()) bool {
+	if p == nil {
+		go fn()
+		return true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if class == laneOperator {
+		p.offers++
+		if len(p.queues[laneOperator]) >= operatorQueueCap {
+			p.refusals++
+			return false
+		}
+	}
+	p.queues[class] = append(p.queues[class], laneJob{key: key, fn: fn})
+	p.dispatchLocked()
+	return true
 }
 
 // do runs fn on lane key and returns once it ran: an operator's command
@@ -122,14 +160,15 @@ func (p *lanePool) queued() int {
 	return p.queuedLocked()
 }
 
-// takeWindow returns the busy and waiting high-water marks since the last
-// call and starts the next window from what is busy and waiting now.
-func (p *lanePool) takeWindow() (busy, queued int) {
+// takeWindow returns the window since the last call and starts the next
+// from what is busy and waiting now.
+func (p *lanePool) takeWindow() laneWindow {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	busy, queued = p.maxBusy, p.maxQueued
+	w := laneWindow{busy: p.maxBusy, queued: p.maxQueued, offers: p.offers, refused: p.refusals}
 	p.maxBusy, p.maxQueued = p.busy, p.queuedLocked()
-	return busy, queued
+	p.offers, p.refusals = 0, 0
+	return w
 }
 
 // wait returns once no job runs or waits: a node's shutdown, and a test

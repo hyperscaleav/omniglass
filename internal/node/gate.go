@@ -269,6 +269,9 @@ type gates struct {
 	// upSeen is every endpoint whose probe has read up since the node
 	// started, which an adopted hold waits on (#1652).
 	upSeen map[string]bool
+	// routes resolves a preview to an endpoint's lane (#1249): transport
+	// and target to endpoint id, rebuilt from each worklist.
+	routes map[string]string
 }
 
 // upstreamTopology is the path dependencies the worklist carries (#1652):
@@ -284,7 +287,7 @@ func newGates() *gates {
 	return &gates{held: map[string]gate{}, current: map[string]string{},
 		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{},
 		quiet: map[string]disruption{}, upstream: map[string]upstreamHold{}, moved: map[string]bool{}, clock: time.Now,
-		upSeen: map[string]bool{}}
+		upSeen: map[string]bool{}, routes: map[string]string{}}
 }
 
 // topology takes the path dependencies off the worklist and derives the
@@ -473,10 +476,20 @@ func (g *gates) refusedAt(endpointID string, r rung) (gate, bool) {
 // only while its fingerprint is current. Caller holds mu.
 func (g *gates) reasonsLocked(endpointID string) []reason {
 	rs := g.ownReasonsLocked(endpointID)
-	if h, ok := g.upstream[endpointID]; ok {
-		rs = append(rs, reason{kind: reasonUpstream, since: h.since, source: h.component, text: upstreamText(h)})
+	if r, ok := g.upstreamReasonLocked(endpointID); ok {
+		rs = append(rs, r)
 	}
 	return rs
+}
+
+// upstreamReasonLocked is the endpoint's upstream reason (#1652), held or
+// waiting, as a reason. Caller holds mu.
+func (g *gates) upstreamReasonLocked(endpointID string) (reason, bool) {
+	h, ok := g.upstream[endpointID]
+	if !ok {
+		return reason{}, false
+	}
+	return reason{kind: reasonUpstream, since: h.since, source: h.component, text: upstreamText(h)}, true
 }
 
 // ownReasonsLocked is every reason the endpoint's gate holds of its own:

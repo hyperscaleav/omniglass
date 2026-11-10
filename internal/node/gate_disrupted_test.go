@@ -319,12 +319,12 @@ func TestADisruptedEndpointHoldsItsPollsAndAnswersAtOnce(t *testing.T) {
 	if !reply.Gated || reply.GateReason != string(reasonDisrupted) || !strings.Contains(reply.Error, named) {
 		t.Fatalf("run now = %+v, want gated by disrupted, naming the command", reply)
 	}
-	jobs := make(chan runJob, 1)
-	var replies []collection.RunReply
-	takeRun(t.Context(), nil, l.sessions.gates, jobs, collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}},
-		func(r collection.RunReply) { replies = append(replies, r) })
-	if len(jobs) != 0 || len(replies) != 1 || replies[0].GateReason != string(reasonDisrupted) {
-		t.Fatalf("a run now was queued (%d) or answered %+v; want answered at once by disrupted", len(jobs), replies)
+	var answered []collection.RunReply
+	takeRun(t.Context(), runRoute{node: "edge", sessions: l.sessions, pool: newLanePool(1)},
+		collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}},
+		func(r collection.RunReply) { answered = append(answered, r) })
+	if len(answered) != 1 || answered[0].GateReason != string(reasonDisrupted) {
+		t.Fatalf("a run now answered %+v; want answered at once by disrupted", answered)
 	}
 	preview := previewRun(t.Context(), l.runner, l.sessions.gates, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
 	if !preview.Gated || preview.GateReason != string(reasonDisrupted) || !strings.Contains(preview.Error, named) {

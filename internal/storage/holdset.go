@@ -2,7 +2,9 @@ package storage
 
 import (
 	"encoding/json"
+	"math"
 	"slices"
+	"strconv"
 )
 
 // Dependency kinds (#1648): what a component_dependency edge says the
@@ -119,8 +121,11 @@ func ResolveHoldSet(in HoldInput) []string {
 }
 
 // OutletParam reads the outlet a power command names: params[name], a string
-// or a JSON number written as its digits. Anything else, or no name, is no
-// outlet, which feeds nothing.
+// or a JSON number written as its digits. A whole number reads as its
+// integer digits however the JSON spells it (2.0, 20e-1): an integer schema
+// admits those, and the PDU switches the same outlet as for 2, so the hold
+// set must name the same outlet too (#1653). Anything else, or no name, is
+// no outlet, which feeds nothing.
 func OutletParam(params []byte, name string) string {
 	if name == "" {
 		return ""
@@ -129,7 +134,17 @@ func OutletParam(params []byte, name string) string {
 	case string:
 		return v
 	case json.Number:
-		return v.String()
+		return wholeDigits(v)
 	}
 	return ""
+}
+
+// wholeDigits writes a JSON number that is a whole number within float64's
+// exact integer range as its integer digits, and any other number as written.
+func wholeDigits(n json.Number) string {
+	f, err := strconv.ParseFloat(n.String(), 64)
+	if err != nil || f != math.Trunc(f) || math.Abs(f) > 1<<53 {
+		return n.String()
+	}
+	return strconv.FormatInt(int64(f), 10)
 }

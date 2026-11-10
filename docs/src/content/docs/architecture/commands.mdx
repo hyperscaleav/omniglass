@@ -75,6 +75,20 @@ A **command** is the "do" half of the telemetry model, alongside a [metric or pr
 - **The two-armed target**: a **settleable** command names the value it sets in exactly one lane, `target_property_type_id` (`set-input` targets `video-input`) **or** `target_metric_type_id` (`set-volume` targets a numeric level), never both (a CHECK enforces the arc). A command with no target is **fire-and-forget** (`reboot`): it records the invocation and a caused event, with no value to settle.
 - **The disruption** (#1651): a **disruptive** command takes its device down (`reboot` is seeded disruptive, quiet 15 s, hold 300 s; `set-input` is not). Its delivery carries the flag and the **hold set**, the endpoints placed on the delivering node that the command takes down (its target's in-band endpoints and what the target hosts, [below](#the-hold-set-follows-dependency-edges)), and the node closes each one's [gate](/architecture/nodes/#implicit-reachability) with reason `disrupted` before it sends ([ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)). For **`quiet_seconds`** nothing runs against a held endpoint: no poll, no probe, no session dial, so a device mid-reboot is not read as a failure or hammered with reconnects. After quiet, each endpoint reopens on **its own** first up verdict that began after quiet (an answer already in flight at the delivery cannot release it), while a sibling that has not answered stays held. **`hold_seconds`** is the backstop: an endpoint with no up verdict by then reopens anyway, counted as `hold-expiry-count`. The hold is **not** the settle window: `settle_window_seconds` is how long settlement watches a value, and a fire-and-forget reboot has none, while the hold bounds how long its endpoints may stay closed. A non-disruptive type carries neither (a CHECK refuses a quiet or hold on one), and a disruptive type's hold must exceed its quiet.
 
+**The power commands** (#1653) are the seeded pair that switch one outlet of a PDU. **`outlet-off`**
+is disruptive (quiet 15 s, hold 300 s) and names `outlet` as its `power_outlet_param`, so its hold
+set is what that outlet feeds ([below](#the-hold-set-follows-dependency-edges)); **`outlet-on`**
+takes nothing down, so it is not disruptive and holds nothing. Both are fire-and-forget (the
+outlet's state is read back by the PDU's own polls, not settled), and both carry a
+`params_schema` that requires `outlet` as an integer from 1 to 4, so an issue naming no outlet,
+or one the PDU does not have, is refused with a 422 before anything is recorded. A driver binds
+them as any command: the shipped `ferrite-pdu-api` renders a POST to the PDU's `/api/outlets/state` with
+`{"outlet": ${arg.outlet}, "state": "off"}`, a whole-leaf reference keeping the outlet a number:
+
+```bash
+omniglass component command issue power-1 --command-type outlet-off --params '{"outlet": 2}'
+```
+
 The registry is seeded official and operator-extensible, official rows read-only, on the same shape as the [sample](/architecture/properties/#the-two-catalogs) and [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
 
 ### The hold set follows dependency edges
@@ -108,8 +122,9 @@ cannot loop it, and each endpoint is held once. Only endpoints placed on the del
 sent; holding one on another node is [#1655](https://github.com/hyperscaleav/omniglass/issues/1655).
 A component with no edges holds what it held before, less its out-of-band endpoints. The
 power-command marker is set only on a disruptive type (a CHECK and a 422 refuse it on any other),
-and no shipped type sets it until the outlet command ships
-([#1653](https://github.com/hyperscaleav/omniglass/issues/1653)).
+and the one shipped type that sets it is [`outlet-off`](#the-command_type-registry). The outlet is
+read from the params as the dependency names it, a whole number as its digits however the JSON
+spells it, so `{"outlet": 2.0}` holds what outlet 2 feeds just as `{"outlet": 2}` does.
 
 ## Issuing a command composes the whole model
 

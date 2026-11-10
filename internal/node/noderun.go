@@ -14,35 +14,38 @@ import (
 )
 
 // The node side of the on-demand node run (#1163, ADR-1163): the server asks
-// the node to run work now and the node answers once. A preview runs polls of
-// a spec no endpoint holds yet, on the request's own goroutine, touching no
-// held session and publishing nothing. A run now runs one of the node's own
-// poll tasks on a dispatcher worker in its endpoint's lane (#1634), ahead
-// of the scheduled runs waiting there, so it borrows the endpoint's session
-// and honors its gate exactly as a scheduled run does, and lands what it
-// reads.
+// the node to run work now and the node answers once. Both kinds are
+// operator work on the endpoint lanes (#1249, ADR-1249). A run now runs one
+// of the node's own poll tasks on its endpoint's lane, ahead of the
+// scheduled runs waiting there, so it borrows the endpoint's session, honors
+// its gate exactly as a scheduled run does, and lands what it reads. A
+// preview runs polls of a spec no endpoint holds yet, touching no held
+// session and publishing nothing: on the lane of the inventoried endpoint
+// its transport and target name, so it never talks to a device beside that
+// endpoint's own work, and off-lane when it names none.
 
 // defaultRunTimeout bounds a run whose request names no budget.
 const defaultRunTimeout = 20 * time.Second
 
-// runJob is a run now handed to the run loop, which gives it to the task's
-// lane: the task, its budget, and the one answer the request is owed.
-type runJob struct {
-	task collection.TaskSpec
-	// deadline is stamped when the request arrives, so a job the loop takes
-	// late runs only in what remains of its caller's budget, and one whose
-	// budget is gone is dropped unrun (its caller was already answered).
-	deadline time.Time
-	respond  func(collection.RunReply)
+// lanesFull is the answer to operator work the lanes refused at the operator
+// queue's cap.
+const lanesFull = "the node's operator lanes are full; retry in a moment"
+
+// runRoute is what a run request needs on the node: where a run now lands
+// what it reads, what it borrows and books, and the lanes both kinds take.
+type runRoute struct {
+	out      *telemetrySpool
+	node     string
+	runner   *collection.Runner
+	sessions *sessionManager
+	sched    *pollSchedule
+	report   *collectionReport
+	pool     *lanePool
 }
 
-// subscribeRuns takes the server's run requests for this node. A preview runs
-// at once on its own goroutine; a run now is handed through the run loop to
-// its endpoint's lane (and refused, not waited on, when the loop has not yet
-// taken the last one handed), unless a reason holds its endpoint, which
-// answers it at once.
-func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, g *gates, jobs chan<- runJob) (*nats.Subscription, error) {
-	return nc.Subscribe(collection.RunSubject(node), func(m *nats.Msg) {
+// subscribeRuns takes the server's run requests for this node.
+func subscribeRuns(ctx context.Context, nc *nats.Conn, rt runRoute) (*nats.Subscription, error) {
+	return nc.Subscribe(collection.RunSubject(rt.node), func(m *nats.Msg) {
 		respond := func(r collection.RunReply) {
 			b, err := json.Marshal(r)
 			if err != nil {
@@ -55,57 +58,95 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 			respond(collection.RunReply{Error: "the node could not read the run request"})
 			return
 		}
-		takeRun(ctx, runner, g, jobs, req, respond)
+		takeRun(ctx, rt, req, respond)
 	})
 }
 
-// takeRun routes one run request: a preview to its own goroutine, a run now
-// through the run loop to its lane.
-func takeRun(ctx context.Context, runner *collection.Runner, g *gates, jobs chan<- runJob, req collection.RunRequest, respond func(collection.RunReply)) {
+// takeRun routes one run request onto its lane. A closed gate answers at
+// once, as the request arrives (#1650): queued, it would wait out whatever
+// its lane is in the middle of. The budget is stamped here, so a run its
+// lane takes late runs only in what remains of it, and one whose budget is
+// gone answers unrun. Operator work past the operator queue's cap is
+// refused at once, never queued.
+func takeRun(ctx context.Context, rt runRoute, req collection.RunRequest, respond func(collection.RunReply)) {
+	if ctx.Err() != nil {
+		respond(collection.RunReply{Error: "the node is stopping"})
+		return
+	}
 	timeout := time.Duration(req.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = defaultRunTimeout
 	}
+	deadline := time.Now().Add(timeout)
+	g := rt.sessions.gatesOf()
 	switch req.Kind {
 	case collection.RunPreview:
-		go func() { respond(previewRun(ctx, runner, g, req.Tasks, req.Mask, timeout)) }()
+		if reply, closed := previewGate(g, req.Tasks); closed {
+			respond(reply)
+			return
+		}
+		run := func() {
+			left := time.Until(deadline)
+			if left <= 0 {
+				respond(collection.RunReply{Error: "the run's budget passed before the node could take it"})
+				return
+			}
+			respond(previewRun(ctx, rt.runner, g, req.Tasks, req.Mask, left))
+		}
+		ep := g.resolve(req.Tasks)
+		if ep == "" {
+			go run()
+			return
+		}
+		if !rt.pool.offer(ep, laneOperator, run) {
+			respond(collection.RunReply{Full: true, Error: lanesFull})
+		}
 	case collection.RunNow:
 		if len(req.Tasks) != 1 {
 			respond(collection.RunReply{Error: "a run now runs exactly one task"})
 			return
 		}
-		// A reason that holds the whole endpoint answers here, as the
-		// request arrives (#1650): queued, it would wait out whatever its
-		// lane is in the middle of, and a run spent timing out against a
-		// gone device can outlast the caller's budget.
-		if r, held := g.holding(req.Tasks[0].EndpointID); held {
-			respond(heldRun(r))
+		task := req.Tasks[0]
+		if c, closed := rt.sessions.consult(task.EndpointID, statelessRung(task), sendsOwnRequest(rt.sessions, task)); closed {
+			respond(runReply(c))
 			return
 		}
-		select {
-		case jobs <- runJob{task: req.Tasks[0], deadline: time.Now().Add(timeout), respond: respond}:
-		default:
-			respond(collection.RunReply{Error: "the node is already running a run now; retry in a moment"})
+		ok := rt.pool.offer(laneKey(task), laneOperator, func() {
+			respond(runNowTask(ctx, rt.out, rt.node, rt.runner, rt.sessions, rt.sched, rt.report, task, deadline))
+		})
+		if !ok {
+			respond(collection.RunReply{Full: true, Error: lanesFull})
 		}
 	default:
 		respond(collection.RunReply{Error: fmt.Sprintf("the node does not know a run of kind %q", req.Kind)})
 	}
 }
 
-// previewRun runs each preview task once, within the budget, and answers with
-// what each read. Nothing is published, so nothing is stored. A preview
-// carries no endpoint, so it is held to the host-wide reasons the node's
-// gates hold on any endpoint at its target's host (#1650): a host the node's
-// own probe reads unreachable answers at once, gated, rather than timing out.
-// A refusal does not hold it: a preview connects with its own inputs.
-func previewRun(ctx context.Context, runner *collection.Runner, g *gates, tasks []collection.TaskSpec, mask []string, timeout time.Duration) collection.RunReply {
+// previewGate is the answer to a preview a closed gate holds: the gate of
+// the endpoint it resolves to (any reason, a refusal included, since a
+// preview sends its own request), else a host-wide reason held on any
+// endpoint at its target's host (#1650), which holds every transport to that
+// host. false when nothing holds it.
+func previewGate(g *gates, tasks []collection.TaskSpec) (collection.RunReply, bool) {
+	if c, target, closed := g.previewClosed(tasks); closed {
+		return previewReply(c, target), true
+	}
 	for _, task := range tasks {
-		var p endpointParams
-		_ = json.Unmarshal(task.EndpointParams, &p)
-		if r, closed := g.closedHost(p.Target); closed {
+		if r, closed := g.closedHost(taskTarget(task)); closed {
 			return collection.RunReply{Gated: true, GateReason: string(r.kind),
-				Error: "node: the host is " + r.text + ", so the preview was not sent; " + reasonRules[r.kind].release}
+				Error: "node: the host is " + r.text + ", so the preview was not sent; " + reasonRules[r.kind].release}, true
 		}
+	}
+	return collection.RunReply{}, false
+}
+
+// previewRun runs each preview task once, within the budget, and answers with
+// what each read. Nothing is published, so nothing is stored. The gate is
+// asked again here, as the preview's lane takes it: a request ahead of it
+// on the lane may have closed it since it arrived.
+func previewRun(ctx context.Context, runner *collection.Runner, g *gates, tasks []collection.TaskSpec, mask []string, timeout time.Duration) collection.RunReply {
+	if reply, closed := previewGate(g, tasks); closed {
+		return reply
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -203,9 +244,7 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 }
 
 // heldRun is the answer to a run now on an endpoint a reason holds whole
-// (unreachable, today): gated, naming the reason and what releases it. A
-// refusal is rung-scoped, so runNowTask asks it on the endpoint's lane, where
-// the endpoint's held session is known.
+// (unreachable, disrupted): gated, naming the reason and what releases it.
 func heldRun(r reason) collection.RunReply {
 	return collection.RunReply{Gated: true, GateReason: string(r.kind),
 		Error: "node: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
@@ -230,15 +269,12 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 		// fingerprint (#1038): a poll would send the credential beside it.
 		return collection.RunReply{Pending: true, Error: "the endpoint's stream is still making its first attempt; run the poll again once it has"}
 	}
-	ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
-	if gt, gated := sessions.refusedAt(task.EndpointID, statelessRung(task)); gated && ownRequest {
-		return collection.RunReply{Gated: true, GateReason: string(reasonRefused), Error: gt.refusal().Error()}
-	}
-	// Any other reason holds the whole endpoint (#1650): takeRun answered
-	// one held when the request arrived; one that closed since is answered
-	// here, and nothing is sent.
-	if r, held := sessions.holding(task.EndpointID); held {
-		return heldRun(r)
+	ownRequest := sendsOwnRequest(sessions, task)
+	// takeRun answered a gate closed when the request arrived; one that
+	// closed since (a reboot ahead of it on the lane) is answered here, and
+	// nothing is sent.
+	if c, closed := sessions.consult(task.EndpointID, statelessRung(task), ownRequest); closed {
+		return runReply(c)
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()

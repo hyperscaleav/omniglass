@@ -1,8 +1,8 @@
 # The power conditioner is simulated and collected
 #
 # The dev fleet's rack power conditioner is a Ferrite PDU 4C with a simulator profile and a driver of its own:
-# the mains voltage, the total current and each outlet's state over SNMP (#1368). It is read only; no
-# outlet can be switched.
+# the mains voltage, the total current and each outlet's state over SNMP (#1368). SNMP and the document
+# stay read only; its http control face is what switches an outlet (#1653).
 
 Type "# The rack's power conditioner, collected by its own driver"
 Enter

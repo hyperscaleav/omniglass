@@ -59,10 +59,10 @@ type upstreamState struct {
 	now         time.Time
 }
 
-// closure is why an upstream endpoint's gate is closed, as a dependent
+// upstreamClosure is why an upstream endpoint's gate is closed, as a dependent
 // reads it: the root it descends from, the component a dependent names,
 // and whether it is only a wait-phase hold.
-type closure struct {
+type upstreamClosure struct {
 	root      string
 	component string
 	name      string
@@ -104,7 +104,7 @@ func deriveUpstream(s upstreamState) map[string]upstreamHold {
 			if own == "" {
 				continue
 			}
-			var candidates []closure
+			var candidates []upstreamClosure
 			for _, pu := range s.edges[ep] {
 				for _, u := range pu.endpoints {
 					c, ok := closureOf(s, held, waiting, u, pu)
@@ -170,24 +170,24 @@ func copyHolds(m map[string]upstreamHold) map[string]upstreamHold {
 
 // closureOf is why upstream endpoint u, reached over pu, is closed; false
 // when its gate is open.
-func closureOf(s upstreamState, held, waiting map[string]upstreamHold, u string, pu pathUpstream) (closure, bool) {
+func closureOf(s upstreamState, held, waiting map[string]upstreamHold, u string, pu pathUpstream) (upstreamClosure, bool) {
 	if s.ownClosed[u] {
-		return closure{root: pu.component, component: pu.component, name: pu.name}, true
+		return upstreamClosure{root: pu.component, component: pu.component, name: pu.name}, true
 	}
 	if h, ok := held[u]; ok {
-		return closure{root: h.root, component: h.component, name: h.name}, true
+		return upstreamClosure{root: h.root, component: h.component, name: h.name}, true
 	}
 	if h, ok := waiting[u]; ok {
-		return closure{root: h.root, component: pu.component, name: pu.name, waiting: true}, true
+		return upstreamClosure{root: h.root, component: pu.component, name: pu.name, waiting: true}, true
 	}
-	return closure{}, false
+	return upstreamClosure{}, false
 }
 
 // holdFrom picks the hold among the candidates: the component the endpoint
 // already names while it is still a candidate, so the answer does not flap
 // between two closed upstreams, else the lowest component id. It is since
 // the endpoint's prior hold, else now.
-func holdFrom(candidates []closure, prior upstreamHold, now time.Time) upstreamHold {
+func holdFrom(candidates []upstreamClosure, prior upstreamHold, now time.Time) upstreamHold {
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].component != candidates[j].component {
 			return candidates[i].component < candidates[j].component
