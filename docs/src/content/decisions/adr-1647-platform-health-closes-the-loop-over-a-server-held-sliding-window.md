@@ -2,7 +2,7 @@
 title: "Platform health closes the loop over a server-held sliding window"
 date: 2026-11-10
 status: Accepted
-summary: "Accepted: with a simulator connected, the server brackets each node on a timer and reads the closed loop over a ring of its last ten brackets, a sliding window held in memory per process, so a loss reads while it is current and clears once the window passes it. Rejected: a since-start total, which carries every old loss into every read after it, and storing the window as platform metrics. The reconcile moved into a pure internal/closedloop package the lab and the server both use. Divergences: the window is ten brackets, the bracket is configurable from 1s to 1m, a scoped component read is a 404, the server assumes the nodes' cadence from its own settings, the connect gap pools every listener, received above 0 became reached, and impairment attribution is node-wide."
+summary: "Accepted: with a simulator connected, the server brackets each node on a timer and reads the closed loop over a ring of its last ten brackets, a sliding window held in memory per process, so a loss reads while it is current and clears once the window passes it. Rejected: a since-start total, which carries every old loss into every read after it, and storing the window as platform metrics. The reconcile moved into a pure internal/closedloop package the lab and the server both use. Divergences: the window is ten brackets, the bracket is configurable from 1s to 1m, a missing simulation:read is a 403 and a scoped component read a 404, every gap is windowed, the server assumes the nodes' cadence from its own settings, the connect gap pools every listener, received above 0 became reached, and impairment attribution is node-wide."
 refs: [1647, 1639, 1644, 1662, 1249, 1634, 1720, 1721, 1722, 1723, 1724]
 ---
 
@@ -15,7 +15,11 @@ refs: [1647, 1639, 1644, 1662, 1249, 1634, 1720, 1721, 1722, 1723, 1724]
      again, as `lab measure` does) and keeps the last brackets in a ring; the window is the oldest
      against the one before the newest, and the newest counts the window's receipts, so a batch the bus
      acknowledged just before the window's end has the next bracket to land. A loss reads while it is
-     inside the window and clears once the window slides past it.
+     inside the window and clears once the window slides past it. That holds for every gap:
+     `received-not-settled`, which #1639 read as the residual at the last read, counts only what went
+     unsettled after the start's residual, over what the simulator received from the start, so `lab
+     measure` reads it over its window too; and `unhit-endpoint`'s in figure counts a component once per
+     protocol, as its count does, however many of its poll tasks land there.
   2. **The ring is in memory, per server process.** It is not stored as platform metrics: a server that
      restarts warms up again, and a second server holds a ring of its own. Storing the gaps is a later
      cut if a history of them earns its place.
@@ -38,7 +42,10 @@ refs: [1647, 1639, 1644, 1662, 1249, 1634, 1720, 1721, 1722, 1723, 1724]
   6. **The gate is `simulation:read`, and a scoped component read is a 404.** The devices in the window
      are unplaced simulator state spanning every component a node simulates, so the read needs an
      all-scope `component:read`. Short of it the route answers 404, as the ticket specified, where the
-     node's observation read answers 403; the page says the read needs a fleet-wide component read.
+     node's observation read answers 403; the page says the read needs a fleet-wide component read. A
+     caller without `simulation:read` gets 403, where the ticket asked for 404: the permission is
+     checked by the gate every route shares, which answers 403, and the route's existence is no secret
+     (it is in the published OpenAPI), so a one-off 404 there would hide nothing.
   7. **Connect-not-accepted pools every listener.** A connection is counted where a face accepts it, and
      the node tallies the dial, not the listener it reached, so the gap is one row per node, labelled
      `any listener`. A dial that never opens is not tallied, so kernel loss on tcp opens no connect gap
