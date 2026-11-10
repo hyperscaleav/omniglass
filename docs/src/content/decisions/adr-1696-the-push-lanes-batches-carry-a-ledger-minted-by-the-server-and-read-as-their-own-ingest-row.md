@@ -29,9 +29,10 @@ refs: [1696, 1641, 1623, 1659, 1691, 1024]
      tags each row with its `lane` (in the JSON too). The push lane crosses the ingest hop alone, so
      its row is its own end to end; `delivery_end_to_end` and the end-to-end line compose the node
      lane alone, so a push-heavy lab cannot dilute a node lane's loss or the reverse.
-  6. **Missing means something narrower on the push lane.** A hole there is a batch the stream
-     stored and the ingest Termed whole, or one the stream gave up before it was read; the footer
-     says so per lane instead of one line for both.
+  6. **Missing means something narrower on the push lane.** A batch the ingest Terms whole records
+     its Term receipt (ADR-1691) under the server's boot and reads under its cause, so a hole there
+     is a batch the ingest could not decode, or one the stream gave up before it was read; the
+     footer says so per lane instead of one line for both.
 - **Context:** The push lane (an integration's `POST /telemetry:push`, a webhook) recorded receipts
   with no ledger, so a Termed pushed batch or a refused item vanished from the delivery read: a lab
   reading 0 said nothing about what was pushed to it.
@@ -47,7 +48,6 @@ refs: [1696, 1641, 1623, 1659, 1691, 1024]
     on an embedded stream.
   - A server stopped mid-window leaves its push boot with no later batch, so it reads unsettled with
     no ratio, not missing.
-  - Whole-batch Terms still read as `missing` on both lanes rather than under their own cause (#1691).
 - **Not chosen:**
   - **Stamping in the push route.** Webhooks publish through the same bus path but not the route,
     and would stay unaccounted.

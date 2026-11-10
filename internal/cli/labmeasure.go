@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
 )
 
@@ -123,8 +124,11 @@ func newLabMeasureCmd() *cobra.Command {
 			"one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory " +
 			"per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the " +
 			"ingest consumer lane's busy fraction and service time a batch, the console's fleet view response " +
-			"times, the retention pass's drain rate, and each telemetry kind's delivery loss across the ingest hop (in, out, " +
-			"loss, deduplicated and the cause of any loss), the node lane and the push lane apart, with the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.\n\n" +
+			"times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the " +
+			"ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, " +
+			"each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the " +
+			"replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as " +
+			"JSON so two runs compare.\n\n" +
 			"With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale " +
 			"lab of that size, measures it, and removes it, so the one command is the whole run.\n\n" +
 			"When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the " +
@@ -133,8 +137,13 @@ func newLabMeasureCmd() *cobra.Command {
 			"apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
 			"The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has " +
 			"landed one minted after it and the telemetry consumer holds nothing pending, then reconciles each batch's " +
-			"ledger against what landed. A healthy lab reads loss 0 for every kind; a boot that did not settle prints " +
-			"unsettled with its node (or as the push lane), and no ratio is read from it.\n\n" +
+			"ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch " +
+			"its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them " +
+			"(self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, " +
+			"for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; " +
+			"a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from " +
+			"it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as " +
+			"far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.\n\n" +
 			"The retention probe plants a backlog of aged property rows and restarts the server to run its pass; " +
 			"--backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not " +
 			"record commit timestamps, which the ingest lag reads: bring it up again.\n\n" +
@@ -197,7 +206,7 @@ func newLabMeasureCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.Int("systems", 0, "bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running")
-	f.String("scenario", "corporate", "the scale scenario a --systems lab runs")
+	f.String("scenario", lab.MeasureScenario, "the scale scenario a --systems lab runs")
 	f.Duration("warmup", 2*time.Minute, "how long the lab runs before the window starts (once, before the first sample)")
 	f.Duration("window", 5*time.Minute, "the window the rates, growth and usage are read over")
 	f.Int("fleet-reads", 20, "how many timed fleet view reads, spread over the window")

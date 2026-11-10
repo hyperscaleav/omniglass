@@ -49,6 +49,10 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 		delivery.RefusedUnregistered, delivery.RefusedWriter, delivery.RefusedInstance,
 		delivery.RefusedInvalid, delivery.RefusedEmpty, delivery.RefusedWrite,
 		delivery.Orphaned, delivery.Unbound, delivery.Unidentified, delivery.Missing,
+		delivery.Shipped, delivery.SpoolOverflow, delivery.SpoolExpired, delivery.BusRefused,
+		delivery.SelfLogOverflow, delivery.EncodeFailed,
+		delivery.RefusedOwner, delivery.RefusedTask, delivery.RefusedBatch, delivery.RefusedMetadata,
+		delivery.Abandoned,
 	} {
 		if !seen[o] {
 			t.Errorf("outcome %q missing from Outcomes", o)
@@ -57,10 +61,65 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 	if !delivery.Stored.Out() || !delivery.Coalesced.Out() || !delivery.Unbound.Out() || !delivery.Deduplicated.Deduplicated() || !delivery.Missing.Lost() {
 		t.Fatal("stored, coalesced and unbound are out, deduplicated is beside the ratio, missing is loss")
 	}
-	for _, o := range []delivery.Outcome{delivery.RefusedWriter, delivery.Orphaned, delivery.Unidentified, delivery.Missing} {
+	for _, o := range []delivery.Outcome{
+		delivery.RefusedWriter, delivery.Orphaned, delivery.Unidentified, delivery.Missing,
+		delivery.RefusedOwner, delivery.RefusedTask, delivery.RefusedBatch, delivery.RefusedMetadata,
+		delivery.Abandoned,
+	} {
 		if !o.Lost() {
 			t.Errorf("outcome %q is not loss", o)
 		}
+	}
+	if !delivery.Shipped.Out() {
+		t.Error("shipped is the node hop's out")
+	}
+	for _, hop := range []delivery.Hop{delivery.Node, delivery.Ingest} {
+		for _, o := range delivery.OutcomesOf(hop) {
+			if !seen[o] {
+				t.Errorf("hop %s outcome %q missing from Outcomes", hop, o)
+			}
+		}
+	}
+	if len(delivery.NodeOutcomes)+len(delivery.IngestOutcomes) != len(delivery.Outcomes) {
+		t.Error("an outcome belongs to more than one hop, or to none")
+	}
+}
+
+// The sim hop (#1694) counts requests, not items, so it has its own outcome
+// set: a request a simulated endpoint settled either came back to the node
+// (returned, out) or was lost one of three ways. Each is classed exactly once,
+// none is shared with the ingest set, and a total's cause reads from it.
+func TestEverySimOutcomeIsClassedExactlyOnce(t *testing.T) {
+	ingest := map[delivery.Outcome]bool{}
+	for _, o := range delivery.Outcomes {
+		ingest[o] = true
+	}
+	want := []delivery.Outcome{delivery.Returned, delivery.Withheld, delivery.Dropped, delivery.NotReturned}
+	if len(delivery.SimOutcomes) != len(want) {
+		t.Fatalf("SimOutcomes = %v; want %v", delivery.SimOutcomes, want)
+	}
+	for i, o := range delivery.SimOutcomes {
+		if o != want[i] {
+			t.Errorf("SimOutcomes[%d] = %q; want %q", i, o, want[i])
+		}
+		if ingest[o] {
+			t.Errorf("sim outcome %q is also an ingest outcome", o)
+		}
+		if o.Deduplicated() {
+			t.Errorf("sim outcome %q is beside the ratio", o)
+		}
+		if o.Out() == o.Lost() {
+			t.Errorf("sim outcome %q is out %v and lost %v; want exactly one", o, o.Out(), o.Lost())
+		}
+	}
+	if !delivery.Returned.Out() {
+		t.Error("returned is not out")
+	}
+	tot := delivery.Total{In: 10, Out: 4, Outcomes: map[delivery.Outcome]uint64{
+		delivery.Returned: 4, delivery.Withheld: 2, delivery.Dropped: 1, delivery.NotReturned: 3,
+	}}
+	if got := tot.Cause(); got != delivery.NotReturned {
+		t.Errorf("Cause = %q; want not-returned, the largest loss", got)
 	}
 }
 
@@ -264,4 +323,209 @@ func TestDeclaredAgainst(t *testing.T) {
 	if len(over) != 1 || over[delivery.Event] != 4 {
 		t.Errorf("over = %v, want event 4", over)
 	}
+}
+
+// TestScheduleHopLossIsSkippedOverDue (#1693): the schedule hop's in is the
+// runs that fell due and its out the runs made, counted for each kind a run
+// produces, so its loss is the skipped dues over the dues; it reads under a
+// hop-named instance, and the end to end composes it with the hops after it.
+func TestScheduleHopLossIsSkippedOverDue(t *testing.T) {
+	var c delivery.Counts
+	c.Scheduled([]delivery.Kind{delivery.Metric, delivery.Property}, 3, 1) // 3 made, 1 skipped
+	c.Scheduled([]delivery.Kind{delivery.Metric}, 0, 0)                    // nothing due counts nothing
+
+	got := map[string]float64{}
+	for _, r := range c.HopReadings(delivery.Schedule) {
+		got[r.Key+" "+r.Instance] = r.Value
+	}
+	want := map[string]float64{
+		"delivery-in-count schedule/metric":     4,
+		"delivery-out-count schedule/metric":    3,
+		"delivery-loss-ratio schedule/metric":   0.25,
+		"delivery-in-count schedule/property":   4,
+		"delivery-loss-ratio schedule/property": 0.25,
+		"delivery-in-count schedule/event":      0, // a kind no run produces reads 0, never a stale loss
+		"delivery-loss-ratio schedule/log":      0,
+	}
+	for k, v := range want {
+		if g, ok := got[k]; !ok || g != v {
+			t.Errorf("%s = %v (present %v), want %v", k, g, ok, v)
+		}
+	}
+	if len(got) != 3*len(delivery.Kinds) {
+		t.Errorf("readings = %d, want %d (three per kind)", len(got), 3*len(delivery.Kinds))
+	}
+
+	h, k, ok := delivery.ParseHopInstance("schedule/metric")
+	if !ok || h != delivery.Schedule || k != delivery.Metric {
+		t.Errorf("ParseHopInstance(schedule/metric) = %q, %q, %v", h, k, ok)
+	}
+	for _, bad := range []string{"metric", "schedule/", "/metric", "schedule/widget", "nowhere/metric"} {
+		if _, _, ok := delivery.ParseHopInstance(bad); ok {
+			t.Errorf("ParseHopInstance(%q) parsed; want refused", bad)
+		}
+	}
+	if s := delivery.HopInstance(delivery.Schedule, delivery.Log); s != "schedule/log" {
+		t.Errorf("HopInstance = %q, want schedule/log", s)
+	}
+
+	schedule, _ := delivery.Loss(4, 3)
+	ingest, _ := delivery.Loss(3, 3)
+	if e := delivery.EndToEnd(schedule, ingest); e != 0.25 {
+		t.Errorf("end to end over a lossy schedule and a clean ingest = %v, want 0.25", e)
+	}
+	if e := delivery.EndToEnd(schedule, 0.5); math.Abs(e-0.625) > 1e-12 {
+		t.Errorf("end to end = %v, want 0.625 (1 - 0.75*0.5)", e)
+	}
+}
+
+// overflowed is receipt with the node's account riding it: the runs its
+// spool dropped and what it lost before minting.
+func overflowed(r delivery.Receipt, runs []delivery.Drop, lost map[delivery.Outcome]map[delivery.Kind]uint64) delivery.Receipt {
+	r.Loss = delivery.NodeLoss{Dropped: runs, Lost: lost}
+	return r
+}
+
+// TestTheNodeHopReconcilesSeparatelyFromIngest: a run the spool dropped
+// reads as the node hop's loss under its cause and leaves the ingest row,
+// a gap the node shipped reads as missing at ingest and not at the node, an
+// item lost before minting is the node's alone, and end to end composes the
+// two hops into the pipeline's whole loss.
+func TestTheNodeHopReconcilesSeparatelyFromIngest(t *testing.T) {
+	rs := []delivery.Receipt{
+		receipt("b1", 1, 1, 0, 3),
+		// seq 2 (2 items) and 3 (3 items) dropped at the spool's cap
+		overflowed(receipt("b1", 4, 2, 8, 1),
+			[]delivery.Drop{{Cause: delivery.SpoolOverflow, From: 2, To: 3, Items: map[delivery.Kind]uint64{delivery.Metric: 5}}},
+			map[delivery.Outcome]map[delivery.Kind]uint64{delivery.EncodeFailed: {delivery.Metric: 2}}),
+		// seq 5 (4 items) shipped and never landed
+		receipt("b1", 6, 3, 13, 2),
+	}
+	node := delivery.ReconcileNode(window(0, 10), rs)[delivery.Metric]
+	ingest := delivery.Reconcile(window(0, 10), rs)[delivery.Metric]
+	if node.In != 17 || node.Out != 10 || node.Outcomes[delivery.SpoolOverflow] != 5 ||
+		node.Outcomes[delivery.EncodeFailed] != 2 || node.Cause() != delivery.SpoolOverflow {
+		t.Fatalf("node = %+v cause %q; want 17 in, 10 out, 5 spool-overflow, 2 encode-failed", node, node.Cause())
+	}
+	if ingest.In != node.Out || ingest.Out != 6 || ingest.Outcomes[delivery.Missing] != 4 {
+		t.Fatalf("ingest = %+v; want in %d (the node's out), 6 out, 4 missing", ingest, node.Out)
+	}
+	nl, _ := node.Loss()
+	il, _ := ingest.Loss()
+	if got, want := delivery.EndToEnd(nl, il), float64(node.In-ingest.Out)/float64(node.In); math.Abs(got-want) > 1e-12 {
+		t.Fatalf("end to end = %v; want %v, what went in at the node and never came out of ingest", got, want)
+	}
+}
+
+// TestAGapTheNodeDidNotDropIsIngestsAlone: with no run on any receipt, the
+// node shipped every item and reads 0, and the gap is missing at ingest.
+func TestAGapTheNodeDidNotDropIsIngestsAlone(t *testing.T) {
+	rs := []delivery.Receipt{receipt("b1", 1, 1, 0, 3), receipt("b1", 3, 2, 7, 1)}
+	node := delivery.ReconcileNode(window(0, 10), rs)[delivery.Metric]
+	if l, ok := node.Loss(); !ok || l != 0 || node.In != 8 {
+		t.Fatalf("node = %+v; want 8 in, loss 0", node)
+	}
+	if got := delivery.Reconcile(window(0, 10), rs)[delivery.Metric]; got.Outcomes[delivery.Missing] != 4 {
+		t.Fatalf("ingest missing = %d; want 4", got.Outcomes[delivery.Missing])
+	}
+}
+
+// TestADroppedRunBelowABootsLowestReceiptIsTheNodes: the gap below the
+// lowest landed receipt is owned as Reconcile owns it, and a run there is
+// the node's.
+func TestADroppedRunBelowABootsLowestReceiptIsTheNodes(t *testing.T) {
+	rs := []delivery.Receipt{overflowed(receipt("b1", 3, 7, 5, 2),
+		[]delivery.Drop{{Cause: delivery.SpoolExpired, From: 1, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 5}}}, nil)}
+	node := delivery.ReconcileNode(window(5, 10), rs)[delivery.Metric]
+	if node.Outcomes[delivery.SpoolExpired] != 5 || node.In != 7 {
+		t.Fatalf("node = %+v; want 5 spool-expired of 7", node)
+	}
+	if got := delivery.Reconcile(window(5, 10), rs)[delivery.Metric]; got.Outcomes[delivery.Missing] != 0 || got.In != 2 {
+		t.Fatalf("ingest = %+v; want 2 in, none missing", got)
+	}
+}
+
+// TestLostBeforeMintingCountsOnceAcrossWindows: the running totals each
+// batch carries split by window, two adjacent windows summing to one over
+// both.
+func TestLostBeforeMintingCountsOnceAcrossWindows(t *testing.T) {
+	lost := func(n uint64) map[delivery.Outcome]map[delivery.Kind]uint64 {
+		return map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: n}}
+	}
+	rs := []delivery.Receipt{
+		overflowed(receipt("b1", 1, 2, 0, 1), nil, lost(3)),
+		overflowed(receipt("b1", 2, 7, 1, 1), nil, lost(5)),
+	}
+	w1 := delivery.ReconcileNode(window(0, 5), rs)[delivery.Log]
+	w2 := delivery.ReconcileNode(window(5, 10), rs)[delivery.Log]
+	both := delivery.ReconcileNode(window(0, 10), rs)[delivery.Log]
+	if w1.Outcomes[delivery.SelfLogOverflow] != 3 || w2.Outcomes[delivery.SelfLogOverflow] != 2 || both.Outcomes[delivery.SelfLogOverflow] != 5 {
+		t.Fatalf("self-log-overflow w1 %d, w2 %d, both %d; want 3, 2, 5", w1.Outcomes[delivery.SelfLogOverflow],
+			w2.Outcomes[delivery.SelfLogOverflow], both.Outcomes[delivery.SelfLogOverflow])
+	}
+	if _, ok := delivery.Reconcile(window(0, 10), rs)[delivery.Log]; ok {
+		t.Fatal("a line lost before minting reads on the ingest row")
+	}
+}
+
+// TestALedgerCarriesADroppedRunUntilAnAckedBatchDoes: consecutive drops of
+// one cause extend one run, every batch minted after carries it, and a batch
+// minted after the run is acked retires it.
+func TestALedgerCarriesADroppedRunUntilAnAckedBatchDoes(t *testing.T) {
+	l := delivery.NewLedger("boot-1")
+	l.Mint(map[delivery.Kind]int{delivery.Metric: 2}, t0, 0)
+	l.Mint(map[delivery.Kind]int{delivery.Metric: 3}, t0, 0)
+	l.Drop(delivery.SpoolOverflow, 1, map[delivery.Kind]int{delivery.Metric: 2})
+	l.Drop(delivery.SpoolOverflow, 2, map[delivery.Kind]int{delivery.Metric: 3})
+	l.Drop(delivery.BusRefused, 3, map[delivery.Kind]int{delivery.Log: 1})
+	l.Lose(delivery.EncodeFailed, map[delivery.Kind]int{delivery.Event: 4})
+	s3 := l.Mint(map[delivery.Kind]int{delivery.Metric: 1}, t0, 2)
+	want := []delivery.Drop{
+		{Cause: delivery.SpoolOverflow, From: 1, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 5}},
+		{Cause: delivery.BusRefused, From: 3, To: 3, Items: map[delivery.Kind]uint64{delivery.Log: 1}},
+	}
+	if got, _ := json.Marshal(s3.Loss.Dropped); string(got) != mustJSON(t, want) {
+		t.Fatalf("seq 3 carries %s; want %s", got, mustJSON(t, want))
+	}
+	if back := delivery.FromProto(s3.Proto()); mustJSON(t, back.Loss) != mustJSON(t, s3.Loss) {
+		t.Fatalf("the wire carried %s; want %s", mustJSON(t, back.Loss), mustJSON(t, s3.Loss))
+	}
+	l.Stored(2) // acked, but minted before the drops
+	if s := l.Mint(nil, t0, 2); len(s.Loss.Dropped) != 2 {
+		t.Fatalf("after an older ack, seq 4 carries %d runs; want 2", len(s.Loss.Dropped))
+	}
+	l.Stored(3)
+	s5 := l.Mint(nil, t0, 4)
+	if len(s5.Loss.Dropped) != 0 {
+		t.Fatalf("after seq 3's ack, seq 5 carries %+v; want none", s5.Loss.Dropped)
+	}
+	if s5.Loss.Lost[delivery.EncodeFailed][delivery.Event] != 4 {
+		t.Fatalf("seq 5 lost = %+v; want the running encode-failed total", s5.Loss.Lost)
+	}
+}
+
+// TestDeclaredUnder: a batch the server Terms whole counts every item its
+// ledger declared under the one cause, kind by kind, and a kind declared at
+// 0 counts nothing.
+func TestDeclaredUnder(t *testing.T) {
+	d := delivery.Declared{delivery.Metric: {Count: 5, Before: 9}, delivery.Log: {Count: 2}, delivery.Event: {Before: 3}}
+	got := d.Under(delivery.Abandoned)
+	if got.Count(delivery.Metric, delivery.Abandoned) != 5 || got.Count(delivery.Log, delivery.Abandoned) != 2 {
+		t.Fatalf("under = %s, want metric 5 and log 2 abandoned", mustJSON(t, got))
+	}
+	if got.Items(delivery.Event) != 0 || got.Items(delivery.Property) != 0 {
+		t.Fatalf("under = %s, counts a kind the batch carries none of", mustJSON(t, got))
+	}
+	if !(delivery.Declared{}).Under(delivery.Abandoned).Empty() {
+		t.Fatal("an empty ledger counts something")
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

@@ -22,11 +22,12 @@ import (
 // Two shapes, per the key table. The each-tick figures are one observation
 // per sample, taken every heartbeat tick. The windowed counts (dues met in
 // flight, skipped intervals, failed command pulls, and the spool's delivery
-// per telemetry kind, #1659) are tallied over the node's
-// report window, the collection report's (report.go), and emitted once when
-// it ends, every window, a quiet window's as zero: a count written only when
-// nonzero would leave the last event's count standing as the series' latest
-// value long after it. The first window runs from the node's start, so it is
+// per telemetry kind, #1659, and the dispatcher's schedule hop, runs due
+// against runs made per kind under the instance schedule/{kind}, #1693) are
+// tallied over the node's report window, the collection report's
+// (report.go), and emitted once when it ends, every window, a quiet window's
+// as zero: a count written only when nonzero would leave the last event's
+// count standing as the series' latest value long after it. The first window runs from the node's start, so it is
 // whole and writes too. Pure: the run loop feeds it and sends what it takes.
 type nodeReport struct {
 	every time.Duration
@@ -38,6 +39,9 @@ type nodeReport struct {
 	// every item a batch carried once it was acked or lost, out for the
 	// acked (#1659).
 	flow delivery.Counts
+	// schedule is the dispatcher's schedule hop over the window (#1693):
+	// runs due in, runs made out, per kind, written under schedule/{kind}.
+	schedule delivery.Counts
 	// pullFailures is the command queue pulls that failed in the window
 	// (#1626): no answer from the bus, or one the node could not read.
 	// Atomic because the command cycle runs off the heartbeat goroutine
@@ -90,6 +94,7 @@ func (r *nodeReport) dispatch(w dispatchWindow, at time.Time) {
 	}
 	r.overruns += w.overruns
 	r.skipped += w.skips
+	r.schedule.Merge(w.schedule)
 	if w.runs > 0 {
 		r.sample(writerclass.ScheduleLateness, platformmetric.Millis(w.lateMax), at, "")
 		r.sample(writerclass.ScheduleGapExcess, platformmetric.Millis(w.gapMax), at, "")
@@ -164,7 +169,10 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 		for _, rd := range r.flow.Readings() {
 			r.sample(rd.Key, rd.Value, now, rd.Instance)
 		}
-		r.overruns, r.skipped, r.flow = 0, 0, delivery.Counts{}
+		for _, rd := range r.schedule.HopReadings(delivery.Schedule) {
+			r.sample(rd.Key, rd.Value, now, rd.Instance)
+		}
+		r.overruns, r.skipped, r.flow, r.schedule = 0, 0, delivery.Counts{}, delivery.Counts{}
 		r.since = now
 	}
 	out := r.samples

@@ -354,3 +354,47 @@ func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
 		t.Fatalf("the windows counted %v failed pulls, want 100", total)
 	}
 }
+
+// #1693: the dispatcher's schedule hop rides the node-self block beside the
+// spool's delivery, under the hop's own instances, schedule/{kind}, once per
+// report window, every kind written, a quiet window's as zero; the spool's
+// bare-kind series are untouched by it.
+func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	var first, second dispatchWindow
+	first.schedule.Scheduled([]delivery.Kind{delivery.Metric, delivery.Property}, 2, 1)
+	second.schedule.Scheduled([]delivery.Kind{delivery.Metric}, 1, 0)
+	r.dispatch(first, t0)
+	if _, ok := readings(r.take(t0.Add(30 * time.Second)))[writerclass.DeliveryInCount+"/schedule/metric"]; ok {
+		t.Fatal("the schedule hop emitted before its window ended")
+	}
+	r.dispatch(second, t0.Add(time.Minute))
+	end := readings(r.take(t0.Add(time.Minute)))
+	want := map[string]float64{
+		writerclass.DeliveryInCount + "/schedule/metric":            4,
+		writerclass.DeliveryOutCount + "/schedule/metric":           3,
+		writerclass.DeliveryLossRatio + "/schedule/metric":          0.25,
+		writerclass.DeliveryInCount + "/schedule/property":          3,
+		writerclass.DeliveryOutCount + "/schedule/property":         2,
+		writerclass.DeliveryInCount + "/schedule/event":             0,
+		writerclass.DeliveryLossRatio + "/schedule/log":             0,
+		writerclass.DeliveryInCount + "/" + string(delivery.Metric): 0, // the spool's own series
+	}
+	for k, v := range want {
+		if g, ok := end[k]; !ok || g != v {
+			t.Errorf("%s = %v (written %v), want %v", k, g, ok, v)
+		}
+		if _, dup := end[k+"#dup"]; dup {
+			t.Errorf("%s emitted twice in one window", k)
+		}
+	}
+	quiet := readings(r.take(t0.Add(2 * time.Minute)))
+	for _, kind := range delivery.Kinds {
+		k := writerclass.DeliveryInCount + "/" + delivery.HopInstance(delivery.Schedule, kind)
+		if v, ok := quiet[k]; !ok || v != 0 {
+			t.Errorf("a quiet window read %s = %v (written %v), want 0", k, v, ok)
+		}
+	}
+}
