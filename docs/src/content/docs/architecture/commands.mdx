@@ -55,7 +55,10 @@ The issue records; the **wire actuates** (#815). The moving parts:
   whose execution report never lands is redelivered after a silence interval, and past a ten minute
   delivery window it stops being deliverable at all (settlement's `timed-out` covers a command no node
   picked up). Only a command still `issued` is delivered: once terminal (a fire-and-forget timed out by
-  its window, a settleable one judged on observation) it is never sent to a node. A failed pull is
+  its window, a settleable one judged on observation) it is never sent to a node (#1675). A settle
+  window counts from the issue and a node pulls once a heartbeat, so a settle window shorter than its
+  node's heartbeat can time a command out before any node takes it, and it then never actuates;
+  faster pickup is #1635. A failed pull is
   logged at Warn on both sides, the server naming the node and the node logging the transition into
   failing and back, so a silent queue reads in the log rather than only as a timeout
   ([ADR-1630](/architecture/decisions/#adr-1630-a-fire-and-forget-command-settles-on-its-report)). The node remembers each command's outcome per id, so a redelivery repeats the **report**,
@@ -252,7 +255,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',
     reply: 'The component&#39;s answer as its execution report carried it, masked of credentials and capped; null until a report lands',
     reason: 'Why it reached its terminal status, in words; null while issued',
-    settled_by: 'What decided it: reply, observation, or window (its settle or delivery window closed on no evidence); no longer written',
+    settled_by: 'What decided it: reply, observation, or window (its settle or delivery window closed on no evidence); the older issue value is no longer written',
     observed_value: 'The sample a settle-check judged it on, when an observation decided it',
     observed_at: 'When that sample was observed',
     settled_event_id: 'The lifecycle event its terminal status wrote: command-settled, command-failed or command-timed-out',

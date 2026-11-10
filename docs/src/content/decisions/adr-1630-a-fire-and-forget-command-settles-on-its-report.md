@@ -3,7 +3,7 @@ title: "A fire-and-forget command settles on its report"
 date: 2026-11-10
 status: Accepted
 summary: "A command with no value to settle (fire-and-forget, `reboot`) is issued `issued` like every other command rather than `settled` at its issue. Its node's execution report decides it in the report's transaction (settled when the node carried it out, failed with the masked error when the execution failed, both by `reply`); a binding that cannot render fails it at once; and with no report inside the ten minute delivery window the sweep times it out by `window`, with a reason naming where it stopped. A terminal command is never delivered, and both sides of a failed command pull log at Warn. Amends ADR-1155 point 5"
-refs: [1630, 1155]
+refs: [1630, 1155, 1675]
 ---
 
 - **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/)
@@ -29,7 +29,12 @@ refs: [1630, 1155]
      endpoint placed on no node, or no endpoint whose driver binds the type.
   4. **A terminal command is not delivered.** The pending query reads `c.status = 'issued'`, so a
      settleable command already timed out by a settle window shorter than the delivery window is
-     never pulled and actuated after the console says it timed out.
+     never pulled and actuated after the console says it timed out. This closes #1675 by its first
+     option (stop offering a final command) rather than holding the status open until the delivery
+     window. The cost: a settle window counts from the issue and a node pulls once a heartbeat (30 s
+     by default), so a settleable command whose 15 s settle window passes before its node's next pull
+     now times out unsent, where before it actuated late under a `timed-out` status. The status and
+     the device now agree; closing the gap itself is faster pickup, #1635.
   5. **A failed pull leaves a log line.** The server's command pull logs at Warn (`facility=command`,
      the node, the error) when its pending read, its marshal or its reply fails, and its status sink
      logs a report it cannot parse; the node logs a failed pull at Warn on the transition into
