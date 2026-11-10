@@ -53,22 +53,64 @@ const (
 	// Abandoned is an item in a batch that failed to land on every attempt
 	// the consumer allows and was Termed at the last.
 	Abandoned Outcome = "abandoned"
-	// Missing is an item that never landed: a gap in its boot's offsets, or
-	// a shortfall between what a batch declared and what it decoded to.
+	// Missing is an item that never landed at ingest: a gap in its boot's
+	// offsets the node does not account for, or a shortfall between what a
+	// batch declared and what it decoded to.
 	Missing Outcome = "missing"
+
+	// The node hop's outcomes (#1692): an item the node minted into a batch
+	// either shipped or was dropped by the node under one of these causes.
+
+	// Shipped is an item the node's spool handed to the stream: out of the
+	// node hop, and into the ingest hop.
+	Shipped Outcome = "shipped"
+	// SpoolOverflow is an item in a batch the spool dropped, oldest first,
+	// at its count or bytes cap.
+	SpoolOverflow Outcome = "spool-overflow"
+	// SpoolExpired is an item in a batch the spool dropped at its age cap.
+	SpoolExpired Outcome = "spool-expired"
+	// BusRefused is an item in a batch the bus refused outright (too large,
+	// no stream), which no retry would change.
+	BusRefused Outcome = "bus-refused"
+	// SelfLogOverflow is a node self-log line the buffer dropped at its cap
+	// before a batch carried it.
+	SelfLogOverflow Outcome = "self-log-overflow"
+	// EncodeFailed is an item in a group or batch the node could not encode.
+	EncodeFailed Outcome = "encode-failed"
 )
 
-// Outcomes is every outcome, out first, then the dedup count, then loss.
-var Outcomes = []Outcome{
+// IngestOutcomes is every outcome of the ingest hop, out first, then the
+// dedup count, then loss.
+var IngestOutcomes = []Outcome{
 	Stored, Coalesced, Unbound, Deduplicated,
 	RefusedUnregistered, RefusedWriter, RefusedInstance, RefusedInvalid,
 	RefusedEmpty, RefusedWrite, Orphaned, Unidentified,
 	RefusedOwner, RefusedTask, RefusedBatch, RefusedMetadata, Abandoned, Missing,
 }
 
+// NodeOutcomes is every outcome of the node hop, out first, then loss.
+var NodeOutcomes = []Outcome{
+	Shipped, SpoolOverflow, SpoolExpired, BusRefused, SelfLogOverflow, EncodeFailed,
+}
+
+// Outcomes is every outcome of every hop: the ingest hop's, then the node's.
+var Outcomes = append(append([]Outcome{}, IngestOutcomes...), NodeOutcomes...)
+
+// OutcomesOf is the outcomes a hop's row counts, nil for a hop with none.
+func OutcomesOf(h Hop) []Outcome {
+	switch h {
+	case Node:
+		return NodeOutcomes
+	case Ingest:
+		return IngestOutcomes
+	}
+	return nil
+}
+
 // Out reports whether the outcome counts as out: accounted for, in the store
-// or, for an unbound sample, in its conduit's unbound inbox.
-func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound }
+// or, for an unbound sample, in its conduit's unbound inbox, or at the node
+// hop handed to the stream.
+func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound || o == Shipped }
 
 // Deduplicated reports whether the outcome is the redelivery count, reported
 // beside the ratio.

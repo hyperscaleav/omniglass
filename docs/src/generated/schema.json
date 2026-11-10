@@ -6328,6 +6328,11 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+     },
+     {
+      "name": "node_loss",
+      "type": "jsonb",
+      "nullable": true
      }
     ]
    }

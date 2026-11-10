@@ -720,31 +720,42 @@ func (r ledgerRig) read(t *testing.T) ([]labfootprint.DeliveryRow, []labfootprin
 	if err != nil {
 		t.Fatalf("parse receipts: %v", err)
 	}
-	return labfootprint.DeliveryOf(labfootprint.DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: true})
+	out, unsettled, ended := labfootprint.DeliveryOf(labfootprint.DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: true})
+	if len(ended) > 0 {
+		t.Fatalf("a boot read as ended by a later boot: %+v", ended)
+	}
+	return out, unsettled
 }
 
-// wantRow fails unless the read has a row for k with these figures.
+// wantRow fails unless the read has an ingest row for k with these figures.
 func wantRow(t *testing.T, rows []labfootprint.DeliveryRow, k delivery.Kind, in, out, dedup uint64, outcomes map[delivery.Outcome]uint64) {
 	t.Helper()
+	wantHopRow(t, rows, delivery.Ingest, k, in, out, dedup, outcomes)
+}
+
+// wantHopRow fails unless the read has a row of hop h for k with these
+// figures.
+func wantHopRow(t *testing.T, rows []labfootprint.DeliveryRow, h delivery.Hop, k delivery.Kind, in, out, dedup uint64, outcomes map[delivery.Outcome]uint64) {
+	t.Helper()
 	for _, row := range rows {
-		if row.Kind != k {
+		if row.Kind != k || row.Hop != h {
 			continue
 		}
 		if row.In != in || row.Out != out || row.Deduplicated != dedup {
-			t.Fatalf("%s: in %d out %d dedup %d, want in %d out %d dedup %d", k, row.In, row.Out, row.Deduplicated, in, out, dedup)
+			t.Fatalf("%s %s: in %d out %d dedup %d, want in %d out %d dedup %d", h, k, row.In, row.Out, row.Deduplicated, in, out, dedup)
 		}
-		for _, o := range delivery.Outcomes {
+		for _, o := range delivery.OutcomesOf(h) {
 			if row.Outcomes[o] != outcomes[o] {
-				t.Fatalf("%s: %s = %d, want %d (all: %v)", k, o, row.Outcomes[o], outcomes[o], row.Outcomes)
+				t.Fatalf("%s %s: %s = %d, want %d (all: %v)", h, k, o, row.Outcomes[o], outcomes[o], row.Outcomes)
 			}
 		}
 		wantLoss, _ := delivery.Loss(in, out)
 		if row.Loss == nil || *row.Loss != wantLoss {
-			t.Fatalf("%s: loss %v, want %v", k, row.Loss, wantLoss)
+			t.Fatalf("%s %s: loss %v, want %v", h, k, row.Loss, wantLoss)
 		}
 		return
 	}
-	t.Fatalf("no %s row in %+v", k, rows)
+	t.Fatalf("no %s %s row in %+v", h, k, rows)
 }
 
 // TestWithheldBatchReadsAsMissing: a boot's batch 3 never reaches the
@@ -767,9 +778,12 @@ func TestWithheldBatchReadsAsMissing(t *testing.T) {
 	}
 	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
 		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Missing: 1})
+		// The batch carries no node account of the gap, so the node hop
+		// shipped it: the loss is the ingest's to name.
+		wantHopRow(t, rows, delivery.Node, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Shipped: 5})
 	}
-	if len(rows) != 2 {
-		t.Fatalf("rows %+v, want metric and log only", rows)
+	if len(rows) != 4 {
+		t.Fatalf("rows %+v, want a node and an ingest row for metric and log only", rows)
 	}
 }
 

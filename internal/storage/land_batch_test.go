@@ -810,3 +810,96 @@ func TestReceiptLedgerMigrationOverExistingReceipts(t *testing.T) {
 		t.Fatalf("receipts = %d, one delivery %d, no ledger %d; want 2 of each", n, one, bare)
 	}
 }
+
+// TestLandBatchRecordsTheNodesLoss (#1692): a batch whose ledger carries the
+// node's own loss account writes it on the receipt as it came, and a batch
+// whose node lost nothing leaves the column null.
+func TestLandBatchRecordsTheNodesLoss(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	if _, err := f.gw.LandBatch(ctx, ledgerTick(f, "tick-1", 1, ts, nil)); err != nil {
+		t.Fatal(err)
+	}
+	b := ledgerTick(f, "tick-3", 3, ts.Add(time.Second), nil)
+	b.Ledger.Loss = delivery.NodeLoss{
+		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 2, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 3}}},
+		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 7}},
+	}
+	if _, err := f.gw.LandBatch(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	read := func(id string) *delivery.NodeLoss {
+		var raw []byte
+		if err := f.conn.QueryRow(ctx, `select node_loss from telemetry_receipt where batch_id = $1`, id).Scan(&raw); err != nil {
+			t.Fatalf("receipt %s: %v", id, err)
+		}
+		if raw == nil {
+			return nil
+		}
+		var n delivery.NodeLoss
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatalf("receipt %s node loss %s: %v", id, raw, err)
+		}
+		return &n
+	}
+	if n := read("tick-1"); n != nil {
+		t.Fatalf("tick-1 node loss = %+v, want null for a node that lost nothing", n)
+	}
+	n := read("tick-3")
+	if n == nil {
+		t.Fatal("tick-3 carries no node loss")
+	}
+	got, _ := json.Marshal(n)
+	want, _ := json.Marshal(b.Ledger.Loss)
+	if string(got) != string(want) {
+		t.Fatalf("tick-3 node loss = %s, want %s", got, want)
+	}
+}
+
+// TestATermReceiptKeepsTheNodesLoss: a batch the server Terms whole (#1691)
+// still carries the node's own loss account (#1692), so its Term receipt
+// records it for the node hop's read, and a later copy that lands over the
+// Term receipt writes its own.
+func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := ledgerTick(f, "tick-2", 2, ts, nil)
+	b.Ledger.Loss = delivery.NodeLoss{
+		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 1, To: 1, Items: map[delivery.Kind]uint64{delivery.Metric: 3}}},
+		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 4}},
+	}
+	read := func() string {
+		var raw []byte
+		if err := f.conn.QueryRow(ctx, `select node_loss from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&raw); err != nil {
+			t.Fatalf("receipt: %v", err)
+		}
+		if raw == nil {
+			return ""
+		}
+		var n delivery.NodeLoss
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatalf("node loss %s: %v", raw, err)
+		}
+		got, _ := json.Marshal(n)
+		return string(got)
+	}
+	want, _ := json.Marshal(b.Ledger.Loss)
+	if err := f.gw.RecordTermedBatch(ctx, termOf(b, delivery.RefusedTask)); err != nil {
+		t.Fatalf("record the Term: %v", err)
+	}
+	if got := read(); got != string(want) {
+		t.Fatalf("Term receipt node loss = %q, want %s", got, want)
+	}
+	b.Ledger.Loss.Lost[delivery.SelfLogOverflow][delivery.Log] = 6
+	want, _ = json.Marshal(b.Ledger.Loss)
+	if landed, err := f.gw.LandBatch(ctx, b); err != nil || !landed.Landed {
+		t.Fatalf("land the later copy: %+v, %v", landed, err)
+	}
+	if got := read(); got != string(want) {
+		t.Fatalf("landed receipt node loss = %q, want the landing's %s", got, want)
+	}
+}

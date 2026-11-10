@@ -81,8 +81,8 @@ func assertScaleFiguresRead(t *testing.T, rep ScaleReport) {
 
 // TestIntegrationScaleDelivery is the delivery read end to end (#1641): a
 // healthy scale lab's nodes stamp each batch's ledger, the server records it
-// on the receipt, and the read reconciles every kind across the ingest hop to
-// exactly 0 loss, with the end-to-end line and the receipts' footprint read.
+// on the receipt, and the read reconciles every kind across the node hop and
+// the ingest hop (#1692) to exactly 0 loss, with the end-to-end line and the receipts' footprint read.
 func TestIntegrationScaleDelivery(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the scale delivery read's integration test runs through make test-lab (it needs the image make builds)")
@@ -106,8 +106,8 @@ func TestIntegrationScaleDelivery(t *testing.T) {
 		t.Fatalf("the scale run failed: %v\n%s\nthe lab:\n%s", err, progress.String(), labLog.String())
 	}
 	t.Logf("%s\n%s", progress.String(), rep.Table())
-	if rep.DeliveryNotRead != "" || len(rep.DeliveryUnsettled) > 0 {
-		t.Fatalf("delivery not read (%q) or unsettled %+v", rep.DeliveryNotRead, rep.DeliveryUnsettled)
+	if rep.DeliveryNotRead != "" || len(rep.DeliveryUnsettled) > 0 || len(rep.DeliveryEnded) > 0 {
+		t.Fatalf("delivery not read (%q), unsettled %+v or unshipped %+v", rep.DeliveryNotRead, rep.DeliveryUnsettled, rep.DeliveryEnded)
 	}
 	measured := 0
 	for _, d := range rep.Delivery {

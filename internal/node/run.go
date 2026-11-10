@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -766,7 +767,13 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // deliberately does not log its own failure, since emitting from the drain
 // path would feed the buffer it just emptied.
 func publishSelf(out *telemetrySpool, name string, sink *logSink, self []*ogv1.MetricSample) {
-	ev := selfLogBatch(name, sink.drain())
+	recs, dropped := sink.drainCounted()
+	if dropped > 0 {
+		// The lines the buffer dropped are the node hop's loss (#1692): the
+		// batch below is the first to carry the count.
+		out.lost(delivery.SelfLogOverflow, map[delivery.Kind]int{delivery.Log: dropped})
+	}
+	ev := selfLogBatch(name, recs)
 	if len(self) > 0 {
 		if ev == nil {
 			ev = &ogv1.TelemetryBatch{NodeId: name}

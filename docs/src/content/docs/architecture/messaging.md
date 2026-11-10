@@ -23,8 +23,8 @@ lane fanning the commit onto JetStream for an `action_rule` consumer
 The delivery contract on that stream is built: every publish waits for the stream's ack under a
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
 under its receipt ([below](#delivery-a-batch-lands-once)), and that receipt accounts for every item
-the batch carried, so a lab run reads each telemetry kind's loss across the ingest hop
-([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
+the batch carried, so a lab run reads each telemetry kind's loss across the node hop and the ingest
+hop ([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
 inside, its ingest lag, backlog, drops and request failures, on its own platform component
 ([below](#measuring-the-pipeline)).
 :::
@@ -152,7 +152,7 @@ operator to place). A healthy
 pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
-Only the ingest hop is read today; the node, schedule and sim hops follow (#1692, #1693, #1694).
+The node hop and the ingest hop are read (#1692); the schedule and sim hops follow (#1693, #1694).
 Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
 every window as platform metrics, 0 when nothing came in (#1659,
 [below](#measuring-the-pipeline)).
@@ -165,6 +165,17 @@ every window as platform metrics, 0 when nothing came in (#1659,
   the ledger is identical on every delivery. A missing batch leaves a hole in `seq`, and the
   neighbors' `before` offsets say how many items of each kind it held, whatever order the batches
   arrived in.
+- **The node names its own losses on the ledger.** A batch the spool gives up on still took a `seq`,
+  so it leaves the same hole a batch lost after shipping does. The ledger tells them apart: its
+  `dropped` (field 6) is the runs of seqs the spool dropped, each with its cause and items per kind,
+  carried by every batch minted after the drop until one of them is acked; its `lost` (field 7) is the
+  items lost before any batch carried them, running totals since the boot began. The node hop's
+  outcomes are `shipped` (out) and, as loss, `spool-overflow` (the count or byte cap dropped the
+  oldest batch), `spool-expired` (a batch aged out), `bus-refused` (the bus refused a batch for good),
+  `self-log-overflow` (the self-log buffer dropped lines) and `encode-failed`. A hole the node's runs
+  cover is the node's loss under its cause; the rest of it the node shipped, and reads at ingest as
+  `missing`. So the node's out is exactly the ingest's in
+  ([ADR-1692](/architecture/decisions/#adr-1692-the-node-hop-reads-its-losses-from-runs-the-next-batches-carry)).
 - **The receipt is the accounting row.** The landing transaction writes the ledger and the batch's
   **outcome** (its items by kind and outcome, from the pass that commits) on the batch's receipt, so
   the accounting commits exactly when the data does and adds no rows. A redelivery the receipt
@@ -175,7 +186,8 @@ every window as platform metrics, 0 when nothing came in (#1659,
   `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway refused while its siblings
   landed), `orphaned` (its task's owner gone), `unidentified`, the causes the consumer Terms a
   batch whole for (`refused-owner`, `refused-task`, `refused-batch`, `refused-metadata`,
-  `abandoned`; below), and `missing` (a hole in a boot's offsets).
+  `abandoned`; below), and `missing` (a hole in a boot's offsets the node does not account for:
+  shipped, never landed).
 - **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
   samples read 0, and only someone who knew to look at the refusal counts would notice. The read
   names the largest outcome behind a loss as its **cause** instead.
@@ -193,8 +205,12 @@ every window as platform metrics, 0 when nothing came in (#1659,
   that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
   can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
   there yet reads **unsettled**, with no ratio.
-- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`; with the
-  one hop today it equals the ingest row.
+- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`: a third
+  lost at the node and nothing at ingest is a third end to end.
+- **A killed boot is named, not yet counted.** A node's spool is memory, so a node that starts again
+  while its spool holds batches loses them, and nothing that landed says how many items they held.
+  The read takes such a boot as far as it landed and names its unshipped tail beside the table;
+  counting the tail on the node row is #1733.
 
 A batch the consumer Terms whole records a **Term receipt** (#1691): the batch's ledger, with every
 item it declared under the cause, so the loss names why it never landed. An owner asserted on the
@@ -203,7 +219,9 @@ refused whole `refused-batch`, unreadable delivery metadata `refused-metadata`, 
 failed its fifth delivery `abandoned`. The receipt is marked `termed`, so it never counts as a
 landing: a later copy of the batch (a node's retry past the stream's duplicate window) that lands
 replaces it with its own ledger and outcome, and the closed loop's receipt count skips it. A Term
-receipt that fails to record is warned and the batch Terms anyway. An undecodable batch has no
+receipt carries the node's own loss account as a landing's would, so a run the node dropped before
+a Termed batch still reads on the node row. A Term receipt that fails to record is warned and the
+batch Terms anyway. An undecodable batch has no
 ledger the server can read, so it records nothing: its items stay `missing`, and the Term is warned
 ([ADR-1691](/architecture/decisions/#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
 The push lane's batches carry no ledger and read

@@ -101,8 +101,8 @@ Under the header, **Where work is lost** draws the path a collected item takes f
 produced it to the store, one hop at a time, in the order an item crosses them:
 
 - **Node**: the node's spool, from a run's output to the stream. An item is out when the stream
-  acks its batch, and lost when the spool drops it at a cap, the bus refuses it, or it never
-  encodes.
+  acks its batch, and lost when the spool drops it at a cap, the bus refuses it, it never encodes,
+  or (one of the node's own log lines) its bounded log buffer drops it.
 - **Ingest**: the server's ingest, from the stream to the store. An item is out when it is stored,
   coalesced or had already landed (a replay is not a loss), and lost when it is refused, orphaned,
   or its batch is terminated whole.
@@ -135,9 +135,11 @@ A failed poll is not lost work. A device that does not answer is a fact the node
 on (it lands on that device's component, as its poll failures), so the node hop still reads 0 while
 a broken device fails every poll. A hop's loss is work the platform itself dropped.
 
-Two hops are not drawn yet: the schedule (whether each run the worklist asks for is run, #1693)
-and the node's causes of loss by kind of failure (#1692). They appear when their figures are
-written; until then the path starts at the node's spool.
+The schedule hop (whether each run the worklist asks for is run, #1693) is not drawn yet. It
+appears when its figures are written; until then the path starts at the node's spool. The node
+hop's loss by cause (a spool cap, a bus refusal, a dropped self-log line, an encode failure) is
+not drawn here either: each batch's ledger carries it, and a lab run reads it per kind
+([reading the delivery table](/guides/lab/#reading-the-delivery-table), #1692).
 
 ## The server panels
 
