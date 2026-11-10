@@ -10,6 +10,7 @@
       "endpoint-rejection",
       "endpoint-rejection-reason",
       "endpoint-responsive",
+      "hold-expiry-count",
       "http-response-time",
       "icmp-reachable",
       "icmp-rtt-avg",

@@ -4426,9 +4426,31 @@
       "type": "text",
       "nullable": false,
       "default": "'local'::text"
+     },
+     {
+      "name": "disruptive",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "quiet_seconds",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "hold_seconds",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
      }
     ],
     "checks": [
+     {
+      "name": "command_type_disruption_check",
+      "expr": "CHECK (((quiet_seconds \u003e= 0) AND (hold_seconds \u003e= 0) AND (disruptive OR ((quiet_seconds = 0) AND (hold_seconds = 0))) AND ((NOT disruptive) OR (hold_seconds \u003e quiet_seconds))))"
+     },
      {
       "name": "command_type_namespace_check",
       "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"

@@ -255,6 +255,7 @@ func newReasonLoop(t *testing.T, runner *collection.Runner) *reasonLoop {
 func (l *reasonLoop) dispatcher() *dispatcher {
 	if l.d == nil {
 		clock := func() time.Time { return l.now }
+		l.sessions.now = clock
 		l.coll = newCollector(l.spool, "edge", l.runner, l.sessions, l.sched, l.report)
 		l.coll.clock = clock
 		l.d = newDispatcher(dispatchConfig{workers: 4, heartbeat: time.Second, probeEvery: l.probeEvery,

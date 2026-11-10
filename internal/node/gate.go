@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,11 @@ func rejectionOf(r rung, class, fingerprint string) string {
 type reasonKind string
 
 const (
+	// reasonDisrupted is a disruptive command (a reboot) delivered to the
+	// endpoint's component (#1651): added before the command is sent,
+	// removed by the endpoint's first up verdict after the quiet period, or
+	// at the hold backstop.
+	reasonDisrupted reasonKind = "disrupted"
 	// reasonRefused is a terminal refusal at a rung (ADR-0158).
 	reasonRefused reasonKind = "refused"
 	// reasonUnreachable is the endpoint's own probe reading down twice in a
@@ -105,7 +111,9 @@ const (
 
 // reasonRule is what a kind of reason does. rank orders the kinds by cause,
 // lowest first, so the reason a gate is named for is the one nearest the
-// root (the slices after #1650 add upstream at 0 and disrupted at 1).
+// root: disrupted (#1651) names the command that took the device down ahead
+// of the refusal and the unreachable reading it causes (a later slice adds
+// upstream at 0).
 // rungScoped holds only at its rung and above, read by refusedAt; every other
 // kind holds the whole endpoint. host closes every connection to the
 // endpoint's host, a preview's included. release is how it reopens, for an
@@ -119,6 +127,7 @@ type reasonRule struct {
 
 // reasonRules is the kind table.
 var reasonRules = map[reasonKind]reasonRule{
+	reasonDisrupted:   {rank: 1, host: true, release: "it reopens on the endpoint's first up verdict after its quiet period, or at its hold backstop"},
 	reasonRefused:     {rank: 2, rungScoped: true, release: "it reopens when the connection fingerprint changes or the rung passes"},
 	reasonUnreachable: {rank: 3, host: true, release: "it reopens on the probe's next up verdict"},
 }
@@ -152,6 +161,21 @@ func mostCausal(rs []reason) reason {
 // unreachableText is the words an unreachable reason is named with.
 func unreachableText(since time.Time, source string) string {
 	return "unreachable since " + since.UTC().Format(time.RFC3339) + " (probe " + source + ")"
+}
+
+// disruptedText is the words a disrupted reason is named with: the command
+// type, the command and since when.
+func disruptedText(commandType string, commandID int64, since time.Time) string {
+	return "disrupted by " + commandType + " (command " + strconv.FormatInt(commandID, 10) + ") since " +
+		since.UTC().Format(time.RFC3339)
+}
+
+// disruption is an endpoint's disrupted reason's clock (#1651): no probe,
+// ping or session dial runs before quietUntil, no up verdict from a probe
+// that began before it releases the reason, and holdUntil is the backstop.
+type disruption struct {
+	quietUntil time.Time
+	holdUntil  time.Time
 }
 
 // downStreak is an endpoint's down verdicts in a row and the first of them.
@@ -209,11 +233,14 @@ type gates struct {
 	others  map[string]map[reasonKind]reason
 	streak  map[string]downStreak
 	hosts   map[string]string
+	// quiet is each disrupted endpoint's quiet and hold clock (#1651).
+	quiet map[string]disruption
 }
 
 func newGates() *gates {
 	return &gates{held: map[string]gate{}, current: map[string]string{},
-		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{}}
+		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{},
+		quiet: map[string]disruption{}}
 }
 
 // observe records the endpoint's fingerprint from the worklist and the
@@ -379,8 +406,8 @@ func (g *gates) place(endpointID, target string) {
 }
 
 // retain forgets the probe-derived state of endpoints no longer on the
-// worklist, and an unreachable reason whose probe task is gone (nothing is
-// left to reopen it). The refused reason is the fingerprint's to lift.
+// worklist, a disrupted reason among it, and an unreachable reason whose
+// probe task is gone (nothing is left to reopen it). The refused reason is the fingerprint's to lift.
 func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -392,6 +419,12 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 	for id := range g.streak {
 		if !endpoints[id] {
 			delete(g.streak, id)
+		}
+	}
+	for id := range g.quiet {
+		if !endpoints[id] {
+			delete(g.quiet, id)
+			delete(g.others[id], reasonDisrupted)
 		}
 	}
 	for id, rs := range g.others {
@@ -436,24 +469,37 @@ func probeVerdict(dps []collection.Sample) (up, ok bool) {
 	return up, ok
 }
 
-// verdict takes the endpoint's probe verdict at a time: the second down in a
-// row adds unreachable, since the first down, and an up removes it and starts
-// the streak over. A probe with no verdict (it could not be attempted) never
-// gets here, so it neither adds to the streak nor resets it. true when the
-// gate's set changed.
+// verdict takes the endpoint's probe verdict, at the time its probe began:
+// the second down in a row adds unreachable, since the first down, and an up
+// removes it and starts the streak over. An up from a probe that began at or
+// after a disruption's quiet period ended removes disrupted too. A verdict
+// from a probe that began before it ended (a probe in flight across the
+// delivery, the stale-up race) read the device before or as it went down: it
+// neither releases the reason nor feeds or resets the streak, so only downs
+// read after quiet add unreachable. A probe with no verdict (it could not be
+// attempted) never gets here either. true when the gate's set changed.
 func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if q, ok := g.quiet[endpointID]; ok && at.Before(q.quietUntil) {
+		return false
+	}
 	if up {
 		delete(g.streak, endpointID)
-		if _, ok := g.others[endpointID][reasonUnreachable]; !ok {
-			return false
+		changed := false
+		if _, ok := g.others[endpointID][reasonUnreachable]; ok {
+			delete(g.others[endpointID], reasonUnreachable)
+			changed = true
 		}
-		delete(g.others[endpointID], reasonUnreachable)
+		if _, ok := g.quiet[endpointID]; ok {
+			delete(g.quiet, endpointID)
+			delete(g.others[endpointID], reasonDisrupted)
+			changed = true
+		}
 		if len(g.others[endpointID]) == 0 {
 			delete(g.others, endpointID)
 		}
-		return true
+		return changed
 	}
 	s := g.streak[endpointID]
 	if s.downs == 0 {
@@ -473,6 +519,87 @@ func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 	g.others[endpointID][reasonUnreachable] = reason{kind: reasonUnreachable, since: s.first, source: taskID,
 		text: unreachableText(s.first, taskID)}
 	return true
+}
+
+// disrupt adds disrupted to each endpoint's gate (#1651), since the delivery,
+// naming the command: quiet is how long nothing runs against it, hold the
+// backstop that removes the reason when no up verdict does. The probe
+// streak starts over: a down read before the reboot says nothing of the
+// device after it. A second disruptive command restarts the clock and names
+// itself.
+func (g *gates) disrupt(endpoints []string, commandType string, commandID int64, since time.Time, quiet, hold time.Duration) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	since = since.UTC()
+	for _, ep := range endpoints {
+		if ep == "" {
+			continue
+		}
+		if g.others[ep] == nil {
+			g.others[ep] = map[reasonKind]reason{}
+		}
+		g.others[ep][reasonDisrupted] = reason{kind: reasonDisrupted, since: since,
+			source: "command-" + strconv.FormatInt(commandID, 10), text: disruptedText(commandType, commandID, since)}
+		g.quiet[ep] = disruption{quietUntil: since.Add(quiet), holdUntil: since.Add(hold)}
+		delete(g.streak, ep)
+	}
+}
+
+// quietUntil is when the endpoint's quiet period ends; false when it is not
+// in one at now.
+func (g *gates) quietUntil(endpointID string, now time.Time) (time.Time, bool) {
+	if g == nil {
+		return time.Time{}, false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	q, ok := g.quiet[endpointID]
+	if !ok || !now.Before(q.quietUntil) {
+		return time.Time{}, false
+	}
+	return q.quietUntil, true
+}
+
+// expiredHold is a disruption the hold backstop ended: the endpoint and the
+// command that disrupted it (command-<id>), for the self-log line.
+type expiredHold struct {
+	endpoint string
+	source   string
+}
+
+// expire removes disrupted from every endpoint whose hold backstop has come
+// with no up verdict, and returns them with the command each named, sorted
+// by endpoint.
+func (g *gates) expire(now time.Time) []expiredHold {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var out []expiredHold
+	for ep, q := range g.quiet {
+		if now.Before(q.holdUntil) {
+			continue
+		}
+		out = append(out, expiredHold{endpoint: ep, source: g.others[ep][reasonDisrupted].source})
+		delete(g.quiet, ep)
+		delete(g.others[ep], reasonDisrupted)
+		if len(g.others[ep]) == 0 {
+			delete(g.others, ep)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].endpoint < out[j].endpoint })
+	return out
+}
+
+// nextExpiry is the earliest hold backstop held, for the run loop's timer.
+func (g *gates) nextExpiry() (time.Time, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var at time.Time
+	for _, q := range g.quiet {
+		if at.IsZero() || q.holdUntil.Before(at) {
+			at = q.holdUntil
+		}
+	}
+	return at, !at.IsZero()
 }
 
 // rejectionOf is the endpoint-rejection value the endpoint publishes now,

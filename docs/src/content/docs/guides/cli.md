@@ -665,6 +665,19 @@ omniglass component command issue disp-1 --command-type set-input --value '"hdmi
 A target must be a key a command may write: a native probe key, `health` or a calc rule's output is
 refused (422) naming the key.
 
+A **disruptive** type takes its device down (`reboot` ships as one): its delivery closes the gates
+of the component's endpoints on that node, nothing runs against them for `--quiet-seconds`, and each
+reopens on its own first up verdict after that, or at `--hold-seconds` as a counted backstop. The
+hold must be greater than the quiet, and neither is the settle window; a run against a held endpoint
+answers 409 naming the command
+([nodes](/architecture/nodes/#implicit-reachability)):
+
+```sh
+omniglass command-type create --name power-cycle --disruptive --quiet-seconds 20 --hold-seconds 300
+omniglass component reachability list disp-1 | jq -c '.endpoints[] | {endpoint, gate_reasons}'
+# {"endpoint":"http","gate_reasons":[{"kind":"disrupted","since":"...","source":"command-42"}]}
+```
+
 ### A command's status, from issue to settlement
 
 The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in

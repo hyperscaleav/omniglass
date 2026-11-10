@@ -429,7 +429,8 @@ endpoint's lane** on the node's bounded worker pool (`--poll-workers`, default 1
 endpoints of one component run side by side, and operator work (a command, a run now) waits for its
 endpoint's lane ahead of the scheduled tasks queued there, never preempting a request in flight. A
 task with no endpoint is a lane of its own. Component-wide exclusion (#1649), a held session's
-declared pool size (#1254) and the smart-wait gate below remain design.
+declared pool size (#1254) remain design. The smart-wait gate this section once designed is built
+as the endpoint gate's `disrupted` reason (#1651, [below](#implicit-reachability)).
 
 ::::design[Target design: the rest of the component task queue, tracked in #1249 and #1649; commands ride the per-node pull of ADR-0136]
 The node's work is the **component task queue** (distinct from the central **rule engine**;
@@ -442,9 +443,6 @@ The node's work is the **component task queue** (distinct from the central **rul
   (#1649). A shared poller runs once on its parent and fans out at binding.
 - **standing receivers** (listen tasks): always-on, event-driven, **not lane-serialized**, sharing a
   held session with pollers (demuxed) or owning their connection.
-
-**Smart-wait gate.** After a disruptive command the lane blocks until reachability reports the host
-back up, read from the node's **local** copy, not the sample store; a fixed timeout backstops.
 
 More than one request in flight to one endpoint comes only from a held session's declared pool
 size (#1254, default 1), since connection and order semantics differ per protocol.
@@ -474,10 +472,30 @@ failure. An endpoint with no probe has no verdict, so its polls fail and back of
 Held sessions and listen tasks are not gated by `unreachable`; their own reconnect handles a
 gone device.
 
+**A disruptive command closes its endpoints' gates** (built, #1651,
+[ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)).
+A command whose type is [disruptive](/architecture/commands/#the-command_type-registry) (`reboot`)
+arrives with its **hold set**, every endpoint of its component on this node, and the node adds a
+`disrupted` reason to each one's gate **before it sends**, dated at the delivery and naming the
+command (`disrupted by reboot (command 42) since <time>`). For the type's quiet period nothing runs
+against a held endpoint: polls are held and counted as `poll-held-count`, never as failures; the
+probe does not run; a held session does not dial; a command, a run now or a preview answers at once
+naming the reason. After quiet each endpoint reopens on **its own** first up verdict, and only a
+probe that **began** after quiet counts, so an answer already in flight when the command went out
+cannot release it; a down verdict releases nothing, and a sibling that has not answered stays held.
+The delivery starts the probe's down streak over, and a verdict read before quiet ends neither feeds
+nor resets it, so `unreachable` takes two downs read after quiet, dated from the first of them.
+The type's hold is the backstop: an endpoint still held then reopens anyway and the window counts
+it as `hold-expiry-count`, so a device that never comes back is seen rather than silently resumed.
+The lane is never blocked: work on other endpoints runs throughout. A failed send leaves the
+gates closed until up or the backstop, since whether the device received the command is unknown. A
+restarted node does not adopt `disrupted` from its worklist (only a refusal is adopted): the
+restart itself outlasts the moment, and the probe reads the device fresh.
+
 :::design[Target design: the layered availability gate's per-host ping, concurrent pre-pass, tracked in #1249; the ping's rtt and loss are #1063]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
-feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
-signal are one always-on probe.
+feed the gate from the node's local copy: the connection detector and the dashboard signal are
+one always-on probe.
 
 **The layered availability gate** is an **OSI-layered** set of cheap checks run as a **concurrent
 pre-pass** (high concurrency, short timeouts) before a connection-endpoint's poll tasks. All

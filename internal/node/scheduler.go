@@ -247,6 +247,11 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 // pass dispatches every task due at now and returns how many it started.
 func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	began := time.Now()
+	// A disruption's hold backstop that came with no up verdict (#1651)
+	// releases its endpoint, counted, before the held polls are looked at.
+	for _, ep := range d.cfg.sessions.expireHolds(now) {
+		d.cfg.report.holdExpired(ep)
+	}
 	d.mu.Lock()
 	d.releaseLocked(now)
 	var jobs []collection.TaskSpec
@@ -271,6 +276,15 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			next := slotAfter(now, phase, every)
 			d.cfg.sched.book(e.id, next)
 			e.at, e.slot, e.fresh, e.extra = next, next, false, false
+			heap.Fix(&d.due, e.idx)
+			continue
+		}
+		if until, quiet := d.cfg.sessions.quietUntil(t.EndpointID, now); quiet && !poll {
+			// A disruptive command's quiet period (#1651): the endpoint's
+			// probe (and its ping) waits it out, so nothing reads the device
+			// mid-reboot, and its first run after is the verdict that can
+			// reopen the gate. A poll is held by the gate below.
+			e.at = until
 			heap.Fix(&d.due, e.idx)
 			continue
 		}
@@ -404,14 +418,16 @@ func (d *dispatcher) kick() {
 	}
 }
 
-// next is the earliest due, for the run loop's timer.
+// next is the earliest due or hold backstop (#1651), for the run loop's
+// timer.
 func (d *dispatcher) next() (time.Time, bool) {
+	at, ok := d.cfg.sessions.nextHoldExpiry()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.due.Len() == 0 {
-		return time.Time{}, false
+	if d.due.Len() > 0 && (!ok || d.due[0].at.Before(at)) {
+		return d.due[0].at, true
 	}
-	return d.due[0].at, true
+	return at, ok
 }
 
 // settle waits for every dispatched run to end.

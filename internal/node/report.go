@@ -46,6 +46,9 @@ type endpointTally struct {
 	// are the endpoint's schedule loss, skipped over due.
 	due     int
 	skipped int
+	// holdExpiries is the disruptions (#1651) the hold backstop released
+	// with no up verdict from the endpoint.
+	holdExpiries int
 }
 
 // endpointReport is one endpoint's rows for a window, under the task they
@@ -121,6 +124,17 @@ func (r *collectionReport) heldPoll(endpoint string) {
 	r.tally(endpoint).heldPolls++
 }
 
+// holdExpired records a disruption (#1651) the hold backstop released: the
+// endpoint gave no up verdict between its quiet period's end and the hold.
+func (r *collectionReport) holdExpired(endpoint string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tally(endpoint).holdExpiries++
+}
+
 // pollDue records one poll of endpoint falling due (#1634), whatever then
 // became of it.
 func (r *collectionReport) pollDue(endpoint string) {
@@ -171,7 +185,7 @@ func (r *collectionReport) due(now time.Time) bool {
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
 // moved to another node) reports nothing. A mean duration lands only for an
-// endpoint that polled, a failure, held, due, skipped or unclaimed count only when nonzero, and a
+// endpoint that polled, a failure, held, due, skipped, unclaimed or hold-expiry count only when nonzero, and a
 // claimed count for every held endpoint. Ordered by task, so a publish order
 // holds still.
 func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpointReport {
@@ -207,6 +221,9 @@ func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpoi
 		}
 		if e.unclaimed > 0 {
 			metric(probekeys.PushUnclaimedCount, float64(e.unclaimed))
+		}
+		if e.holdExpiries > 0 {
+			metric(probekeys.HoldExpiryCount, float64(e.holdExpiries))
 		}
 		if len(dps) > 0 {
 			out = append(out, endpointReport{task: task, samples: dps})

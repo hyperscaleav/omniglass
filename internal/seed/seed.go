@@ -452,6 +452,9 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			TargetPropertyType  string `yaml:"target_property_type"`
 			TargetMetricType    string `yaml:"target_metric_type"`
 			SettleWindowSeconds int    `yaml:"settle_window_seconds"`
+			Disruptive          bool   `yaml:"disruptive"`
+			QuietSeconds        int    `yaml:"quiet_seconds"`
+			HoldSeconds         int    `yaml:"hold_seconds"`
 		} `yaml:"command_types"`
 	}
 	if err := yaml.Unmarshal(commandTypesYAML, &doc); err != nil {
@@ -462,6 +465,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			Name: c.Name, Label: c.Label, Description: c.Description,
 			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
 			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
+			Disruptive: c.Disruptive, QuietSeconds: c.QuietSeconds, HoldSeconds: c.HoldSeconds,
 		}); err != nil {
 			return err
 		}

@@ -1141,9 +1141,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
+				var fDisruptive bool
+				var fHoldSeconds int
 				var fLabel string
 				var fName string
 				var fParamsSchema string
+				var fQuietSeconds int
 				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
@@ -1159,6 +1162,12 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
 						}
+						if cmd.Flags().Changed("disruptive") {
+							body["disruptive"] = fDisruptive
+						}
+						if cmd.Flags().Changed("hold-seconds") {
+							body["hold_seconds"] = fHoldSeconds
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
@@ -1167,6 +1176,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("params-schema") {
 							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("quiet-seconds") {
+							body["quiet_seconds"] = fQuietSeconds
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = fSettleWindowSeconds
@@ -1181,10 +1193,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again")
+				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
+				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type")
 				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
@@ -1246,15 +1261,18 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
+				var fDisruptive bool
+				var fHoldSeconds int
 				var fLabel string
 				var fParamsSchema string
+				var fQuietSeconds int
 				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a command type",
-					Long:    "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+					Long:    "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 					Example: "  omniglass command-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1263,11 +1281,20 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
 						}
+						if cmd.Flags().Changed("disruptive") {
+							body["disruptive"] = fDisruptive
+						}
+						if cmd.Flags().Changed("hold-seconds") {
+							body["hold_seconds"] = fHoldSeconds
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("params-schema") {
 							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("quiet-seconds") {
+							body["quiet_seconds"] = fQuietSeconds
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = fSettleWindowSeconds
@@ -1282,8 +1309,11 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row")
+				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds")
 				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")

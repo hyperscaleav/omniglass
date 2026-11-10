@@ -3,7 +3,8 @@
 # names one target arm, target_property_type or target_metric_type, never both (it
 # opens an intended value and settles when observed matches); a fire-and-forget
 # command has no target and just records the invocation. An unregistered or double
-# target fails the seed run naming the row.
+# target fails the seed run naming the row. A disruptive command (#1651) also
+# names quiet_seconds and hold_seconds, neither of them the settle window.
 command_types:
   - name: set-input
     label: Set Input
@@ -17,8 +18,15 @@ command_types:
     label: Reboot
     description: >-
       Tell a component to restart. A fire-and-forget command: it records the
-      invocation and a caused event, with no intended value to settle.
+      invocation and a caused event, with no intended value to settle. A
+      disruptive one: its delivery closes the gates of the component's
+      endpoints on that node, the node runs nothing against them for the
+      quiet period, then each reopens on its own first up verdict, with the
+      hold as the backstop for one that never reads up.
     settle_window_seconds: 0
+    disruptive: true
+    quiet_seconds: 15
+    hold_seconds: 300
   # The http drivers' actuations (#902).
   - name: set-volume
     label: Set Volume

@@ -62,6 +62,15 @@ type CommandDelivery struct {
 	// Request is an http command's rendered request (#902), never carrying
 	// a credential: the node applies the endpoint's scheme.
 	Request *driver.Request
+	// Disruptive: the command takes its device down (#1651). The node
+	// closes the gate of every endpoint in HoldEndpoints (each endpoint of
+	// the component placed on this node) before it sends, runs nothing
+	// against them for QuietSeconds, then reopens each on its own first up
+	// verdict, with HoldSeconds the backstop. Empty for any other command.
+	Disruptive    bool
+	QuietSeconds  int
+	HoldSeconds   int
+	HoldEndpoints []string
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
@@ -85,6 +94,11 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			select distinct on (c.id)
 				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
 				i.params as endpoint_params, i.node_name, d.spec,
+				ct.disruptive, ct.quiet_seconds, ct.hold_seconds,
+				case when ct.disruptive then array(
+					select e2.id::text from endpoint e2
+					where e2.component = c.component_id and e2.node_name = i.node_name
+					order by e2.id::text) else '{}'::text[] end as hold_endpoints,
 				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
 				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
 			from command c
@@ -98,7 +112,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			  and jsonb_path_exists(d.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
 			order by c.id, i.name
 		)
-		select id, command_type, params, endpoint_id, transport, endpoint_params, spec, intended_prop, intended_metric
+		select id, command_type, params, endpoint_id, transport, endpoint_params, spec, intended_prop, intended_metric,
+			disruptive, quiet_seconds, hold_seconds, hold_endpoints
 		from candidate
 		where node_name = (select principal_id from node where name = $1)`, node)
 	if err != nil {
@@ -116,11 +131,15 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		spec           []byte
 		intendedProp   []byte
 		intendedMetric *float64
+		disruptive     bool
+		quiet, hold    int
+		holdEndpoints  []string
 	}
 	var pending []pendingRow
 	for rows.Next() {
 		var r pendingRow
-		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.endpointID, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric); err != nil {
+		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.endpointID, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric,
+			&r.disruptive, &r.quiet, &r.hold, &r.holdEndpoints); err != nil {
 			return nil, fmt.Errorf("storage: scan pending command: %w", err)
 		}
 		pending = append(pending, r)
@@ -171,6 +190,9 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Reply:       req.Reply,
 			SessionOnly: r.transport != "udp" && (sp.Session != nil || r.transport != "tcp"),
 			Retries:     req.RetriesOr(driver.DefaultCommandRetries),
+		}
+		if r.disruptive {
+			d.Disruptive, d.QuietSeconds, d.HoldSeconds, d.HoldEndpoints = true, r.quiet, r.hold, r.holdEndpoints
 		}
 		if driver.IsHTTP(r.transport) {
 			// An http command is its own request (#902): no session to ride,

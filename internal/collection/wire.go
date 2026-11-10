@@ -169,6 +169,15 @@ type CommandDelivery struct {
 	// never carries a credential: the node applies the endpoint's declared
 	// scheme from what its worklist delivered.
 	Request *driver.Request `json:"request,omitempty"`
+	// Disruptive says the command takes its device down (#1651): before it
+	// sends, the node closes the gate of every endpoint in HoldEndpoints
+	// (each endpoint of the component placed on this node), runs nothing
+	// against them for QuietSeconds, then reopens each on its own first up
+	// verdict, with HoldSeconds the counted backstop.
+	Disruptive    bool     `json:"disruptive,omitempty"`
+	QuietSeconds  int      `json:"quiet_seconds,omitempty"`
+	HoldSeconds   int      `json:"hold_seconds,omitempty"`
+	HoldEndpoints []string `json:"hold_endpoints,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

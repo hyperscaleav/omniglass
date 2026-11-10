@@ -806,9 +806,12 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
+| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again |
+| `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
+| `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
 | `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
 | `--target-property-type` | string | (none) | The property this command sets, for settlement (at most one target arm) |
@@ -875,13 +878,16 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
+| `--disruptive` | bool | `false` | Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row |
+| `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window |
 | `--label` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
 | `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |

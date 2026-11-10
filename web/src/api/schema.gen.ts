@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Update a command type
-         * @description Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         * @description Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
          */
         patch: operations["update-command-type"];
         trace?: never;
@@ -6360,6 +6360,13 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of every endpoint of the component on the delivering node until each reads up again */
+            disruptive: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive
+             */
+            hold_seconds: number;
             /** @description The command type's uuid, the stable form of name */
             id: string;
             label?: string;
@@ -6367,6 +6374,11 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment for the invocation params */
             params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive
+             */
+            quiet_seconds: number;
             /**
              * Format: int64
              * @description How long the device is given to actuate before a mismatch is a failed command
@@ -6594,12 +6606,24 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description The command type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the params */
             params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.
@@ -10102,7 +10126,7 @@ export interface components {
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
-            /** @description Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), oldest first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection */
+            /** @description Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection */
             gate_reasons?: components["schemas"]["ReachGateReasonBody"][] | null;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
@@ -10135,14 +10159,14 @@ export interface components {
             webhook?: components["schemas"]["EndpointWebhookBody"];
         };
         ReachGateReasonBody: {
-            /** @description The reason's kind: unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict */
+            /** @description The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict */
             kind: string;
             /**
              * Format: date-time
-             * @description When the reason began: for unreachable, the first of the down verdicts that closed the gate
+             * @description When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate
              */
             since: string;
-            /** @description The task whose observation added the reason (the reachability probe's task id) */
+            /** @description What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id */
             source: string;
         };
         ReachHistoryBody: {
@@ -12055,10 +12079,22 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
