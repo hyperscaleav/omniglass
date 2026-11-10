@@ -752,6 +752,11 @@ ingest hop alone, and it says so under the rows: `sim not measured` and the same
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
 
+The [perf gate](#checking-against-the-baseline) reads this table as it prints it: every row with a
+loss above 0 fails the check, naming its kind, hop and cause; an unsettled boot fails it, by name; and
+a read that was not measured fails it with the reason. There is no tolerance, since a healthy lab reads
+exactly 0 by construction, and the gate never passes on a read it could not make.
+
 #### Checking against the baseline
 
 `omniglass lab perf` turns the measurement into a regression gate
@@ -774,7 +779,7 @@ run counts the same whole rounds:
 <PerfGateFigures part="sizes" />
 
 Each figure is in one of three classes. **Exact** figures must be 0 whatever the baseline holds: a lost
-request, a redelivery or a dropped sample is a bug, not a cost. **Host-independent** figures are counts
+request, a redelivery, a dropped sample or a lost telemetry item is a bug, not a cost. **Host-independent** figures are counts
 (rows, bytes, samples), which gate on any host. **Host-dependent** figures are times and container
 usage, which gate only on the host the baseline was generated on:
 
@@ -796,6 +801,26 @@ How to read the verdict table it prints, one row a figure:
   count or memory size). The figure is printed for the reader and gates nothing; the counted figures
   still gate in full. The table's host line names both hosts. Run on the baseline's host class (CI for
   `ci`, the architect's laptop for `laptop`) to gate them.
+
+The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one a kind a hop, named
+`delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
+`-` and is no figure). A sim hop row names its protocol in place of the kind (`delivery_loss/sim/snmp`),
+and a push-lane row names its lane first (`delivery_loss/push/ingest/metric`), so it is never folded
+into the node lane's row for the same hop and kind. Over several runs the worst run is the
+figure, and its note says what was lost, where, and the largest outcome behind it, the same cause the
+table prints:
+
+```
+STATUS  FIGURE                          CLASS  BASELINE  OBSERVED  DELTA  SPREAD (BASE/RUNS)  TOLERANCE  NOTE
+fail    delivery_loss/ingest/property   exact  0         0.3       0.3    -                   0          property lost 3 of 10 at ingest, cause missing
+fail    delivery_unsettled_boots        exact  0         1         1      -                   0          no ratio read from node edge-hq boot 019a6c1e
+pass    delivery_loss/ingest/metric     exact  0         0         0      -                   0
+```
+
+`delivery_unsettled_boots` counts the boots no ratio was read from and names the first three, with the
+stream's backlog note when the stream was the cause. A run whose delivery read was not measured, or
+read no kind carrying items, fails as `delivery_loss` with the reason: a fleet that delivered nothing in
+the window is not a fleet that lost nothing.
 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this

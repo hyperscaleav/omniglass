@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
@@ -213,7 +214,7 @@ func serverContainer(r ScaleReport) (ScaleContainer, bool) {
 }
 
 // gatedFamilies is the gate's compared figures, in the order the verdict
-// lists them. #1695 adds to these tables.
+// lists them.
 func gatedFamilies() []gatedFamily {
 	return []gatedFamily{
 		{Family: "metric_rows_per_minute_per_system", Class: ClassHostIndependent, Tolerance: 0.02, TwoSided: true, Unit: "rows/min",
@@ -287,7 +288,7 @@ func gatedFamilies() []gatedFamily {
 }
 
 // exactFamilies is the figures that must read 0, in the order the verdict
-// lists them. #1695 adds to this table.
+// lists them.
 func exactFamilies() []exactFamily {
 	return []exactFamily{
 		{Family: "closed_loop_loss", About: "every closed-loop gap from endpoint to database (#1639), per gap",
@@ -327,7 +328,7 @@ func exactFamilies() []exactFamily {
 				var out []exactReading
 				for _, d := range r.Delivery {
 					if d.Loss != nil {
-						out = append(out, exactReading{Name: fmt.Sprintf("delivery_loss/%s/%s", d.Hop, d.Kind), Value: *d.Loss})
+						out = append(out, exactReading{Name: deliveryFigure(d), Value: *d.Loss, Note: lossNote(d)})
 					}
 				}
 				// A read with no kind to account is not a 0: a fleet that
@@ -339,9 +340,66 @@ func exactFamilies() []exactFamily {
 			}},
 		{Family: "delivery_unsettled_boots", About: "node boots whose batches had not all settled when the read ran out",
 			Read: func(r ScaleReport) []exactReading {
-				return []exactReading{{Name: "delivery_unsettled_boots", Value: float64(len(r.DeliveryUnsettled))}}
+				return []exactReading{{Name: "delivery_unsettled_boots", Value: float64(len(r.DeliveryUnsettled)), Note: unsettledNote(r)}}
 			}},
 	}
+}
+
+// deliverySubject is what a delivery row counts: its kind, or on the sim hop,
+// whose rows are one a protocol with no kind (#1694), its protocol.
+func deliverySubject(d DeliveryRow) string {
+	if d.Hop == delivery.Sim {
+		return d.Protocol
+	}
+	return string(d.Kind)
+}
+
+// deliveryFigure is a delivery row's exact figure name,
+// delivery_loss/<hop>/<kind>, the sim hop's naming its protocol in place of
+// the kind. A push-lane row (#1696) names its lane first, so it is never
+// folded into the node lane's row for the same hop and kind.
+func deliveryFigure(d DeliveryRow) string {
+	if d.Lane == LanePush {
+		return fmt.Sprintf("delivery_loss/%s/%s/%s", d.Lane, d.Hop, deliverySubject(d))
+	}
+	return fmt.Sprintf("delivery_loss/%s/%s", d.Hop, deliverySubject(d))
+}
+
+// lossNote names a lossy delivery row's kind (or protocol), hop and cause,
+// with its lane when it is the push lane's, empty when the row lost nothing.
+func lossNote(d DeliveryRow) string {
+	if d.Lost() == 0 {
+		return ""
+	}
+	at := string(d.Hop)
+	if d.Lane == LanePush {
+		at += " on the push lane"
+	}
+	return fmt.Sprintf("%s lost %d of %d at %s, cause %s", deliverySubject(d), d.Lost(), d.In, at, cmpOr(string(d.Cause()), "unknown"))
+}
+
+// unsettledNamed is how many unsettled boots a note names before it counts
+// the rest.
+const unsettledNamed = 3
+
+// unsettledNote names the run's unsettled boots, the first few by node and
+// boot, with the read's own note on why, empty when every boot settled.
+func unsettledNote(r ScaleReport) string {
+	if len(r.DeliveryUnsettled) == 0 {
+		return ""
+	}
+	var named []string
+	for _, u := range r.DeliveryUnsettled[:min(len(r.DeliveryUnsettled), unsettledNamed)] {
+		named = append(named, fmt.Sprintf("node %s boot %s", u.Node, u.Boot))
+	}
+	note := "no ratio read from " + strings.Join(named, ", ")
+	if more := len(r.DeliveryUnsettled) - unsettledNamed; more > 0 {
+		note += fmt.Sprintf(" and %d more", more)
+	}
+	if r.DeliveryNote != "" {
+		note += "; " + r.DeliveryNote
+	}
+	return note
 }
 
 func cmpOr(s, or string) string {
@@ -519,8 +577,10 @@ func exactVerdicts(runs []ScaleReport) []FigureVerdict {
 					missing[x.Name]++
 					f.Note = x.Note
 				case x.Value > f.Observed:
+					// The worst run says why, unless a run that could not
+					// be read already has.
 					f.Observed = x.Value
-					if f.Note == "" {
+					if missing[x.Name] == 0 {
 						f.Note = x.Note
 					}
 				}

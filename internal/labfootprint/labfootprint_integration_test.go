@@ -172,8 +172,8 @@ func TestIntegrationScaleDeliveryInducedUnregistered(t *testing.T) {
 		switch d.Kind {
 		case delivery.Property:
 			property = true
-			if *d.Loss <= 0 || d.Cause != delivery.RefusedUnregistered || d.Outcomes[delivery.RefusedUnregistered] == 0 {
-				t.Errorf("property across %s: loss %v, cause %q, outcomes %v; want a loss caused by refused-unregistered", d.Hop, *d.Loss, d.Cause, d.Outcomes)
+			if *d.Loss <= 0 || d.Cause() != delivery.RefusedUnregistered || d.Outcomes[delivery.RefusedUnregistered] == 0 {
+				t.Errorf("property across %s: loss %v, cause %q, outcomes %v; want a loss caused by refused-unregistered", d.Hop, *d.Loss, d.Cause(), d.Outcomes)
 			}
 		case delivery.Metric:
 			metric = true

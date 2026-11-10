@@ -62,11 +62,12 @@ type Total struct {
 func (t Total) Loss() (float64, bool) { return Loss(t.In, t.Out) }
 
 // Cause is the largest loss outcome behind the total, "" when nothing was
-// lost. A tie goes to the outcome listed first in Outcomes, then SimOutcomes.
+// lost. A tie goes to the outcome listed first in Outcomes, then SimOutcomes,
+// then the schedule hop's Skipped (its Made is out, never a cause).
 func (t Total) Cause() Outcome {
 	var cause Outcome
 	var most uint64
-	for _, o := range slices.Concat(Outcomes, SimOutcomes) {
+	for _, o := range slices.Concat(Outcomes, SimOutcomes, []Outcome{Skipped}) {
 		if o.Lost() && t.Outcomes[o] > most {
 			cause, most = o, t.Outcomes[o]
 		}

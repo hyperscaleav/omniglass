@@ -724,7 +724,7 @@ func TestScaleDeliverySimRowPerProtocol(t *testing.T) {
 	}
 	snmp := rep.Delivery[1]
 	if snmp.Hop != delivery.Sim || snmp.Protocol != "snmp" || snmp.In != 40 || snmp.Out != 30 || snmp.Loss == nil || *snmp.Loss != 0.25 ||
-		snmp.Outcomes[delivery.Withheld] != 10 || snmp.Cause != delivery.Withheld {
+		snmp.Outcomes[delivery.Withheld] != 10 || snmp.Cause() != delivery.Withheld {
 		t.Errorf("the snmp sim row = %+v, want 40 in, 30 out, 0.25 lost to withheld", snmp)
 	}
 	table := rep.Table()
@@ -858,7 +858,7 @@ func TestScaleDeliveryPrintsTheNodeRowPerKind(t *testing.T) {
 		receipt("b1", 4, 700, m(10, 30), nil),
 	))
 	node, ingest := rowOn(t, rep, delivery.Node, delivery.Metric), rowOn(t, rep, delivery.Ingest, delivery.Metric)
-	if node.In != 30 || node.Out != 20 || node.Outcomes[delivery.SpoolOverflow] != 10 || node.Cause != delivery.SpoolOverflow {
+	if node.In != 30 || node.Out != 20 || node.Outcomes[delivery.SpoolOverflow] != 10 || node.Cause() != delivery.SpoolOverflow {
 		t.Errorf("node metric row = %+v, want 30 in, 20 shipped, 10 spool-overflow", node)
 	}
 	if ingest.In != 20 || ingest.Out != 20 || ingest.Loss == nil || *ingest.Loss != 0 {
@@ -941,7 +941,7 @@ func TestScaleDeliveryPushLaneRowsApart(t *testing.T) {
 		t.Errorf("node row = %+v, want 40 in 40 out, 0 loss", nodeRow)
 	}
 	if pushRow.Lane != LanePush || pushRow.Hop != delivery.Ingest || pushRow.In != 7 || pushRow.Out != 5 ||
-		pushRow.Outcomes[delivery.Missing] != 2 || pushRow.Cause != delivery.Missing {
+		pushRow.Outcomes[delivery.Missing] != 2 || pushRow.Cause() != delivery.Missing {
 		t.Errorf("push row = %+v, want 7 in 5 out, 2 missing", pushRow)
 	}
 	if got := rep.DeliveryEndToEnd[delivery.Metric]; got != 0 {
@@ -1068,7 +1068,7 @@ func TestScaleDeliveryScheduleHopRow(t *testing.T) {
 		t.Fatalf("delivery rows = %+v, want metric schedule, node and ingest, and property node and ingest", rep.Delivery)
 	}
 	if r := rep.Delivery[0]; r.Hop != delivery.Schedule || r.Kind != delivery.Metric || r.In != 10 || r.Out != 8 ||
-		r.Loss == nil || *r.Loss != 0.2 || r.Cause != delivery.Skipped || r.Outcomes[delivery.Made] != 8 || r.Outcomes[delivery.Skipped] != 2 {
+		r.Loss == nil || *r.Loss != 0.2 || r.Cause() != delivery.Skipped || r.Outcomes[delivery.Made] != 8 || r.Outcomes[delivery.Skipped] != 2 {
 		t.Errorf("schedule row = %+v, want metric 10 due, 8 made, 0.2 lost to skipped dues", r)
 	}
 	table := rep.Table()

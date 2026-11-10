@@ -87,9 +87,6 @@ func ScheduleRowsOf(counts []ScheduleCount) []DeliveryRow {
 		made := min(counts[i].Made, counts[i].Due)
 		row := DeliveryRow{Lane: LaneNode, Hop: delivery.Schedule, Kind: k, In: counts[i].Due, Out: made,
 			Outcomes: map[delivery.Outcome]uint64{delivery.Made: made, delivery.Skipped: counts[i].Due - made}}
-		if made < row.In {
-			row.Cause = delivery.Skipped
-		}
 		if l, ok := delivery.Loss(row.In, row.Out); ok {
 			row.Loss = &l
 		}

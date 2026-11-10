@@ -52,8 +52,25 @@ func TestIntegrationPerfGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lab perf check against its own baseline: %v\n%s", err, out)
 	}
-	if v := readTestVerdict(t, verdict); v.Status != PerfPass {
+	v := readTestVerdict(t, verdict)
+	if v.Status != PerfPass {
 		t.Fatalf("the immediate check read %s, want pass:\n%s", v.Status, out)
+	}
+	// A healthy lab loses nothing: every delivery row the run read is an
+	// exact pass at 0, and every boot settled (#1695).
+	losses := 0
+	for _, f := range v.Figures {
+		if strings.HasPrefix(f.Name, "delivery_loss/") || f.Name == "delivery_unsettled_boots" {
+			if f.Status != PerfPass || f.Observed != 0 {
+				t.Errorf("%s = %+v, want a pass at 0", f.Name, f)
+			}
+			if strings.HasPrefix(f.Name, "delivery_loss/") {
+				losses++
+			}
+		}
+	}
+	if losses == 0 {
+		t.Errorf("the verdict holds no delivery_loss row, want one a kind a hop:\n%s", out)
 	}
 
 	const rows = "metric_rows_per_minute_per_system"

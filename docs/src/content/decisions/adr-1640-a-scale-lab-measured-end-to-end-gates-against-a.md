@@ -30,9 +30,10 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
        against a threshold, and only on the host the baseline was measured on.
   2. **Three classes, one table each, extended by adding a row.** `exactFamilies` and `gatedFamilies`
      in `perfgate.go` are the tables; the docs render them (`docs/src/generated/perfgate.json`, written
-     by `make gen`). A new figure (#1695's) is one row and its reader.
+     by `make gen`). A new figure is one row and its reader.
      - **Exact:** every closed-loop gap (#1639), `ingest_lag_not_measured`, `redeliveries`, each telemetry
-       kind's `delivery_loss` per hop (#1641), and `delivery_unsettled_boots`. Each must be 0, whatever the
+       kind's `delivery_loss` per hop (#1641), and `delivery_unsettled_boots`; a failed loss row names its
+       kind, hop and cause, and an unsettled boot is named (#1695). Each must be 0, whatever the
        baseline holds; a baseline whose runs read otherwise is refused. A figure that was not read is not
        a 0: a closed loop with no node answering, or a delivery read with no kind carrying items, fails.
      - **Host-independent:** metric and property rows a minute per system (2 percent, either way, since
@@ -63,7 +64,7 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
      match on CPU model, cores and memory; the Go version and the image build are recorded for the
      reader and do not decide a match.
   6. **The sizes, and the window.** `ci` is corporate at 300 systems, which a standard GitHub runner
-     holds; `laptop` is corporate at 1000. 3000 belongs to #1695. Both warm up for 2 minutes and measure a
+     holds; `laptop` is corporate at 1000. 3000 belongs to #1719. Both warm up for 2 minutes and measure a
      5 minute window, a whole multiple of every interval the scenario's drivers poll at and of the lab
      cadence (2 s, 5 s, 10 s, 30 s, 1 min, 5 min), so every run counts the same whole rounds. A run sets
      no backlog (the retention probe restarts the server) and no system page clients. The issue's first

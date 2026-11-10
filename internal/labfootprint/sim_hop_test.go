@@ -69,11 +69,11 @@ func TestSimHopReadsWithheldAnswersAsLossOverRealSockets(t *testing.T) {
 			if *r.Loss != want {
 				t.Errorf("loss %v, want %v", *r.Loss, want)
 			}
-			if c.wantW > 0 && r.Cause != delivery.Withheld {
-				t.Errorf("cause %q, want withheld", r.Cause)
+			if c.wantW > 0 && r.Cause() != delivery.Withheld {
+				t.Errorf("cause %q, want withheld", r.Cause())
 			}
-			if c.wantW == 0 && r.Cause != "" {
-				t.Errorf("a healthy agent reads cause %q", r.Cause)
+			if c.wantW == 0 && r.Cause() != "" {
+				t.Errorf("a healthy agent reads cause %q", r.Cause())
 			}
 		})
 	}

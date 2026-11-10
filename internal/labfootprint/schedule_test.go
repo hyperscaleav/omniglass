@@ -42,7 +42,7 @@ func TestParseSchedule(t *testing.T) {
 // and the push lane's rows, which no schedule produced, follow the node lane's.
 func TestScheduleRowsLeadTheirKind(t *testing.T) {
 	sched := ScheduleRowsOf([]ScheduleCount{{Kind: delivery.Property, Due: 5, Made: 5}, {Kind: delivery.Log}})
-	if len(sched) != 1 || sched[0].Loss == nil || *sched[0].Loss != 0 || sched[0].Cause != "" {
+	if len(sched) != 1 || sched[0].Loss == nil || *sched[0].Loss != 0 || sched[0].Cause() != "" {
 		t.Fatalf("rows = %+v, want one property row reading 0, no cause", sched)
 	}
 	ingest := []DeliveryRow{{Lane: LaneNode, Hop: delivery.Ingest, Kind: delivery.Metric}, {Lane: LaneNode, Hop: delivery.Ingest, Kind: delivery.Property},

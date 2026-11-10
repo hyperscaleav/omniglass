@@ -55,8 +55,8 @@ func TestASpoolOverflowReadsAsTheNodeHopsLoss(t *testing.T) {
 	if nodeRow.In != 6 || nodeRow.Out != 4 || nodeRow.Outcomes[delivery.SpoolOverflow] != 2 || nodeRow.Outcomes[delivery.Shipped] != 4 {
 		t.Fatalf("node row %+v, want 6 minted, 4 shipped, 2 lost to spool-overflow", nodeRow)
 	}
-	if nodeRow.Cause != delivery.SpoolOverflow || nodeRow.Loss == nil || *nodeRow.Loss != 2.0/6 {
-		t.Fatalf("node row loss %v cause %q, want 2/6 under spool-overflow", nodeRow.Loss, nodeRow.Cause)
+	if nodeRow.Cause() != delivery.SpoolOverflow || nodeRow.Loss == nil || *nodeRow.Loss != 2.0/6 {
+		t.Fatalf("node row loss %v cause %q, want 2/6 under spool-overflow", nodeRow.Loss, nodeRow.Cause())
 	}
 	ingestRow := rowOf(t, rows, delivery.Ingest, delivery.Metric)
 	if ingestRow.In != 4 || ingestRow.Out != 4 || ingestRow.Loss == nil || *ingestRow.Loss != 0 {
