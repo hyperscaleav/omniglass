@@ -3,7 +3,6 @@ package labfootprint
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +11,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
-
-func TestMain(m *testing.M) { os.Exit(storagetest.Main(m)) }
 
 // readAbsolutes runs AbsolutesQuery as psql -At prints it: the row's
 // fields joined by a pipe.

@@ -70,6 +70,8 @@ var Registry = []Var{
 		Doc: "the encryption key's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
 	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server", Deprecated: "OMNIGLASS_ENCRYPTION_KEY_FILE",
 		Doc: "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
+	{Key: "OMNIGLASS_SERVER_NAME", Default: "the hostname", Scope: "server",
+		Doc: "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",
@@ -78,6 +80,10 @@ var Registry = []Var{
 		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
 	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
 		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
+	{Key: "OMNIGLASS_NODE_SESSION_DIALS", Default: "16", Scope: "node",
+		Doc: "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"},
+	{Key: "OMNIGLASS_LANE_WORKERS", Scope: "node",
+		Doc: "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"},
 	// omniglass lab run finds its Docker daemon the way the docker CLI does
 	// (#1194): these three, then the platform's default socket or pipe.
 	{Key: "DOCKER_HOST", Scope: "cli",

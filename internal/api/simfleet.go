@@ -29,6 +29,7 @@ type SimHub interface {
 	SimStatus(node string) (simhub.Status, bool)
 	Nodes() []string
 	FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error)
+	EndpointObservation(ctx context.Context, node string) (collection.EndpointObservation, error)
 }
 
 // WithSimHub supplies the server's simulators: the node simulation view, the
@@ -141,6 +142,10 @@ type fireSimInput struct {
 
 type fireSimOutput struct {
 	Body collection.SimOperationResult
+}
+
+type simObservationOutput struct {
+	Body collection.EndpointObservation
 }
 
 type addSimComponentInput struct {
@@ -415,6 +420,34 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error500InternalServerError("fire sim operation")
 		}
 		return &fireSimOutput{Body: res}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-node-simulation-observation",
+		Method:      http.MethodGet,
+		Path:        "/nodes/{name}/simulation/observation",
+		Summary:     "Get a node's endpoint observation",
+		Description: "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
+	}, "simulation", "read"), func(ctx context.Context, in *nodePathInput) (*simObservationOutput, error) {
+		if !a.scopeFor(ctx, "component", "read").All {
+			return nil, huma.Error403Forbidden("a node's endpoint observation spans every component it simulates, so it needs an all-scope component read")
+		}
+		if _, err := gw.GetNode(ctx, in.Name, scope.Set{All: true}); err != nil {
+			return nil, mapNodeErr(err)
+		}
+		if hub == nil {
+			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", in.Name))
+		}
+		obs, err := hub.EndpointObservation(ctx, in.Name)
+		switch {
+		case errors.Is(err, collection.ErrNoSimulator):
+			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", in.Name))
+		case errors.Is(err, collection.ErrNodeAbsent):
+			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("node %s did not answer", in.Name))
+		case err != nil:
+			return nil, huma.Error500InternalServerError("get endpoint observation")
+		}
+		return &simObservationOutput{Body: obs}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{

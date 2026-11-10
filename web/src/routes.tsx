@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Subscriptions from "./pages/Subscriptions";
 import Inbox from "./pages/Inbox";
 import Nodes from "./pages/Nodes";
+import PlatformHealth from "./pages/PlatformHealth";
 import Simulation from "./pages/Simulation";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
@@ -60,6 +61,7 @@ export const PAGES: Record<string, Component> = {
   Subscriptions,
   Inbox,
   Nodes,
+  PlatformHealth,
   Simulation,
   Users,
   Roles,

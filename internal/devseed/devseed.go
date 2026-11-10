@@ -42,17 +42,52 @@ type Doc struct {
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
-	Alarms            []Alarm           `yaml:"alarms"`
-	PropertyValues    []Property        `yaml:"property_values"`
-	SimSecrets        []SimSecret       `yaml:"sim_secrets"`
-	SimEndpoints      []SimEndpoint     `yaml:"sim_endpoints"`
-	SimComponents     []Component       `yaml:"sim_components"`
+	// ComponentDependencies are the fleet's dependency edges (#1648): a
+	// component fed from a PDU's outlet, or hosted by another component.
+	ComponentDependencies []ComponentDependency `yaml:"component_dependencies"`
+	Alarms                []Alarm               `yaml:"alarms"`
+	PropertyValues        []Property            `yaml:"property_values"`
+	SimSecrets            []SimSecret           `yaml:"sim_secrets"`
+	SimEndpoints          []SimEndpoint         `yaml:"sim_endpoints"`
+	SimComponents         []Component           `yaml:"sim_components"`
 	// SimIdentityBindings tie the simulated conduit's room ids to the
 	// systems they are the rooms of (#1282).
 	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
 	// SimPusher is the simulated first-party pusher (#1370), granted with
 	// the simulated fleet only.
 	SimPusher *SimPusher `yaml:"sim_pusher"`
+}
+
+// ComponentDependency is one fixture dependency edge (#1648): Component
+// depends on Upstream by Kind (power, host or path), a power edge naming the
+// Upstream's Outlet that feeds it. Both ends are fixture keys.
+type ComponentDependency struct {
+	Component string `yaml:"component"`
+	Upstream  string `yaml:"upstream"`
+	Kind      string `yaml:"kind"`
+	Outlet    string `yaml:"outlet"`
+}
+
+// seedComponentDependencies records the fixture's dependency edges through
+// the gateway's own write, each end by the uuid the seed made. An edge
+// already recorded is a no-op, so a re-seed writes nothing.
+func seedComponentDependencies(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs map[string]string) error {
+	all := scope.Set{All: true}
+	for _, d := range doc.ComponentDependencies {
+		comp, ok := compIDs[d.Component]
+		if !ok {
+			return fmt.Errorf("devseed: dependency names component key %q, which the fleet has no component for", d.Component)
+		}
+		up, ok := compIDs[d.Upstream]
+		if !ok {
+			return fmt.Errorf("devseed: dependency names upstream key %q, which the fleet has no component for", d.Upstream)
+		}
+		_, err := gw.CreateComponentDependency(ctx, actorID, comp, storage.ComponentDependencySpec{Upstream: up, Kind: d.Kind, Outlet: d.Outlet}, all, all)
+		if err != nil && !errors.Is(err, storage.ErrDependencyExists) {
+			return fmt.Errorf("devseed: record %s depends on %s by %s: %w", d.Component, d.Upstream, d.Kind, err)
+		}
+	}
+	return nil
 }
 
 // SimSecret is a platform secret the simulated fleet's endpoints reference
@@ -649,6 +684,12 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all, all, all, all); err != nil {
 			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
 		}
+	}
+
+	// Dependency edges: after the components, so both ends resolve to the
+	// uuids the seed made (a name is unique only in its placement).
+	if err := seedComponentDependencies(ctx, gw, actorID, doc, compIDs); err != nil {
+		return err
 	}
 
 	// Alarms: raised last of the fleet writes, since the component must exist and

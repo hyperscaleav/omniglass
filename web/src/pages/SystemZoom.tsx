@@ -43,7 +43,7 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
-import { metricBuckets, metricBucketsKey } from "../lib/series";
+import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtPlace, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -72,9 +72,6 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // is read once, for the place, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// SERIES_POLL_MS is the Data table's sparkline cadence: a day's line moves
-// too little in the leaf's five seconds to be worth a request per metric.
-const SERIES_POLL_MS = 30_000;
 // The Data table reads a day at five-minute buckets (#1269): 288 of them, the
 // min/max band and the avg line, so a one-sample spike survives and the read
 // is the same size however busy the metric.

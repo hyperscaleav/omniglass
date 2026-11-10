@@ -551,3 +551,77 @@ func TestExecuteDeliveryOverTLSNeverDialsAThrowaway(t *testing.T) {
 		t.Fatalf("a tls command dialed a throwaway connection: %v", throwaway.sent)
 	}
 }
+
+// gatedDialer holds every dial until release closes, counting how many are
+// in flight at once.
+type gatedDialer struct {
+	release chan struct{}
+	mu      sync.Mutex
+	now     int
+	peak    int
+	conns   []*heldFake
+}
+
+func (d *gatedDialer) Dial(ctx context.Context, _ string, _ time.Duration, _ collection.Inbound) (collection.HeldConn, error) {
+	d.mu.Lock()
+	d.now++
+	d.peak = max(d.peak, d.now)
+	d.mu.Unlock()
+	defer func() {
+		d.mu.Lock()
+		d.now--
+		d.mu.Unlock()
+	}()
+	select {
+	case <-d.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	c := &heldFake{done: make(chan struct{})}
+	d.mu.Lock()
+	d.conns = append(d.conns, c)
+	d.mu.Unlock()
+	return c, nil
+}
+
+func (d *gatedDialer) counts() (now, peak int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.now, d.peak
+}
+
+// A node restarting with many held endpoints dials them through its
+// session-dials slots (#1636): ten wanted sessions behind a dialer that
+// holds every dial never have more than two in flight, wait as
+// establishing, and all come up once the dialer lets go.
+func TestSessionManagerDialsThroughItsSlots(t *testing.T) {
+	t.Parallel()
+	dialer := &gatedDialer{release: make(chan struct{})}
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
+	m.dials = collection.NewDialSlots(2)
+	defer m.closeAll()
+
+	var wl []collection.TaskSpec
+	for i := range 10 {
+		id := string(rune('a' + i))
+		wl = append(wl, listenTask("l"+id, "ep-"+id, "10.0.0."+string(rune('1'+i))+":51325"))
+	}
+	m.reconcile(wl)
+	for _, task := range wl {
+		log.waitFor(t, task.ID, collection.SessionEstablishing)
+	}
+	waitUntil(t, "two dials in flight", func() bool { now, _ := dialer.counts(); return now == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if _, peak := dialer.counts(); peak != 2 {
+		t.Fatalf("peak dials in flight = %d, want the 2 slots", peak)
+	}
+
+	close(dialer.release)
+	for _, task := range wl {
+		log.waitFor(t, task.ID, collection.SessionUp)
+	}
+	if _, peak := dialer.counts(); peak > 2 {
+		t.Fatalf("peak dials in flight = %d, want at most 2", peak)
+	}
+}

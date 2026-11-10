@@ -168,13 +168,19 @@ var IdentityShapes = map[string]TableIdentity{
 		"long as its horizon keeps it",
 		NoLabel: "no operator surface of its own: only the ingest's conflict check reads a receipt, and " +
 			"nothing renders a receipt row for a label to appear on"},
+	"platform_server": {Shape: ShapeHumanNotAKey, Reason: "the identity a server boots under " +
+		"(OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a " +
+		"kebab token, and the server's component carries the operator-facing name (#1627)",
+		NoLabel: "no operator surface of its own: the server is shown through its platform component, " +
+			"which carries the label"},
 
 	// Id only.
 	"alarm":        {Shape: ShapeIDOnly},
 	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named"},
 	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
-	"credential": {Shape: ShapeIDOnly},
-	"event":      {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
+	"component_dependency": {Shape: ShapeIDOnly, Reason: "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named"},
+	"credential":           {Shape: ShapeIDOnly},
+	"event":                {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
 	"metric_series":      {Shape: ShapeIDOnly, Reason: "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting node; nothing addresses it by name"},

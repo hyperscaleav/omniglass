@@ -111,6 +111,11 @@ property_types:
       retry, lifts it. The fingerprint is a digest only. A refusal of a
       changed key (class host-key) appends its evidence, the pinned key and
       the key the component offered instead, each a SHA256 fingerprint.
+      The gate is a set of reasons: beside that refusal, which comes first,
+      each other reason is an entry of its kind, since when (RFC 3339) and
+      the task that added it, the entries joined by a semicolon (unreachable
+      2026-11-09T14:03:00Z task-1, from the endpoint's own probe reading down
+      twice in a row, lifted by its next up).
   - name: endpoint-rejection-reason
     data_type: string
     label: Endpoint Rejection Reason
@@ -133,6 +138,18 @@ property_types:
       it broke and when it came back, not a sample per check. incomplete ranks
       between healthy and degraded and means a commissioning gap: a role short
       because its hardware was never installed, which no alarm will ever fire for.
+  # The server's identity (#1644), on the server's own platform component:
+  # its boot writes both, the version when it changes and the start time on
+  # every boot. The platform writer class reserves them to the boot.
+  - name: server-version
+    data_type: string
+    label: Server Version
+    description: The Omniglass build this server runs, written by its boot and rewritten when an upgrade changes it.
+  - name: server-started-at
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" }
+    label: Server Started At
+    description: When this server last booted, an RFC 3339 UTC timestamp its boot writes; the server's uptime is the time since.
   - name: video-input
     data_type: string
     validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }

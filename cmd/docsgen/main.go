@@ -98,11 +98,9 @@ func writeLeaf(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.Short != "" {
 		b.WriteString(cmd.Short + "\n\n")
 	}
-	use := cmd.UseLine()
-	if cmd.HasAvailableSubCommands() {
-		// cobra appends [command] to a group's UseLine; its own run takes flags only.
-		use = cmd.CommandPath() + " [flags]"
-	}
+	// A runnable group's own run takes what its Use names (`node simulation
+	// <name>`); its subcommands are listed beneath it, so no [command] here.
+	use := strings.Replace(cmd.UseLine(), " [command]", "", 1)
 	b.WriteString("```\n" + use + "\n```\n\n")
 	if long := strings.TrimSpace(cmd.Long); long != "" && long != strings.TrimSpace(cmd.Short) {
 		b.WriteString(long + "\n\n")

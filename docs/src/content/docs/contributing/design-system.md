@@ -216,6 +216,14 @@ confirm whose body has to teach cannot be a native prompt.
 `BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
 the `Sidebar` / `TopBar` shell.
 
+**A polled list keys its rows (`KeyedFor`).** A polled read hands back fresh objects every time, and
+Solid's `For` rebuilds a row whose item is a new object, so over a poll every row loses the state it
+holds: an expanded chart closes, a tooltip vanishes under the pointer, a disclosure the operator
+closed opens again. `KeyedFor` takes the list and a key (`by`) and keeps a row mounted while its key
+is in the list, handing it the key's newest item, so the row's state survives the poll and its
+figures follow it. Platform health renders every level with it (server, panel, key, route, node,
+column).
+
 **A toast points at an outcome; it never holds the only copy.** Any surface raises one with
 `pushToast` (a tone, a title, an optional live body and one action), and the shell's `Toaster` draws
 it bottom right, a polite live region, each toast a raised card edged in its tone's hue (a soft fill

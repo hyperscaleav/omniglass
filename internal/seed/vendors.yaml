@@ -33,6 +33,12 @@ vendors:
     label: Newtron
     kind: manufacturer
     website: https://newtron.example
+  # Omniglass itself: the developer of the platform's own parts (#1094), so a
+  # node's component names a real product rather than the generic floor.
+  - id: omniglass
+    label: Omniglass
+    kind: developer
+    website: https://omniglass.hyperscaleav.com
   - id: polaris
     label: Polaris
     kind: manufacturer

@@ -11,11 +11,12 @@ sidebar:
 
 :::caution[Design: the ViewResult contract is entirely unbuilt]
 The framework on this page is not built: there is no `view` table, no `ViewResult` shape, no
-`/views/{id}:run` route, and no renderer library. Today's read side is typed CRUD `GET`s plus five
+`/views/{id}:run` route, and no renderer library. Today's read side is typed CRUD `GET`s plus six
 hand-written composed reads (reachability, events, the component and node log
-reads, and the fleet projection at `GET /views/fleet`, the first route actually served under
-`/views/`) that stand in until this framework lands, which the [API](/architecture/api/) page's
-views-exception note covers.
+reads, the fleet projection at `GET /views/fleet`, the first route actually served under
+`/views/`, and the platform projection at `GET /views/platform`, the second, behind
+[Platform health](/guides/operator/platform-health/)) that stand in until this framework lands,
+which the [API](/architecture/api/) page's views-exception note covers.
 :::
 
 Writes go through typed resource CRUD; in the target model **everything read goes through a view**:

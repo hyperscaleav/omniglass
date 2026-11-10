@@ -26,13 +26,15 @@ var taskFieldFingerprint = map[string]string{
 	"CertificatePin": "CertificatePin", // the same, for a tls endpoint
 	"SessionRetry":   "Retry",
 	// not a connection input
-	"ID":           "-", // the task's own content hash
-	"Mode":         "-", // poll or listen: what to do, not how to connect
-	"EndpointID":   "-", // the key a session and a gate are held under
-	"EndpointName": "-", // derived from the transport
-	"Spec":         "-", // the function (what to ask and how to read it); its arm rides the session identity
-	"Fingerprint":  "-", // the digest itself
-	"Rejection":    "-", // the gate the digest is compared against
+	"ID":            "-", // the task's own content hash
+	"Mode":          "-", // poll or listen: what to do, not how to connect
+	"EndpointID":    "-", // the key a session and a gate are held under
+	"EndpointName":  "-", // derived from the transport
+	"Spec":          "-", // the function (what to ask and how to read it); its arm rides the session identity
+	"Fingerprint":   "-", // the digest itself
+	"Rejection":     "-", // the gate the digest is compared against
+	"ComponentID":   "-", // whose endpoint it is: the key a path upstream names (#1652)
+	"PathUpstreams": "-", // what the endpoint is reached through: a gate input, not a dial input
 }
 
 func TestEveryTaskFieldIsAFingerprintInputOrDeclaredNotOne(t *testing.T) {

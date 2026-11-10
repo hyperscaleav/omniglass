@@ -421,6 +421,9 @@ func systemMoverName(ctx context.Context, gw storage.Gateway, a *authenticator, 
 // mapSystemErr translates the gateway's system sentinels into HTTP status,
 // mirroring locations.
 func mapSystemErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
