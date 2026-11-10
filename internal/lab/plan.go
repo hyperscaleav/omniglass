@@ -512,6 +512,11 @@ func Plan(o Options) (Spec, error) {
 		if o.InduceUnregistered {
 			seedCmd = append(seedCmd, "--induce-unregistered")
 		}
+		if !o.Ephemeral {
+			// A kept scale lab (#1633): the seed keeps the fleet its
+			// database already holds and re-enrolls the site nodes.
+			seedCmd = append(seedCmd, "--keep")
+		}
 		seedEnv = append(append([]string{}, appEnv...), SiteNodeTokenHashesEnv+"="+FormatSiteNodeTokenHashes(o.SiteNodes))
 	}
 	spec.Seed = Service{
@@ -655,4 +660,28 @@ func SortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(ks)
 	return ks
+}
+
+// RestartCommand is the command that brings this lab back with its data, for
+// the stop line's hint. A learner's lab comes back with a bare lab run; a
+// kept scale lab (#1633) needs its own scenario, size and --keep (and its
+// cadence, when not the lab's own, and its project, when not the scale lab's
+// own, since the data lives in that project's volumes), or a bare run would
+// start the dev fleet.
+func RestartCommand(o Options) string {
+	cmd := "omniglass lab run"
+	if !o.Scale() {
+		return cmd
+	}
+	cmd += " --scenario " + o.Scenario + " --systems " + strconv.Itoa(o.Systems)
+	if o.Cadence != "" && o.Cadence != CadenceLab {
+		cmd += " --cadence " + o.Cadence
+	}
+	if o.Project != "" && o.Project != ScaleProject {
+		cmd += " --project " + o.Project
+	}
+	if !o.Ephemeral {
+		cmd += " --keep"
+	}
+	return cmd
 }

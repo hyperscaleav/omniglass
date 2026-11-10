@@ -167,12 +167,12 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		nodes = append(nodes, lab.SiteNode{Name: name, TokenHash: hex.EncodeToString(hash)})
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes[1:]), false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
+		lab.FormatSiteNodeTokenHashes(nodes[1:]), false, false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
 		t.Fatalf("a missing site hash: %v, want a refusal naming %s", err, nodes[0].Name)
 	}
 
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
 	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") {
@@ -230,8 +230,112 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		t.Errorf("%d addresses for %d components", len(addresses), plan.Totals.Components)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes), false); err == nil || !strings.Contains(err.Error(), "holds data") {
+		lab.FormatSiteNodeTokenHashes(nodes), false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
 		t.Fatalf("a second seed: %v, want a refusal of a database holding data", err)
+	}
+}
+
+// A kept scale lab's seed (#1633), against a real database: a second seed
+// with keep, on the database the first one seeded and with this run's new
+// token hashes, seeds nothing (the component and node counts hold), enrolls
+// every site node with its new hash (the last run's no longer authenticates)
+// and says it kept the fleet. Without keep the throwaway refusal stands, and
+// with keep at another size the kept fleet is not the plan, so it is refused
+// naming --fresh.
+func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	plan := corporateScalePlan(t, 3)
+	mint := func() (map[string][]byte, string) {
+		t.Helper()
+		tokens := map[string][]byte{}
+		var nodes []lab.SiteNode
+		for _, site := range plan.Sites {
+			_, hash, _, err := auth.NewBearerToken()
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := labscenario.SiteNode(site.Name)
+			tokens[name] = hash
+			nodes = append(nodes, lab.SiteNode{Name: name, TokenHash: hex.EncodeToString(hash)})
+		}
+		return tokens, lab.FormatSiteNodeTokenHashes(nodes)
+	}
+	firstTokens, firstHashes := mint()
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, false, true); err != nil {
+		t.Fatalf("the first seed, kept: %v", err)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	all := scope.Set{All: true}
+	counts := func() (int, int) {
+		t.Helper()
+		cs, err := gw.ListComponents(ctx, all)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ns, err := gw.ListNodes(ctx, all)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(cs), len(ns)
+	}
+	components, nodes := counts()
+
+	secondTokens, secondHashes := mint()
+	var out bytes.Buffer
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err != nil {
+		t.Fatalf("the second seed, kept: %v", err)
+	}
+	res := lab.ParseSeedResult(out.String())
+	if !res.Node || !strings.Contains(res.Summary, "kept") {
+		t.Fatalf("seed result %+v, want the nodes present and the fleet kept", res)
+	}
+	if c, n := counts(); c != components || n != nodes {
+		t.Fatalf("after a kept seed: %d components and %d nodes, want the first run's %d and %d", c, n, components, nodes)
+	}
+	for name, hash := range secondTokens {
+		pr, err := gw.AuthenticateBearer(ctx, hash)
+		if err != nil || pr.Node == nil || pr.Node.Name != name {
+			t.Errorf("%s's new token = %+v, %v; want it to authenticate %s", name, pr, err, name)
+		}
+		if _, err := gw.AuthenticateBearer(ctx, firstTokens[name]); err == nil {
+			t.Errorf("%s's last-run token still authenticates", name)
+		}
+	}
+
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, false); err == nil ||
+		!strings.Contains(err.Error(), "holds data") || !strings.Contains(err.Error(), "--fresh") {
+		// The kept volumes outlive a throwaway run, so starting it again
+		// throwaway never clears them: the refusal names --fresh.
+		t.Fatalf("a throwaway seed on the kept database: %v, want the refusal of a database holding data, naming --fresh", err)
+	}
+	other := corporateScalePlan(t, 20)
+	var otherNodes []lab.SiteNode
+	for _, site := range other.Sites {
+		otherNodes = append(otherNodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: "00"})
+	}
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 20, lab.LoginUser, lab.LoginPassword,
+		lab.FormatSiteNodeTokenHashes(otherNodes), false, true); err == nil || !strings.Contains(err.Error(), "--fresh") {
+		t.Fatalf("a kept seed at another size: %v, want a refusal naming --fresh", err)
+	}
+	// A first run stopped after the fleet was seeded and before its nodes
+	// were placed leaves a node at no site: not this plan's fleet.
+	unplaced, nowhere := labscenario.SiteNode(plan.Sites[0].Name), ""
+	if _, err := gw.UpdateNode(ctx, "", unplaced, storage.NodePatch{LocationName: &nowhere}, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err == nil ||
+		!strings.Contains(err.Error(), "--fresh") || !strings.Contains(err.Error(), unplaced) {
+		t.Fatalf("a kept seed with %s at no site: %v, want a refusal naming the node and --fresh", unplaced, err)
+	}
+	if c, n := counts(); c != components || n != nodes {
+		t.Fatalf("after the refusals: %d components and %d nodes, want %d and %d", c, n, components, nodes)
 	}
 }
 
@@ -279,7 +383,7 @@ func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 		nodes = append(nodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: hex.EncodeToString(hash)})
 	}
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), true); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), true, false); err != nil {
 		t.Fatalf("lab seed --systems 3 --induce-unregistered: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())
