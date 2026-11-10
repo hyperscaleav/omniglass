@@ -93,8 +93,8 @@ func (t *Total) add(o Outcome, n uint64) {
 
 // boots groups receipts by (node, boot), each boot's receipts sorted by seq
 // with duplicates of a seq dropped, so arrival order and a receipt read twice
-// change nothing. A receipt with no boot (the API lane's) carries no ledger
-// and is skipped.
+// change nothing. A receipt with no ledger (no boot or seq) is skipped; the
+// push lane's receipts key on the server's boot with no node (#1696).
 func boots(receipts []Receipt) [][]Receipt {
 	type bootKey struct{ node, boot string }
 	by := map[bootKey][]Receipt{}
