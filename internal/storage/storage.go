@@ -637,6 +637,11 @@ type Gateway interface {
 	// PruneTelemetryReceipts keeps the receipts to their horizon.
 	LandBatch(ctx context.Context, b IngestBatch) (LandResult, error)
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
+	// CountTelemetryReceipts and ListClosedLoopPollTargets are the server's
+	// closed-loop window reads (ADR-1647): a node's receipts around a window,
+	// and the poll targets the sim should see hit.
+	CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error)
+	ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error

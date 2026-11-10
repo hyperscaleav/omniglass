@@ -429,7 +429,7 @@ func (s *Server) publishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch, i
 const partitionBootTimeout = time.Minute
 
 // receiptPruneEvery is how often the server deletes telemetry receipts past
-// receiptHorizon; receiptPruneTimeout bounds one pass.
+// ReceiptHorizon; receiptPruneTimeout bounds one pass.
 const (
 	receiptPruneEvery   = time.Hour
 	receiptPruneTimeout = 5 * time.Minute
@@ -449,7 +449,7 @@ func (s *Server) startReceiptPrune() {
 		defer t.Stop()
 		for {
 			pass, done := context.WithTimeout(ctx, receiptPruneTimeout)
-			n, err := s.store.PruneTelemetryReceipts(pass, time.Now().Add(-receiptHorizon), 0)
+			n, err := s.store.PruneTelemetryReceipts(pass, time.Now().Add(-ReceiptHorizon), 0)
 			done()
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("telemetry receipt prune failed", "facility", "ingest", "error", err.Error())

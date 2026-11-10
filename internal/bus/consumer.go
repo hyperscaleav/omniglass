@@ -37,7 +37,7 @@ import (
 // push route's bounded retry) is answered with the first copy's ack and
 // nothing is stored twice. A retry past it is stored again, and the receipt
 // (#311, LandBatch) keeps it from landing twice, so the window saves work and
-// the receipt is the guarantee. receiptHorizon is how long a receipt is kept:
+// the receipt is the guarantee. ReceiptHorizon is how long a receipt is kept
 // far past the stream's redelivery (maxTelemetryDeliveries acks) and a
 // node's retry of a batch it could not ship, ADR-0311.
 const (
@@ -45,7 +45,7 @@ const (
 	telemetryConsumer        = "og-telemetry-worker"
 	maxTelemetryDeliveries   = 5
 	telemetryDuplicateWindow = 5 * time.Minute
-	receiptHorizon           = 24 * time.Hour
+	ReceiptHorizon           = 24 * time.Hour
 )
 
 // telemetryAckWait is how long the stream waits for the consumer's ack

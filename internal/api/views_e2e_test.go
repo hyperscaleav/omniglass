@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,8 +14,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -633,5 +637,233 @@ func TestPlatformViewIsStampedNodeRead(t *testing.T) {
 	}
 	if op.OperationID != "get-platform-view" || op.Permission != "node:read" {
 		t.Errorf("GET /views/platform = %+v, want get-platform-view stamped node:read", op)
+	}
+}
+
+// platformSimulationWire is the closed-loop read of GET
+// /views/platform/simulation, as the Platform health page decodes it.
+type platformSimulationWire struct {
+	WindowSeconds  int `json:"window_seconds"`
+	BracketSeconds int `json:"bracket_seconds"`
+	Nodes          []struct {
+		Node     string     `json:"node"`
+		State    string     `json:"state"`
+		Start    *time.Time `json:"start"`
+		End      *time.Time `json:"end"`
+		Brackets int        `json:"brackets"`
+		Error    string     `json:"error"`
+		Gaps     []struct {
+			Gap      string   `json:"gap"`
+			Protocol string   `json:"protocol"`
+			Count    int64    `json:"count"`
+			In       int64    `json:"in"`
+			Ratio    *float64 `json:"ratio"`
+			Masked   int64    `json:"masked"`
+			MaskedBy string   `json:"masked_by"`
+			Reading  string   `json:"reading"`
+		} `json:"gaps"`
+		Receipts struct {
+			Landed   int64 `json:"landed"`
+			Margin   int64 `json:"margin"`
+			AfterEnd int64 `json:"after_end"`
+		} `json:"receipts"`
+		Protocols []struct {
+			Protocol    string `json:"protocol"`
+			Accepted    int64  `json:"accepted"`
+			Received    int64  `json:"received"`
+			Answered    int64  `json:"answered"`
+			PollTargets int64  `json:"poll_targets"`
+			LatencyMs   struct {
+				N int `json:"n"`
+			} `json:"latency_ms"`
+		} `json:"protocols"`
+		QueueDepth  *int64 `json:"queue_depth"`
+		BusyWorkers *int64 `json:"busy_workers"`
+		Devices     []struct {
+			ComponentID string           `json:"component_id"`
+			Component   string           `json:"component"`
+			Received    map[string]int64 `json:"received"`
+			Impaired    bool             `json:"impaired"`
+		} `json:"devices"`
+	} `json:"nodes"`
+}
+
+// TestPlatformSimulationViewAPI drives the closed loop the Platform health
+// page reads with a simulator connected: a ring over a node's simulator,
+// its node and the receipts it landed, read over HTTP. The figures span
+// every component the node simulates, so a location-scoped component read is
+// a 404 (the section is not there for that caller), and no simulation:read
+// is the gate's 403. Receipts count by landed_at, only inside the window and
+// its margin.
+func TestPlatformSimulationViewAPI(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	r := &platformViewRig{ctx: ctx, dsn: dsn, owner: bootstrapOwnerTok(t, ctx, gw)}
+	r.role(t, "loop-sim-reader", "simulation:read", "component:read")
+	r.role(t, "loop-component-reader", "component:read")
+	all := scope.Set{All: true}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	panel, _ := lineProtocolProduct(t, ctx, gw)
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &panel}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	comp, node := "panel-1", "site-a"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+		Params: []byte(`{"target":"127.60.0.1:51325"}`)}, all); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var panelID string
+	if err := conn.QueryRow(ctx, `select id from component where name = 'panel-1'`).Scan(&panelID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Tick k is k minutes past base: the node opened 6k connections and sent
+	// 60k http requests, which the sim accepted, received and answered, and
+	// the bus acknowledged 6k batches.
+	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute)
+	tick := 0
+	at := func(k int) time.Time { return base.Add(time.Duration(k) * time.Minute) }
+	hub := &fakeHub{Registry: simhub.New()}
+	hub.Pulled("site-a", collection.SimCapabilities{}, []string{panelID})
+	observe := func(k int) {
+		n := int64(100 + 60*k)
+		sim := collection.SimObservation{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
+			Protocols: []collection.SimProtocolObservation{{Protocol: "http", Accepted: n / 10, Received: n, Answered: n}}}
+		hub.observation = map[string]collection.EndpointObservation{"site-a": {
+			SimBefore: sim,
+			Node: collection.RequestTallySnapshot{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
+				Transports: []collection.TallyCounters{{Transport: "http", Connections: n / 10, Sent: n, Answered: n}}, BatchesAcknowledged: int64(10 + 6*k)},
+			SimAfter: sim,
+		}}
+		hits := make([]collection.SimHit, 6)
+		for i := range hits {
+			hits[i] = collection.SimHit{ComponentID: panelID, Protocol: "tcp", At: at(k)}
+		}
+		hub.Report("site-a", collection.SimHitBatch{Hits: hits})
+	}
+	ring := closedloop.NewRing(api.NewSimLoopSource(hub, gw, closedloop.NodeCadence{Heartbeat: 30 * time.Second}), func() time.Time { return at(tick) }, 2, time.Minute)
+
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub), api.WithClosedLoopRing(ring)))
+	defer srv.Close()
+	r.c = &apiClient{t: t, ctx: ctx, base: srv.URL}
+	const path = "/views/platform/simulation"
+	read := func(tok string) platformSimulationWire {
+		t.Helper()
+		raw := r.c.do(tok, http.MethodGet, path, nil, http.StatusOK)
+		var w platformSimulationWire
+		if err := json.Unmarshal(raw, &w); err != nil {
+			t.Fatalf("decode %s: %v", raw, err)
+		}
+		if w.Nodes == nil {
+			t.Fatalf("nodes = null in %s, want an array", raw)
+		}
+		return w
+	}
+
+	hq := r.location(t, "hq")
+	r.c.do("", http.MethodGet, path, nil, http.StatusUnauthorized)
+	noSim := principalWithGrants(t, ctx, dsn, "loop-no-sim", []grant{{role: "loop-component-reader", scopeKind: "all"}})
+	r.c.do(noSim, http.MethodGet, path, nil, http.StatusForbidden)
+	located := principalWithGrants(t, ctx, dsn, "loop-located", []grant{{role: "loop-sim-reader", scopeKind: "location", scopeID: hq}})
+	r.c.do(located, http.MethodGet, path, nil, http.StatusNotFound)
+	reader := principalWithGrants(t, ctx, dsn, "loop-reader", []grant{{role: "loop-sim-reader", scopeKind: "all"}})
+
+	// Before the ring has bracketed anything, an admin reads no node.
+	if w := read(r.owner); len(w.Nodes) != 0 || w.WindowSeconds != 120 || w.BracketSeconds != 60 {
+		t.Fatalf("before any bracket: %+v, want no nodes over a 2-bracket window", w)
+	}
+
+	// The window will be tick 0 to tick 2, its receipts counted at tick 3.
+	from, start, end, next := at(0).Add(-closedloop.ReceiptMargin), at(0), at(2), at(3)
+	land := map[string]time.Time{"before": from.Add(-time.Second), "margin": start.Add(-10 * time.Second),
+		"after": end.Add(time.Second), "past": next.Add(time.Second)}
+	for i := range 9 {
+		land[fmt.Sprintf("in-%d", i)] = start.Add(time.Duration(i) * 10 * time.Second)
+	}
+	for id, t0 := range land {
+		id = collection.TelemetrySubject("site-a") + " " + id
+		if _, err := gw.LandBatch(ctx, storage.IngestBatch{BatchID: id}); err != nil {
+			t.Fatalf("land %s: %v", id, err)
+		}
+		if _, err := conn.Exec(ctx, `update telemetry_receipt set landed_at = $2 where batch_id = $1`, id, t0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for tick = 0; tick < 2; tick++ {
+		observe(tick)
+		ring.Take(ctx, []string{"site-a"})
+	}
+	if w := read(reader); len(w.Nodes) != 1 || w.Nodes[0].State != closedloop.WindowWarmingUp || w.Nodes[0].Gaps != nil || w.Nodes[0].Start != nil {
+		t.Fatalf("two brackets in: %+v, want site-a warming up with no figure", w)
+	}
+	for ; tick < 4; tick++ {
+		observe(tick)
+		ring.Take(ctx, []string{"site-a"})
+	}
+
+	w := read(reader)
+	if len(w.Nodes) != 1 {
+		t.Fatalf("nodes = %+v, want site-a", w.Nodes)
+	}
+	n := w.Nodes[0]
+	if n.Node != "site-a" || n.State != closedloop.WindowMeasured || n.Error != "" ||
+		n.Start == nil || !n.Start.Equal(start) || n.End == nil || !n.End.Equal(end) {
+		t.Fatalf("site-a = %+v, want measured from %s to %s", n, start, end)
+	}
+	if n.Receipts.Landed != 11 || n.Receipts.Margin != 1 || n.Receipts.AfterEnd != 1 {
+		t.Fatalf("receipts = %+v, want 11 landed (1 in the margin, 1 after the end), none outside the span", n.Receipts)
+	}
+	gap := func(name, protocol string) int {
+		for i, g := range n.Gaps {
+			if g.Gap == name && g.Protocol == protocol {
+				return i
+			}
+		}
+		t.Fatalf("gaps = %+v, want %s %q", n.Gaps, name, protocol)
+		return -1
+	}
+	landed := n.Gaps[gap(closedloop.GapPublishedNotLanded, "")]
+	if landed.In != 12 || landed.Count != 1 || landed.Ratio == nil || *landed.Ratio != 1.0/12 || landed.Masked != 2 || landed.MaskedBy == "" {
+		t.Fatalf("published-not-landed = %+v, want 1 of 12 with the 2 at the edges masked beside it", landed)
+	}
+	if sent := n.Gaps[gap(closedloop.GapSentNotReceived, "http")]; sent.In != 120 || sent.Ratio == nil || *sent.Ratio != 0 || sent.Reading != closedloop.ReadingLoss {
+		t.Fatalf("http sent-not-received = %+v, want a healthy 0 over 120", sent)
+	}
+	// http is what the sim served; tcp is panel-1's poll target, which the
+	// window counts as due even though this sim's protocol reads carry none.
+	if p := n.Protocols; len(p) != 2 || p[0].Protocol != "http" || p[0].Accepted != 12 || p[0].Received != 120 || p[0].Answered != 120 ||
+		p[1].Protocol != "tcp" || p[1].PollTargets != 1 {
+		t.Fatalf("protocols = %+v, want http's window deltas (12 connections, 120 requests) and tcp's one poll target", n.Protocols)
+	}
+	if n.QueueDepth != nil || n.BusyWorkers != nil {
+		t.Fatalf("queue %v, busy %v: want both null (not wired yet) from a node that reports neither", n.QueueDepth, n.BusyWorkers)
+	}
+	if len(n.Devices) != 1 || n.Devices[0].ComponentID != panelID || n.Devices[0].Component != "panel-1" || n.Devices[0].Received["tcp"] != 12 {
+		t.Fatalf("devices = %+v, want panel-1 with its 12 tcp hits over the window", n.Devices)
+	}
+
+	// A handler with no ring (no simulator anywhere) reads no node.
+	bare := httptest.NewServer(api.NewHandler(gw))
+	defer bare.Close()
+	var empty platformSimulationWire
+	if err := json.Unmarshal((&apiClient{t: t, ctx: ctx, base: bare.URL}).do(r.owner, http.MethodGet, path, nil, http.StatusOK), &empty); err != nil || empty.Nodes == nil || len(empty.Nodes) != 0 {
+		t.Fatalf("no ring: %+v, %v; want an empty nodes array", empty, err)
 	}
 }

@@ -4,7 +4,8 @@ import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import PlatformHealth from "./PlatformHealth";
-import { PLATFORM_VIEW_KEY, type PlatformServer, type PlatformView } from "../lib/platformhealth";
+import { NOT_WIRED, PLATFORM_SIM_KEY, PLATFORM_VIEW_KEY, WARMING_UP, type PlatformServer, type PlatformSimNode, type PlatformSimulation, type PlatformView } from "../lib/platformhealth";
+import { SIMULATION_KEY, type SimFleet } from "../lib/simulation";
 import { NODE_DOWN_AFTER_MS } from "../lib/nodes";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
@@ -102,10 +103,15 @@ function emptySeries() {
 // A seeded view mounts on a client that never retries; a refused one (null)
 // mounts on the production default, three retries with backoff, so only the
 // page's own retry policy can surface the refusal promptly.
-function mount(view: PlatformView | null) {
+// The simulator fleet is seeded disconnected unless a test connects one, so
+// the simulation section's condition is the test's to set.
+const disconnected: SimFleet = { connected: false, nodes: [] };
+function mount(view: PlatformView | null, sim: { me?: Me; fleet?: SimFleet; body?: PlatformSimulation } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: view ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   if (view) qc.setQueryData([...PLATFORM_VIEW_KEY], view);
-  qc.setQueryData([...ME_KEY], viewer);
+  qc.setQueryData([...ME_KEY], sim.me ?? viewer);
+  qc.setQueryData([...SIMULATION_KEY], sim.fleet ?? disconnected);
+  if (sim.body) qc.setQueryData([...PLATFORM_SIM_KEY], sim.body);
   // Under the console's own base, so an in-app link proves it routes there.
   window.history.pushState({}, "", "/web/platform");
   const r = render(() => (
@@ -400,5 +406,71 @@ describe("PlatformHealth page", () => {
     expect(link).toHaveAttribute("href", `/web/components/${uuidFor("server")}`);
     fireEvent.click(link);
     await waitFor(() => expect(window.location.pathname).toBe(`/web/components/${uuidFor("server")}`));
+  });
+});
+
+// With a simulator (#1647): the section keys on the nav's "simulator"
+// condition, a simulation reader with a simulator connected, never on lab.
+const connected: SimFleet = { connected: true, nodes: [] };
+const measured: PlatformSimNode = {
+  node: "edge-alpha", state: "measured", start: ago(600_000), end: ago(60_000), brackets: 11, error: "",
+  gaps: [
+    { gap: "connect-not-accepted", protocol: "", count: 0, in: 40, ratio: 0, masked: 0, masked_by: "connections still in the kernel backlog at the end read", answered_late: 0, reading: "loss" },
+    { gap: "sent-not-received", protocol: "http", count: 30, in: 120, ratio: 0.25, masked: 0, masked_by: "requests in flight at the node's end read", answered_late: 0, reading: "impaired" },
+    { gap: "published-not-landed", protocol: "", count: 2, in: 40, ratio: 0.05, masked: 1, masked_by: "receipts landed in the margin before the window", answered_late: 0, reading: "loss" },
+    { gap: "sent-not-received", protocol: "icmp", count: 0, in: 0, ratio: null, masked: 0, masked_by: "", answered_late: 0, reading: "not observed by the sim" },
+  ],
+  receipts: { landed: 42, margin: 1, backlog: 0, after_end: 0 },
+  protocols: [{ protocol: "http", accepted: 9, received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
+  in_flight_high: 2, queue_depth: null, busy_workers: null,
+  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
+};
+const simBody = (nodes: PlatformSimNode[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, nodes });
+
+describe("PlatformHealth with a simulator", () => {
+  it("is absent with no simulator connected, even on a lab instance", () => {
+    mount(full, { body: simBody([measured]) });
+    expect(screen.queryByTestId("platform-simulation")).toBeNull();
+  });
+
+  it("is absent for a principal who cannot read simulation", () => {
+    const nodeReader: Me = { principal: { id: "n", kind: "human" }, permissions: ["node:read", "component:read"], grants: [] };
+    mount(full, { me: nodeReader, fleet: connected, body: simBody([measured]) });
+    expect(screen.queryByTestId("platform-simulation")).toBeNull();
+  });
+
+  it("is present with a simulator connected: gaps worst first, each read by tone and naming its masking term", () => {
+    mount({ ...full, lab: false }, { fleet: connected, body: simBody([measured]) });
+    const section = screen.getByTestId("platform-simulation");
+    expect(within(section).getByText(/last 10 minutes/)).toBeInTheDocument();
+    const rows = within(section).getAllByTestId("platform-sim-gap");
+    expect(rows.map((r) => r.getAttribute("data-ratio"))).toEqual(["0.25", "0.05", "0", ""]);
+    expect(rows.map((r) => r.getAttribute("data-tone"))).toEqual(["expected", "fault", "calm", "calm"]);
+    expect(rows[0]).toHaveTextContent("25.0%");
+    expect(rows[1]).toHaveTextContent("1 in receipts landed in the margin before the window");
+    expect(rows[2]).toHaveTextContent("connections still in the kernel backlog at the end read");
+    expect(rows[2]).toHaveTextContent("any listener");
+    expect(rows[2].className).toBe("");
+  });
+
+  it("links each device to its drawer on the Simulation page and names the figures not wired yet", () => {
+    mount(full, { fleet: connected, body: simBody([measured]) });
+    const device = screen.getByTestId("platform-sim-device");
+    expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}`);
+    expect(within(device).getByText("impaired")).toBeInTheDocument();
+    expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-accepted", "9");
+    expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-received", "90");
+    expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-poll-targets", "1");
+    expect(screen.getAllByText(NOT_WIRED)).toHaveLength(2);
+  });
+
+  it("while warming up says why and shows no gap and no number", () => {
+    const warming: PlatformSimNode = { ...measured, state: "warming up", start: null, end: null, brackets: 1, gaps: null, protocols: [], devices: [] };
+    mount(full, { fleet: connected, body: simBody([warming]) });
+    const card = screen.getByTestId("platform-sim-edge-alpha");
+    expect(within(card).getByTestId("platform-sim-note")).toHaveTextContent(WARMING_UP);
+    expect(within(card).queryByTestId("platform-sim-gaps")).toBeNull();
+    expect(within(card).getByText("Batches landed").closest("div")!.parentElement).toHaveTextContent("-");
+    expect(within(card).queryByText("42")).toBeNull();
   });
 });

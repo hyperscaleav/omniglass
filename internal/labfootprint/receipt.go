@@ -6,17 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// receiptMargin is how far before the window's start a node's receipts are
-// counted: the stream's ack wait (telemetryAckWait in internal/bus), the
-// longest a batch the bus acknowledged after the start read can have landed
-// before it.
-const receiptMargin = 30 * time.Second
-
 // maxEndpointWindow is the longest window the receipt count can read: the
-// server prunes receipts past a 24 h horizon (receiptHorizon in internal/bus),
+// server prunes receipts past a 24 h horizon (ReceiptHorizon in internal/bus),
 // and a window that long would lose its earliest receipts to the prune.
 const maxEndpointWindow = 23 * time.Hour
 
@@ -37,24 +32,24 @@ func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
 		count(*) filter (where landed_at > to_timestamp(%[4]s))
 		from telemetry_receipt
 		where starts_with(batch_id, %[1]s) and landed_at >= to_timestamp(%[5]s)`,
-		sqlLiteral(prefix), epochLiteral(t0), epochLiteral(drained), epochLiteral(t1), epochLiteral(t0.Add(-receiptMargin)))
+		sqlLiteral(prefix), epochLiteral(t0), epochLiteral(drained), epochLiteral(t1), epochLiteral(t0.Add(-closedloop.ReceiptMargin)))
 }
 
 // parseReceiptCount reads the query's one row as psql -At prints it.
-func parseReceiptCount(out string) (ReceiptCount, error) {
+func parseReceiptCount(out string) (closedloop.ReceiptCount, error) {
 	f := strings.Split(strings.TrimSpace(out), "|")
 	if len(f) != 4 {
-		return ReceiptCount{}, fmt.Errorf("receipt count: want 4 columns, got %q", strings.TrimSpace(out))
+		return closedloop.ReceiptCount{}, fmt.Errorf("receipt count: want 4 columns, got %q", strings.TrimSpace(out))
 	}
 	var n [4]int64
 	for i, s := range f {
 		v, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return ReceiptCount{}, fmt.Errorf("receipt count: column %d: %w", i+1, err)
+			return closedloop.ReceiptCount{}, fmt.Errorf("receipt count: column %d: %w", i+1, err)
 		}
 		n[i] = v
 	}
-	return ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
+	return closedloop.ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
 }
 
 // drainedQuery reads whether the ingest lane has drained past at, and the

@@ -8,6 +8,7 @@ import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
 import KeyedFor from "../components/KeyedFor";
 import PipelineFlow from "../components/PipelineFlow";
+import PlatformSimulation from "./PlatformSimulation";
 import { ArrowUpRight, ChevronRight, TriangleAlert } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -112,6 +113,7 @@ export default function PlatformHealth() {
               {(s, i) => <ServerPanels server={s()} view={v()} open={i() === 0} />}
             </KeyedFor>
             <NodeTable view={v()} />
+            <PlatformSimulation />
           </>
         )}
       </Show>

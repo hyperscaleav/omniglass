@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 )
 
@@ -410,7 +411,7 @@ type ScaleRun struct {
 	Absolutes Absolutes
 	// Endpoints is each node's bracketed endpoint observation; when none was
 	// read, EndpointsGap says why.
-	Endpoints    []NodeBracket
+	Endpoints    []closedloop.NodeBracket
 	EndpointsGap string
 	// Delivery is the receipts the delivery table reconciles (#1641).
 	Delivery DeliveryRead
@@ -469,8 +470,8 @@ type ScaleReport struct {
 	*SystemPageFigures
 	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
 	// then says why.
-	Endpoints    *EndpointReport `json:"endpoints,omitempty"`
-	EndpointsGap string          `json:"endpoints_not_measured,omitempty"`
+	Endpoints    *closedloop.EndpointReport `json:"endpoints,omitempty"`
+	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 
 	// Delivery is each kind's loss across each hop it crosses (#1641), over
 	// the settled boots; DeliveryEndToEnd is each kind's loss over all its
@@ -514,7 +515,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		EndpointsGap:          r.EndpointsGap,
 	}
 	if len(r.Endpoints) > 0 {
-		e := SummarizeEndpoints(r.Endpoints)
+		e := closedloop.SummarizeEndpoints(r.Endpoints)
 		out.Endpoints = &e
 	}
 	ms := make([]float64, len(r.Lag))
@@ -619,7 +620,7 @@ func (r ScaleReport) Table() string {
 	}
 	line("retention drain", r.Drain.describe())
 	if r.Endpoints != nil {
-		r.Endpoints.table(&b)
+		endpointTable(*r.Endpoints, &b)
 	} else if r.EndpointsGap != "" {
 		b.WriteString("\nendpoints not measured: " + r.EndpointsGap + "\n")
 	}

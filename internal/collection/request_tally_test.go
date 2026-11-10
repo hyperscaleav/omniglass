@@ -11,6 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
 	"github.com/hyperscaleav/omniglass/internal/sim"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
 // The node's request tally is the node half of the closed loop the scale lab
@@ -195,6 +196,42 @@ func TestTalliedHTTPProbeCountsOneRequest(t *testing.T) {
 	seen := simObservedEventually(t, dev, "http", func(o sim.ObservationCounters) bool { return o.Settled() == 1 })
 	if seen.Received != 1 || seen.Accepted != 1 {
 		t.Fatalf("the sim observed %+v", seen)
+	}
+}
+
+// A websocket endpoint's probe is a plain GET / (#1034), which the face's
+// listener accepts and answers without an upgrade. The probe tallies under
+// the task's transport, so the node's websocket row pairs with the sim's
+// websocket row, and the face counts the request it answers off its path
+// (#1647): before, the node counted it as http while the sim counted only
+// the websocket accept, an artifact gap on a healthy lab.
+func TestTalliedWebSocketProbeCountsWhereTheFaceReceivesIt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	dev := newTallySimDevice(t, sim.HTTPAuth{})
+	dev.SetWebSocket(profile.WebSocket{Path: "/api/ws", Paths: []string{"status"}}, sim.HTTPAuth{})
+	addr, err := dev.StartWebSocket(0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dev.StopWebSocket)
+	tally := collection.NewRequestTally()
+	res, err := collection.NewTalliedHTTPProber(tally).Probe(context.Background(),
+		collection.HTTPTask{Target: addr.String(), Timeout: 2 * time.Second, Tally: collection.TallyWebSocket})
+	if err != nil || !res.Responded {
+		t.Fatalf("probe = %+v, %v", res, err)
+	}
+	if c := tally.Counters(collection.TallyHTTP); c.Sent != 0 || c.Connections != 0 {
+		t.Fatalf("a websocket probe tallied on http: %+v", c)
+	}
+	c := tally.Counters(collection.TallyWebSocket)
+	if c.Sent != 1 || c.Connections != 1 || c.Answered != 1 {
+		t.Fatalf("one websocket probe tallied %+v", c)
+	}
+	seen := simObservedEventually(t, dev, "websocket", func(o sim.ObservationCounters) bool { return o.Settled() == 1 && o.OpenConnections == 0 })
+	if seen.Received != c.Sent || seen.Accepted != c.Connections || seen.Answered != c.Answered {
+		t.Fatalf("the sim observed %+v against the node's %+v", seen, c)
 	}
 }
 

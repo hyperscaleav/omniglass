@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
@@ -64,10 +65,10 @@ func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
 		}
 	}
 	for _, g := range e.Gaps {
-		if g.Gap == GapUnhitEndpoint && g.Reading != ReadingNotObserved && g.Count > 0 {
+		if g.Gap == closedloop.GapUnhitEndpoint && g.Reading != closedloop.ReadingNotObserved && g.Count > 0 {
 			t.Errorf("unhit endpoint: %+v", g)
 		}
-		if g.Reading == ReadingRestarted {
+		if g.Reading == closedloop.ReadingRestarted {
 			t.Errorf("a node restarted inside the window: %+v", g)
 		}
 	}

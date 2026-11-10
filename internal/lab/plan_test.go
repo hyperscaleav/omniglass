@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/simnode"
 
@@ -338,14 +339,15 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		probe     string
 		worklist  string
 		simPoll   string
+		bracket   string
 	}{
-		{"", false, "2s", "10s", "5s", "2s"},
-		{"", true, "2s", "2s", "2s", "2s"},
-		{"lab", true, "2s", "10s", "5s", "2s"},
-		{"walkthrough", false, "2s", "2s", "2s", "2s"},
+		{"", false, "2s", "10s", "5s", "2s", "10s"},
+		{"", true, "2s", "2s", "2s", "2s", "1s"},
+		{"lab", true, "2s", "10s", "5s", "2s", "10s"},
+		{"walkthrough", false, "2s", "2s", "2s", "2s", "1s"},
 		// The product's own: the node's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
-		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String()},
+		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},
 	}
 	for _, c := range cases {
 		o := testOptions()
@@ -368,6 +370,27 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		}
 		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
 			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		}
+		// The server is told the bracket its closed loop takes and the
+		// cadence its node runs at (#1647), so Platform health counts the
+		// poll targets the node really ran.
+		env := map[string]string{}
+		for _, kv := range s.Server.Env {
+			k, v, _ := strings.Cut(kv, "=")
+			env[k] = v
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_BRACKET"]; got != c.bracket {
+			t.Errorf("cadence %q: closed-loop bracket %q, want %s", c.cadence, got, c.bracket)
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"]; got != c.heartbeat {
+			t.Errorf("cadence %q: closed-loop heartbeat %q, want %s", c.cadence, got, c.heartbeat)
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]; got != c.probe {
+			t.Errorf("cadence %q: closed-loop probe interval %q, want %q", c.cadence, got, c.probe)
+		}
+		if _, err := closedloop.ParseSettings(closedloop.RawSettings{Bracket: env["OMNIGLASS_CLOSED_LOOP_BRACKET"],
+			Heartbeat: env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"], ProbeEvery: env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]}, node.DefaultHeartbeat); err != nil {
+			t.Errorf("cadence %q: the server would refuse its closed-loop settings: %v", c.cadence, err)
 		}
 	}
 	o := testOptions()

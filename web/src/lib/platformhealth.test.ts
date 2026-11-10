@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
+  deviceReceived,
   figureText,
+  gapName,
+  gapProtocolText,
+  gapTone,
+  NOT_WIRED,
+  ratioText,
+  RESTARTED,
+  windowText,
+  simStateNote,
+  sortDevices,
+  sortGaps,
+  WARMING_UP,
+  wiredText,
+  type PlatformSimDevice,
+  type PlatformSimGap,
   hopFigure,
   lossPercent,
   lossTinted,
@@ -152,6 +167,97 @@ describe("platformRefusal", () => {
 
   it("is the error's own message otherwise", () => {
     expect(platformRefusal({ status: 500, title: "Internal Server Error", detail: "read platform view" })).toBe("read platform view");
+  });
+});
+
+// With a simulator (#1647): order and tone only; every count is the server's.
+const gap = (over: Partial<PlatformSimGap>): PlatformSimGap => ({
+  gap: "sent-not-received", protocol: "http", count: 0, in: 100, ratio: 0, masked: 0, masked_by: "", answered_late: 0, reading: "loss", ...over,
+});
+
+describe("sortGaps", () => {
+  it("puts the worst ratio first, sinks a gap with no ratio, and keeps travel order on a tie", () => {
+    const got = sortGaps([
+      gap({ gap: "connect-not-accepted", ratio: 0 }),
+      gap({ gap: "sent-not-received", ratio: null }),
+      gap({ gap: "received-not-settled", ratio: 0.02 }),
+      gap({ gap: "answered-not-returned", ratio: 0 }),
+      gap({ gap: "published-not-landed", ratio: 0.5 }),
+    ]).map((g) => g.gap);
+    expect(got).toEqual(["published-not-landed", "received-not-settled", "connect-not-accepted", "answered-not-returned", "sent-not-received"]);
+  });
+  it("reads a warming-up node's null gaps as none", () => {
+    expect(sortGaps(null)).toEqual([]);
+  });
+});
+
+describe("gapTone", () => {
+  it("maps impaired, restarted and unexplained loss to distinct tones", () => {
+    const tones = [gapTone({ reading: "impaired", ratio: 0.3 }), gapTone({ reading: "restarted", ratio: null }), gapTone({ reading: "loss", ratio: 0.3 })];
+    expect(tones).toEqual(["expected", "restarted", "fault"]);
+    expect(new Set(tones).size).toBe(3);
+  });
+  it("tints a ratio only above 0", () => {
+    expect(gapTone({ reading: "loss", ratio: 0 })).toBe("calm");
+    expect(gapTone({ reading: "impaired", ratio: 0 })).toBe("calm");
+    expect(gapTone({ reading: "loss", ratio: null })).toBe("calm");
+    expect(gapTone({ reading: "not observed by the sim", ratio: null })).toBe("calm");
+  });
+});
+
+describe("gap words", () => {
+  it("names the hop and prints the ratio as a percent, no number when there is none", () => {
+    expect(gapName("sent-not-received")).toBe("sent, not received");
+    expect(gapName("spool-dropped")).toBe("spool dropped");
+    expect(ratioText(0)).toBe("0%");
+    expect(ratioText(0.125)).toBe("12.5%");
+    expect(ratioText(0.0004)).toBe("0.04%");
+    expect(ratioText(null)).toBe("-");
+  });
+
+  it("names what a gap with no protocol counts: every listener for a connect, batches for the telemetry hops", () => {
+    expect(gapProtocolText({ gap: "sent-not-received", protocol: "snmp" })).toBe("snmp");
+    expect(gapProtocolText({ gap: "connect-not-accepted", protocol: "" })).toBe("any listener");
+    expect(gapProtocolText({ gap: "published-not-landed", protocol: "" })).toBe("batches");
+    expect(gapProtocolText({ gap: "spool-dropped", protocol: "" })).toBe("batches");
+  });
+});
+
+describe("windowText", () => {
+  it("names the window in minutes, or in seconds for a lab's short one", () => {
+    expect(windowText(600)).toBe("10 minutes");
+    expect(windowText(60)).toBe("1 minute");
+    expect(windowText(100)).toBe("100 seconds");
+    expect(windowText(20)).toBe("20 seconds");
+    expect(windowText(undefined)).toBe("10 minutes");
+  });
+});
+
+describe("states with no number", () => {
+  it("says why a warming-up or restarted window has no figures, naming no number", () => {
+    expect(simStateNote({ state: "warming up" })).toBe(WARMING_UP);
+    expect(simStateNote({ state: "restarted" })).toBe(RESTARTED);
+    expect(simStateNote({ state: "measured" })).toBeNull();
+    expect(WARMING_UP).not.toMatch(/\d/);
+    expect(RESTARTED).not.toMatch(/\d/);
+  });
+  it("reads an unreported queue depth or busy-worker figure as not wired yet", () => {
+    expect(wiredText(null)).toBe(NOT_WIRED);
+    expect(wiredText(undefined)).toBe(NOT_WIRED);
+    expect(wiredText(0)).toBe("0");
+    expect(NOT_WIRED).not.toMatch(/\d/);
+  });
+});
+
+describe("devices", () => {
+  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, ...over });
+  it("sums a device's requests over its protocols", () => {
+    expect(deviceReceived(dev({ received: { http: 4, tcp: 2 } }))).toBe(6);
+    expect(deviceReceived(dev({}))).toBe(0);
+  });
+  it("lists unhit, then impaired, then the rest by name", () => {
+    const got = sortDevices([dev({ component: "b" }), dev({ component: "a" }), dev({ component: "z", impaired: true }), dev({ component: "y", unhit: true })]).map((d) => d.component);
+    expect(got).toEqual(["y", "z", "a", "b"]);
   });
 });
 

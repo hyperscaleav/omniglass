@@ -4,11 +4,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
 func TestParseReceiptCountReadsThePsqlRow(t *testing.T) {
 	got, err := parseReceiptCount("12|3|2|4\n")
-	if err != nil || got != (ReceiptCount{Landed: 12, Margin: 3, Backlog: 2, AfterEnd: 4}) {
+	if err != nil || got != (closedloop.ReceiptCount{Landed: 12, Margin: 3, Backlog: 2, AfterEnd: 4}) {
 		t.Fatalf("parse = %+v, %v", got, err)
 	}
 	for _, bad := range []string{"", "1|2|3", "1|x|3|4"} {

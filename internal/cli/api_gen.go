@@ -10049,6 +10049,30 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "simulation",
+					Short: "Commands for the simulation resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "Read what each simulator saw against what the platform collected",
+							Long:    "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
+							Example: "  omniglass view platform simulation list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/views/platform/simulation")
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return parent
 		}())
 		return parent

@@ -2,7 +2,7 @@ import { For, Show, createMemo, createResource } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { navItems, filterNav, filterWhen, type NavItem } from "../lib/nav";
-import { SIMULATION_KEY, getSimulation, sidebarPollMs } from "../lib/simulation";
+import { SIMULATION_KEY, getSimulation, sidebarPollMs, simulatorConnected } from "../lib/simulation";
 import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
 import { principalName } from "../lib/principals";
 import { PanelLeft, LogOut } from "./icons";
@@ -54,7 +54,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
     retry: false,
   }));
   const items = createMemo(() =>
-    filterWhen(filterNav(navItems, (tokens) => can(me.data, ...tokens)), (c) => c === "simulator" && sim.data?.connected === true),
+    filterWhen(filterNav(navItems, (tokens) => can(me.data, ...tokens)), (c) => c === "simulator" && simulatorConnected(me.data, sim.data)),
   );
 
   return (

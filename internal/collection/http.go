@@ -71,7 +71,7 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	call := p.tally.call(TallyHTTP)
+	call := p.tally.call(t.Tally)
 	// The dial runs on the transport's own goroutine, which can outlive a
 	// request that timed out, so what it learns lands in dialed under mu and
 	// the probe reads a copy once the request returns.

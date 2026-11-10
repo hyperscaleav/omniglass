@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -55,20 +56,20 @@ func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	land("og.v1.telemetry.edge 1", t0.Add(time.Minute))    // a node a LIKE pattern would match
 	land("og.v1.telemetry.e_ge", t0.Add(time.Minute))      // no message id
 
-	count := func(drained time.Time) ReceiptCount {
+	count := func(drained time.Time) closedloop.ReceiptCount {
 		t.Helper()
-		var c ReceiptCount
+		var c closedloop.ReceiptCount
 		if err := conn.QueryRow(ctx, receiptCountQuery("e_ge", t0, drained, t1)).Scan(&c.Landed, &c.Margin, &c.Backlog, &c.AfterEnd); err != nil {
 			t.Fatal(err)
 		}
 		return c
 	}
 	drained := t0.Add(2 * time.Minute)
-	want := ReceiptCount{Landed: 4, Margin: 1, Backlog: 1, AfterEnd: 1}
+	want := closedloop.ReceiptCount{Landed: 4, Margin: 1, Backlog: 1, AfterEnd: 1}
 	if got := count(drained); got != want {
 		t.Fatalf("count = %+v, want %+v", got, want)
 	}
-	if got, want := count(t1.Add(2*time.Minute)), (ReceiptCount{Landed: 4, Margin: 1, Backlog: 2, AfterEnd: 1}); got != want {
+	if got, want := count(t1.Add(2*time.Minute)), (closedloop.ReceiptCount{Landed: 4, Margin: 1, Backlog: 2, AfterEnd: 1}); got != want {
 		t.Fatalf("drained past the end, count = %+v, want %+v", got, want)
 	}
 	if n, err := gw.PruneTelemetryReceipts(ctx, now.Add(-24*time.Hour), 0); err != nil || n != 1 {

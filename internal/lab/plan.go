@@ -113,6 +113,12 @@ type Cadence struct {
 	// Zero leaves the platform's own setting, as a learner's lab and a
 	// measurement at the product's defaults do.
 	ReportSeconds int
+	// ClosedLoopBracket is how often the lab's server brackets its node for
+	// Platform health's closed loop (#1647), its window ten of them: a
+	// learner's lab every 10s, so the window fills in under two minutes; a
+	// script's every 1s, so a walkthrough sees an impairment open a gap and
+	// clear inside its recorded budget; `default` the server's own minute.
+	ClosedLoopBracket string
 	// For says who runs at it, in the lab guide's words.
 	For string
 }
@@ -133,17 +139,19 @@ func CadenceProfiles() []Cadence {
 		// A change in the console reaches the node at its next pull, so the
 		// lab pulls every 5s: within seconds, without a 1,000-system lab
 		// rebuilding every site's worklist every 2s (#1577).
-		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s",
+		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes every 2s, so
 		// a walkthrough waiting on a probe's verdict keeps its recorded
 		// budget.
 		// Its report window is 10s, the setting's floor: at the platform's
 		// 60s the first delivery and poll figures land as a minute's
-		// recording ends (#1646).
-		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s", ReportSeconds: 10,
+		// recording ends (#1646). Its closed loop brackets every second, a
+		// 10s window, so a walkthrough sees an impairment's attribution
+		// clear inside its budget (#1647).
+		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s", ReportSeconds: 10, ClosedLoopBracket: "1s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(),
+		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(), ClosedLoopBracket: "1m",
 			For: "the product's own defaults: what a deployment's node runs at"},
 	}
 }
@@ -472,7 +480,12 @@ func Plan(o Options) (Spec, error) {
 			"OMNIGLASS_NATS_STORE_DIR="+dataDir+"/nats",
 			// A container's hostname is new each run; a fixed name keeps one
 			// server platform component across restarts on a kept database.
-			"OMNIGLASS_SERVER_NAME=server"),
+			"OMNIGLASS_SERVER_NAME=server",
+			// The closed loop's bracket, and the cadence the node runs at,
+			// which a server is otherwise not told (#1647).
+			"OMNIGLASS_CLOSED_LOOP_BRACKET="+cadence.ClosedLoopBracket,
+			"OMNIGLASS_CLOSED_LOOP_HEARTBEAT="+cadence.Heartbeat,
+			"OMNIGLASS_CLOSED_LOOP_PROBE_EVERY="+cadence.ProbeEvery),
 		Mounts:  []Mount{{Volume: volData, Target: dataDir}},
 		Publish: &Publish{HostIP: o.Listen, HostPort: o.Port, ContainerPort: consolePort},
 		Restart: "on-failure",

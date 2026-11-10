@@ -10533,6 +10533,344 @@
         ],
         "type": "object"
       },
+      "PlatformSimulationDevice": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "description": "The component's name; empty when it is no longer one of the node's simulated devices.",
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "impaired": {
+            "description": "Whether the simulator impairs the device at the window's end.",
+            "type": "boolean"
+          },
+          "received": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "Requests the device saw over the window, by protocol.",
+            "type": "object"
+          },
+          "unhit": {
+            "description": "Whether it is a poll target due over the window that the simulator never saw.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "component_id",
+          "component",
+          "received",
+          "impaired",
+          "unhit"
+        ],
+        "type": "object"
+      },
+      "PlatformSimulationGap": {
+        "additionalProperties": false,
+        "properties": {
+          "answered_late": {
+            "description": "Answers the node gave up on before they arrived.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "count": {
+            "description": "How many were lost at the hop over the window, past its masking term.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "gap": {
+            "description": "The hop a request or a batch was lost at, in travel order.",
+            "type": "string"
+          },
+          "in": {
+            "description": "How many went into the hop over the window: the ratio's denominator.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "masked": {
+            "description": "How many the masking term accounts for, not counted as lost.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "masked_by": {
+            "description": "What the masking term is, empty when the gap has none.",
+            "type": "string"
+          },
+          "protocol": {
+            "description": "The protocol the gap is on; empty for a batch gap, which is per node.",
+            "type": "string"
+          },
+          "ratio": {
+            "description": "count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reading": {
+            "description": "How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.",
+            "enum": [
+              "loss",
+              "impaired",
+              "restarted",
+              "not observed by the sim"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "gap",
+          "protocol",
+          "count",
+          "in",
+          "ratio",
+          "masked",
+          "masked_by",
+          "answered_late",
+          "reading"
+        ],
+        "type": "object"
+      },
+      "PlatformSimulationNode": {
+        "additionalProperties": false,
+        "properties": {
+          "brackets": {
+            "description": "How many brackets the server holds for the node.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "busy_workers": {
+            "description": "The node's busy-worker high water; null until a node reports it.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformSimulationDevice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "end": {
+            "description": "The window's last bracket; null while warming up.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Why the last bracket or its reads failed; empty when they did not.",
+            "type": "string"
+          },
+          "gaps": {
+            "description": "Every gap over the window in travel order; null while warming up.",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSimulationGap"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "in_flight_high": {
+            "description": "The most requests the simulator held at once over every protocol.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "node": {
+            "type": "string"
+          },
+          "protocols": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformSimulationProtocol"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "queue_depth": {
+            "description": "The node's dispatch queue depth; null until a node reports it.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "receipts": {
+            "$ref": "#/components/schemas/PlatformSimulationReceipts"
+          },
+          "start": {
+            "description": "The window's first bracket; null while warming up.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "description": "warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.",
+            "enum": [
+              "warming up",
+              "measured",
+              "restarted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "state",
+          "start",
+          "end",
+          "brackets",
+          "error",
+          "gaps",
+          "receipts",
+          "protocols",
+          "in_flight_high",
+          "queue_depth",
+          "busy_workers",
+          "devices"
+        ],
+        "type": "object"
+      },
+      "PlatformSimulationProtocol": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "description": "Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "answered": {
+            "description": "Requests it answered.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_flight_high": {
+            "description": "The most requests on the protocol the simulator held at once.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "latency_ms": {
+            "$ref": "#/components/schemas/Quantiles",
+            "description": "The simulator's service time in milliseconds; n is 0 when it timed nothing."
+          },
+          "poll_targets": {
+            "description": "Enabled poll targets the window should have drawn on the protocol at least twice.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "received": {
+            "description": "Requests the simulator received on the protocol over the window.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol",
+          "accepted",
+          "received",
+          "answered",
+          "latency_ms",
+          "poll_targets",
+          "in_flight_high"
+        ],
+        "type": "object"
+      },
+      "PlatformSimulationReceipts": {
+        "additionalProperties": false,
+        "properties": {
+          "after_end": {
+            "description": "Of those, the ones landed after the end, acknowledged before the end read.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "backlog": {
+            "description": "Batches the ingest lane held at the end. The server does not read it, so it is 0.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "landed": {
+            "description": "Batches landed from the margin before the window's start to the bracket after its end.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "margin": {
+            "description": "Of those, the ones landed before the start: a batch acknowledged before the start read.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "landed",
+          "margin",
+          "backlog",
+          "after_end"
+        ],
+        "type": "object"
+      },
+      "PlatformSimulationViewOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PlatformSimulationViewOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "bracket_seconds": {
+            "description": "How often the server brackets each node.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodes": {
+            "description": "Each node with a connected simulator; empty when none is.",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSimulationNode"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "read_at": {
+            "description": "The server's clock at the read.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_seconds": {
+            "description": "A full window's length.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "read_at",
+          "window_seconds",
+          "bracket_seconds",
+          "nodes"
+        ],
+        "type": "object"
+      },
       "PlatformSystemBody": {
         "additionalProperties": false,
         "properties": {
@@ -11784,6 +12122,34 @@
         "required": [
           "owner_kind",
           "owner"
+        ],
+        "type": "object"
+      },
+      "Quantiles": {
+        "additionalProperties": false,
+        "properties": {
+          "n": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "p50": {
+            "format": "double",
+            "type": "number"
+          },
+          "p95": {
+            "format": "double",
+            "type": "number"
+          },
+          "p99": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "p50",
+          "p95",
+          "p99",
+          "n"
         ],
         "type": "object"
       },
@@ -34141,6 +34507,36 @@
         },
         "summary": "Read Omniglass's own health in one call",
         "x-omniglass-permission": "node:read"
+      }
+    },
+    "/views/platform/simulation": {
+      "get": {
+        "description": "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
+        "operationId": "get-platform-simulation-view",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSimulationViewOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read what each simulator saw against what the platform collected",
+        "x-omniglass-permission": "simulation:read"
       }
     },
     "/webhooks/{token}": {

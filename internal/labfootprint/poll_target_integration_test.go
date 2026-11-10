@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -86,7 +87,7 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 	task("t-icmp", "poll", "p3-icmp", `{"probe":"icmp"}`, true)
 	task("t-loose", "poll", "p3-loose", `{}`, true)
 
-	cadence := map[string]NodeCadence{
+	cadence := map[string]closedloop.NodeCadence{
 		"edge-a": {Heartbeat: 5 * time.Second, ProbeEvery: 30 * time.Second},
 		"edge-b": {Heartbeat: 10 * time.Second, ProbeEvery: 20 * time.Second},
 	}
@@ -156,8 +157,8 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 }
 
 // sortedTargets orders targets by transport.
-func sortedTargets(ts []PollTarget) []PollTarget {
+func sortedTargets(ts []closedloop.PollTarget) []closedloop.PollTarget {
 	out := slices.Clone(ts)
-	slices.SortFunc(out, func(a, b PollTarget) int { return strings.Compare(a.Transport, b.Transport) })
+	slices.SortFunc(out, func(a, b closedloop.PollTarget) int { return strings.Compare(a.Transport, b.Transport) })
 	return out
 }

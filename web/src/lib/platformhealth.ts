@@ -107,6 +107,114 @@ export function notUpCount(v: PlatformView): number {
   return (v.nodes ?? []).filter((n) => nodePill(n, v.read_at) !== "up").length;
 }
 
+// ---- With a simulator (#1647) ----
+//
+// The simulation section reads what each node's simulator saw against what the
+// platform collected, over the sliding window the server brackets each minute,
+// a lab faster (internal/closedloop). Every gap is a loss ratio, 0 healthy. The derivations
+// below decide only order and tone; every count is the server's.
+
+export type PlatformSimulation = components["schemas"]["PlatformSimulationViewOutputBody"];
+export type PlatformSimNode = components["schemas"]["PlatformSimulationNode"];
+export type PlatformSimGap = components["schemas"]["PlatformSimulationGap"];
+export type PlatformSimDevice = components["schemas"]["PlatformSimulationDevice"];
+
+export const PLATFORM_SIM_KEY = ["platform-simulation"] as const;
+
+export async function platformSimulation(): Promise<PlatformSimulation> {
+  const { data, error } = await api.GET("/views/platform/simulation");
+  if (error) throw error;
+  return data as PlatformSimulation;
+}
+
+// sortGaps puts the worst ratio first. A gap with no ratio (nothing went in,
+// the sim does not observe the hop, or the node restarted) sinks below every
+// measured one; ties keep the server's travel order.
+export function sortGaps(gaps: PlatformSimGap[] | null | undefined): PlatformSimGap[] {
+  const rank = (g: PlatformSimGap) => (g.ratio == null ? -1 : g.ratio);
+  return [...(gaps ?? [])].sort((a, b) => rank(b) - rank(a));
+}
+
+// A gap's tone is how it reads, not how big it is. Loss above 0 is a fault
+// nothing on the page explains; impaired above 0 is the expected cost of an
+// impairment someone applied; restarted is neither, a window no figure from is
+// meaningful. A 0, or a hop with nothing in, is calm: a ratio is tinted only
+// above 0.
+export type GapTone = "fault" | "expected" | "restarted" | "calm";
+
+export function gapTone(g: Pick<PlatformSimGap, "reading" | "ratio">): GapTone {
+  if (g.reading === "restarted") return "restarted";
+  if (g.ratio == null || g.ratio <= 0) return "calm";
+  if (g.reading === "impaired") return "expected";
+  if (g.reading === "loss") return "fault";
+  return "calm";
+}
+
+// gapName is a gap's hop as words: "sent-not-received" reads "sent, not received".
+export function gapName(gap: string): string {
+  return gap.replace("-not-", ", not ").replaceAll("-", " ");
+}
+
+// gapProtocolText names what a gap row counts. A connect gap with no protocol
+// pools every listener on the node (the node knows the transport it dialed,
+// the sim the listener that accepted); the telemetry hops count batches.
+export function gapProtocolText(g: Pick<PlatformSimGap, "gap" | "protocol">): string {
+  if (g.protocol) return g.protocol;
+  return g.gap === "connect-not-accepted" ? "any listener" : "batches";
+}
+
+// ratioText is a loss ratio as a percent; a gap with no ratio has no number.
+export function ratioText(ratio: number | null | undefined): string {
+  if (ratio == null) return "-";
+  if (ratio === 0) return "0%";
+  const pct = ratio * 100;
+  return `${pct < 0.1 ? pct.toFixed(2) : pct.toFixed(1)}%`;
+}
+
+// windowText is the window's length in words: whole minutes, or seconds for a
+// lab's short window that is not a whole number of them. Unread, it is the
+// server's default ten minutes.
+export function windowText(seconds: number | null | undefined): string {
+  const s = seconds ?? 600;
+  if (s % 60 !== 0) return `${s} seconds`;
+  const m = s / 60;
+  return m === 1 ? "1 minute" : `${m} minutes`;
+}
+
+export const WARMING_UP =
+  "Warming up: the server needs a full window and the bracket after it before it reads a gap.";
+export const RESTARTED =
+  "Restarted: a counter went backwards inside the window, so no figure from it means anything until the window slides past.";
+
+// simStateNote is the reason a node's window carries no figures, or null when
+// it is measured. It names no number: a count while warming up would be a
+// partial window read as a whole one.
+export function simStateNote(n: Pick<PlatformSimNode, "state">): string | null {
+  if (n.state === "warming up") return WARMING_UP;
+  if (n.state === "restarted") return RESTARTED;
+  return null;
+}
+
+export const NOT_WIRED = "not wired yet";
+
+// wiredText is a figure the node does not report yet (its dispatch queue depth
+// and busy workers): no number until it does.
+export function wiredText(v: number | null | undefined): string {
+  return v == null ? NOT_WIRED : String(v);
+}
+
+// deviceReceived is a device's requests over the window across protocols.
+export function deviceReceived(d: Pick<PlatformSimDevice, "received">): number {
+  return Object.values(d.received ?? {}).reduce((a, b) => a + b, 0);
+}
+
+// sortDevices puts the devices that need a look first: unhit, then impaired,
+// then by name.
+export function sortDevices(devices: PlatformSimDevice[] | null | undefined): PlatformSimDevice[] {
+  const rank = (d: PlatformSimDevice) => (d.unhit ? 0 : d.impaired ? 1 : 2);
+  return [...(devices ?? [])].sort((a, b) => rank(a) - rank(b) || (a.component || a.component_id).localeCompare(b.component || b.component_id));
+}
+
 // Where work is lost (#1646). Every figure is a loss ratio: the share of what a
 // hop took in that it did not hand on, 0 is healthy. The page holds no hop
 // list: the hops are the view's, in the order an item crosses them.

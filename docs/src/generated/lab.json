@@ -199,6 +199,12 @@
       "setup": []
     },
     {
+      "id": "watch-an-impaired-device",
+      "title": "Watch an impaired device",
+      "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+      "setup": []
+    },
+    {
       "id": "write-a-rule-as-an-expression",
       "title": "Write a rule as an expression",
       "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
@@ -212,6 +218,7 @@
       "probe_every": "10s",
       "worklist_every": "5s",
       "report_every": "",
+      "closed_loop_bracket": "10s",
       "for": "a learner's lab: a change in the console shows within seconds"
     },
     {
@@ -220,6 +227,7 @@
       "probe_every": "2s",
       "worklist_every": "2s",
       "report_every": "10s",
+      "closed_loop_bracket": "1s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
@@ -228,6 +236,7 @@
       "probe_every": "30s",
       "worklist_every": "30s",
       "report_every": "",
+      "closed_loop_bracket": "1m",
       "for": "the product's own defaults: what a deployment's node runs at"
     }
   ]

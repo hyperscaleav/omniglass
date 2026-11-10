@@ -48,7 +48,10 @@ type FactCadence struct {
 	// ReportEvery is the collection report window the profile's seed sets
 	// (#1646), empty when it leaves the platform's own setting.
 	ReportEvery string `json:"report_every"`
-	For         string `json:"for"`
+	// ClosedLoopBracket is how often the server brackets the node for
+	// Platform health's closed loop.
+	ClosedLoopBracket string `json:"closed_loop_bracket"`
+	For               string `json:"for"`
 }
 
 // FactVolume is one named volume the lab keeps.
@@ -144,7 +147,7 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		if c.ReportSeconds > 0 {
 			report = (time.Duration(c.ReportSeconds) * time.Second).String()
 		}
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, ReportEvery: report, For: c.For})
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, ReportEvery: report, ClosedLoopBracket: c.ClosedLoopBracket, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {
