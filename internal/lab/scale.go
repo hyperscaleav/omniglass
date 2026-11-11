@@ -251,8 +251,9 @@ func FormatMiB(m float64) string {
 // is a whole multiple of every interval the lab runs on
 // (ScenarioPollIntervals), so each window reads whole poll cycles.
 type PerfSize struct {
-	// Name is what --size takes: ci fits a hosted runner, laptop the
-	// architect's machine.
+	// Name is what --size takes: the size's rung on the measuring ladder,
+	// its systems. Where a rung runs is the baseline's host fingerprint, not
+	// its name (#1780).
 	Name       string
 	Scenario   string
 	Systems    int
@@ -262,9 +263,9 @@ type PerfSize struct {
 }
 
 // BaselineFile is the size's committed baseline, under
-// internal/labfootprint/baseline/: the scenario, the systems, the size.
+// internal/labfootprint/baseline/: the scenario and the systems.
 func (s PerfSize) BaselineFile() string {
-	return fmt.Sprintf("%s-%d.%s.json", s.Scenario, s.Systems, s.Name)
+	return fmt.Sprintf("%s-%d.json", s.Scenario, s.Systems)
 }
 
 // FleetViewReads is how many fleet view reads a window times: enough that the
@@ -274,13 +275,13 @@ func (s PerfSize) BaselineFile() string {
 // percent on it (#1751).
 const FleetViewReads = 100
 
-// PerfSizes are the gate's sizes, smallest first: the ladder the architect
-// set on #1640 (corporate 300 on a runner, 1,000 on the laptop, 3,000 the
-// goal).
+// PerfSizes are the gate's sizes, smallest first, each named by its rung on
+// the ladder the architect set on #1640 (corporate 300, 1,000, and 3,000 the
+// goal): 300 fits a hosted runner, 1000 runs on the Proxmox worker (#1737).
 func PerfSizes() []PerfSize {
 	return []PerfSize{
-		{Name: "ci", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
-		{Name: "laptop", Scenario: "corporate", Systems: 1000, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
+		{Name: "300", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
+		{Name: "1000", Scenario: "corporate", Systems: 1000, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
 	}
 }
 

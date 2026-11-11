@@ -118,22 +118,22 @@
   ],
   "sizes": [
     {
-      "name": "ci",
+      "name": "300",
       "scenario": "corporate",
       "systems": 300,
       "warmup_seconds": 120,
       "window_seconds": 300,
       "fleet_reads": 100,
-      "file": "corporate-300.ci.json"
+      "file": "corporate-300.json"
     },
     {
-      "name": "laptop",
+      "name": "1000",
       "scenario": "corporate",
       "systems": 1000,
       "warmup_seconds": 120,
       "window_seconds": 300,
       "fleet_reads": 100,
-      "file": "corporate-1000.laptop.json"
+      "file": "corporate-1000.json"
     }
   ]
 }

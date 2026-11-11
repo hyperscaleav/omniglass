@@ -181,8 +181,8 @@ func TestPerfSizeNamed(t *testing.T) {
 			t.Errorf("size %s is not a whole size: %+v", sz.Name, sz)
 		}
 	}
-	if _, err := PerfSizeNamed("huge"); err == nil || !strings.Contains(err.Error(), "ci") {
-		t.Errorf("PerfSizeNamed(huge) = %v, want a refusal naming the sizes", err)
+	if _, err := PerfSizeNamed("ci"); err == nil || !strings.Contains(err.Error(), "300, 1000") {
+		t.Errorf("PerfSizeNamed(ci) = %v, want a refusal naming the rungs", err)
 	}
 }
 

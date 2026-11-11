@@ -18,7 +18,7 @@ var (
 
 // gateInputs are the inputs every fixture baseline was generated with.
 func gateInputs() PerfInputs {
-	return PerfInputs{Size: "ci", Scenario: "corporate", Systems: 300, WarmupS: 120, WindowS: 300, FleetReads: 20, PlanDigest: "plan-a"}
+	return PerfInputs{Size: "300", Scenario: "corporate", Systems: 300, WarmupS: 120, WindowS: 300, FleetReads: 20, PlanDigest: "plan-a"}
 }
 
 // cleanRun is one clean run of the ci size on the gate's host: every exact
@@ -525,7 +525,7 @@ func TestPerfGateFactsAreTheTables(t *testing.T) {
 	if classes[ClassExact] == 0 || classes[ClassHostIndependent] == 0 || classes[ClassHostDependent] == 0 {
 		t.Fatalf("classes %v, want all three", classes)
 	}
-	if len(facts.Sizes) != 2 || facts.Sizes[0].File != "corporate-300.ci.json" {
+	if len(facts.Sizes) != 2 || facts.Sizes[0].File != "corporate-300.json" {
 		t.Fatalf("sizes %+v", facts.Sizes)
 	}
 }

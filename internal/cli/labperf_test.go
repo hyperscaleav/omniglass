@@ -12,7 +12,7 @@ import (
 // A size resolves to its committed baseline's path and the inputs its runs
 // measure with; an override moves the inputs and the device set with them.
 func TestLabPerfOptsResolveTheSize(t *testing.T) {
-	o := labPerfOpts{size: "ci", runs: 3, settleWait: time.Minute}
+	o := labPerfOpts{size: "300", runs: 3, settleWait: time.Minute}
 	in, err := o.inputs()
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +20,7 @@ func TestLabPerfOptsResolveTheSize(t *testing.T) {
 	if in.Scenario != "corporate" || in.Systems != 300 || in.WindowS != 300 || in.WarmupS != 120 || in.FleetReads != 100 || in.PlanDigest == "" {
 		t.Fatalf("ci inputs = %+v", in)
 	}
-	if got, want := o.baselinePath(), filepath.Join("internal", "labfootprint", "baseline", "corporate-300.ci.json"); got != want {
+	if got, want := o.baselinePath(), filepath.Join("internal", "labfootprint", "baseline", "corporate-300.json"); got != want {
 		t.Fatalf("baseline path = %s, want %s", got, want)
 	}
 	o.baseline = "/tmp/x.json"
@@ -28,7 +28,7 @@ func TestLabPerfOptsResolveTheSize(t *testing.T) {
 		t.Fatal("--baseline does not name the file")
 	}
 
-	small := labPerfOpts{size: "ci", runs: 1, systems: 4, warmup: 30 * time.Second, window: time.Minute, fleetReads: 3, settleWait: time.Minute}
+	small := labPerfOpts{size: "300", runs: 1, systems: 4, warmup: 30 * time.Second, window: time.Minute, fleetReads: 3, settleWait: time.Minute}
 	sin, err := small.inputs()
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestLabPerfOptsResolveTheSize(t *testing.T) {
 }
 
 func TestLabPerfOptsCheck(t *testing.T) {
-	ok := labPerfOpts{size: "ci", runs: 3, settleWait: time.Minute}
+	ok := labPerfOpts{size: "300", runs: 3, settleWait: time.Minute}
 	if err := ok.check(); err != nil {
 		t.Fatalf("a valid set of flags: %v", err)
 	}

@@ -210,8 +210,8 @@ thing. Knowing which answers a given question is most of the value:
 | Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | A regression smaller than its tolerance or the runs' spread; times and usage on a host other than the baseline's | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
 | Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Exact for the loss figures; the rest a median of N runs against a spread | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
 | Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **Opt in.** Fails the change it runs on; never a required check | **No.** A diagnostic | **No.** Inert without `-bench` |
-| Fleet it reads | The test's own fixture | The test's own fixture | The dev scenario's fleet, one standard workload | The corporate scenario at a named size (`ci` or `laptop`), stated in the baseline it compares with | The corporate scenario at 20 systems by default, read from the lab's labels | The benchmark's own fixture |
-| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make perf-check SIZE=ci`, or the `run:perf` label on a PR | `make lab-footprint` | `make bench`, deliberately, before and after |
+| Fleet it reads | The test's own fixture | The test's own fixture | The dev scenario's fleet, one standard workload | The corporate scenario at a named rung (`300` or `1000` systems), stated in the baseline it compares with | The corporate scenario at 20 systems by default, read from the lab's labels | The benchmark's own fixture |
+| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make perf-check SIZE=300`, or the `run:perf` label on a PR | `make lab-footprint` | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
 as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
@@ -393,14 +393,14 @@ deliberately does **not** do is as much of the design as what it does:
 Those three refusals hold for a benchmark. A whole scale lab answers each of them differently, and is
 the one instrument that gates on time at all
 ([ADR-1640](/architecture/decisions/#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)).
-`make perf-check SIZE=ci|laptop` measures three throwaway labs of a named size and compares them with
+`make perf-check SIZE=300|1000` measures three throwaway labs of a rung of the ladder and compares them with
 that size's committed baseline:
 
 - **A CI job, but opt in.** The `run:perf` label runs it on a PR and posts the verdict; it is never a
   required check.
 - **A stored baseline, but generated and fingerprinted.** `make perf-baseline` writes it on the host
-  class it gates (the `ci` file from the `perf` workflow's dispatch artifact, the `laptop` file on the
-  architect's laptop), with that host's CPU, cores and memory. Times and usage gate only on a matching
+  class it gates (the `300` file from the `perf` workflow's dispatch artifact on a hosted runner, the
+  `1000` file on the Proxmox worker), with that host's CPU, cores and memory. Times and usage gate only on a matching
   host and read `reported` elsewhere; the counts gate everywhere. A PR that changes a baseline says why.
 - **Medians against a spread, never one run.** A figure fails only past its tolerance and past the
   baseline's spread plus the runs' spread; runs that spread past the tolerance read `noisy`, which does
