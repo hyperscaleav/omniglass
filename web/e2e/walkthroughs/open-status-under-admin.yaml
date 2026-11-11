@@ -1,11 +1,17 @@
-# Platform health's sidebar door (#1767). The page is administration, whether
-# Omniglass itself is well, so it sits under Admin as Status, one word like
-# every other tab, behind node:read like Nodes.
-title: Open Status from Admin
-description: From Home, find Status under Admin in the sidebar, open it, and read the build the server runs.
+# Nodes and Platform health's sidebar doors (#1767). Both are administration:
+# enrolling a node is an admin's job, and whether Omniglass itself is well is
+# read off the platform's own components. So both sit under Admin, Platform
+# health as Status, one word like every other tab, both behind node:read.
+title: Open Nodes and Status from Admin
+description: From Home, find Nodes and Status under Admin in the sidebar, open Nodes where a new node is set up, then open Status and read the build the server runs.
 steps:
   - goto: /
-    caption: The sidebar's Admin group holds the platform's administration, its Status among it.
+    caption: The sidebar's Admin group holds the platform's administration, Nodes and Status among it.
+    hold: 1500
+  - click: 'aside a[href$="/nodes"]'
+    caption: Open Nodes under Admin.
+  - wait: { text: New node }
+    caption: The collection nodes, and New node, where an admin sets one up.
     hold: 1500
   - click: 'aside a[href$="/platform"]'
     caption: Open Status under Admin.
