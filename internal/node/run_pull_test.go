@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -233,6 +234,20 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 		return v.Value
 	}
 	pollUntil(t, 15*time.Second, "the session never came up", func() bool { return latest() == "up" })
+	// The held session is the panel's one long-lived connection. The
+	// endpoint's reachability probe dials the panel every 200 ms too, and each
+	// dial is a session for a moment, so the test follows the held one by its
+	// ID rather than reading a count a probe can catch at two (#1784).
+	var held string
+	pollUntil(t, 5*time.Second, "the panel never held exactly one session", func() bool {
+		ids := panel.TCPSession().SessionIDs()
+		if len(ids) != 1 {
+			return false
+		}
+		held = ids[0]
+		return true
+	})
+	stillHeld := func() bool { return slices.Contains(panel.TCPSession().SessionIDs(), held) }
 
 	// Storage drops out for three failed pulls (the backoff waits are under
 	// 1 s, 2 s and 4 s).
@@ -241,8 +256,8 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	pollUntil(t, 15*time.Second, "the server never failed three pulls", func() bool {
 		return srv.WorklistCounts().ReadFailed >= failedBefore+3
 	})
-	if n := panel.TCPSession().SessionCount(); n != 1 {
-		t.Errorf("the panel holds %d sessions while storage is down, want 1", n)
+	if !stillHeld() {
+		t.Errorf("the panel dropped its held session while storage was down; it holds %v", panel.TCPSession().SessionIDs())
 	}
 	if got := latest(); got != "up" {
 		t.Errorf("session-state %q while storage is down, want up", got)
@@ -254,8 +269,8 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	pollUntil(t, 15*time.Second, "the pull never recovered", func() bool {
 		return srv.WorklistCounts().Served > servedBefore
 	})
-	if n := panel.TCPSession().SessionCount(); n != 1 {
-		t.Errorf("the panel holds %d sessions after storage returned, want 1", n)
+	if !stillHeld() {
+		t.Errorf("the panel dropped its held session by the time storage returned; it holds %v", panel.TCPSession().SessionIDs())
 	}
 	series, err := gw.ListPropertySeries(ctx, "component", comp, "session-state", time.Hour, 50)
 	if err != nil {
