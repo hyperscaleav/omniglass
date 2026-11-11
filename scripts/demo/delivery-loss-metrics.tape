@@ -3,16 +3,18 @@
 # The node and the server each write their own hop's delivery as three platform metrics, the item
 # kind (metric, property, event, log) as the instance: delivery-in-count, delivery-out-count and
 # delivery-loss-ratio, (in - out) / in, where 0 is healthy. They land every report window, 0 when
-# quiet, and replace the old spool-drop, publish-failure and bus drop counts (#1659, ADR-1659).
+# quiet, and replace the old spool-drop, publish-failure and bus drop counts (#1659, ADR-1659). The
+# node also writes the schedule hop under the same keys, its instance the hop and the kind
+# (schedule/metric), so the bare kind stays the node's own hop (#1744).
 
 Hide
-Type `demo_until 150 'omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"delivery-loss-ratio\") | .instance_count] == [4]"'`
+Type `demo_until 150 'omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"delivery-loss-ratio\") | [.instances[].instance | select(contains(\"/\") | not)] | sort] == [[\"event\",\"log\",\"metric\",\"property\"]]"'`
 Enter
 Wait@180s
 Type `demo_hush 'srv=$(omniglass view platform list | jq -r ".servers[0].name")'`
 Enter
 Wait
-Type `demo_until 150 'omniglass component metric list "$srv" | jq -e "[.metrics[] | select(.metric_type_name == \"delivery-loss-ratio\") | .instance_count] == [4]"'`
+Type `demo_until 150 'omniglass component metric list "$srv" | jq -e "[.metrics[] | select(.metric_type_name == \"delivery-loss-ratio\") | [.instances[].instance | select(contains(\"/\") | not)] | sort] == [[\"event\",\"log\",\"metric\",\"property\"]]"'`
 Enter
 Wait@180s
 Type "clear"
@@ -25,7 +27,7 @@ Wait
 Type `omniglass component metric list edge-hq | jq -c '.metrics[] | select(.metric_type_name | startswith("delivery-")) | {metric: .metric_type_name, kinds: [.instances[].instance]}'`
 Enter
 Wait
-Type "# The node edge-hq: each kind's window, in, out and the loss between them"
+Type "# The node edge-hq: each kind's window, in, out and the loss, its own hop then the schedule hop"
 Enter
 Wait
 Type `omniglass component metric list edge-hq | jq -c '[.metrics[] | select(.metric_type_name | startswith("delivery-")) | .metric_type_name as $m | .instances[] | {m: $m, kind: .instance, v: .value}] | group_by(.kind)[] | (map({(.m): .v}) | add) as $d | {kind: .[0].kind, in: $d["delivery-in-count"], out: $d["delivery-out-count"], loss: $d["delivery-loss-ratio"]}'`
