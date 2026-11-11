@@ -36,9 +36,14 @@ Wait
 Type `(while :; do omniglass telemetry push --owner '{"kind":"system","ref":"hq-huddle-room-1"}' --metrics '[{"name":"occupancy-count","value":3}]' --properties '[{"name":"occupancy-state","value":"occupied"}]' >/dev/null 2>&1; sleep 5; done) & pusher=$!`
 Enter
 Wait
-Type "omniglass lab measure --systems 0 --warmup 10s --window 40s --fleet-reads 1 --backlog 0 --json /tmp/push-lane.json >/tmp/push-lane.txt 2>/tmp/push-lane.err"
+Hide
+Type `demo_hush 'omniglass lab measure --systems 0 --warmup 10s --window 40s --fleet-reads 1 --backlog 0 --json /tmp/push-lane.json >/tmp/push-lane.txt 2>/tmp/push-lane.err'`
 Enter
 Wait@300s
+Show
+Type "# Measured unseen while it pushed: omniglass lab measure --systems 0 --warmup 10s --window 40s"
+Enter
+Wait
 Type "# The delivery table: the node lane first, then the push lane, each kind across the ingest hop"
 Enter
 Wait

@@ -20,9 +20,14 @@ Show
 Type "# A corporate scale lab of 20 systems is up; sample it three times, each over one 30 second collection cycle"
 Enter
 Wait
-Type "omniglass lab measure --every 30s --window 30s --warmup 10s --samples 3 --page-clients 2 --page-loads 5 --append series.jsonl"
+Hide
+Type `demo_hush 'omniglass lab measure --every 30s --window 30s --warmup 10s --samples 3 --page-clients 2 --page-loads 5 --append series.jsonl >/tmp/series.txt 2>/tmp/series.err'`
 Enter
-Wait@150s
+Wait@480s
+Show
+Type "# Sampled unseen: omniglass lab measure --every 30s --window 30s --samples 3 --append series.jsonl"
+Enter
+Wait
 Type "# One JSON line a sample: the server's uptime climbs, and the lag and page timings sit beside it"
 Enter
 Wait
