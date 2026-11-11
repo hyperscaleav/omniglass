@@ -23,9 +23,14 @@ Wait
 Type "# Measure the lab already running: no --systems, so lab measure reads the fleet off the lab's own containers"
 Enter
 Wait
-Type "omniglass lab measure --warmup 10s --window 30s --fleet-reads 3 --backlog 0 --json fleet.json >table.txt 2>measure.log"
+Hide
+Type `demo_hush 'omniglass lab measure --warmup 10s --window 30s --fleet-reads 3 --backlog 0 --json fleet.json >table.txt 2>measure.log'`
 Enter
 Wait@240s
+Show
+Type "# Measured unseen: omniglass lab measure --warmup 10s --window 30s --fleet-reads 3 --backlog 0"
+Enter
+Wait
 Type "# The table's first line names the scenario and the size the lab was brought up at"
 Enter
 Wait
