@@ -58,6 +58,15 @@ func TestNodeSilentOpensAndClears(t *testing.T) {
 	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "node-silent"); n != 1 {
 		t.Fatalf("a check-in age of 120 s left %d node-silent alarms open on edge-silent's platform component, want 1", n)
 	}
+	alarms, err := gw.ListAlarms(ctx, "edge-silent", storage.AlarmFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range alarms {
+		if a.RaisedByRule != nil && *a.RaisedByRule == "node-silent" && a.Severity != "high" {
+			t.Errorf("node-silent raised at %q, want high", a.Severity)
+		}
+	}
 	age(10)
 	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "node-silent"); n != 0 {
 		t.Fatalf("a node heard from again left %d node-silent alarms open, want it cleared", n)
