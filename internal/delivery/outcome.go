@@ -97,6 +97,21 @@ const (
 	NotReturned Outcome = "not-returned"
 )
 
+// The publish hop's outcomes (#1746). The server's publisher counts calls
+// that reached the push lane's turn, never items: a refused call minted
+// nothing, so the items it carried are on no ledger and are no receipt's.
+// They read here, under refused-turn, and never as the ingest hop's missing.
+const (
+	// TurnTaken is a call that took the publish turn: out of the publish hop.
+	TurnTaken Outcome = "turn-taken"
+	// RefusedTurn is a call whose wait for the turn ran out, answered 503
+	// before it minted anything: the publish hop's loss.
+	RefusedTurn Outcome = "refused-turn"
+)
+
+// PublishOutcomes is every publish hop outcome, out first, then loss.
+var PublishOutcomes = []Outcome{TurnTaken, RefusedTurn}
+
 // SimOutcomes is every sim hop outcome, out first, then loss.
 var SimOutcomes = []Outcome{Returned, Withheld, Dropped, NotReturned}
 
@@ -127,15 +142,18 @@ func OutcomesOf(h Hop) []Outcome {
 		return NodeOutcomes
 	case Ingest:
 		return IngestOutcomes
+	case Publish:
+		return PublishOutcomes
 	}
 	return nil
 }
 
 // Out reports whether the outcome counts as out: accounted for, in the store
 // or, for an unbound sample, in its conduit's unbound inbox, or at the node
-// hop handed to the stream, or, on the sim hop, back at the node.
+// hop handed to the stream, or, on the sim hop, back at the node, or, on the
+// publish hop, through the turn.
 func (o Outcome) Out() bool {
-	return o == Stored || o == Coalesced || o == Unbound || o == Shipped || o == Returned
+	return o == Stored || o == Coalesced || o == Unbound || o == Shipped || o == Returned || o == TurnTaken
 }
 
 // Deduplicated reports whether the outcome is the redelivery count, reported

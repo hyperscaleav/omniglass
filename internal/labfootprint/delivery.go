@@ -75,6 +75,9 @@ type DeliveryRead struct {
 	Backlog     Backlog
 	// Schedule is the schedule hop's runs due and made per kind (#1693).
 	Schedule []ScheduleCount
+	// Publish is the push lane's turn: the calls that reached it and the
+	// calls it refused (#1746).
+	Publish PublishCount
 }
 
 // DeliveryRow is one kind across one hop of one lane: the same keys for
@@ -410,9 +413,13 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 			missing[d.Lane] = missing[d.Lane] || c == delivery.Missing
 		}
 		name, dedup := string(d.Kind), strconv.FormatUint(d.Deduplicated, 10)
-		if d.Hop == delivery.Sim {
+		switch d.Hop {
+		case delivery.Sim:
 			// A sim row is a protocol, and the sim hop has no redelivery.
 			name, dedup = d.Protocol, "-"
+		case delivery.Publish:
+			// A publish row counts pushes, and a turn has no redelivery.
+			name, dedup = deliverySubject(d), "-"
 		}
 		row(name, string(d.Lane), string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss, dedup, cause)
 	}
@@ -437,6 +444,9 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	for _, e := range r.DeliveryEnded {
 		fmt.Fprintf(b, "%-12s%s, boot %s: last seq %d landed, boot %s began %s; anything after %d never shipped, uncounted\n",
 			"unshipped", bootOwner(e.Node), e.Boot, e.Last, e.Next, e.NextMinted.UTC().Format(time.RFC3339), e.Last)
+	}
+	if slices.ContainsFunc(r.Delivery, func(d DeliveryRow) bool { return d.Hop == delivery.Publish }) {
+		fmt.Fprintf(b, "%-12s%-6s%s\n", "publish", LanePush, publishLabel)
 	}
 	for _, l := range []struct {
 		lane  DeliveryLane
