@@ -1,0 +1,15 @@
+# Platform health's sidebar door (#1767). The page is administration, whether
+# Omniglass itself is well, so it sits under Admin as Platform, one word like
+# every other tab, behind node:read like Nodes.
+title: Open Platform from Admin
+description: From Home, find Platform under Admin in the sidebar, open it, and read the build the server runs.
+steps:
+  - goto: /
+    caption: The sidebar's Admin group holds the platform's administration, Platform among it.
+    hold: 1500
+  - click: 'aside a[href$="/platform"]'
+    caption: Open Platform under Admin.
+  - wait: { selector: '[data-testid=platform-version]' }
+    caption: Platform health, the build and uptime read off the platform's own components. The top bar reads Platform.
+    poster: true
+    hold: 2000
