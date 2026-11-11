@@ -36,7 +36,7 @@ func TestIntegrationPerfGate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
 	defer cancel()
 
-	out, err := perfCmd(ctx, append([]string{"baseline", "--size", "ci", "--runs", "1",
+	out, err := perfCmd(ctx, append([]string{"baseline", "--size", "300", "--runs", "1",
 		"--systems", "20", "--warmup", "1m", "--fleet-reads", "4", "--out", baseline}, image...)...)
 	if err != nil {
 		t.Fatalf("lab perf baseline: %v\n%s", err, out)
@@ -47,7 +47,7 @@ func TestIntegrationPerfGate(t *testing.T) {
 	}
 
 	verdict := filepath.Join(dir, "verdict.json")
-	out, err = perfCmd(ctx, append([]string{"check", "--size", "ci", "--runs", "1",
+	out, err = perfCmd(ctx, append([]string{"check", "--size", "300", "--runs", "1",
 		"--baseline", baseline, "--append", checked, "--json", verdict}, image...)...)
 	if err != nil {
 		t.Fatalf("lab perf check against its own baseline: %v\n%s", err, out)
@@ -89,7 +89,7 @@ func TestIntegrationPerfGate(t *testing.T) {
 	}
 	perturbed := filepath.Join(dir, "perturbed.json")
 	writeTestBaseline(t, perturbed, base)
-	out, err = perfCmd(ctx, "check", "--size", "ci", "--runs", "1",
+	out, err = perfCmd(ctx, "check", "--size", "300", "--runs", "1",
 		"--baseline", perturbed, "--samples", checked)
 	if err == nil {
 		t.Fatalf("lab perf check against a baseline with rows a minute halved exited 0, want nonzero:\n%s", out)

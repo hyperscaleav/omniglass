@@ -1,6 +1,6 @@
 {
   "inputs": {
-    "size": "ci",
+    "size": "300",
     "scenario": "corporate",
     "systems": 300,
     "warmup_seconds": 120,

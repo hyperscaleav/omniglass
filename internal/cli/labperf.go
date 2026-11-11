@@ -150,7 +150,7 @@ func newLabPerfCmd() *cobra.Command {
 
 func labPerfFlags(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.String("size", "ci", "the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000)")
+	f.String("size", "300", "the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000)")
 	f.Int("runs", 3, "how many throwaway labs to measure, one after another; every gated figure is their median")
 	f.String("image", "", "the omniglass image each lab runs (lab run's --image); empty is this binary's own build")
 	f.Duration("settle-timeout", 5*time.Minute, "how long each run's delivery read waits for its window's batches to land; "+

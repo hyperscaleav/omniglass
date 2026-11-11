@@ -71,15 +71,16 @@ scale-lab: all
 scale-measure: all
 	./bin/omniglass lab measure --scenario $(SCENARIO) --systems $(SYSTEMS) $(SCALE_MEASURE_ARGS)
 
-# The perf gate (#1640, ADR-1640): PERF_RUNS throwaway scale labs at SIZE (ci
-# or laptop) measured one after another and compared with the committed
-# baseline under internal/labfootprint/baseline. perf-check prints one row a
-# figure and fails on any regression past it; perf-baseline rewrites the
-# size's baseline from fresh runs, a reviewed change the PR states the reason
+# The perf gate (#1640, ADR-1640): PERF_RUNS throwaway scale labs at SIZE (a
+# rung of the ladder: 300 or 1000 corporate systems) measured one after
+# another and compared with the committed baseline under
+# internal/labfootprint/baseline. perf-check prints one row a figure and
+# fails on any regression past it; perf-baseline rewrites the size's
+# baseline from fresh runs, a reviewed change the PR states the reason
 # for. Outside make test and never a required check: each run stands up a
 # real scale lab for minutes. PERF_ARGS passes flags (PERF_ARGS="--image
 # omniglass:mine"); CI runs it on the run:perf label.
-SIZE      ?= ci
+SIZE      ?= 300
 PERF_RUNS ?= 3
 perf-check: all
 	./bin/omniglass lab perf check --size $(SIZE) --runs $(PERF_RUNS) $(PERF_ARGS)

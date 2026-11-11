@@ -369,7 +369,7 @@ with a corporate fleet, and it is never a measurement basis.
 | `make lab-footprint` | corporate, 20 systems | the per-container footprint on a developer machine |
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
-| `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the named size (`ci` or `laptop`) its baseline states | refuses a run of another scenario, size or device set as invalid |
+| `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the rung (`300` or `1000` systems) its baseline states | refuses a run of another scenario, size or device set as invalid |
 | the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
@@ -857,13 +857,14 @@ it measures fresh throwaway labs of a named size and compares them with that siz
 so a change that makes the fleet costlier to run fails before it merges.
 
 ```bash
-make perf-check SIZE=ci                  # three labs of the ci size against corporate-300.ci.json
-make perf-check SIZE=laptop              # three of the laptop size against corporate-1000.laptop.json
-make perf-baseline SIZE=ci               # three labs, then rewrite the ci baseline from them
-./bin/omniglass lab perf check --size ci --runs 1 --image omniglass:mine   # one lab, a private image
+make perf-check SIZE=300                 # three labs at 300 systems against corporate-300.json
+make perf-check SIZE=1000                # three at 1000 against corporate-1000.json
+make perf-baseline SIZE=300              # three labs, then rewrite the 300 baseline from them
+./bin/omniglass lab perf check --size 300 --runs 1 --image omniglass:mine   # one lab, a private image
 ```
 
-A size fixes everything a run measures with, so two runs of it are comparable: the scenario and its
+A size is a rung of the measuring ladder, named by its systems; where it runs is a fact of the host,
+which the baseline's fingerprint records, not of the name. A size fixes everything a run measures with, so two runs of it are comparable: the scenario and its
 systems, the warm-up, the window, the timed fleet view reads, no backlog and no system page clients. The
 window is a whole multiple of every poll interval the scenario's drivers and cadence declare, so each
 run counts the same whole rounds:
@@ -891,8 +892,8 @@ How to read the verdict table it prints, one row a figure:
   baseline so the gain is held.
 - **reported**: a host-dependent figure measured on a host other than the baseline's (another CPU, core
   count or memory size). The figure is printed for the reader and gates nothing; the counted figures
-  still gate in full. The table's host line names both hosts. Run on the baseline's host class (CI for
-  `ci`, the architect's laptop for `laptop`) to gate them.
+  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a hosted
+  runner for `300`, the Proxmox worker for `1000`) to gate them.
 
 The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one a kind a hop, named
 `delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
@@ -924,16 +925,16 @@ impaired, so an impaired gap can only mean a fault left on.
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
 spread and values, the inputs and the host fingerprint, and refuses, naming each figure, when an exact
 figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance
-(a check could never gate it). Generate it on the host class it gates: the `ci` baseline from the `perf`
-workflow's dispatch with `update` set, which uploads the file as an artifact, and the `laptop` baseline on
-the architect's laptop. Neither is committed yet ([#1751](https://github.com/hyperscaleav/omniglass/issues/1751)),
-so until then a check without `--baseline` says there is no baseline and how to make one. A PR that
+(a check could never gate it). Generate it on the host class it gates: the `300` baseline from the `perf`
+workflow's dispatch with `update` set, which uploads the file as an artifact, and the `1000` baseline on
+the Proxmox worker ([#1737](https://github.com/hyperscaleav/omniglass/issues/1737)). Only the `300` one is
+committed so far, so a check of `1000` without `--baseline` says there is no baseline and how to make one. A PR that
 changes a baseline file says why in its body. `--append FILE` keeps each
 run's report as a line, so runs a baseline refused can be read again with `--samples FILE` instead of
 measured again; `--samples` also reads the last `--runs` (or `--last`) lines of a sampling run's series.
 
 In CI the gate is opt in and never a required check: the `run:perf` label on a PR runs
-`make perf-check SIZE=ci` on its branch and posts the verdict table as one comment, updated on every
+`make perf-check SIZE=300` on its branch and posts the verdict table as one comment, updated on every
 run. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
 
 ### Sampling a scale lab over time

@@ -2834,7 +2834,7 @@ Brings up --runs throwaway scale labs of the size, one after another, and writes
 | `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
 | `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
 | `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
-| `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
+| `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
 | `--systems` | int | `0` | override the size's systems; 0 is the size's |
 | `--warmup` | duration | `0s` | override the size's warmup; 0 is the size's |
 | `--window` | duration | `0s` | override the size's window; 0 is the size's |
@@ -2863,7 +2863,7 @@ Runs are invalid, and no figure is compared, when they measured another fleet, w
 | `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
 | `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
 | `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
-| `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
+| `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
 
 ### `omniglass lab run`
 
