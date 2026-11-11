@@ -18,7 +18,7 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 ## Nodes
 
-**Nodes** in the sidebar (with `node:read`, which must be **all-scope**, since a node is
+**Nodes** under Admin in the sidebar (with `node:read`, which must be **all-scope**, since a node is
 fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
 inventory. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,

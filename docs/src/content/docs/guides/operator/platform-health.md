@@ -78,9 +78,10 @@ collect. **Platform health** is Omniglass watching itself. It answers one questi
 platform is well, and it answers it the way you would answer it about any room: from the samples
 on the platform's own components.
 
-Open it from **Platform health** in the sidebar, under Nodes, or from the **Platform** tile on
-Home, which carries the platform's verdict and how many nodes are not up. You need `node:read`
-to open it; the tile and the sidebar entry are hidden without it.
+Open it from **Status** under Admin in the sidebar, or from the **Platform** tile on Home, which
+carries the platform's verdict and how many nodes are not up. You need `node:read` to open it; the
+tile and the sidebar entry are hidden without it, and Admin shows it to a `node:read` holder who has
+none of its other tabs.
 
 ::screenshot{#platform-health}
 

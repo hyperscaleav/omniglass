@@ -124,6 +124,12 @@
       "setup": []
     },
     {
+      "id": "open-status-under-admin",
+      "title": "Open Nodes and Status from Admin",
+      "description": "From Home, find Nodes and Status under Admin in the sidebar, open Nodes where a new node is set up, then open Status and read the build the server runs.",
+      "setup": []
+    },
+    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",

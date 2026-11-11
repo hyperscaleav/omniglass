@@ -235,13 +235,17 @@ interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
-outline of places. **Nodes**, the collection daemons, are monitored and
-scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
-entry rather than sitting in Admin. **Endpoints and tasks are not nav items**: an endpoint is a
+outline of places. **Nodes**, the collection daemons, are infrastructure rather than fleet
+inventory, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
+`node:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the
-platform-preferences page.
+Admin is the renamed Settings group: Users, Roles, Groups, Audit, Nodes, Status (the Platform
+health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
+here behind the same `node:read` gate as Nodes, whose rows it reads), plus the live Settings leaf, the
+platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
+alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
+longer title.
 
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:
