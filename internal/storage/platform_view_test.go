@@ -727,3 +727,97 @@ func pipelineEnd(t *testing.T, ends []storage.PlatformPipelineEnd, kind delivery
 	t.Fatalf("kind %s absent from the end to end: %+v", kind, ends)
 	return storage.PlatformPipelineEnd{}
 }
+
+// The reasons a platform key is kept off the Platform health page. The page is
+// the summary; a row or a panel opens onto its component's detail, which
+// charts every key that component carries, so a key kept off is one click
+// away, never unread.
+const (
+	offVerdict      = "the page shows the platform system's recorded verdict, which this rollup is"
+	offNodeDetail   = "node detail beyond the table's columns: on the node's component page its row opens"
+	offProcess      = "every process's runtime figures: on its own component page, node or server"
+	offServerDetail = "server detail beyond its panels: on the server's component page its panel opens"
+	offRetention    = "the retention pass's own bookkeeping: on the server's component page"
+)
+
+// platformKeysOffPage is every platform key deliberately kept off the page,
+// each with its reason. A key leaves this list by joining a panel.
+var platformKeysOffPage = map[string]string{
+	writerclass.Health: offVerdict,
+
+	writerclass.WorklistTaskCount:       offNodeDetail,
+	writerclass.TickDuration:            offNodeDetail,
+	writerclass.ScheduleGapExcess:       offNodeDetail,
+	writerclass.SpoolBatchCount:         offNodeDetail,
+	writerclass.SessionHeldCount:        offNodeDetail,
+	writerclass.CommandDispatchLatency:  offNodeDetail,
+	writerclass.CommandExecutionLatency: offNodeDetail,
+	writerclass.CommandRedeliveryCount:  offNodeDetail,
+	writerclass.CommandPullFailureCount: offNodeDetail,
+
+	writerclass.ProcessGoroutineCount: offProcess,
+	writerclass.ProcessHeapSize:       offProcess,
+	writerclass.ProcessGCPause:        offProcess,
+	writerclass.ProcessCPUSeconds:     offProcess,
+	writerclass.ProcessFDCount:        offProcess,
+
+	// The panels rank the slowest routes by their max; the mean is the
+	// component page's.
+	writerclass.HTTPRequestDuration:         offServerDetail,
+	writerclass.DBPoolIdle:                  offServerDetail,
+	writerclass.DBPoolTotal:                 offServerDetail,
+	writerclass.DBPoolWaitDuration:          offServerDetail,
+	writerclass.BusConsumerRedelivered:      offServerDetail,
+	writerclass.BusTelemetryAckFailureCount: offServerDetail,
+	writerclass.BusWorklistPullCount:        offServerDetail,
+	writerclass.BusWorklistReplyBytesMax:    offServerDetail,
+	writerclass.BusRequestCount:             offServerDetail,
+	writerclass.BusRequestFailureCount:      offServerDetail,
+	writerclass.CalcServedCount:             offServerDetail,
+	writerclass.CalcPassDuration:            offServerDetail,
+	writerclass.SweepDuration:               offServerDetail,
+	writerclass.SweepCount:                  offServerDetail,
+	writerclass.SweepFailureCount:           offServerDetail,
+	writerclass.WebhookPostCount:            offServerDetail,
+	writerclass.WebhookRefusalCount:         offServerDetail,
+
+	writerclass.RetentionPassDuration:       offRetention,
+	writerclass.RetentionPassFailureCount:   offRetention,
+	writerclass.MetricPartitionCreatedCount: offRetention,
+	writerclass.MetricPartitionDroppedCount: offRetention,
+	writerclass.MetricPartitionCount:        offRetention,
+	writerclass.MetricTrendMarkLag:          offRetention,
+	writerclass.MetricBlockMarkLag:          offRetention,
+}
+
+// TestPlatformPageListsEveryPlatformKey (#1763): every key the server or a
+// node writes of itself is on the Platform health page or kept off it with a
+// reason, so a new gauge cannot land silently absent. A kept-off key that
+// joins the page, or stops being a platform key, must leave the list too.
+func TestPlatformPageListsEveryPlatformKey(t *testing.T) {
+	t.Parallel()
+	onPage := map[string]bool{}
+	for _, k := range storage.PlatformPageKeys() {
+		onPage[k] = true
+	}
+	platform := map[string]bool{}
+	for _, k := range writerclass.PlatformKeys() {
+		platform[k] = true
+		if !onPage[k] && platformKeysOffPage[k] == "" {
+			t.Errorf("%s is a platform key no panel lists and the off-page list does not name", k)
+		}
+	}
+	for k := range platformKeysOffPage {
+		if onPage[k] {
+			t.Errorf("%s is on the page and on the off-page list", k)
+		}
+		if !platform[k] {
+			t.Errorf("%s is on the off-page list but is not a platform key", k)
+		}
+	}
+	for k := range onPage {
+		if !platform[k] {
+			t.Errorf("the page reads %s, which is not a platform key", k)
+		}
+	}
+}
