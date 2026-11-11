@@ -712,8 +712,9 @@ push lane's follow, its publish row ahead of its ingest rows:
   metrics ([below](#reading-the-push-lanes-turn)), not from receipts, so a lab with no pushers has no
   publish row, and its window is the report windows that closed inside the measured one: it can lead
   or trail the ingest rows by up to one report window (`collection.report_seconds`, a minute by
-  default). A push that took the turn and then failed to publish reads `turn-taken` here and is the
-  stream refusal under **missing** below. Dedup reads `-`: a turn has no redelivery.
+  default). A push that took the turn and then failed to publish reads `turn-taken` here, and its items are
+  taken back off the ledger (the pusher was answered 503 and still holds them), so it reads on no
+  row below. Dedup reads `-`: a turn has no redelivery.
 
 A kind with nothing in reads `-`, never 0, and the push lane shows a kind only once its boot has
 carried one (the sample's push lane has pushed no log line).
@@ -805,7 +806,10 @@ push lane that is keeping up from one whose pushers queue behind each other:
   `503` with nothing minted. As a share of `push-lane-publish-count` it is the publish row's loss;
   healthy is 0.
 - **`push-lane-turn-wait-p99`**, **`push-lane-turn-wait-max`**: how long a push waited for the
-  turn, in milliseconds, at the 99th percentile and at worst. A refused push counts its whole wait.
+  turn, in milliseconds, at the 99th percentile and at worst. A refused push counts its whole wait,
+  and so does a push whose pusher gave up first (its own timeout under 5 seconds): that wait is in
+  neither count above, since the push neither took the turn nor was refused, but it is queueing all
+  the same.
   Healthy is a few milliseconds; a p99 that climbs toward 5,000 is the push lane about to refuse.
   A corporate 3,000 lab pushes about 5 times a second and reads a p99 near 0.01 ms with no
   refusals, the measurement the one publish turn stands on

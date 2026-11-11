@@ -176,6 +176,22 @@ func TestPushTurnCountsPublishesRefusalsAndWait(t *testing.T) {
 	}
 
 	rec.Flush("server")
+	m.pushTurn(delivery.Turn{Wait: 3 * time.Second, Abandoned: true})
+	got = flushed(rec)
+	if _, ok := got[[2]string{writerclass.PushLanePublishCount, ""}]; ok {
+		t.Fatalf("flushed %v, want an abandoned wait counted as no publish: it never took the turn", got)
+	}
+	if _, ok := got[[2]string{writerclass.PushLaneRefusalCount, ""}]; ok {
+		t.Fatalf("flushed %v, want an abandoned wait counted as no refusal: the lane never answered it 503", got)
+	}
+	if got[[2]string{writerclass.PushLaneTurnWaitMax, ""}] != 3000 {
+		t.Fatalf("turn wait max = %v, want the abandoned 3000 ms: a pusher that gave up waiting still waited", got[[2]string{writerclass.PushLaneTurnWaitMax, ""}])
+	}
+	if p99 := got[[2]string{writerclass.PushLaneTurnWaitP99, ""}]; p99 < 3000*7/8 || p99 > 3000*9/8 {
+		t.Fatalf("turn wait p99 = %v, want about the abandoned 3000 ms", p99)
+	}
+
+	rec.Flush("server")
 	m.pushTurn(delivery.Turn{Wait: time.Millisecond})
 	if n, ok := flushed(rec)[[2]string{writerclass.PushLaneRefusalCount, ""}]; !ok || n != 0 {
 		t.Fatalf("a window of publishes and no refusal reads refusals %v (landed %v), want a 0 that landed: the ratio reads healthy, not unreported", n, ok)

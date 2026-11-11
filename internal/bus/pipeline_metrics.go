@@ -54,7 +54,14 @@ func (m pipelineMetrics) quantile(key, instance string, q float64, d time.Durati
 // pushTurn records one caller's wait for the push lane's publish turn
 // (#1746): a publish, a refusal when the wait ran out, and the wait toward
 // the window's p99 and max in milliseconds, a refusal's whole bound included.
+// A wait its caller abandoned folds into the wait alone: it neither took the
+// turn nor was answered 503, but the pusher still waited on the lane.
 func (m pipelineMetrics) pushTurn(t delivery.Turn) {
+	m.quantile(writerclass.PushLaneTurnWaitP99, "", 0.99, t.Wait)
+	m.max(writerclass.PushLaneTurnWaitMax, "", float64(t.Wait)/float64(time.Millisecond))
+	if t.Abandoned {
+		return
+	}
 	m.count(writerclass.PushLanePublishCount, "", 1)
 	refused := 0.0
 	if t.Refused {
@@ -66,8 +73,6 @@ func (m pipelineMetrics) pushTurn(t delivery.Turn) {
 	if m.rec != nil {
 		m.rec.Count(writerclass.PushLaneRefusalCount, "", refused)
 	}
-	m.quantile(writerclass.PushLaneTurnWaitP99, "", 0.99, t.Wait)
-	m.max(writerclass.PushLaneTurnWaitMax, "", float64(t.Wait)/float64(time.Millisecond))
 }
 
 func (m pipelineMetrics) gauge(key, instance string, v float64) {

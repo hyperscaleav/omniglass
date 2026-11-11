@@ -227,7 +227,9 @@ func holdTurn(p *delivery.Publisher) (release func()) {
 // the server can export the turn's wait and its refusals. A caller that
 // takes its turn reports the wait it took, a caller refused reports a wait
 // of at least the bound, and a caller that gave up on its own (its ctx
-// ended) reports nothing: it was neither served nor refused.
+// ended) reports its wait as abandoned: it was neither served nor refused,
+// but a pusher whose own timeout is under the bound gives up while it waits,
+// and its wait is the lane's contention all the same.
 func TestPublisherReportsEveryTurn(t *testing.T) {
 	const bound = 40 * time.Millisecond
 	p, got := observed(bound)
@@ -249,8 +251,9 @@ func TestPublisherReportsEveryTurn(t *testing.T) {
 	}
 	release()
 	ts := got()
-	if len(ts) != 3 || ts[1].Refused || !ts[2].Refused || ts[2].Wait < bound {
-		t.Fatalf("turns %+v, want the holder's taken turn, then one refusal that waited the bound and nothing for the cancelled caller", ts)
+	if len(ts) != 4 || ts[1].Refused || ts[1].Abandoned || !ts[2].Refused || ts[2].Abandoned || ts[2].Wait < bound ||
+		ts[3].Refused || !ts[3].Abandoned || ts[3].Wait < 0 || ts[3].Wait >= bound {
+		t.Fatalf("turns %+v, want the holder's taken turn, then one refusal that waited the bound, then the cancelled caller's abandoned wait", ts)
 	}
 }
 

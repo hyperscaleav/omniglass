@@ -405,7 +405,7 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   `push-lane-turn-wait-max`**: the push lane's publish turn (#1746). The pushes and webhook posts
   that waited for the turn, those refused because the wait passed 5 seconds (answered `503`, nothing
   minted), and the wait itself at the 99th percentile and at worst, in milliseconds, a refusal's
-  whole wait included. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
+  whole wait included, and so is the wait of a pusher that gave up before either. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
   bound is a push lane whose pushers queue behind one another.
 
 [Platform health](/guides/operator/platform-health/#where-work-is-lost) reads the delivery keys hop

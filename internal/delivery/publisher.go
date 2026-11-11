@@ -26,12 +26,15 @@ type Publisher struct {
 }
 
 // Turn is one caller's wait for the publish turn (#1746): how long it waited,
-// and whether the wait ran out (ErrTurnTimeout) rather than ending in the
-// turn. The server exports both, the wait as the turn's contention and the
-// refusals as the pushes the lane answered 503 before minting anything.
+// and whether the wait ran out (ErrTurnTimeout) or the caller gave up first
+// (its ctx ended: Abandoned) rather than ending in the turn. The server
+// exports the wait as the turn's contention, an abandoned one included (a
+// pusher whose own timeout is under the bound gives up while it waits), and
+// the refusals as the pushes the lane answered 503 before minting anything.
 type Turn struct {
-	Wait    time.Duration
-	Refused bool
+	Wait      time.Duration
+	Refused   bool
+	Abandoned bool
 }
 
 // NewPublisher starts a publisher's boot; now is its clock, and wait is the
@@ -41,7 +44,7 @@ func NewPublisher(boot string, now func() time.Time, wait time.Duration) *Publis
 }
 
 // Observe sets f to hear every caller's Turn: one per caller that took its
-// turn or was refused, none for a caller whose ctx ended first. f runs on the
+// turn, was refused, or abandoned its wait. f runs on the
 // caller's goroutine, so it must not block. It returns p, to chain on
 // NewPublisher.
 func (p *Publisher) Observe(f func(Turn)) *Publisher {
@@ -73,6 +76,7 @@ func (p *Publisher) Publish(ctx context.Context, counts map[Kind]int, send func(
 	case p.turn <- struct{}{}:
 		p.report(Turn{Wait: time.Since(start)})
 	case <-ctx.Done():
+		p.report(Turn{Wait: time.Since(start), Abandoned: true})
 		return ctx.Err()
 	case <-bound.C:
 		p.report(Turn{Wait: time.Since(start), Refused: true})

@@ -12,7 +12,11 @@ refs: [1746, 1696, 1641, 1628, 1623]
      ends: how long the caller waited and whether the wait ran out. The bus server's pipeline
      metrics fold them into the window: `push-lane-publish-count`, `push-lane-refusal-count`, and
      the wait's p99 and max (`push-lane-turn-wait-p99`, `push-lane-turn-wait-max`, a refusal's whole
-     wait included), written with the rest of the server's figures once a report window.
+     wait included), written with the rest of the server's figures once a report window. A caller
+     that gives up while it waits (its request ended, as a pusher whose own timeout is under the
+     bound does) reports its wait as abandoned: it folds into the p99 and max and into neither count,
+     since it neither took the turn nor was answered `503`. Reporting nothing for it would hide the
+     queue from exactly the pushers that stop waiting first.
   2. **A refused push is a publish-hop loss, not missing.** A push whose wait ran out was answered
      `503` and minted nothing, so it holds no seq and leaves no hole: the ingest rows cannot see it.
      The read gives the push lane a `publish` hop with the outcomes `turn-taken` (out) and
