@@ -388,12 +388,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// on the transition only (#1630).
 	executedCommands := newCommandState()
 	// report accumulates each endpoint's collection telemetry over a report
-	// window (#1369), published when the window is due.
-	report := newCollectionReport(cfg.ReportEvery, time.Now())
+	// window (#1369), published when the window is due. Both reports close on
+	// one grid the node's name places (#1779), so each window holds one
+	// window's worth however late the housekeep tick takes it.
+	reportStart, reportSeed := time.Now(), phaseSeed(cfg.Name)
+	report := newCollectionReport(cfg.ReportEvery, reportSeed, reportStart)
 	// self is the node's account of itself (#1625): its dispatch, schedule,
 	// spool, sessions and process, sent as platform metrics in the node-self
 	// block of the batch each tick publishes, on the same window.
-	self := newNodeReport(cfg.ReportEvery, time.Now())
+	self := newNodeReport(cfg.ReportEvery, reportSeed, reportStart)
 	if cfg.ReportEvery <= 0 {
 		report.setEvery(wl.ReportEvery())
 		self.setEvery(wl.ReportEvery())
@@ -482,7 +485,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	defer ticker.Stop()
 	reconciler := time.NewTicker(heartbeat)
 	defer reconciler.Stop()
-	keepEvery := housekeepEvery(heartbeat, report.every)
+	keepEvery := housekeepEvery(heartbeat, report.every())
 	housekeeper := time.NewTicker(keepEvery)
 	defer housekeeper.Stop()
 	// due wakes the loop at the dispatcher's earliest due (#1634); with
@@ -532,7 +535,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
 				self.setEvery(wl.ReportEvery())
-				if every := housekeepEvery(heartbeat, report.every); every != keepEvery {
+				if every := housekeepEvery(heartbeat, report.every()); every != keepEvery {
 					keepEvery = every
 					housekeeper.Reset(every)
 				}

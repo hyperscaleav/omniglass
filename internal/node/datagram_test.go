@@ -406,7 +406,7 @@ func TestAUDPEndpointReportsItsListenersPushes(t *testing.T) {
 	held.router.Claim(driver.LineMessage("EVT INPUT dp1"))
 	held.router.Unclaimed(driver.LineMessage("NOISE"))
 	m.closeDatagram("ep-1", held, "rebinding")
-	report := newCollectionReport(time.Minute, t0)
+	report := newCollectionReport(time.Minute, 0, t0)
 	m.reportPushes(report)
 	got := reportValues(t, report.take(t0.Add(time.Minute), publishTasks([]collection.TaskSpec{task})))["l1"]
 	if got[probekeys.PushMessageCount] != 1 || got[probekeys.PushUnclaimedCount] != 1 {

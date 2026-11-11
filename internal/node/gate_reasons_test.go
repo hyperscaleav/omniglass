@@ -242,7 +242,7 @@ type reasonLoop struct {
 func newReasonLoop(t *testing.T, runner *collection.Runner) *reasonLoop {
 	return &reasonLoop{t: t, runner: runner,
 		sessions: newSessionManager(nil, sessionHooks{}), sched: newPollSchedule(),
-		report: newCollectionReport(time.Minute, gateT0),
+		report: newCollectionReport(time.Minute, 0, gateT0),
 		spool: newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
 			return func(context.Context) error { return nil }, nil
 		}),

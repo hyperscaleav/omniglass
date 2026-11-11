@@ -443,7 +443,10 @@ of its own:
 Each is counted where it happens and reported once a **report window**, the platform's
 `collection.report_seconds` (a minute by default, 10 seconds to an hour), so it costs a few rows per
 endpoint per window however fast a driver polls or a device pushes. The node reads the window off its
-worklist at heartbeat granularity, and the server's webhook receiver reads it from the settings. A row's
+worklist at heartbeat granularity, and the server's webhook receiver reads it from the settings. A
+node's windows close on a grid: each ends a whole window after the last, at an offset into the window
+its name sets, however late the housekeeping pass that takes it runs, so every window holds one
+window's counts and a fleet's nodes land theirs spread across the window rather than together (#1779). A row's
 instance is its endpoint, so an endpoint's several polls share one series, published under a task the
 node holds when the window closes, and a rate is read from the counts rather than stored. A session or
 socket recycled mid-window hands its counts to the next report. The server lands each component's

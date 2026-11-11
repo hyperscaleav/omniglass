@@ -39,7 +39,7 @@ var t0 = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 // under one of its tasks.
 func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.poll("ep-bar", 40*time.Millisecond, false)
 	r.poll("ep-bar", 20*time.Millisecond, false)
 	r.poll("ep-bar", 90*time.Millisecond, true)
@@ -77,7 +77,7 @@ func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
 // the next reports nothing in the next: nothing ran there and nothing is held.
 func TestAReportWindowCountsAHeldEndpointsPushes(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.pushes("ep-panel", 3, 0)
 	r.pushes("ep-panel", 2, 1)
 	r.pushes("ep-quiet", 0, 0)
@@ -97,25 +97,26 @@ func TestAReportWindowCountsAHeldEndpointsPushes(t *testing.T) {
 	}
 }
 
-// Every row of a window is stamped at the window's end, and the next window
-// starts there, so the windows tile time with no gap or overlap.
-func TestAReportWindowStampsItsEndAndStartsTheNext(t *testing.T) {
+// Every row of a window is stamped when it is taken, and the next window
+// starts at this one's grid end, not at the take, so a late take neither
+// lengthens the next window nor drifts the grid (#1779).
+func TestAReportWindowStampsItsTakeAndStartsTheNextOnTheGrid(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.poll("ep", time.Millisecond, false)
-	end := t0.Add(61 * time.Second)
-	for _, row := range r.take(end, map[string]string{"ep": "task"}) {
+	taken := t0.Add(61 * time.Second)
+	for _, row := range r.take(taken, map[string]string{"ep": "task"}) {
 		for _, s := range row.samples {
-			if !s.TS.Equal(end) {
-				t.Errorf("%s stamped %v, want the window's end %v", s.Name, s.TS, end)
+			if !s.TS.Equal(taken) {
+				t.Errorf("%s stamped %v, want the take %v", s.Name, s.TS, taken)
 			}
 		}
 	}
-	if r.due(end.Add(59 * time.Second)) {
-		t.Error("the next window is due before its own length from the last one's end")
+	if r.due(t0.Add(2*time.Minute - time.Nanosecond)) {
+		t.Error("the next window is due before its grid end")
 	}
-	if !r.due(end.Add(time.Minute)) {
-		t.Error("the next window is not due a length after the last one's end")
+	if !r.due(t0.Add(2 * time.Minute)) {
+		t.Error("the next window is not due at its grid end, a length after the last one's")
 	}
 }
 
@@ -124,7 +125,7 @@ func TestAReportWindowStampsItsEndAndStartsTheNext(t *testing.T) {
 // does not carry (an older server) keeps the node's own default.
 func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.setEvery(0)
 	if r.due(t0.Add(30*time.Second)) || !r.due(t0.Add(time.Minute)) {
 		t.Error("a window the worklist does not carry changed the default")
@@ -142,7 +143,7 @@ func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 // was deleted, or moved to another node) reports nothing.
 func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.poll("ep-bar", 30*time.Millisecond, false)
 	r.poll("ep-gone", 30*time.Millisecond, false)
 	got := reportValues(t, r.take(t0.Add(time.Minute), map[string]string{"ep-bar": "task-revised"}))
@@ -156,7 +157,7 @@ func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
 // gate holds, while the mean time stays the time of the polls that ran.
 func TestARefusedPollIsAFailureWithoutATime(t *testing.T) {
 	t.Parallel()
-	r := newCollectionReport(time.Minute, t0)
+	r := newCollectionReport(time.Minute, 0, t0)
 	r.poll("ep", 40*time.Millisecond, false)
 	r.refused("ep")
 	r.refused("ep")
