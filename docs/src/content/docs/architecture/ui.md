@@ -240,7 +240,7 @@ scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps i
 entry rather than sitting in Admin. **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, Groups, Audit, Platform (the Platform health
+Admin is the renamed Settings group: Users, Roles, Groups, Audit, Status (the Platform health
 page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits here
 behind the same `node:read` gate as Nodes, whose rows it reads), plus the live Settings leaf, the
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child

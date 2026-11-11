@@ -51,16 +51,16 @@ describe("filterNav", () => {
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
-  // Platform health (#1644) is administration, so its door is Platform under
+  // Platform health (#1644) is administration, so its door is Status under
   // Admin (#1767), behind the same node:read gate as Nodes because its rows are
   // the node list. The page keeps its name; only the door is one word.
-  it("keeps Platform under Admin, and only for a node:read holder", () => {
-    expect(rail([">"])).not.toContain("Platform");
+  it("keeps Status under Admin, and only for a node:read holder", () => {
+    expect(rail([">"])).not.toContain("Status");
     expect(rail([">"])).not.toContain("Platform health");
-    expect(section("Admin", ["node:read"])).toContain("Platform");
-    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Platform");
+    expect(section("Admin", ["node:read"])).toContain("Status");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
     expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
-    expect(sectionLabel("/web/platform")).toBe("Platform");
+    expect(sectionLabel("/web/platform")).toBe("Status");
   });
 
   // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
@@ -220,11 +220,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Platform", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Status", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Platform and the ungated Settings under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Platform", "Settings"]);
+  it("shows a bare *:read viewer only Status and the ungated Settings under Admin", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Status", "Settings"]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
