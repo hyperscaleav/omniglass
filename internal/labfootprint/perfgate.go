@@ -222,13 +222,13 @@ func gatedFamilies() []gatedFamily {
 			Read: func(r ScaleReport) map[string]float64 {
 				return perSystem("metric_rows_per_minute_per_system", r.MetricRowsPerMinute, r)
 			}},
-		{Family: "property_rows_per_minute_per_system", Class: ClassHostIndependent, Tolerance: 0.02, TwoSided: true, Unit: "rows/min",
-			About: "property rows the fleet writes a minute, per system",
+		{Family: "property_rows_per_minute_per_system", Class: ClassHostIndependent, Tolerance: 0.25, TwoSided: true, Unit: "rows/min",
+			About: "property rows the fleet writes a minute, per system; a window holds about 90 at ci's size, so count noise sets its tolerance",
 			Read: func(r ScaleReport) map[string]float64 {
 				return perSystem("property_rows_per_minute_per_system", r.PropertyRowsPerMinute, r)
 			}},
-		{Family: "database_bytes_per_day_per_system", Class: ClassHostIndependent, Tolerance: 0.05, Unit: "bytes/day",
-			About: "the database's growth a day, per system",
+		{Family: "database_bytes_per_day_per_system", Class: ClassHostIndependent, Tolerance: 0.15, Unit: "bytes/day",
+			About: "the database's growth a day, per system; storage grows in allocation steps a 5 minute window does not average out, so its tolerance is wider",
 			Read: func(r ScaleReport) map[string]float64 {
 				return perSystem("database_bytes_per_day_per_system", r.DatabaseBytesPerDay, r)
 			}},
@@ -269,7 +269,7 @@ func gatedFamilies() []gatedFamily {
 				return nil
 			}},
 		{Family: "server_working_set_mib", Class: ClassHostDependent, Tolerance: 0.15, Unit: "MiB",
-			About: "the server container's working set at the window's end",
+			About: "the median of the server container's working set read across the window",
 			Read: func(r ScaleReport) map[string]float64 {
 				if c, ok := serverContainer(r); ok {
 					return one("server_working_set_mib", c.WorkingSetMiB)

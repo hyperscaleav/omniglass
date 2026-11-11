@@ -267,13 +267,20 @@ func (s PerfSize) BaselineFile() string {
 	return fmt.Sprintf("%s-%d.%s.json", s.Scenario, s.Systems, s.Name)
 }
 
+// FleetViewReads is how many fleet view reads a window times: enough that the
+// nearest-rank p95 has five reads above it, so a slow read or two (a
+// collection pause, a neighbour's burst) does not set the figure. At 20 the
+// p95 was the second slowest read, and a ci baseline's runs spread 37
+// percent on it (#1751).
+const FleetViewReads = 100
+
 // PerfSizes are the gate's sizes, smallest first: the ladder the architect
 // set on #1640 (corporate 300 on a runner, 1,000 on the laptop, 3,000 the
 // goal).
 func PerfSizes() []PerfSize {
 	return []PerfSize{
-		{Name: "ci", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: 20},
-		{Name: "laptop", Scenario: "corporate", Systems: 1000, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: 20},
+		{Name: "ci", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
+		{Name: "laptop", Scenario: "corporate", Systems: 1000, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
 	}
 }
 

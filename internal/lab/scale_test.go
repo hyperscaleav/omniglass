@@ -2,6 +2,7 @@ package lab
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -182,5 +183,19 @@ func TestPerfSizeNamed(t *testing.T) {
 	}
 	if _, err := PerfSizeNamed("huge"); err == nil || !strings.Contains(err.Error(), "ci") {
 		t.Errorf("PerfSizeNamed(huge) = %v, want a refusal naming the sizes", err)
+	}
+}
+
+// Each size times enough fleet view reads that its nearest-rank p95 has five
+// reads above it, so a slow read or two (a collection pause, a neighbour's
+// burst) cannot set the gated figure. At 20 reads the p95 was the second
+// slowest, and the ci baseline's runs spread 37 percent on it (#1751).
+func TestPerfSizesReadTheFleetViewEnoughForItsP95(t *testing.T) {
+	for _, sz := range PerfSizes() {
+		n := sz.FleetReads
+		rank := int(math.Ceil(0.95 * float64(n)))
+		if above := n - rank; above < 5 {
+			t.Errorf("size %s times %d fleet view reads: its p95 has %d above it, want at least 5 (100 reads)", sz.Name, n, above)
+		}
 	}
 }

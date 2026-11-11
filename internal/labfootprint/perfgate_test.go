@@ -142,21 +142,21 @@ func TestComparePerfExactFigureFailsAtAnyNonzeroValue(t *testing.T) {
 	}
 }
 
-// A host-independent figure gates on any host: 6 percent over a 5 percent
+// A host-independent figure gates on any host: 25 percent over a 15 percent
 // tolerance fails even on a host that is not the baseline's.
 func TestComparePerfHostIndependentFigureGatesOnAnyHost(t *testing.T) {
 	base := baselineOf(t, runsWith(3, nil))
 	runs := runsWith(3, func(_ int, r *ScaleReport) {
 		r.Host = &otherHost
-		r.DatabaseBytesPerDay *= 1.06
+		r.DatabaseBytesPerDay *= 1.25
 	})
 	v := ComparePerf(base, runs, nil)
 	f := figureNamed(t, v, "database_bytes_per_day_per_system")
-	if f.Status != PerfFail || f.Tolerance != 0.05 || v.Status != PerfFail {
-		t.Fatalf("figure %s at tolerance %v, verdict %s; want fail at 0.05", f.Status, f.Tolerance, v.Status)
+	if f.Status != PerfFail || f.Tolerance != 0.15 || v.Status != PerfFail {
+		t.Fatalf("figure %s at tolerance %v, verdict %s; want fail at 0.15", f.Status, f.Tolerance, v.Status)
 	}
-	if f.Observed != 1.06e7 || f.Baseline != 1e7 {
-		t.Fatalf("observed %v against %v, want the per-system 1.06e7 against 1e7", f.Observed, f.Baseline)
+	if f.Observed != 1.25e7 || f.Baseline != 1e7 {
+		t.Fatalf("observed %v against %v, want the per-system 1.25e7 against 1e7", f.Observed, f.Baseline)
 	}
 }
 

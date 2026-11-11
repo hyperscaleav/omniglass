@@ -36,8 +36,9 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
        kind, hop and cause, and an unsettled boot is named (#1695). Each must be 0, whatever the
        baseline holds; a baseline whose runs read otherwise is refused. A figure that was not read is not
        a 0: a closed loop with no node answering, or a delivery read with no kind carrying items, fails.
-     - **Host-independent:** metric and property rows a minute per system (2 percent, either way, since
-       fewer rows is lost work), database bytes a day per system (5 percent), WAL bytes per sample
+     - **Host-independent:** metric rows a minute per system (2 percent, either way, since fewer rows is
+       lost work), property rows a minute per system (25 percent, either way), database bytes a day per
+       system (15 percent; both set from measured spreads, below), WAL bytes per sample
        (10 percent, provisional, below), samples per batch (5 percent, either way).
      - **Host-dependent:** endpoint latency p95 per protocol (20 percent), ingest lag p95 (20 percent),
        server millicores and working set (15 percent), fleet view p95 (20 percent). Each fails only on its
@@ -73,7 +74,23 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
   7. **WAL per sample's 10 percent is provisional.** It moves with checkpoint timing, which a 5 minute
      window does not hold still. The value is set wider than the counts' until the committed baselines'
      spreads say what it should be; baseline generation refuses a figure whose spread passes its
-     tolerance, so a value too tight shows up as a refused baseline, not a muted gate.
+     tolerance, so a value too tight shows up as a refused baseline, not a muted gate. The first `ci`
+     dispatch (#1751) did exactly that for two figures, and both tolerances moved on its three runs'
+     spreads. Property rows a minute spread 5.5 percent past their 2: a ci window holds about 90 property
+     rows, whose count noise alone is about 10 percent a run, so the tolerance is 25 percent, still tight
+     enough to catch a doubling. Database bytes a day spread 7.2 percent past their 5: the database grows
+     in allocation steps a 5 minute window does not average out, the same class as WAL, so the tolerance
+     is 15 percent. WAL per sample spread 0.7 percent and metric rows 0.6, so their 10 and 2 percent
+     stand. The second dispatch (run 42934069932) refused two host-dependent figures whose spreads an
+     earlier dispatch had read at 14 percent: the server's working set (57.9, 69.6 and 74.2 MiB, 23
+     percent past its 15) and the fleet view p95 (17.5, 14.6 and 12.2 ms, 37 percent past its 20). Here
+     the measurement changed, not the tolerance. The working set had been one read at the window's end,
+     so each run landed wherever the Go heap's collection cycle happened to be; it is now the median of
+     about 30 reads taken across the window, a read every 10 s besides the two ends, for every container
+     the report lists, while CPU stays the window's delta. The fleet view p95 had been the nearest-rank
+     p95 of 20 reads, which is the second slowest, so one slow read moved it; each size now times 100
+     reads, five above the p95. Both change what a run measures, so the `laptop` baseline must be
+     generated from a build that carries them.
   8. **The baselines are generated on the host class they gate, and not on a shared host.** The `ci`
      baseline comes from the `perf` workflow's `workflow_dispatch` with `update` set, which uploads
      `corporate-300.ci.json` as an artifact; the `laptop` baseline from `make perf-baseline SIZE=laptop`

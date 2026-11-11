@@ -13,6 +13,7 @@ package labfootprint
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -190,7 +191,8 @@ func FoldNodes(w Window) Window {
 }
 
 // WindowOf turns the readings at a window's start and end into its rates.
-// The working set is the one read at the end.
+// The working set is the one read at the end; a scale window replaces it
+// with the median of the reads taken across the window (MedianWorkingSets).
 func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) {
 	dt := db1.At.Sub(db0.At)
 	if dt <= 0 {
@@ -234,4 +236,44 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 		}
 	}
 	return w, nil
+}
+
+// MedianWorkingSetMiB is the median of the working sets reads took, in MiB:
+// the middle read, or the mean of the middle two. A Go process's heap grows
+// to its next collection and falls back, so one read lands anywhere in that
+// cycle and the median of reads spread across a window does not (#1751). No
+// reads read as 0; reads is not reordered.
+func MedianWorkingSetMiB(reads []Usage) float64 {
+	n := len(reads)
+	if n == 0 {
+		return 0
+	}
+	sets := make([]uint64, n)
+	for i, u := range reads {
+		sets[i] = u.WorkingSetBytes()
+	}
+	slices.Sort(sets)
+	med := float64(sets[n/2])
+	if n%2 == 0 {
+		med = (float64(sets[n/2-1]) + med) / 2
+	}
+	return med / (1 << 20)
+}
+
+// MedianWorkingSets is w with each container's working set the median of the
+// reads taken across the window, its CPU left the window's delta. A
+// container w lists with no reads is refused rather than read as holding
+// nothing.
+func MedianWorkingSets(w Window, reads map[string][]Usage) (Window, error) {
+	out := w
+	out.Containers = make(map[string]ContainerWindow, len(w.Containers))
+	for name, c := range w.Containers {
+		rs := reads[name]
+		if len(rs) == 0 {
+			return Window{}, fmt.Errorf("the %s container has no working set read across the window", name)
+		}
+		c.WorkingSetMiB = MedianWorkingSetMiB(rs)
+		out.Containers[name] = c
+	}
+	return out, nil
 }

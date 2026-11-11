@@ -76,6 +76,7 @@ jobs:
       - name: Regenerate the CI baseline
         if: ${{ env.UPDATE == 'true' }}
         run: |
+          set -o pipefail
           mkdir -p perf-out
           make perf-baseline SIZE=ci PERF_ARGS="--append perf-out/runs.jsonl --out perf-out/corporate-300.ci.json" 2>&1 | tee perf-out/lab.log
 

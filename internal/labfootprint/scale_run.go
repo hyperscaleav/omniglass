@@ -427,10 +427,18 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 	}
 	h.say("measuring for %s, with %d fleet-view reads", cfg.Window, cfg.FleetReads)
 	end := time.Now().Add(cfg.Window)
+	finishUsage := sampleUsage(ctx, cfg.Window/workingSetReads, func(ctx context.Context) (map[string]Usage, error) {
+		return h.readUsage(ctx, l)
+	})
+	defer finishUsage()
 	if err := h.loadWindow(ctx, cfg, s.pageSystem, run); err != nil {
 		return time.Time{}, err
 	}
 	if err := sleep(ctx, time.Until(end)); err != nil {
+		return time.Time{}, err
+	}
+	reads, err := finishUsage()
+	if err != nil {
 		return time.Time{}, err
 	}
 	db1, use1, err := h.readScale(ctx, l)
@@ -442,6 +450,15 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 		stop, endpointErr = h.markEnd(ctx, l)
 	}
 	if run.Measured, err = WindowOf(db0, db1, use0, use1); err != nil {
+		return time.Time{}, err
+	}
+	// The ends are reads across the window too.
+	for _, ends := range []map[string]Usage{use0, use1} {
+		for name, u := range ends {
+			reads[name] = append(reads[name], u)
+		}
+	}
+	if run.Measured, err = MedianWorkingSets(run.Measured, reads); err != nil {
 		return time.Time{}, err
 	}
 	h.say("window: %s metric rows a minute, %.0f millicores in all", count(run.Measured.MetricRowsPerMinute), totalMillicores(run.Measured))
@@ -607,9 +624,7 @@ func totalMillicores(w Window) float64 {
 	return t
 }
 
-// readScale takes one reading of the database and of every container, the
-// containers read together so a large fleet's reading is seconds, not a
-// minute, apart.
+// readScale takes one reading of the database and of every container.
 func (h *harness) readScale(ctx context.Context, l scaleLab) (DBCounters, map[string]Usage, error) {
 	out, err := h.psql(ctx, DBCountersQuery)
 	if err != nil {
@@ -619,6 +634,16 @@ func (h *harness) readScale(ctx context.Context, l scaleLab) (DBCounters, map[st
 	if err != nil {
 		return DBCounters{}, nil, err
 	}
+	use, err := h.readUsage(ctx, l)
+	if err != nil {
+		return DBCounters{}, nil, err
+	}
+	return db, use, nil
+}
+
+// readUsage reads every container's cgroup, the containers read together so
+// a large fleet's reading is seconds, not a minute, apart.
+func (h *harness) readUsage(ctx context.Context, l scaleLab) (map[string]Usage, error) {
 	var (
 		mu   sync.Mutex
 		wg   sync.WaitGroup
@@ -642,9 +667,58 @@ func (h *harness) readScale(ctx context.Context, l scaleLab) (DBCounters, map[st
 	wg.Wait()
 	if len(errs) > 0 {
 		sort.Slice(errs, func(i, j int) bool { return errs[i].Error() < errs[j].Error() })
-		return DBCounters{}, nil, errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
-	return db, use, nil
+	return use, nil
+}
+
+// workingSetReads is how many times a window reads every container's usage
+// across it besides its ends: a read every 10 s over the gate's 5 minute
+// window, so the working set it reports is the median of about 30 reads, not
+// wherever in the Go heap's collection cycle the window's end landed (#1751).
+const workingSetReads = 30
+
+// sampleUsage reads every container's usage on a steady tick of gap, from now
+// until it is stopped, so the window's working set has reads spread across it
+// to take the median of (MedianWorkingSets). The function it returns stops
+// the reads and waits for them, then gives them by container, or the first
+// read that failed, which ends them; called again, it gives the same. A read
+// the stop itself cuts short is no error: the window it served has closed.
+func sampleUsage(ctx context.Context, gap time.Duration, read func(context.Context) (map[string]Usage, error)) func() (map[string][]Usage, error) {
+	ctx, stop := context.WithCancel(ctx)
+	var (
+		reads  = map[string][]Usage{}
+		failed error
+		done   = make(chan struct{})
+	)
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(max(gap, time.Millisecond))
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			use, err := read(ctx)
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				failed = err
+				return
+			}
+			for name, u := range use {
+				reads[name] = append(reads[name], u)
+			}
+		}
+	}()
+	return sync.OnceValues(func() (map[string][]Usage, error) {
+		stop()
+		<-done
+		return reads, failed
+	})
 }
 
 // readFleetView reads the console's whole-fleet view, as its Explore page

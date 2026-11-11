@@ -17,7 +17,7 @@ func TestLabPerfOptsResolveTheSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if in.Scenario != "corporate" || in.Systems != 300 || in.WindowS != 300 || in.WarmupS != 120 || in.FleetReads != 20 || in.PlanDigest == "" {
+	if in.Scenario != "corporate" || in.Systems != 300 || in.WindowS != 300 || in.WarmupS != 120 || in.FleetReads != 100 || in.PlanDigest == "" {
 		t.Fatalf("ci inputs = %+v", in)
 	}
 	if got, want := o.baselinePath(), filepath.Join("internal", "labfootprint", "baseline", "corporate-300.ci.json"); got != want {
