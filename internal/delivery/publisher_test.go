@@ -188,3 +188,91 @@ func TestPublisherBoundsItsTurn(t *testing.T) {
 		t.Fatalf("after a refused turn: seq %d before %d, want 2 and 0 (the refused caller minted none)", next.Seq, next.Kinds[delivery.Metric].Before)
 	}
 }
+
+// observed is a publisher whose observer records every turn it reports.
+func observed(bound time.Duration) (*delivery.Publisher, func() []delivery.Turn) {
+	var mu sync.Mutex
+	var turns []delivery.Turn
+	p := delivery.NewPublisher("push-boot", pubClock, bound).Observe(func(tn delivery.Turn) {
+		mu.Lock()
+		turns = append(turns, tn)
+		mu.Unlock()
+	})
+	return p, func() []delivery.Turn {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]delivery.Turn(nil), turns...)
+	}
+}
+
+// holdTurn takes p's turn and keeps it until the returned release is
+// called; release waits for the holder's publish to end.
+func holdTurn(p *delivery.Publisher) (release func()) {
+	hold, let, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = p.Publish(context.Background(), nil, func(delivery.Stamp) error {
+			close(hold)
+			<-let
+			return nil
+		})
+	}()
+	<-hold
+	return func() { close(let); <-done }
+}
+
+// TestPublisherReportsEveryTurn (#1746): the publisher tells its observer
+// how long each caller waited for its turn and whether the wait ran out, so
+// the server can export the turn's wait and its refusals. A caller that
+// takes its turn reports the wait it took, a caller refused reports a wait
+// of at least the bound, and a caller that gave up on its own (its ctx
+// ended) reports nothing: it was neither served nor refused.
+func TestPublisherReportsEveryTurn(t *testing.T) {
+	const bound = 40 * time.Millisecond
+	p, got := observed(bound)
+	publish(t, p, map[delivery.Kind]int{delivery.Metric: 1}, nil)
+	if ts := got(); len(ts) != 1 || ts[0].Refused || ts[0].Wait < 0 || ts[0].Wait >= bound {
+		t.Fatalf("an uncontended turn reported %+v, want one taken turn with a wait under the bound", ts)
+	}
+
+	release := holdTurn(p)
+	if err := p.Publish(context.Background(), map[delivery.Kind]int{delivery.Metric: 1}, func(delivery.Stamp) error {
+		return nil
+	}); !errors.Is(err, delivery.ErrTurnTimeout) {
+		t.Fatalf("a wait past the bound = %v, want ErrTurnTimeout", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := p.Publish(ctx, nil, func(delivery.Stamp) error { return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled wait = %v, want context.Canceled", err)
+	}
+	release()
+	ts := got()
+	if len(ts) != 3 || ts[1].Refused || !ts[2].Refused || ts[2].Wait < bound {
+		t.Fatalf("turns %+v, want the holder's taken turn, then one refusal that waited the bound and nothing for the cancelled caller", ts)
+	}
+}
+
+// TestPublisherReportsTheWaitForATakenTurn (#1746): a caller queued behind a
+// held turn reports, once it takes its turn, at least how long it was held.
+func TestPublisherReportsTheWaitForATakenTurn(t *testing.T) {
+	p, got := observed(time.Minute)
+	release := holdTurn(p)
+	waited := make(chan error, 1)
+	start := make(chan time.Time, 1)
+	go func() {
+		start <- time.Now()
+		waited <- p.Publish(context.Background(), map[delivery.Kind]int{delivery.Metric: 1}, func(delivery.Stamp) error { return nil })
+	}()
+	began := <-start
+	time.Sleep(20 * time.Millisecond)
+	held := time.Since(began)
+	release()
+	if err := <-waited; err != nil {
+		t.Fatalf("a wait under the bound = %v, want its turn", err)
+	}
+	ts := got()
+	if len(ts) != 2 || ts[1].Refused || ts[1].Wait < held-5*time.Millisecond {
+		t.Fatalf("turns %+v, want a taken turn that waited about the %v the turn was held", ts, held)
+	}
+}
