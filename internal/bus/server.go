@@ -96,6 +96,7 @@ type Server struct {
 	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
 	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
 	cons              jetstream.Consumer // the telemetry durable, read for its backlog
+	telemetry         jetstream.Stream   // OG_TELEMETRY, read for its last sequence
 	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
 	// platformComponentID is the server's own platform component, where the
 	// retention pass lands its figures (#1629); empty writes none.

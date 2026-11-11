@@ -551,8 +551,8 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		out.Delivery = append(out.Delivery, WithSchedule(ScheduleRowsOf(d.Schedule), hops)...)
 		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
 		if !d.StreamClear {
-			out.DeliveryNote = fmt.Sprintf("unsettled: the telemetry consumer still held batches when the settle ran out (%s pending, %s unacked)",
-				gauge(d.Backlog.Pending, d.Backlog.SeenPending), gauge(d.Backlog.AckPending, d.Backlog.SeenAckPending))
+			_, why := d.Backlog.Settled(d.Published)
+			out.DeliveryNote = "unsettled: the telemetry stream had not settled when the settle ran out: " + why
 		}
 	}
 	if w.SamplesLanded > 0 {

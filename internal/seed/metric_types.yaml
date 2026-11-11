@@ -292,6 +292,14 @@ metric_types:
     data_type: int
     label: Telemetry Redelivering
     description: Batches the telemetry consumer holds that were delivered more than once, at the end of the report window.
+  - name: bus-consumer-ack-floor
+    data_type: int
+    label: Telemetry Ack Floor
+    description: The telemetry stream sequence at and below which the server's consumer has answered every batch, landed or dropped, read at the report. It reaching an earlier bus-stream-last-seq proves every batch the stream held by then is settled, under any steady load.
+  - name: bus-stream-last-seq
+    data_type: int
+    label: Telemetry Stream Head
+    description: The sequence of the last batch the telemetry stream stored, read at the report; it only grows, so the batches published by a moment are all at or below the head read after it.
   - name: bus-telemetry-ack-failure-count
     data_type: int
     label: Telemetry Ack Failures

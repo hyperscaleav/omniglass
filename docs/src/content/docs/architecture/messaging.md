@@ -376,6 +376,12 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   `og-telemetry-worker` durable at the window's close: batches stored and not yet delivered, delivered
   and not yet acked (at most one, the batch in flight), and redelivered. Healthy is a pending count
   near 0 that does not grow window over window; a growing one is a backlog the lane is not clearing.
+- **`bus-stream-last-seq`, `bus-consumer-ack-floor`**: the `OG_TELEMETRY` stream's last sequence and
+  the durable's ack floor at the window's close: the newest batch the stream took, and the sequence at
+  and below which every batch was answered (landed, or Termed at the delivery bound). The head is read
+  before the floor, so a floor at the head means every batch published before the read was answered,
+  even while later ones are in flight. The lab's delivery read settles on it (#1758); the gap between
+  the two is the backlog in sequences, healthy small and not growing.
 - **`ingest-lane-busy`**: the share of the window the consumer spent handling batches. One batch is
   in flight, so this is the lane's utilisation. Near 1 with a growing backlog, the lane is the
   ceiling; low with a high lag, the lag is upstream of it.
