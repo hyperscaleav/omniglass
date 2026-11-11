@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -145,6 +146,7 @@ func TestPipelineMetricsZeroValueRecordsNothing(t *testing.T) {
 	m.mean(writerclass.IngestLag, "", 1)
 	m.max(writerclass.IngestLagMax, "", 1)
 	m.gauge(writerclass.BusConsumerPending, "", 1)
+	m.failure(writerclass.SweepFailureCount, "", true)
 }
 
 // TestPushTurnCountsPublishesRefusalsAndWait (#1746): every push lane turn
@@ -195,5 +197,47 @@ func TestPushTurnCountsPublishesRefusalsAndWait(t *testing.T) {
 	m.pushTurn(delivery.Turn{Wait: time.Millisecond})
 	if n, ok := flushed(rec)[[2]string{writerclass.PushLaneRefusalCount, ""}]; !ok || n != 0 {
 		t.Fatalf("a window of publishes and no refusal reads refusals %v (landed %v), want a 0 that landed: the ratio reads healthy, not unreported", n, ok)
+	}
+}
+
+// TestFailureCountsLandAZeroBesideTheirAttempts (#1769): a bus request, a
+// sweep and a telemetry ack each count a failure on every attempt, 1 when it
+// failed and 0 when it did not, so a healthy window's failures land beside
+// their attempts as a 0 and the pair reads "0 / n" rather than a failure
+// figure never reported.
+func TestFailureCountsLandAZeroBesideTheirAttempts(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	rec := platformmetric.NewRecorder(func() time.Time { return now })
+	s := &Server{metrics: pipelineMetrics{rec}}
+
+	s.request(requestHeartbeat, nil)
+	s.request(requestHeartbeat, nil)
+	s.request(requestCommandPull, errors.New("db down"))
+	_ = s.sweep(sweepEventRule, func() error { return nil })
+	_ = s.sweep(sweepCommandSettlement, func() error { return errors.New("db down") })
+	s.ack(&fakeMsg{})
+	s.ack(&fakeMsg{})
+
+	got := flushed(rec)
+	for key, want := range map[[2]string]float64{
+		{writerclass.BusRequestCount, requestHeartbeat}:          2,
+		{writerclass.BusRequestFailureCount, requestHeartbeat}:   0,
+		{writerclass.BusRequestCount, requestCommandPull}:        1,
+		{writerclass.BusRequestFailureCount, requestCommandPull}: 1,
+		{writerclass.SweepCount, sweepEventRule}:                 1,
+		{writerclass.SweepFailureCount, sweepEventRule}:          0,
+		{writerclass.SweepCount, sweepCommandSettlement}:         1,
+		{writerclass.SweepFailureCount, sweepCommandSettlement}:  1,
+		{writerclass.BusTelemetryAckFailureCount, ""}:            0,
+	} {
+		if n, ok := got[key]; !ok || n != want {
+			t.Errorf("%s{%s} = %v (landed %v), want %v", key[0], key[1], n, ok, want)
+		}
+	}
+
+	rec.Flush("server")
+	s.ack(&fakeMsg{ackErr: errors.New("ack timed out")})
+	if n := flushed(rec)[[2]string{writerclass.BusTelemetryAckFailureCount, ""}]; n != 1 {
+		t.Fatalf("an unconfirmed ack counts %v, want 1", n)
 	}
 }

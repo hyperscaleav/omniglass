@@ -151,7 +151,7 @@ four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the 
 groups the platform view returns for a server, so the page holds no key list of its own. The page is
 the summary, not the whole record: every figure a server or a node writes of itself is either on it
 or kept off it on purpose, with a reason a test holds, so a new gauge cannot go missing quietly. What
-stays off (each process's runtime figures, the bus's request and pull counts, the retention pass's
+stays off (each process's runtime figures, the bus's pull counts, the retention pass's
 own bookkeeping) reads on the component page the server's name, or a node's row, opens.
 
 A panel row is one key: its last hour as a sparkline beside its current figure. Click a row, or tab
@@ -183,6 +183,12 @@ is the last minute's, and a route that went quiet drops off it. Below them sits 
 of a request: the queries that ran past the slow-query threshold, the connection pool in use
 against its size, and the acquires that found the pool exhausted and waited.
 
+Last, what the nodes asked of the server over the bus (#1769). **Bus Request Failures** reads as a
+share of **Bus Requests**, `a / b`, one row per path (a node's heartbeat, its command pull, its
+command report): the requests the server failed beside those it handled, in the window. A path that
+answered everything reads `0 / n`, healthy, not **not reported**: the server writes the 0 beside
+every window of requests, so a missing figure means no requests, never no failures.
+
 ### Ingest
 
 How far behind the pipeline that lands telemetry runs. **Ingest Lag** is the time from a sample's
@@ -209,6 +215,12 @@ and how long the oldest due one has waited, and the share of the window the tele
 busy. A lane near fully busy with a backlog that only grows is a server that cannot keep up,
 usually before any figure elsewhere moves.
 
+The server's own sweeps (settling commands a node never reported, evaluating event rules) read the
+same way: **Sweep Failures** against **Sweeps**, `a / b`, a row per sweep, `0 / n` when every pass in
+the window succeeded. **Telemetry Ack Failures** counts the batches the server landed but could not
+confirm to the bus, which the bus redelivers; it reads 0 in any window the consumer acked, so a
+figure above 0 is the only one that needs reading.
+
 **Telemetry Ack Floor** reads against the **Telemetry Stream Head**, `a / b`: the sequence at and
 below which the consumer has answered every batch, beside the newest batch the stream stored. The
 gap between them is the backlog in sequences, healthy small and not growing. A floor that reaches a
@@ -221,7 +233,8 @@ Whether old data is dropped on time. **Retention Behind** has a row per lane: 0 
 last pass caught up with its window, 1 when it stopped short or failed. A lane that stays at 1
 raises the seeded Retention behind alarm. Beside it, the rows each pass deleted, the oldest metric
 day's age read against the retention window (steady at about the window plus a day once retention
-keeps up), and the database's size with each table's.
+keeps up), and the database's size with each table's. **Retention Pass Failures** is the last pass's:
+0 on a clean pass, 1 when it failed, and like the pass's other facts it reads its latest however old.
 
 ## The node table
 

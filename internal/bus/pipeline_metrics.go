@@ -63,16 +63,22 @@ func (m pipelineMetrics) pushTurn(t delivery.Turn) {
 		return
 	}
 	m.count(writerclass.PushLanePublishCount, "", 1)
-	refused := 0.0
-	if t.Refused {
-		refused = 1
+	m.failure(writerclass.PushLaneRefusalCount, "", t.Refused)
+}
+
+// failure counts one attempt's failure, 1 when it failed and 0 when it did
+// not. Counted even at zero, unlike a quiet count: a window of attempts lands
+// its failures beside them, so the pair reads "0 / n", healthy, rather than a
+// failure figure never reported (#1769).
+func (m pipelineMetrics) failure(key, instance string, failed bool) {
+	if m.rec == nil {
+		return
 	}
-	// Counted even at zero, unlike a quiet count: a window of publishes lands
-	// its refusals beside them, so the pair reads "0 / n", healthy, rather
-	// than a refusal figure never reported.
-	if m.rec != nil {
-		m.rec.Count(writerclass.PushLaneRefusalCount, "", refused)
+	n := 0.0
+	if failed {
+		n = 1
 	}
+	m.rec.Count(key, instance, n)
 }
 
 func (m pipelineMetrics) gauge(key, instance string, v float64) {
@@ -191,9 +197,7 @@ const (
 // request records one request on path, and whether it failed.
 func (s *Server) request(path string, err error) {
 	s.metrics.count(writerclass.BusRequestCount, path, 1)
-	if err != nil {
-		s.metrics.count(writerclass.BusRequestFailureCount, path, 1)
-	}
+	s.metrics.failure(writerclass.BusRequestFailureCount, path, err != nil)
 }
 
 // failOnce says when a failing path's warning is news: the first failure for
@@ -255,9 +259,7 @@ func (s *Server) sweep(name string, run func() error) error {
 	err := run()
 	s.metrics.mean(writerclass.SweepDuration, name, float64(time.Since(start))/float64(time.Millisecond))
 	s.metrics.count(writerclass.SweepCount, name, 1)
-	if err != nil {
-		s.metrics.count(writerclass.SweepFailureCount, name, 1)
-	}
+	s.metrics.failure(writerclass.SweepFailureCount, name, err != nil)
 	return err
 }
 
