@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
@@ -1024,22 +1025,138 @@ func TestParseReceipts(t *testing.T) {
 	}
 }
 
-// The backlog read is the consumer's latest pending and ack-pending gauges
-// published after the settle began; a gauge not yet published is unknown,
-// never a clear stream.
+// The backlog read is every report the server gauged the telemetry stream in
+// after the window closed, oldest first: the stream's last sequence and the
+// consumer's ack floor paired by the report they were flushed in. A gauge a
+// report did not carry is unread there, never a 0, and a line that is not a
+// sample is skipped.
 func TestParseBacklog(t *testing.T) {
-	for _, c := range []struct {
-		out   string
-		clear bool
-	}{
-		{"bus-consumer-ack-pending|0\nbus-consumer-pending|0\n", true},
-		{"bus-consumer-ack-pending|3\nbus-consumer-pending|0\n", false},
-		{"bus-consumer-pending|0\n", false},
-		{"", false},
-	} {
-		if got := ParseBacklog(c.out).Clear(); got != c.clear {
-			t.Errorf("backlog %q clear = %v, want %v", c.out, got, c.clear)
+	out := fmt.Sprintf("bus-consumer-ack-floor|%[1]s|38\nbus-stream-last-seq|%[1]s|40\nbus-stream-last-seq|%[2]s|50\nnot a sample\nbus-stream-last-seq|%[2]s|x\n",
+		epoch(at(660)), epoch(at(720)))
+	got := ParseBacklog(out)
+	want := Backlog{
+		{At: at(660), Head: 40, Floor: 38, SeenHead: true, SeenFloor: true},
+		{At: at(720), Head: 50, SeenHead: true},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("backlog = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if !got[i].At.Equal(want[i].At) || got[i].Head != want[i].Head || got[i].Floor != want[i].Floor ||
+			got[i].SeenHead != want[i].SeenHead || got[i].SeenFloor != want[i].SeenFloor {
+			t.Errorf("sample %d = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+	if len(ParseBacklog("")) != 0 {
+		t.Error("an empty read parsed a sample")
+	}
+	q := BacklogQuery(at(600))
+	for _, name := range []string{"bus-stream-last-seq", "bus-consumer-ack-floor", epoch(at(600))} {
+		if !strings.Contains(q, name) {
+			t.Errorf("the backlog query does not read %s:\n%s", name, q)
+		}
+	}
+}
+
+// The stream has settled once a report read its last sequence after every
+// window batch was known published, and the consumer's ack floor then
+// reached it (#1758): every batch at or below it was landed or dropped,
+// however many batches arrived behind it. A report's flush follows its
+// reads, so only a report whose previous report flushed at or after that
+// moment proves its read came after it.
+func TestBacklogSettled(t *testing.T) {
+	p := at(700)
+	sample := func(s int, head, floor float64) BacklogSample {
+		return BacklogSample{At: at(s), Head: head, Floor: floor, SeenHead: true, SeenFloor: true}
+	}
+	for _, c := range []struct {
+		name    string
+		backlog Backlog
+		settled bool
+		why     string
+	}{
+		{"the floor passes a later head", Backlog{sample(660, 40, 38), sample(720, 50, 48), sample(780, 60, 58), sample(840, 70, 68)}, true, ""},
+		{"a report's own floor reaches its head", Backlog{sample(720, 50, 48), sample(780, 60, 60)}, true, ""},
+		{"a floor that never passes", Backlog{sample(720, 50, 48), sample(780, 60, 58), sample(840, 70, 59)}, false,
+			"the ack floor reached 59, not yet past the stream's last sequence 60"},
+		{"reports before the moment do not count", Backlog{sample(650, 40, 40), sample(690, 45, 45)}, false,
+			"the stream's last sequence was never read"},
+		{"a report stamped after it may have read before it", Backlog{sample(690, 45, 40), sample(710, 50, 50)}, false,
+			"the stream's last sequence was never read"},
+		{"the report after that one counts", Backlog{sample(690, 45, 40), sample(710, 50, 50), sample(770, 55, 55)}, true, ""},
+		{"nothing gauged", nil, false, "the stream's last sequence was never read"},
+		{"a floor never read", Backlog{sample(720, 50, 48), {At: at(780), Head: 60, SeenHead: true}}, false,
+			"the consumer's ack floor was never read"},
+	} {
+		settled, why := c.backlog.Settled(p)
+		if settled != c.settled || !strings.Contains(why, c.why) || (c.settled && why != "") {
+			t.Errorf("%s: settled %v (%q), want %v (%q)", c.name, settled, why, c.settled, c.why)
+		}
+	}
+}
+
+// Every batch the read reconciles was known published by the latest mint
+// that proved a boot settled, or that began the boot after an ended one, and
+// never before the window closed (#1758).
+func TestPublishedAt(t *testing.T) {
+	m := func(n, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: n, Before: before}}
+	}
+	w := delivery.Window{From: at(0), To: at(600)}
+	if got := PublishedAt(w, nil); !got.Equal(at(600)) {
+		t.Errorf("no receipts: published at %v, want the window's close", got)
+	}
+	settled := []delivery.Receipt{receipt("b1", 1, 100, m(10, 0), nil), receipt("b1", 2, 700, m(10, 10), nil), receipt("b1", 3, 760, m(10, 20), nil)}
+	if got := PublishedAt(w, settled); !got.Equal(at(700)) {
+		t.Errorf("a settled boot: published at %v, want its proving mint at 700 s", got)
+	}
+	ended := []delivery.Receipt{receipt("b1", 1, 100, m(10, 0), nil), receipt("b1", 2, 200, m(10, 10), nil), receipt("b2", 1, 650, m(5, 0), nil)}
+	ended[2].Resolved = 0
+	if got := PublishedAt(w, ended); !got.Equal(at(650)) {
+		t.Errorf("an ended boot: published at %v, want the next boot's first mint at 650 s", got)
+	}
+}
+
+// The regression #1758 names: under steady load the consumer holds one batch
+// pending and one in flight at every report, so the stream never reads
+// empty, yet its ack floor passes the last sequence read after every window
+// batch was published. The read settles and reads every hop; before, it ran
+// out its bound and named every boot unsettled.
+func TestScaleDeliverySettlesUnderSteadyLoad(t *testing.T) {
+	m := func(n, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: n, Before: before}}
+	}
+	rs := []delivery.Receipt{receipt("b1", 1, 100, m(10, 0), nil), receipt("b1", 2, 700, m(10, 10), nil)}
+	busy := func(s int, head float64) BacklogSample {
+		return BacklogSample{At: at(s), Head: head, Floor: head - 2, SeenHead: true, SeenFloor: true}
+	}
+	run := deliveryRun(rs...)
+	run.Delivery = DeliveryReadOf(run.Delivery.Window, rs, Backlog{busy(660, 40), busy(720, 50), busy(780, 60), busy(840, 70)})
+	if !run.Delivery.StreamClear {
+		t.Fatal("a stream whose ack floor passed its settled head did not read clear")
+	}
+	rep := SummarizeScale(run)
+	if len(rep.DeliveryUnsettled) != 0 || rep.DeliveryNote != "" {
+		t.Fatalf("unsettled %+v, note %q; want the boot read", rep.DeliveryUnsettled, rep.DeliveryNote)
+	}
+	if r := rowOn(t, rep, delivery.Node, delivery.Metric); r.In != 10 || r.Out != 10 {
+		t.Errorf("node metric row = %+v, want the window's 10", r)
+	}
+	if r := rowOn(t, rep, delivery.Ingest, delivery.Metric); r.In != 10 || r.Out != 10 {
+		t.Errorf("ingest metric row = %+v, want the window's 10", r)
+	}
+
+	// An ack floor that never passes leaves every boot unsettled, and says why.
+	stuck := func(s int, head float64) BacklogSample {
+		return BacklogSample{At: at(s), Head: head, Floor: 55, SeenHead: true, SeenFloor: true}
+	}
+	run.Delivery = DeliveryReadOf(run.Delivery.Window, rs, Backlog{stuck(660, 40), stuck(720, 50), stuck(780, 60), stuck(840, 70)})
+	rep = SummarizeScale(run)
+	if run.Delivery.StreamClear || len(rep.Delivery) != 0 || len(rep.DeliveryUnsettled) != 1 {
+		t.Fatalf("clear %v, rows %+v, unsettled %+v; want no rows and the boot unsettled", run.Delivery.StreamClear, rep.Delivery, rep.DeliveryUnsettled)
+	}
+	if want := "unsettled: the telemetry stream had not settled when the settle ran out: the ack floor reached 55, not yet past the stream's last sequence 60"; rep.DeliveryNote != want {
+		t.Errorf("note = %q, want %q", rep.DeliveryNote, want)
 	}
 }
 

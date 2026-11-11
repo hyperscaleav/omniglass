@@ -59,11 +59,13 @@
     "reserved": true,
     "doc": "what only the Omniglass process writes about itself or its rollups",
     "keys": [
+      "bus-consumer-ack-floor",
       "bus-consumer-ack-pending",
       "bus-consumer-pending",
       "bus-consumer-redelivered",
       "bus-request-count",
       "bus-request-failure-count",
+      "bus-stream-last-seq",
       "bus-telemetry-ack-failure-count",
       "bus-worklist-pull-count",
       "bus-worklist-reply-bytes-max",

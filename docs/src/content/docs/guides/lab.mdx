@@ -736,12 +736,17 @@ carried one (the sample's push lane has pushed no log line).
   hops. The push lane crosses the ingest hop alone, so its row is its own end to end and the line
   leaves it out.
 - **unsettled** names a boot whose window's batches were not all known when `--settle-timeout`
-  ran out (no later batch said its publisher had cleared past them, or the stream still held
-  batches), with no ratio for it rather than a guess. A node boot reads `node <name>, boot <id>`;
+  ran out (no later batch said its publisher had cleared past them, or the stream had not answered
+  every batch published by then), with no ratio for it rather than a guess. A node boot reads `node <name>, boot <id>`;
   the push lane's boot is the server process's, and reads `push lane, boot <id>`. The push lane
   settles on the next push, so a lab whose pushers stopped before the window ended, or whose
-  server restarted after it, reads its push lane unsettled. A note under the table gives the
-  stream's pending and unacked counts when the stream was the cause.
+  server restarted after it, reads its push lane unsettled. The stream has answered them when the
+  telemetry consumer's ack floor, gauged by the server each report window, reaches the stream's last
+  sequence as read after the last of those batches was published: everything at or below the floor
+  landed or was dropped at the delivery bound, so the read settles under steady load, with the
+  consumer never empty. A note under the table gives the floor and the last sequence it had not
+  reached, or which gauge was never read, when the stream was the cause. At the platform's 60s report
+  window the settle can take four windows, so `--settle-timeout` defaults to 5 minutes.
 
 - **unshipped** names a node boot that will never settle because its node started again while its spool
   still held batches: the spool is memory, so they went with the process. The boot is read as far as

@@ -272,6 +272,26 @@ func TestUnsettledNamesABootWithNothingResolvedPastTheWindow(t *testing.T) {
 	}
 }
 
+// A settled boot is proven at the mint of its earliest receipt whose resolved
+// reaches below its first batch after the window: by then every batch it
+// minted in the window had left its spool (#1758). A later receipt that also
+// reaches does not move it, and a boot Unsettled names is not proven.
+func TestProvenIsTheEarliestResolvingMint(t *testing.T) {
+	a := receipt("b1", 1, 2, 0, 1)
+	b := receipt("b1", 2, 7, 1, 1) // after the window, seq 1 still queued
+	c := receipt("b1", 3, 8, 2, 1)
+	c.Resolved = 1 // seq 1 out of the spool by minute 8
+	d := receipt("b1", 4, 9, 3, 1)
+	d.Resolved = 3
+	e := receipt("b2", 1, 3, 0, 1)
+	e.Node = "node-b" // nothing after the window yet
+	got := delivery.Proven(window(0, 5), []delivery.Receipt{a, b, c, d, e})
+	want := map[delivery.Boot]time.Time{{Node: "node-a", Boot: "b1"}: t0.Add(8 * time.Minute)}
+	if len(got) != len(want) || !got[delivery.Boot{Node: "node-a", Boot: "b1"}].Equal(want[delivery.Boot{Node: "node-a", Boot: "b1"}]) {
+		t.Fatalf("proven = %+v; want b1 at minute 8 and no b2", got)
+	}
+}
+
 func TestTallyRoundTripsAsJSON(t *testing.T) {
 	var tl delivery.Tally
 	tl.Add(delivery.Metric, delivery.Stored, 3)

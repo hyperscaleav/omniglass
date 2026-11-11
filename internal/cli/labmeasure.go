@@ -136,7 +136,9 @@ func newLabMeasureCmd() *cobra.Command {
 			"consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s " +
 			"apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
 			"The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has " +
-			"landed one minted after it and the telemetry consumer holds nothing pending, then reconciles each batch's " +
+			"landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, " +
+			"every batch the stream held once all of those were published (its ack floor past the stream's last sequence), " +
+			"so a consumer that never empties under steady load still settles; then it reconciles each batch's " +
 			"ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch " +
 			"its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them " +
 			"(self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, " +
@@ -212,7 +214,8 @@ func newLabMeasureCmd() *cobra.Command {
 	f.Int("fleet-reads", lab.FleetViewReads, "how many timed fleet view reads, spread over the window")
 	f.Int64("backlog", 150000, "aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling)")
 	f.Duration("drain-timeout", 3*time.Minute, "how long the retention probe waits for the pass to clear the backlog")
-	f.Duration("settle-timeout", 3*time.Minute, "how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled")
+	f.Duration("settle-timeout", 5*time.Minute, "how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; "+
+		"at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more")
 	f.String("json", "lab-measure.json", "also write the figures here as JSON; empty writes none")
 	f.Int("page-clients", 0, "how many clients load the console's system page at once across the window; 0 skips the load")
 	f.Int("page-loads", 20, "how many timed system page loads each client makes, spread over the window")

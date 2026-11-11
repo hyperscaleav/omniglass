@@ -2782,7 +2782,7 @@ With no --systems it measures the scale lab already running. With --systems it b
 
 When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
 
-The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the telemetry consumer holds nothing pending, then reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
+The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
 
 The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
 
@@ -2803,7 +2803,7 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--page-system` | string | (none) | the system whose page the clients load, by name; empty loads the fleet view's first |
 | `--samples` | int | `0` | stop after this many samples; 0 samples until interrupted |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
-| `--settle-timeout` | duration | `3m0s` | how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled |
+| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
 | `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
@@ -2833,7 +2833,7 @@ Brings up --runs throwaway scale labs of the size, one after another, and writes
 | `--out` | string | (none) | where to write the baseline; empty is the size's committed file under internal/labfootprint/baseline |
 | `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
 | `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
-| `--settle-timeout` | duration | `3m0s` | how long each run's delivery read waits for its window's batches to land |
+| `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
 | `--systems` | int | `0` | override the size's systems; 0 is the size's |
 | `--warmup` | duration | `0s` | override the size's warmup; 0 is the size's |
@@ -2862,7 +2862,7 @@ Runs are invalid, and no figure is compared, when they measured another fleet, w
 | `--last` | int | `0` | with --samples: how many samples from the series' end to read; 0 reads --runs |
 | `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
 | `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
-| `--settle-timeout` | duration | `3m0s` | how long each run's delivery read waits for its window's batches to land |
+| `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
 
 ### `omniglass lab run`

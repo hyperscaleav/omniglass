@@ -25,24 +25,27 @@ type platformViewFixture struct {
 	bravo     *storage.Component
 	server    string
 	startedAt time.Time
+	// day is the start of today in UTC: the fixture's samples sit at fixed
+	// hours of it, because the metric table only holds partitions from today on.
+	day time.Time
 }
 
 func newPlatformViewFixture(t *testing.T) platformViewFixture {
 	t.Helper()
 	gw, ctx, dsn := platformGatewayDSN(t)
-	f := platformViewFixture{gw: gw, ctx: ctx}
+	f := platformViewFixture{gw: gw, ctx: ctx, day: time.Now().UTC().Truncate(24 * time.Hour)}
 	f.alpha = platformNode(t, ctx, gw, "edge-alpha")
 	f.bravo = platformNode(t, ctx, gw, "edge-bravo")
 	var err error
 	if f.server, err = gw.EnsureServerComponent(ctx, "lab-server"); err != nil {
 		t.Fatalf("ensure server component: %v", err)
 	}
-	f.startedAt = time.Date(2026, 11, 9, 9, 30, 0, 0, time.UTC)
+	f.startedAt = f.day.Add(9*time.Hour + 30*time.Minute)
 	if err := gw.RecordServerIdentity(ctx, f.server, "v1.2.3", f.startedAt); err != nil {
 		t.Fatalf("record server identity: %v", err)
 	}
 
-	older := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	older := f.day.Add(10 * time.Hour)
 	newer := older.Add(30 * time.Second)
 	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
 		{ComponentID: f.alpha.ID, Key: writerclass.CheckinAge, Value: 90, TS: older},
@@ -306,7 +309,7 @@ func TestPlatformViewRanksTheSlowestRoutesOfTheNewestWindow(t *testing.T) {
 func TestPlatformViewReadsEachRetentionLane(t *testing.T) {
 	t.Parallel()
 	f := newPlatformViewFixture(t)
-	older := time.Date(2026, 11, 9, 11, 0, 0, 0, time.UTC)
+	older := f.day.Add(11 * time.Hour)
 	newer := older.Add(time.Hour)
 	if err := f.gw.RecordPlatformMetrics(f.ctx, []storage.PlatformMetric{
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric", Value: 1, TS: older},

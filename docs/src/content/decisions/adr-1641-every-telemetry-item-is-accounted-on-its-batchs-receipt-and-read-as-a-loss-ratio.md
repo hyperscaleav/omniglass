@@ -59,6 +59,14 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
     window as `missing`. The window is capped at 23 hours by the receipts' day.
   - The settle reads the stream's backlog from the server's own `bus-consumer-pending` and
     `bus-consumer-ack-pending` platform gauges (#1628), not from JetStream directly.
+    **Amended (#1758):** waiting for both to read 0 never settled under steady load, where the
+    consumer always holds the batch in flight. The server now also gauges the consumer's ack floor
+    (`bus-consumer-ack-floor`) and the stream's last sequence (`bus-stream-last-seq`), and the settle
+    waits for a report whose ack floor reaches the last sequence a report read after every batch the
+    read reconciles was published: the mint of the batch that proved each boot settled, or of the next
+    boot's first batch for an ended one. Everything at or below the floor was answered, so batches
+    behind it no longer hold the read. The settle's default bound rose from 3 to 5 minutes, four 60 s
+    report windows and a margin.
   - The induced unregistered-key end-to-end run is #1698, and the healthy end-to-end test ran by
     hand against a private image, not through `make test-lab`, which rebuilds the shared dev image.
   - The receipt grew from about 290 to about 675 bytes a batch, past the scaling target at 1,000
