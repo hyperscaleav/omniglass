@@ -504,8 +504,9 @@ own failed pulls of the queue, on its node-self lane
 ([commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured)).
 `checkin-age` is the server's: a timer writes every claimed
 node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
-its claim, before its first). It keeps growing while a node is silent, which is the series a
-node-silent rule reads. The webhook counts are the receiver's
+its claim, before its first). It keeps growing while a node is silent, which is the series the
+seeded `node-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
+the node's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
 `metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
 ([storage](/architecture/storage/#what-a-retention-pass-reports)).
@@ -579,6 +580,14 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   the calc, notification and settlement ticks' depth, pace and failures
   ([workers](/architecture/workers/#measuring-the-ticks)). The seeded `ingest-lag-high` rule raises a
   warning alarm on this component when the server falls 30 s behind its samples for 2 minutes.
+- **`data-dir-disk-used-ratio`**: how full the filesystem holding the server's data directory
+  (`OMNIGLASS_DATA_DIR`, where the bus keeps its stream) is, its used bytes over its total, 0 empty
+  and 1 full, read with a `statfs` at each window's close. The blocks a filesystem reserves for root
+  count as free, so a disk a non-root server can no longer write to can read short of 1 (about 0.95
+  on a default ext4); the rule's 0.9 fires before that. A window whose read fails (the directory is not there yet) carries
+  no value and logs a WARN once, when the reads start failing, and the other figures still land. The
+  seeded `disk-nearly-full` rule raises a warning alarm on this component when the ratio holds over
+  0.9 for 2 minutes and clears it at 0.85 or under.
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
 gone by the write is dropped rather than failed, as a node's is. The same component carries the

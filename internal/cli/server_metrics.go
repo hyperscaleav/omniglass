@@ -68,13 +68,15 @@ func serverReportWindow(ctx context.Context, gw serverMetricsStore) time.Duratio
 }
 
 // reporter lands the recorder's windows on the server's component: each
-// window it gauges the pool, the outbox and the process's runtime, runs the
-// samplers it is handed (the bus's, #1628), and re-reads the slow-query
-// setting, so a change to it takes within a window without a restart.
-func (m *serverMetrics) reporter(gw serverMetricsStore, componentID string, log *slog.Logger, samplers ...platformmetric.Sampler) *platformmetric.Reporter {
+// window it gauges the pool, the outbox, the process's runtime and the disk
+// holding dataDir (#1707), runs the samplers it is handed (the bus's, #1628),
+// and re-reads the slow-query setting, so a change to it takes within a
+// window without a restart.
+func (m *serverMetrics) reporter(gw serverMetricsStore, componentID, dataDir string, log *slog.Logger, samplers ...platformmetric.Sampler) *platformmetric.Reporter {
 	all := append([]platformmetric.Sampler{
 		platformmetric.PoolSampler(gw.PoolStat),
 		platformmetric.RuntimeSampler(platformmetric.ReadProcess),
+		platformmetric.DiskSampler(dataDir, platformmetric.ReadDisk, log),
 		outboxSampler(gw),
 		func(ctx context.Context, _ *platformmetric.Recorder) { m.applySlowQuery(ctx, gw) },
 	}, samplers...)

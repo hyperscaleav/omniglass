@@ -204,6 +204,15 @@ metric_types:
     unit: bytes
     label: Database Size
     description: On-disk bytes of the whole Omniglass database.
+  # The server's data directory disk (#1707): how full the filesystem holding
+  # the server's data directory is, landed on the server's own component every
+  # report window. disk-nearly-full reads it.
+  - name: data-dir-disk-used-ratio
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Data Disk Used
+    description: The share of the filesystem holding the server's data directory that is in use, used bytes over total, 0 empty and 1 full. Written every report window; a window whose disk read failed carries none.
   # The server's own request and database figures (#1627), landed on the
   # server's component in the platform system each report window. Only the
   # server writes them. An http-request-* sample's instance is the request's

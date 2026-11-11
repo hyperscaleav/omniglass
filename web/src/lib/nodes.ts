@@ -90,9 +90,9 @@ export async function enrollNode(name: string): Promise<EnrollOutput> {
   return data as EnrollOutput;
 }
 
-// The node liveness window mirrors the server's node-down sweep default
-// (OMNIGLASS_NODE_DOWN_AFTER, 90s): a node whose last heartbeat predates it is
-// swept to `node-down` server-side, so the console pill uses the same threshold.
+// The node liveness window mirrors the seeded node-silent rule (#1707): a node
+// whose checkin-age passes 90s opens that alarm server-side, so the console pill
+// reads down past the same threshold.
 export const NODE_DOWN_AFTER_MS = 90_000;
 
 export type NodeStatus = "up" | "down" | "never";

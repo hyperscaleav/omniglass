@@ -55,11 +55,13 @@ landed each tick on its own platform component, and the server's check-in age fo
 its own losses on every batch's ledger, read as the node hop of the loss table (#1692,
 [below](#delivery-a-batch-lands-once));
 and its command queue's health (#1626, [below](#self-monitoring-the-node-reports-itself)): depth,
-oldest age, latencies, redeliveries, stuck and expired commands, and the node's failed pulls.
+oldest age, latencies, redeliveries, stuck and expired commands, and the node's failed pulls; and
+a silent node's alarm, the seeded `node-silent` rule over its `checkin-age` (#1707,
+[ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
-the node-down sweep (its input, `checkin-age`, is built), the
+the
 cascade-resolved buffer knobs, a probe concurrency apart from the worker pool, a per-task
 deadline, and the last of the per-kind model that replaced the heartbeat tick, the heartbeat on its
 own and a command run the moment it is issued (#1635, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)). The credential is a shared
@@ -186,7 +188,7 @@ deduplicates ([below](#delivery-a-batch-lands-once)); the subject it lands on is
   admission consumer preserves each batch's `Nats-Msg-Id` when republishing to the trusted stream.
 - **Control down**: a **durable JetStream consumer** on the node's **command queue**, plus
   **worklist-change signals** (the config-generation bump); subjects scoped by placement.
-- **Control up**: heartbeat (feeding the node-down sweep), command-execution results (the
+- **Control up**: heartbeat (the last check-in `checkin-age` counts from), command-execution results (the
   `action`-row status), `session_log` transitions, and the `:report` self-telemetry, each on its
   own subject.
 
@@ -785,8 +787,8 @@ the dispatcher's window ([below](#scheduling-concurrency-and-self-observability)
 interval reads a zero `schedule-gap-excess`, and a late pass or a skipped slot reads the distance it
 lost. A node that goes silent sends nothing, so the server writes the one figure that keeps
 moving: `checkin-age`, every claimed node's seconds since its last heartbeat (or its claim, before the
-first), every 15 s; it grows while the node is silent and is the input of the node-down sweep
-below. The keys, their units and how each is sampled are in
+first), every 15 s; it grows while the node is silent, and past 90 s the seeded `node-silent` rule
+opens a `high` alarm on the node's platform component, cleared by the next heartbeat (#1707). The keys, their units and how each is sampled are in
 [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself).
 
 The node's **command queue** reports on the same component (#1626). The server reads every node's
@@ -858,7 +860,7 @@ block ([above](#self-monitoring-the-node-reports-itself)), the latest dispatch a
 interval as `schedule-gap-excess`; it also says the window in a `dispatch window` self-log line, only
 for a window that passed a due over, so a node keeping its schedule logs nothing.
 
-::::design[Target design: a probe concurrency apart from the pool, a per-task deadline, the remaining `node.self` counts and the node-down sweep, tracked in #1094 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
+::::design[Target design: a probe concurrency apart from the pool, a per-task deadline, and the remaining `node.self` counts, tracked in #1094 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
 The probes run at a **high fixed concurrency** (`gateConcurrency`) with short timeouts, so the cheap
 gate is never throttled by a small `--lane-workers`, and a node facing many dead targets is bounded
 by concurrency, not the serial sum of probe timeouts (a dead SNMP get costs `timeout * (retries+1)`,
@@ -878,12 +880,10 @@ operator-authored template), the admission consumer binds it to the **reporting 
 amortized rule refresh apply for free. Self-telemetry is best-effort (a failed report is logged,
 never fatal).
 
-A node that goes dark reports nothing, so a **node-liveness sweep** runs server-side: a node whose
-last heartbeat (or registration, if it never checked in) predates `OMNIGLASS_NODE_DOWN_AFTER`
-(default 90s) gets a node-owned **`node-down` alarm**, auto-resolved on the next heartbeat. The
-sweep raises it directly (no event_rule: a dead node emits no sample), keyed by `(node-down,
-node owner)` for idempotency across sweeps; this is why the node owner arc reaches `event` and
-`alarm`, not just samples.
+A node that goes dark reports nothing, but the server still writes its `checkin-age`, so the silent
+node alarms through the ordinary rule path: the seeded `node-silent` rule, built (#1707). The earlier
+design here, a node-liveness sweep raising a node-owned `node-down` alarm directly after
+`OMNIGLASS_NODE_DOWN_AFTER`, is replaced by it ([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 
 A degraded-but-alive node alarms through the ordinary **event_rule** path: a rule on a `node.*` key
 opens a node-owned alarm. Two are seeded, `node-overrun` (while `node.overrun` is true) and

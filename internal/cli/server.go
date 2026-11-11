@@ -221,7 +221,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.
-	go self.reporter(gw, serverComponentID, log, busSrv.Sampler()).Run(notifyCtx)
+	go self.reporter(gw, serverComponentID, c.DataDir, log, busSrv.Sampler()).Run(notifyCtx)
 	go ring.Run(notifyCtx, api.SimLoopNodes(busSrv, time.Now))
 
 	errc := make(chan error, 1)

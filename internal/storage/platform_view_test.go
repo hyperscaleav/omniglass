@@ -780,6 +780,9 @@ var platformKeysOffPage = map[string]string{
 	writerclass.SweepFailureCount:           offServerDetail,
 	writerclass.WebhookPostCount:            offServerDetail,
 	writerclass.WebhookRefusalCount:         offServerDetail,
+	// A filling disk reaches the page as its alarm, disk-nearly-full, in
+	// the server's open count (#1707); the figure is the component page's.
+	writerclass.DataDirDiskUsedRatio: offServerDetail,
 
 	writerclass.RetentionPassDuration:       offRetention,
 	writerclass.RetentionPassFailureCount:   offRetention,

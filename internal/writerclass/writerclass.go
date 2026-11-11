@@ -251,6 +251,14 @@ const (
 // serverBootWriter is what writes the server's identity properties.
 const serverBootWriter = "the server boot"
 
+// DataDirDiskUsedRatio is the share of the filesystem holding the server's
+// data directory that is in use (#1707): used bytes over total, 0 empty and 1
+// full, written every report window on the server's own platform component.
+const DataDirDiskUsedRatio = "data-dir-disk-used-ratio"
+
+// serverDiskWriter is what writes the data directory's disk figure.
+const serverDiskWriter = "the server's data directory disk sampler"
+
 // A hop's delivery (#1659): the items per kind that arrived at it and the
 // items it handed on, and the loss between them, each one series per
 // telemetry kind (the kind is the instance), written every window, zero when
@@ -359,6 +367,9 @@ var platform = map[string]string{
 	// The server's identity (#1644).
 	ServerVersion:   serverBootWriter,
 	ServerStartedAt: serverBootWriter,
+
+	// The server's data directory disk (#1707).
+	DataDirDiskUsedRatio: serverDiskWriter,
 
 	// A node's command queue (#1626).
 	CommandPendingCount:     "the server's command queue timer",

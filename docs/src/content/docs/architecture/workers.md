@@ -45,13 +45,12 @@ A subsystem that consumes the same message is **a stage, not a second loop**; co
 scale horizontally with no leader (JetStream hands each message to exactly one member).
 :::
 
-:::design[The node-liveness sweep, tracked in #419]
-Alongside the consumers, a **node-liveness sweep** runs on its own ticker: a *poll*, not a drain (a
-down node produces no message), scanning heartbeat freshness and raising / resolving the node-owned
-`node-down` alarm idempotently over the one-open dedup primitive
-([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key),
-built; nodes already publish the heartbeat the sweep will read, the sweep itself is not).
-:::
+A down node produces no message, so its liveness is a *poll*, not a drain, and the poll is the
+server's: a 15 s timer writes every claimed node's `checkin-age`, the seconds since it last spoke, and
+the seeded `node-silent` rule reads that series like any other. The design had a
+node-liveness sweep of its own raise a `node-down` alarm directly; the rule over a server-written age
+replaced it
+([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 
 There is no separate projector: a current value is the latest series row, derived on read ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus); [storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
 
@@ -81,6 +80,13 @@ attempts, so a loss reads as a ratio where 0 is healthy.
 These are all the server's own clock against its own database, so unlike ingest lag no node clock is
 in them and no skew moves them. The definitions are
 [ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
+
+The `event-rule` sweep is also how the server's self-monitoring alarms hold their sustain. Four
+official rules watch Omniglass itself: `ingest-lag-high`, `retention-behind`, `disk-nearly-full`
+(the server's data directory disk, `data-dir-disk-used-ratio`, over 0.9 for 2 minutes, cleared at
+0.85 or under) on the server's component, and `node-silent` (a claimed node's `checkin-age` past
+90 s, three missed heartbeats, with no sustain) on the node's
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 
 :::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
 
