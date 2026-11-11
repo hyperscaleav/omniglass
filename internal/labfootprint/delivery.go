@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -62,16 +63,19 @@ func laneOf(node string) DeliveryLane {
 
 // DeliveryRead is what the run read for the delivery table: the window, the
 // receipts of every boot with a batch minted in it, and whether the
-// telemetry stream had emptied when the settle ended.
+// telemetry stream had settled every batch of theirs when the settle ended.
 type DeliveryRead struct {
 	// Read is false when the run did not read receipts; Reason says why.
 	Read     bool
 	Reason   string
 	Window   delivery.Window
 	Receipts []delivery.Receipt
-	// StreamClear is whether the telemetry consumer held no pending and no
-	// unacked batch when the settle ended; Backlog is what it last read.
+	// StreamClear is whether the telemetry stream had settled every batch
+	// published by Published, the moment every batch the read reconciles
+	// was known published (#1758); Backlog is what the server gauged of the
+	// stream after the window closed.
 	StreamClear bool
+	Published   time.Time
 	Backlog     Backlog
 	// Schedule is the schedule hop's runs due and made per kind (#1693).
 	Schedule []ScheduleCount
@@ -132,11 +136,45 @@ type EndedBoot struct {
 	NextMinted time.Time `json:"next_minted"`
 }
 
+// DeliveryReadOf is the read of one settle poll: the receipts and backlog it
+// read, when every batch it reconciles was known published, and whether the
+// stream had settled them all by the backlog.
+func DeliveryReadOf(w delivery.Window, receipts []delivery.Receipt, backlog Backlog) DeliveryRead {
+	published := PublishedAt(w, receipts)
+	clear, _ := backlog.Settled(published)
+	return DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: clear, Published: published, Backlog: backlog}
+}
+
+// PublishedAt is the moment every batch the read reconciles was known
+// published, into the telemetry stream or dropped short of it: the latest of
+// the mints that proved each boot settled (delivery.Proven), of the first
+// mints of the boots that followed an ended one (the old process was gone by
+// then, and what it published with it), and the window's close. The mints
+// are the nodes' and the server's clocks, read against the server's report
+// stamps: one clock in a lab, whose containers share the host's (#1758).
+func PublishedAt(w delivery.Window, receipts []delivery.Receipt) time.Time {
+	at := w.To
+	for _, m := range delivery.Proven(w, receipts) {
+		at = laterOf(at, m)
+	}
+	for _, e := range delivery.EndedOf(delivery.Unsettled(w, receipts), receipts) {
+		at = laterOf(at, e.NextMinted)
+	}
+	return at
+}
+
+func laterOf(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
 // DeliveryOf reconciles the read into one row per lane and kind the
 // window's batches carried across each hop, the node lane first and the
 // node hop then the ingest's in kind order, then the push lane's ingest
 // rows in kind order, over the settled boots only. A boot still unsettled is named instead of read;
-// while the stream still held batches, every boot is. With the stream clear,
+// while the stream had not settled the batches published, every boot is. With the stream clear,
 // an unsettled boot its node followed with another boot is ended: it will
 // never settle, so it is read as far as it landed and named as ended.
 func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot, []EndedBoot) {
@@ -337,46 +375,93 @@ func ParseReceipts(out string) ([]delivery.Receipt, error) {
 	return rs, nil
 }
 
-// Backlog is the telemetry consumer's backlog as the server last gauged it:
-// batches stored and not yet delivered, and delivered and not yet acked.
-type Backlog struct {
-	Pending, AckPending         float64
-	SeenPending, SeenAckPending bool
+// BacklogSample is one report's read of the telemetry stream as the server
+// gauged it: the stream's last sequence (Head) and the consumer's ack floor
+// (Floor), each with whether the report carried it, stamped At the report's
+// flush, which follows both reads.
+type BacklogSample struct {
+	At                  time.Time
+	Head, Floor         float64
+	SeenHead, SeenFloor bool
 }
 
-// Clear is whether both gauges were read and both are 0: a gauge not yet
-// published is unknown, never an empty stream.
-func (b Backlog) Clear() bool {
-	return b.SeenPending && b.SeenAckPending && b.Pending == 0 && b.AckPending == 0
+// Backlog is every report the server gauged the telemetry stream in after
+// the window closed, oldest first.
+type Backlog []BacklogSample
+
+// Settled is whether every batch published by p was answered, landed or
+// dropped at the bound, and when not, why (#1758). It needs a head read after
+// p: a report's whose previous report flushed at or after p, since a report
+// reads before it flushes. Then any report from that one on whose ack floor
+// reaches the head proves every batch at or below it answered, however many
+// arrived behind it, so a consumer that never empties under steady load
+// still settles. A gauge not yet read is unknown, never a settled stream.
+// Pure.
+func (b Backlog) Settled(p time.Time) (bool, string) {
+	first := -1
+	for i := 1; i < len(b); i++ {
+		if b[i].SeenHead && !b[i-1].At.Before(p) {
+			first = i
+			break
+		}
+	}
+	if first < 0 {
+		return false, "the stream's last sequence was never read after every window batch was known published"
+	}
+	head := b[first].Head
+	floor, seen := 0.0, false
+	for _, s := range b[first:] {
+		if !s.SeenFloor {
+			continue
+		}
+		if s.Floor >= head {
+			return true, ""
+		}
+		floor, seen = s.Floor, true
+	}
+	if !seen {
+		return false, fmt.Sprintf("the consumer's ack floor was never read after the stream's last sequence %s", count(head))
+	}
+	return false, fmt.Sprintf("the ack floor reached %s, not yet past the stream's last sequence %s", count(floor), count(head))
 }
 
-// BacklogQuery is the latest of each consumer backlog gauge the server
-// published after a time, one `name|value` a line.
+// BacklogQuery is every stream head and ack floor gauge the server published
+// after a time, oldest first, one `name|epoch|value` a line.
 func BacklogQuery(after time.Time) string {
-	return fmt.Sprintf(`select distinct on (mt.name) mt.name, m.value from metric m
+	return fmt.Sprintf(`select mt.name, extract(epoch from m.ts), m.value from metric m
 		join metric_series s on s.id = m.series_id join metric_type mt on mt.id = s.metric_type_id
 		where mt.name in ('%s', '%s') and m.ts > to_timestamp(%s)
-		order by mt.name, m.ts desc`,
-		writerclass.BusConsumerPending, writerclass.BusConsumerAckPending, epoch(after))
+		order by m.ts, mt.name`,
+		writerclass.BusStreamLastSeq, writerclass.BusConsumerAckFloor, epoch(after))
 }
 
-// ParseBacklog reads what BacklogQuery writes.
+// ParseBacklog reads what BacklogQuery writes, pairing the two gauges by the
+// report that flushed them.
 func ParseBacklog(out string) Backlog {
 	var b Backlog
 	for _, line := range strings.Split(out, "\n") {
-		name, value, ok := strings.Cut(strings.TrimSpace(line), "|")
-		if !ok {
+		parts := strings.Split(strings.TrimSpace(line), "|")
+		if len(parts) != 3 {
 			continue
 		}
-		v, err := strconv.ParseFloat(value, 64)
+		ts, err := strconv.ParseFloat(parts[1], 64)
 		if err != nil {
 			continue
 		}
-		switch name {
-		case writerclass.BusConsumerPending:
-			b.Pending, b.SeenPending = v, true
-		case writerclass.BusConsumerAckPending:
-			b.AckPending, b.SeenAckPending = v, true
+		v, err := strconv.ParseFloat(parts[2], 64)
+		if err != nil {
+			continue
+		}
+		at := time.UnixMicro(int64(math.Round(ts * 1e6))).UTC()
+		if len(b) == 0 || !b[len(b)-1].At.Equal(at) {
+			b = append(b, BacklogSample{At: at})
+		}
+		s := &b[len(b)-1]
+		switch parts[0] {
+		case writerclass.BusStreamLastSeq:
+			s.Head, s.SeenHead = v, true
+		case writerclass.BusConsumerAckFloor:
+			s.Floor, s.SeenFloor = v, true
 		}
 	}
 	return b
@@ -495,11 +580,3 @@ func bootOwner(node string) string {
 // ratio is a loss for the table: exact 0 as 0, otherwise four significant
 // figures.
 func ratio(v float64) string { return strconv.FormatFloat(v, 'g', 4, 64) }
-
-// gauge is a backlog gauge for a note: its value, or unread.
-func gauge(v float64, seen bool) string {
-	if !seen {
-		return "unread"
-	}
-	return strconv.FormatFloat(v, 'f', 0, 64)
-}

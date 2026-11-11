@@ -153,7 +153,8 @@ func labPerfFlags(cmd *cobra.Command) {
 	f.String("size", "ci", "the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000)")
 	f.Int("runs", 3, "how many throwaway labs to measure, one after another; every gated figure is their median")
 	f.String("image", "", "the omniglass image each lab runs (lab run's --image); empty is this binary's own build")
-	f.Duration("settle-timeout", 3*time.Minute, "how long each run's delivery read waits for its window's batches to land")
+	f.Duration("settle-timeout", 5*time.Minute, "how long each run's delivery read waits for its window's batches to land; "+
+		"at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more")
 	f.String("samples", "", "read a sampling run's series (lab measure --every --append) in place of fresh labs")
 	f.Int("last", 0, "with --samples: how many samples from the series' end to read; 0 reads --runs")
 	f.String("append", "", "keep each fresh run's report as a line in this file, which --samples reads again")

@@ -140,6 +140,14 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	}
 	r.latest(t, writerclass.BusConsumerAckPending, "")
 	r.latest(t, writerclass.IngestLaneBusy, "")
+	// The stream took the one batch, and the consumer's ack floor stands on
+	// it: everything the stream ever stored is answered.
+	if n := r.latest(t, writerclass.BusStreamLastSeq, ""); n != 1 {
+		t.Fatalf("bus-stream-last-seq = %v, want the 1 batch published", n)
+	}
+	if n := r.latest(t, writerclass.BusConsumerAckFloor, ""); n != 1 {
+		t.Fatalf("bus-consumer-ack-floor = %v, want the stream's last sequence, 1", n)
+	}
 
 	// The server's hop (#1659): the tick's 3 metrics came in and 1 went out.
 	// The fence kept t-ghost's, and tcp-open is a property the metric lane
@@ -211,6 +219,15 @@ func TestMaxDeliverCountsOneDrop(t *testing.T) {
 	r.wantDelivery(t, 2, 1, 0.5)
 	if n := r.latest(t, writerclass.IngestBatchCount, ""); n != 1 {
 		t.Fatalf("ingest-batch-count = %v, want the 1 batch that landed", n)
+	}
+	// A batch dropped at the bound is answered as surely as one acked: the
+	// ack floor passes the doomed batch to the stream's last sequence, which
+	// is how the scale harness reads every published batch settled (#1758).
+	if n := r.latest(t, writerclass.BusStreamLastSeq, ""); n != 2 {
+		t.Fatalf("bus-stream-last-seq = %v, want the 2 batches published", n)
+	}
+	if n := r.latest(t, writerclass.BusConsumerAckFloor, ""); n != 2 {
+		t.Fatalf("bus-consumer-ack-floor = %v, want it past the dropped batch to 2", n)
 	}
 }
 

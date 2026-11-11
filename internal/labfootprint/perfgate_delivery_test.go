@@ -185,13 +185,13 @@ func TestComparePerfDeliveryUnsettledBootsNoteIsBounded(t *testing.T) {
 		for _, n := range []string{"a", "b", "c", "d", "e"} {
 			r.DeliveryUnsettled = append(r.DeliveryUnsettled, UnsettledBoot{Node: "edge-" + n, Boot: "boot-" + n})
 		}
-		r.DeliveryNote = "unsettled: the telemetry consumer still held batches when the settle ran out (4 pending, 0 unacked)"
+		r.DeliveryNote = "unsettled: the telemetry stream had not settled when the settle ran out: the ack floor reached 41, not yet past the stream's last sequence 45"
 	})
 	f := figureNamed(t, ComparePerf(base, runs, nil), "delivery_unsettled_boots")
 	if f.Status != PerfFail || f.Observed != 5 {
 		t.Fatalf("figure = %+v, want a fail at 5", f)
 	}
-	for _, want := range []string{"edge-a", "edge-c", "and 2 more", "still held batches"} {
+	for _, want := range []string{"edge-a", "edge-c", "and 2 more", "not yet past the stream's last sequence"} {
 		if !strings.Contains(f.Note, want) {
 			t.Errorf("the note %q does not hold %q", f.Note, want)
 		}

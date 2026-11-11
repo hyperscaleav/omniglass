@@ -693,8 +693,9 @@ const settlePoll = 5 * time.Second
 // readDelivery settles, then reads, the receipts the delivery table
 // reconciles: it re-reads until every boot with a batch minted in the window
 // has landed one minted after it, whose resolved reaches past the window, and
-// the server has gauged its telemetry consumer empty since the window closed,
-// or until the bound. What has not settled by then is read as unsettled, not
+// the server has gauged its telemetry consumer's ack floor past the stream's
+// last sequence as read after every such batch was published (#1758), or
+// until the bound. What has not settled by then is read as unsettled, not
 // guessed at. A read that fails leaves the table not measured, with why; the
 // run's other figures still print.
 func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound time.Duration) DeliveryRead {
@@ -715,7 +716,7 @@ func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound tim
 		if out, err := h.psql(ctx, BacklogQuery(w.To)); err == nil {
 			backlog = ParseBacklog(out)
 		}
-		d := DeliveryRead{Read: true, Window: w, Receipts: rs, StreamClear: backlog.Clear(), Backlog: backlog}
+		d := DeliveryReadOf(w, rs, backlog)
 		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !time.Now().Before(deadline) {
 			return h.readSchedule(ctx, d)
 		}

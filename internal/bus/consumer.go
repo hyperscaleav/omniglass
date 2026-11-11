@@ -103,6 +103,7 @@ func (s *Server) startTelemetryConsumer() error {
 		return err
 	}
 	s.cons = cons
+	s.telemetry = stream
 	cc, err := cons.Consume(func(msg jetstream.Msg) { s.handleTelemetry(msg) })
 	if err != nil {
 		return err

@@ -329,14 +329,26 @@ func (s *Server) Sampler() platformmetric.Sampler {
 }
 
 // sampleConsumer gauges the telemetry consumer's backlog: the batches stored
-// and not yet delivered, delivered and not yet acked, and redelivered. A read
-// that fails says nothing this window rather than a zero that did not happen.
+// and not yet delivered, delivered and not yet acked, and redelivered. Beside
+// them it gauges the stream's last sequence and the consumer's ack floor, at
+// and below which every batch is answered, landed or dropped at the bound
+// (#1758). The head is read first, so a floor that reaches it proves every
+// batch the stream held at that read settled, whatever the load behind it. A
+// read that fails says nothing this window rather than a zero that did not
+// happen.
 func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
 	if s.cons == nil {
 		return
 	}
 	ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if s.telemetry != nil {
+		if sinfo, err := s.telemetry.Info(ictx); err != nil {
+			slog.Debug("telemetry stream info unread", "facility", "ingest", "error", err.Error())
+		} else {
+			m.gauge(writerclass.BusStreamLastSeq, "", float64(sinfo.State.LastSeq))
+		}
+	}
 	info, err := s.cons.Info(ictx)
 	if err != nil {
 		slog.Debug("telemetry consumer info unread", "facility", "ingest", "error", err.Error())
@@ -344,5 +356,6 @@ func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
 	}
 	m.gauge(writerclass.BusConsumerPending, "", float64(info.NumPending))
 	m.gauge(writerclass.BusConsumerAckPending, "", float64(info.NumAckPending))
+	m.gauge(writerclass.BusConsumerAckFloor, "", float64(info.AckFloor.Stream))
 	m.gauge(writerclass.BusConsumerRedelivered, "", float64(info.NumRedelivered))
 }
