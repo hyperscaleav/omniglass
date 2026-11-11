@@ -112,6 +112,12 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.IngestLagMax, Window: true},
 		{Name: writerclass.IngestBatchCount, Window: true},
 		{Name: writerclass.IngestSampleCount, Window: true},
+		// The push lane's front door (#1746): its refusals against its
+		// publishes, and how long a push waited for the publish turn.
+		{Name: writerclass.PushLaneRefusalCount, Of: writerclass.PushLanePublishCount, Window: true},
+		{Name: writerclass.PushLanePublishCount, Window: true},
+		{Name: writerclass.PushLaneTurnWaitP99, Window: true},
+		{Name: writerclass.PushLaneTurnWaitMax, Window: true},
 	}},
 	{Name: "queues", Label: "Queues", Keys: []PlatformServerKey{
 		{Name: writerclass.BusConsumerPending},

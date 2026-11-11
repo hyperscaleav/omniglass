@@ -116,6 +116,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
+	s.push.Observe(s.metrics.pushTurn)
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
@@ -144,4 +145,39 @@ func TestPipelineMetricsZeroValueRecordsNothing(t *testing.T) {
 	m.mean(writerclass.IngestLag, "", 1)
 	m.max(writerclass.IngestLagMax, "", 1)
 	m.gauge(writerclass.BusConsumerPending, "", 1)
+}
+
+// TestPushTurnCountsPublishesRefusalsAndWait (#1746): every push lane turn
+// counts toward push-lane-publish-count, a refused one toward
+// push-lane-refusal-count as well, so refusals read as a ratio where zero is
+// healthy, and every turn's wait folds into the window's p99 and max, in
+// milliseconds, a refusal's included: it waited the whole bound.
+func TestPushTurnCountsPublishesRefusalsAndWait(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	rec := platformmetric.NewRecorder(func() time.Time { return now })
+	m := pipelineMetrics{rec}
+	for range 3 {
+		m.pushTurn(delivery.Turn{Wait: 2 * time.Millisecond})
+	}
+	m.pushTurn(delivery.Turn{Wait: 5 * time.Second, Refused: true})
+
+	got := flushed(rec)
+	if got[[2]string{writerclass.PushLanePublishCount, ""}] != 4 || got[[2]string{writerclass.PushLaneRefusalCount, ""}] != 1 {
+		t.Fatalf("flushed %v, want four publishes, one refused", got)
+	}
+	if got[[2]string{writerclass.PushLaneTurnWaitMax, ""}] != 5000 {
+		t.Fatalf("turn wait max = %v, want the refusal's 5000 ms", got[[2]string{writerclass.PushLaneTurnWaitMax, ""}])
+	}
+	if p99 := got[[2]string{writerclass.PushLaneTurnWaitP99, ""}]; p99 < 5000*7/8 || p99 > 5000*9/8 {
+		t.Fatalf("turn wait p99 = %v, want about the refusal's 5000 ms", p99)
+	}
+	if len(got) != 4 {
+		t.Fatalf("flushed %v, want only the four push lane keys", got)
+	}
+
+	rec.Flush("server")
+	m.pushTurn(delivery.Turn{Wait: time.Millisecond})
+	if n, ok := flushed(rec)[[2]string{writerclass.PushLaneRefusalCount, ""}]; !ok || n != 0 {
+		t.Fatalf("a window of publishes and no refusal reads refusals %v (landed %v), want a 0 that landed: the ratio reads healthy, not unreported", n, ok)
+	}
 }
