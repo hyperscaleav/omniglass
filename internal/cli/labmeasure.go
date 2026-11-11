@@ -209,7 +209,7 @@ func newLabMeasureCmd() *cobra.Command {
 	f.String("scenario", lab.MeasureScenario, "the scale scenario a --systems lab runs")
 	f.Duration("warmup", 2*time.Minute, "how long the lab runs before the window starts (once, before the first sample)")
 	f.Duration("window", 5*time.Minute, "the window the rates, growth and usage are read over")
-	f.Int("fleet-reads", 20, "how many timed fleet view reads, spread over the window")
+	f.Int("fleet-reads", lab.FleetViewReads, "how many timed fleet view reads, spread over the window")
 	f.Int64("backlog", 150000, "aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling)")
 	f.Duration("drain-timeout", 3*time.Minute, "how long the retention probe waits for the pass to clear the backlog")
 	f.Duration("settle-timeout", 3*time.Minute, "how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled")

@@ -269,7 +269,7 @@ func gatedFamilies() []gatedFamily {
 				return nil
 			}},
 		{Family: "server_working_set_mib", Class: ClassHostDependent, Tolerance: 0.15, Unit: "MiB",
-			About: "the server container's working set at the window's end",
+			About: "the median of the server container's working set read across the window",
 			Read: func(r ScaleReport) map[string]float64 {
 				if c, ok := serverContainer(r); ok {
 					return one("server_working_set_mib", c.WorkingSetMiB)

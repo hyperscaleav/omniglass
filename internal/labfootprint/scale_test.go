@@ -1,13 +1,16 @@
 package labfootprint
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1187,5 +1190,75 @@ func TestScaleRunReadsTheFleetFromTheLab(t *testing.T) {
 	}
 	if _, err := scaleRunOf(map[string]string{lab.LabelLabScenario: "dev"}, cfg, 1); err == nil || !strings.Contains(err.Error(), "runs the dev scenario, which has no size") {
 		t.Fatalf("a dev lab: err %v, want a refusal naming its scenario", err)
+	}
+}
+
+// The window's usage is read on a steady tick from its start until it is
+// stopped, every container each tick, so its working set has reads spread
+// across the window to take the median of; once stopped nothing more is read.
+func TestSampleUsageReadsAcrossTheWindowUntilStopped(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		calls int
+	)
+	read := func(context.Context) (map[string]Usage, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		return map[string]Usage{"server": {Anon: uint64(calls) << 20}, "db": {Anon: 1 << 20}}, nil
+	}
+	finish := sampleUsage(context.Background(), 10*time.Millisecond, read)
+	time.Sleep(150 * time.Millisecond)
+	reads, err := finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(reads["server"]); n < 5 || len(reads["db"]) != n {
+		t.Fatalf("%d server and %d db reads over 150 ms at a 10 ms tick, want at least 5 of each", n, len(reads["db"]))
+	}
+	mu.Lock()
+	at := calls
+	mu.Unlock()
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	after := calls
+	mu.Unlock()
+	if after != at {
+		t.Errorf("%d reads after the sampling stopped, want none", after-at)
+	}
+	again, err := finish()
+	if err != nil || len(again["server"]) != len(reads["server"]) {
+		t.Errorf("a second finish gave %d reads, %v; want the same reads", len(again["server"]), err)
+	}
+}
+
+// A read that fails is the window's error and ends the reads; a read the stop
+// itself cuts short is not an error, since the window it served has closed.
+func TestSampleUsageFailsOnAFailedReadNotOnTheStop(t *testing.T) {
+	calls := 0
+	failing := func(context.Context) (map[string]Usage, error) {
+		calls++
+		if calls == 3 {
+			return nil, errors.New("read the server container: no such container")
+		}
+		return map[string]Usage{"server": {}}, nil
+	}
+	finish := sampleUsage(context.Background(), time.Millisecond, failing)
+	time.Sleep(50 * time.Millisecond)
+	if _, err := finish(); err == nil || !strings.Contains(err.Error(), "server container") {
+		t.Errorf("err = %v, want the failed read", err)
+	}
+	if calls != 3 {
+		t.Errorf("%d reads, want none after the failed third", calls)
+	}
+
+	blocked := func(ctx context.Context) (map[string]Usage, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	finish = sampleUsage(context.Background(), time.Millisecond, blocked)
+	time.Sleep(20 * time.Millisecond)
+	if _, err := finish(); err != nil {
+		t.Errorf("a read cut short by the stop: err = %v, want none", err)
 	}
 }

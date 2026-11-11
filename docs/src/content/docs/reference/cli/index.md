@@ -2796,7 +2796,7 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling) |
 | `--drain-timeout` | duration | `3m0s` | how long the retention probe waits for the pass to clear the backlog |
 | `--every` | duration | `0s` | sample the running lab on this interval, one JSON line a sample; 0 measures once |
-| `--fleet-reads` | int | `20` | how many timed fleet view reads, spread over the window |
+| `--fleet-reads` | int | `100` | how many timed fleet view reads, spread over the window |
 | `--json` | string | `lab-measure.json` | also write the figures here as JSON; empty writes none |
 | `--page-clients` | int | `0` | how many clients load the console's system page at once across the window; 0 skips the load |
 | `--page-loads` | int | `20` | how many timed system page loads each client makes, spread over the window |

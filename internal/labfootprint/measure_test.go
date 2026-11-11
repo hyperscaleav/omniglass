@@ -137,6 +137,77 @@ func TestWindowOf(t *testing.T) {
 	}
 }
 
+// A window's working set is the median of the reads taken across it, so a
+// read that lands on a collection peak moves nothing: the Go heap grows to
+// its next cycle and falls back, and one read at the window's end landed
+// anywhere in that cycle (the ci baseline's runs spread 23 percent, #1751).
+func TestMedianWorkingSetMiB(t *testing.T) {
+	reads := func(mibs ...uint64) []Usage {
+		out := make([]Usage, len(mibs))
+		for i, m := range mibs {
+			out[i] = Usage{Anon: m << 20}
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		reads []Usage
+		want  float64
+	}{
+		{"a collection peak last reads the median, not the peak", reads(60, 58, 61, 59, 90), 60},
+		{"an even count reads the mean of the middle two", reads(64, 58, 60, 62), 61},
+		{"one read is its own median", reads(70), 70},
+		{"no reads read as 0", nil, 0},
+		{"shared memory counts", []Usage{{Anon: 30 << 20, Shmem: 2 << 20}}, 32},
+	}
+	for _, c := range cases {
+		if got := MedianWorkingSetMiB(c.reads); !near(got, c.want) {
+			t.Errorf("%s: %v MiB, want %v", c.name, got, c.want)
+		}
+	}
+	in := reads(90, 58, 60)
+	MedianWorkingSetMiB(in)
+	if in[0].Anon != 90<<20 {
+		t.Error("the reads were reordered")
+	}
+}
+
+// A scale window's containers take the median of the reads across it as
+// their working set; their CPU stays the window's delta, and a container the
+// window read at its ends with no reads across it is refused, never read as
+// empty.
+func TestMedianWorkingSets(t *testing.T) {
+	w := Window{MetricRowsPerMinute: 10, Containers: map[string]ContainerWindow{
+		"server": {Millicores: 100, WorkingSetMiB: 90},
+		"db":     {Millicores: 200, WorkingSetMiB: 300},
+	}}
+	mib := func(m uint64) Usage { return Usage{Anon: m << 20} }
+	reads := map[string][]Usage{
+		"server": {mib(60), mib(58), mib(61), mib(59), mib(90)},
+		"db":     {mib(250), mib(256), mib(252)},
+	}
+	got, err := MedianWorkingSets(w, reads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := got.Containers["server"]; !near(s.WorkingSetMiB, 60) || !near(s.Millicores, 100) {
+		t.Errorf("server %+v, want the median 60 MiB and its 100 millicores", s)
+	}
+	if d := got.Containers["db"]; !near(d.WorkingSetMiB, 252) || !near(d.Millicores, 200) {
+		t.Errorf("db %+v, want the median 252 MiB and its 200 millicores", d)
+	}
+	if got.MetricRowsPerMinute != 10 {
+		t.Errorf("the window's rates moved: %+v", got)
+	}
+	if w.Containers["server"].WorkingSetMiB != 90 {
+		t.Error("the window passed in was changed")
+	}
+	delete(reads, "db")
+	if _, err := MedianWorkingSets(w, reads); err == nil || !strings.Contains(err.Error(), "db") {
+		t.Errorf("a container with no reads: err = %v, want one naming it", err)
+	}
+}
+
 // The batch figures come from the receipt counter and the lane row counters:
 // a batch is a receipt, a sample is a metric or property row.
 func TestWindowOfBatchFigures(t *testing.T) {

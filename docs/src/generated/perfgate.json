@@ -105,7 +105,7 @@
       "tolerance": 0.15,
       "two_sided": false,
       "unit": "MiB",
-      "about": "the server container's working set at the window's end"
+      "about": "the median of the server container's working set read across the window"
     },
     {
       "family": "fleet_view_p95_ms",
@@ -123,7 +123,7 @@
       "systems": 300,
       "warmup_seconds": 120,
       "window_seconds": 300,
-      "fleet_reads": 20,
+      "fleet_reads": 100,
       "file": "corporate-300.ci.json"
     },
     {
@@ -132,7 +132,7 @@
       "systems": 1000,
       "warmup_seconds": 120,
       "window_seconds": 300,
-      "fleet_reads": 20,
+      "fleet_reads": 100,
       "file": "corporate-1000.laptop.json"
     }
   ]

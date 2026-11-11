@@ -506,8 +506,9 @@ How to read each row:
   run reads one point, and [a sampling run](#sampling-a-scale-lab-over-time) reads its trend.
 - **`<container>` cpu, memory**: each container's CPU in millicores (a thousand is one core) over
   the window, from the cgroup's CPU time, and its working set (anonymous plus shared memory, the part
-  not reclaimable as page cache). One line each for the server, Postgres and every node, then the
-  total. A node is one site's simulators and its collection, so its cost is what that site's devices
+  not reclaimable as page cache). The working set is the median of about 30 reads taken across the
+  window, so where in the Go heap's collection cycle the window happened to end does not move it. One
+  line each for the server, Postgres and every node, then the total. A node is one site's simulators and its collection, so its cost is what that site's devices
   add; the server and Postgres are what every site's writes add up to.
 - **ingest lag p50, p95, p99**: the time from a sample's probe (the timestamp the node gave it) to the
   commit of its row, over the newest observed metric rows the window landed (up to 20,000, the count is
