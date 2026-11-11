@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -66,3 +67,10 @@ func seedInto(ctx context.Context, dsn string, withFleet bool) error {
 	}
 	return nil
 }
+
+// PlannedSender is one webhook sender a plan seeds (#1747).
+type PlannedSender = plannedSender
+
+// PlanSenders plans a scenario plan's webhook senders against the shipped
+// simulator profiles and drivers, with no database.
+func PlanSenders(p *scenario.Plan) ([]PlannedSender, error) { return shippedSenders(rowsOf(p)) }

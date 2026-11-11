@@ -182,7 +182,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			return err
 		}
 		nodes[i] = lab.SiteNode{Name: labscenario.SiteNode(site.Name), Token: token, TokenHash: hex.EncodeToString(hash),
-			Components: site.Totals.Components}
+			Components: site.Simulated()}
 	}
 	pushers, err := scaleLabPushers(plan, auth.NewBearerToken)
 	if err != nil {
@@ -197,7 +197,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 		cadence = lab.CadenceLab
 	}
 	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (a node each), %d simulated components.\n",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components)
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Simulated())
 	fmt.Fprintln(out)
 	start := f.start
 	if start == nil {
@@ -660,6 +660,9 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return fmt.Errorf("lab seed: %s carries no token hash for the node %s", lab.SiteNodeTokenHashesEnv, node)
 		}
 		for _, p := range site.Pushers {
+			if p.Webhook {
+				continue // a webhook sender signs its posts, and needs no bearer token
+			}
 			if _, ok := pushers[p.Name]; !ok {
 				return fmt.Errorf("lab seed: %s carries no token for the pusher %s", lab.PusherTokensEnv, p.Name)
 			}
@@ -712,8 +715,8 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 	if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 		return err
 	}
-	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, %d pushers, seeded in %s",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, seeded.Pushers, time.Since(start).Round(time.Second))
+	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, %d pushers, %d webhook senders, seeded in %s",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, seeded.Pushers, seeded.Senders, time.Since(start).Round(time.Second))
 	if in := seeded.Induced; in != nil {
 		summary += fmt.Sprintf("; %s answers %s through %s, refused-unregistered", in.Component, in.Key, in.Driver)
 	}
@@ -757,8 +760,9 @@ func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway
 		if err != nil {
 			return err
 		}
-		if len(devices) != site.Totals.Components {
-			return notThisPlan(fmt.Sprintf("%s simulates %d components, the plan's site %d", node, len(devices), site.Totals.Components))
+		// A webhook sender (#1747) is a component on its site's node too.
+		if len(devices) != site.Simulated() {
+			return notThisPlan(fmt.Sprintf("%s simulates %d components, the plan's site %d", node, len(devices), site.Simulated()))
 		}
 	}
 	for _, site := range plan.Sites {

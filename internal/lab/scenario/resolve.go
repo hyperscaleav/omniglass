@@ -56,14 +56,39 @@ type SitePlan struct {
 	Totals    Totals
 }
 
-// PusherPlan is one pusher placed at a site (#1743): its name (the site's,
-// the declaration's and its index), its emulator profile, and the systems of
-// the site it is granted telemetry:push on. Its token is minted per run, never
-// planned.
+// PusherPlan is one outside actor placed at a site (#1743): its name (the
+// site's, the declaration's and its index), its emulator profile, and the
+// systems of the site it speaks for. A token pusher (Webhook false) is
+// granted telemetry:push on them and its token is minted per run, never
+// planned. A webhook sender (Webhook true, #1747) is a component whose rooms
+// are bound to them; its signing secret is minted per seed, never planned.
 type PusherPlan struct {
 	Name    string
 	Profile string
 	Systems []string
+	Webhook bool
+}
+
+// Simulated is how many components the site's simulator serves: the site's
+// own and each webhook sender's (#1747), a component with an address on the
+// site's node. A token pusher is no component and is not counted.
+func (s SitePlan) Simulated() int {
+	n := s.Totals.Components
+	for _, p := range s.Pushers {
+		if p.Webhook {
+			n++
+		}
+	}
+	return n
+}
+
+// Simulated is how many components every site's simulator serves together.
+func (p *Plan) Simulated() int {
+	n := 0
+	for _, s := range p.Sites {
+		n += s.Simulated()
+	}
+	return n
 }
 
 // BuildingPlan is one building and its floor count.
@@ -158,7 +183,7 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	for i, s := range sites {
 		sp := resolveSite(m.Name, s.name, s.label, s.arch, perSite[i]+1, c, names)
 		sp.Totals = count(m, sp.Systems)
-		sp.Pushers = placePushers(m.Pushers, sp.Name, sp.Systems)
+		sp.Pushers = placePushers(m.Pushers, sp.Name, sp.Systems, cat)
 		plan.Sites = append(plan.Sites, sp)
 		byArchetype[sp.Archetype] = append(byArchetype[sp.Archetype], sp.Systems...)
 	}
@@ -184,17 +209,27 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 // placePushers places a site's pushers in declaration order, each scoped to
 // the next Systems of the site's systems (in plan order, wrapping), so the
 // site's pushers share its systems while it has enough and every one is
-// scoped to at least one.
-func placePushers(decls []Pusher, site string, systems []SystemPlan) []PusherPlan {
+// scoped to at least one. A declaration with Systems omitted is scoped to
+// every system of the site and takes none from the others' share. A profile
+// the catalog names a webhook sender places as one (#1747).
+func placePushers(decls []Pusher, site string, systems []SystemPlan, c Catalog) []PusherPlan {
 	if len(systems) == 0 {
 		return nil
 	}
 	var out []PusherPlan
 	next := 0
 	for _, d := range decls {
+		sender := c.Sender != nil && c.Sender(d.Profile.Name) && (c.Pusher == nil || !c.Pusher(d.Profile.Name))
 		for k := 1; k <= d.PerSite; k++ {
-			pp := PusherPlan{Name: fmt.Sprintf("%s-%s-%d", site, d.Name.Name, k), Profile: d.Profile.Name}
-			for i := 0; i < min(d.Systems, len(systems)); i++ {
+			pp := PusherPlan{Name: fmt.Sprintf("%s-%s-%d", site, d.Name.Name, k), Profile: d.Profile.Name, Webhook: sender}
+			if d.Systems == nil {
+				for _, s := range systems {
+					pp.Systems = append(pp.Systems, s.Name)
+				}
+				out = append(out, pp)
+				continue
+			}
+			for i := 0; i < min(*d.Systems, len(systems)); i++ {
 				pp.Systems = append(pp.Systems, systems[(next+i)%len(systems)].Name)
 			}
 			next += len(pp.Systems)

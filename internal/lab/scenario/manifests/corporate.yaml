@@ -108,8 +108,17 @@ archetypes:
 # of the site's systems. The lab seeds its telemetry:push principal and mints
 # its token per run, so every corporate lab pushes and lab measure reads the
 # push lane.
+#
+# And one meeting platform account a site (#1747), a webhook sender: systems
+# omitted, so it speaks for every one of the site's systems. The lab seeds
+# its webhook endpoint, mints the endpoint's signing key per run and binds
+# each room to its system, so the account's signed posts land on the push
+# lane beside the booking service's.
 pushers:
   - name: booking
     profile: booking-service
     per_site: 1
     systems: 4
+  - name: ucc
+    profile: ucc-platform
+    per_site: 1

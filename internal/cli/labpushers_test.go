@@ -40,6 +40,9 @@ func TestScaleLabMintsATokenPerDeclaredPusher(t *testing.T) {
 	want := map[string]string{} // pusher -> its site's node
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
+			if p.Webhook {
+				continue // a meeting platform signs with a seeded secret, holding no token (#1747)
+			}
 			want[p.Name] = labscenario.SiteNode(site.Name)
 		}
 	}

@@ -319,6 +319,24 @@ simulator in its own process for that site's components. Every simulated compone
 own loopback address, so a site looks like many devices rather than many ports on one address. The
 lab is up once every site's node is collecting from every component (the planted faults aside).
 
+Not everything a real fleet hears is collected. The scenario also declares each site's **outside
+actors**, the services that report to the server on their own, and the simulator beside the site's
+node runs them:
+
+- **A token pusher.** `corporate` places one booking service a site, pushing four of its systems'
+  bookings every 30 seconds through `POST /telemetry:push`. The lab mints its bearer token on every
+  run, for a service account that may push to those systems and do nothing else.
+- **A webhook sender.** `corporate` also places one meeting platform account a site (`ucc-platform`),
+  which speaks for every one of the site's systems. The lab seeds the account as a component with a
+  `ucc-webhook` endpoint and a signing key minted on every run (beside the product's polled
+  `ucc-rooms` endpoint on the site's node), and binds each system's room to its system;
+  the simulator subscribes the account to the endpoint, adds each bound room, and the account posts a
+  signed report naming every room's meeting state every 30 seconds. Its key is sealed in the server
+  and handed to the simulator alone: neither the plan, the seed's output nor a log shows it.
+
+Both arrive on the server's [push lane](#reading-the-delivery-table), so `lab measure` reads their
+loss beside the nodes'.
+
 ```sh
 omniglass lab run --scenario corporate --systems 300
 ```
@@ -605,11 +623,14 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
 `node` is what the nodes collected and shipped, `push` what was pushed to the server (`POST
-/telemetry:push` and the webhook receivers). The scale lab's push lane comes from the pushers its
-scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
-service a site, each pushing its four systems' bookings every 30 seconds from the simulator beside
-the site's node, so every corporate lab reads push rows (metrics and properties; a booking service
-pushes no event or log line). Anything else that pushes to the lab's server during the window, as
+/telemetry:push` and the webhook receivers). The scale lab's push lane comes from the outside actors
+its scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
+service a site, each pushing its four systems' bookings, and one meeting platform account a site,
+each posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
+beside the site's node. So every corporate lab reads push rows: metrics and properties from the
+bookings, properties and log lines from the reports. A report names the account's own demo rooms
+too, which no system binds, so the push lane's properties read some `unbound`, which is not loss.
+Anything else that pushes to the lab's server during the window, as
 `omniglass telemetry push` against it does, reads on the same lane. A healthy lab reads exactly 0
 for every kind on both:
 
@@ -1017,6 +1038,9 @@ pushers:                        # outside actors that report by pushing, placed 
     profile: booking-service    # a simulator profile with a push face
     per_site: 1                 # how many each site has
     systems: 4                  # how many of the site's systems each one pushes for
+  - name: ucc                   # each placed one is <site>-ucc-<k>
+    profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
+    per_site: 1                 # systems omitted: it speaks for every one of the site's systems
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
@@ -1028,9 +1052,14 @@ no weight; every other archetype repeats and takes one. The site bounds must hav
 one and a maximum no lower than the minimum. A pusher is declared like the devices are: its profile
 must have a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), and it needs
 at least one a site and at least one system to push for, since a pusher scoped to nothing could
-push nowhere. Each placed pusher is a service account granted `telemetry:push` on its systems alone;
-the lab mints its token on every run and hands it only to the simulator that runs it, never the plan
-or a log. The validator collects every problem at once and names
+push nowhere; omit `systems` and it is scoped to every system of its site. The profile's face says
+which kind of actor it is. A push face makes a token pusher: a service account granted
+`telemetry:push` on its systems alone, whose token the lab mints on every run and hands only to the
+simulator that runs it, never the plan or a log. A webhook face (one naming the driver of its
+endpoint and the route that adds a room, [simulation](/architecture/simulation/#a-simulated-service-posts-from-the-start))
+makes a webhook sender: a component with an endpoint of that driver, a signing secret minted on
+every run and sealed in the server, and an identity binding per system on the driver's room
+identity, named for the system. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text
