@@ -31,7 +31,9 @@ func TestObservedSNMPDatagramsSettleByCommunity(t *testing.T) {
 	if _, err := g.Get(ctx, bound.String(), "lab-ro", oid, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	c := dev.Observed("snmp")
+	// The face counts a datagram after writing its reply, so the client can
+	// hold the reply before the count lands.
+	c := observedEventually(t, dev, "snmp", func(c ObservationCounters) bool { return c.Settled() == 1 })
 	if c.Received != 1 || c.Answered != 1 || c.InFlight != 0 || c.Accepted != 0 {
 		t.Fatalf("one answered get = %+v", c)
 	}
