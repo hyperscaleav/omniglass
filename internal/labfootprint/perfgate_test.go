@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
 var (
@@ -543,5 +544,30 @@ func TestPerfGateFactsJSONIsCommitted(t *testing.T) {
 	}
 	if string(committed) != string(want) {
 		t.Error("docs/src/generated/perfgate.json drifted from labfootprint.PerfGateFacts: run make gen and commit the result")
+	}
+}
+
+// A committed baseline is the one its size names: it decodes strictly and
+// states that size's name, scenario and systems, so a renamed size cannot
+// leave its file behind or gate against another rung's figures (#1780). A
+// size with no committed baseline yet is skipped.
+func TestEachCommittedBaselineIsItsSizes(t *testing.T) {
+	for _, s := range lab.PerfSizes() {
+		f, err := os.Open("baseline/" + s.BaselineFile())
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := ReadBaseline(f)
+		_ = f.Close()
+		if err != nil {
+			t.Fatalf("%s: %v", s.BaselineFile(), err)
+		}
+		if in := b.Inputs; in.Size != s.Name || in.Scenario != s.Scenario || in.Systems != s.Systems {
+			t.Errorf("%s states size %q, %s at %d; want size %q, %s at %d",
+				s.BaselineFile(), in.Size, in.Scenario, in.Systems, s.Name, s.Scenario, s.Systems)
+		}
 	}
 }
