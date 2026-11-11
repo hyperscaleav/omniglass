@@ -1008,6 +1008,32 @@
    "description": "Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count."
   },
   {
+   "name": "push-lane-publish-count",
+   "data_type": "int",
+   "label": "Push Lane Publishes",
+   "description": "Pushes that waited for the push lane's publish turn over the report window, taken or refused."
+  },
+  {
+   "name": "push-lane-refusal-count",
+   "data_type": "int",
+   "label": "Push Lane Refusals",
+   "description": "Pushes refused because their wait for the publish turn passed the bound (answered 503, nothing minted) over the report window; a share of push-lane-publish-count."
+  },
+  {
+   "name": "push-lane-turn-wait-p99",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Push Lane Turn Wait (p99)",
+   "description": "The 99th percentile of how long a push waited for the publish turn over the report window, a refusal's whole bound included."
+  },
+  {
+   "name": "push-lane-turn-wait-max",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Push Lane Turn Wait (max)",
+   "description": "The longest a push waited for the publish turn over the report window, a refusal's whole bound included."
+  },
+  {
    "name": "command-pending-count",
    "data_type": "int",
    "label": "Pending Commands",

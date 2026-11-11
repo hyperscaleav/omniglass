@@ -149,10 +149,6 @@ export const Check: Component<P> = (p) => (
 export const Server: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></Svg>
 );
-// A pulse trace: Omniglass's own health, the Platform health page (#1644).
-export const Activity: Component<P> = (p) => (
-  <Svg size={p.size}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></Svg>
-);
 // A lab flask: the simulated fleet (#890).
 export const FlaskConical: Component<P> = (p) => (
   <Svg size={p.size}><path d="M10 2v7.3" /><path d="M14 9.3V2" /><path d="M8.5 2h7" /><path d="M14 9.3a6.5 6.5 0 1 1-4 0" /><path d="M5.5 16h13" /></Svg>

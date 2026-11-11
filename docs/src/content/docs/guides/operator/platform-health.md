@@ -78,9 +78,10 @@ collect. **Platform health** is Omniglass watching itself. It answers one questi
 platform is well, and it answers it the way you would answer it about any room: from the samples
 on the platform's own components.
 
-Open it from **Platform health** in the sidebar, under Nodes, or from the **Platform** tile on
-Home, which carries the platform's verdict and how many nodes are not up. You need `node:read`
-to open it; the tile and the sidebar entry are hidden without it.
+Open it from **Status** under Admin in the sidebar, or from the **Platform** tile on Home, which
+carries the platform's verdict and how many nodes are not up. You need `node:read` to open it; the
+tile and the sidebar entry are hidden without it, and Admin shows it to a `node:read` holder who has
+none of its other tabs.
 
 ::screenshot{#platform-health}
 
@@ -147,7 +148,11 @@ reads it per kind ([reading the delivery table](/guides/lab/#reading-the-deliver
 Each server has a panel set: a disclosure headed with the server's name, its verdict and how many
 alarms are open on it, the first one open. The name links to the server's platform component. The
 four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the keys in each are the
-groups the platform view returns for a server, so the page holds no key list of its own.
+groups the platform view returns for a server, so the page holds no key list of its own. The page is
+the summary, not the whole record: every figure a server or a node writes of itself is either on it
+or kept off it on purpose, with a reason a test holds, so a new gauge cannot go missing quietly. What
+stays off (each process's runtime figures, the bus's request and pull counts, the retention pass's
+own bookkeeping) reads on the component page the server's name, or a node's row, opens.
 
 A panel row is one key: its last hour as a sparkline beside its current figure. Click a row, or tab
 to it and press Enter or Space, to open the full chart beneath it, and again to close it. Hover a key's name, or tab to it, for what
@@ -160,7 +165,7 @@ new, instance by instance: an ingest lag from before the fleet went quiet is not
 today's. The gauges the server samples every window, and the retention facts its hourly pass
 writes, read their latest however old. A pair
 that only reads against its bound (a pool's connections in use against its size, the oldest
-partition's age against the retention window) reads `a / b`, and byte sizes read in KB, MB or GB.
+partition's age against the retention window, the ack floor against the stream head) reads `a / b`, and byte sizes read in KB, MB or GB.
 
 A panel turns amber, and names the alarm, only while an alarm is open on one of its keys. The seeded
 rules on the server's keys raise those alarms; the page adds no threshold of its own, so an amber
@@ -189,6 +194,13 @@ handed on and lost, as a loss ratio where 0 is healthy) lands on its platform co
 (#1659) and is read as the Ingest hop under [where work is lost](#where-work-is-lost). An oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
 which turns this panel amber.
 
+Below them, the push lane's front door (#1746). Every push and webhook post waits for the server's
+one publish turn, and a wait past 5 seconds is refused with `503`, so **Push Lane Refusals** reads as
+a share of **Push Lane Publishes**, 0 when healthy, and **Push Lane Turn Wait** at the 99th
+percentile and at worst says how close the lane runs to refusing. A refused push minted nothing, so
+it is not on the Ingest hop's figures: this pair is where it shows. The lab reads the same figures as
+the [publish row](/guides/lab/#reading-the-push-lanes-turn) of its delivery table.
+
 ### Queues
 
 What is waiting. The telemetry batches not yet delivered to the server's consumer and those
@@ -196,6 +208,12 @@ delivered but not yet acknowledged, the calculations waiting to run, the outbox'
 and how long the oldest due one has waited, and the share of the window the telemetry lane spent
 busy. A lane near fully busy with a backlog that only grows is a server that cannot keep up,
 usually before any figure elsewhere moves.
+
+**Telemetry Ack Floor** reads against the **Telemetry Stream Head**, `a / b`: the sequence at and
+below which the consumer has answered every batch, beside the newest batch the stream stored. The
+gap between them is the backlog in sequences, healthy small and not growing. A floor that reaches a
+head read earlier means every batch stored by then has landed or been dropped, even while later
+ones are in flight; the lab's delivery read settles on exactly that before it counts loss.
 
 ### Retention
 

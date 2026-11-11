@@ -238,7 +238,8 @@ func TestDeliveryTableCauseSurvivesJSON(t *testing.T) {
 // The hops that joined the table beside the ingest hop each read as their own
 // figure: a sim row by its protocol (#1694), a push-lane row under its lane
 // (#1696) and never folded into the node lane's row for the same hop and
-// kind, and a schedule row naming skipped (#1693), all read back from JSON.
+// kind, a schedule row naming skipped (#1693), and the push lane's publish row
+// by the pushes it counts, naming refused-turn (#1746), all read back from JSON.
 func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
 	base := baselineOf(t, runsWith(3, nil))
 	lossy := func(r DeliveryRow) DeliveryRow {
@@ -260,6 +261,8 @@ func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
 			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Sim, Protocol: "http", In: 20, Out: 20,
 				Outcomes: map[delivery.Outcome]uint64{delivery.Returned: 20}}),
 			node, push,
+			lossy(DeliveryRow{Lane: LanePush, Hop: delivery.Publish, In: 4, Out: 3,
+				Outcomes: map[delivery.Outcome]uint64{delivery.TurnTaken: 3, delivery.RefusedTurn: 1}}),
 		}
 		*r = viaJSON(t, *r)
 	})
@@ -274,6 +277,7 @@ func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
 		{"delivery_loss/sim/http", PerfPass, nil},
 		{"delivery_loss/ingest/metric", PerfPass, nil},
 		{"delivery_loss/push/ingest/metric", PerfFail, []string{"metric lost 4 of 10 at ingest on the push lane", "cause missing"}},
+		{"delivery_loss/push/publish/pushes", PerfFail, []string{"pushes lost 1 of 4 at publish on the push lane", "cause refused-turn"}},
 	}
 	for _, c := range cases {
 		f := figureNamed(t, v, c.figure)
