@@ -51,14 +51,23 @@ describe("filterNav", () => {
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
-  // Platform health (#1644) sits after Nodes behind the same node:read door,
-  // because its rows are the node list.
-  it("shows Platform health after Nodes, and only to a node:read holder", () => {
-    const labels = navItems.map((i) => i.label);
-    expect(labels.indexOf("Platform health")).toBe(labels.indexOf("Nodes") + 1);
-    expect(rail(["node:read"])).toContain("Platform health");
-    expect(rail(["component:read", "system:read"])).not.toContain("Platform health");
+  // Platform health (#1644) is administration, so its door is Platform under
+  // Admin (#1767), behind the same node:read gate as Nodes because its rows are
+  // the node list. The page keeps its name; only the door is one word.
+  it("keeps Platform under Admin, and only for a node:read holder", () => {
+    expect(rail([">"])).not.toContain("Platform");
+    expect(rail([">"])).not.toContain("Platform health");
+    expect(section("Admin", ["node:read"])).toContain("Platform");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Platform");
     expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
+    expect(sectionLabel("/web/platform")).toBe("Platform");
+  });
+
+  // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
+  // A tab needing two words is a sign it names a page rather than a door.
+  it("labels every sidebar tab with one word", () => {
+    const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
+    expect(labels.filter((l) => /\s/.test(l))).toEqual([]);
   });
 
   it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Nodes", () => {
@@ -211,11 +220,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Platform", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only the ungated Settings soon-stub under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Settings"]);
+  it("shows a bare *:read viewer only Platform and the ungated Settings under Admin", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Platform", "Settings"]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {

@@ -74,10 +74,6 @@ export const navItems: NavItem[] = [
   // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
   // door.
   { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
-  // Platform health (#1644): whether Omniglass itself is well, read off the
-  // platform components every node and server already has. Behind node:read,
-  // the same door as Nodes, because its rows are the node list.
-  { label: "Platform health", path: "/platform", icon: Icons.Activity, live: true, resource: "node", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each node's check-in, schedule and command queue." },
   // Simulation (#890): the simulated fleet a simulator beside a node serves,
   // its live hits, impairments and each component's API surface. A lab and demo
   // surface, so its door shows only while a simulator is connected.
@@ -105,12 +101,17 @@ export const navItems: NavItem[] = [
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
-    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
+    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, platform health, and platform settings.",
     children: [
       { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
+      // Platform health (#1644): whether Omniglass itself is well, read off the
+      // platform components every node and server already has. Administration,
+      // so it sits here as Platform (#1767; every tab is one word), behind
+      // node:read like Nodes because its rows are the node list.
+      { label: "Platform", path: "/platform", live: true, resource: "node", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each node's check-in, schedule and command queue." },
       { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },
