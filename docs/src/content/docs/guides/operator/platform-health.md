@@ -147,7 +147,11 @@ reads it per kind ([reading the delivery table](/guides/lab/#reading-the-deliver
 Each server has a panel set: a disclosure headed with the server's name, its verdict and how many
 alarms are open on it, the first one open. The name links to the server's platform component. The
 four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the keys in each are the
-groups the platform view returns for a server, so the page holds no key list of its own.
+groups the platform view returns for a server, so the page holds no key list of its own. The page is
+the summary, not the whole record: every figure a server or a node writes of itself is either on it
+or kept off it on purpose, with a reason a test holds, so a new gauge cannot go missing quietly. What
+stays off (each process's runtime figures, the bus's request and pull counts, the retention pass's
+own bookkeeping) reads on the component page the server's name, or a node's row, opens.
 
 A panel row is one key: its last hour as a sparkline beside its current figure. Click a row, or tab
 to it and press Enter or Space, to open the full chart beneath it, and again to close it. Hover a key's name, or tab to it, for what
@@ -160,7 +164,7 @@ new, instance by instance: an ingest lag from before the fleet went quiet is not
 today's. The gauges the server samples every window, and the retention facts its hourly pass
 writes, read their latest however old. A pair
 that only reads against its bound (a pool's connections in use against its size, the oldest
-partition's age against the retention window) reads `a / b`, and byte sizes read in KB, MB or GB.
+partition's age against the retention window, the ack floor against the stream head) reads `a / b`, and byte sizes read in KB, MB or GB.
 
 A panel turns amber, and names the alarm, only while an alarm is open on one of its keys. The seeded
 rules on the server's keys raise those alarms; the page adds no threshold of its own, so an amber
@@ -203,6 +207,12 @@ delivered but not yet acknowledged, the calculations waiting to run, the outbox'
 and how long the oldest due one has waited, and the share of the window the telemetry lane spent
 busy. A lane near fully busy with a backlog that only grows is a server that cannot keep up,
 usually before any figure elsewhere moves.
+
+**Telemetry Ack Floor** reads against the **Telemetry Stream Head**, `a / b`: the sequence at and
+below which the consumer has answered every batch, beside the newest batch the stream stored. The
+gap between them is the backlog in sequences, healthy small and not growing. A floor that reaches a
+head read earlier means every batch stored by then has landed or been dropped, even while later
+ones are in flight; the lab's delivery read settles on exactly that before it counts loss.
 
 ### Retention
 
