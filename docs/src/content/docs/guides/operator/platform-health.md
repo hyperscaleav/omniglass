@@ -189,6 +189,13 @@ handed on and lost, as a loss ratio where 0 is healthy) lands on its platform co
 (#1659) and is read as the Ingest hop under [where work is lost](#where-work-is-lost). An oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
 which turns this panel amber.
 
+Below them, the push lane's front door (#1746). Every push and webhook post waits for the server's
+one publish turn, and a wait past 5 seconds is refused with `503`, so **Push Lane Refusals** reads as
+a share of **Push Lane Publishes**, 0 when healthy, and **Push Lane Turn Wait** at the 99th
+percentile and at worst says how close the lane runs to refusing. A refused push minted nothing, so
+it is not on the Ingest hop's figures: this pair is where it shows. The lab reads the same figures as
+the [publish row](/guides/lab/#reading-the-push-lanes-turn) of its delivery table.
+
 ### Queues
 
 What is waiting. The telemetry batches not yet delivered to the server's consumer and those
