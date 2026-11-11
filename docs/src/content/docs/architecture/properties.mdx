@@ -331,7 +331,7 @@ The read side pivots three values per property of an owner, and carries them on 
 
 - **Raw payload: not stored.** The sample is authoritative; see [observed](#observed-from-a-component-via-an-edge-parse).
 - **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in `metric` / `property` is the persistence write, and samples **do not go through CDC** ([messaging](/architecture/messaging/#two-lanes-one-bus)).
-- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_line`** (a component's words), **`node_log`** (a node's self-narration), **`audit_log`**, and the design-stage **`session_log`**, **`internal_log`**, and **`collection_log`**. No rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` itself.
+- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_line`** (a component's words, the platform's own narration included, on its platform component), **`node_log`** (a node's self-narration), **`audit_log`**, and the design-stage **`session_log`** and **`collection_log`**. No rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` itself.
 - **Derived** (produced by rules, reconstructable in principle): **`metric`**, **`property`**, **event**, **alarm**, **action**.
 
 ## The DAG invariant

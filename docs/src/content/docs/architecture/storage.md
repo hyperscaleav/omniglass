@@ -248,9 +248,10 @@ The immutable, append-only records: the lineage targets and what a backtest read
 - **`node_log`** (a **node's** self-logs, the same payload shape without the owner arc, split by origin, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for operator writes; secret decrypts always recorded, [audit](/architecture/audit/)).
 
+The platform's own narration is `log_line` too, on the platform component of the process that tells it, not a table of its own: the server's housekeeping notes land on the server's component ([what a retention pass reports](#what-a-retention-pass-reports), [ADR-1708](/architecture/decisions/#adr-1708-the-platforms-self-narration-is-log-lines-on-its-platform-component-not-a-table-of-its-own)).
+
 :::design[Target design, tracked in #430]
 - **`session_log`** (connection-lifecycle transitions, node-reported, [nodes](/architecture/nodes/#sessions)); the built session (#816) needed none: its state is the `session-state` property and its reasons are node logs ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)), so this table waits on per-session counters earning it;
-- **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg / config-sync, [workers](/architecture/workers/));
 - the **`collection_log`** companion (the cheap per-run execution record).
 :::
 
@@ -623,6 +624,18 @@ code). One pass writes one sample per key and instance, at the pass's end:
   index leading on `ts` it is a full scan, so the behind flags and deleted counts stand in until #1417
   partitions them.
 
+Beside the figures, a pass tells what it did in words, as `log_line` rows on the same component
+(#1708): source `omniglass-server`, facility `retention`, one line per kind of work the pass did, each
+with the message the process's log carries and its counts as attributes. **Rows pruned past their
+retention window** (the deleted count per lane, their total, the lanes left behind), **metric hours
+closed into trends**, **metric days folded into blocks**, and **metric partitions rolled** are info; a
+failed pass is a warning carrying its error. The boot's partition check writes **metric partitions
+created** when it made any. A pass that did nothing writes nothing, and none raises an event: a pass is
+routine, not a condition. The line goes through the Storage Gateway like any component's; a failed
+write is one warning in the process's log, never retried and never failing the pass, and a server with
+no platform component (a test harness) writes none. The lines age out with the info and warning bands
+they sit in, like any other.
+
 **Behind and failed read differently.** A lane is *behind* when the pass stopped at its chunk budget
 with rows still past the window, which is normal after a long outage or a window shortened: the next
 pass comes a minute later and catches up. A *failure* is an error (a statement that failed, a window
@@ -648,7 +661,7 @@ none of these figures until a boot whose ensure succeeds.
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning, rolled by the server: no `pg_partman`, no `pg_cron`). The firehose (`metric`) is the partitioning-critical one, and is built ([above](#the-narrow-metric-lane)); `event`, `log_line` and `node_log` are not yet. `property` is not partitioned: sparse by construction.
-- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band (with an optional install-wide override per band for `node_log`, #1350), in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
+- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band (with an optional install-wide override per band for `node_log`, #1350), in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
 

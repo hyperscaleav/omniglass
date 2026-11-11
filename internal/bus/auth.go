@@ -99,6 +99,10 @@ type Store interface {
 	// RetentionStatus is the storage read after each pass (#1629): the
 	// metric partitions held and the stored tables' and database's bytes.
 	RetentionStatus(ctx context.Context) (storage.RetentionStatus, error)
+	// InsertLogLines is the housekeeping narration's write (#1708): what a
+	// retention pass or the boot's partition check did, as log lines on the
+	// server's platform component.
+	InsertLogLines(ctx context.Context, lines []storage.LogLineWrite) error
 	// CompactMetricTrends and PruneMetricTrends are the trend tier's (#1276):
 	// hours closed into trends on every pass, and the trend window kept.
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)

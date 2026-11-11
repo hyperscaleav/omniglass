@@ -250,9 +250,9 @@ func (s *Server) subscribe() error {
 	if err != nil {
 		return fmt.Errorf("bus: metric partitions: %w", err)
 	}
-	if len(created) > 0 {
-		slog.Info("metric partitions created", "facility", "retention", "created", created)
-	}
+	// What it made is told as a log line on the server's platform component
+	// too (#1708); a failed write is logged and never refuses the boot.
+	tellHousekeeping(context.Background(), s.store, s.platformComponentID, partitionNotes(created), time.Now(), partitionBootTimeout)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
