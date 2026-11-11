@@ -253,33 +253,17 @@ func (s *Server) startSampleRetention() {
 			start := time.Now()
 			rep, err := retentionPass(ctx, s.store, start, sampleRetentionChunk, sampleRetentionMaxChunks, sampleRetentionTimeout)
 			rep.Duration = time.Since(start)
-			if err != nil && ctx.Err() == nil {
-				slog.Warn("sample retention pass failed", "facility", "retention", "error", err.Error())
+			// What the pass did is told to the process's log and as log lines
+			// on the server's platform component (#1708); a pass cut short by
+			// shutdown is not a failure.
+			if ctx.Err() != nil {
+				err = nil
 			}
+			tellHousekeeping(ctx, s.store, s.platformComponentID, retentionNotes(rep, err), time.Now(), sampleRetentionTimeout)
 			// The pass's figures land on the server's platform component
 			// (#1629); a failed write loses one pass's points, logged.
 			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
 				slog.Warn("retention figures not recorded", "facility", "retention", "error", err.Error())
-			}
-			var total int64
-			for _, n := range rep.Deleted {
-				total += n
-			}
-			if total > 0 || len(rep.Behind) > 0 {
-				slog.Info("rows pruned past their retention window", "facility", "retention",
-					"deleted", rep.Deleted, "behind", rep.Behind)
-			}
-			if rep.Trends.Hours > 0 || rep.Trends.Recomputed > 0 {
-				slog.Info("metric hours closed into trends", "facility", "retention",
-					"hours", rep.Trends.Hours, "through", rep.Trends.Through, "recomputed", rep.Trends.Recomputed)
-			}
-			if b := rep.Blocks; b.Days > 0 || b.Weeks > 0 {
-				slog.Info("metric days folded into blocks", "facility", "retention", "days", b.Days, "through", b.Through,
-					"weeks", b.Weeks, "week_through", b.WeekThrough, "blocks", b.Blocks)
-			}
-			if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
-				slog.Info("metric partitions rolled", "facility", "retention",
-					"created", rep.Created, "dropped", rep.Dropped)
 			}
 			t := time.NewTimer(nextRetentionWait(rep))
 			select {

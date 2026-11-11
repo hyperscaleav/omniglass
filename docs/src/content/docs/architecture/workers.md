@@ -171,8 +171,9 @@ drift, the system-level form of [config](/architecture/variables/)'s `reconcile:
 - **Output**: the delta, asserted as **node config** (which tasks and commands each node runs,
   derived from placements) and as **reconciled `run` actions** (desired-state commands that stay
   asserted, e.g. a codec's feedback registration).
-- **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging an
-  `internal_log` per run.
+- **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging a
+  `log_line` per run on the server's platform component, as the retention pass does
+  ([storage](/architecture/storage/#what-a-retention-pass-reports)).
 
 Open: the reconcile cadence (continuous versus on-audit-change versus a periodic full sweep) and
 backoff on a flapping target.

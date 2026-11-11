@@ -109,6 +109,7 @@ func (f fakeStore) RetentionStatus(context.Context) (storage.RetentionStatus, er
 	return storage.RetentionStatus{}, nil
 }
 func (f fakeStore) RecordTermedBatch(context.Context, storage.TermedBatch) error { return nil }
+func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error { return nil }
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }
