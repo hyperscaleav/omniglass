@@ -27,11 +27,12 @@ import (
 // tallied over the node's report window, the collection report's
 // (report.go), and emitted once when it ends, every window, a quiet window's
 // as zero: a count written only when nonzero would leave the last event's
-// count standing as the series' latest value long after it. The first window runs from the node's start, so it is
-// whole and writes too. Pure: the run loop feeds it and sends what it takes.
+// count standing as the series' latest value long after it. The window sits
+// on the node's grid (#1779), the collection report's, and its first runs
+// from the node's start to its first slot and writes too. Pure: the run loop
+// feeds it and sends what it takes.
 type nodeReport struct {
-	every time.Duration
-	since time.Time
+	win reportWindow
 
 	overruns int
 	skipped  int
@@ -62,18 +63,20 @@ type spoolFigures struct {
 	flow    delivery.Counts
 }
 
-func newNodeReport(every time.Duration, now time.Time) *nodeReport {
+// newNodeReport starts a report whose windows sit on the grid seed places,
+// the collection report's (#1779).
+func newNodeReport(every time.Duration, seed uint64, now time.Time) *nodeReport {
 	if every <= 0 {
 		every = defaultReportEvery
 	}
-	return &nodeReport{every: every, since: now}
+	return &nodeReport{win: newReportWindow(every, seed, now)}
 }
 
 // setEvery applies the report window the worklist carries; none keeps the
 // window the node has.
 func (r *nodeReport) setEvery(every time.Duration) {
-	if r != nil && every > 0 {
-		r.every = every
+	if r != nil {
+		r.win.setEvery(every)
 	}
 }
 
@@ -149,13 +152,13 @@ func (r *nodeReport) worklist(tasks int, at time.Time) {
 }
 
 // take returns what the report holds: the each-tick samples since the last
-// take, and, once the window has run its length, the window's counts, zero
-// included, stamped at now, the window's end, the next window starting there.
+// take, and, once the window has reached its grid end, the window's counts,
+// zero included, stamped at now, the next window starting at that end.
 func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 	if r == nil {
 		return nil
 	}
-	if !now.Before(r.since.Add(r.every)) {
+	if r.win.due(now) {
 		for _, c := range []struct {
 			key string
 			n   int
@@ -173,7 +176,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			r.sample(rd.Key, rd.Value, now, rd.Instance)
 		}
 		r.overruns, r.skipped, r.flow, r.schedule = 0, 0, delivery.Counts{}, delivery.Counts{}
-		r.since = now
+		r.win.close(now)
 	}
 	out := r.samples
 	r.samples = nil

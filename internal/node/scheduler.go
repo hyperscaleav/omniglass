@@ -3,7 +3,6 @@ package node
 import (
 	"container/heap"
 	"context"
-	"hash/fnv"
 	"sync"
 	"time"
 
@@ -42,9 +41,7 @@ func phaseOf(id string, every time.Duration) time.Duration {
 	if every <= 0 {
 		return 0
 	}
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(id))
-	return time.Duration(h.Sum64() % uint64(every))
+	return time.Duration(phaseSeed(id) % uint64(every))
 }
 
 // slotAfter is the first slot of the grid (every apart, offset phase from

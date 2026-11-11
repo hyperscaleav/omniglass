@@ -24,8 +24,7 @@ const defaultReportEvery = time.Minute
 // (#1634), and the run loop publishes what it takes.
 type collectionReport struct {
 	mu        sync.Mutex
-	every     time.Duration
-	since     time.Time
+	win       reportWindow
 	endpoints map[string]*endpointTally
 }
 
@@ -58,11 +57,14 @@ type endpointReport struct {
 	samples []collection.Sample
 }
 
-func newCollectionReport(every time.Duration, now time.Time) *collectionReport {
+// newCollectionReport starts a report whose windows sit on the grid seed
+// places (#1779): the node's phaseSeed, so its reports keep their place
+// across a restart and spread from other nodes'.
+func newCollectionReport(every time.Duration, seed uint64, now time.Time) *collectionReport {
 	if every <= 0 {
 		every = defaultReportEvery
 	}
-	return &collectionReport{every: every, since: now, endpoints: map[string]*endpointTally{}}
+	return &collectionReport{win: newReportWindow(every, seed, now), endpoints: map[string]*endpointTally{}}
 }
 
 // setEvery applies the window the worklist carries, from the window in
@@ -70,9 +72,14 @@ func newCollectionReport(every time.Duration, now time.Time) *collectionReport {
 func (r *collectionReport) setEvery(every time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if every > 0 {
-		r.every = every
-	}
+	r.win.setEvery(every)
+}
+
+// every is the report's window length.
+func (r *collectionReport) every() time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.win.every
 }
 
 func (r *collectionReport) tally(endpoint string) *endpointTally {
@@ -172,15 +179,15 @@ func (r *collectionReport) pushes(endpoint string, claimed, unclaimed int) {
 	e.unclaimed += unclaimed
 }
 
-// due reports a window that has run its length.
+// due reports a window that has reached its grid end.
 func (r *collectionReport) due(now time.Time) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return !now.Before(r.since.Add(r.every))
+	return r.win.due(now)
 }
 
-// take returns the window's rows, each stamped at now, the window's end, and
-// starts the next window there. Each endpoint's rows publish under the task
+// take returns the window's rows, each stamped at now, and starts the next
+// window at the grid end of this one. Each endpoint's rows publish under the task
 // tasks names for it, the task the node holds now: a driver revision
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
@@ -231,7 +238,7 @@ func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpoi
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].task < out[j].task })
 	r.endpoints = map[string]*endpointTally{}
-	r.since = now
+	r.win.close(now)
 	return out
 }
 

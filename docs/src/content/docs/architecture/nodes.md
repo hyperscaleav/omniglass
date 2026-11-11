@@ -457,7 +457,9 @@ heartbeat ([ADR-1636](/architecture/decisions/#adr-1636-held-sessions-reconcile-
   dial cannot hold up a healthy session's recovery; the jittered backoff spreads a mass redial.
 - **Housekeeping on its own clock.** Unclaimed lines are flushed and pushes are counted into the
   collection report on a housekeeping timer at the report window, never longer than the
-  heartbeat, so a long heartbeat does not hold them.
+  heartbeat, so a long heartbeat does not hold them. A pass takes the report once its window
+  reaches its grid end, and the next window starts at that end, not at the pass, so a pass running
+  a second late never stretches the window that follows (#1779).
 
 Still design below: the pool knobs.
 

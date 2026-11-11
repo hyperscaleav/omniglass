@@ -34,7 +34,7 @@ func readings(ms []*ogv1.MetricSample) map[string]float64 {
 func TestNodeReportTalliesTheDispatchWindows(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 3, passMax: 2 * time.Second, overruns: 1, skips: 2}, t0)
 	r.dispatch(dispatchWindow{passes: 1, passMax: time.Millisecond, overruns: 1}, t0.Add(30*time.Second))
 	got := readings(r.take(t0.Add(time.Minute)))
@@ -46,7 +46,7 @@ func TestNodeReportTalliesTheDispatchWindows(t *testing.T) {
 func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	for i := range 3 {
 		r.dispatch(dispatchWindow{passes: 4, passMax: 2 * time.Second}, t0.Add(time.Duration(i)*30*time.Second))
 	}
@@ -62,7 +62,7 @@ func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{}, t0)
 	if got := readings(r.take(t0)); len(got) != 0 {
 		t.Fatalf("an empty dispatch window read %v", got)
@@ -72,7 +72,7 @@ func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 
 	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
@@ -127,7 +127,7 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
 	t1, t2, t3 := t0.Add(time.Minute), t0.Add(2*time.Minute), t0.Add(3*time.Minute)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
 	first := readings(r.take(t1))
@@ -161,7 +161,7 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 func TestNodeReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	key := func(k string, kind delivery.Kind) string { return k + "/" + string(kind) }
 
 	var early delivery.Counts
@@ -213,7 +213,7 @@ func TestNodeReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
 func TestNodeReportSamplesTheEachTickFigures(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 2, passMax: 1500 * time.Millisecond, runs: 3, lateMax: 250 * time.Millisecond, gapMax: 15 * time.Second}, t0)
 	r.spool(spoolFigures{batches: 0}, t0)
 	r.sessions(map[collection.SessionState]int{collection.SessionUp: 3, collection.SessionDown: 1}, t0)
@@ -260,7 +260,7 @@ func TestNodeReportSamplesTheEachTickFigures(t *testing.T) {
 func TestNodeReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 1, passMax: time.Millisecond}, t0)
 	got := readings(r.take(t0))
 	for _, k := range []string{writerclass.ScheduleLateness, writerclass.ScheduleGapExcess} {
@@ -286,7 +286,7 @@ func TestNodeReportIsNilSafe(t *testing.T) {
 func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.process(platformmetric.Process{CPU: 4 * time.Second, FDs: 12}, t0)
 	first := readings(r.take(t0))
 	if _, ok := first[writerclass.ProcessCPUSeconds]; ok {
@@ -308,7 +308,7 @@ func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	r.commandPullFailed()
 	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[writerclass.CommandPullFailureCount] != 0 {
 		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
@@ -337,7 +337,7 @@ func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for range 100 {
@@ -362,7 +362,7 @@ func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
 func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, t0)
+	r := newNodeReport(time.Minute, 0, t0)
 	var first, second dispatchWindow
 	first.schedule.Scheduled([]delivery.Kind{delivery.Metric, delivery.Property}, 2, 1)
 	second.schedule.Scheduled([]delivery.Kind{delivery.Metric}, 1, 0)

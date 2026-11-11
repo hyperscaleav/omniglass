@@ -425,7 +425,7 @@ func TestSessionManagerReportsItsListenersPushes(t *testing.T) {
 	defer m.closeAll()
 	m.reconcile([]collection.TaskSpec{task})
 	tasks := publishTasks([]collection.TaskSpec{task})
-	report := newCollectionReport(time.Minute, t0)
+	report := newCollectionReport(time.Minute, 0, t0)
 	take := func(at time.Time) map[string]float64 {
 		t.Helper()
 		m.reportPushes(report)

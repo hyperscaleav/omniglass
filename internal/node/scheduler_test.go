@@ -50,7 +50,7 @@ type schedHarness struct {
 
 func newSchedHarness(t *testing.T, start time.Time, workers int, heartbeat time.Duration) *schedHarness {
 	h := &schedHarness{t: t, now: start, runs: map[string][]time.Time{}, spans: map[string][][2]time.Time{},
-		started: make(chan string, 256), report: newCollectionReport(time.Hour, start)}
+		started: make(chan string, 256), report: newCollectionReport(time.Hour, 0, start)}
 	h.d = newDispatcher(dispatchConfig{workers: workers, heartbeat: heartbeat, clock: h.clock,
 		sched: newPollSchedule(), report: h.report, work: h.work})
 	t.Cleanup(h.d.pool.wait)
