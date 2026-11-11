@@ -261,6 +261,10 @@ ledger the server can read, so it records nothing: its items stay `missing`, and
   took the turn (`turn-taken`), the loss `refused-turn`. A push is one call whatever it carries, so
   the row is counted in pushes, never composed with a kind's items
   ([ADR-1746](/architecture/decisions/#adr-1746-a-push-refused-at-the-publish-turn-is-read-as-a-publish-row-counted-in-pushes), #1746).
+  One turn per server holds at the corporate 3,000 push load: 5 pushes a second from 60 pushers
+  refused none and waited about 0.01 ms at the p99, so the turn is not sharded until a run shows it
+  near its bound
+  ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
 
 `omniglass lab measure` prints the table
 ([lab](/guides/lab/#reading-the-delivery-table)).

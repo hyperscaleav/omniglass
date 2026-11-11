@@ -807,6 +807,9 @@ push lane that is keeping up from one whose pushers queue behind each other:
 - **`push-lane-turn-wait-p99`**, **`push-lane-turn-wait-max`**: how long a push waited for the
   turn, in milliseconds, at the 99th percentile and at worst. A refused push counts its whole wait.
   Healthy is a few milliseconds; a p99 that climbs toward 5,000 is the push lane about to refuse.
+  A corporate 3,000 lab pushes about 5 times a second and reads a p99 near 0.01 ms with no
+  refusals, the measurement the one publish turn stands on
+  ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
 
 Platform health shows all four on the server's [Ingest panel](/guides/operator/platform-health/#ingest),
 the refusals as a share of the publishes. The CLI reads the same panel:
