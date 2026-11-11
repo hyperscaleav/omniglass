@@ -36,6 +36,36 @@ rules:
     severity: warning
     fire_event_type: condition-started
     clear_event_type: condition-ended
+  # A claimed node gone quiet (#1094, #1707): the server's check-in timer
+  # writes each claimed node's checkin-age every 15 s, and an age past 90 s is
+  # three of a node's 30 s heartbeats missed. The age is itself the sustain, so
+  # the rule fires on the first reading past it, with no fire_sustain of its
+  # own. Raised on the node's platform component; it clears on the first
+  # reading back at or under 90, which a node's next heartbeat brings.
+  - name: node-silent
+    label: Node silent
+    description: A claimed node has not checked in for more than 90 seconds, three missed heartbeats.
+    sample_key: checkin-age
+    fire: 'value > 90'
+    clear: 'value <= 90'
+    severity: high
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
+  # The server's data directory nearly out of room (#1094, #1707): the
+  # filesystem holding it past 90 percent used for a sustained stretch, so a
+  # brief spike (a large temporary file) does not page. It clears only once the
+  # disk is back at or under 85 percent, so a disk sitting at the line does not
+  # flap. Raised on the server's own platform component.
+  - name: disk-nearly-full
+    label: Disk nearly full
+    description: The filesystem holding the server's data directory is more than 90 percent used.
+    sample_key: data-dir-disk-used-ratio
+    fire: 'value > 0.9'
+    fire_sustain: 2m
+    clear: 'value <= 0.85'
+    severity: warning
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
   # A retention lane, or a compaction, that stops short of its window pass
   # after pass opens a warning on the server's platform component (#1629):
   # one alarm per lane, once the flag has read 1 for the sustain. A pass left

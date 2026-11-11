@@ -800,6 +800,14 @@
    "description": "On-disk bytes of the whole Omniglass database."
   },
   {
+   "name": "data-dir-disk-used-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Data Disk Used",
+   "description": "The share of the filesystem holding the server's data directory that is in use, used bytes over total, 0 empty and 1 full. Written every report window; a window whose disk read failed carries none."
+  },
+  {
    "name": "http-request-count",
    "data_type": "int",
    "label": "HTTP Requests",
@@ -3989,6 +3997,29 @@
    "sample_key": "ingest-lag-max",
    "fire": "value \u003e 30",
    "clear": "value \u003c= 30",
+   "fire_sustain": "2m",
+   "severity": "warning",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "node-silent",
+   "label": "Node silent",
+   "description": "A claimed node has not checked in for more than 90 seconds, three missed heartbeats.",
+   "sample_key": "checkin-age",
+   "fire": "value \u003e 90",
+   "clear": "value \u003c= 90",
+   "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "disk-nearly-full",
+   "label": "Disk nearly full",
+   "description": "The filesystem holding the server's data directory is more than 90 percent used.",
+   "sample_key": "data-dir-disk-used-ratio",
+   "fire": "value \u003e 0.9",
+   "clear": "value \u003c= 0.85",
    "fire_sustain": "2m",
    "severity": "warning",
    "fire_event_type": "condition-started",

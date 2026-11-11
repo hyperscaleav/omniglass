@@ -81,6 +81,7 @@
       "command-pull-failure-count",
       "command-redelivery-count",
       "command-stuck-count",
+      "data-dir-disk-used-ratio",
       "database-bytes",
       "db-pool-acquired",
       "db-pool-idle",

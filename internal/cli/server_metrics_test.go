@@ -84,8 +84,9 @@ func TestApplySlowQueryFollowsTheSetting(t *testing.T) {
 }
 
 // TestServerReporterGaugesThePoolAndReReadsTheSetting: each window lands the
-// pool's gauges on the server's component and re-reads the slow-query
-// setting, so a change takes within a window without a restart.
+// pool's gauges and the data directory's disk on the server's component and
+// re-reads the slow-query setting, so a change takes within a window without
+// a restart.
 func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -93,7 +94,7 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900},
 		outbox: storage.OutboxStatus{Queued: 7, DueAge: 45 * time.Second}}
 	sampled := false
-	rp := m.reporter(gw, "server-1", nil, func(context.Context, *platformmetric.Recorder) { sampled = true })
+	rp := m.reporter(gw, "server-1", t.TempDir(), nil, func(context.Context, *platformmetric.Recorder) { sampled = true })
 	gw.pool = storage.PoolStat{Acquired: 3, Max: 12, EmptyAcquireCount: 4}
 	if err := rp.Report(ctx); err != nil {
 		t.Fatalf("report: %v", err)
@@ -117,6 +118,10 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	if _, ok := got[writerclass.ProcessGoroutineCount]; !ok {
 		t.Errorf("the window read no runtime: %v", got)
 	}
+	// The data directory's disk is read off the real filesystem (#1707).
+	if v, ok := got[writerclass.DataDirDiskUsedRatio]; !ok || v < 0 || v > 1 {
+		t.Errorf("data directory disk = %v (present %v), want a ratio from 0 to 1", v, ok)
+	}
 	if !sampled {
 		t.Error("the bus sampler the reporter was handed never ran")
 	}
@@ -128,7 +133,7 @@ func TestServerReporterSaysNothingOfAnUnreadOutbox(t *testing.T) {
 	t.Parallel()
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 	gw := &fakeSelfStore{outboxErr: errors.New("down")}
-	if err := m.reporter(gw, "server-1", nil).Report(context.Background()); err != nil {
+	if err := m.reporter(gw, "server-1", t.TempDir(), nil).Report(context.Background()); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 	for _, r := range gw.written {
@@ -145,7 +150,7 @@ func TestAServerWithNoComponentStillFollowsTheSlowQuerySetting(t *testing.T) {
 	t.Parallel()
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900}, pool: storage.PoolStat{Max: 12}}
-	if err := m.reporter(gw, "", nil).Report(context.Background()); err != nil {
+	if err := m.reporter(gw, "", t.TempDir(), nil).Report(context.Background()); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 	if got := m.tracer.Threshold(); got != 900*time.Millisecond {
