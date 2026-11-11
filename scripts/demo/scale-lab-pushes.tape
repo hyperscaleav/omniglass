@@ -71,9 +71,14 @@ Wait
 Type "# lab measure reads the push lane: a window long enough for a later push to settle the first"
 Enter
 Wait
-Type "omniglass lab measure --systems 0 --warmup 10s --window 70s --fleet-reads 1 --backlog 0 --json /tmp/push-lane.json >/tmp/push-lane.txt 2>/tmp/push-lane.err"
+Hide
+Type `demo_hush 'omniglass lab measure --systems 0 --warmup 10s --window 70s --fleet-reads 1 --backlog 0 --json /tmp/push-lane.json >/tmp/push-lane.txt 2>/tmp/push-lane.err'`
 Enter
 Wait@300s
+Show
+Type "# Measured unseen: omniglass lab measure --systems 0 --warmup 10s --window 70s --backlog 0"
+Enter
+Wait
 Type "# Every booking and every signed platform post was stored: each push-lane row reads a loss of 0"
 Enter
 Wait
