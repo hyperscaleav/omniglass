@@ -356,6 +356,28 @@ metric_types:
     data_type: int
     label: Sweep Failures
     description: Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count.
+  # The push lane's one publisher (#1746), on the server's platform component:
+  # every push waits for the publish turn, one at a time, and a wait past the
+  # bound is refused (the API answers 503, minting nothing), so a refusal
+  # reads as a share of the publishes, zero when healthy.
+  - name: push-lane-publish-count
+    data_type: int
+    label: Push Lane Publishes
+    description: Pushes that waited for the push lane's publish turn over the report window, taken or refused.
+  - name: push-lane-refusal-count
+    data_type: int
+    label: Push Lane Refusals
+    description: Pushes refused because their wait for the publish turn passed the bound (answered 503, nothing minted) over the report window; a share of push-lane-publish-count.
+  - name: push-lane-turn-wait-p99
+    data_type: float
+    unit: ms
+    label: Push Lane Turn Wait (p99)
+    description: The 99th percentile of how long a push waited for the publish turn over the report window, a refusal's whole bound included.
+  - name: push-lane-turn-wait-max
+    data_type: float
+    unit: ms
+    label: Push Lane Turn Wait (max)
+    description: The longest a push waited for the publish turn over the report window, a refusal's whole bound included.
   # A node's command queue (#1626), on the node's platform component: the
   # server writes all but the pull failures, which the node counts of itself.
   # Each is one observation per sample; a percentile derives from the

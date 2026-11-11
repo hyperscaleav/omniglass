@@ -141,3 +141,30 @@ func TestRecorderOrdersItsFlush(t *testing.T) {
 		}
 	}
 }
+
+// TestRecorderFoldsAQuantileOfDurations (#1746): a quantile series counts
+// the window's durations into the latency histogram's buckets and reads the
+// asked quantile in milliseconds, within one bucket width of the truth; an
+// empty window reads nothing, and the next window starts from no durations.
+func TestRecorderFoldsAQuantileOfDurations(t *testing.T) {
+	t.Parallel()
+	clock := &fixedClock{t: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)}
+	r := platformmetric.NewRecorder(clock.now)
+	for i := range 99 {
+		r.Quantile("wait-p99", "", 0.99, time.Duration(i%10)*time.Millisecond)
+	}
+	r.Quantile("wait-p99", "", 0.99, 4*time.Second)
+	r.Quantile("wait-p99", "", 0.99, 4*time.Second)
+	got := byKey(r.Flush("c"))[[2]string{"wait-p99", ""}]
+	if got.Value < 4000*7/8 || got.Value > 4000*9/8 {
+		t.Fatalf("p99 over 99 short waits and two of 4 s = %v ms, want about 4000", got.Value)
+	}
+
+	r.Quantile("wait-p99", "", 0.99, 3*time.Millisecond)
+	if got := byKey(r.Flush("c"))[[2]string{"wait-p99", ""}]; got.Value < 3*7.0/8 || got.Value > 3*9.0/8 {
+		t.Fatalf("the next window's p99 of one 3 ms wait = %v ms, want about 3: the window carried the last one's waits", got.Value)
+	}
+	if rows := r.Flush("c"); len(rows) != 0 {
+		t.Fatalf("a quantile with nothing observed flushed %+v, want nothing", rows)
+	}
+}

@@ -548,7 +548,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 	} else {
 		var hops []DeliveryRow
 		hops, out.DeliveryUnsettled, out.DeliveryEnded = DeliveryOf(d)
-		out.Delivery = append(out.Delivery, WithSchedule(ScheduleRowsOf(d.Schedule), hops)...)
+		out.Delivery = append(out.Delivery, WithPublish(PublishRowOf(d.Publish), WithSchedule(ScheduleRowsOf(d.Schedule), hops))...)
 		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
 		if !d.StreamClear {
 			_, why := d.Backlog.Settled(d.Published)

@@ -459,6 +459,51 @@ func TestPlatformViewAgesOutAServerWindowFigure(t *testing.T) {
 	}
 }
 
+// TestPlatformViewServesThePushLaneTurn (#1746): the Ingest panel reads the
+// push lane's publish turn, its refusals against its publishes (a pair, so 0
+// of n reads healthy) and the turn's p99 and max wait, each its newest
+// window's figure. It stands on a bare server component rather than the
+// platform view fixture, whose samples are pinned to fixed days.
+func TestPlatformViewServesThePushLaneTurn(t *testing.T) {
+	t.Parallel()
+	gw, ctx, _ := platformGatewayDSN(t)
+	server, err := gw.EnsureServerComponent(ctx, "lab-server")
+	if err != nil {
+		t.Fatalf("ensure server component: %v", err)
+	}
+	window := time.Now().UTC().Truncate(time.Second).Add(-5 * time.Second)
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: server, Key: writerclass.PushLanePublishCount, Value: 412, TS: window},
+		{ComponentID: server, Key: writerclass.PushLaneRefusalCount, Value: 3, TS: window},
+		{ComponentID: server, Key: writerclass.PushLaneTurnWaitP99, Value: 4800, TS: window},
+		{ComponentID: server, Key: writerclass.PushLaneTurnWaitMax, Value: 5001, TS: window},
+	}); err != nil {
+		t.Fatalf("record platform metrics: %v", err)
+	}
+	v, err := gw.PlatformView(ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	ingest := serverPanel(t, v, "ingest")
+	var paired bool
+	for _, k := range ingest.Keys {
+		paired = paired || (k.Name == writerclass.PushLaneRefusalCount && k.Of == writerclass.PushLanePublishCount)
+	}
+	if !paired {
+		t.Errorf("ingest keys = %+v, want push-lane-refusal-count read against push-lane-publish-count", ingest.Keys)
+	}
+	for key, want := range map[string]float64{
+		writerclass.PushLanePublishCount: 412,
+		writerclass.PushLaneRefusalCount: 3,
+		writerclass.PushLaneTurnWaitP99:  4800,
+		writerclass.PushLaneTurnWaitMax:  5001,
+	} {
+		if got := figuresOf(ingest, key); len(got) != 1 || got[0].Value != want {
+			t.Errorf("%s = %+v, want this window's %v", key, got, want)
+		}
+	}
+}
+
 // deliveryWindow is one window of a hop's three keys for one kind on one
 // platform component, as the node's report or the server's recorder writes it.
 func deliveryWindow(id, kind string, in, out float64, ts time.Time) []storage.PlatformMetric {

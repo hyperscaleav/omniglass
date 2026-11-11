@@ -736,6 +736,21 @@ func (h *harness) readSchedule(ctx context.Context, d DeliveryRead) DeliveryRead
 	if d.Schedule, err = ParseSchedule(out); err != nil {
 		return DeliveryRead{Reason: err.Error()}
 	}
+	return h.readPublish(ctx, d)
+}
+
+// readPublish adds the push lane's publish hop (#1746) to a settled read.
+// The server stamps its turn counts at each report window's close, so the
+// read sums the windows that closed in the measured one: it can lead or trail
+// the receipts' window by up to one collection report window.
+func (h *harness) readPublish(ctx context.Context, d DeliveryRead) DeliveryRead {
+	out, err := h.psql(ctx, PublishQuery(d.Window.From, d.Window.To))
+	if err != nil {
+		return DeliveryRead{Reason: fmt.Sprintf("the publish hop did not read: %v", err)}
+	}
+	if d.Publish, err = ParsePublish(out); err != nil {
+		return DeliveryRead{Reason: err.Error()}
+	}
 	return d
 }
 

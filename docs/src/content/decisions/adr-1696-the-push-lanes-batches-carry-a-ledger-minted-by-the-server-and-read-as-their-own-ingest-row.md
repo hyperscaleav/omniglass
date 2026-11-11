@@ -42,6 +42,10 @@ refs: [1696, 1641, 1623, 1659, 1691, 1024]
     that outgrows it shards the publisher, one boot per shard. A stalled stream holds the turn
     through every attempt of the publish at the head, so the turn's wait is bounded: a caller
     behind it hears `503` within one ack timeout, not that stall times its place in the queue.
+    **Amended (#1746):** measured at the corporate 3,000 push load (60 pushers, 5 pushes a second),
+    the turn refused nothing and its p99 wait stayed near 0.01 ms, so the one publisher stays and
+    sharding waits on a run that shows the turn near its bound
+    ([ADR-1746.2](#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
   - A refused publish whose copy the stream did store (the ack lost in flight) lands with offsets
     that overlap its next neighbor's. Read alone it counts correctly, but when the batch above it is
     also missing, that hole reads up to the withdrawn count short. Both must happen in one window,

@@ -442,3 +442,29 @@ func TestRequestFailuresAreCounted(t *testing.T) {
 		t.Fatalf("bus-request-count[heartbeat] = %v, want 2", n)
 	}
 }
+
+// TestAPushLandsItsTurnOnTheServerComponent (#1746): a push through the
+// server's push lane lands, at the window's report, one publish, a refusal
+// count beside it (zero, so the refusal ratio reads healthy rather than
+// absent), and its turn's wait as the window's p99 and max, well under the
+// bound on an idle lane.
+func TestAPushLandsItsTurnOnTheServerComponent(t *testing.T) {
+	r := newPipelineRig(t)
+	srv := r.start(t, r.gw)
+	if err := srv.PublishTelemetry(r.ctx, pushBatch("turn")); err != nil {
+		t.Fatalf("publish the push: %v", err)
+	}
+	r.report(t, srv)
+
+	if n := r.latest(t, writerclass.PushLanePublishCount, ""); n != 1 {
+		t.Errorf("push-lane-publish-count = %v, want 1", n)
+	}
+	for _, key := range []string{writerclass.PushLaneTurnWaitP99, writerclass.PushLaneTurnWaitMax} {
+		if ms := r.latest(t, key, ""); ms < 0 || ms >= 1000 {
+			t.Errorf("%s = %v ms, want an idle lane's wait, well under a second", key, ms)
+		}
+	}
+	if n := r.latest(t, writerclass.PushLaneRefusalCount, ""); n != 0 {
+		t.Errorf("push-lane-refusal-count = %v, want a landed 0", n)
+	}
+}

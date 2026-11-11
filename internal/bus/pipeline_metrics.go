@@ -19,7 +19,8 @@ import (
 // process's platformmetric.Recorder (#1627) and landed on the server's
 // platform component once a report window. A failure count always has its
 // attempts beside it (ingest-batch-count, bus-request-count, sweep-count), so
-// every loss figure reads as a ratio where 0 is healthy.
+// every loss figure reads as a ratio where 0 is healthy; the push lane's
+// refusals stand beside push-lane-publish-count the same way.
 
 // pipelineMetrics is the bus's handle on the recorder. Its zero value records
 // nothing, so a Server built without one (a fixture) instruments as a no-op.
@@ -41,6 +42,36 @@ func (m pipelineMetrics) mean(key, instance string, v float64) {
 func (m pipelineMetrics) max(key, instance string, v float64) {
 	if m.rec != nil {
 		m.rec.Max(key, instance, v)
+	}
+}
+
+func (m pipelineMetrics) quantile(key, instance string, q float64, d time.Duration) {
+	if m.rec != nil {
+		m.rec.Quantile(key, instance, q, d)
+	}
+}
+
+// pushTurn records one caller's wait for the push lane's publish turn
+// (#1746): a publish, a refusal when the wait ran out, and the wait toward
+// the window's p99 and max in milliseconds, a refusal's whole bound included.
+// A wait its caller abandoned folds into the wait alone: it neither took the
+// turn nor was answered 503, but the pusher still waited on the lane.
+func (m pipelineMetrics) pushTurn(t delivery.Turn) {
+	m.quantile(writerclass.PushLaneTurnWaitP99, "", 0.99, t.Wait)
+	m.max(writerclass.PushLaneTurnWaitMax, "", float64(t.Wait)/float64(time.Millisecond))
+	if t.Abandoned {
+		return
+	}
+	m.count(writerclass.PushLanePublishCount, "", 1)
+	refused := 0.0
+	if t.Refused {
+		refused = 1
+	}
+	// Counted even at zero, unlike a quiet count: a window of publishes lands
+	// its refusals beside them, so the pair reads "0 / n", healthy, rather
+	// than a refusal figure never reported.
+	if m.rec != nil {
+		m.rec.Count(writerclass.PushLaneRefusalCount, "", refused)
 	}
 }
 

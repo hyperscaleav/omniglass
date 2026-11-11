@@ -346,10 +346,14 @@ func exactFamilies() []exactFamily {
 }
 
 // deliverySubject is what a delivery row counts: its kind, or on the sim hop,
-// whose rows are one a protocol with no kind (#1694), its protocol.
+// whose rows are one a protocol with no kind (#1694), its protocol, or on the
+// publish hop, whose one row counts calls (#1746), pushes.
 func deliverySubject(d DeliveryRow) string {
-	if d.Hop == delivery.Sim {
+	switch d.Hop {
+	case delivery.Sim:
 		return d.Protocol
+	case delivery.Publish:
+		return "pushes"
 	}
 	return string(d.Kind)
 }

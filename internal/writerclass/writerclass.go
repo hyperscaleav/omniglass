@@ -176,7 +176,8 @@ const (
 // report window, landed by the server on its own platform component. Every
 // failure count has the count it is a share of: a drop or an ack failure of
 // ingest-batch-count, a request failure of bus-request-count, a sweep failure
-// of sweep-count, so each loss reads as a ratio where zero is healthy.
+// of sweep-count, a push lane refusal of push-lane-publish-count, so each loss
+// reads as a ratio where zero is healthy.
 const (
 	IngestLag                   = "ingest-lag"
 	IngestLagMax                = "ingest-lag-max"
@@ -201,6 +202,13 @@ const (
 	SweepDuration               = "sweep-duration"
 	SweepCount                  = "sweep-count"
 	SweepFailureCount           = "sweep-failure-count"
+	// The push lane's one publisher (#1746): every caller that waited for
+	// the publish turn, those whose wait ran out (answered 503, minting
+	// nothing), and the wait itself, its p99 and its largest.
+	PushLanePublishCount = "push-lane-publish-count"
+	PushLaneRefusalCount = "push-lane-refusal-count"
+	PushLaneTurnWaitP99  = "push-lane-turn-wait-p99"
+	PushLaneTurnWaitMax  = "push-lane-turn-wait-max"
 )
 
 // serverPipelineWriter is what writes the server's pipeline keys.
@@ -343,6 +351,10 @@ var platform = map[string]string{
 	SweepDuration:               serverPipelineWriter,
 	SweepCount:                  serverPipelineWriter,
 	SweepFailureCount:           serverPipelineWriter,
+	PushLanePublishCount:        serverPipelineWriter,
+	PushLaneRefusalCount:        serverPipelineWriter,
+	PushLaneTurnWaitP99:         serverPipelineWriter,
+	PushLaneTurnWaitMax:         serverPipelineWriter,
 
 	// The server's identity (#1644).
 	ServerVersion:   serverBootWriter,

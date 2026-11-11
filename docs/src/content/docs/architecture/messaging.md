@@ -253,6 +253,18 @@ ledger the server can read, so it records nothing: its items stay `missing`, and
   receipt as a node's does, under the server's boot, so it reads under its cause on the push row; a
   hole that does hold items is one the stream stored and the ingest could not decode, read as
   `missing` as on the node lane.
+- **A push refused at the turn is the push lane's loss, counted in pushes.** Publishes go one at a
+  time, so a push waits for the turn, and a wait past 5 seconds is refused (`503`) before it mints
+  anything: no seq, no ledger, nothing to read as missing. The server counts the pushes that waited
+  and those refused on its own platform component ([below](#measuring-the-pipeline)), and the read
+  gives the push lane a **publish** row ahead of its ingest rows: in is the pushes, out those that
+  took the turn (`turn-taken`), the loss `refused-turn`. A push is one call whatever it carries, so
+  the row is counted in pushes, never composed with a kind's items
+  ([ADR-1746](/architecture/decisions/#adr-1746-a-push-refused-at-the-publish-turn-is-read-as-a-publish-row-counted-in-pushes), #1746).
+  One turn per server holds at the corporate 3,000 push load: 5 pushes a second from 60 pushers
+  refused none and waited about 0.01 ms at the p99, so the turn is not sharded until a run shows it
+  near its bound
+  ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
 
 `omniglass lab measure` prints the table
 ([lab](/guides/lab/#reading-the-delivery-table)).
@@ -395,6 +407,12 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   write that fails also logs one WARN for the node, `heartbeat not recorded, the node may read as
   silent`, and not again until a heartbeat from that node lands, so a database outage under a fleet
   heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures.
+- **`push-lane-publish-count`, `push-lane-refusal-count`, `push-lane-turn-wait-p99`,
+  `push-lane-turn-wait-max`**: the push lane's publish turn (#1746). The pushes and webhook posts
+  that waited for the turn, those refused because the wait passed 5 seconds (answered `503`, nothing
+  minted), and the wait itself at the 99th percentile and at worst, in milliseconds, a refusal's
+  whole wait included, and so is the wait of a pusher that gave up before either. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
+  bound is a push lane whose pushers queue behind one another.
 
 [Platform health](/guides/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
 by hop, the node's spool then this ingest, each hop's loss over its components' summed counts and the
