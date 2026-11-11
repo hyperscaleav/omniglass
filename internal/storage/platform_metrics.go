@@ -14,13 +14,16 @@ import (
 // PlatformMetric is one observation Omniglass makes of one of its own parts
 // (#1094, first written by #1625): a platform key's value on a platform
 // component, at a time. The instance discriminates where the key does, and
-// is empty otherwise.
+// is empty otherwise. Source is empty for the process's own measure; the dev
+// seed names itself when it lays down history for a capture (#1790), so a
+// seeded series stays apart from the measured one.
 type PlatformMetric struct {
 	ComponentID string
 	Key         string
 	Instance    string
 	Value       float64
 	TS          time.Time
+	Source      string
 }
 
 // RecordPlatformMetrics lands the process's own observations as the platform
@@ -43,7 +46,7 @@ func (p *PG) RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) e
 			order = append(order, r.ComponentID)
 		}
 		byComponent[r.ComponentID] = append(byComponent[r.ComponentID], MetricSampleWrite{OwnerKind: "component",
-			OwnerID: r.ComponentID, Key: r.Key, Instance: r.Instance, Value: r.Value, TS: r.TS})
+			OwnerID: r.ComponentID, Key: r.Key, Instance: r.Instance, Value: r.Value, Source: r.Source, TS: r.TS})
 	}
 	var errs []error
 	for _, id := range order {

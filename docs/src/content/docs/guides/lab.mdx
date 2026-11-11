@@ -291,7 +291,11 @@ command itself; here is when you would reach for each:
 A few more flags are hidden from the help because they are for scripts, not for you: the repo's
 own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
 own through them (a project of its own whose data goes when it stops, held for the script, or one
-whose fleet has no node collecting from it, so the pages the docs photograph hold still). The
+whose fleet has no node collecting from it, so the pages the docs photograph hold still). One is
+for captures only: `--platform-history` seeds an hour of made-up figures on the lab's server, a sample
+a minute for each key platform health draws, so a screenshot of the page shows full sparklines
+rather than the few minutes a fresh lab has measured. It needs `--ephemeral`, and a scale lab
+refuses it, so a lab you learn from or measure only ever shows what its own server measured. The
 [demos guide](/contributing/demos/) says how the repo uses them.
 
 **Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:

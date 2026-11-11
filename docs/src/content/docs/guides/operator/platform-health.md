@@ -85,6 +85,9 @@ none of its other tabs.
 
 ::screenshot{#platform-health}
 
+The server panels in this screenshot draw an hour of made-up history, seeded for the capture so its
+sparklines run the full hour; your own lab's draw what its server has measured since it started.
+
 ## The header
 
 - **Platform** is the verdict of the platform system, the system every node and every server is

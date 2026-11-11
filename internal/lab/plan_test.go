@@ -350,6 +350,36 @@ func TestPlanNoNode(t *testing.T) {
 	}
 }
 
+// Seeded platform history (#1790) is for a capture: an hour of the server's
+// own figures lands only when a throwaway lab asks for it, so a learner's lab
+// and a scale lab never carry fabricated platform health.
+func TestPlanPlatformHistory(t *testing.T) {
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--platform-history") {
+		t.Fatalf("a lab without the option: the seed runs %v, want no --platform-history", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.PlatformHistory = true
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "--ephemeral") {
+		t.Fatalf("a learner's lab with platform history: %v, want a refusal naming --ephemeral", err)
+	}
+	o.Project, o.Ephemeral = "shots-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--platform-history") {
+		t.Fatalf("a throwaway lab with platform history: the seed runs %v, want --platform-history", s.Seed.Cmd)
+	}
+	sc := scaleOptions()
+	sc.PlatformHistory = true
+	if _, err := Plan(sc); err == nil || !strings.Contains(err.Error(), "--platform-history") {
+		t.Fatalf("a scale lab with platform history: %v, want a refusal naming --platform-history", err)
+	}
+}
+
 // A throwaway lab's collection report window (#1646): a walkthrough has a
 // minute of video, and the platform's own 60s window would land the first
 // delivery and poll figures as the recording ends, so the walkthrough
