@@ -382,6 +382,9 @@ func nodeSelf(by string) bool {
 	return by == nodeSelfWriter || by == processSelfWriter || by == deliveryWriter
 }
 
+// PlatformKeys is every platform key, whoever writes it, sorted.
+func PlatformKeys() []string { return platformKeysWhere(func(string) bool { return true }) }
+
 // NodeSelfKeys is every key a node reports of itself, sorted.
 func NodeSelfKeys() []string { return platformKeysWhere(nodeSelf) }
 

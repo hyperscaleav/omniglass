@@ -392,7 +392,7 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   the durable's ack floor at the window's close: the newest batch the stream took, and the sequence at
   and below which every batch was answered (landed, or Termed at the delivery bound). The head is read
   before the floor, so a floor at the head means every batch published before the read was answered,
-  even while later ones are in flight. The lab's delivery read settles on it (#1758); the gap between
+  even while later ones are in flight. The lab's delivery read settles on it (#1758), and Platform health's Queues panel reads the floor against the head (#1763); the gap between
   the two is the backlog in sequences, healthy small and not growing.
 - **`ingest-lane-busy`**: the share of the window the consumer spent handling batches. One batch is
   in flight, so this is the lane's utilisation. Near 1 with a growing backlog, the lane is the

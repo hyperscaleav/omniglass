@@ -122,6 +122,11 @@ var PlatformServerGroups = []PlatformServerGroup{
 	{Name: "queues", Label: "Queues", Keys: []PlatformServerKey{
 		{Name: writerclass.BusConsumerPending},
 		{Name: writerclass.BusConsumerAckPending},
+		// The consumer's ack floor against the stream's head (#1763): the
+		// floor reaching a head read earlier settles every batch stored by
+		// then, the check a lab measure makes before it reads delivery.
+		{Name: writerclass.BusConsumerAckFloor, Of: writerclass.BusStreamLastSeq},
+		{Name: writerclass.BusStreamLastSeq},
 		{Name: writerclass.CalcPendingDepth},
 		{Name: writerclass.OutboxQueuedDepth},
 		{Name: writerclass.OutboxDueAge},
@@ -148,6 +153,25 @@ func platformServerKeys() (names []string, ranks []int, windows []bool) {
 		}
 	}
 	return names, ranks, windows
+}
+
+// PlatformPageKeys is every key the Platform health page reads, in no order:
+// the node table's columns, each server panel's keys and the keys they are
+// read against, the pipeline's delivery keys and the server's identity. A
+// platform key outside it is off the page, which TestPlatformPageListsEveryPlatformKey
+// allows only with a reason.
+func PlatformPageKeys() []string {
+	out := platformViewKeys()
+	for _, g := range PlatformServerGroups {
+		for _, k := range g.Keys {
+			out = append(out, k.Name)
+			if k.Of != "" {
+				out = append(out, k.Of)
+			}
+		}
+	}
+	out = append(out, pipelineKeys...)
+	return append(out, writerclass.ServerVersion, writerclass.ServerStartedAt)
 }
 
 // PlatformKey is one column's catalog facts: its metric type's label, unit
