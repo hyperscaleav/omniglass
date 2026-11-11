@@ -205,22 +205,46 @@ type Boot struct{ Node, Boot string }
 // the window. Until it settles, a gap at its tail could still fill from its
 // spool, so a ratio read from it would be a guess.
 func Unsettled(w Window, receipts []Receipt) []Boot {
+	proven := Proven(w, receipts)
 	var out []Boot
 	for _, rs := range boots(receipts) {
-		in := slices.ContainsFunc(rs, func(r Receipt) bool { return w.Contains(r.Minted) })
-		if !in {
+		b := Boot{Node: rs[0].Node, Boot: rs[0].Boot}
+		if _, ok := proven[b]; !ok && slices.ContainsFunc(rs, func(r Receipt) bool { return w.Contains(r.Minted) }) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// Proven is each boot with a receipt in the window that Unsettled does not
+// name, with when it was known to have published every batch it minted in
+// the window: the mint of its earliest receipt whose resolved reaches the seq
+// below its lowest landed seq minted after the window. A receipt's resolved
+// is read as it is minted, so by then each of those batches had left the
+// boot's spool, into the stream or dropped (#1758). Pure.
+func Proven(w Window, receipts []Receipt) map[Boot]time.Time {
+	out := map[Boot]time.Time{}
+	for _, rs := range boots(receipts) {
+		if !slices.ContainsFunc(rs, func(r Receipt) bool { return w.Contains(r.Minted) }) {
 			continue
 		}
 		var after uint64 // the lowest seq landed minted after the window
-		var resolved uint64
 		for _, r := range rs {
-			resolved = max(resolved, r.Resolved)
 			if r.Minted.After(w.To) && (after == 0 || r.Seq < after) {
 				after = r.Seq
 			}
 		}
-		if after == 0 || resolved < after-1 {
-			out = append(out, Boot{Node: rs[0].Node, Boot: rs[0].Boot})
+		if after == 0 {
+			continue
+		}
+		var at time.Time
+		for _, r := range rs {
+			if r.Resolved >= after-1 && (at.IsZero() || r.Minted.Before(at)) {
+				at = r.Minted
+			}
+		}
+		if !at.IsZero() {
+			out[Boot{Node: rs[0].Node, Boot: rs[0].Boot}] = at
 		}
 	}
 	return out

@@ -186,6 +186,8 @@ const (
 	BusConsumerPending          = "bus-consumer-pending"
 	BusConsumerAckPending       = "bus-consumer-ack-pending"
 	BusConsumerRedelivered      = "bus-consumer-redelivered"
+	BusConsumerAckFloor         = "bus-consumer-ack-floor"
+	BusStreamLastSeq            = "bus-stream-last-seq"
 	BusTelemetryAckFailureCount = "bus-telemetry-ack-failure-count"
 	BusWorklistPullCount        = "bus-worklist-pull-count"
 	BusWorklistReplyBytesMax    = "bus-worklist-reply-bytes-max"
@@ -326,6 +328,8 @@ var platform = map[string]string{
 	BusConsumerPending:          serverPipelineWriter,
 	BusConsumerAckPending:       serverPipelineWriter,
 	BusConsumerRedelivered:      serverPipelineWriter,
+	BusConsumerAckFloor:         serverPipelineWriter,
+	BusStreamLastSeq:            serverPipelineWriter,
 	BusTelemetryAckFailureCount: serverPipelineWriter,
 	BusWorklistPullCount:        serverPipelineWriter,
 	BusWorklistReplyBytesMax:    serverPipelineWriter,
