@@ -899,8 +899,8 @@ How to read the verdict table it prints, one row a figure:
   baseline so the gain is held.
 - **reported**: a host-dependent figure measured on a host other than the baseline's (another CPU, core
   count or memory size). The figure is printed for the reader and gates nothing; the counted figures
-  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a hosted
-  runner for `300`, the Proxmox worker for `1000`) to gate them.
+  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a test
+  VM of 8 cores and 16 GiB, for every rung) to gate them.
 
 The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one a kind a hop, named
 `delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
@@ -932,17 +932,17 @@ impaired, so an impaired gap can only mean a fault left on.
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
 spread and values, the inputs and the host fingerprint, and refuses, naming each figure, when an exact
 figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance
-(a check could never gate it). Generate it on the host class it gates: the `300` baseline from the `perf`
-workflow's dispatch with `update` set, which uploads the file as an artifact, and the `1000` baseline on
-a Proxmox test VM ([#1737](https://github.com/hyperscaleav/omniglass/issues/1737)), 8 cores and 16 GiB. A
-check of `1000` anywhere else gates only the host-independent and exact figures. A PR that
+(a check could never gate it). Generate it on the host class it gates: every rung's baseline comes from
+a test VM of 8 cores and 16 GiB. A check anywhere else gates only the host-independent and exact
+figures. A PR that
 changes a baseline file says why in its body. `--append FILE` keeps each
 run's report as a line, so runs a baseline refused can be read again with `--samples FILE` instead of
 measured again; `--samples` also reads the last `--runs` (or `--last`) lines of a sampling run's series.
 
-In CI the gate is opt in and never a required check: the `run:perf` label on a PR runs
-`make perf-check SIZE=300` on its branch and posts the verdict table as one comment, updated on every
-run. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
+The gate never runs in CI and is never a required check: a run takes a scale lab for the better part of
+an hour, and its times and usage gate only on the baseline's host class, which a GitHub runner is not
+([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
+on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
 
 ### Sampling a scale lab over time
 
