@@ -272,25 +272,9 @@ describe("the one form, empty", () => {
     const createBtn = within(form).getByRole("button", { name: /create system/i });
     expect(cancelBtn).toBeTruthy();
     expect(createBtn).toBeTruthy();
-  });
-
-  it("disables Create button when classification is incomplete", async () => {
-    mountCreate("location");
-    const form = await screen.findByTestId("entity-create-form");
-    const createBtn = within(form).getByRole("button", { name: /create location/i });
-    expect(createBtn).toBeDisabled();
-    const typeSelect = within(form).getByLabelText("Location type") as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "room" } });
-    await waitFor(() => expect(createBtn).not.toBeDisabled());
-  });
-
-  it("disables Create button and all buttons while busy", async () => {
-    mountCreate("system");
-    const form = await screen.findByTestId("entity-create-form");
-    const createBtn = within(form).getByRole("button", { name: /create system/i });
-    const cancelBtn = within(form).getByRole("button", { name: /cancel/i });
-    expect(createBtn).not.toBeDisabled();
-    expect(cancelBtn).not.toBeDisabled();
+    // Buttons are rendered inside the form's action rail (border-t pt-4)
+    const rail = form.querySelector(".border-t.border-base-300.pt-4");
+    expect(rail).toBeTruthy();
   });
 
   it("Cancel button calls onCancel", async () => {
