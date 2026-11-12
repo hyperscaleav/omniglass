@@ -83,7 +83,15 @@ ignored and `?edit=1` lands Configure already editing.
 
 ## Name-shaped addresses (#759, #853)
 
-A detail view accepts a name-shaped address (`/components/mic-1`, `/systems/boardroom`, `/locations/hq`) as an operator convenience, resolved to the UUID and kept in the path. **A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
+A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
+
+```
+/components/mic-1
+/systems/boardroom
+/locations/hq
+```
+
+**A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
 
 ## One renderer library, two composition modes
 

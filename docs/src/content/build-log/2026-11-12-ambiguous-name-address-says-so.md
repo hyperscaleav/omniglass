@@ -1,7 +1,7 @@
 ---
 title: "Ambiguous name-shaped addresses show a message"
-description: "Name-shaped addresses now distinguish between missing and ambiguous resolution."
 date: 2026-11-12
+refs: [853]
 ---
 
 Fixed #853: a name-shaped component, location, or system address now:
