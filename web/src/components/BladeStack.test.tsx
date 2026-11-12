@@ -289,4 +289,63 @@ describe("BladeStack", () => {
     expect(btn.disabled).toBe(true);
     expect(btn.querySelector(".loading-spinner")).toBeTruthy();
   });
+
+  describe("shell inertness", () => {
+    // The shell root App.tsx marks with data-app-shell; a stand-in with a row
+    // button behind the stack and a toast-like control portaled outside it.
+    const mountShell = () => {
+      const shell = document.createElement("div");
+      shell.setAttribute("data-app-shell", "");
+      const row = document.createElement("button");
+      row.textContent = "row";
+      shell.appendChild(row);
+      document.body.appendChild(shell);
+      return { shell, row };
+    };
+
+    it("sets inert on the shell while a blade is open and clears it when the last closes", () => {
+      const { shell } = mountShell();
+      const ctl = createBladeController();
+      render(() => <BladeStack controller={ctl} registry={registry} />);
+      expect(shell.hasAttribute("inert")).toBe(false);
+
+      ctl.push({ kind: "user", id: "a" });
+      expect(shell.hasAttribute("inert")).toBe(true);
+      ctl.push({ kind: "group", id: "x" });
+      expect(shell.hasAttribute("inert")).toBe(true);
+
+      ctl.pop();
+      expect(shell.hasAttribute("inert")).toBe(true);
+      ctl.close();
+      expect(shell.hasAttribute("inert")).toBe(false);
+      shell.remove();
+    });
+
+    it("leaves the portaled blade outside the inert root, and clears inert when the stack unmounts", () => {
+      const { shell } = mountShell();
+      const ctl = createBladeController();
+      const { unmount } = render(() => <BladeStack controller={ctl} registry={registry} />);
+      ctl.push({ kind: "user", id: "a" });
+      const aside = document.querySelector("aside[data-blade]")!;
+      expect(shell.contains(aside)).toBe(false);
+      expect(aside.closest("[inert]")).toBeNull();
+
+      unmount();
+      expect(shell.hasAttribute("inert")).toBe(false);
+      shell.remove();
+    });
+
+    it("returns focus to the opener after the last blade closes, with inert cleared", async () => {
+      const { shell, row } = mountShell();
+      const ctl = createBladeController();
+      render(() => <BladeStack controller={ctl} registry={registry} />);
+      row.focus();
+      ctl.push({ kind: "user", id: "a" });
+      await Promise.resolve();
+      expect(document.activeElement).not.toBe(row);
+      ctl.close();
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      shell.remove();
+    });
+  });
 });

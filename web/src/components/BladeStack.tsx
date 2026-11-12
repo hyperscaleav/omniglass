@@ -47,6 +47,22 @@ export default function BladeStack(props: {
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
+  // The shell root (App.tsx marks it data-app-shell) is inert while any blade is
+  // open: the Tab trap, the accessibility tree and pointer hit-testing then agree
+  // that the top blade is the only live surface. The blades, the toasts and the
+  // palette portal to the body, outside that root, so they stay live. The Tab trap
+  // below stays as the fallback for a browser without `inert`.
+  const setShellInert = (on: boolean) =>
+    document.querySelector("[data-app-shell]")?.toggleAttribute("inert", on);
+  createEffect(() => {
+    const on = stack().length > 0;
+    setShellInert(on);
+    // A deep-linked blade opens while the page is still mounting, before the
+    // shell is in the document; apply again once it is.
+    if (on) queueMicrotask(() => stack().length > 0 && setShellInert(true));
+  });
+  onCleanup(() => setShellInert(false));
+
   // Focus management: when the stack opens, remember the focused element and move
   // focus into the top blade; when it closes, restore focus to that element.
   let priorFocus: HTMLElement | null = null;
