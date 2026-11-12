@@ -46,7 +46,7 @@ func TestValidateSettleRefusesFireAndForget(t *testing.T) {
 	s.Commands[0].Settle = &driver.Settle{From: "response", Extract: &driver.Extract{Regex: `^OK$`}}
 	err := s.Validate(catalog())
 	if err == nil {
-		t.Errorf("fire-and-forget command with settle: expected error")
+		t.Fatalf("fire-and-forget command with settle: expected error")
 	}
 	if !strings.Contains(err.Error(), "fire-and-forget") {
 		t.Errorf("fire-and-forget error should mention fire-and-forget: %v", err)
