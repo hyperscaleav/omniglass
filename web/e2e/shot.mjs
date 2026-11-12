@@ -2,11 +2,11 @@
 // PNG to the host FS. Usage:
 //   node e2e/shot.mjs <url> <out.png> [--token TOK] [--click SEL]...
 //     [--select "SEL||VALUE"]... [--type "SEL||TEXT"]... [--press KEY]...
-//     [--wait MS] [--full]
+//     [--hover SEL]... [--viewport WxH] [--wait MS] [--full]
 import { chromium } from '@playwright/test';
 const a = process.argv.slice(2);
 const url = a[0], out = a[1];
-let token = process.env.OG_TOKEN || '', wait = 450, full = false;
+let token = process.env.OG_TOKEN || '', wait = 450, full = false, viewportWidth = 1320, viewportHeight = 860;
 const steps = [];
 for (let i = 2; i < a.length; i++) {
   if (a[i] === '--token') token = a[++i];
@@ -16,10 +16,20 @@ for (let i = 2; i < a.length; i++) {
   else if (a[i] === '--type') steps.push(['type', a[++i]]);
   else if (a[i] === '--press') steps.push(['press', a[++i]]);
   else if (a[i] === '--wait') wait = +a[++i];
+  else if (a[i] === '--viewport') {
+    const vp = a[++i];
+    const m = vp.match(/^(\d+)x(\d+)$/);
+    if (!m) {
+      console.error('Usage: node e2e/shot.mjs <url> <out.png> [--token TOK] [--click SEL]... [--select "SEL||VALUE"]... [--type "SEL||TEXT"]... [--press KEY]... [--hover SEL]... [--viewport WxH] [--wait MS] [--full]');
+      process.exit(1);
+    }
+    viewportWidth = parseInt(m[1], 10);
+    viewportHeight = parseInt(m[2], 10);
+  }
   else if (a[i] === '--full') full = true;
 }
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 1320, height: 860 }, deviceScaleFactor: 2 });
+const ctx = await b.newContext({ viewport: { width: viewportWidth, height: viewportHeight }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 if (token) await page.addInitScript(t => localStorage.setItem('og-token', t), token);
 await page.goto(url, { waitUntil: 'networkidle' });
