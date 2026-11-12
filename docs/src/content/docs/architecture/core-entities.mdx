@@ -336,6 +336,12 @@ system can carry either, both, or neither. Conformance is **not** a copy: the st
 resolve **live** for every conforming system until it overrides one. See the
 [Standards guide](/guides/admin/standards/).
 
+A system also declares **roles** directly on itself (an ad hoc role), which is how a one-off system
+gets any: it inherits none. The console declares them from the system's Roles panel in edit mode,
+where the add row sits under the Ad hoc group (and in the empty state, so a one-off system's first
+role is one click from the copy). An ad hoc role edits and withdraws in place; a name the system's
+standard already declares is refused (409) rather than shadowed, and shows on the add row.
+
 ### Declared properties: the classifier contracts and the declared rows
 
 A classifier also **declares what its instances expose**, one row per declared name, unique per

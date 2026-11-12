@@ -7,7 +7,9 @@ import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types"
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import {
   deleteStandardRole,
+  deleteSystemRole,
   setStandardRole,
+  setSystemRole,
   standardRoles,
   standardRolesKey,
   type DeclaredRole,
@@ -35,6 +37,13 @@ import { describeError } from "../lib/format";
 // validation, and its whole row body, which is the component, so the honest
 // move is a sibling that reads the same.
 //
+// The editing pieces are OWNER-GENERIC: a role is declared either on a standard
+// or directly on a system (an ad hoc role, the only way a one-off system gets
+// any), and the two share the declaration, the draft, and the controls; only
+// the write calls differ, chosen by the RoleOwner. RoleEditor is the standard's
+// whole panel; RolesPanel mounts RoleDeclareRow and RoleEditForm for a system's
+// ad hoc roles, where the list itself is the resolved Roles panel's.
+//
 // Each role is addressed by name, so a write is a PATCH (idempotent: an edit
 // revises the role in place, and declaring is the same route) and a withdraw is
 // a DELETE. Writes are immediate, but the blade's edit slot still gates the
@@ -54,7 +63,7 @@ type Impact = "outage" | "degraded" | "none";
 // here is silently cleared on every unrelated edit, which is exactly the bug
 // this type used to carry (#626, predates the epic: impact, capacity, and
 // position_labels were all missing until this commit, see build-log.md).
-type RoleDraft = {
+export type RoleDraft = {
   display: string;
   quorum: string;
   acceptedTypes: string[];
@@ -67,7 +76,7 @@ type RoleDraft = {
   positionLabels: string[];
 };
 
-const emptyDraft = (): RoleDraft => ({
+export const emptyDraft = (): RoleDraft => ({
   display: "",
   quorum: "1",
   acceptedTypes: [],
@@ -130,9 +139,337 @@ export function buildSpec(draft: RoleDraft): RoleSpec | string {
   };
 }
 
+// The party a role is declared on: a standard (every conforming system inherits
+// it) or a system (the role is its own).
+export type RoleOwner = { kind: "standard"; id: string } | { kind: "system"; name: string };
+
+// writeRole declares or revises the role on its owner.
+function writeRole(owner: RoleOwner, role: string, spec: RoleSpec): Promise<DeclaredRole> {
+  return owner.kind === "standard" ? setStandardRole(owner.id, role, spec) : setSystemRole(owner.name, role, spec);
+}
+
+// withdrawRole removes the role from its owner.
+export function withdrawRole(owner: RoleOwner, role: string): Promise<void> {
+  return owner.kind === "standard" ? deleteStandardRole(owner.id, role) : deleteSystemRole(owner.name, role);
+}
+
+// draftOf opens a declared role as a draft. Structural over the fields a
+// standard's line and a system's resolved role share, so either feeds it.
+export function draftOf(r: Pick<DeclaredRole, "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">): RoleDraft {
+  return {
+    display: r.label ?? "",
+    quorum: String(r.quorum),
+    acceptedTypes: [...(r.accepted_types ?? [])],
+    pinnedProducts: [...(r.pinned_products ?? [])],
+    impact: (r.impact as Impact) || "degraded",
+    capacity: r.capacity != null ? String(r.capacity) : "",
+    positionLabels: [...(r.position_labels ?? [])],
+  };
+}
+
+// A generic picked-set editor: the picked names as removable chips, plus a
+// picker over what is left in the given catalog. The set replaces the role's
+// accepted-types or pinned-products set wholesale on save, so this is the
+// whole set, not a delta.
+function TokenSet(p: {
+  picked: string[];
+  options: { name: string; label: string }[];
+  placeholder: string;
+  emptyLabel: string;
+  removeLabel: (v: string) => string;
+  onChange: (next: string[]) => void;
+}): JSX.Element {
+  const left = createMemo(() =>
+    [...p.options]
+      .filter((o) => !p.picked.includes(o.name))
+      .sort(byLabel),
+  );
+  return (
+    <div class="flex flex-col gap-1.5">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <Show when={p.picked.length} fallback={<span class="text-[11px] italic text-base-content/40">{p.emptyLabel}</span>}>
+          <For each={p.picked}>
+            {(c) => (
+              <span class="badge badge-outline badge-sm gap-1 font-data">
+                {c}
+                <button
+                  type="button"
+                  class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
+                  aria-label={p.removeLabel(c)}
+                  onClick={() => p.onChange(p.picked.filter((x) => x !== c))}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+          </For>
+        </Show>
+      </div>
+      <Show when={left().length}>
+        <select
+          class="select select-bordered select-sm w-full"
+          aria-label={p.placeholder}
+          value=""
+          onChange={(e) => { const v = e.currentTarget.value; if (v) p.onChange([...p.picked, v]); e.currentTarget.value = ""; }}
+        >
+          <option value="">{p.placeholder}</option>
+          <For each={left()}>{(o) => <option value={o.name}>{o.label} ({o.name})</option>}</For>
+        </select>
+      </Show>
+    </div>
+  );
+}
+
+// A freeform, position-ordered sibling of TokenSet: labels typed rather than
+// picked from a catalog, one per position (index 0 is position 1). Replaces
+// the set wholesale on save, same as the two catalog-backed sets above.
+function LabelSet(p: { labels: string[]; placeholder: string; removeLabel: (v: string) => string; onChange: (next: string[]) => void }): JSX.Element {
+  const [text, setText] = createSignal("");
+  const add = () => {
+    const v = text().trim();
+    if (!v) return;
+    p.onChange([...p.labels, v]);
+    setText("");
+  };
+  return (
+    <div class="flex flex-col gap-1.5">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <Show when={p.labels.length} fallback={<span class="text-[11px] italic text-base-content/40">unlabeled positions</span>}>
+          <For each={p.labels}>
+            {(v, i) => (
+              <span class="badge badge-outline badge-sm gap-1">
+                {i() + 1}. {v}
+                <button
+                  type="button"
+                  class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
+                  aria-label={p.removeLabel(v)}
+                  onClick={() => p.onChange(p.labels.filter((_, j) => j !== i()))}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+          </For>
+        </Show>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <input
+          class="input input-bordered input-sm min-w-0 flex-1"
+          placeholder={p.placeholder}
+          aria-label={p.placeholder}
+          value={text()}
+          onInput={(e) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        />
+        <Button square size="xs" icon={Plus} label="Add position label" title="Add" onClick={add} />
+      </div>
+    </div>
+  );
+}
+
+// RoleDraftFields is the editable body of a role: the label, quorum, capacity,
+// and impact on one line beside the caller's action buttons, then the two
+// typed-slot sets and the position labels. Declaring and editing differ only in
+// the accessible names and the buttons.
+function RoleDraftFields(p: {
+  draft: RoleDraft;
+  onDraft: (next: RoleDraft) => void;
+  names: { display: string; quorum: string; capacity: string; impact: string };
+  actions: JSX.Element;
+}): JSX.Element {
+  const typeCatalog = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
+  const productCatalog = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
+  return (
+    <>
+      <div class="flex items-center gap-2">
+        <input
+          class="input input-bordered input-sm min-w-0 flex-1"
+          placeholder="name, e.g. Table microphone"
+          aria-label={p.names.display}
+          value={p.draft.display}
+          onInput={(e) => p.onDraft({ ...p.draft, display: e.currentTarget.value })}
+        />
+        <input
+          class="input input-bordered input-sm w-20 shrink-0 tnum"
+          type="number"
+          aria-label={p.names.quorum}
+          value={p.draft.quorum}
+          onInput={(e) => p.onDraft({ ...p.draft, quorum: e.currentTarget.value })}
+        />
+        <input
+          class="input input-bordered input-sm w-20 shrink-0 tnum"
+          type="number"
+          placeholder="cap"
+          aria-label={p.names.capacity}
+          value={p.draft.capacity}
+          onInput={(e) => p.onDraft({ ...p.draft, capacity: e.currentTarget.value })}
+        />
+        <select
+          class="select select-bordered select-sm w-28 shrink-0"
+          aria-label={p.names.impact}
+          value={p.draft.impact}
+          onChange={(e) => p.onDraft({ ...p.draft, impact: e.currentTarget.value as Impact })}
+        >
+          <For each={IMPACT_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+        </select>
+        {p.actions}
+      </div>
+      <TokenSet
+        picked={p.draft.acceptedTypes}
+        options={typeCatalog.data ?? []}
+        placeholder="Accept a component type…"
+        emptyLabel="any type"
+        removeLabel={(c) => `Stop accepting ${c}`}
+        onChange={(next) => p.onDraft({ ...p.draft, acceptedTypes: next })}
+      />
+      <TokenSet
+        picked={p.draft.pinnedProducts}
+        options={productCatalog.data ?? []}
+        placeholder="Pin a product…"
+        emptyLabel="any product of an accepted type"
+        removeLabel={(c) => `Stop pinning ${c}`}
+        onChange={(next) => p.onDraft({ ...p.draft, pinnedProducts: next })}
+      />
+      <LabelSet
+        labels={p.draft.positionLabels}
+        placeholder="Label a position, e.g. Left channel…"
+        removeLabel={(v) => `Remove position label ${v}`}
+        onChange={(next) => p.onDraft({ ...p.draft, positionLabels: next })}
+      />
+    </>
+  );
+}
+
+const ErrorAlert = (p: { message: string | null }): JSX.Element => (
+  <Show when={p.message}>
+    <div role="alert" class="alert alert-error alert-soft py-1.5 text-xs"><span>{p.message}</span></div>
+  </Show>
+);
+
+// RoleEditForm is the open edit of one declared role: its own draft, its own
+// error (the server's refusal, verbatim), saved in place by a PATCH on the
+// owner. onWritten refreshes whatever the host reads the roles from; onClose
+// closes the form, on Cancel and after a successful save.
+export function RoleEditForm(p: {
+  owner: RoleOwner;
+  role: Pick<DeclaredRole, "name" | "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">;
+  onWritten: () => Promise<unknown>;
+  onClose: () => void;
+}): JSX.Element {
+  const [draft, setDraft] = createSignal<RoleDraft>(draftOf(p.role));
+  const [err, setErr] = createSignal<string | null>(null);
+  const [busy, setBusy] = createSignal(false);
+
+  async function save() {
+    setErr(null);
+    const spec = buildSpec(draft());
+    if (typeof spec === "string") { setErr(spec); return; }
+    setBusy(true);
+    try {
+      await writeRole(p.owner, p.role.name, spec);
+      await p.onWritten();
+      p.onClose();
+    } catch (e) {
+      setErr(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-1.5">
+      <RoleDraftFields
+        draft={draft()}
+        onDraft={setDraft}
+        names={{
+          display: `Name for ${p.role.name}`,
+          quorum: `Quorum for ${p.role.name}`,
+          capacity: `Capacity for ${p.role.name}`,
+          impact: `Impact for ${p.role.name}`,
+        }}
+        actions={
+          <>
+            <Button square size="xs" intent="action" icon={Check} label={`Save ${p.role.name}`} title="Save" disabled={busy()} onClick={save} />
+            <Button square size="xs" icon={X} label="Cancel role edit" title="Cancel" onClick={p.onClose} />
+          </>
+        }
+      />
+      <ErrorAlert message={err()} />
+    </div>
+  );
+}
+
+// RoleDeclareRow is the dashed add row: name the role, then the same fields an
+// edit carries. The name is operator-invented (no catalog), and a refusal (a
+// name the owner's standard already declares is a 409 on a system) reads inline
+// here and leaves the draft as typed. Its drafts live as long as it is mounted,
+// so a host that unmounts it on leaving edit mode drops them.
+export function RoleDeclareRow(p: { owner: RoleOwner; onWritten: () => Promise<unknown> }): JSX.Element {
+  const [name, setName] = createSignal("");
+  const [draft, setDraft] = createSignal<RoleDraft>(emptyDraft());
+  const [err, setErr] = createSignal<string | null>(null);
+  const [busy, setBusy] = createSignal(false);
+
+  function reset() {
+    setName("");
+    setDraft(emptyDraft());
+    setErr(null);
+  }
+
+  async function declare() {
+    const role = name().trim();
+    if (!role) return;
+    setErr(null);
+    const spec = buildSpec(draft());
+    if (typeof spec === "string") { setErr(spec); return; }
+    setBusy(true);
+    try {
+      await writeRole(p.owner, role, spec);
+      await p.onWritten();
+      reset();
+    } catch (e) {
+      setErr(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="flex flex-col gap-1.5 rounded-box border border-dashed border-base-300 p-2.5">
+      <input
+        class="input input-bordered input-sm w-full font-data"
+        placeholder="Declare a role: name it, e.g. table-mic…"
+        aria-label="Role name"
+        value={name()}
+        onInput={(e) => setName(e.currentTarget.value)}
+      />
+      <Show when={name().trim()}>
+        <RoleDraftFields
+          draft={draft()}
+          onDraft={setDraft}
+          names={{
+            display: "Name for the new role",
+            quorum: "Quorum for the new role",
+            capacity: "Capacity for the new role",
+            impact: "Impact for the new role",
+          }}
+          actions={
+            <>
+              <Button square size="xs" intent="action" icon={Plus} label="Declare role" title="Declare" disabled={busy()} onClick={declare} />
+              <Button square size="xs" icon={X} label="Cancel role declaration" title="Cancel" onClick={reset} />
+            </>
+          }
+        />
+      </Show>
+      <ErrorAlert message={err()} />
+    </div>
+  );
+}
+
 export default function RoleEditor(props: { id: string; official: boolean }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
+  const owner = (): RoleOwner => ({ kind: "standard", id: props.id });
   const key = () => standardRolesKey(props.id);
   const q = useQuery(() => ({
     queryKey: key(),
@@ -141,8 +478,6 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     // list and discard an in-progress edit.
     refetchOnWindowFocus: false,
   }));
-  const typeCatalog = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
-  const productCatalog = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const rows = createMemo<DeclaredRole[]>(() => [...(q.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -159,189 +494,38 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  // The role whose row is open for editing (one at a time), and its draft.
+  // The role whose row is open for editing (one at a time).
   const [editing, setEditing] = createSignal<string | null>(null);
-  const [draft, setDraft] = createSignal<RoleDraft>(emptyDraft());
-  // The add row's draft: the invented name, plus the same fields.
-  const [addName, setAddName] = createSignal("");
-  const [addDraft, setAddDraft] = createSignal<RoleDraft>(emptyDraft());
 
-  // Leaving blade edit mode (Save or Cancel alike) discards the open drafts
-  // and clears any stale error; see ContractEditor for the rationale (a draft
+  // Leaving blade edit mode (Save or Cancel alike) discards the open edit and
+  // clears any stale error; see ContractEditor for the rationale (a draft
   // surviving Cancel resurrects on the next pencil press). Immediate-apply
-  // writes mean an open draft at footer Save is dropped, never flushed.
+  // writes mean an open draft at footer Save is dropped, never flushed. The add
+  // row unmounts with canDeclare, taking its own draft with it.
   createEffect((was: boolean | undefined) => {
     const now = bladeEditing();
     if (was && !now) {
       setEditing(null);
-      resetAdd();
       setErr(null);
     }
     return now;
   });
 
-  function openEdit(r: DeclaredRole) {
-    setEditing(r.name);
-    setDraft({
-      display: r.label ?? "",
-      quorum: String(r.quorum),
-      acceptedTypes: [...(r.accepted_types ?? [])],
-      pinnedProducts: [...(r.pinned_products ?? [])],
-      impact: (r.impact as Impact) || "degraded",
-      capacity: r.capacity != null ? String(r.capacity) : "",
-      positionLabels: [...(r.position_labels ?? [])],
-    });
-    setErr(null);
-  }
-
-  function resetAdd() {
-    setAddName("");
-    setAddDraft(emptyDraft());
-  }
-
-  async function write(role: string, spec: RoleSpec, after: () => void) {
-    setBusy(true);
-    setErr(null);
-    try {
-      await setStandardRole(props.id, role, spec);
-      await qc.invalidateQueries({ queryKey: key() });
-      after();
-    } catch (e) {
-      setErr(describeError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveEdit(r: DeclaredRole) {
-    setErr(null);
-    const spec = buildSpec(draft());
-    if (typeof spec === "string") { setErr(spec); return; }
-    await write(r.name, spec, () => setEditing(null));
-  }
-
-  async function declare() {
-    const name = addName().trim();
-    if (!name) return;
-    setErr(null);
-    const spec = buildSpec(addDraft());
-    if (typeof spec === "string") { setErr(spec); return; }
-    await write(name, spec, resetAdd);
-  }
+  const refresh = () => qc.invalidateQueries({ queryKey: key() });
 
   async function withdraw(role: string) {
     if (!confirm(`Withdraw "${role}" from this standard? Every conforming system loses it, and its assignments with it.`)) return;
     setBusy(true);
     setErr(null);
     try {
-      await deleteStandardRole(props.id, role);
-      await qc.invalidateQueries({ queryKey: key() });
+      await withdrawRole(owner(), role);
+      await refresh();
       if (editing() === role) setEditing(null);
     } catch (e) {
       setErr(describeError(e));
     } finally {
       setBusy(false);
     }
-  }
-
-  // A generic picked-set editor: the picked names as removable chips, plus a
-  // picker over what is left in the given catalog. The set replaces the role's
-  // accepted-types or pinned-products set wholesale on save, so this is the
-  // whole set, not a delta.
-  function TokenSet(p: {
-    picked: string[];
-    options: { name: string; label: string }[];
-    placeholder: string;
-    emptyLabel: string;
-    removeLabel: (v: string) => string;
-    onChange: (next: string[]) => void;
-  }): JSX.Element {
-    const left = createMemo(() =>
-      [...p.options]
-        .filter((o) => !p.picked.includes(o.name))
-        .sort(byLabel),
-    );
-    return (
-      <div class="flex flex-col gap-1.5">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <Show when={p.picked.length} fallback={<span class="text-[11px] italic text-base-content/40">{p.emptyLabel}</span>}>
-            <For each={p.picked}>
-              {(c) => (
-                <span class="badge badge-outline badge-sm gap-1 font-data">
-                  {c}
-                  <button
-                    type="button"
-                    class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
-                    aria-label={p.removeLabel(c)}
-                    onClick={() => p.onChange(p.picked.filter((x) => x !== c))}
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              )}
-            </For>
-          </Show>
-        </div>
-        <Show when={left().length}>
-          <select
-            class="select select-bordered select-sm w-full"
-            aria-label={p.placeholder}
-            value=""
-            onChange={(e) => { const v = e.currentTarget.value; if (v) p.onChange([...p.picked, v]); e.currentTarget.value = ""; }}
-          >
-            <option value="">{p.placeholder}</option>
-            <For each={left()}>{(o) => <option value={o.name}>{o.label} ({o.name})</option>}</For>
-          </select>
-        </Show>
-      </div>
-    );
-  }
-
-  // A freeform, position-ordered sibling of TokenSet: labels typed rather than
-  // picked from a catalog, one per position (index 0 is position 1). Replaces
-  // the set wholesale on save, same as the two catalog-backed sets above.
-  function LabelSet(p: { labels: string[]; placeholder: string; removeLabel: (v: string) => string; onChange: (next: string[]) => void }): JSX.Element {
-    const [text, setText] = createSignal("");
-    const add = () => {
-      const v = text().trim();
-      if (!v) return;
-      p.onChange([...p.labels, v]);
-      setText("");
-    };
-    return (
-      <div class="flex flex-col gap-1.5">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <Show when={p.labels.length} fallback={<span class="text-[11px] italic text-base-content/40">unlabeled positions</span>}>
-            <For each={p.labels}>
-              {(v, i) => (
-                <span class="badge badge-outline badge-sm gap-1">
-                  {i() + 1}. {v}
-                  <button
-                    type="button"
-                    class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
-                    aria-label={p.removeLabel(v)}
-                    onClick={() => p.onChange(p.labels.filter((_, j) => j !== i()))}
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              )}
-            </For>
-          </Show>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <input
-            class="input input-bordered input-sm min-w-0 flex-1"
-            placeholder={p.placeholder}
-            aria-label={p.placeholder}
-            value={text()}
-            onInput={(e) => setText(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          />
-          <Button square size="xs" icon={Plus} label="Add position label" title="Add" onClick={add} />
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -384,7 +568,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                   <span class="badge badge-ghost badge-sm shrink-0 tnum">{r.quorum} wanted</span>
                   <span class="badge badge-ghost badge-sm shrink-0 capitalize">{r.impact} impact</span>
                   <Show when={canDeclare() && editing() !== r.name}>
-                    <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => openEdit(r)} />
+                    <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => { setEditing(r.name); setErr(null); }} />
                   </Show>
                   <Show when={canWithdraw()}>
                     <Button square size="xs" icon={Trash} label={`Withdraw ${r.name}`} title="Withdraw" disabled={busy()} onClick={() => withdraw(r.name)} />
@@ -415,64 +599,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                     </div>
                   }
                 >
-                  <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-2">
-                      <input
-                        class="input input-bordered input-sm min-w-0 flex-1"
-                        placeholder="name"
-                        aria-label={`Name for ${r.name}`}
-                        value={draft().display}
-                        onInput={(e) => setDraft({ ...draft(), display: e.currentTarget.value })}
-                      />
-                      <input
-                        class="input input-bordered input-sm w-20 shrink-0 tnum"
-                        type="number"
-                        aria-label={`Quorum for ${r.name}`}
-                        value={draft().quorum}
-                        onInput={(e) => setDraft({ ...draft(), quorum: e.currentTarget.value })}
-                      />
-                      <input
-                        class="input input-bordered input-sm w-20 shrink-0 tnum"
-                        type="number"
-                        placeholder="cap"
-                        aria-label={`Capacity for ${r.name}`}
-                        value={draft().capacity}
-                        onInput={(e) => setDraft({ ...draft(), capacity: e.currentTarget.value })}
-                      />
-                      <select
-                        class="select select-bordered select-sm w-28 shrink-0"
-                        aria-label={`Impact for ${r.name}`}
-                        value={draft().impact}
-                        onChange={(e) => setDraft({ ...draft(), impact: e.currentTarget.value as Impact })}
-                      >
-                        <For each={IMPACT_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
-                      </select>
-                      <Button square size="xs" intent="action" icon={Check} label={`Save ${r.name}`} title="Save" disabled={busy()} onClick={() => saveEdit(r)} />
-                      <Button square size="xs" icon={X} label="Cancel role edit" title="Cancel" onClick={() => setEditing(null)} />
-                    </div>
-                    <TokenSet
-                      picked={draft().acceptedTypes}
-                      options={typeCatalog.data ?? []}
-                      placeholder="Accept a component type…"
-                      emptyLabel="any type"
-                      removeLabel={(c) => `Stop accepting ${c}`}
-                      onChange={(next) => setDraft({ ...draft(), acceptedTypes: next })}
-                    />
-                    <TokenSet
-                      picked={draft().pinnedProducts}
-                      options={productCatalog.data ?? []}
-                      placeholder="Pin a product…"
-                      emptyLabel="any product of an accepted type"
-                      removeLabel={(c) => `Stop pinning ${c}`}
-                      onChange={(next) => setDraft({ ...draft(), pinnedProducts: next })}
-                    />
-                    <LabelSet
-                      labels={draft().positionLabels}
-                      placeholder="Label a position, e.g. Left channel…"
-                      removeLabel={(v) => `Remove position label ${v}`}
-                      onChange={(next) => setDraft({ ...draft(), positionLabels: next })}
-                    />
-                  </div>
+                  <RoleEditForm owner={owner()} role={r} onWritten={refresh} onClose={() => setEditing(null)} />
                 </Show>
               </div>
             )}
@@ -481,73 +608,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       </Show>
 
       <Show when={canDeclare()}>
-        <div class="flex flex-col gap-1.5 rounded-box border border-dashed border-base-300 p-2.5">
-          <input
-            class="input input-bordered input-sm w-full font-data"
-            placeholder="Declare a role: name it, e.g. table-mic…"
-            aria-label="Role name"
-            value={addName()}
-            onInput={(e) => setAddName(e.currentTarget.value)}
-          />
-          <Show when={addName().trim()}>
-            <div class="flex items-center gap-2">
-              <input
-                class="input input-bordered input-sm min-w-0 flex-1"
-                placeholder="name, e.g. Table microphone"
-                aria-label="Name for the new role"
-                value={addDraft().display}
-                onInput={(e) => setAddDraft({ ...addDraft(), display: e.currentTarget.value })}
-              />
-              <input
-                class="input input-bordered input-sm w-20 shrink-0 tnum"
-                type="number"
-                aria-label="Quorum for the new role"
-                value={addDraft().quorum}
-                onInput={(e) => setAddDraft({ ...addDraft(), quorum: e.currentTarget.value })}
-              />
-              <input
-                class="input input-bordered input-sm w-20 shrink-0 tnum"
-                type="number"
-                placeholder="cap"
-                aria-label="Capacity for the new role"
-                value={addDraft().capacity}
-                onInput={(e) => setAddDraft({ ...addDraft(), capacity: e.currentTarget.value })}
-              />
-              <select
-                class="select select-bordered select-sm w-28 shrink-0"
-                aria-label="Impact for the new role"
-                value={addDraft().impact}
-                onChange={(e) => setAddDraft({ ...addDraft(), impact: e.currentTarget.value as Impact })}
-              >
-                <For each={IMPACT_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
-              </select>
-              <Button square size="xs" intent="action" icon={Plus} label="Declare role" title="Declare" disabled={busy()} onClick={declare} />
-              <Button square size="xs" icon={X} label="Cancel role declaration" title="Cancel" onClick={resetAdd} />
-            </div>
-            <TokenSet
-              picked={addDraft().acceptedTypes}
-              options={typeCatalog.data ?? []}
-              placeholder="Accept a component type…"
-              emptyLabel="any type"
-              removeLabel={(c) => `Stop accepting ${c}`}
-              onChange={(next) => setAddDraft({ ...addDraft(), acceptedTypes: next })}
-            />
-            <TokenSet
-              picked={addDraft().pinnedProducts}
-              options={productCatalog.data ?? []}
-              placeholder="Pin a product…"
-              emptyLabel="any product of an accepted type"
-              removeLabel={(c) => `Stop pinning ${c}`}
-              onChange={(next) => setAddDraft({ ...addDraft(), pinnedProducts: next })}
-            />
-            <LabelSet
-              labels={addDraft().positionLabels}
-              placeholder="Label a position, e.g. Left channel…"
-              removeLabel={(v) => `Remove position label ${v}`}
-              onChange={(next) => setAddDraft({ ...addDraft(), positionLabels: next })}
-            />
-          </Show>
-        </div>
+        <RoleDeclareRow owner={owner()} onWritten={refresh} />
       </Show>
     </div>
   );

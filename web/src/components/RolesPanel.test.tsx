@@ -8,6 +8,8 @@ import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
+import { COMPONENT_TYPES_KEY } from "../lib/component_types";
+import { PRODUCTS_KEY } from "../lib/products";
 
 // The panel resolves a system's roles: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
@@ -111,6 +113,9 @@ function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: Fle
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...SYSTEMS_KEY], [system]);
   qc.setQueryData([...ME_KEY], owner);
+  // The declare and edit forms offer these catalogs for the typed-slot guard.
+  qc.setQueryData([...COMPONENT_TYPES_KEY], []);
+  qc.setQueryData([...PRODUCTS_KEY], []);
   if (opts.health !== null) qc.setQueryData([...systemHealthKey("boardroom")], opts.health ?? health);
   const result = render(() => (
     <QueryClientProvider client={qc}>
@@ -235,6 +240,124 @@ describe("RolesPanel", () => {
     expect(within(adhoc).getByText("Spare panel")).toBeTruthy();
     expect(within(adhoc).queryByText("Table microphone")).toBeNull(); // inherited rows stay above
     expect(getByText("declared on this system, not by its standard")).toBeTruthy();
+  });
+
+  // A one-off system conforms to no standard, so it inherits no roles: the
+  // roles it needs are the ones an operator declares on it, and the empty copy
+  // promises exactly that, so edit mode has to carry the control.
+  describe("declaring a role on the system", () => {
+    const lectern: EffectiveRole = {
+      name: "lectern-mic", label: "Lectern mic", quorum: 1, impact: "degraded",
+      accepted_types: [], pinned_products: [], position_labels: [], from_standard: false,
+      assigned_to: [], positions: [], assigned: 0, understaffed: 1,
+    };
+
+    it("offers an add row from the empty state, and the declared role renders under Ad hoc", async () => {
+      let patch: Request | undefined;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const req = input as Request;
+        if (req.method === "PATCH") { patch = req.clone(); return json({ ...lectern }); }
+        return json({ system: "boardroom", roles: patch ? [lectern] : [] });
+      });
+
+      const { getByText, getByLabelText, getByRole, queryByRole } = mount({ rows: [] });
+      expect(getByText(/No roles yet/)).toBeTruthy();
+      expect(queryByRole("group", { name: /ad hoc/i })).toBeTruthy(); // the add row's home
+      fireEvent.input(getByLabelText("Role name"), { target: { value: "lectern-mic" } });
+      fireEvent.input(getByLabelText("Name for the new role"), { target: { value: "Lectern mic" } });
+      fireEvent.click(getByLabelText("Declare role"));
+
+      await waitFor(() => expect(patch).toBeTruthy());
+      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/roles/lectern-mic");
+      const body = await patch!.json();
+      expect(body.label).toBe("Lectern mic");
+      expect(body.quorum).toBe(1);
+      const adhoc = getByRole("group", { name: /ad hoc/i });
+      await waitFor(() => expect(within(adhoc).getByText("Lectern mic")).toBeTruthy());
+    });
+
+    it("offers the add row beside inherited roles too, under Ad hoc", () => {
+      const { getByRole } = mount({ rows: roles.filter((r) => r.from_standard) });
+      expect(within(getByRole("group", { name: /ad hoc/i })).getByLabelText("Role name")).toBeTruthy();
+    });
+
+    it("edits an ad hoc role in place with a PATCH", async () => {
+      let patch: Request | undefined;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const req = input as Request;
+        if (req.method === "PATCH") { patch = req.clone(); return json({ name: "spare-panel" }); }
+        return json({ system: "boardroom", roles });
+      });
+
+      const { getByLabelText } = mount();
+      fireEvent.click(getByLabelText("Edit spare-panel"));
+      fireEvent.input(getByLabelText("Quorum for spare-panel"), { target: { value: "3" } });
+      fireEvent.click(getByLabelText("Save spare-panel"));
+
+      await waitFor(() => expect(patch).toBeTruthy());
+      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/roles/spare-panel");
+      expect((await patch!.json()).quorum).toBe(3);
+    });
+
+    it("withdraws an ad hoc role after confirmation with a DELETE", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      let del: Request | undefined;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const req = input as Request;
+        if (req.method === "DELETE") { del = req.clone(); return new Response(null, { status: 204 }); }
+        return json({ system: "boardroom", roles });
+      });
+
+      const { getByLabelText } = mount();
+      fireEvent.click(getByLabelText("Withdraw spare-panel"));
+
+      await waitFor(() => expect(del).toBeTruthy());
+      expect(new URL(del!.url).pathname).toBe("/api/v1/systems/boardroom/roles/spare-panel");
+    });
+
+    it("offers an inherited role neither edit nor withdraw", () => {
+      const { queryByLabelText } = mount();
+      expect(queryByLabelText("Edit table-mic")).toBeNull();
+      expect(queryByLabelText("Withdraw table-mic")).toBeNull();
+      expect(queryByLabelText("Edit spare-panel")).toBeTruthy(); // the ad hoc one does
+    });
+
+    it("shows a shadowing refusal inline on the add row and stays in edit", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const req = input as Request;
+        if (req.method === "PATCH") {
+          return json(
+            { title: "Conflict", status: 409, detail: 'role "table-mic" is already declared by this system\'s standard' },
+            409,
+            "application/problem+json",
+          );
+        }
+        return json({ system: "boardroom", roles });
+      });
+
+      const { getByLabelText, getByRole } = mount();
+      const adhoc = getByRole("group", { name: /ad hoc/i });
+      fireEvent.input(getByLabelText("Role name"), { target: { value: "table-mic" } });
+      fireEvent.click(getByLabelText("Declare role"));
+
+      const alert = await waitFor(() => within(adhoc).getByRole("alert"));
+      expect(alert.textContent).toBe('role "table-mic" is already declared by this system\'s standard');
+      expect((getByLabelText("Role name") as HTMLInputElement).value).toBe("table-mic"); // still editable
+    });
+
+    it("renders no declare, edit, or withdraw control outside edit", () => {
+      const { queryByLabelText, queryByRole } = mount({ canUpdate: false });
+      expect(queryByLabelText("Role name")).toBeNull();
+      expect(queryByLabelText("Edit spare-panel")).toBeNull();
+      expect(queryByLabelText("Withdraw spare-panel")).toBeNull();
+      expect(queryByRole("group", { name: /ad hoc/i })).toBeTruthy(); // the role itself still reads
+    });
+
+    it("shows no add row, and no empty Ad hoc group, to a reader on a roleless system", () => {
+      const { queryByLabelText, queryByRole } = mount({ rows: [], canUpdate: false });
+      expect(queryByLabelText("Role name")).toBeNull();
+      expect(queryByRole("group", { name: /ad hoc/i })).toBeNull();
+    });
   });
 
   it("says a role nobody fills is unfilled rather than showing an empty list", () => {
