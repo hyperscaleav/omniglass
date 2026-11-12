@@ -373,7 +373,7 @@ type Gateway interface {
 
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
-	// and TypeIsWithin walk the tree in Go; no DB logic.
+	// and TypeIsWithin read the ancestor chain in one recursive query and fold it in Go.
 	// The global tier of the label rules (#682): one row per entity kind,
 	// its shipped default rewritten authoritatively on every boot and an
 	// operator's override left alone, which is why they are two columns.

@@ -188,6 +188,7 @@ type fakeMsg struct {
 	header  nats.Header
 	naked   bool
 	termed  bool
+	ackErr  error
 }
 
 func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) { return m.meta, m.metaErr }
@@ -196,7 +197,7 @@ func (m *fakeMsg) Headers() nats.Header                      { return m.header }
 func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.node-a" }
 func (m *fakeMsg) Reply() string                             { return "" }
 func (m *fakeMsg) Ack() error                                { return nil }
-func (m *fakeMsg) DoubleAck(context.Context) error           { return nil }
+func (m *fakeMsg) DoubleAck(context.Context) error           { return m.ackErr }
 func (m *fakeMsg) Nak() error                                { m.naked = true; return nil }
 func (m *fakeMsg) NakWithDelay(time.Duration) error          { m.naked = true; return nil }
 func (m *fakeMsg) InProgress() error                         { return nil }

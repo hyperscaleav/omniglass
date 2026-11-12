@@ -135,26 +135,26 @@ type endpointPathInput struct {
 
 type createEndpointInput struct {
 	Body struct {
-		Transport string            `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
-		Label     string            `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
-		Component *string           `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
-		Node      *string           `json:"node,omitempty" doc:"Node placement, by name or id"`
-		Params    json.RawMessage   `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
-		Driver    *string           `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
-		Inputs    map[string]string `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
-		OutOfBand bool              `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open"`
+		Transport string          `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
+		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
+		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
+		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
+		Params    json.RawMessage `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
+		Driver    *string         `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
+		Inputs    inputScalars    `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
+		OutOfBand bool            `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open"`
 	}
 }
 
 type updateEndpointInput struct {
 	Endpoint string `path:"endpoint" doc:"The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"boi.17c.415a.$comp.display-1/https"`
 	Body     struct {
-		Node      *string           `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
-		Label     *string           `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
-		Params    json.RawMessage   `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
-		Inputs    map[string]string `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"`
-		Transport *string           `json:"transport,omitempty" doc:"The transport: a driver-attached endpoint takes only one its driver speaks"`
-		OutOfBand *bool             `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone"`
+		Node      *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
+		Label     *string         `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
+		Params    json.RawMessage `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
+		Inputs    inputScalars    `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"`
+		Transport *string         `json:"transport,omitempty" doc:"The transport: a driver-attached endpoint takes only one its driver speaks"`
+		OutOfBand *bool           `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone"`
 	}
 }
 
@@ -243,7 +243,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
 			Driver:    in.Body.Driver,
-			Inputs:    in.Body.Inputs,
+			Inputs:    in.Body.Inputs.strings(),
 			OutOfBand: in.Body.OutOfBand,
 			// An attach resolves its secret references under the caller's own
 			// secret read scope and admin tier, so it can only bind a secret the
@@ -270,7 +270,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
 			Label:     in.Body.Label,
-			Inputs:    in.Body.Inputs,
+			Inputs:    in.Body.Inputs.strings(),
 			Transport: in.Body.Transport,
 			OutOfBand: in.Body.OutOfBand,
 			// An edit re-resolves every attached secret under the caller's own
