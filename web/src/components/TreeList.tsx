@@ -16,7 +16,7 @@ import {
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
-import { type BladeDef, type BladeEdit, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
+import { type BladeDef, BladesContext, createBladeController, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), which
 // Files is a config over. It owns the filter header (the faceted chip search),
@@ -84,28 +84,10 @@ export type ListCtx<N extends ListNode> = {
   // true in the full-page detail, false in a blade: lets a shared detail body show
   // its breadcrumb only in a blade and drill via blade vs URL navigation.
   full: boolean;
-  // The read -> Edit -> Save slot for THIS detail surface, present only when the ctx
-  // renders a detail body (the blade slot inside EntityBladeBody, or the full page's
-  // own slot); absent in list-cell / create contexts. A detail body reads
-  // `edit.editing()` to switch view (read-only) vs edit (inputs + binding editors),
-  // `edit.bind()` to register its saver, and `edit.begin()` for its pencil. Threaded
-  // through ctx, never via useBladeEdit, since renderDetail is shared by the blade
-  // (inside a provider) and the full page (outside one).
-  edit?: BladeEdit;
   openEdit: (n: N) => void;
   openCreate: (parent: N | null) => void;
-  openNode: (n: N) => void;
-  // context-aware open: in a blade it pushes a child blade, on the full page it
-  // navigates to that node's full-page URL.
-  go: (n: N) => void;
-  openFull: (n: N) => void;
   parentOf: (n: N) => N | undefined;
   byId: (id: string) => N | undefined;
-  pushBlade: (n: N) => void;
-  popBlade: () => void;
-  closeBlades: () => void;
-  setFullPage: (n: N | null) => void;
-  pathOf: (n: N) => { id: string; display: string }[];
 };
 
 export interface ListConfig<N extends ListNode> {
@@ -327,7 +309,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // Blade ops delegate to the shared controller; a node maps to a { kind, id } ref
   // under this page's entity kind. push truncates-to-existing (breadcrumb collapse).
   const pushBlade = (n: N) => blades.push({ kind: cfg.entity.name, id: n.id });
-  const popBlade = () => blades.pop();
   const closeBlades = () => blades.close();
 
   const openFull = (n: N) => (cfg.onOpenNode ? cfg.onOpenNode(n) : showFull(n));
@@ -340,20 +321,13 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     // otherwise render behind the higher-z blade and be unreachable).
     openEdit: (n: N) => { closeBlades(); setForm({ mode: "edit", node: n }); },
     openCreate: (parent: N | null) => { closeBlades(); setForm({ mode: "create", parent }); },
-    openNode,
-    openFull,
     parentOf: (n: N) => index().parentOf.get(n.id),
     byId: (id: string) => index().byId.get(id),
-    pushBlade,
-    popBlade,
-    closeBlades,
-    setFullPage: (n: N | null) => showFull(n),
-    pathOf,
   };
   // Two views over the shared context: the full page navigates by URL, a blade
   // drills by pushing another blade.
-  const ctxFull: ListCtx<N> = { ...baseCtx, full: true, go: openFull };
-  const ctxBlade: ListCtx<N> = { ...baseCtx, full: false, go: pushBlade };
+  const ctxFull: ListCtx<N> = { ...baseCtx, full: true };
+  const ctxBlade: ListCtx<N> = { ...baseCtx, full: false };
 
   // The entity blade body: renderDetail in blade context, plus the footer action
   // rail. Delete and Edit register on the shared BladeStack footer (pinned to the
@@ -378,7 +352,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           : undefined;
       },
     });
-    return <Show when={node()}>{(n) => cfg.renderDetail?.(n(), { ...ctxBlade, edit })}</Show>;
+    return <Show when={node()}>{(n) => cfg.renderDetail?.(n(), ctxBlade)}</Show>;
   };
 
   // Single-kind registry for the shared BladeStack: this page's own entity. The
@@ -599,10 +573,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   );
 
   const FullPage = (props2: { node: N }) => {
-    // The full page hosts its own read -> Edit -> Save slot (the blade gets one from
-    // BladeStack; the full page renders outside BladeStack, so it makes its own). The
-    // page's detail() renders the Save / Cancel / pencil footer from ctx.edit.
-    const edit = createEditSlot();
     return (
     <section class="fade-in flex max-w-3xl flex-col gap-4">
       <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
@@ -637,7 +607,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
             background list refetch swaps props2.node for a fresh object; Show dedupes on
             truthiness, so the callback runs once while the node stays present. The detail
             re-reads live data through ctx.byId. Mirrors the blade path (EntityBladeBody). */}
-        <Show when={props2.node}>{(node) => cfg.renderDetail?.(node(), { ...ctxFull, edit })}</Show>
+        <Show when={props2.node}>{(node) => cfg.renderDetail?.(node(), ctxFull)}</Show>
       </div>
     </section>
     );
