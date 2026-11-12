@@ -1,34 +1,58 @@
 import { describe, it, expect } from "vitest";
 import { createSignal } from "solid-js";
-import { render, fireEvent } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import TreeSelect from "./TreeSelect";
 import type { TreeNode } from "../lib/treeselect";
 
 const items: TreeNode[] = [
   { id: "ca", value: "campus-a", label: "Campus A", parentId: null, rank: 0 },
   { id: "b1", value: "bldg-1", label: "Bldg 1", parentId: "ca", rank: 1 },
+  { id: "f2", value: "floor-2", label: "Floor 2", parentId: "b1", rank: 0 },
+  { id: "rm", value: "boardroom", label: "Boardroom", parentId: "f2", rank: 0 },
 ];
 
+const trigger = () => screen.getByRole("button") as HTMLElement;
+const open = () => fireEvent.keyDown(trigger(), { key: "Enter" });
+const optionFor = (label: string) => screen.getByRole("option", { name: new RegExp(label) });
+
 describe("TreeSelect", () => {
-  it("renders the optional root then the tree in order, indenting children", () => {
-    const { container } = render(() => (
-      <TreeSelect items={items} value="" onChange={() => {}} rootLabel="Root (no parent)" />
-    ));
-    const opts = [...container.querySelectorAll("option")];
-    expect(opts.map((o) => o.value)).toEqual(["", "campus-a", "bldg-1"]);
-    expect(opts[1].textContent).toBe("Campus A"); // a root, no indent
-    expect(opts[2].textContent).toContain("Bldg 1");
-    expect(opts[2].textContent!.startsWith(" ")).toBe(true); // a child, nbsp-indented
+  it("shows a deep selection as its bare label when closed, with no indent or glue in the text", () => {
+    render(() => <TreeSelect items={items} value="boardroom" onChange={() => {}} rootLabel="None" />);
+    // The text content is the label and nothing else: the depth glyph and the
+    // ancestor path are drawn by CSS, so they cannot leak into a copied value, a
+    // test, or a screen reader's read of the label.
+    expect(trigger().textContent).toBe("Boardroom");
+    expect(trigger().querySelector("[data-path]")?.getAttribute("data-path")).toBe(
+      "Campus A / Bldg 1 / Floor 2",
+    );
   });
 
-  it("reports the chosen value on change", () => {
-    let picked = "";
-    const { container } = render(() => (
-      <TreeSelect items={items} value="" onChange={(v) => (picked = v)} rootLabel="Root (no parent)" />
+  it("indents each open item by its depth with inline padding, not text", async () => {
+    render(() => <TreeSelect items={items} value="" onChange={() => {}} rootLabel="Root (no parent)" />);
+    open();
+    const pad = (label: string) => parseFloat(optionFor(label).style.paddingLeft || "0");
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Root (no parent)",
+      "Campus A",
+      "Bldg 1",
+      "Floor 2",
+      "Boardroom",
+    ]);
+    expect(pad("Campus A")).toBeLessThan(pad("Bldg 1"));
+    expect(pad("Bldg 1")).toBeLessThan(pad("Floor 2"));
+    expect(pad("Floor 2")).toBeLessThan(pad("Boardroom"));
+    expect(optionFor("Boardroom").style.paddingLeft).not.toBe("");
+  });
+
+  it("reports the chosen value, and the empty value for the root option", async () => {
+    const picked: string[] = [];
+    render(() => (
+      <TreeSelect items={items} value="campus-a" onChange={(v) => picked.push(v)} rootLabel="Root (no parent)" />
     ));
-    const select = container.querySelector("select")!;
-    fireEvent.change(select, { target: { value: "bldg-1" } });
-    expect(picked).toBe("bldg-1");
+    open();
+    fireEvent.click(await screen.findByRole("option", { name: /Bldg 1/ }));
+    expect(picked).toEqual(["bldg-1"]);
   });
 
   it("takes its value when the items land after it is rendered", () => {
@@ -38,21 +62,66 @@ describe("TreeSelect", () => {
     // the stored parent (#772). Driven by a signal, not a timer: the gap is the
     // subject of the test, so it is opened and closed by hand.
     const [tree, setTree] = createSignal<TreeNode[]>([]);
-    const { container } = render(() => (
-      <TreeSelect items={tree()} value="bldg-1" onChange={() => {}} rootLabel="Root (no parent)" />
-    ));
-    const select = container.querySelector("select")!;
-    expect(select.value).toBe("");
+    render(() => <TreeSelect items={tree()} value="boardroom" onChange={() => {}} rootLabel="Root (no parent)" />);
+    expect(trigger().textContent).not.toBe("Boardroom");
 
     setTree(items);
 
-    expect(select.value).toBe("bldg-1");
+    expect(trigger().textContent).toBe("Boardroom");
   });
 
-  it("forwards an id to the underlying select", () => {
-    const { container } = render(() => (
-      <TreeSelect items={items} value="" onChange={() => {}} id="reparent-select" />
-    ));
-    expect(container.querySelector("select")!.id).toBe("reparent-select");
+  it("follows a value changed from outside", () => {
+    const [value, setValue] = createSignal("campus-a");
+    render(() => <TreeSelect items={items} value={value()} onChange={() => {}} />);
+    expect(trigger().textContent).toBe("Campus A");
+    setValue("bldg-1");
+    expect(trigger().textContent).toBe("Bldg 1");
+  });
+
+  it("forwards an id to the trigger, so an external label can point at it", () => {
+    render(() => <TreeSelect items={items} value="" onChange={() => {}} id="reparent-select" />);
+    expect(trigger().id).toBe("reparent-select");
+  });
+
+  it("omits the node and subtree named by excludeSubtreeOf", async () => {
+    render(() => <TreeSelect items={items} value="" onChange={() => {}} excludeSubtreeOf="b1" />);
+    open();
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+    expect(screen.getByRole("option").textContent).toBe("Campus A");
+  });
+
+  describe("keyboard", () => {
+    it.each([
+      ["Enter", { key: "Enter" }],
+      ["Space", { key: " " }],
+      ["ArrowDown", { key: "ArrowDown" }],
+    ])("opens on %s", async (_name, ev) => {
+      render(() => <TreeSelect items={items} value="" onChange={() => {}} />);
+      expect(screen.queryByRole("listbox")).toBeNull();
+      fireEvent.keyDown(trigger(), ev);
+      expect(await screen.findByRole("listbox")).toBeTruthy();
+    });
+
+    it("closes on Escape and returns focus to the trigger", async () => {
+      render(() => <TreeSelect items={items} value="" onChange={() => {}} />);
+      trigger().focus();
+      open();
+      const listbox = await screen.findByRole("listbox");
+      fireEvent.keyDown(listbox, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      // Kobalte hands focus back on a later frame, once the listbox is unmounted.
+      await waitFor(() => expect(document.activeElement).toBe(trigger()));
+    });
+
+    it("jumps to a label by typing its first letters", async () => {
+      const picked: string[] = [];
+      render(() => <TreeSelect items={items} value="" onChange={(v) => picked.push(v)} />);
+      trigger().focus();
+      // Type-ahead on the closed trigger selects the matching label directly.
+      fireEvent.keyDown(trigger(), { key: "B" });
+      fireEvent.keyDown(trigger(), { key: "o" });
+      fireEvent.keyDown(trigger(), { key: "a" });
+      await waitFor(() => expect(picked).toContain("boardroom"));
+    });
   });
 });

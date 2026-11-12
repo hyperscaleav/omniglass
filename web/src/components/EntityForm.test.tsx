@@ -14,6 +14,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { treeValue } from "./TreeSelect.testkit";
 
 // EntityForm (#826 slice 1): the ONE form per fleet kind. It renders read or
 // edit against a slot its host owns (the workspace's Configure tab, the
@@ -254,14 +255,14 @@ describe("the one form, empty", () => {
   it("prefills the placement from `under`, the explorer's create-where-you-stand", async () => {
     mountCreate("system", uuidFor("ef-west"));
     const form = await screen.findByTestId("entity-create-form");
-    const location = within(form).getByLabelText("Location") as HTMLSelectElement;
-    await waitFor(() => expect(location.value).toBe(uuidFor("ef-west")));
+    const location = within(form).getByLabelText("Location");
+    await waitFor(() => expect(treeValue(location)).toBe("West Building"));
   });
 
   it("prefills a location's parent from `under`", async () => {
     mountCreate("location", uuidFor("ef-west"));
     const form = await screen.findByTestId("entity-create-form");
-    const parent = within(form).getByLabelText("Parent") as HTMLSelectElement;
-    await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
+    const parent = within(form).getByLabelText("Parent");
+    await waitFor(() => expect(treeValue(parent)).toBe("West Building"));
   });
 });
