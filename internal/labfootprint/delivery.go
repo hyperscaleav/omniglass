@@ -344,7 +344,8 @@ func ReceiptsQuery(from, to time.Time) string {
 
 func epoch(t time.Time) string { return strconv.FormatFloat(float64(t.UnixMicro())/1e6, 'f', 6, 64) }
 
-// ParseReceipts reads what ReceiptsQuery writes.
+// ParseReceipts reads what ReceiptsQuery writes, the ledger and outcome as
+// the receipt packs them (#1699).
 func ParseReceipts(out string) ([]delivery.Receipt, error) {
 	var rs []delivery.Receipt
 	for _, line := range strings.Split(out, "\n") {
@@ -358,15 +359,23 @@ func ParseReceipts(out string) ([]delivery.Receipt, error) {
 			Minted     time.Time         `json:"minted"`
 			Resolved   uint64            `json:"resolved"`
 			Deliveries int               `json:"deliveries"`
-			Ledger     delivery.Declared `json:"ledger"`
-			Outcome    delivery.Tally    `json:"outcome"`
+			Ledger     []*int64          `json:"ledger"`
+			Outcome    []int32           `json:"outcome"`
 			NodeLoss   delivery.NodeLoss `json:"node_loss"`
 		}
 		if err := json.Unmarshal([]byte(line), &row); err != nil {
 			return nil, fmt.Errorf("read a receipt %q: %w", line, err)
 		}
+		declared, err := delivery.DeclaredOf(row.Ledger)
+		if err != nil {
+			return nil, fmt.Errorf("read a receipt %q: %w", line, err)
+		}
+		outcome, err := delivery.TallyOf(row.Outcome)
+		if err != nil {
+			return nil, fmt.Errorf("read a receipt %q: %w", line, err)
+		}
 		r := delivery.Receipt{Boot: row.Boot, Seq: row.Seq, Minted: row.Minted.UTC(), Resolved: row.Resolved,
-			Deliveries: row.Deliveries, Declared: row.Ledger, Outcome: row.Outcome, Loss: row.NodeLoss}
+			Deliveries: row.Deliveries, Declared: declared, Outcome: outcome, Loss: row.NodeLoss}
 		if row.Node != nil {
 			r.Node = *row.Node
 		}

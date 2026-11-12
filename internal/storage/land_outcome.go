@@ -20,19 +20,16 @@ import (
 // those columns empty. A pushed batch's ledger has no node: the push lane's
 // boot is the server's own (#1696).
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
-	var node, boot, ledger, nodeLoss *string
+	var node, boot, nodeLoss *string
 	var seq, resolved *int64
+	var ledger []*int64
 	var minted any
 	if b.Node != "" {
 		node = &b.Node
 	}
 	if l := b.Ledger; l != nil {
-		raw, err := json.Marshal(l.Kinds)
-		if err != nil {
-			return false, fmt.Errorf("storage: land batch %s: receipt ledger: %w", b.BatchID, err)
-		}
-		s, r, j := int64(l.Seq), int64(l.Resolved), string(raw)
-		boot, seq, resolved, ledger, minted = &l.Boot, &s, &r, &j, l.Minted
+		s, r := int64(l.Seq), int64(l.Resolved)
+		boot, seq, resolved, ledger, minted = &l.Boot, &s, &r, l.Kinds.Cells(), l.Minted
 		if !l.Loss.Empty() {
 			raw, err := json.Marshal(l.Loss)
 			if err != nil {
@@ -53,7 +50,7 @@ func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, e
 // deliveries at 1 (an insert, or the replace of a Term receipt), so that is
 // the first flag; a redelivery counts on.
 const insertReceiptSQL = `insert into telemetry_receipt as r (batch_id, node, boot, seq, minted, resolved, ledger, node_loss)
-	values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
+	values ($1, $2, $3, $4, $5, $6, $7::bigint[], $8::jsonb)
 	on conflict (batch_id) do update set
 		deliveries = case when r.termed then 1 else r.deliveries + 1 end,
 		node = case when r.termed then excluded.node else r.node end,
@@ -72,11 +69,11 @@ const insertReceiptSQL = `insert into telemetry_receipt as r (batch_id, node, bo
 // transaction that landed it, so the receipt never names an outcome the batch
 // did not commit.
 func recordBatchOutcome(ctx context.Context, tx pgx.Tx, batchID string, t delivery.Tally) error {
-	raw, err := json.Marshal(t)
+	cells, err := t.Cells()
 	if err != nil {
 		return fmt.Errorf("storage: land batch %s: outcome: %w", batchID, err)
 	}
-	if _, err := tx.Exec(ctx, `update telemetry_receipt set outcome = $2::jsonb where batch_id = $1`, batchID, string(raw)); err != nil {
+	if _, err := tx.Exec(ctx, `update telemetry_receipt set outcome = $2::int[] where batch_id = $1`, batchID, cells); err != nil {
 		return fmt.Errorf("storage: land batch %s: outcome: %w", batchID, err)
 	}
 	return nil

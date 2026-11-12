@@ -462,6 +462,10 @@ const receiptLedgerVersion = "20261109232007"
 // receiptTermedVersion is the migration that marks a Term receipt (#1691).
 const receiptTermedVersion = "20261110140219"
 
+// receiptPackedVersion is the migration that packs the receipt's ledger and
+// outcome into integer arrays (#1699).
+const receiptPackedVersion = "20261112051714"
+
 // tallyOf is a tally from a literal, for comparison.
 func tallyOf(m map[delivery.Kind]map[delivery.Outcome]int) delivery.Tally {
 	var t delivery.Tally
@@ -502,17 +506,18 @@ type receiptRow struct {
 func (f landFixture) receipt(t *testing.T, id string) receiptRow {
 	t.Helper()
 	var r receiptRow
-	var ledger, outcome []byte
+	var ledger []*int64
+	var outcome []int32
 	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome, termed
 		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome, &r.termed)
 	if err != nil {
 		t.Fatalf("read receipt %s: %v", id, err)
 	}
-	if err := json.Unmarshal(ledger, &r.ledger); err != nil {
-		t.Fatalf("receipt %s ledger %s: %v", id, ledger, err)
+	if r.ledger, err = delivery.DeclaredOf(ledger); err != nil {
+		t.Fatalf("receipt %s ledger: %v", id, err)
 	}
-	if err := json.Unmarshal(outcome, &r.outcome); err != nil {
-		t.Fatalf("receipt %s outcome %s: %v", id, outcome, err)
+	if r.outcome, err = delivery.TallyOf(outcome); err != nil {
+		t.Fatalf("receipt %s outcome %v: %v", id, outcome, err)
 	}
 	return r
 }
@@ -808,6 +813,101 @@ func TestReceiptLedgerMigrationOverExistingReceipts(t *testing.T) {
 	}
 	if n != 2 || one != 2 || bare != 2 {
 		t.Fatalf("receipts = %d, one delivery %d, no ledger %d; want 2 of each", n, one, bare)
+	}
+}
+
+// TestReceiptPackedMigrationOverExistingReceipts (#1699): the migration
+// packing the ledger and outcome applies over receipts already landed as
+// jsonb, each reading back as it was written (a kind or outcome this server
+// has no slot or code for left out, a zero left out of the outcome), applies
+// again as a no-op, and its down section restores the jsonb.
+func TestReceiptPackedMigrationOverExistingReceipts(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, receiptPackedVersion); err != nil {
+		t.Fatalf("roll back below the packed receipt: %v", err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id, ledger, outcome) values
+		('full', '{"metric":{"count":58,"before":3000000000},"property":{"count":0,"before":9},"log":{"count":1,"before":2},"trace":{"count":1,"before":1}}',
+			'{"metric":{"stored":58,"missing":2},"log":{"stored":1,"coalesced":0},"trace":{"stored":1},"event":{"returned":4}}'),
+		('null-ledger', 'null', '{}'),
+		('bare', null, null)`); err != nil {
+		t.Fatalf("plant receipts: %v", err)
+	}
+	raw, err := db.FS.ReadFile("migrations/" + receiptPackedVersion + "_telemetry_receipt_packed.sql")
+	if err != nil {
+		t.Fatalf("read the migration: %v", err)
+	}
+	up, down, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("migration missing '-- migrate:down' marker")
+	}
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, up); err != nil {
+			t.Fatalf("apply %d: %v", i+1, err)
+		}
+	}
+	read := func(id string) (ledger []*int64, outcome []int32) {
+		t.Helper()
+		if err := conn.QueryRow(ctx, `select ledger, outcome from telemetry_receipt where batch_id = $1`, id).Scan(&ledger, &outcome); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		return ledger, outcome
+	}
+
+	ledger, outcome := read("full")
+	d, err := delivery.DeclaredOf(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (delivery.Declared{
+		delivery.Metric:   {Count: 58, Before: 3_000_000_000},
+		delivery.Property: {Count: 0, Before: 9},
+		delivery.Log:      {Count: 1, Before: 2},
+	}); fmt.Sprint(d) != fmt.Sprint(want) {
+		t.Fatalf("full ledger = %v, want %v", d, want)
+	}
+	tl, err := delivery.TallyOf(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := tallyOf(map[delivery.Kind]map[delivery.Outcome]int{
+		delivery.Metric: {delivery.Stored: 58, delivery.Missing: 2},
+		delivery.Log:    {delivery.Stored: 1},
+	}); !sameTally(t, tl, want) {
+		t.Fatalf("full outcome = %+v, want %+v", tl, want)
+	}
+
+	ledger, outcome = read("null-ledger")
+	if d, err := delivery.DeclaredOf(ledger); ledger == nil || err != nil || len(d) != 0 {
+		t.Fatalf("null ledger = %v (%v, %v), want an array declaring nothing", ledger, d, err)
+	}
+	if outcome == nil || len(outcome) != 0 {
+		t.Fatalf("empty outcome = %v, want an empty array", outcome)
+	}
+
+	if ledger, outcome = read("bare"); ledger != nil || outcome != nil {
+		t.Fatalf("bare receipt = %v, %v; want no ledger and no outcome", ledger, outcome)
+	}
+
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, down); err != nil {
+			t.Fatalf("roll back %d: %v", i+1, err)
+		}
+	}
+	var restored bool
+	if err := conn.QueryRow(ctx, `select ledger = '{"metric":{"count":58,"before":3000000000},"property":{"count":0,"before":9},"log":{"count":1,"before":2}}'
+		and outcome = '{"metric":{"stored":58,"missing":2},"log":{"stored":1}}'
+		from telemetry_receipt where batch_id = 'full'`).Scan(&restored); err != nil {
+		t.Fatalf("read the restored receipt: %v", err)
+	}
+	if !restored {
+		t.Fatal("the down section did not restore the full receipt's jsonb")
 	}
 }
 
