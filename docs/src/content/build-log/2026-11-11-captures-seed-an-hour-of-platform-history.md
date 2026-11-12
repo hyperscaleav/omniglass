@@ -23,8 +23,14 @@ are the windowed ingest, push and slow query figures: a capture's lab has no nod
 live, and a windowed figure whose newest sample is two report windows old reads not reported, so a
 seeded hour of them would never draw.
 
+An hour reaching back past midnight UTC lands in a day the server's boot has not made yet (the
+seed runs before the server starts), so a platform write now makes a missing metric day and
+retries, as the ingest's write already did; a storage test drops yesterday's partition and records
+into it.
+
 A unit test fails any server panel key the history neither seeds, measures nor exempts with a
-reason; another holds every failure at 0, and another ends each size on the figure measured. Integration tests on a real Postgres hold the metric
-table's last seeded size above what it measured before the history's rows landed, and seed through
-the lab's own seed one-off: with the flag every series lands sixty samples and a second run adds none; without it
-the server carries no sample, and the dev fleet's seed writes none on any platform component.
+reason; another holds every failure at 0, and another ends each size on the figure measured.
+Integration tests on a real Postgres hold the metric table's last seeded size above what it
+measured before the history's rows landed, and land sixty samples per series with a second run
+adding none. The lab's own seed one-off lands the history with the flag; without it the server
+carries no sample, and the dev fleet's seed writes none on any platform component.
