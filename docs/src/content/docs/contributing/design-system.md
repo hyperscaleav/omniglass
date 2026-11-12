@@ -212,7 +212,7 @@ confirm whose body has to teach cannot be a native prompt.
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
-`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`PanelFooter`, `Badge`, `Page`, `Breadcrumb` (its crumbs are links), `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
 `BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
 the `Sidebar` / `TopBar` shell.
 

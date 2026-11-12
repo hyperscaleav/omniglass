@@ -180,6 +180,9 @@ func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return 
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) WriteAuthEventFor(context.Context, string, string, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil

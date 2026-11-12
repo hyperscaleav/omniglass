@@ -6922,7 +6922,7 @@ export interface components {
             driver?: string;
             /** @description The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest */
             inputs?: {
-                [key: string]: string;
+                [key: string]: string | number;
             };
             /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for */
             label?: string;
@@ -12933,7 +12933,7 @@ export interface components {
             readonly $schema?: string;
             /** @description A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
             inputs?: {
-                [key: string]: string;
+                [key: string]: string | number;
             };
             /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
             label?: string;
