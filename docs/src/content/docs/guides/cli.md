@@ -549,7 +549,7 @@ omniglass driver rename barco-snmp --name barco-projector-snmp      # re-derives
 omniglass driver delete barco-snmp                                  # refused (422) if official, or while an endpoint is attached through it
 ```
 
-An **official** row, for example the `crestron` vendor, is read-only: `update`, `delete` and `rename`
+An **official** row, for example the `boreal` vendor, is read-only: `update`, `delete` and `rename`
 all 422. A vendor's `website` is validated to an `http`/`https` scheme on write; any other scheme (for
 example `javascript:`) is a 422.
 
@@ -573,7 +573,7 @@ omniglass product update barco-ub12 --label "Barco UB12 Pro"
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
-An **official** product, for example `cisco-room-bar`, is read-only: `update`, `delete` and
+An **official** product, for example `kestrel-vroom`, is read-only: `update`, `delete` and
 `rename` all 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
 an unknown vendor, driver, parent, or component_type id is a 422.
 
@@ -772,7 +772,7 @@ A classifier **declares** which properties its instances carry; an instance **se
 are the same three verbs, and the contract commands hang off the classifier that owns them:
 
 ```sh
-omniglass product property list cisco-room-bar                         # a product's contract
+omniglass product property list kestrel-vroom                          # a product's contract
 omniglass standard property list huddle-room                           # a standard's contract
 omniglass location-type property list room                             # a location type's contract
 omniglass standard property update huddle-room room-capacity --default-value 6 --required=true

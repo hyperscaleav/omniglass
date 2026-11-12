@@ -32,7 +32,7 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
-// "Crestron TSW-1070"), on the flat FlatList surface. A product is addressed by
+// "Kestrel VRoom"), on the flat FlatList surface. A product is addressed by
 // its kebab name (ADR-0062: the uuid is identity, the name is what an operator
 // reads and types); official rows are read-only,
 // same as the Types catalog's official rows: the Edit / Delete pair greys. A
@@ -299,10 +299,10 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
       <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
+        <input class="input input-bordered w-full" value={display()} placeholder="Kestrel VRoom" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="kestrel-vroom" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Kind" hint="What class of thing the product is.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>

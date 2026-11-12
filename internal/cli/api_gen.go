@@ -9866,7 +9866,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key, e.g. crestron-logo")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key, e.g. boreal-logo")
 				cmd.Flags().StringVar(&fKind, "kind", "", "The role the organization plays")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")

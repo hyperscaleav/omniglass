@@ -7578,7 +7578,7 @@ export interface components {
              * @example /api/v1/schemas/CreateVendorInputBody.json
              */
             readonly $schema?: string;
-            /** @description A glyph key, e.g. crestron-logo */
+            /** @description A glyph key, e.g. boreal-logo */
             icon?: string;
             /**
              * @description The role the organization plays
