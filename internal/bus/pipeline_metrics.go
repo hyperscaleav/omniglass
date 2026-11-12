@@ -246,12 +246,6 @@ func (s *Server) recordHeartbeat(ctx context.Context, node string) {
 	s.heartbeatFail.ok(node)
 }
 
-// The sweeps the settlement tick times, sweep-*'s instances.
-const (
-	sweepCommandSettlement = "command-settlement"
-	sweepEventRule         = "event-rule"
-)
-
 // sweep runs one sweep, recording its duration, that it ran, and whether it
 // failed. It returns the sweep's error.
 func (s *Server) sweep(name string, run func() error) error {

@@ -213,22 +213,22 @@ func TestFailureCountsLandAZeroBesideTheirAttempts(t *testing.T) {
 	s.request(requestHeartbeat, nil)
 	s.request(requestHeartbeat, nil)
 	s.request(requestCommandPull, errors.New("db down"))
-	_ = s.sweep(sweepEventRule, func() error { return nil })
-	_ = s.sweep(sweepCommandSettlement, func() error { return errors.New("db down") })
+	_ = s.sweep(writerclass.SweepEventRule, func() error { return nil })
+	_ = s.sweep(writerclass.SweepCommandSettlement, func() error { return errors.New("db down") })
 	s.ack(&fakeMsg{})
 	s.ack(&fakeMsg{})
 
 	got := flushed(rec)
 	for key, want := range map[[2]string]float64{
-		{writerclass.BusRequestCount, requestHeartbeat}:          2,
-		{writerclass.BusRequestFailureCount, requestHeartbeat}:   0,
-		{writerclass.BusRequestCount, requestCommandPull}:        1,
-		{writerclass.BusRequestFailureCount, requestCommandPull}: 1,
-		{writerclass.SweepCount, sweepEventRule}:                 1,
-		{writerclass.SweepFailureCount, sweepEventRule}:          0,
-		{writerclass.SweepCount, sweepCommandSettlement}:         1,
-		{writerclass.SweepFailureCount, sweepCommandSettlement}:  1,
-		{writerclass.BusTelemetryAckFailureCount, ""}:            0,
+		{writerclass.BusRequestCount, requestHeartbeat}:                     2,
+		{writerclass.BusRequestFailureCount, requestHeartbeat}:              0,
+		{writerclass.BusRequestCount, requestCommandPull}:                   1,
+		{writerclass.BusRequestFailureCount, requestCommandPull}:            1,
+		{writerclass.SweepCount, writerclass.SweepEventRule}:                1,
+		{writerclass.SweepFailureCount, writerclass.SweepEventRule}:         0,
+		{writerclass.SweepCount, writerclass.SweepCommandSettlement}:        1,
+		{writerclass.SweepFailureCount, writerclass.SweepCommandSettlement}: 1,
+		{writerclass.BusTelemetryAckFailureCount, ""}:                       0,
 	} {
 		if n, ok := got[key]; !ok || n != want {
 			t.Errorf("%s{%s} = %v (landed %v), want %v", key[0], key[1], n, ok, want)
