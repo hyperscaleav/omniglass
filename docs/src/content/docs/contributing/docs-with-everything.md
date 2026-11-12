@@ -282,6 +282,20 @@ and stills come from the recording, copied into `docs/public/walkthroughs/<id>/`
 the embed plays the video with controls. Writing,
 recording, reviewing and embedding one is [demos](/contributing/demos/#embed-a-walkthrough-in-the-docs).
 
+## Where committed images live
+
+A committed image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) belongs in one of a short list of
+homes, and a guard test in `internal/build` fails any other:
+
+- `docs/public/screenshots/`: the clean docs renders from `make docs-shots`.
+- `docs/screenshots/baseline/`: their masked twins, the diff baseline for `make docs-shots-check`.
+- `docs/public/walkthroughs/<id>/`: walkthrough stills copied by `make docs-walkthroughs`.
+- `docs/public/d2/`: D2 diagram renders (SVG, an image home all the same).
+- `.github/screenshots/<n>/`: PR evidence for PR `n`, including its `walkthroughs/` subtrees.
+- `internal/avatar/testdata/`: a test fixture the avatar renderer reads.
+
+A new home is a line in the guard's list with the reason it exists, plus a line here.
+
 ## Style
 
 - No em dashes. Use commas, colons, periods, or parentheses.
