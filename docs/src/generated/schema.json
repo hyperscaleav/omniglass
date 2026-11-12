@@ -6315,12 +6315,12 @@
      },
      {
       "name": "ledger",
-      "type": "jsonb",
+      "type": "ARRAY",
       "nullable": true
      },
      {
       "name": "outcome",
-      "type": "jsonb",
+      "type": "ARRAY",
       "nullable": true
      },
      {
