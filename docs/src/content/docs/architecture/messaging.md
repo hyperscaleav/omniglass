@@ -406,7 +406,9 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   `command-report`): the node requests the server handled and those it failed to serve. A heartbeat
   write that fails also logs one WARN for the node, `heartbeat not recorded, the node may read as
   silent`, and not again until a heartbeat from that node lands, so a database outage under a fleet
-  heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures.
+  heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures: the
+  failure count is written 0 beside every window of requests, so Platform health's Requests panel
+  reads it against the requests, path by path, as `0 / n` (#1769).
 - **`push-lane-publish-count`, `push-lane-refusal-count`, `push-lane-turn-wait-p99`,
   `push-lane-turn-wait-max`**: the push lane's publish turn (#1746). The pushes and webhook posts
   that waited for the turn, those refused because the wait passed 5 seconds (answered `503`, nothing

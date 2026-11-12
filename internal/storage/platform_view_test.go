@@ -504,6 +504,59 @@ func TestPlatformViewServesThePushLaneTurn(t *testing.T) {
 	}
 }
 
+// TestPlatformViewServesTheServersFailureCounts (#1769): the server's
+// failure counts read on the panels beside their attempts, each the newest
+// window's figure: a bus request's failures against its requests on Requests,
+// a sweep's against its runs and the telemetry ack's on Queues, and the
+// retention pass's failure on Retention. A pair carries its Of key, so the
+// page reads failures as a ratio where 0 is healthy.
+func TestPlatformViewServesTheServersFailureCounts(t *testing.T) {
+	t.Parallel()
+	gw, ctx, _ := platformGatewayDSN(t)
+	server, err := gw.EnsureServerComponent(ctx, "lab-server")
+	if err != nil {
+		t.Fatalf("ensure server component: %v", err)
+	}
+	window := time.Now().UTC().Truncate(time.Second).Add(-5 * time.Second)
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: server, Key: writerclass.BusRequestCount, Instance: "heartbeat", Value: 240, TS: window},
+		{ComponentID: server, Key: writerclass.BusRequestFailureCount, Instance: "heartbeat", Value: 2, TS: window},
+		{ComponentID: server, Key: writerclass.SweepCount, Instance: "event-rule", Value: 30, TS: window},
+		{ComponentID: server, Key: writerclass.SweepFailureCount, Instance: "event-rule", Value: 1, TS: window},
+		{ComponentID: server, Key: writerclass.BusTelemetryAckFailureCount, Value: 3, TS: window},
+		{ComponentID: server, Key: writerclass.RetentionPassFailureCount, Value: 1, TS: window},
+	}); err != nil {
+		t.Fatalf("record platform metrics: %v", err)
+	}
+	v, err := gw.PlatformView(ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	for _, c := range []struct {
+		panel, key, of string
+		want           float64
+	}{
+		{"requests", writerclass.BusRequestFailureCount, writerclass.BusRequestCount, 2},
+		{"requests", writerclass.BusRequestCount, "", 240},
+		{"queues", writerclass.SweepFailureCount, writerclass.SweepCount, 1},
+		{"queues", writerclass.SweepCount, "", 30},
+		{"queues", writerclass.BusTelemetryAckFailureCount, "", 3},
+		{"retention", writerclass.RetentionPassFailureCount, "", 1},
+	} {
+		p := serverPanel(t, v, c.panel)
+		var listed bool
+		for _, k := range p.Keys {
+			listed = listed || (k.Name == c.key && k.Of == c.of)
+		}
+		if !listed {
+			t.Errorf("%s keys = %+v, want %s read against %q", c.panel, p.Keys, c.key, c.of)
+		}
+		if got := figuresOf(p, c.key); len(got) != 1 || got[0].Value != c.want {
+			t.Errorf("%s %s = %+v, want this window's %v", c.panel, c.key, got, c.want)
+		}
+	}
+}
+
 // deliveryWindow is one window of a hop's three keys for one kind on one
 // platform component, as the node's report or the server's recorder writes it.
 func deliveryWindow(id, kind string, in, out float64, ts time.Time) []storage.PlatformMetric {
@@ -763,29 +816,23 @@ var platformKeysOffPage = map[string]string{
 
 	// The panels rank the slowest routes by their max; the mean is the
 	// component page's.
-	writerclass.HTTPRequestDuration:         offServerDetail,
-	writerclass.DBPoolIdle:                  offServerDetail,
-	writerclass.DBPoolTotal:                 offServerDetail,
-	writerclass.DBPoolWaitDuration:          offServerDetail,
-	writerclass.BusConsumerRedelivered:      offServerDetail,
-	writerclass.BusTelemetryAckFailureCount: offServerDetail,
-	writerclass.BusWorklistPullCount:        offServerDetail,
-	writerclass.BusWorklistReplyBytesMax:    offServerDetail,
-	writerclass.BusRequestCount:             offServerDetail,
-	writerclass.BusRequestFailureCount:      offServerDetail,
-	writerclass.CalcServedCount:             offServerDetail,
-	writerclass.CalcPassDuration:            offServerDetail,
-	writerclass.SweepDuration:               offServerDetail,
-	writerclass.SweepCount:                  offServerDetail,
-	writerclass.SweepFailureCount:           offServerDetail,
-	writerclass.WebhookPostCount:            offServerDetail,
-	writerclass.WebhookRefusalCount:         offServerDetail,
+	writerclass.HTTPRequestDuration:      offServerDetail,
+	writerclass.DBPoolIdle:               offServerDetail,
+	writerclass.DBPoolTotal:              offServerDetail,
+	writerclass.DBPoolWaitDuration:       offServerDetail,
+	writerclass.BusConsumerRedelivered:   offServerDetail,
+	writerclass.BusWorklistPullCount:     offServerDetail,
+	writerclass.BusWorklistReplyBytesMax: offServerDetail,
+	writerclass.CalcServedCount:          offServerDetail,
+	writerclass.CalcPassDuration:         offServerDetail,
+	writerclass.SweepDuration:            offServerDetail,
+	writerclass.WebhookPostCount:         offServerDetail,
+	writerclass.WebhookRefusalCount:      offServerDetail,
 	// A filling disk reaches the page as its alarm, disk-nearly-full, in
 	// the server's open count (#1707); the figure is the component page's.
 	writerclass.DataDirDiskUsedRatio: offServerDetail,
 
 	writerclass.RetentionPassDuration:       offRetention,
-	writerclass.RetentionPassFailureCount:   offRetention,
 	writerclass.MetricPartitionCreatedCount: offRetention,
 	writerclass.MetricPartitionDroppedCount: offRetention,
 	writerclass.MetricPartitionCount:        offRetention,

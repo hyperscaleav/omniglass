@@ -79,7 +79,7 @@ scale-measure: all
 # baseline from fresh runs, a reviewed change the PR states the reason
 # for. Outside make test and never a required check: each run stands up a
 # real scale lab for minutes. PERF_ARGS passes flags (PERF_ARGS="--image
-# omniglass:mine"); CI runs it on the run:perf label.
+# omniglass:mine"). It runs by hand on a test VM (ADR-1787), never in CI.
 SIZE      ?= 300
 PERF_RUNS ?= 3
 perf-check: all

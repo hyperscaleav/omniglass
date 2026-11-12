@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 )
 
 func strp(s string) *string { return &s }
@@ -577,5 +578,114 @@ func TestRootComponentTypeRequiresStem(t *testing.T) {
 		Name: "child-no-stem", Label: "Child No Stem", ParentID: &root.ID,
 	}); err != nil {
 		t.Fatalf("create child with no stem under a stemmed root: %v", err)
+	}
+}
+
+// fourLevelChain returns a seeded counting gateway and the ids of a four-level
+// chain: the seeded display-device -> display -> interactive-display, and a
+// custom leaf under the last one. The leaf and interactive-display state no
+// facts, so the leaf inherits through two hops.
+func fourLevelChain(t *testing.T) (gw storage.Gateway, counter *querycount.Counter, root, mid, leaf *storage.ComponentType) {
+	t.Helper()
+	ctx := context.Background()
+	gw, counter = storagetest.NewCountingDB(t)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	var err error
+	if root, err = gw.GetComponentType(ctx, "display-device"); err != nil {
+		t.Fatalf("get display-device: %v", err)
+	}
+	if mid, err = gw.GetComponentType(ctx, "display"); err != nil {
+		t.Fatalf("get display: %v", err)
+	}
+	parent, err := gw.GetComponentType(ctx, "interactive-display")
+	if err != nil {
+		t.Fatalf("get interactive-display: %v", err)
+	}
+	if leaf, err = gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "fi-kiosk-display", Label: "Kiosk Display", ParentID: &parent.ID,
+	}); err != nil {
+		t.Fatalf("create leaf: %v", err)
+	}
+	counter.Reset()
+	return gw, counter, root, mid, leaf
+}
+
+// TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates: a four-level chain
+// where the forked node sits in the middle. The fork restates its icon and
+// nothing else, so the leaf below it takes the fork's icon, the middle node's
+// own shipped abbrev, and the stem and tags of the root two hops further up.
+func TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	gw, _, root, mid, leaf := fourLevelChain(t)
+
+	if _, err := gw.UpdateComponentType(ctx, "", root.Name, storage.ComponentTypePatch{
+		DefaultTags: &[]string{"av", "screen"},
+	}); err != nil {
+		t.Fatalf("fork the root's tags: %v", err)
+	}
+	if _, err := gw.UpdateComponentType(ctx, "", mid.Name, storage.ComponentTypePatch{
+		Icon: strp("tv-house"),
+	}); err != nil {
+		t.Fatalf("fork the middle node's icon: %v", err)
+	}
+
+	stem, icon, abbrev, tags, err := gw.ResolveTypeFacts(ctx, leaf.ID)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if icon != "tv-house" {
+		t.Errorf("icon = %q, want the forked middle node's %q", icon, "tv-house")
+	}
+	if abbrev != *mid.Abbrev {
+		t.Errorf("abbrev = %q, want the middle node's shipped %q (the fork did not restate it)", abbrev, *mid.Abbrev)
+	}
+	if stem != *mid.Stem {
+		t.Errorf("stem = %q, want the middle node's shipped %q", stem, *mid.Stem)
+	}
+	if len(tags) != 2 || tags[0] != "av" || tags[1] != "screen" {
+		t.Errorf("tags = %v, want the root's forked [av screen]", tags)
+	}
+}
+
+// TestTheTypeChainWalkIsOneStatement: resolving a leaf's facts and asking
+// whether it sits under the root cost one statement each however many levels
+// the walk climbs (#803), and asking a type about itself costs none.
+func TestTheTypeChainWalkIsOneStatement(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	gw, counter, root, mid, leaf := fourLevelChain(t)
+
+	if _, _, _, _, err := gw.ResolveTypeFacts(ctx, leaf.ID); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if n := counter.N(); n != 1 {
+		t.Errorf("ResolveTypeFacts across four levels cost %d statements, want 1", n)
+	}
+
+	counter.Reset()
+	within, err := gw.TypeIsWithin(ctx, leaf.ID, root.ID)
+	if err != nil {
+		t.Fatalf("TypeIsWithin: %v", err)
+	}
+	if !within {
+		t.Error("TypeIsWithin(leaf, root) = false, want true")
+	}
+	if n := counter.N(); n != 1 {
+		t.Errorf("TypeIsWithin across four levels cost %d statements, want 1", n)
+	}
+
+	counter.Reset()
+	within, err = gw.TypeIsWithin(ctx, mid.ID, leaf.ID)
+	if err != nil {
+		t.Fatalf("TypeIsWithin upward: %v", err)
+	}
+	if within {
+		t.Error("TypeIsWithin(mid, leaf) = true, want false: a type is not within its descendant")
+	}
+	if n := counter.N(); n != 1 {
+		t.Errorf("a refused TypeIsWithin cost %d statements, want 1", n)
 	}
 }
