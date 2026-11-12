@@ -33,6 +33,7 @@ func seededSamples(t *testing.T, ctx context.Context, gw storage.Gateway, server
 // panels read, so a capture of platform health draws full lines. A second run
 // writes nothing: the history is its own sentinel.
 func TestSeedPlatformHistoryLandsAnHourOncePerSeries(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, devseed.BootSeededDSN(t), devseed.SecretProvider())
 	if err != nil {
@@ -48,7 +49,11 @@ func TestSeedPlatformHistoryLandsAnHourOncePerSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := seededSamples(t, ctx, gw, serverID)
-	want := devseed.PlatformHistorySeries()
+	status, err := gw.RetentionStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := devseed.PlatformHistorySeries(status, now)
 	if len(want) == 0 {
 		t.Fatal("the history names no series")
 	}
@@ -72,6 +77,7 @@ func TestSeedPlatformHistoryLandsAnHourOncePerSeries(t *testing.T) {
 // lands no sample on any platform component, so a learner's lab reads only
 // what its own server measured.
 func TestFleetSeedWritesNoPlatformHistory(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 	var n int
 	if err := conn.QueryRow(ctx, `

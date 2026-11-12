@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
@@ -153,7 +154,7 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 // server, with no node to collect from; the same seed not asked for it lands
 // none, so a learner's lab reads only what its own server measures.
 func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
-	seeded := func(platformHistory bool) int {
+	seeded := func(platformHistory bool) (got, want int) {
 		t.Helper()
 		ctx := context.Background()
 		dsn := storagetest.NewDSN(t)
@@ -172,20 +173,24 @@ func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		n := 0
+		status, err := gw.RetentionStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = len(devseed.PlatformHistorySeries(status, time.Now())) * devseed.PlatformHistoryMinutes
 		for _, key := range devseed.PlatformHistoryKeys() {
 			samples, err := gw.ListMetricSeries(ctx, "component", server, key, 0, 100000)
 			if err != nil {
 				t.Fatal(err)
 			}
-			n += len(samples)
+			got += len(samples)
 		}
-		return n
+		return got, want
 	}
-	if got, want := seeded(true), len(devseed.PlatformHistorySeries())*devseed.PlatformHistoryMinutes; got != want {
+	if got, want := seeded(true); got != want {
 		t.Errorf("seeded with platform history: %d samples on the server, want %d", got, want)
 	}
-	if got := seeded(false); got != 0 {
+	if got, _ := seeded(false); got != 0 {
 		t.Errorf("seeded without platform history: %d samples on the server, want none", got)
 	}
 }

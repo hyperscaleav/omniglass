@@ -86,7 +86,9 @@ none of its other tabs.
 ::screenshot{#platform-health}
 
 The server panels in this screenshot draw an hour of made-up history, seeded for the capture so its
-sparklines run the full hour; your own lab's draw what its server has measured since it started.
+sparklines run the full hour; your own lab's draw what its server has measured since it started. The
+capture's lab has no node, so the ingest, push and slow query rows still read **not reported**: a
+windowed figure no one writes goes unreported after two report windows, however much history it has.
 
 ## The header
 

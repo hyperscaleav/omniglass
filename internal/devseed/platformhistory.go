@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"math"
 	"slices"
 	"time"
@@ -79,39 +80,16 @@ func retentionLaneNames() []string {
 	return lanes
 }
 
-// retentionTableBytes is each table a retention pass sizes and a typical size
-// for a small lab, in bytes.
-var retentionTableBytes = []struct {
-	table string
-	bytes float64
-}{
-	{"metric", 663552},
-	{"metric_trend", 57344},
-	{"metric_block", 16384},
-	{"property", 262144},
-	{"log_line", 106496},
-	{"node_log", 73728},
-}
-
 // platformHistory is the hour each server panel key draws, keyed by metric
 // key. Every value is a healthy small lab's: failures and queues read 0, the
-// pool sits low against its size, ingest lags a second or two. A key on a
-// panel that is neither here nor in platformHistoryExempt fails
-// TestPlatformHistoryCoversEveryServerPanelKey.
+// pool sits low against its size. The sizes are measured instead
+// (platformHistoryMeasured). A key on a panel that is in none of the three
+// fails TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBSlowQueryCount:      zero(),
 		writerclass.DBPoolAcquired:        count(0.6, 1),
 		writerclass.DBPoolMax:             count(12, 0),
 		writerclass.DBPoolWaitCount:       zero(),
-		writerclass.IngestLag:             one(1.1, 0.15),
-		writerclass.IngestLagMax:          one(2.9, 0.3),
-		writerclass.IngestBatchCount:      count(16, 0.1),
-		writerclass.IngestSampleCount:     count(5360, 0.05),
-		writerclass.PushLaneRefusalCount:  zero(),
-		writerclass.PushLanePublishCount:  count(1, 0.5),
-		writerclass.PushLaneTurnWaitP99:   one(0.001, 0.3),
-		writerclass.PushLaneTurnWaitMax:   one(0.002, 0.3),
 		writerclass.BusConsumerPending:    zero(),
 		writerclass.BusConsumerAckPending: zero(),
 		writerclass.CalcPendingDepth:      zero(),
@@ -119,10 +97,6 @@ var platformHistory = func() map[string][]historySeries {
 		writerclass.OutboxDueAge:          zero(),
 		writerclass.IngestLaneBusy:        one(0.05, 0.4),
 		writerclass.RetentionWindowDays:   {{instance: "metric", base: 14, whole: true}},
-		// The oldest partition ages a day a day: an hour on it is a
-		// twenty-fourth of a day, against the 1.98 it reads at the end.
-		writerclass.MetricOldestDayAge: {{base: 1.98, climb: (1.0 / 24) / 1.98}},
-		writerclass.DatabaseBytes:      {{base: 18331327, climb: 0.005, whole: true}},
 	}
 	for _, r := range consoleRoutes {
 		h[writerclass.HTTPRequestDurationMax] = append(h[writerclass.HTTPRequestDurationMax], historySeries{instance: r.route, base: r.ms, swing: 0.3})
@@ -135,17 +109,64 @@ var platformHistory = func() map[string][]historySeries {
 	for _, c := range []string{"metric_trend compaction", "metric_block compaction"} {
 		h[writerclass.RetentionBehind] = append(h[writerclass.RetentionBehind], historySeries{instance: c})
 	}
-	for _, t := range retentionTableBytes {
-		h[writerclass.TableBytes] = append(h[writerclass.TableBytes], historySeries{instance: t.table, base: t.bytes, climb: 0.02, whole: true})
-	}
 	return h
 }()
+
+// platformHistoryMeasured is each server panel key whose hour is anchored on
+// what the database measures as the seed runs (RetentionStatus, the read the
+// retention pass reports from), so the hour ends on the size the server's
+// next pass writes and draws no cliff into it.
+var platformHistoryMeasured = map[string]bool{
+	writerclass.MetricOldestDayAge: true,
+	writerclass.DatabaseBytes:      true,
+	writerclass.TableBytes:         true,
+}
+
+// windowUnwritten is why a window key a capture lab never writes is left out:
+// with no node, nothing is ingested or pushed and no query runs slow, and a
+// window key past two report windows reads "not reported" however much
+// history it has, so a seeded hour of it would never draw.
+const windowUnwritten = "a window key no capture lab writes: it reads not reported once its newest sample is two report windows old, so a seeded hour would never draw"
+
+// streamPosition is why a stream position is left to the server.
+const streamPosition = "a stream position: the lab's stream starts over, so a seeded hour would draw a cliff into the live head"
 
 // platformHistoryExempt is each server panel key the history leaves to the
 // server, and why.
 var platformHistoryExempt = map[string]string{
-	writerclass.BusConsumerAckFloor: "a stream position: the lab's stream starts over, so a seeded hour would draw a cliff into the live head",
-	writerclass.BusStreamLastSeq:    "a stream position: the lab's stream starts over, so a seeded hour would draw a cliff into the live head",
+	writerclass.BusConsumerAckFloor:  streamPosition,
+	writerclass.BusStreamLastSeq:     streamPosition,
+	writerclass.DBSlowQueryCount:     windowUnwritten,
+	writerclass.IngestLag:            windowUnwritten,
+	writerclass.IngestLagMax:         windowUnwritten,
+	writerclass.IngestBatchCount:     windowUnwritten,
+	writerclass.IngestSampleCount:    windowUnwritten,
+	writerclass.PushLaneRefusalCount: windowUnwritten,
+	writerclass.PushLanePublishCount: windowUnwritten,
+	writerclass.PushLaneTurnWaitP99:  windowUnwritten,
+	writerclass.PushLaneTurnWaitMax:  windowUnwritten,
+}
+
+// historyFor is the whole hour ending at end: the profiles, plus the sizes
+// and the oldest partition's age anchored on status. A size climbs into the
+// figure measured; the age is read off the oldest partition at each minute.
+func historyFor(status storage.RetentionStatus, end time.Time) map[string][]historySeries {
+	h := maps.Clone(platformHistory)
+	h[writerclass.DatabaseBytes] = []historySeries{{base: float64(status.DatabaseBytes), climb: 0.005, whole: true}}
+	for _, table := range slices.Sorted(maps.Keys(status.TableBytes)) {
+		h[writerclass.TableBytes] = append(h[writerclass.TableBytes],
+			historySeries{instance: table, base: float64(status.TableBytes[table]), climb: 0.02, whole: true})
+	}
+	if len(status.Partitions) > 0 {
+		// The newest minute is a minute before end; the oldest is the
+		// hour's span of a day before that.
+		age := end.Add(-time.Minute).Sub(status.Partitions[0].From).Hours() / 24
+		span := float64(PlatformHistoryMinutes-1) / (24 * 60)
+		if age > 0 {
+			h[writerclass.MetricOldestDayAge] = []historySeries{{base: age, climb: span / age}}
+		}
+	}
+	return h
 }
 
 // historyValue is series s's value in minute i of n, oldest first: the base,
@@ -186,10 +207,15 @@ func SeedPlatformHistory(ctx context.Context, gw storage.Gateway, identity strin
 			return nil
 		}
 	}
+	status, err := gw.RetentionStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("platform history: measure sizes: %w", err)
+	}
 	end := now.Truncate(time.Minute)
+	history := historyFor(status, end)
 	var rows []storage.PlatformMetric
-	for _, key := range PlatformHistoryKeys() {
-		for _, s := range platformHistory[key] {
+	for _, key := range slices.Sorted(maps.Keys(history)) {
+		for _, s := range history[key] {
 			for i := range PlatformHistoryMinutes {
 				rows = append(rows, storage.PlatformMetric{
 					ComponentID: component, Key: key, Instance: s.instance,
@@ -206,21 +232,23 @@ func SeedPlatformHistory(ctx context.Context, gw storage.Gateway, identity strin
 	return nil
 }
 
-// PlatformHistoryKeys is every key the history writes, sorted.
+// PlatformHistoryKeys is every key the history can write, sorted.
 func PlatformHistoryKeys() []string {
-	keys := make([]string, 0, len(platformHistory))
-	for k := range platformHistory {
+	keys := slices.Collect(maps.Keys(platformHistory))
+	for k := range platformHistoryMeasured {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
 	return keys
 }
 
-// PlatformHistorySeries is every (key, instance) the history writes.
-func PlatformHistorySeries() [][2]string {
+// PlatformHistorySeries is every (key, instance) the history writes into a
+// database that measures status at now.
+func PlatformHistorySeries(status storage.RetentionStatus, now time.Time) [][2]string {
+	history := historyFor(status, now.Truncate(time.Minute))
 	var out [][2]string
-	for _, k := range PlatformHistoryKeys() {
-		for _, s := range platformHistory[k] {
+	for _, k := range slices.Sorted(maps.Keys(history)) {
+		for _, s := range history[k] {
 			out = append(out, [2]string{k, s.instance})
 		}
 	}
