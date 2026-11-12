@@ -348,8 +348,8 @@ export default function Profile() {
             </div>
             <Note note={avatarMsg()} />
             <div>
-              <label class="eyebrow mb-1.5 block">Username</label>
-              <input type="text" class="input input-bordered w-full" value={human()?.username ?? ""} disabled readonly />
+              <label class="eyebrow mb-1.5 block" for="profile-username">Username</label>
+              <input id="profile-username" type="text" class="input input-bordered w-full" value={human()?.username ?? ""} disabled readonly />
               <p class="mt-1 text-[11px] text-base-content/40">Your sign-in name. An administrator can change it.</p>
             </div>
             <div>
@@ -364,8 +364,8 @@ export default function Profile() {
               />
             </div>
             <div>
-              <label class="eyebrow mb-1.5 block">Email</label>
-              <input type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly placeholder="not set" />
+              <label class="eyebrow mb-1.5 block" for="profile-email">Email</label>
+              <input id="profile-email" type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly />
               <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
             </div>
             <Note note={profileMsg()} />
