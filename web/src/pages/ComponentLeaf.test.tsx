@@ -77,12 +77,12 @@ const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[] }) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[] }, components?: Component[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
-  qc.setQueryData([...COMPONENTS_KEY], [component]);
+  qc.setQueryData([...COMPONENTS_KEY], components ?? [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
   for (const n of seed?.nodes ?? nodes) qc.setQueryData([...nodeKey(n.name)], n);
   qc.setQueryData([...LOCATIONS_KEY], []);
@@ -206,6 +206,42 @@ describe("the component leaf", () => {
     mount(`/web/components/${uuidFor("cf-c-bar")}`, []);
     expect(screen.getByText(/Not in any system yet/)).toBeTruthy();
     expect(screen.getByTestId("leaf-collection")).toBeTruthy();
+  });
+
+  it("a name-shaped address with two components named mic-1 shows ambiguous message instead of redirecting", () => {
+    const mic1_a: Component = {
+      id: uuidFor("cf-c-mic1-a"),
+      name: "mic-1",
+      label: "Mic 1 A",
+      location: "boardroom-a",
+      location_id: uuidFor("cf-room"),
+      product: "kestrel-vroom",
+    } as unknown as Component;
+    const mic1_b: Component = {
+      id: uuidFor("cf-c-mic1-b"),
+      name: "mic-1",
+      label: "Mic 1 B",
+      location: "boardroom-a",
+      location_id: uuidFor("cf-room"),
+      product: "kestrel-vroom",
+    } as unknown as Component;
+    mount(`/web/components/mic-1`, undefined, mic1_a, me, undefined, undefined, [mic1_a, mic1_b]);
+    expect(screen.getByText(/More than one component/i)).toBeTruthy();
+  });
+
+  it("a name-shaped address with one component named mic-1 redirects to its id", async () => {
+    const mic1: Component = {
+      id: uuidFor("cf-c-mic1"),
+      name: "mic-1",
+      label: "Mic 1",
+      location: "boardroom-a",
+      location_id: uuidFor("cf-room"),
+      product: "kestrel-vroom",
+    } as unknown as Component;
+    mount(`/web/components/mic-1`, undefined, mic1, me, undefined, undefined, [mic1]);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(`/web/components/${uuidFor("cf-c-mic1")}`);
+    });
   });
 });
 
