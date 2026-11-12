@@ -264,4 +264,55 @@ describe("the one form, empty", () => {
     const parent = within(form).getByLabelText("Parent") as HTMLSelectElement;
     await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
   });
+
+  it("renders Cancel and Create buttons through FormActionBar inline", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const cancelBtn = within(form).getByRole("button", { name: /cancel/i });
+    const createBtn = within(form).getByRole("button", { name: /create system/i });
+    expect(cancelBtn).toBeTruthy();
+    expect(createBtn).toBeTruthy();
+  });
+
+  it("disables Create button when classification is incomplete", async () => {
+    mountCreate("location");
+    const form = await screen.findByTestId("entity-create-form");
+    const createBtn = within(form).getByRole("button", { name: /create location/i });
+    expect(createBtn).toBeDisabled();
+    const typeSelect = within(form).getByLabelText("Location type") as HTMLSelectElement;
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(createBtn).not.toBeDisabled());
+  });
+
+  it("disables Create button and all buttons while busy", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const createBtn = within(form).getByRole("button", { name: /create system/i });
+    const cancelBtn = within(form).getByRole("button", { name: /cancel/i });
+    expect(createBtn).not.toBeDisabled();
+    expect(cancelBtn).not.toBeDisabled();
+  });
+
+  it("Cancel button calls onCancel", async () => {
+    const onCancel = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], owner);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...LOCATION_TYPES_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], []);
+    window.history.pushState({}, "", "/web/x");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/x" component={() => <EntityCreateForm kind="system" onCreated={() => {}} onCancel={onCancel} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtn);
+    expect(onCancel).toHaveBeenCalled();
+  });
 });

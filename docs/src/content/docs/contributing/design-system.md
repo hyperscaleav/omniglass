@@ -119,8 +119,8 @@ a place holding none or several renders its own subject card,
   `rail-ownership.test.ts` fails on it. This replaced an opt-in `DrawerFooter` helper that each
   form had to remember to wrap its buttons in: two forms forgot, and stayed wrong for months while
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
-  cannot. Full-page create forms still draw their own inline rail and converge when the CRUD form
-  primitive lands.
+  cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
+  `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
 - **Client preferences in localStorage, for now.** Column order/visibility
   persists per browser; the eventual home is a per-principal user-preferences endpoint (a
   read/write swap), not the cascade.
