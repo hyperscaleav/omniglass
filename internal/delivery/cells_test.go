@@ -50,6 +50,19 @@ func TestLedgerCellsOfAnEmptyLedger(t *testing.T) {
 	}
 }
 
+// TestLedgerCellsSaturateAtInt64: a node's count past int64 packs at
+// int64's ceiling rather than wrapping negative, so its receipt still reads.
+func TestLedgerCellsSaturateAtInt64(t *testing.T) {
+	got := delivery.Declared{delivery.Metric: {Count: math.MaxUint64, Before: math.MaxInt64 + 1}}.Cells()
+	back, err := delivery.DeclaredOf(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (delivery.Declared{delivery.Metric: {Count: math.MaxInt64, Before: math.MaxInt64}}); !reflect.DeepEqual(back, want) {
+		t.Fatalf("read back %v, want %v", back, want)
+	}
+}
+
 // TestLedgerCellsLeaveAnUnknownKindOut: a kind a newer node declares has no
 // slot here, and no reader counts it.
 func TestLedgerCellsLeaveAnUnknownKindOut(t *testing.T) {
@@ -185,7 +198,6 @@ func TestTallyCellsRefuseWhatHasNoCode(t *testing.T) {
 	cases := map[string]func(*delivery.Tally){
 		"unknown kind":    func(t *delivery.Tally) { t.Add("trace", delivery.Stored, 1) },
 		"unknown outcome": func(t *delivery.Tally) { t.Add(delivery.Metric, delivery.Returned, 1) },
-		"past int32":      func(t *delivery.Tally) { t.Add(delivery.Metric, delivery.Stored, math.MaxInt32+1) },
 	}
 	for name, add := range cases {
 		var tl delivery.Tally
@@ -193,6 +205,21 @@ func TestTallyCellsRefuseWhatHasNoCode(t *testing.T) {
 		if _, err := tl.Cells(); err == nil {
 			t.Errorf("%s: packed, want an error", name)
 		}
+	}
+}
+
+// TestTallyCellsSaturateAtInt32: a count past int32, as a node's ledger
+// declaring more than it could have sent leaves on its shortfall, packs at
+// int32's ceiling: it still reads as loss, and the batch still lands.
+func TestTallyCellsSaturateAtInt32(t *testing.T) {
+	var tl delivery.Tally
+	tl.Add(delivery.Metric, delivery.Missing, math.MaxInt32+5)
+	got, err := tl.Cells()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int32{18, math.MaxInt32}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("cells = %v, want %v", got, want)
 	}
 }
 

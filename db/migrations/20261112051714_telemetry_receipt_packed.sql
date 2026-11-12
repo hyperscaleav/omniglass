@@ -13,16 +13,22 @@
 -- Both lists are delivery.kindSlots and delivery.outcomeCodes, append-only,
 -- pinned by TestKindSlotsArePinned and TestEveryOutcomeHasItsPinnedCode. A
 -- kind or outcome name neither list knows is not carried over: no reader
--- counts it. Each column converts only while it is still jsonb, so a second
+-- counts it. A ledger count past int64 and an outcome count past int32 are
+-- saturated at their ceilings, as delivery's Cells pack them. Each column converts only while it is still jsonb, so a second
 -- run changes nothing. The conversions live in session-temporary functions:
 -- they leave no object in the schema.
+CREATE FUNCTION pg_temp.og_receipt_count(n text) RETURNS bigint
+LANGUAGE sql IMMUTABLE STRICT AS $$
+  SELECT least(n::numeric, 9223372036854775807)::bigint
+$$;
+
 CREATE FUNCTION pg_temp.og_receipt_ledger_cells(l jsonb) RETURNS bigint[]
 LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE WHEN l IS NULL THEN NULL ELSE ARRAY[
-    (l->'metric'->>'count')::bigint, (l->'metric'->>'before')::bigint,
-    (l->'property'->>'count')::bigint, (l->'property'->>'before')::bigint,
-    (l->'event'->>'count')::bigint, (l->'event'->>'before')::bigint,
-    (l->'log'->>'count')::bigint, (l->'log'->>'before')::bigint
+    pg_temp.og_receipt_count(l->'metric'->>'count'), pg_temp.og_receipt_count(l->'metric'->>'before'),
+    pg_temp.og_receipt_count(l->'property'->>'count'), pg_temp.og_receipt_count(l->'property'->>'before'),
+    pg_temp.og_receipt_count(l->'event'->>'count'), pg_temp.og_receipt_count(l->'event'->>'before'),
+    pg_temp.og_receipt_count(l->'log'->>'count'), pg_temp.og_receipt_count(l->'log'->>'before')
   ] END
 $$;
 
@@ -43,7 +49,7 @@ LANGUAGE sql IMMUTABLE AS $$
       ('shipped', 19), ('spool-overflow', 20), ('spool-expired', 21),
       ('bus-refused', 22), ('self-log-overflow', 23), ('encode-failed', 24)
     ) AS c(name, code) ON c.name = out.name
-    CROSS JOIN LATERAL (VALUES (1, k.slot << 8 | c.code), (2, out.n::int)) AS p(part, cell)
+    CROSS JOIN LATERAL (VALUES (1, k.slot << 8 | c.code), (2, least(out.n::bigint, 2147483647)::int)) AS p(part, cell)
     WHERE out.n::bigint > 0
   ), '{}'::int[]) END
 $$;
@@ -62,6 +68,7 @@ END $$;
 
 DROP FUNCTION pg_temp.og_receipt_ledger_cells(jsonb);
 DROP FUNCTION pg_temp.og_receipt_outcome_cells(jsonb);
+DROP FUNCTION pg_temp.og_receipt_count(text);
 
 -- migrate:down
 

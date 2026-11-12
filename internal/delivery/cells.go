@@ -31,7 +31,8 @@ var outcomeCodes = []Outcome{
 // Cells is the ledger as the receipt stores it: a (count, before) pair per
 // kind slot, both nil for a kind the ledger does not declare, so an absent
 // kind stays apart from one declared at zero. A kind with no slot is not
-// stored: no reader counts a kind this server does not know. Pure.
+// stored: no reader counts a kind this server does not know. A count past
+// int64 packs at int64's ceiling rather than wrapping negative. Pure.
 func (d Declared) Cells() []*int64 {
 	out := make([]*int64, 2*len(kindSlots))
 	for i, k := range kindSlots {
@@ -39,7 +40,7 @@ func (d Declared) Cells() []*int64 {
 		if !ok {
 			continue
 		}
-		n, before := int64(c.Count), int64(c.Before)
+		n, before := int64(min(c.Count, math.MaxInt64)), int64(min(c.Before, math.MaxInt64))
 		out[2*i], out[2*i+1] = &n, &before
 	}
 	return out
@@ -72,27 +73,26 @@ func DeclaredOf(cells []*int64) (Declared, error) {
 
 // Cells is the tally as the receipt stores it: (code, n) pairs, code the
 // kind's slot << 8 | the outcome's code, in slot then code order, zeros
-// left out. A kind or outcome with no code, or a count past int32, is an
-// error: the server tallies only what it knows. Pure.
+// left out. A kind or outcome with no code is an error: the server tallies
+// only what it knows. A count past int32 packs at int32's ceiling, still
+// loss, so a node's ledger declaring more than it sent cannot refuse the
+// batch it shortchanged. Pure.
 func (t Tally) Cells() ([]int32, error) {
 	out := []int32{}
 	for k, os := range t.m {
 		if slot(k) < 0 {
 			return nil, fmt.Errorf("tally kind %q has no slot", k)
 		}
-		for o, n := range os {
+		for o := range os {
 			if code(o) < 0 {
 				return nil, fmt.Errorf("tally outcome %q has no code", o)
-			}
-			if n > math.MaxInt32 {
-				return nil, fmt.Errorf("tally %s %s of %d is past int32", k, o, n)
 			}
 		}
 	}
 	for s, k := range kindSlots {
 		for c, o := range outcomeCodes {
 			if n := t.m[k][o]; c > 0 && n > 0 {
-				out = append(out, int32(s<<8|c), int32(n))
+				out = append(out, int32(s<<8|c), int32(min(n, math.MaxInt32)))
 			}
 		}
 	}

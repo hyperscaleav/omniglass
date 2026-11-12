@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -836,6 +837,7 @@ func TestReceiptPackedMigrationOverExistingReceipts(t *testing.T) {
 		('full', '{"metric":{"count":58,"before":3000000000},"property":{"count":0,"before":9},"log":{"count":1,"before":2},"trace":{"count":1,"before":1}}',
 			'{"metric":{"stored":58,"missing":2},"log":{"stored":1,"coalesced":0},"trace":{"stored":1},"event":{"returned":4}}'),
 		('null-ledger', 'null', '{}'),
+		('past-int32', '{"metric":{"count":3000000000,"before":18446744073709551615}}', '{"metric":{"stored":1,"missing":2999999999}}'),
 		('bare', null, null)`); err != nil {
 		t.Fatalf("plant receipts: %v", err)
 	}
@@ -889,6 +891,14 @@ func TestReceiptPackedMigrationOverExistingReceipts(t *testing.T) {
 	}
 	if outcome == nil || len(outcome) != 0 {
 		t.Fatalf("empty outcome = %v, want an empty array", outcome)
+	}
+
+	ledger, outcome = read("past-int32")
+	if d, err := delivery.DeclaredOf(ledger); err != nil || d[delivery.Metric] != (delivery.Count{Count: 3_000_000_000, Before: math.MaxInt64}) {
+		t.Fatalf("past-int32 ledger = %v (%v), want before saturated at %d", d, err, int64(math.MaxInt64))
+	}
+	if tl, err := delivery.TallyOf(outcome); err != nil || tl.Count(delivery.Metric, delivery.Missing) != math.MaxInt32 || tl.Count(delivery.Metric, delivery.Stored) != 1 {
+		t.Fatalf("past-int32 outcome = %v (%+v, %v), want missing saturated at %d", outcome, tl, err, math.MaxInt32)
 	}
 
 	if ledger, outcome = read("bare"); ledger != nil || outcome != nil {
@@ -1001,5 +1011,40 @@ func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
 	}
 	if got := read(); got != string(want) {
 		t.Fatalf("landed receipt node loss = %q, want the landing's %s", got, want)
+	}
+}
+
+// TestReceiptLandsAShortfallPastInt32 (#1699): a node whose ledger declares
+// more items than int32 holds, as a counter bug would, still lands the
+// items it carried, its receipt holding the shortfall saturated rather
+// than the batch refused for it.
+func TestReceiptLandsAShortfallPastInt32(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := storage.IngestBatch{
+		BatchID: "og.v1.telemetry.edge-1 past-int32",
+		Writer:  storage.NodeWriter("", ""),
+		Node:    "edge-1",
+		Ledger: &delivery.Stamp{Boot: "b1", Seq: 1, Minted: at, Kinds: delivery.Declared{
+			delivery.Log: {Count: 3_000_000_001},
+		}},
+		NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: at}},
+	}
+	b.Tally.Add(delivery.Log, delivery.Missing, 3_000_000_000)
+	if res, err := f.gw.LandBatch(ctx, b); err != nil || !res.Landed {
+		t.Fatalf("land: %+v, %v", res, err)
+	}
+	var outcome []int32
+	if err := f.conn.QueryRow(ctx, `select outcome from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&outcome); err != nil {
+		t.Fatalf("read the receipt: %v", err)
+	}
+	tl, err := delivery.TallyOf(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tl.Count(delivery.Log, delivery.Stored) != 1 || tl.Count(delivery.Log, delivery.Missing) != math.MaxInt32 {
+		t.Fatalf("outcome = %+v, want 1 stored and missing saturated at %d", tl, math.MaxInt32)
 	}
 }
