@@ -101,11 +101,13 @@ did not already carry; an endpoint's secret inputs are references by name, never
 before #1088 carry base64 and are served as written.
 
 Auth events ride a **second write lane**: login and logout run on read / no-transaction paths, so
-they emit through a standalone non-transactional seam (`WriteAuthEvent`) under `resource = 'auth'`,
+they emit through a standalone non-transactional seam under `resource = 'auth'`,
 with the verbs `login`, `logout`, `login_failed` (a wrong password on a real account),
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
-lockout window), and `revoke_session` (an admin ending another principal's session). An impersonated
-action records **both** actors (`actor_principal_id` the impersonated principal,
+lockout window), and `revoke_session` (an admin ending another principal's session). Self-service
+logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
+`resource_id` set to the target principal's id so the trail answers "whose sessions did this admin
+revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated principal,
 `real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
