@@ -226,8 +226,8 @@ export default function ComponentLeaf() {
     const trail = componentCrumbs(view.data, placeId(), primary()?.systemId);
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(component()?.id ?? id())}`) },
-      ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(c.kind === "system" ? `/systems/${c.id}` : `/locations/${c.id}`) })),
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` },
+      ...trail.map((c) => ({ key: c.id, label: c.label, href: c.kind === "system" ? `/systems/${c.id}` : `/locations/${c.id}` })),
     ];
   });
 

@@ -210,7 +210,7 @@ describe("a folder place (#872)", () => {
 
   it("links Explore back to this place's row in the outline", async () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
     expect(await screen.findByTestId("fleet-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("lz-b1")}`);
   });
