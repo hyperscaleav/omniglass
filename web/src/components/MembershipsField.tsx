@@ -86,7 +86,10 @@ export default function MembershipsField(props: {
             {/* The select first: FieldRow labels the first element it finds. */}
             <TreeSelect items={items()} value={props.primary()} onChange={props.onPrimary} rootLabel="None" />
             <Show when={others().length > 0}>
+              {/* "also in", SystemZoom's word for the same relation, so the
+                  select above reads as the primary rather than as one of many. */}
               <span class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-base-content/60">also in</span>
                 <For each={others()}>
                   {(m) => (
                     <span class="badge badge-sm gap-1">
