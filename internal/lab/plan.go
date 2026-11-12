@@ -34,6 +34,10 @@ const (
 	DefaultScenario = "dev"
 	// The node the dev seed places every simulated component on.
 	NodeName = "edge-hq"
+	// ServerName is the server's fixed identity: a container's hostname is
+	// new each run, and this keeps one server platform component across
+	// restarts on a kept database, the one a seed writes history onto.
+	ServerName = "server"
 	// The well-known login of every walkthrough, so a learner's screen
 	// matches the lesson's.
 	LoginUser     = "dev"
@@ -268,6 +272,13 @@ type Options struct {
 	// simulated fleet's wiring and enrolls no node, so no node runs and
 	// nothing collects. Only a throwaway lab may run without one.
 	NoNode bool
+	// PlatformHistory seeds an hour of the server's own platform figures
+	// before the lab comes up (#1790), so a capture of platform health draws
+	// full lines instead of the few minutes a fresh lab has. It is a
+	// capture's, never a learner's: those figures are made up, so only a
+	// throwaway lab takes it, and never a scale lab, whose figures are the
+	// measurement.
+	PlatformHistory bool
 	// Cadence names the node's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
@@ -432,6 +443,12 @@ func Plan(o Options) (Spec, error) {
 	if o.InduceUnregistered && !o.Scale() {
 		return Spec{}, fmt.Errorf("--induce-unregistered is a scale lab's: it needs --systems")
 	}
+	if o.PlatformHistory && o.Scale() {
+		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
+	}
+	if o.PlatformHistory && !o.Ephemeral {
+		return Spec{}, fmt.Errorf("--platform-history seeds made-up platform figures for a capture, so it needs --ephemeral: a learner's lab reads its own")
+	}
 	if o.NoNode && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
 	}
@@ -506,6 +523,9 @@ func Plan(o Options) (Spec, error) {
 		// the window.
 		seedCmd = append(seedCmd, "--report-seconds", strconv.Itoa(cadence.ReportSeconds))
 	}
+	if o.PlatformHistory {
+		seedCmd = append(seedCmd, "--platform-history")
+	}
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash, pusherTokens)
 	if o.Scale() {
@@ -544,9 +564,7 @@ func Plan(o Options) (Spec, error) {
 			"OMNIGLASS_NATS_ADDR=0.0.0.0:"+strconv.Itoa(busPort),
 			"OMNIGLASS_NATS_URL=nats://server:"+strconv.Itoa(busPort),
 			"OMNIGLASS_NATS_STORE_DIR="+dataDir+"/nats",
-			// A container's hostname is new each run; a fixed name keeps one
-			// server platform component across restarts on a kept database.
-			"OMNIGLASS_SERVER_NAME=server",
+			"OMNIGLASS_SERVER_NAME="+ServerName,
 			// The closed loop's bracket, and the cadence the node runs at,
 			// which a server is otherwise not told (#1647).
 			"OMNIGLASS_CLOSED_LOOP_BRACKET="+cadence.ClosedLoopBracket,

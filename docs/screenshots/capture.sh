@@ -53,7 +53,9 @@ OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
 BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
 lab_init ogshots
-STACK_SCENARIO=dev lab_up --no-node
+# --platform-history: an hour of made-up server figures, so platform health's
+# sparklines draw full lines; for a capture only, never a learner's lab (#1790).
+STACK_SCENARIO=dev lab_up --no-node --platform-history
 
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently
