@@ -193,7 +193,8 @@ The browser e2e tier (`make test-e2e`) and the docs screenshots (`make docs-shot
 stands omniglass up in Docker one way. Each fits the lab to what it checks: the e2e tier's is
 seeded with the `empty` scenario, so its CRUD round-trips start from a fresh install, and the
 screenshots' runs with `--no-node`, the dev fleet without the simulated wiring and with no node
-collecting from it, so a page photographed twice is the same page. The lab's banner is a fact about
+collecting from it, so a page photographed twice is the same page, and with `--platform-history`, an
+hour of made-up server figures, so platform health's sparklines draw full lines (#1790). The lab's banner is a fact about
 the lab rather than the product the docs teach, so the screenshot capture hides it.
 
 **A terminal demo** is played by VHS from its own image, pinned by digest, which bundles what VHS

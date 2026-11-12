@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
@@ -34,7 +35,7 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, nil, 0); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, nil, 0, false); err != nil {
 			t.Fatalf("lab seed (no node %v): %v", noNode, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -90,7 +91,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 		}
 		var out bytes.Buffer
 		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(nodeHash), false,
-			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0); err != nil {
+			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 		return hash
@@ -127,7 +128,7 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds, false); err != nil {
 			t.Fatalf("lab seed (report seconds %d): %v", seconds, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -146,6 +147,51 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 	}
 	if got := window(0); got != 60 {
 		t.Errorf("seeded with none: collection.report_seconds = %d, want the platform's 60", got)
+	}
+}
+
+// A capture's seed (#1790) lands an hour of platform history on the lab's
+// server, with no node to collect from; the same seed not asked for it lands
+// none, so a learner's lab reads only what its own server measures.
+func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
+	seeded := func(platformHistory bool) (got, want int) {
+		t.Helper()
+		ctx := context.Background()
+		dsn := storagetest.NewDSN(t)
+		t.Setenv("OMNIGLASS_DSN", dsn)
+		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+		var out bytes.Buffer
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, platformHistory); err != nil {
+			t.Fatalf("lab seed (platform history %v): %v", platformHistory, err)
+		}
+		gw, err := storage.NewPG(ctx, dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer gw.Close()
+		server, err := gw.EnsureServerComponent(ctx, lab.ServerName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := gw.RetentionStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = len(devseed.PlatformHistorySeries(status, time.Now())) * devseed.PlatformHistoryMinutes
+		for _, key := range devseed.PlatformHistoryKeys() {
+			samples, err := gw.ListMetricSeries(ctx, "component", server, key, 0, 100000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got += len(samples)
+		}
+		return got, want
+	}
+	if got, want := seeded(true); got != want {
+		t.Errorf("seeded with platform history: %d samples on the server, want %d", got, want)
+	}
+	if got, _ := seeded(false); got != 0 {
+		t.Errorf("seeded without platform history: %d samples on the server, want none", got)
 	}
 }
 
