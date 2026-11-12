@@ -33,7 +33,6 @@ import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
 import { Plus, X } from "./icons";
-import { byLabel } from "../lib/entities";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
@@ -510,8 +509,8 @@ export function EntityCreateForm(props: {
   });
   const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
   const bindNeedsPermission = () => !can(me.data, "system", "update");
-  const standardOptions = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
-  const productOptions = createMemo(() => [...(products.data ?? [])].sort(byLabel));
+  const standardOptions = createMemo(() => standards.data ?? []);
+  const productOptions = createMemo(() => products.data ?? []);
 
   const displayPen = createPen();
   const namePen = createPen();

@@ -1,6 +1,5 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
-import { byLabel } from "./entities";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -118,9 +117,10 @@ export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };
 
-// systemTypeTree groups the flat registry into a forest by parent_id, each
-// level sorted by label, for the admin page's rows and the
-// classification picker's indented option list.
+// systemTypeTree groups the flat registry into a forest by parent_id, for the admin
+// page's rows and the classification picker's indented option list. It does
+// not sort: the registry is served in label order (#757), and grouping keeps
+// the order each level was received in.
 export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
   const byId = new Map<string, SystemTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));
   const roots: SystemTypeNode[] = [];
@@ -130,14 +130,13 @@ export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  const sortLevel = (nodes: SystemTypeNode[], depth: number) => {
-    nodes.sort(byLabel);
+  const setDepth = (nodes: SystemTypeNode[], depth: number) => {
     for (const n of nodes) {
       n.depth = depth;
-      sortLevel(n.children, depth + 1);
+      setDepth(n.children, depth + 1);
     }
   };
-  sortLevel(roots, 0);
+  setDepth(roots, 0);
   return roots;
 }
 
