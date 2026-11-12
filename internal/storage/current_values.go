@@ -190,8 +190,9 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // latestValue is the unguarded series lookup, so a caller that has already
 // scope-checked the owner (command settlement) can
 // read many provenances without re-checking each time. The series order is
-// seriesOrderSQL's: a declared series orders by insertion (id desc), every
-// other by the value's own time with the row id breaking same-instant ties.
+// seriesOrderSQL's: a declared or intended series orders by insertion (id
+// desc), every other by the value's own time with the row id breaking
+// same-instant ties.
 //
 // The two orders are split by who supplies `ts` (#712). The observed lane
 // accepts a caller-supplied timestamp (a node backfilling, a device reporting
@@ -200,8 +201,8 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // of that ordering is that a database clock stepping backwards between two
 // writes to one series resolves to the earlier-written row, which no tiebreak
 // can reach, because there is no tie. A declared row never carries a caller's
-// timestamp (SetProperty and ClearProperty insert with `ts` defaulted), so its
-// `ts` is only an annotation and the identity id is the authoritative order:
+// timestamp (SetProperty and ClearProperty insert with `ts` defaulted), nor does
+// an intended one (IssueCommand does the same), so their `ts` is only an annotation and the identity id is the authoritative order:
 // the backwards step cannot reach it. `property.id` is a bigint identity
 // column, so `id desc` is the sequence descending, not an arbitrary identifier
 // (the first reading of #712 took it for a random uuid and filed a
@@ -259,17 +260,25 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 }
 
 // seriesOrderSQL is the `order by` list that puts a property series' current
-// row first, by the lane that wrote it (#712). A declared series orders by
-// insertion, `id desc`: its rows never carry a caller's timestamp, so the
-// identity id is the authoritative sequence and a wall clock stepping backwards
-// between two writes cannot make the earlier row win. Every other provenance
-// keeps `ts desc, id desc`, because the observed and calculated lanes accept a
-// caller-supplied `ts` and a late-arriving older sample must not become
-// current merely by being written last. A query whose provenance is a fixed
-// declared literal writes `id desc` itself and names this rule beside it.
+// row first, by the lane that wrote it (#712). The declared and intended lanes
+// order by insertion, `id desc`: their rows never carry a caller's timestamp
+// (a declared row is an operator's write, an intended row a command's, both
+// stamped by the database), so the identity id is the authoritative sequence
+// and a wall clock stepping backwards between two writes cannot make the
+// earlier row win. Every other provenance keeps `ts desc, id desc`, because the
+// observed and calculated lanes accept a caller-supplied `ts` and a
+// late-arriving older sample must not become current merely by being written
+// last. A query whose provenance is a fixed declared or intended literal
+// writes `id desc` itself and names this rule beside it.
 func seriesOrderSQL(provenance string) string {
-	if provenance == declaredProvenance {
+	if insertionOrdered(provenance) {
 		return "id desc"
 	}
 	return "ts desc, id desc"
+}
+
+// insertionOrdered reports whether a provenance's series is ordered by
+// insertion rather than by `ts`: the lanes whose `ts` the database stamps.
+func insertionOrdered(provenance string) bool {
+	return provenance == declaredProvenance || provenance == "intended"
 }

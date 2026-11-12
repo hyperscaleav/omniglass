@@ -732,7 +732,7 @@ func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Ty
 // a time (the series index leads with owner, type and instance). Each newest
 // row is by `ts desc, id desc` and must stay so (#712): observed and
 // calculated rows carry a caller-supplied ts, and a late-arriving older sample
-// must not become current by being written last. Only the declared lane orders
+// must not become current by being written last. Only the declared and intended lanes order
 // by insertion (seriesOrderSQL). With
 // aggregateOnly it reads the aggregate instance alone, as own (an output's
 // current value).

@@ -176,8 +176,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		),
 		candidate as (`+commandCandidates("now() - interval '"+deliveryTTL+"'", "here", true)+`)
 		select k.id, k.command_type, k.params, k.endpoint_id, k.transport, k.endpoint_params, k.spec,
-			(select pr.value from property pr where pr.command_id = k.id and pr.provenance = 'intended' order by pr.ts desc limit 1),
-			(select m.value from metric_declared m where m.command_id = k.id order by m.ts desc limit 1),
+			(select pr.value from property pr where pr.command_id = k.id and pr.provenance = 'intended' order by pr.id desc limit 1),
+			(select m.value from metric_declared m where m.command_id = k.id order by m.id desc limit 1),
 			k.disruptive, k.quiet_seconds, k.hold_seconds, k.target_id, k.node_name::text, k.power_outlet_param
 		from candidate k
 		where k.node_name = (select principal_id from node where name = $1)

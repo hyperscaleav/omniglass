@@ -197,17 +197,16 @@ const commandRideSQL = `left join lateral (
 	) ride on true`
 
 // commandReadCols is the read shape, in the order scanCommandRecord reads it.
-// The two intended-value subselects order by ts, not id: an intended row's ts
-// is the database's now at the command's open, so insertion order would agree
-// bar a clock step, but #712 split the declared lane only and the intended
-// lane is read by ts throughout (see latestIntendedSQL).
+// The two intended-value subselects order by id, insertion order (#712): an
+// intended row's ts is the database's now at the command's open, never a
+// caller's (see latestIntendedSQL).
 var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.instance, c.params, c.status,
 	c.dispatched_at, c.first_dispatched_at, c.delivery_count, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
 	coalesce(c.settled_by, ''), c.observed_value, c.observed_at, c.caused_event_id, c.settled_event_id,
 	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
-	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc, pr.id desc limit 1),
-	(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc, m.id desc limit 1),
+	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.id desc limit 1),
+	(select m.value from metric_declared m where m.command_id = c.id order by m.id desc limit 1),
 	coalesce(ride.id::text, ''), coalesce(ride.name, ''),
 	coalesce((select n.name from node n where n.principal_id = ride.node_name), ''),
 	coalesce(drv.name, ''), drv.spec`
@@ -317,8 +316,8 @@ func (p *PG) GetComponentCommand(ctx context.Context, componentID string, id int
 
 // ListComponentCommands reads a component's command history, newest first,
 // narrowed by f. It lists commands by their own ts: a history, not a series'
-// current row, so the declared-lane rule of #712 does not apply. componentID is RESOLVED, as for GetComponentCommand. A
-// limit outside 1..MaxCommandListLimit reads DefaultCommandListLimit or the
+// current row, so the insertion-order rule of #712 does not apply. componentID
+// is RESOLVED, as for GetComponentCommand. A limit outside 1..MaxCommandListLimit reads DefaultCommandListLimit or the
 // ceiling.
 func (p *PG) ListComponentCommands(ctx context.Context, componentID string, f CommandFilter) ([]CommandRecord, error) {
 	limit := f.Limit
