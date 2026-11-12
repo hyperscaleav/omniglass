@@ -206,6 +206,9 @@ type Gateway interface {
 	// ListAuditLog returns recent audit rows (newest first) for the audit read
 	// surface, resolving actor and real-actor usernames.
 	ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, error)
+	// WriteAuthEventFor records an auth event (login, logout, revoke) in the audit
+	// trail with optional target attribution, off the read/no-tx auth paths.
+	WriteAuthEventFor(ctx context.Context, actorID, verb, resource, resourceID string) error
 	// WriteAuthEvent records an auth event (login, logout) in the audit trail, off
 	// the read/no-tx auth paths.
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error

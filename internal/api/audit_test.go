@@ -19,6 +19,7 @@ import (
 type auditEvent struct {
 	Verb          string `json:"verb"`
 	Resource      string `json:"resource"`
+	ResourceID    string `json:"resource_id"`
 	Actor         string `json:"actor"`
 	ActorName     string `json:"actor_name"`
 	RealActor     string `json:"real_actor"`

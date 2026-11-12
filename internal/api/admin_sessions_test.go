@@ -177,7 +177,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 		t.Fatalf("revoked session should stop authenticating: want 401, got %d", code)
 	}
 
-	// The revoke is audited with the acting admin as the actor.
+	// The revoke is audited with the acting admin as the actor and the target principal.
 	var auditDoc struct {
 		Events []auditEvent `json:"events"`
 	}
@@ -186,12 +186,12 @@ func TestAdminSessionsAPI(t *testing.T) {
 	}
 	found := false
 	for _, e := range auditDoc.Events {
-		if e.Verb == "revoke_session" && e.Actor == adminID {
+		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "principal" && e.ResourceID == aliceID {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("no revoke_session audit event attributed to the admin (%s) in %+v", adminID, auditDoc.Events)
+		t.Fatalf("no revoke_session audit event attributed to the admin (%s) with target alice (%s) in %+v", adminID, aliceID, auditDoc.Events)
 	}
 }
 
@@ -344,7 +344,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		t.Fatalf("idempotent bulk revoke: want (200, 0), got (%d, %d)", code, n)
 	}
 
-	// The bulk revoke is audited with the acting admin as actor.
+	// The bulk revoke is audited with the acting admin as actor and the target principal.
 	var auditDoc struct {
 		Events []auditEvent `json:"events"`
 	}
@@ -353,11 +353,11 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 	}
 	found := false
 	for _, e := range auditDoc.Events {
-		if e.Verb == "revoke_session" && e.Actor == adminID {
+		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "principal" && e.ResourceID == aliceID {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("no revoke_session audit event attributed to the admin (%s)", adminID)
+		t.Fatalf("no revoke_session audit event attributed to the admin (%s) with target alice (%s)", adminID, aliceID)
 	}
 }
