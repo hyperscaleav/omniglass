@@ -69,9 +69,15 @@ node web/e2e/shot.mjs "http://127.0.0.1:8080/web/<route>" out.png \
 Interactive states (an open menu, a chosen option, an edit face) are driven with the
 step flags, never faked. The console ships **dark-only** (`omniglass-dark`); do not
 chase a light theme. An error state the live console cannot be walked into is exercised
-in a component test instead, and the verdict says so. Until #845 lands a `--viewport`
-flag, a bespoke (non-`ListShell`) surface proves its squeeze behavior with a
-narrow-viewport `web/e2e` test rather than a capture.
+in a component test instead, and the verdict says so. A bespoke (non-`ListShell`) surface
+proves its squeeze behavior with a narrow-viewport capture:
+
+```bash
+node web/e2e/shot.mjs "http://127.0.0.1:8080/web/<route>" squeeze.png \
+  --token "$(./bin/omniglass token dev)" --viewport 1280x800 \
+  [--click SEL]... [--select "SEL||VALUE"]... [--type "SEL||TEXT"]... \
+  [--hover SEL]... [--press KEY]... [--wait MS] [--full]
+```
 
 **Read every capture.** Open each PNG and grade it. This is the step that exists because
 skipping it is how ugly ships: the captures are evidence only if they are actually
