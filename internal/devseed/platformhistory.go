@@ -67,6 +67,14 @@ var consoleRoutes = []struct {
 	{"GET /api/v1/components 2xx", 24},
 }
 
+// sparklineReads is the sample reads one load of platform health makes, one
+// per sparkline, with its typical slowest response in milliseconds.
+var sparklineReads = struct {
+	route string
+	count float64
+	ms    float64
+}{"GET /api/v1/components/{name}/metrics/{metric}/samples 2xx", 47, 33.6}
+
 // retentionLaneNames is every lane a retention pass reports, as the pass names
 // them (bus.retentionLanes): the sample lanes, the trend lane, then each log
 // table's bands.
@@ -81,13 +89,14 @@ func retentionLaneNames() []string {
 }
 
 // platformHistory is the hour each server panel key draws, keyed by metric
-// key. Every value is a healthy small lab's: failures and queues read 0, the
-// pool sits low against its size. The sizes are measured instead
-// (platformHistoryMeasured). A key on a panel that is in none of the three
-// fails TestPlatformHistoryCoversEveryServerPanelKey.
+// key. Every value is a healthy capture lab's: failures and queues read 0, the
+// pool holds a connection of its size, and with no node nothing is ingested.
+// The sizes are measured instead (platformHistoryMeasured). A key on a panel
+// that is in none of the three fails
+// TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBPoolAcquired:        count(0.6, 1),
+		writerclass.DBPoolAcquired:        count(0.3, 1),
 		writerclass.DBPoolMax:             count(12, 0),
 		writerclass.DBPoolWaitCount:       zero(),
 		writerclass.BusConsumerPending:    zero(),
@@ -95,13 +104,15 @@ var platformHistory = func() map[string][]historySeries {
 		writerclass.CalcPendingDepth:      zero(),
 		writerclass.OutboxQueuedDepth:     zero(),
 		writerclass.OutboxDueAge:          zero(),
-		writerclass.IngestLaneBusy:        one(0.05, 0.4),
+		writerclass.IngestLaneBusy:        zero(),
 		writerclass.RetentionWindowDays:   {{instance: "metric", base: 14, whole: true}},
 	}
 	for _, r := range consoleRoutes {
 		h[writerclass.HTTPRequestDurationMax] = append(h[writerclass.HTTPRequestDurationMax], historySeries{instance: r.route, base: r.ms, swing: 0.3})
-		h[writerclass.HTTPRequestCount] = append(h[writerclass.HTTPRequestCount], historySeries{instance: r.route, base: 1.5, swing: 0.4, whole: true})
+		h[writerclass.HTTPRequestCount] = append(h[writerclass.HTTPRequestCount], historySeries{instance: r.route, base: 1.2, swing: 0.4, whole: true})
 	}
+	h[writerclass.HTTPRequestDurationMax] = append(h[writerclass.HTTPRequestDurationMax], historySeries{instance: sparklineReads.route, base: sparklineReads.ms, swing: 0.3})
+	h[writerclass.HTTPRequestCount] = append(h[writerclass.HTTPRequestCount], historySeries{instance: sparklineReads.route, base: sparklineReads.count, swing: 0.1, whole: true})
 	for _, lane := range retentionLaneNames() {
 		h[writerclass.RetentionDeletedCount] = append(h[writerclass.RetentionDeletedCount], historySeries{instance: lane})
 		h[writerclass.RetentionBehind] = append(h[writerclass.RetentionBehind], historySeries{instance: lane})
@@ -147,15 +158,18 @@ var platformHistoryExempt = map[string]string{
 	writerclass.PushLaneTurnWaitMax:  windowUnwritten,
 }
 
-// historyFor is the whole hour ending at end: the profiles, plus the sizes
-// and the oldest partition's age anchored on status. A size climbs into the
-// figure measured; the age is read off the oldest partition at each minute.
-func historyFor(status storage.RetentionStatus, end time.Time) map[string][]historySeries {
-	h := maps.Clone(platformHistory)
-	h[writerclass.DatabaseBytes] = []historySeries{{base: float64(status.DatabaseBytes), climb: 0.005, whole: true}}
+// measuredHistory is the hour of the sizes and the oldest partition's age,
+// anchored on status, ending at end. A size climbs a tenth into the figure
+// measured, a young lab's growth, so the little it grows between the measure
+// and the server's next live sample is small against the line's own rise;
+// the age is read off the oldest partition at each minute.
+func measuredHistory(status storage.RetentionStatus, end time.Time) map[string][]historySeries {
+	h := map[string][]historySeries{
+		writerclass.DatabaseBytes: {{base: float64(status.DatabaseBytes), climb: 0.1, whole: true}},
+	}
 	for _, table := range slices.Sorted(maps.Keys(status.TableBytes)) {
 		h[writerclass.TableBytes] = append(h[writerclass.TableBytes],
-			historySeries{instance: table, base: float64(status.TableBytes[table]), climb: 0.02, whole: true})
+			historySeries{instance: table, base: float64(status.TableBytes[table]), climb: 0.1, whole: true})
 	}
 	if len(status.Partitions) > 0 {
 		// The newest minute is a minute before end; the oldest is the
@@ -170,17 +184,19 @@ func historyFor(status storage.RetentionStatus, end time.Time) map[string][]hist
 }
 
 // historyValue is series s's value in minute i of n, oldest first: the base,
-// raised toward the newest minute by the climb, swung by a wave whose phase is
-// fixed per series so two series do not move in step. Never negative.
+// raised toward the newest minute by the climb, swung by a jitter hashed from
+// the series and the minute, so a line reads like a lab's noise rather than a
+// wave, two series do not move in step, and two runs draw the same line.
+// Never negative.
 func historyValue(key string, s historySeries, i, n int) float64 {
 	f := 0.0
 	if n > 1 {
 		f = float64(i-(n-1)) / float64(n-1)
 	}
 	h := fnv.New32a()
-	h.Write([]byte(key + "\x00" + s.instance))
-	salt := float64(h.Sum32()%628) / 100
-	v := s.base * (1 + s.climb*f) * (1 + s.swing*math.Sin(0.9*float64(i)+salt))
+	fmt.Fprintf(h, "%s\x00%s\x00%d", key, s.instance, i)
+	jitter := float64(h.Sum32()%2001)/1000 - 1
+	v := s.base * (1 + s.climb*f) * (1 + s.swing*jitter)
 	if s.whole {
 		v = math.Round(v)
 	}
@@ -207,12 +223,25 @@ func SeedPlatformHistory(ctx context.Context, gw storage.Gateway, identity strin
 			return nil
 		}
 	}
+	end := now.Truncate(time.Minute)
+	if err := gw.RecordPlatformMetrics(ctx, historyRows(component, platformHistory, end)); err != nil {
+		return fmt.Errorf("platform history: record: %w", err)
+	}
+	// The sizes are measured after the rest of the hour lands, so the bytes
+	// it took are in the figure the measured hour ends on.
 	status, err := gw.RetentionStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("platform history: measure sizes: %w", err)
 	}
-	end := now.Truncate(time.Minute)
-	history := historyFor(status, end)
+	if err := gw.RecordPlatformMetrics(ctx, historyRows(component, measuredHistory(status, end), end)); err != nil {
+		return fmt.Errorf("platform history: record sizes: %w", err)
+	}
+	return nil
+}
+
+// historyRows is history's samples on component, a minute apart, the newest
+// a minute before end.
+func historyRows(component string, history map[string][]historySeries, end time.Time) []storage.PlatformMetric {
 	var rows []storage.PlatformMetric
 	for _, key := range slices.Sorted(maps.Keys(history)) {
 		for _, s := range history[key] {
@@ -226,10 +255,7 @@ func SeedPlatformHistory(ctx context.Context, gw storage.Gateway, identity strin
 			}
 		}
 	}
-	if err := gw.RecordPlatformMetrics(ctx, rows); err != nil {
-		return fmt.Errorf("platform history: record: %w", err)
-	}
-	return nil
+	return rows
 }
 
 // PlatformHistoryKeys is every key the history can write, sorted.
@@ -245,7 +271,8 @@ func PlatformHistoryKeys() []string {
 // PlatformHistorySeries is every (key, instance) the history writes into a
 // database that measures status at now.
 func PlatformHistorySeries(status storage.RetentionStatus, now time.Time) [][2]string {
-	history := historyFor(status, now.Truncate(time.Minute))
+	history := maps.Clone(platformHistory)
+	maps.Copy(history, measuredHistory(status, now.Truncate(time.Minute)))
 	var out [][2]string
 	for _, k := range slices.Sorted(maps.Keys(history)) {
 		for _, s := range history[k] {

@@ -69,7 +69,7 @@ func TestPlatformHistoryReadsHealthy(t *testing.T) {
 // draw the same line, and a size that climbs ends the hour at its base.
 func TestPlatformHistoryIsDeterministic(t *testing.T) {
 	t.Parallel()
-	s := historyFor(storage.RetentionStatus{DatabaseBytes: 1000}, time.Now())[writerclass.DatabaseBytes][0]
+	s := measuredHistory(storage.RetentionStatus{DatabaseBytes: 1000}, time.Now())[writerclass.DatabaseBytes][0]
 	if a, b := historyValue(writerclass.DatabaseBytes, s, 7, 60), historyValue(writerclass.DatabaseBytes, s, 7, 60); a != b {
 		t.Fatalf("minute 7 read %v then %v", a, b)
 	}
@@ -104,7 +104,7 @@ func TestPlatformHistoryEndsOnTheMeasuredSizes(t *testing.T) {
 		TableBytes:    map[string]int64{"metric": 1_800_000, "log_line": 90_000},
 		Partitions:    []storage.MetricPartition{{From: end.Add(-48*time.Hour - time.Minute)}},
 	}
-	h := historyFor(status, end)
+	h := measuredHistory(status, end)
 	if got, _ := newestOldest(t, h, writerclass.DatabaseBytes, ""); got != 17_000_000 {
 		t.Errorf("the database size ends the hour at %v, want the measured 17000000", got)
 	}
@@ -125,7 +125,7 @@ func TestPlatformHistoryEndsOnTheMeasuredSizes(t *testing.T) {
 	if want := 2 - 59.0/(24*60); math.Abs(oldest-want) > 1e-9 {
 		t.Errorf("the oldest partition's age starts the hour at %v days, want %v", oldest, want)
 	}
-	if _, ok := historyFor(storage.RetentionStatus{}, end)[writerclass.MetricOldestDayAge]; ok {
+	if _, ok := measuredHistory(storage.RetentionStatus{}, end)[writerclass.MetricOldestDayAge]; ok {
 		t.Error("a database with no metric partition seeded an oldest age, want none")
 	}
 }

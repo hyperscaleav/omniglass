@@ -7,6 +7,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // seededSamples counts the server's seeded samples of every key the history
@@ -70,6 +71,48 @@ func TestSeedPlatformHistoryLandsAnHourOncePerSeries(t *testing.T) {
 		if n != first[s] {
 			t.Errorf("%s %q: a second run moved its seeded samples from %d to %d, want none added", s[0], s[1], first[s], n)
 		}
+	}
+}
+
+// The seeded hour's sizes end on the database as it stands once the rest of
+// the hour has landed, so the thousands of rows the history itself writes are
+// in the figure and the server's next live sample draws no cliff up from it
+// (#1790). Measured before the seed, the metric table ends lower than that.
+func TestSeedPlatformHistoryEndsTheSizesAfterItsOwnRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, devseed.BootSeededDSN(t), devseed.SecretProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	before, err := gw.RetentionStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := devseed.SeedPlatformHistory(ctx, gw, "server", time.Now()); err != nil {
+		t.Fatalf("seed platform history: %v", err)
+	}
+	serverID, err := gw.EnsureServerComponent(ctx, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	samples, err := gw.ListMetricSeries(ctx, "component", serverID, writerclass.TableBytes, 2*time.Hour, 10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var newest storage.MetricSample
+	for _, s := range samples {
+		if s.Source == "devseed" && s.Instance == "metric" && s.TS.After(newest.TS) {
+			newest = s
+		}
+	}
+	if newest.TS.IsZero() {
+		t.Fatal("no seeded metric table size")
+	}
+	if newest.Value <= float64(before.TableBytes["metric"]) {
+		t.Fatalf("the hour ends the metric table at %v bytes, want above the %d measured before the history's own rows landed",
+			newest.Value, before.TableBytes["metric"])
 	}
 }
 
