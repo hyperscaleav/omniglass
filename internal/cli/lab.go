@@ -117,6 +117,9 @@ func newLabRunCmd(version string) *cobra.Command {
 	// The docs screenshots (#1267) photograph pages that must hold still: a
 	// fleet with no node collecting from it.
 	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
+	// The docs screenshots (#1790) photograph platform health with full
+	// sparklines: an hour of the server's figures, made up, for a capture only.
+	cmd.Flags().BoolVar(&script.platformHistory, "platform-history", false, "seed an hour of made-up platform history on the server, so platform health draws full lines in a capture (needs --ephemeral)")
 	// The lab footprint (#1277) measures a lab at a chosen cadence profile.
 	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the node's cadence profile ("+lab.CadenceNames()+"); empty is lab, or walkthrough for a throwaway lab")
 	// The scale lab's knobs for proving it: a forced low memory limit shows
@@ -125,7 +128,7 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().DurationVar(&scale.timeout, "ready-timeout", defaultScaleTimeout, "a scale lab: how long its bring-up may take before it is removed, naming what is not up")
 	// The delivery table's proof that a refusal reads as loss (#1698).
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "platform-history", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -313,11 +316,12 @@ func parseByteSize(in string) (int64, error) {
 
 // labScript are lab run's script-only settings.
 type labScript struct {
-	ephemeral bool
-	noNode    bool
-	readyFile string
-	whilePID  int
-	cadence   string
+	ephemeral       bool
+	noNode          bool
+	platformHistory bool
+	readyFile       string
+	whilePID        int
+	cadence         string
 }
 
 type labFlags struct {
@@ -392,6 +396,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Pushers: pushers,
 			Owner:   lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode, Cadence: f.script.cadence,
+			PlatformHistory: f.script.platformHistory,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -468,7 +473,7 @@ func dialDaemon(host string) error {
 
 func newLabSeedCmd() *cobra.Command {
 	var scenario, node, user, password string
-	var noNode, induce, keep bool
+	var noNode, induce, keep, platformHistory bool
 	var systems, reportSeconds int
 	cmd := &cobra.Command{
 		Use:    "seed",
@@ -487,7 +492,7 @@ func newLabSeedCmd() *cobra.Command {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
-				pushers, reportSeconds)
+				pushers, reportSeconds, platformHistory)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -495,6 +500,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", lab.LoginUser, "the owner's username")
 	cmd.Flags().StringVar(&password, "password", lab.LoginPassword, "the owner's password")
 	cmd.Flags().BoolVar(&noNode, "no-node", false, "seed the fleet without the simulated wiring and enroll no node, so the lab runs none")
+	cmd.Flags().BoolVar(&platformHistory, "platform-history", false, "on the first run, seed an hour of made-up platform history on the server, for a capture (#1790)")
 	cmd.Flags().IntVar(&reportSeconds, "report-seconds", 0, "set the platform's collection report window (collection.report_seconds) to this many seconds; 0 leaves it as it is")
 	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with a node per site")
 	cmd.Flags().BoolVar(&induce, "induce-unregistered", false, "with --systems: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
@@ -517,7 +523,11 @@ func newLabSeedCmd() *cobra.Command {
 // window (#1646) before the server and the node start, so both read it for
 // their first window: a walkthrough lab's 10s, where the platform's 60s would
 // land the first figures as its recording ends.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, pushers map[string]lab.PusherToken, reportSeconds int) error {
+// platformHistory seeds, on the first run only, an hour of made-up figures on
+// the server's platform component (#1790), so a capture of platform health
+// draws full lines. Only a capture asks for it: a learner's lab reads what
+// its own server measured.
+func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -540,6 +550,12 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 			return err
 		}
 		summary = fmt.Sprintf("the %s fleet, seeded on this lab's first run", sc.Name)
+		if platformHistory {
+			if err := devseed.SeedPlatformHistory(ctx, gw, lab.ServerName, time.Now()); err != nil {
+				return err
+			}
+			summary += ", with an hour of platform history"
+		}
 	} else if ok, err := gw.SetPassword(ctx, user, pwHash); err != nil {
 		return err
 	} else if !ok {

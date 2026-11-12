@@ -86,3 +86,29 @@ func TestNodeCheckinsReadsEveryClaimedNode(t *testing.T) {
 		}
 	}
 }
+
+// TestRecordPlatformMetricsMakesAMissingDay: a platform write dated into a
+// day with no partition (a capture lab's hour of history seeded at 00:20 UTC,
+// before the server's boot rolls yesterday in, #1790) makes the day and lands,
+// as the ingest's write does, rather than failing the whole component.
+func TestRecordPlatformMetricsMakesAMissingDay(t *testing.T) {
+	t.Parallel()
+	gw, ctx, dsn := platformGatewayDSN(t)
+	yesterday := dayStart(time.Now()).AddDate(0, 0, -1)
+	mustExec(t, connectDSN(t, dsn), `drop table if exists `+dayName(yesterday))
+	server, err := gw.EnsureServerComponent(ctx, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := yesterday.Add(23*time.Hour + 40*time.Minute)
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: server, Key: writerclass.DBPoolMax, Value: 12, TS: at},
+		{ComponentID: server, Key: writerclass.DBPoolMax, Value: 12, TS: at.Add(30 * time.Minute)},
+	}); err != nil {
+		t.Fatalf("record platform metrics into a missing day: %v", err)
+	}
+	series, err := gw.ListMetricSeries(ctx, "component", server, writerclass.DBPoolMax, 0, 10)
+	if err != nil || len(series) != 2 {
+		t.Fatalf("%d samples stored (%v), want both", len(series), err)
+	}
+}
