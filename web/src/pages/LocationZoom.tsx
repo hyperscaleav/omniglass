@@ -103,9 +103,9 @@ export default function LocationZoom() {
     const chain = ancestors(id(), locationIndex(view.data));
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
       // The trail ends at the parent: the place itself is the page title.
-      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
+      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
     ];
   });
 

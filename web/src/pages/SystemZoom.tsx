@@ -292,8 +292,8 @@ export default function SystemZoom() {
     const trail = view.data ? systemCrumbs(view.data, id()) : [];
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
-      ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(`/locations/${c.id}`) })),
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
+      ...trail.map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })),
     ];
   });
 

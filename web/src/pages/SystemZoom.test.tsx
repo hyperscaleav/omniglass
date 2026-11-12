@@ -749,7 +749,7 @@ describe("the place is context, the system the subject (#872)", () => {
   // outline down to this system's row, not at the top of the fleet.
   it("links Explore back to this system's row in the outline", async () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
     expect(await screen.findByTestId("fleet-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
   });

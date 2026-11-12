@@ -193,6 +193,12 @@ Two layers, deliberately decoupled:
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
+**A breadcrumb crumb is a link.** The `Breadcrumb` primitive renders each crumb that has a destination as a
+real `<a href>` (the router's `A`) inside `<nav aria-label="Breadcrumb">`: a click navigates in-app, a
+middle-click opens a tab, the address can be copied, a screen reader announces a link in a navigation
+landmark, and the target is in the DOM. A caller hands the crumb an `href`, the address it already knows;
+the last crumb, the current page, has none and renders as plain text marked `aria-current="page"`.
+
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
