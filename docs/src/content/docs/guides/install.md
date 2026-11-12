@@ -131,6 +131,14 @@ systems in it) under replica sites, and simulates only the example fleet's own d
 collector is not load-tested by accident (a device the example fleet does not declare is never
 wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
 
+Whatever the scenario, the example fleet plants one secret cascade to read. The simulated panel login
+(`sim-panel-login`) exists at the platform, on Boardroom A, and on the touch panel inside it, so the
+panel's [effective secrets](/guides/cli/#secrets) (the secrets resolution on the component's page in the
+console, or `omniglass component effective-secret list <panel id>`) show the panel's own copy as the winner with
+the room's and the platform's shadowed beneath it. Another component in Boardroom A resolves the room's
+copy, and every component elsewhere the platform's. Secrets carry no system band, so there are three
+tiers, not four. Re-seeding creates none of them twice.
+
 ### The whole loop in Docker
 
 From a checkout or a release binary, with nothing but Docker, `omniglass lab run` runs every piece of
