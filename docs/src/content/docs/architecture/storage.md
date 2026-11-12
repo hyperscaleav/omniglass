@@ -117,6 +117,19 @@ Column schemas live with each owning feature: [samples](/architecture/properties
   hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
   for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)
   for how scope and ambiguity are then decided against the resolved candidate set.
+- **A row lock that must cover a read is its own statement.** At READ COMMITTED a statement's
+  snapshot is taken when it begins, before it waits on a row lock, and when the lock is released only
+  the locked row is re-read: a correlated subquery in the same statement keeps what the old snapshot
+  saw. So `FOR UPDATE` on a resolving read serialises two writers without making the second read what
+  the first wrote (#709, the registry fork). The registry fork takes its lock in a statement of its
+  own (`lockRegistryRow`), and the read that follows is a new statement with a new snapshot. The label
+  recompute is the one place that keeps `FOR UPDATE` on its row scan, and why it may is recorded beside
+  it (#731): a label renders from the locked row's own columns, which the re-read refreshes, and from
+  facts resolved by separate statements after the scan, never from the scan's subquery columns. A
+  test pins that no label key reads one, and a contention test forces a recompute to wait mid-scan
+  while a product rename commits and shows that the scan's subqueries went stale and the label did
+  not. A component moved into a location while that location's label is edited is a separate window,
+  open as #1805.
 
 ## Migrations: three buckets, kept separate
 
