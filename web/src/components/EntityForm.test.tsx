@@ -221,7 +221,7 @@ describe("the one form, editing", () => {
 });
 
 describe("the one form, empty", () => {
-  function mountCreate(kind: "system" | "location" | "component", under?: string) {
+  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...ME_KEY], owner);
     qc.setQueryData([...SYSTEMS_KEY], []);
@@ -237,7 +237,7 @@ describe("the one form, empty", () => {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
-          <Route path="/x" component={() => <EntityCreateForm kind={kind} under={under} onCreated={() => {}} onCancel={() => {}} />} />
+          <Route path="/x" component={() => <EntityCreateForm kind={kind} under={under} onCreated={() => {}} onCancel={onCancel} />} />
         </Router>
       </QueryClientProvider>
     ));
@@ -265,38 +265,32 @@ describe("the one form, empty", () => {
     await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
   });
 
-  it("renders Cancel and Create buttons through FormActionBar inline", async () => {
+  it("draws Cancel and Create in one FormActionBar inline rail, Create last", async () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
-    const cancelBtn = within(form).getByRole("button", { name: /cancel/i });
-    const createBtn = within(form).getByRole("button", { name: /create system/i });
-    expect(cancelBtn).toBeTruthy();
-    expect(createBtn).toBeTruthy();
-    // Buttons are rendered inside the form's action rail (border-t pt-4)
-    const rail = form.querySelector(".border-t.border-base-300.pt-4");
+    const cancel = within(form).getByRole("button", { name: /cancel/i });
+    const create = within(form).getByRole("button", { name: /create system/i });
+    const rail = cancel.closest(".border-t.border-base-300.pt-4");
     expect(rail).toBeTruthy();
+    expect(rail!.contains(create)).toBe(true);
+    // Both right-aligned together, Cancel before Create: the template face's rail.
+    expect(cancel.parentElement).toBe(create.parentElement);
+    expect(cancel.parentElement!.classList.contains("ml-auto")).toBe(true);
+    expect(cancel.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("Cancel button calls onCancel", async () => {
+  it("keeps Create disabled until the form is ready", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+  });
+
+  it("Cancel calls onCancel", async () => {
     const onCancel = vi.fn();
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...ME_KEY], owner);
-    qc.setQueryData([...SYSTEMS_KEY], []);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...LOCATION_TYPES_KEY], []);
-    qc.setQueryData([...STANDARDS_KEY], []);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], []);
-    window.history.pushState({}, "", "/web/x");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router base="/web">
-          <Route path="/x" component={() => <EntityCreateForm kind="system" onCreated={() => {}} onCancel={onCancel} />} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelBtn);
-    expect(onCancel).toHaveBeenCalled();
+    mountCreate("system", undefined, onCancel);
+    const form = await screen.findByTestId("entity-create-form");
+    fireEvent.click(within(form).getByRole("button", { name: /cancel/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

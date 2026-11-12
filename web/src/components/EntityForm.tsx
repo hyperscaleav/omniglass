@@ -605,7 +605,15 @@ export function EntityCreateForm(props: {
   });
 
   return (
-    <form data-testid="entity-create-form" class="flex flex-col gap-5">
+    <form
+      data-testid="entity-create-form"
+      class="flex flex-col gap-5"
+      onSubmit={(e) => {
+        // The rail's buttons are type=button; Enter in a field still submits the form.
+        e.preventDefault();
+        if (!formActions.binding()?.disabled?.()) void create();
+      }}
+    >
       <div class="flex items-center gap-2">
         <h2 class="text-lg font-semibold tracking-tight">New {KIND_NOUN[props.kind]}</h2>
         <span class="badge badge-warning badge-sm">Draft</span>

@@ -52,8 +52,8 @@ describe("action rail ownership", () => {
   // The full-page create forms' inline `border-t ... pt-4` row is the one form
   // action rail outside the shell's ownership. FormActionBar inline draws it, so
   // no component may hand-roll a row with the inline rail's exact class signature,
-  // except FormActionBar which owns it (PanelFooter has different padding;
-  // Files.tsx line 149 has flex-wrap and is not a form rail).
+  // except FormActionBar which owns it. PanelFooter has different padding, and the
+  // blade row in pages/Files.tsx adds flex-wrap, so neither shares the signature.
   it("FormActionBar inline is the one full-page form action rail", () => {
     const inlineRail = /class="[^"]*\bflex items-center gap-2 border-t border-base-300 pt-4\b[^"]*"/;
     const allowlist = ["components/FormActionBar.tsx"];
