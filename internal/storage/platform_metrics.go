@@ -36,8 +36,11 @@ type PlatformMetric struct {
 // Each component's rows land in a transaction of their own, as
 // RecordWebhookCounts does, so a refusal costs only its own rows: a component
 // gone since its rows were read (a node deleted between the read and the
-// write) is dropped, and every other component's rows still land. Any other
-// failure is returned, after the rest have been tried.
+// write) is dropped, and every other component's rows still land. A row
+// dated into a day with no partition makes the day and is retried, as the
+// ingest's write is (a capture's seeded hour reaching back past midnight
+// before the server's boot rolls yesterday in, #1790). Any other failure is
+// returned, after the rest have been tried.
 func (p *PG) RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error {
 	byComponent := map[string][]MetricSampleWrite{}
 	var order []string
@@ -51,9 +54,17 @@ func (p *PG) RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) e
 	var errs []error
 	for _, id := range order {
 		writes := byComponent[id]
-		err := p.sampleWrite(ctx, "record platform metrics", func(ctx context.Context, tx pgx.Tx) error {
-			return p.writeMetricSamples(ctx, tx, gatewayWriter(writerclass.Process), writes)
-		})
+		write := func() error {
+			return p.sampleWrite(ctx, "record platform metrics", func(ctx context.Context, tx pgx.Tx) error {
+				return p.writeMetricSamples(ctx, tx, gatewayWriter(writerclass.Process), writes)
+			})
+		}
+		err := write()
+		if isPartitionRoutingMiss(err) {
+			if err = p.landMetricDays(ctx, writes); err == nil {
+				err = write()
+			}
+		}
 		if err != nil && !errors.Is(err, ErrComponentNotFound) {
 			errs = append(errs, err)
 		}
