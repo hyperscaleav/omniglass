@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createSignal } from "solid-js";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import TreeSelect from "./TreeSelect";
+import Drawer from "./Drawer";
 import type { TreeNode } from "../lib/treeselect";
 
 const items: TreeNode[] = [
@@ -88,6 +89,24 @@ describe("TreeSelect", () => {
     open();
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
     expect(screen.getByRole("option").textContent).toBe("Campus A");
+  });
+
+  it("keeps its open list readable to assistive tech inside a drawer", async () => {
+    // A drawer is a modal dialog, and a modal dialog marks every node added
+    // outside it aria-hidden, a beat later. The list is portaled to the body, so
+    // unless it claims the screen itself it lands outside the drawer and a screen
+    // reader cannot reach a single option (the Secrets owner picker sits in one).
+    render(() => (
+      <Drawer open onClose={() => {}} title="New secret">
+        <TreeSelect items={items} value="" onChange={() => {}} rootLabel="Choose…" />
+      </Drawer>
+    ));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Choose…" }), { key: "Enter" });
+    await screen.findByRole("listbox");
+    // The dialog hides on a timeout and then a frame; outlast both.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    expect(screen.getAllByRole("option")).toHaveLength(5);
   });
 
   describe("keyboard", () => {

@@ -65,6 +65,10 @@ export default function TreeSelect(props: TreeSelectProps) {
       // Kobalte reads the empty key as no selection and shows the placeholder, so
       // the root option's label is what stands in for it.
       placeholder={props.rootLabel ?? "Select…"}
+      // Modal while open, as a native dropdown is: the list is portaled to the
+      // body, and a drawer (a modal Dialog) marks anything added outside it
+      // aria-hidden unless the list hides the page itself while it is open.
+      modal
       sameWidth
       gutter={4}
       itemComponent={(p) => (
