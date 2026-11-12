@@ -211,6 +211,16 @@ const (
 	PushLaneTurnWaitMax  = "push-lane-turn-wait-max"
 )
 
+// The sweeps the server's settlement tick times, the instances of the sweep-*
+// keys.
+const (
+	SweepCommandSettlement = "command-settlement"
+	SweepEventRule         = "event-rule"
+)
+
+// Sweeps is every sweep the server times.
+var Sweeps = []string{SweepCommandSettlement, SweepEventRule}
+
 // serverPipelineWriter is what writes the server's pipeline keys.
 const serverPipelineWriter = "the server's pipeline recorder"
 

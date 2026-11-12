@@ -54,7 +54,8 @@ func TestPlatformHistoryReadsHealthy(t *testing.T) {
 		writerclass.DBPoolWaitCount,
 		writerclass.BusConsumerPending, writerclass.BusConsumerAckPending, writerclass.CalcPendingDepth,
 		writerclass.OutboxQueuedDepth, writerclass.OutboxDueAge,
-		writerclass.RetentionBehind, writerclass.RetentionDeletedCount,
+		writerclass.RetentionBehind, writerclass.RetentionDeletedCount, writerclass.RetentionPassFailureCount,
+		writerclass.SweepFailureCount,
 	} {
 		if top := historyMax(key); top != 0 {
 			t.Errorf("%s reaches %v, want 0 the whole hour", key, top)
