@@ -662,7 +662,9 @@ func calcSeries(lane rules.Lane) (table, typeCol, value string) {
 // and type, then instance, so the read touches every in-window sample of the
 // key before it keeps the newest: its cost is the window's volume, bounded by
 // rules.MaxCalcWindow. The window is in the samples' own time (ts) against
-// the server's now.
+// the server's now. ts leads the order, not id (#712): the lane is observed
+// and calculated, whose ts a caller supplies, so insertion order is not their
+// order.
 func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
 	sql := fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
@@ -727,7 +729,11 @@ func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Ty
 // sample is older than CalcStaleAfter left out and returned as stale. own is
 // the aggregate instance's newest value (nil when there is none), the value
 // a system member's record carries. Instances are walked one index probe at
-// a time (the series index leads with owner, type and instance). With
+// a time (the series index leads with owner, type and instance). Each newest
+// row is by `ts desc, id desc` and must stay so (#712): observed and
+// calculated rows carry a caller-supplied ts, and a late-arriving older sample
+// must not become current by being written last. Only the declared lane orders
+// by insertion (seriesOrderSQL). With
 // aggregateOnly it reads the aggregate instance alone, as own (an output's
 // current value).
 func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool) (values []any, own any, stale []staleInstance, err error) {
