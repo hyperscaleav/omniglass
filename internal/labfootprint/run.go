@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -294,11 +295,34 @@ func (h *harness) usage(ctx context.Context, id string) (Usage, error) {
 	return UsageFromStats(s)
 }
 
+// psqlCeiling bounds a harness query whose context sets no deadline: the
+// longest any one of them may run in the database (the drain probe's plant,
+// the slowest, takes about a minute at a million rows).
+const psqlCeiling = 10 * time.Minute
+
+// statementTimeout is the statement_timeout a harness query runs under: what
+// its context has left, never more than psqlCeiling, and never zero, which
+// Postgres reads as no limit at all.
+func statementTimeout(deadline time.Time, ok bool, now time.Time) time.Duration {
+	if !ok {
+		return psqlCeiling
+	}
+	return min(psqlCeiling, max(time.Millisecond, deadline.Sub(now)))
+}
+
 // psql runs one query in the database container and returns its unaligned
-// output.
+// output. The query ends with its context, in the database too: Postgres
+// times it out at the context's deadline, and a cancelled context cancels
+// its backend, found by the application name it runs under. A psql killed
+// with its exec leaves its query running, which is how a stopped measure's
+// delivery read ran on for hours (#1841).
 func (h *harness) psql(ctx context.Context, q string) (string, error) {
+	name := fmt.Sprintf("omniglass-lab-%016x", rand.Uint64())
+	deadline, ok := ctx.Deadline()
 	ex, err := h.dc.ExecCreate(ctx, h.env["LAB_DB"], client.ExecCreateOptions{
-		Cmd:          []string{"psql", "-U", "omniglass", "-d", "omniglass", "-AtX", "-v", "ON_ERROR_STOP=1", "-c", q},
+		Cmd: []string{"psql", "-U", "omniglass", "-d", "omniglass", "-AtX", "-v", "ON_ERROR_STOP=1", "-c", q},
+		Env: []string{"PGAPPNAME=" + name,
+			fmt.Sprintf("PGOPTIONS=-c statement_timeout=%d", statementTimeout(deadline, ok, time.Now()).Milliseconds())},
 		AttachStdout: true, AttachStderr: true,
 	})
 	if err != nil {
@@ -309,8 +333,22 @@ func (h *harness) psql(ctx context.Context, q string) (string, error) {
 		return "", err
 	}
 	defer att.Close()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			att.Close()
+		case <-done:
+		}
+	}()
 	var stdout, stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, att.Reader); err != nil {
+	_, err = stdcopy.StdCopy(&stdout, &stderr, att.Reader)
+	if ctx.Err() != nil {
+		h.cancelBackend(ctx, name)
+		return "", ctx.Err()
+	}
+	if err != nil {
 		return "", err
 	}
 	in, err := h.dc.ExecInspect(ctx, ex.ID, client.ExecInspectOptions{})
@@ -321,6 +359,17 @@ func (h *harness) psql(ctx context.Context, q string) (string, error) {
 		return "", fmt.Errorf("psql exited %d: %s", in.ExitCode, strings.TrimSpace(stderr.String()))
 	}
 	return stdout.String(), nil
+}
+
+// cancelBackend cancels the query of the harness psql running under name,
+// on a context of its own, since the one it ran on has ended.
+func (h *harness) cancelBackend(ctx context.Context, name string) {
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if _, err := h.psql(cctx, fmt.Sprintf(
+		`select pg_cancel_backend(pid) from pg_stat_activity where application_name = '%s'`, name)); err != nil {
+		h.say("could not cancel the query of %s: %v", name, err)
+	}
 }
 
 // timeReads holds the server and Postgres to ReadCPUs, then times each
