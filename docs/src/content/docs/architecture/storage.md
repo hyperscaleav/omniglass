@@ -737,6 +737,17 @@ each chain row carries the component it was walked up from, so a candidate secre
 component of its own reference, never a sibling's: the confinement a per-component resolve gave, kept
 in one statement. A shared credential (a location's, the platform's) unseals once per pull.
 
+The **component_type walk** is one statement too. Resolving a type's facts (stem, icon, abbrev, label
+rule, default tags) or asking whether it sits under another climbs `parent_id` through a single
+recursive query, bounded at 32 nodes, that returns the chain nearest first with each node's operator
+shadow beside it. The first-non-null fold and the per-node fork rule
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))
+run in Go over those rows, so the cost does not grow with the depth of the tree: the OAVC taxonomy's
+leaf, subcategory and category root
+([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional))
+cost what a flat registry did, and the label recompute and a generated-name create are held to the
+ceilings they had before it (#803).
+
 :::design[Embedded Postgres, tracked in #19]
 Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's
 persistence consumer and the record lane's CDC publisher (#430) target this one backend through the

@@ -145,8 +145,9 @@ func (s *Server) batchID(msg jetstream.Msg) string {
 func (s *Server) ack(msg jetstream.Msg) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := msg.DoubleAck(ctx); err != nil {
-		s.metrics.count(writerclass.BusTelemetryAckFailureCount, "", 1)
+	err := msg.DoubleAck(ctx)
+	s.metrics.failure(writerclass.BusTelemetryAckFailureCount, "", err != nil)
+	if err != nil {
 		slog.Warn("telemetry ack not confirmed, the batch will be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
 	}
 }

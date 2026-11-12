@@ -96,16 +96,17 @@ func retentionLaneNames() []string {
 // TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBPoolAcquired:        count(0.3, 1),
-		writerclass.DBPoolMax:             count(12, 0),
-		writerclass.DBPoolWaitCount:       zero(),
-		writerclass.BusConsumerPending:    zero(),
-		writerclass.BusConsumerAckPending: zero(),
-		writerclass.CalcPendingDepth:      zero(),
-		writerclass.OutboxQueuedDepth:     zero(),
-		writerclass.OutboxDueAge:          zero(),
-		writerclass.IngestLaneBusy:        zero(),
-		writerclass.RetentionWindowDays:   {{instance: "metric", base: 14, whole: true}},
+		writerclass.DBPoolAcquired:            count(0.3, 1),
+		writerclass.DBPoolMax:                 count(12, 0),
+		writerclass.DBPoolWaitCount:           zero(),
+		writerclass.BusConsumerPending:        zero(),
+		writerclass.BusConsumerAckPending:     zero(),
+		writerclass.CalcPendingDepth:          zero(),
+		writerclass.OutboxQueuedDepth:         zero(),
+		writerclass.OutboxDueAge:              zero(),
+		writerclass.IngestLaneBusy:            zero(),
+		writerclass.RetentionPassFailureCount: zero(),
+		writerclass.RetentionWindowDays:       {{instance: "metric", base: 14, whole: true}},
 	}
 	for _, r := range consoleRoutes {
 		h[writerclass.HTTPRequestDurationMax] = append(h[writerclass.HTTPRequestDurationMax], historySeries{instance: r.route, base: r.ms, swing: 0.3})
@@ -116,6 +117,11 @@ var platformHistory = func() map[string][]historySeries {
 	for _, lane := range retentionLaneNames() {
 		h[writerclass.RetentionDeletedCount] = append(h[writerclass.RetentionDeletedCount], historySeries{instance: lane})
 		h[writerclass.RetentionBehind] = append(h[writerclass.RetentionBehind], historySeries{instance: lane})
+	}
+	// Each sweep passes twice a report window on a healthy lab.
+	for _, sweep := range writerclass.Sweeps {
+		h[writerclass.SweepCount] = append(h[writerclass.SweepCount], historySeries{instance: sweep, base: 2, whole: true})
+		h[writerclass.SweepFailureCount] = append(h[writerclass.SweepFailureCount], historySeries{instance: sweep})
 	}
 	for _, c := range []string{"metric_trend compaction", "metric_block compaction"} {
 		h[writerclass.RetentionBehind] = append(h[writerclass.RetentionBehind], historySeries{instance: c})
@@ -156,6 +162,10 @@ var platformHistoryExempt = map[string]string{
 	writerclass.PushLanePublishCount: windowUnwritten,
 	writerclass.PushLaneTurnWaitP99:  windowUnwritten,
 	writerclass.PushLaneTurnWaitMax:  windowUnwritten,
+	// A node's bus requests and the telemetry acks of its batches.
+	writerclass.BusRequestCount:             windowUnwritten,
+	writerclass.BusRequestFailureCount:      windowUnwritten,
+	writerclass.BusTelemetryAckFailureCount: windowUnwritten,
 }
 
 // measuredHistory is the hour of the sizes and the oldest partition's age,
