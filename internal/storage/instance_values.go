@@ -32,6 +32,10 @@ import (
 // every row (latestIntendedSQL reads told instead).
 //
 // Which instances are live is liveInstanceSQL's to say.
+// Each instance's newest row is by `ts desc, id desc` and ts must lead (#712):
+// the lane is observed, whose ts a caller supplies, so a late-arriving older
+// sample must not become current by being written last. The declared lane's
+// order is insertion instead (seriesOrderSQL).
 // lane is property or metric; value is the column expression read as value.
 func latestObservedPerInstanceSQL(lane, value, col string) string {
 	return fmt.Sprintf(`with recursive inst(instance) as (
@@ -102,7 +106,12 @@ func transportNames() []string {
 // command targeting the key on the owner named, newest first. An intended row
 // is a command's (ADR-0456: its stamper is the command, on the command's
 // instance), so those instances are every series one can sit on, and each is
-// one probe, never a walk of the observed instances.
+// one probe, never a walk of the observed instances. Each instance's newest row
+// is ordered by ts, though an intended row's ts is the database's now at the
+// command's open, never a caller's, so insertion order would agree with it bar
+// a clock step (#712). Left on ts: #712 split the declared lane only, and the
+// intended lane (here, command_read.go, settlement.go) is read the same way
+// throughout; moving it is its own change.
 func latestIntendedSQL(col string) string {
 	return fmt.Sprintf(`select n.value, n.ts, n.provenance, i.instance from
 			(select distinct c.instance from command c
