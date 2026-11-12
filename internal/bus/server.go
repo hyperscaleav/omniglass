@@ -501,6 +501,9 @@ var ErrNoSimulator = collection.ErrNoSimulator
 // started.
 func (s *Server) Nodes() []string { return s.sims.Nodes() }
 
+// Forget drops a node's simulator status, for a node that was deleted.
+func (s *Server) Forget(node string) { s.sims.Forget(node) }
+
 // FireSimOperation asks the simulator beside node to run op against one of
 // its devices and returns the device's answer.
 func (s *Server) FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
