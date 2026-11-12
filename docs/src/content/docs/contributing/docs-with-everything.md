@@ -177,13 +177,14 @@ regions a capture cannot render deterministically (a v7-uuid id subtext, a seed-
 timestamp, a history strip whose weights divide by the capture's own clock) are painted as
 constant boxes. `make docs-shots-check` recaptures and diffs **the baselines only**, at zero
 tolerance, the visual sibling of the `make gen` drift check: the pinned browser's masked
-rasters are byte-stable, so any diff is a real, un-recaptured UI change. The old percentage
-ceiling passed exactly the changes the gate exists to catch, a renamed label or a collapsed
-rail repainting fewer pixels than seed jitter (#398, #623). Two caveats: the comparison counts
-the pixels pixelmatch judges different at its default perceptual threshold, so a change
-confined to near-identical dark tones can still score zero (#774), and a real UI change that
-falls entirely inside a masked region is invisible to the gate, which is the price of masking
-and the reason a mask names the smallest box that holds still around what moves.
+rasters are byte-stable, so any diff is a real, un-recaptured UI change. The comparison is
+exact: byte-equal files pass, and otherwise every pixel is compared in every channel, so a
+change confined to near-identical dark tones fails too (#774). The old percentage ceiling
+passed exactly the changes the gate exists to catch, a renamed label or a collapsed rail
+repainting fewer pixels than seed jitter (#398, #623), and a perceptual threshold would have
+passed a surface token swap. One caveat: a real UI change that falls entirely inside a masked
+region is invisible to the gate, which is the price of masking and the reason a mask names the
+smallest box that holds still around what moves.
 
 ### A mask covers a box that holds still, and says that it is there
 
@@ -241,14 +242,12 @@ fill; they embed the clean render.
 
 Prove a mask holds by recapturing **with the clock moved**, never by capturing twice a few
 minutes apart: two captures in the same hour of the same day are structurally blind to exactly
-the jitter a mask exists to absorb. And prove it **exactly**: the gate's comparison counts the
-pixels pixelmatch judges different at threshold 0.1 (#774), which scores a mask edge moving one
-pixel over a dark surface as zero, so the gate alone passes a mask that moves. `DOCS_SHOTS_EXACT=1`
-compares every pixel instead:
+the jitter a mask exists to absorb. The gate's comparison is exact (#774), so a mask edge
+moving one pixel fails it and the proof is the gate itself with the clock moved:
 
 ```bash
-make docs-shots-check                                                # the gate
-DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check  # the proof: the clock moved, every pixel equal
+make docs-shots-check                                  # the gate
+DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check       # the proof: the clock moved, every pixel equal
 ```
 
 The contract (the page's declared mask paints a box the value cannot move, leaves what the shot
