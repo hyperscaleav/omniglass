@@ -9,6 +9,7 @@ import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { toasts } from "../lib/toast";
 
 // The Nodes page is a config over the shared FlatList: a row per collection node,
 // each labelled by its label (the name/key is the subtitle), a row opening
@@ -217,14 +218,20 @@ describe("Nodes page", () => {
     await waitFor(() => expect(screen.queryByDisplayValue("og_tok_SECRET")).toBeNull());
   });
 
-  it("creates a node with its identity fields then auto-enrolls it, revealing the token", async () => {
+  it("creates a node without enrolling it, then opens its blade with Enroll as the primary action", async () => {
+    const calls: string[] = [];
+    let created = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
+      if (method !== "GET") calls.push(`${method} ${new URL(url, "http://x").pathname}`);
       if (url.includes(":enroll") && method === "POST") return json({ name: "edge-2", token: "og_new_TOKEN" });
-      if (url.endsWith("/nodes") && method === "POST") return json({ name: "edge-2", enrolled: false }, 201);
-      return json({ nodes: [...seed, { name: "edge-2", enrolled: true }] });
+      if (url.endsWith("/nodes") && method === "POST") {
+        created = true;
+        return json({ name: "edge-2", enrolled: false, tags: {} }, 201);
+      }
+      return json({ nodes: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
     });
 
     mount(owner);
@@ -232,12 +239,71 @@ describe("Nodes page", () => {
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.input(nameInput, { target: { value: "edge-2" } });
     // The create form also carries label + location (parity with components).
-    expect(screen.getByLabelText("Name")).toBeTruthy();
     expect(screen.getByLabelText("Location")).toBeTruthy();
+    // The copy no longer promises a token.
+    expect(screen.queryByText(/mints/i)).toBeNull();
     fireEvent.click(screen.getByText("Create node"));
+    await waitFor(() => expect(screen.queryByLabelText("Name")).toBeNull()); // the create drawer closes
 
-    expect(await screen.findByDisplayValue("og_new_TOKEN")).toBeTruthy();
-    await waitFor(() => expect(screen.queryByText("Create node")).toBeNull());
+    // The new node's blade opens with Enroll as its primary action (not the kebab).
+    const blade = await screen.findByRole("dialog");
+    expect((await within(blade).findByRole("button", { name: "Enroll" })).closest("ul")).toBeNull();
+    expect(toasts().map((t) => t.title)).toContain("Node created. Enroll it when the device is ready.");
+    // Exactly one write, and none to :enroll; no token is on screen.
+    expect(calls).toEqual(["POST /api/v1/nodes"]);
+    expect(screen.queryByLabelText("Enrollment token")).toBeNull();
+  });
+
+  it("enrolls an unenrolled node from its primary Enroll button and reveals the token", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (url.includes(":enroll") && method === "POST") return json({ name: "edge-new", token: "og_first_TOKEN" });
+      return json({ nodes: seed });
+    });
+
+    mount(owner);
+    fireEvent.click(screen.getByText("edge-new"));
+    const blade = await screen.findByRole("dialog");
+    const enroll = await within(blade).findByRole("button", { name: "Enroll" });
+    expect(enroll.closest("ul")).toBeNull(); // the footer's primary slot, not the kebab menu
+    fireEvent.click(enroll);
+    expect(await screen.findByDisplayValue("og_first_TOKEN")).toBeTruthy();
+  });
+
+  it("keeps Re-enroll in the kebab for an enrolled node, with no primary Enroll", async () => {
+    mount(owner);
+    fireEvent.click(screen.getByText("HQ Edge Node"));
+    const blade = await screen.findByRole("dialog");
+    await within(blade).findByText("Enrolled");
+    expect(within(blade).queryByRole("button", { name: "Enroll" })).toBeNull();
+  });
+
+  it("lets node:create without node:enroll create a node, and hides Enroll on its blade", async () => {
+    const creator: Me = { principal: { id: "c", kind: "human" }, permissions: ["node:read", "node:create"], grants: [] };
+    let created = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = typeof input === "string" ? "GET" : req.method;
+      if (url.endsWith("/nodes") && method === "POST") {
+        created = true;
+        return json({ name: "edge-2", enrolled: false, tags: {} }, 201);
+      }
+      return json({ nodes: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
+    });
+
+    mount(creator);
+    fireEvent.click(screen.getByText("New node"));
+    fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "edge-2" } });
+    fireEvent.click(screen.getByText("Create node"));
+    await waitFor(() => expect(screen.queryByLabelText("Name")).toBeNull());
+
+    const blade = await screen.findByRole("dialog");
+    await within(blade).findByText("Enrolled");
+    expect(within(blade).queryByRole("button", { name: "Enroll" })).toBeNull();
+    expect(within(blade).queryByText(/Re-?enroll/i)).toBeNull();
   });
 
   // The create form's two identity fields are coupled by lib/entities: the operator

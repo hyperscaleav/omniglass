@@ -446,3 +446,28 @@ func TestResolveDedupRoots(t *testing.T) {
 		t.Fatalf("dedup failed: %+v", set)
 	}
 }
+
+// Registered separates a decision from an omission (#754): a tier resource and a
+// fleet-wide one are both registered, an unknown one is not. A fleet-wide
+// resource covers no tier, so a set resolved for it can never be checked against
+// a tree table, and Resolve stamps every set with the resource it was resolved
+// for so the gateway can ask exactly that.
+func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
+	for _, r := range []string{"component", "command", "telemetry", "secret", "node", "platform"} {
+		if !scope.Registered(r) {
+			t.Errorf("Registered(%q) = false, want true", r)
+		}
+	}
+	if scope.Registered("widget") {
+		t.Error("Registered(widget) = true, want false: nothing registers it")
+	}
+	for _, tier := range []string{"location", "system", "component"} {
+		if scope.Covers("node", tier) {
+			t.Errorf("Covers(node, %s) = true, want false: a fleet-wide resource has no tier", tier)
+		}
+	}
+	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "C"}}
+	if s := scope.Resolve(g, index(), "widget", "read"); !s.Empty() || s.Resource != "widget" {
+		t.Fatalf("Resolve for an unregistered resource = %+v, want empty and stamped widget", s)
+	}
+}

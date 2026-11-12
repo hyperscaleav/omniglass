@@ -124,18 +124,33 @@ func liveOrSnapshot(live string, snapshot *string) string {
 	return ""
 }
 
+// WriteAuthEventFor records an authentication event (login, logout, revoke) in
+// the audit trail with optional target attribution. Unlike writeAuditRes, it
+// takes no transaction: auth events are read/no-tx paths, so the emit is a
+// standalone autocommit insert. It records the real actor from context for
+// consistency, though auth events are not impersonated. The resource and
+// resourceID name what the action targeted (e.g. "principal" and the target
+// principal's id for a session revoke); callers can omit them to default to
+// resource='auth' with no target.
+func (p *PG) WriteAuthEventFor(ctx context.Context, actorID, verb, resource, resourceID string) error {
+	if resource == "" {
+		resource = "auth"
+	}
+	channel, client := auditChannelFrom(ctx)
+	if _, err := p.pool.Exec(ctx, `
+		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, channel, client)
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, nullize(resourceID), channel, client); err != nil {
+		return fmt.Errorf("storage: write auth event: %w", err)
+	}
+	return nil
+}
+
 // WriteAuthEvent records an authentication event (login, logout) in the audit
 // trail. Unlike writeAuditRes, it takes no transaction: login and logout are
 // read/no-tx paths, so the emit is a standalone autocommit insert. It still
 // records the real actor from context, for consistency, though auth events are
 // not impersonated.
 func (p *PG) WriteAuthEvent(ctx context.Context, actorID, verb string) error {
-	channel, client := auditChannelFrom(ctx)
-	if _, err := p.pool.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, channel, client)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, 'auth', $4, $5)`,
-		nullize(actorID), nullize(realActorFrom(ctx)), verb, channel, client); err != nil {
-		return fmt.Errorf("storage: write auth event: %w", err)
-	}
-	return nil
+	return p.WriteAuthEventFor(ctx, actorID, verb, "", "")
 }

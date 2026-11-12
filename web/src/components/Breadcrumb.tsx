@@ -1,3 +1,4 @@
+import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 import { crumbLayout, type Crumb } from "../lib/breadcrumb";
 
@@ -6,7 +7,9 @@ import { crumbLayout, type Crumb } from "../lib/breadcrumb";
 // ellipsise to a stub. The rule is crumbLayout's arithmetic, pinned at the
 // unit tier; this component only applies the styles. The fleet zoom renders
 // a one-crumb trail; the later zooms extend the same trail with the ancestor
-// chain.
+// chain. A crumb with a destination is a real link (the router's A, so a click
+// navigates in-app and a middle-click opens a tab); the crumb without one is
+// the current page, marked aria-current.
 export default function Breadcrumb(props: { crumbs: Crumb[] }) {
   const styles = () => crumbLayout(props.crumbs.length);
   return (
@@ -22,10 +25,12 @@ export default function Breadcrumb(props: { crumbs: Crumb[] }) {
               style={styles()[i()]}
               title={crumb.title ?? crumb.label}
             >
-              <Show when={crumb.onClick} fallback={crumb.label}>
-                <button type="button" class="cursor-pointer truncate hover:text-base-content" onClick={crumb.onClick}>
-                  {crumb.label}
-                </button>
+              <Show when={crumb.href} fallback={<span aria-current="page">{crumb.label}</span>}>
+                {(href) => (
+                  <A href={href()} class="truncate hover:text-base-content">
+                    {crumb.label}
+                  </A>
+                )}
               </Show>
             </span>
           </>

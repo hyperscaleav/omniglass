@@ -14,6 +14,8 @@ import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { COMPONENTS_KEY } from "../lib/components";
+import { componentSystemsKey } from "../lib/members";
 
 // EntityForm (#826 slice 1): the ONE form per fleet kind. It renders read or
 // edit against a slot its host owns (the workspace's Configure tab, the
@@ -234,6 +236,184 @@ describe("the one form, editing", () => {
       `rename:${uuidFor("ef-room")}:huddle-2`,
     ]);
     expect(slot().editing()).toBe(false);
+  });
+});
+
+describe("a component's memberships, editable from its own face (#767)", () => {
+  // A component's system on create is its primary MEMBERSHIP. The routes to
+  // change it already exist (add, remove, setPrimary); the edit face is where
+  // the operator who made the binding looks for it.
+  const comp = uuidFor("mf-mic");
+  const alpha = uuidFor("mf-alpha");
+  const beta = uuidFor("mf-beta");
+  const gamma = uuidFor("mf-gamma");
+  const member = (system_id: string, system: string, primary: boolean) => ({ component: "mic", component_id: comp, component_verdict: "healthy", primary, system, system_id, system_count: 1 });
+  const readerOnly: Me = { principal: { id: "u-rd", kind: "human" }, human: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
+
+  type Call = { method: string; path: string };
+  function mountComponent(me: Me = owner, memberships = [member(alpha, "alpha", true), member(gamma, "gamma", false)]) {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...SYSTEMS_KEY], [
+      { id: alpha, name: "alpha", label: "Alpha Room", actions: ["update"] },
+      { id: beta, name: "beta", label: "Beta Room", actions: ["update"] },
+      { id: gamma, name: "gamma", label: "Gamma Room", actions: ["update"] },
+    ]);
+    qc.setQueryData([...COMPONENTS_KEY], [
+      { id: comp, name: "mic", label: "Mic", product: "generic-device", system: "alpha", system_id: alpha, system_count: memberships.length, actions: ["create", "update", "delete"] },
+    ]);
+    qc.setQueryData([...componentSystemsKey(comp)], memberships);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("mf-prod"), name: "generic-device", label: "Generic Device" }]);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/web/x");
+    let slot!: BladeEdit;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/x" component={() => {
+            slot = createEditSlot();
+            return <BladesContext.Provider value={createBladeController()}><EntityForm kind="component" id={comp} slot={slot} host="blade" /></BladesContext.Provider>;
+          }} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    return { slot: () => slot, qc };
+  }
+
+  // Answers every write 200/204, or refuses the one the test names.
+  function stubWrites(refuse?: { method: string; match: string; status: number; detail: string }) {
+    const calls: Call[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      const path = decodeURIComponent(new URL(req.url).pathname.replace("/api/v1", ""));
+      calls.push({ method: req.method, path });
+      if (refuse && req.method === refuse.method && path.includes(refuse.match)) {
+        return new Response(JSON.stringify({ title: "Forbidden", status: refuse.status, detail: refuse.detail }), { status: refuse.status, headers: { "content-type": "application/problem+json" } });
+      }
+      if (req.method === "PUT" || req.method === "DELETE" || path.endsWith(":setPrimary")) return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const writes = () => calls.filter((c) => c.path.includes("/members/"));
+    return { calls, writes, stub };
+  }
+
+  it("shows the Memberships field in edit, seeded with the primary system and the others as chips", async () => {
+    const { slot } = mountComponent();
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    const primary = await within(form).findByRole("combobox", { name: /memberships/i }) as HTMLSelectElement;
+    await waitFor(() => expect(primary.value).toBe(alpha));
+    // The other membership is a chip with its own remove control.
+    expect(within(form).getByRole("button", { name: /remove gamma room/i })).toBeTruthy();
+  });
+
+  it("picking another primary issues PUT then :setPrimary, addressed by uuid", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      const primary = await within(form).findByRole("combobox", { name: /memberships/i });
+      fireEvent.change(primary, { target: { value: beta } });
+      await slot().save();
+      expect(writes()).toEqual([
+        { method: "PUT", path: `/systems/${beta}/members/${comp}` },
+        { method: "POST", path: `/systems/${beta}/members/${comp}:setPrimary` },
+      ]);
+      expect(slot().editing()).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("promoting a system it is already in skips the PUT and only moves the primary", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: gamma } });
+      await slot().save();
+      expect(writes()).toEqual([{ method: "POST", path: `/systems/${gamma}/members/${comp}:setPrimary` }]);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("clearing the primary issues DELETE on that membership", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent(owner, [member(alpha, "alpha", true)]);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: "" } });
+      await slot().save();
+      expect(writes()).toEqual([{ method: "DELETE", path: `/systems/${alpha}/members/${comp}` }]);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("removing a chip issues DELETE on that membership only", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.click(await within(form).findByRole("button", { name: /remove gamma room/i }));
+      await slot().save();
+      expect(writes()).toEqual([{ method: "DELETE", path: `/systems/${gamma}/members/${comp}` }]);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("writes nothing when the memberships were not touched", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      await screen.findByTestId("entity-form");
+      slot().begin();
+      await slot().save();
+      expect(writes()).toEqual([]);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("is read-only without system:update, and still shows the memberships", async () => {
+    const { slot } = mountComponent(readerOnly);
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    await waitFor(() => expect(within(form).getByText("Alpha Room")).toBeTruthy());
+    expect(within(form).getByText("Gamma Room")).toBeTruthy();
+    expect(within(form).queryByRole("combobox", { name: /memberships/i })).toBeNull();
+    expect(within(form).queryByRole("button", { name: /remove gamma room/i })).toBeNull();
+    expect(within(form).getByText(/needs.*system:update/i)).toBeTruthy();
+  });
+
+  it("renders the server's refusal inline and leaves the face in edit", async () => {
+    const { stub } = stubWrites({ method: "PUT", match: "/members/", status: 403, detail: "you may read system beta but not update it" });
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: beta } });
+      await expect(slot().save()).rejects.toBeTruthy();
+      expect((await within(form).findByRole("alert")).textContent).toContain("you may read system beta but not update it");
+      expect(slot().editing()).toBe(true);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("refreshes both ends of the relation, so a system's member list follows without a reload", async () => {
+    const { stub } = stubWrites();
+    try {
+      const { slot, qc } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      const invalidated: string[] = [];
+      const real = qc.invalidateQueries.bind(qc);
+      qc.invalidateQueries = ((filters: { queryKey?: readonly unknown[] }) => {
+        invalidated.push(String(filters?.queryKey?.[0]));
+        return real(filters as never);
+      }) as typeof qc.invalidateQueries;
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: beta } });
+      await slot().save();
+      expect(invalidated).toContain("system-members");
+      expect(invalidated).toContain("component-systems");
+      expect(invalidated).toContain("components");
+    } finally { stub.mockRestore(); }
   });
 });
 
