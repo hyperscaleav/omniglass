@@ -4,8 +4,8 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
 import {
-  buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
-  type Crumb, type Row, type SortState,
+  buildIndex, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
+  type Row, type SortState,
 } from "../lib/listmodel";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
@@ -81,8 +81,8 @@ export const identityOf = (n: ListNode): Labelled => ({
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
 
 export type ListCtx<N extends ListNode> = {
-  // true in the full-page detail, false in a blade: lets a shared detail body show
-  // its breadcrumb only in a blade and drill via blade vs URL navigation.
+  // true in the full-page detail, false in a blade: lets a shared detail body carry
+  // the actions the blade's footer rail would otherwise hold.
   full: boolean;
   openEdit: (n: N) => void;
   openCreate: (parent: N | null) => void;
@@ -230,9 +230,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const showFull = (n: N | null) => setFullPage(() => n);
 
   // The flattened index (id -> node, child -> parent, the in-order node list, the
-  // container ids) and the ancestor path: both are pure, in lib/listmodel.
+  // container ids): pure, in lib/listmodel.
   const index = createMemo(() => buildIndex(cfg.nodes()));
-  const pathOf = (n: N): Crumb[] => pathOfModel(index(), n);
 
   // focusMiss is true when the route's focus id names no row here: an honest
   // "no such row", never a silent fall-through to the unfiltered list. False
@@ -577,28 +576,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     <section class="fade-in flex max-w-3xl flex-col gap-4">
       <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
       <div class="flex flex-col gap-2">
-        <Show when={pathOf(props2.node).length}>
-          <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={pathOf(props2.node)}>
-              {(c, i) => (
-                <>
-                  <Show when={i()}>
-                    <span class="text-base-content/30">{"›"}</span>
-                  </Show>
-                  <button
-                    class="text-base-content/60 hover:text-base-content"
-                    onClick={() => {
-                      const anc = index().byId.get(c.id);
-                      if (anc) openFull(anc);
-                    }}
-                  >
-                    {c.display}
-                  </button>
-                </>
-              )}
-            </For>
-          </div>
-        </Show>
         <h1 class="text-2xl font-semibold tracking-tight">{props2.node.display}</h1>
       </div>
       <div class="card border border-base-300 bg-base-200 og-pad">
