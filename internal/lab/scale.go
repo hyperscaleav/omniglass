@@ -277,7 +277,7 @@ const FleetViewReads = 100
 
 // PerfSizes are the gate's sizes, smallest first, each named by its rung on
 // the ladder the architect set on #1640 (corporate 300, 1,000, and 3,000 the
-// goal): 300 fits a hosted runner, 1000 runs on the Proxmox worker (#1737).
+// goal). Every rung runs on a test VM of one host class (ADR-1787).
 func PerfSizes() []PerfSize {
 	return []PerfSize{
 		{Name: "300", Scenario: "corporate", Systems: 300, Warmup: 2 * time.Minute, Window: 5 * time.Minute, FleetReads: FleetViewReads},
