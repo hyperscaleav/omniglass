@@ -225,6 +225,27 @@ resolution. Every URL-reachable state is also a state the
 [docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
 what retired the one-shot handoffs.
 
+**A blade or workspace edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
+blade stack and by the Configure face) is the one place that knows an editor is open, so three rules
+hang off it (#854):
+
+1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
+   components list, the fleet view, the system roles and health reads (prefix keys, so every system's
+   copy), and the verdict read. A component that staffs a role is refused by the server (409,
+   referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
+2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
+   (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
+   Configure footer), where the operator's eyes are, not at the top of a long form. A save that
+   rejects is never swallowed silently.
+3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
+   asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
+   discards the drafts; cancelling stays on Configure with them intact. The guard covers the form's
+   own drafts; a router-wide guard (a link out of the page, closing the tab) is not built.
+
+A changed route id resets the edit too: each host keys its Configure face on the id
+(`<Show when={id()} keyed>`), so another place, system or component is a new face with a fresh slot and
+drafts, never the previous entity's half-typed edit under the new page.
+
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
 grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
 navigate to the registries' own canonical flat routes (`/products`, `/metrics`, ...), each real

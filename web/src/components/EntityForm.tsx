@@ -211,7 +211,13 @@ export default function EntityForm(props: {
       : "None of the systems you can see is inside your system:update scope; the memberships stay as they are.";
   };
 
+  // What the drafts held when seeded, so the slot can say whether the operator
+  // has changed anything (the Configure tab asks before dropping them).
+  const draftState = () => JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName()]);
+  let seeded = "";
+
   slot.bind({
+    dirty: () => draftState() !== seeded,
     // Editing begins on the update verb alone; a rename-only grant reads. The
     // rename call inside save keeps its own gate and still goes last.
     editable: () => canUpdate() && !!raw(),
@@ -236,6 +242,7 @@ export default function EntityForm(props: {
         setParentName(parentID);
         setInitialParent(parentID);
       }
+      seeded = draftState();
     },
     save: async () => {
       setErr(null);
@@ -268,7 +275,8 @@ export default function EntityForm(props: {
           else await renameComponent(r.id, name().trim());
         }
       } catch (e) {
-        setErr(describeError(e));
+        // The slot records the reason and the host shows it beside Save
+        // (SaveError), where the operator is, not at the top of the form.
         throw e; // keep the slot editing so the operator can retry
       } finally {
         // The kind's list AND the fleet view: Explore's cards, the blade's own

@@ -1,9 +1,11 @@
-import { Show } from "solid-js";
+import { Show, onCleanup } from "solid-js";
 import Button from "./Button";
 import EntityForm, { type EntityKind } from "./EntityForm";
+import SaveError from "./SaveError";
 import { createEditSlot, type BladeEdit } from "../lib/blades";
 import { useEditParam } from "../lib/editurl";
 import { can, useMe } from "../lib/auth";
+import type { LeaveGuard } from "../lib/leave_guard";
 
 // ConfigureFace: the workspace's Configure tab, which is the page host of the
 // ONE form (EntityForm, #826). The page owns the edit slot and the footer;
@@ -11,26 +13,33 @@ import { can, useMe } from "../lib/auth";
 // (ADR-0120's rule, ADR-0132's destination), so a deep link opens the form
 // already editing. Everything else, the fields, their gates, and the save
 // order, lives in the form and is shared with the blade.
+//
+// The face OWNS its slot and drafts for its whole life, so a host keys it on
+// the id (`<Show when={id()} keyed>`): a new id is a new face, never the old
+// entity's drafts under the new entity's page.
 
 export type ConfigureKind = EntityKind;
 
 function Footer(props: { slot: BladeEdit; onEdit: () => void }) {
   return (
-    <div class="flex items-center gap-2 border-t border-base-300 px-4 pb-4 pt-3">
-      <span class="flex-1" />
-      <Show
-        when={props.slot.editing()}
-        fallback={
-          <Show when={props.slot.editable()}>
-            <Button intent="action" onClick={props.onEdit}>Edit</Button>
-          </Show>
-        }
-      >
-        <Button onClick={() => props.slot.cancel()}>Cancel</Button>
-        <Button intent="action" loading={props.slot.saving()} disabled={!props.slot.valid()} onClick={() => props.slot.save().catch(() => { /* surfaced by the form's alert; the slot stays editing */ })}>
-          Save changes
-        </Button>
-      </Show>
+    <div class="flex flex-col gap-2 border-t border-base-300 px-4 pb-4 pt-3">
+      <SaveError slot={props.slot} />
+      <div class="flex items-center gap-2">
+        <span class="flex-1" />
+        <Show
+          when={props.slot.editing()}
+          fallback={
+            <Show when={props.slot.editable()}>
+              <Button intent="action" onClick={props.onEdit}>Edit</Button>
+            </Show>
+          }
+        >
+          <Button onClick={() => props.slot.cancel()}>Cancel</Button>
+          <Button intent="action" loading={props.slot.saving()} disabled={!props.slot.valid()} onClick={() => props.slot.save().catch(() => { /* the slot keeps the reason (SaveError above) and stays editing */ })}>
+            Save changes
+          </Button>
+        </Show>
+      </div>
     </div>
   );
 }
@@ -42,9 +51,13 @@ export default function ConfigureFace(props: {
   // system's own form takes `edit=1`, its sole place's `edit=place`.
   editValue?: string;
   testid?: string;
+  // The page's leave guard: this face's slot is tracked into it, so the page
+  // can ask before a tab switch drops unsaved drafts.
+  guard?: LeaveGuard;
 }) {
   const me = useMe();
   const slot = createEditSlot();
+  if (props.guard) onCleanup(props.guard.track(slot));
   const canUpdate = () => can(me.data, props.kind, "update");
   const value = props.editValue;
   // Ready once the form has bound the slot against a loaded row: editable()
