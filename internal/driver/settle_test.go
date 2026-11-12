@@ -38,6 +38,30 @@ func TestValidateSettle(t *testing.T) {
 	}
 }
 
+// A fire-and-forget command cannot declare a settle.
+func TestValidateSettleRefusesFireAndForget(t *testing.T) {
+	// reboot is a fire-and-forget command (no target)
+	s := validSpec()
+	s.Commands[0].CommandType = "reboot"
+	s.Commands[0].Settle = &driver.Settle{From: "response", Extract: &driver.Extract{Regex: `^OK$`}}
+	err := s.Validate(catalog())
+	if err == nil {
+		t.Errorf("fire-and-forget command with settle: expected error")
+	}
+	if !strings.Contains(err.Error(), "fire-and-forget") {
+		t.Errorf("fire-and-forget error should mention fire-and-forget: %v", err)
+	}
+
+	// set-input has a target, so settle should be allowed
+	s2 := validSpec()
+	s2.Commands[0].CommandType = "set-input"
+	s2.Commands[0].Settle = &driver.Settle{From: "response", Extract: &driver.Extract{Regex: `^INPUT (\S+)$`}}
+	err2 := s2.Validate(catalog())
+	if err2 != nil {
+		t.Errorf("targeted command with settle should be allowed: %v", err2)
+	}
+}
+
 // JudgeReply reads a device's reply to a command the way its binding says.
 func TestJudgeReply(t *testing.T) {
 	value := driver.CommandBinding{Settle: &driver.Settle{From: "response", Extract: &driver.Extract{Regex: `^INPUT (\S+)$`}}}
