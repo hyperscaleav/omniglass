@@ -282,6 +282,48 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 	return nil
 }
 
+// healthDeferral is what a composite write passes down its ...Tx bodies so the
+// health recompute runs once, before commit, instead of once per piece (#915).
+// Each body that would recompute inline appends the owners it would have named
+// and returns; the composite then calls flush with the union. A nil
+// *healthDeferral is every single-write path: recomputeOrDefer recomputes
+// inline, exactly as before.
+//
+// Why it matters beyond cost: recordHealth writes on a transition, and a
+// system born impaired then staffed slot by slot inside one transaction would
+// record `incomplete` and then `healthy` milliseconds apart, an edge no reader
+// could observe because the write is atomic. Recording only the final state
+// leaves one edge per owner and chain level. Locations are not collected: the
+// chain over the deferred systems is derived at flush (locationsOver), and no
+// composite removes a link, which is the only reason a caller names them.
+type healthDeferral struct {
+	components, systems refSet
+}
+
+func newHealthDeferral() *healthDeferral {
+	return &healthDeferral{components: refSet{}, systems: refSet{}}
+}
+
+// recomputeOrDefer is recomputeChain for a ...Tx body that a composite may
+// call: inline when deferred is nil, appended to it otherwise. Lock order is
+// unchanged either way, since the composite's flush is the last health work
+// in its transaction.
+func (p *PG) recomputeOrDefer(ctx context.Context, q txQuerier, deferred *healthDeferral, components, systems []ownerRef) error {
+	if deferred == nil {
+		return p.recomputeChain(ctx, q, components, systems, nil)
+	}
+	deferred.components.add(components...)
+	deferred.systems.add(systems...)
+	return nil
+}
+
+// flush runs the one recompute for everything the composite deferred. Owners
+// are deduplicated by id (refSet), so a system staffed by N components is
+// visited once, and so is each location above it.
+func (d *healthDeferral) flush(ctx context.Context, p *PG, q txQuerier) error {
+	return p.recomputeChain(ctx, q, d.components.sorted(), d.systems.sorted(), nil)
+}
+
 // bottomUp orders a location chain so every location comes after each of its
 // children in the set, which is the order locationVerdict needs: a location
 // folds its children's recorded verdicts, so a child has to be recorded before
