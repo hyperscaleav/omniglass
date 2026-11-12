@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -462,6 +463,10 @@ const receiptLedgerVersion = "20261109232007"
 // receiptTermedVersion is the migration that marks a Term receipt (#1691).
 const receiptTermedVersion = "20261110140219"
 
+// receiptPackedVersion is the migration that packs the receipt's ledger and
+// outcome into integer arrays (#1699).
+const receiptPackedVersion = "20261112051714"
+
 // tallyOf is a tally from a literal, for comparison.
 func tallyOf(m map[delivery.Kind]map[delivery.Outcome]int) delivery.Tally {
 	var t delivery.Tally
@@ -502,17 +507,18 @@ type receiptRow struct {
 func (f landFixture) receipt(t *testing.T, id string) receiptRow {
 	t.Helper()
 	var r receiptRow
-	var ledger, outcome []byte
+	var ledger []*int64
+	var outcome []int32
 	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome, termed
 		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome, &r.termed)
 	if err != nil {
 		t.Fatalf("read receipt %s: %v", id, err)
 	}
-	if err := json.Unmarshal(ledger, &r.ledger); err != nil {
-		t.Fatalf("receipt %s ledger %s: %v", id, ledger, err)
+	if r.ledger, err = delivery.DeclaredOf(ledger); err != nil {
+		t.Fatalf("receipt %s ledger: %v", id, err)
 	}
-	if err := json.Unmarshal(outcome, &r.outcome); err != nil {
-		t.Fatalf("receipt %s outcome %s: %v", id, outcome, err)
+	if r.outcome, err = delivery.TallyOf(outcome); err != nil {
+		t.Fatalf("receipt %s outcome %v: %v", id, outcome, err)
 	}
 	return r
 }
@@ -811,6 +817,110 @@ func TestReceiptLedgerMigrationOverExistingReceipts(t *testing.T) {
 	}
 }
 
+// TestReceiptPackedMigrationOverExistingReceipts (#1699): the migration
+// packing the ledger and outcome applies over receipts already landed as
+// jsonb, each reading back as it was written (a kind or outcome this server
+// has no slot or code for left out, a zero left out of the outcome), applies
+// again as a no-op, and its down section restores the jsonb.
+func TestReceiptPackedMigrationOverExistingReceipts(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, receiptPackedVersion); err != nil {
+		t.Fatalf("roll back below the packed receipt: %v", err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id, ledger, outcome) values
+		('full', '{"metric":{"count":58,"before":3000000000},"property":{"count":0,"before":9},"log":{"count":1,"before":2},"trace":{"count":1,"before":1}}',
+			'{"metric":{"stored":58,"missing":2},"log":{"stored":1,"coalesced":0},"trace":{"stored":1},"event":{"returned":4}}'),
+		('null-ledger', 'null', '{}'),
+		('past-int32', '{"metric":{"count":3000000000,"before":18446744073709551615}}', '{"metric":{"stored":1,"missing":2999999999}}'),
+		('bare', null, null)`); err != nil {
+		t.Fatalf("plant receipts: %v", err)
+	}
+	raw, err := db.FS.ReadFile("migrations/" + receiptPackedVersion + "_telemetry_receipt_packed.sql")
+	if err != nil {
+		t.Fatalf("read the migration: %v", err)
+	}
+	up, down, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("migration missing '-- migrate:down' marker")
+	}
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, up); err != nil {
+			t.Fatalf("apply %d: %v", i+1, err)
+		}
+	}
+	read := func(id string) (ledger []*int64, outcome []int32) {
+		t.Helper()
+		if err := conn.QueryRow(ctx, `select ledger, outcome from telemetry_receipt where batch_id = $1`, id).Scan(&ledger, &outcome); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		return ledger, outcome
+	}
+
+	ledger, outcome := read("full")
+	d, err := delivery.DeclaredOf(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (delivery.Declared{
+		delivery.Metric:   {Count: 58, Before: 3_000_000_000},
+		delivery.Property: {Count: 0, Before: 9},
+		delivery.Log:      {Count: 1, Before: 2},
+	}); fmt.Sprint(d) != fmt.Sprint(want) {
+		t.Fatalf("full ledger = %v, want %v", d, want)
+	}
+	tl, err := delivery.TallyOf(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := tallyOf(map[delivery.Kind]map[delivery.Outcome]int{
+		delivery.Metric: {delivery.Stored: 58, delivery.Missing: 2},
+		delivery.Log:    {delivery.Stored: 1},
+	}); !sameTally(t, tl, want) {
+		t.Fatalf("full outcome = %+v, want %+v", tl, want)
+	}
+
+	ledger, outcome = read("null-ledger")
+	if d, err := delivery.DeclaredOf(ledger); ledger == nil || err != nil || len(d) != 0 {
+		t.Fatalf("null ledger = %v (%v, %v), want an array declaring nothing", ledger, d, err)
+	}
+	if outcome == nil || len(outcome) != 0 {
+		t.Fatalf("empty outcome = %v, want an empty array", outcome)
+	}
+
+	ledger, outcome = read("past-int32")
+	if d, err := delivery.DeclaredOf(ledger); err != nil || d[delivery.Metric] != (delivery.Count{Count: 3_000_000_000, Before: math.MaxInt64}) {
+		t.Fatalf("past-int32 ledger = %v (%v), want before saturated at %d", d, err, int64(math.MaxInt64))
+	}
+	if tl, err := delivery.TallyOf(outcome); err != nil || tl.Count(delivery.Metric, delivery.Missing) != math.MaxInt32 || tl.Count(delivery.Metric, delivery.Stored) != 1 {
+		t.Fatalf("past-int32 outcome = %v (%+v, %v), want missing saturated at %d", outcome, tl, err, math.MaxInt32)
+	}
+
+	if ledger, outcome = read("bare"); ledger != nil || outcome != nil {
+		t.Fatalf("bare receipt = %v, %v; want no ledger and no outcome", ledger, outcome)
+	}
+
+	for i := range 2 {
+		if _, err := conn.Exec(ctx, down); err != nil {
+			t.Fatalf("roll back %d: %v", i+1, err)
+		}
+	}
+	var restored bool
+	if err := conn.QueryRow(ctx, `select ledger = '{"metric":{"count":58,"before":3000000000},"property":{"count":0,"before":9},"log":{"count":1,"before":2}}'
+		and outcome = '{"metric":{"stored":58,"missing":2},"log":{"stored":1}}'
+		from telemetry_receipt where batch_id = 'full'`).Scan(&restored); err != nil {
+		t.Fatalf("read the restored receipt: %v", err)
+	}
+	if !restored {
+		t.Fatal("the down section did not restore the full receipt's jsonb")
+	}
+}
+
 // TestLandBatchRecordsTheNodesLoss (#1692): a batch whose ledger carries the
 // node's own loss account writes it on the receipt as it came, and a batch
 // whose node lost nothing leaves the column null.
@@ -901,5 +1011,40 @@ func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
 	}
 	if got := read(); got != string(want) {
 		t.Fatalf("landed receipt node loss = %q, want the landing's %s", got, want)
+	}
+}
+
+// TestReceiptLandsAShortfallPastInt32 (#1699): a node whose ledger declares
+// more items than int32 holds, as a counter bug would, still lands the
+// items it carried, its receipt holding the shortfall saturated rather
+// than the batch refused for it.
+func TestReceiptLandsAShortfallPastInt32(t *testing.T) {
+	t.Parallel()
+	f := newGroupFixture(t)
+	ctx := context.Background()
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	b := storage.IngestBatch{
+		BatchID: "og.v1.telemetry.edge-1 past-int32",
+		Writer:  storage.NodeWriter("", ""),
+		Node:    "edge-1",
+		Ledger: &delivery.Stamp{Boot: "b1", Seq: 1, Minted: at, Kinds: delivery.Declared{
+			delivery.Log: {Count: 3_000_000_001},
+		}},
+		NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: at}},
+	}
+	b.Tally.Add(delivery.Log, delivery.Missing, 3_000_000_000)
+	if res, err := f.gw.LandBatch(ctx, b); err != nil || !res.Landed {
+		t.Fatalf("land: %+v, %v", res, err)
+	}
+	var outcome []int32
+	if err := f.conn.QueryRow(ctx, `select outcome from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&outcome); err != nil {
+		t.Fatalf("read the receipt: %v", err)
+	}
+	tl, err := delivery.TallyOf(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tl.Count(delivery.Log, delivery.Stored) != 1 || tl.Count(delivery.Log, delivery.Missing) != math.MaxInt32 {
+		t.Fatalf("outcome = %+v, want 1 stored and missing saturated at %d", tl, math.MaxInt32)
 	}
 }
