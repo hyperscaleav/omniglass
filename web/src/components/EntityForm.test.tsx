@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import EntityForm, { EntityCreateForm } from "./EntityForm";
 import { BladesContext, createBladeController, createEditSlot, type BladeEdit } from "../lib/blades";
-import { SYSTEMS_KEY } from "../lib/systems";
+import { SYSTEMS_KEY, checkSystemName } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
@@ -28,6 +28,14 @@ vi.mock("../lib/locations", async (orig) => {
     updateLocation: vi.fn(async (id: string) => { calls.push(`update:${id}`); return {}; }),
     moveLocation: vi.fn(async (id: string, parent: string) => { calls.push(`move:${id}:${parent}`); return {}; }),
     renameLocation: vi.fn(async (id: string, name: string) => { calls.push(`rename:${id}:${name}`); return {}; }),
+  };
+});
+
+vi.mock("../lib/systems", async (orig) => {
+  const real = await orig<typeof import("../lib/systems")>();
+  return {
+    ...real,
+    checkSystemName: vi.fn(),
   };
 });
 
@@ -263,5 +271,92 @@ describe("the one form, empty", () => {
     const form = await screen.findByTestId("entity-create-form");
     const parent = within(form).getByLabelText("Parent") as HTMLSelectElement;
     await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
+  });
+});
+
+describe("the one form, system rename precheck", () => {
+  it("calls checkSystemName with the system's parent_id and location_id when the system has a parent", async () => {
+    const mockCheckFn = vi.mocked(checkSystemName);
+    mockCheckFn.mockResolvedValueOnce({ valid: true, available: true });
+
+    // Set up test with a system that has a parent_id
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], owner);
+    qc.setQueryData([...SYSTEMS_KEY], [
+      {
+        id: uuidFor("parent-sys"),
+        name: "parent",
+        label: "Parent System",
+        parent_id: undefined,
+        location_id: uuidFor("ef-room"),
+        actions: ["create", "update", "delete", "rename"]
+      },
+      {
+        id: uuidFor("child-sys"),
+        name: "child",
+        label: "Child System",
+        parent_id: uuidFor("parent-sys"),
+        location_id: uuidFor("ef-room"),
+        actions: ["create", "update", "delete", "rename"]
+      },
+    ]);
+    qc.setQueryData([...LOCATIONS_KEY], [
+      { id: uuidFor("ef-room"), name: "huddle-room", label: "Huddle Room", location_type: "room", parent_id: uuidFor("ef-west"), actions: ["create", "update", "delete"] },
+    ]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...systemRolesKey(uuidFor("child-sys"))], []);
+    qc.setQueryData(["system-properties", uuidFor("child-sys")], []);
+
+    window.history.pushState({}, "", "/web/x");
+    let slot!: BladeEdit;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route
+            path="/x"
+            component={() => {
+              const blades = createBladeController();
+              slot = createEditSlot();
+              return (
+                <BladesContext.Provider value={blades}>
+                  <EntityForm kind="system" id={uuidFor("child-sys")} slot={slot} host="page" />
+                </BladesContext.Provider>
+              );
+            }}
+          />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    const form = await screen.findByTestId("entity-form");
+    slot.begin();
+    const nameInput = within(form).getByDisplayValue("child") as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "sibling-name" } });
+    const checkButton = within(form).getByRole("button", { name: /check/i });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => {
+      expect(mockCheckFn).toHaveBeenCalledWith("sibling-name", uuidFor("parent-sys"), uuidFor("ef-room"));
+    });
+  });
+
+  it("shows an error when the check call fails", async () => {
+    const mockCheckFn = vi.mocked(checkSystemName);
+    mockCheckFn.mockRejectedValueOnce(new Error("Check failed"));
+
+    const { slot } = mount("system", uuidFor("ef-sys"));
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    const nameInput = within(form).getByDisplayValue("huddle") as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "test-name" } });
+    const checkButton = within(form).getByRole("button", { name: /check/i });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => {
+      expect(within(form).getByText(/check failed/i)).toBeTruthy();
+    });
   });
 });

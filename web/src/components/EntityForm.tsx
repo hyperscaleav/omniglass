@@ -74,12 +74,23 @@ function NameField(props: {
 }) {
   const [checking, setChecking] = createSignal(false);
   const [result, setResult] = createSignal<NameCheck | null>(null);
-  createEffect(on(props.name, () => setResult(null)));
+  const [checkError, setCheckError] = createSignal<string | null>(null);
+  createEffect(on(props.name, () => { setResult(null); setCheckError(null); }));
   async function runCheck() {
     setChecking(true);
-    try { setResult(await props.check(props.name().trim())); } catch { setResult(null); } finally { setChecking(false); }
+    setCheckError(null);
+    try {
+      setResult(await props.check(props.name().trim()));
+    } catch (e) {
+      setCheckError(`Check failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      setResult(null);
+    } finally {
+      setChecking(false);
+    }
   }
   const hint = () => {
+    const err = checkError();
+    if (err) return err;
     const r = result();
     if (!r) return undefined;
     if (r.valid && r.available) return "Available.";
@@ -279,9 +290,9 @@ export default function EntityForm(props: {
 
   const check = (n: string) => {
     const rec = row();
-    if (props.kind === "system") return checkSystemName(n, undefined, (rec?.location as string) || undefined);
+    if (props.kind === "system") return checkSystemName(n, (rec?.parent_id as string) || undefined, (rec?.location_id as string) || undefined);
     if (props.kind === "location") return checkLocationName(n, (rec?.parent_id as string) || undefined);
-    return checkComponentName(n, (rec?.parent as string) || undefined, (rec?.location as string) || undefined);
+    return checkComponentName(n, (rec?.parent_id as string) || undefined, (rec?.location_id as string) || undefined);
   };
 
   async function doReset() {
