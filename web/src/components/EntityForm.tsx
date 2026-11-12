@@ -33,7 +33,7 @@ import TreeSelect from "./TreeSelect";
 import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
-import { Plus, X } from "./icons";
+import { Plus } from "./icons";
 import { byLabel } from "../lib/entities";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
