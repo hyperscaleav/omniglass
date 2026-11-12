@@ -1134,3 +1134,64 @@ describe("the lab's system page load", () => {
     }
   });
 });
+
+describe("ambiguous name addresses (#853)", () => {
+  it("a name-shaped address with two systems with same name shows ambiguous message", async () => {
+    const ambigView: FleetView = {
+      locations: [
+        {
+          id: uuidFor("szp-room"),
+          name: "boardroom-a",
+          label: "Boardroom A",
+          location_type: "room",
+          location_type_id: uuidFor("szpt-room"),
+          parent: "",
+          verdict: "degraded",
+        },
+      ],
+      systems: [
+        {
+          id: uuidFor("szp-sys"),
+          name: "boardroom",
+          label: "Boardroom",
+          location: uuidFor("szp-room"),
+          verdict: "degraded",
+          dots: [],
+        },
+        {
+          id: uuidFor("szp-dup"),
+          name: "boardroom",
+          label: "Boardroom Duplicate",
+          location: null,
+          verdict: "healthy",
+          dots: [],
+        },
+      ],
+    } as unknown as FleetView;
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    seedSeverityLevels(qc);
+    qc.setQueryData([...FLEET_VIEW_KEY], ambigView);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", icon: "door-open", official: true, forked: false, allowed_parent_types: [] }]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], []);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], []);
+    window.history.pushState({}, "", `/web/systems/boardroom`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/systems/:id" component={Systems} />
+          <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => {
+      expect(screen.getByText(/More than one system/i)).toBeTruthy();
+      expect(window.location.pathname).toBe(`/web/systems/boardroom`);
+    });
+  });
+});

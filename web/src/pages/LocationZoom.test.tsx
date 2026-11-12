@@ -386,3 +386,39 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
     expect(parentPicker().value).toBe(uuidFor("lz-hq"));
   });
 });
+
+describe("ambiguous name addresses (#853)", () => {
+  it("a name-shaped address with two locations with same name shows ambiguous message", async () => {
+    const ambigView: FleetView = {
+      locations: [
+        loc("lz-hq", "hq", "Headquarters", "campus", "", "degraded"),
+        loc("lz-dup", "hq", "Headquarters Duplicate", "campus", "", "healthy"),
+      ],
+      systems: [],
+    } as unknown as FleetView;
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...FLEET_VIEW_KEY], ambigView);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], []);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], []);
+    window.history.pushState({}, "", `/web/locations/hq`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/locations/:id" component={Locations} />
+          <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => {
+      expect(screen.getByText(/More than one location/i)).toBeTruthy();
+      expect(window.location.pathname).toBe(`/web/locations/hq`);
+    });
+  });
+});

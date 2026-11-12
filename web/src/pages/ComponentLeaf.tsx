@@ -106,9 +106,13 @@ export default function ComponentLeaf() {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
-  const component = createMemo<FleetComponent | undefined>(() =>
-    (components.data ?? []).find((c) => c.id === id() || c.name === id()),
-  );
+  const component = createMemo<FleetComponent | undefined>(() => {
+    const all = components.data ?? [];
+    const byId = all.find((c) => c.id === id());
+    if (byId) return byId;
+    const byName = all.filter((c) => c.name === id());
+    return byName.length === 1 ? byName[0] : undefined;
+  });
 
   // The leaf is addressed by uuid; a name-shaped address resolves through the
   // component list when unique, keeping the param (#759's rule).
@@ -227,7 +231,8 @@ export default function ComponentLeaf() {
     ];
   });
 
-  const missing = () => !!(view.data && components.data) && !component() && !(components.data ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!(view.data && components.data) && !component() && (components.data ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!(view.data && components.data) && !component() && !ambiguous();
   const failure = () => view.error ?? components.error;
 
   return (
@@ -238,6 +243,7 @@ export default function ComponentLeaf() {
       <DetailGate
         noun="component"
         missing={missing()}
+        ambiguous={ambiguous()}
         pending={view.isPending || components.isPending}
         error={failure() ? describeError(failure()) : null}
         retrying={view.isFetching || components.isFetching}

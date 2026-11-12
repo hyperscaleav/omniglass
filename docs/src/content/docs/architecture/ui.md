@@ -81,6 +81,18 @@ panel is the glance (verdict, why, context, identity and tags) and the configura
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
+## Name-shaped addresses (#759, #853)
+
+A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
+
+```
+/components/mic-1
+/systems/boardroom
+/locations/hq
+```
+
+**A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
+
 ## One renderer library, two composition modes
 
 ::::design[Target design: the renderer library and composable dashboards, tracked in #523]
