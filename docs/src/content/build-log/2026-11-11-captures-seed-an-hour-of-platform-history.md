@@ -9,7 +9,7 @@ sparkline was a stub at the right edge of an hour-wide chart. `lab run --platfor
 for scripts) now has the lab's seed write an hour of the server's figures on its platform component
 on the lab's first run: a sample a minute, ending the minute before the seed ran, for every key and
 instance a server panel reads, source `devseed`. The values are a healthy small lab's, fixed per
-series so two captures draw the same lines: failures and queues 0, the pool holding a connection.
+series so two captures draw the same lines: failures and queues 0, the pool now and then holding a connection, request times and counts jittered around what a console polling the page reads.
 The database and table sizes and the oldest partition's age climb into what the database measures
 once the rest of the hour has landed, so the history's own rows are in the figure and the server's
 next live sample carries the line on rather than drawing a cliff.
