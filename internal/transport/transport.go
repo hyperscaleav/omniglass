@@ -112,6 +112,15 @@ func UsesTLS(name string) bool {
 	return ok && t.TLS
 }
 
+// IsDialed reports a transport a node dials to a target (every one but a push
+// transport and udp, which binds a local port and sends to the driver's
+// named request): its bare endpoint's params must name that target (#1187).
+// False for an unknown name.
+func IsDialed(name string) bool {
+	t, ok := byName[name]
+	return ok && !t.Push && name != "udp"
+}
+
 // ProbeYieldsToSession reports a transport whose reachability probe does not
 // dial while the endpoint's held session is up (telnet, #1033): false for an
 // unknown name.

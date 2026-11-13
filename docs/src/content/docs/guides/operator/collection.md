@@ -74,6 +74,17 @@ without one reads its transport name exactly.
     with a standard get carrying its driver's community, so it too needs a driver, never a standalone
     probe; there is no free-text name), a node placement, and a target (`host:port` for the
     tcp-family transports, `host` for icmp).
+
+    From the CLI or the API a probe's address is the one `target` key of its `params`, written as
+    `host[:port]`. `count` and `timeout` tune an icmp probe, and `tls-mode` a `tls` or `https` one.
+    There are no `host` or `port` keys: params that carry no `target`, or carry either of those keys,
+    are refused with a 422 on create (a 400 on an edit) naming `target`, because the node would
+    otherwise skip the endpoint forever and its reachability would never read.
+
+    ```bash
+    omniglass endpoint create --component amp-9 --transport tcp --params '{"target":"10.20.4.61:8080"}'
+    ```
+
   - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
     offered) and fill the **inputs** its spec declares: a host, a port with its default
     pre-filled, credentials as **secret references** (the name of a secret of the declared

@@ -40,10 +40,16 @@ var (
 )
 
 // checkBareParams reads what a bare endpoint's params hand its transport's
-// dialer with meaning, refusing a value it cannot use: the mode of an
+// dialer with meaning, refusing a value it cannot use: the target a node
+// dials (required of every dialed transport, #1187), and the mode of an
 // endpoint over the tls handshake (tls #1035, https #902), which a
 // driver-attached one has checked as an input instead.
 func checkBareParams(transportName string, params []byte) error {
+	if transport.IsDialed(transportName) && len(params) > 0 {
+		if err := checkTarget(params); err != nil {
+			return err
+		}
+	}
 	if (!transport.UsesTLS(transportName) && transportName != "udp") || len(params) == 0 {
 		return nil
 	}
@@ -64,6 +70,32 @@ func checkBareParams(transportName string, params []byte) error {
 	}
 	return nil
 }
+
+// checkTarget refuses a dialed endpoint's params that carry no target the
+// node can dial (#1187): the node reads the one `target` key as host[:port]
+// and skips a task whose target is empty, forever, so the endpoint's
+// reachability would never read. Params left out are not this check's (an
+// unchanged edit carries none); a host or port key is the likely mistake, and
+// the message names the key to use instead.
+func checkTarget(params []byte) error {
+	var p map[string]any
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("params must be a JSON object holding a %s", targetParam)
+	}
+	for _, k := range []string{"host", "port"} {
+		if _, ok := p[k]; ok {
+			return fmt.Errorf("params.%s is not a key: set params.%s as host[:port], the address the node dials", k, targetParam)
+		}
+	}
+	if target, _ := p[targetParam].(string); strings.TrimSpace(target) == "" {
+		return fmt.Errorf("params.%s is required: the address the node dials, as host[:port]", targetParam)
+	}
+	return nil
+}
+
+// targetParam is the params key the node reads a dialed endpoint's address
+// from (endpointParams.Target in internal/node).
+const targetParam = "target"
 
 // checkListenPort refuses a bare udp endpoint's listen port the node could
 // not bind (#1037), through the one reading the node itself uses.
@@ -436,7 +468,8 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		return nil, ErrUnknownTransport
 	}
 	if plan == nil {
-		if err := checkBareParams(spec.Transport, params); err != nil {
+		// The params as given, not the {} left out ones are stored as.
+		if err := checkBareParams(spec.Transport, spec.Params); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrEndpointParamsInvalid, err)
 		}
 	}

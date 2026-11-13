@@ -6930,7 +6930,7 @@ export interface components {
             node?: string;
             /** @description Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
             out_of_band?: boolean;
-            /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
+            /** @description Address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https); an attach derives them from the inputs instead */
             params?: unknown;
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
             transport?: string;
@@ -7876,7 +7876,7 @@ export interface components {
             node_id?: string;
             /** @description A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
             out_of_band: boolean;
-            /** @description The address/target settings (jsonb) */
+            /** @description The address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https) */
             params?: unknown;
             /** @description The transport name (the wire this endpoint speaks over), from the code registry */
             transport: string;
@@ -12941,7 +12941,7 @@ export interface components {
             node?: string;
             /** @description Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
             out_of_band?: boolean;
-            /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
+            /** @description Replace the address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
             /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
             transport?: string;
