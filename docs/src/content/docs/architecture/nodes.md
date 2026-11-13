@@ -155,12 +155,15 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   1 MB limit.
 - **A worklist grows only when the node learns.** An unchanged node's worklist is the same bytes on
   every build. Two fields come from what the node published back, not from what an operator
-  declared: an ssh or tls endpoint's key pin once the node trusts a key on first use, and the
-  endpoint's last rejection. Each rides every task of its endpoint, so a fleet's first contact grows
-  each reply once, and the size then holds until a pin is replaced or a gate moves. On the 3,000-system corporate soak the headquarters
-  node learned 440 https pins in its first minute; its 4,831 https tasks gained 71 bytes each,
-  taking the reply from 938 KB to 1,171 KB on the wire, past the 1 MB limit (#1872). Grouping the
-  wire by endpoint carries each pin once (#1583).
+  declared: an ssh endpoint's host key or a TLS endpoint's (tls, https, wss) certificate pin once the node
+  trusts a key on first use, and the endpoint's last rejection. Each rides every task of its
+  endpoint, so the size changes only when a pin is learned or dropped, a rejection appears or
+  clears, or an operator changes what the node runs. A replaced pin is the same length. On the
+  3,000-system corporate soak the headquarters node learned 440 https pins in its first minute; its
+  4,831 https tasks (about 11 per endpoint) gained 71 bytes each, taking the reply from 938 KB to
+  1,171 KB on the wire, past the 1 MB limit (#1872). A reply over the limit is refused on every
+  pull, so the node keeps running its last worklist. Grouping the wire by endpoint carries each pin
+  once (#1583).
 - **The server answers pulls from a bounded pool.** The node states how long it will wait in an
   `Omniglass-Timeout` header (a duration, so the clocks need not agree), and the server's deadline
   for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
