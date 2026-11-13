@@ -19,6 +19,10 @@ type alarmWire struct {
 	Severity  string `json:"severity"`
 	Message   string `json:"message"`
 	Active    bool   `json:"active"`
+	// The acknowledgement a health read carries beside the alarm (#990).
+	Acknowledged   bool    `json:"acknowledged"`
+	AcknowledgedAt *string `json:"acknowledged_at"`
+	AcknowledgedBy string  `json:"acknowledged_by"`
 }
 
 type healthWire struct {
@@ -139,6 +143,21 @@ func TestHealthAPI(t *testing.T) {
 	}
 	if len(role.Alarms) != 1 || role.Alarms[0].ID != raised.ID {
 		t.Fatalf("alarms = %+v, want the causing alarm named", role.Alarms)
+	}
+	if a := role.Alarms[0]; a.Acknowledged || a.AcknowledgedAt != nil || a.AcknowledgedBy != "" {
+		t.Fatalf("role alarm = %+v, want it unacknowledged before anybody acknowledges", a)
+	}
+
+	// Acknowledging is orthogonal to cleared (ADR-0109): the alarm stays raised
+	// and the role stays impaired, and the health read now says who looked and
+	// when, so the system page needs no trip to each component (#990).
+	c.do(ownerTok, http.MethodPost, ackPath("bar-1", raised.ID), nil, http.StatusOK)
+	role = health(ownerTok, "/systems/hq-1/health").Roles[0]
+	if len(role.Alarms) != 1 {
+		t.Fatalf("alarms after acknowledge = %+v, want the alarm still raised", role.Alarms)
+	}
+	if a := role.Alarms[0]; !a.Acknowledged || a.AcknowledgedAt == nil || a.AcknowledgedBy == "" {
+		t.Fatalf("role alarm after acknowledge = %+v, want acknowledged, with when and by whom", a)
 	}
 
 	// The system's members read carries each member's own verdict (#940): a

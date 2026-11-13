@@ -4753,6 +4753,16 @@ components:
     HealthAlarmBody:
       additionalProperties: false
       properties:
+        acknowledged:
+          description: Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised
+          type: boolean
+        acknowledged_at:
+          description: When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+          format: date-time
+          type: string
+        acknowledged_by:
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          type: string
         component:
           description: The component the alarm is on, by name
           type: string
@@ -4775,6 +4785,7 @@ components:
         - severity
         - message
         - raised_at
+        - acknowledged
       type: object
     HealthOutputBody:
       additionalProperties: false
