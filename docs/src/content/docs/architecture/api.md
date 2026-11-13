@@ -137,8 +137,11 @@ A name that no visible row answers to, or that more than one does, is a **404 na
 up**; when more than one answers, the 404 lists each in the spelling that does resolve
 (`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
 transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
-row then run on that resolved row exactly as they do for a uuid. The tree entities keep their own
-ambiguity refusal, a 409 listing candidates (#697; aligning the two is #1134). A write answers with
+row then run on that resolved row exactly as they do for a uuid. The tree entities answer the
+same way (#1134): a bare name that more than one visible component, system or location answers to is a
+404 naming the reference, each candidate spelled as its dotted address with its uuid beside it
+(`boi.17c.415a.$comp.display-1 (<uuid>)`), and either half resolves on the same route. A candidate the
+caller cannot read is neither listed nor counted. A write answers with
 the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a
 name is a lookup: automation that must never drift addresses `<owner>/<name>` or stores the uuid.
 
@@ -278,7 +281,7 @@ status mapping:
 | 400 | malformed request (bad JSON, an undeclared param) |
 | 401 | unauthenticated |
 | 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
-| 404 | not found, **including out-of-read-scope** (below) |
+| 404 | not found, **including out-of-read-scope** (below), and a name no single visible row answers to, which lists the rows that do |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
 | 422 | semantic validation (a driver attach missing a required input) |
 | 429 | throttled |

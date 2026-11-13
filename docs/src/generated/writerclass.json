@@ -140,6 +140,7 @@
       "tick-overrun-count",
       "webhook-post-count",
       "webhook-refusal-count",
+      "worker-busy-fraction",
       "worklist-task-count"
     ],
     "admits": [

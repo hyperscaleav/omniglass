@@ -258,7 +258,7 @@ describe("RolesPanel", () => {
     // Options carry the component's uuid, not its name (#627 review, the
     // pre-existing surface: staffing a role resolves the component
     // fleet-wide via scopedByName, ADR-0062, so a duplicate-named component
-    // 409s on a bare name regardless of scope; the picker must submit the
+    // 404s on a bare name regardless of scope; the picker must submit the
     // unambiguous uuid to keep the promise Task 15 already made elsewhere).
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", uuidFor("c-3"), uuidFor("c-2")]);
 

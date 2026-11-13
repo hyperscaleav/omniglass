@@ -38,7 +38,7 @@ func pathTestServer(t *testing.T) (*apiClient, string) {
 	return &apiClient{t: t, ctx: ctx, base: srv.URL}, ownerTok
 }
 
-// TestGetComponentAlarmsByAmbiguousNameIs409 is the task brief's own required
+// TestGetComponentAlarmsByAmbiguousNameIs404 is the task brief's own required
 // regression (Step 4): before mapAlarmErr delegated to the shared mapRefErr
 // (#627 Task 11), it sat on its own `default: 500` branch, so a duplicate-name
 // GET on a component-scoped nested route (not just the bare GET /components/
@@ -46,7 +46,7 @@ func pathTestServer(t *testing.T) (*apiClient, string) {
 // error the moment two rooms held the same name. Proves the wiring reaches a
 // SECOND route through the same mapper, not just the one every prior task
 // happened to test.
-func TestGetComponentAlarmsByAmbiguousNameIs409(t *testing.T) {
+func TestGetComponentAlarmsByAmbiguousNameIs404(t *testing.T) {
 	t.Parallel()
 	c, tok := pathTestServer(t)
 
@@ -55,11 +55,11 @@ func TestGetComponentAlarmsByAmbiguousNameIs409(t *testing.T) {
 	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "dup-alarm", "product": "generic-device", "parent": "holder-alarm"}, http.StatusCreated)
 
 	status, body := c.send(tok, http.MethodGet, "/components/dup-alarm/alarms", nil)
-	if status != http.StatusConflict {
-		t.Fatalf("GET .../alarms on an ambiguous component status = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("GET .../alarms on an ambiguous component status = %d, want 404\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-alarm") {
-		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 
