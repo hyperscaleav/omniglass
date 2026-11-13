@@ -333,9 +333,11 @@ them. A move or a lost node then strands no sender aimed at a live peer. A sende
 that is down loses its pushes until it is re-pointed: failover for a single push target is a
 virtual IP the operator runs across the pool's nodes, not something omniglass manages. A shared-port
 listener is not part of the component's unit and adds nothing to its cost; a listener on a session
-a node holds (a line it dialed out) stays with the component's assigned node. Taking these pushes at
-the server instead (#1158) is the likely default for most fleets, unencrypted as much of that
-traffic is; a pool's nodes are the option for a sender that should not cross a WAN.
+a node holds (a line it dialed out) stays with the component's assigned node. The edge is the
+default home for these pushes: much of that traffic is unencrypted, and a pool's nodes take it on the
+site's LAN rather than over public ingress. The server hosts webhooks and other standard public web
+traffic (ADR-1024); server-hosted shared-port listeners (#1158) are the exception, for a sender with
+no site node near it.
 
 **Capacity: expected cost balances, measured headroom guards.** The server balances on a
 component's **expected cost**, the sum over its tasks of 1 / interval (runs a second). A poll
