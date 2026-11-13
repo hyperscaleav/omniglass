@@ -3,6 +3,7 @@ package seed
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -184,12 +185,36 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 	if len(got) != 5 || got["high"].Rank != 40 || !got["high"].Outage || got["average"].Outage || got["disaster"].Color != "darkred" {
 		t.Errorf("severity_levels = %+v, want the five shipped levels with high and above an outage", doc.SeverityLevels)
 	}
-	if len(doc.EventRules) != 1 {
-		t.Fatalf("event_rules = %+v, want the one official rule", doc.EventRules)
+	var names []string
+	rules := map[string]factsEventRule{}
+	for _, r := range doc.EventRules {
+		names = append(names, r.Name)
+		rules[r.Name] = r
 	}
-	r := doc.EventRules[0]
-	if r.Name != "reachability-lost" || r.SampleKey != "endpoint-reachable" || r.Fire != `value == "down"` || r.Clear != `value == "up"` ||
-		r.FireSustain != "15s" || r.Severity != "high" || r.FireEventType != "condition-started" || r.ClearEventType != "condition-ended" {
-		t.Errorf("event_rules[0] = %+v", r)
+	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "disk-nearly-full", "retention-behind"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("event_rules = %v, want the official rules %v in file order", names, want)
+	}
+	for _, w := range []factsEventRule{
+		{Name: "reachability-lost", SampleKey: "endpoint-reachable", Fire: `value == "down"`, Clear: `value == "up"`, FireSustain: "15s", Severity: "high"},
+		{Name: "ingest-lag-high", SampleKey: "ingest-lag-max", Fire: "value > 30", Clear: "value <= 30", FireSustain: "2m", Severity: "warning"},
+		// A node three 30 s heartbeats quiet fires at once: the age already
+		// is the sustain (#1707).
+		{Name: "node-silent", SampleKey: "checkin-age", Fire: "value > 90", Clear: "value <= 90", Severity: "high"},
+		// The data directory's disk past 90 percent used, cleared below 85 so
+		// a disk hovering at the line does not flap (#1707).
+		{Name: "disk-nearly-full", SampleKey: "data-dir-disk-used-ratio", Fire: "value > 0.9", Clear: "value <= 0.85", FireSustain: "2m", Severity: "warning"},
+		// The retention pass's lane behind past its catch-up passes (#1629).
+		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
+	} {
+		w.FireEventType, w.ClearEventType = "condition-started", "condition-ended"
+		r := rules[w.Name]
+		if r.Label == "" || r.Description == "" {
+			t.Errorf("event rule %s has no label or description: %+v", w.Name, r)
+		}
+		r.Label, r.Description = "", ""
+		if r != w {
+			t.Errorf("event rule %s = %+v, want %+v", w.Name, r, w)
+		}
 	}
 }

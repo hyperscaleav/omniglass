@@ -18,7 +18,7 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 ## Nodes
 
-**Nodes** in the sidebar (with `node:read`, which must be **all-scope**, since a node is
+**Nodes** under Admin in the sidebar (with `node:read`, which must be **all-scope**, since a node is
 fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
 inventory. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
@@ -80,6 +80,16 @@ without one reads its transport name exactly.
     shape, never a value). The spec derives the transport, the target, and the endpoint's
     tasks: a poll task per poll function, a standing listen task per listener. The
     [Drivers](/guides/admin/drivers/) page shows each spec's menu before you attach it.
+
+    From the CLI or the API the same attach is one call. An input the spec declares as a number
+    takes a JSON number, so the SNMP port is `10161`, not `"10161"` (a string still works, and the
+    endpoint stores either as the string `"10161"`); a boolean, object or array is refused with a
+    422 naming the input:
+
+    ```bash
+    omniglass endpoint create --component amp-9 --driver snmp-generic \
+      --inputs '{"host":"10.20.4.61","port":10161,"community":"lab-community"}'
+    ```
 
   The owning component is the one you are on. Either face **derives the endpoint's tasks**
   for you, so a fresh endpoint is working collection with no second step.

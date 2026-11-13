@@ -44,6 +44,11 @@ func TestDriverAttachAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-9"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
+	for _, name := range []string{"amp-10", "amp-11", "amp-12"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
+			t.Fatalf("create component %s: %v", name, err)
+		}
+	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "public"},
@@ -152,5 +157,62 @@ func TestDriverAttachAPI(t *testing.T) {
 	})
 	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "stub") {
 		t.Fatalf("stub driver: status %d body %s, want 422 naming the stub", status, body)
+	}
+
+	// A number input takes a JSON number (#901): port is declared kind number,
+	// and 10161 lands as the stored string "10161". A string still works, and an
+	// edit accepts both.
+	storedPort := func(body []byte) string {
+		t.Helper()
+		var got struct {
+			Inputs map[string]string `json:"inputs"`
+		}
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatalf("decode endpoint %s: %v", body, err)
+		}
+		return got.Inputs["port"]
+	}
+	out = c.do(ownerTok, http.MethodPost, "/endpoints", map[string]any{
+		"driver": "snmp-generic", "component": "amp-10",
+		"inputs": map[string]any{"host": "10.20.4.62", "port": 10161, "community": "lab-community"},
+	}, http.StatusCreated)
+	if got := storedPort(out); got != "10161" {
+		t.Fatalf("numeric port stored as %q, want \"10161\": %s", got, out)
+	}
+	out = c.do(ownerTok, http.MethodPost, "/endpoints", map[string]any{
+		"driver": "snmp-generic", "component": "amp-11",
+		"inputs": map[string]any{"host": "10.20.4.63", "port": "10161", "community": "lab-community"},
+	}, http.StatusCreated)
+	if got := storedPort(out); got != "10161" {
+		t.Fatalf("string port stored as %q, want \"10161\": %s", got, out)
+	}
+	var made struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(out, &made); err != nil {
+		t.Fatalf("decode endpoint: %v", err)
+	}
+	out = c.do(ownerTok, http.MethodPatch, "/endpoints/"+made.ID, map[string]any{"inputs": map[string]any{"port": 10162}}, http.StatusOK)
+	if got := storedPort(out); got != "10162" {
+		t.Fatalf("numeric port edit stored as %q, want \"10162\": %s", got, out)
+	}
+	out = c.do(ownerTok, http.MethodPatch, "/endpoints/"+made.ID, map[string]any{"inputs": map[string]any{"port": "10163"}}, http.StatusOK)
+	if got := storedPort(out); got != "10163" {
+		t.Fatalf("string port edit stored as %q, want \"10163\": %s", got, out)
+	}
+
+	// A boolean, an object or an array is a 422 naming the key, on create and edit.
+	for name, bad := range map[string]any{"boolean": true, "object": map[string]any{"n": 1}, "array": []int{1}} {
+		status, body = c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{
+			"driver": "snmp-generic", "component": "amp-12",
+			"inputs": map[string]any{"host": "10.20.4.64", "port": bad, "community": "lab-community"},
+		})
+		if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "inputs.port") {
+			t.Fatalf("%s port on create: status %d body %s, want 422 naming inputs.port", name, status, body)
+		}
+		status, body = c.send(ownerTok, http.MethodPatch, "/endpoints/"+made.ID, map[string]any{"inputs": map[string]any{"port": bad}})
+		if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "inputs.port") {
+			t.Fatalf("%s port on edit: status %d body %s, want 422 naming inputs.port", name, status, body)
+		}
 	}
 }

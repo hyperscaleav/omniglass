@@ -180,6 +180,9 @@ func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return 
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) WriteAuthEventFor(context.Context, string, string, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil
@@ -460,8 +463,17 @@ func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) erro
 func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult, error) {
 	return LandResult{}, nil
 }
+func (UnimplementedGateway) RecordTermedBatch(context.Context, TermedBatch) error {
+	return nil
+}
 func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
+}
+func (UnimplementedGateway) CountTelemetryReceipts(context.Context, string, time.Time, time.Time, time.Time, time.Time) (ReceiptWindow, error) {
+	return ReceiptWindow{}, nil
+}
+func (UnimplementedGateway) ListClosedLoopPollTargets(context.Context) ([]ClosedLoopPollTarget, error) {
+	return nil, nil
 }
 func (UnimplementedGateway) ListComponentLogSources(context.Context, string, time.Duration) ([]string, error) {
 	return nil, nil
@@ -480,6 +492,12 @@ func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatc
 }
 func (UnimplementedGateway) DeleteNode(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
+}
+func (UnimplementedGateway) EnsurePlatform(context.Context) error {
+	return nil
+}
+func (UnimplementedGateway) EnsureServerComponent(context.Context, string) (string, error) {
+	return "", nil
 }
 func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
 	return nil, nil
@@ -757,6 +775,9 @@ func (UnimplementedGateway) PruneMetricTrends(context.Context, time.Time, int) (
 func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RetentionStatus(context.Context) (RetentionStatus, error) {
+	return RetentionStatus{}, nil
+}
 func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
 	return 0, nil
 }
@@ -780,6 +801,18 @@ func (UnimplementedGateway) RecordWebhookCounts(context.Context, []WebhookCount)
 }
 func (UnimplementedGateway) CollectionSettings(context.Context) (settings.CollectionSettings, error) {
 	return settings.CollectionSettings{}, nil
+}
+func (UnimplementedGateway) DatabaseSettings(context.Context) (settings.DatabaseSettings, error) {
+	return settings.DatabaseSettings{}, nil
+}
+func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
+	return nil
+}
+func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CommandQueueHealth(context.Context, time.Time) (CommandQueueRead, error) {
+	return CommandQueueRead{}, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
@@ -891,6 +924,15 @@ func (UnimplementedGateway) PutIdentityBinding(context.Context, string, string, 
 func (UnimplementedGateway) DeleteIdentityBinding(context.Context, string, string, string, string, IdentityBindingScopes) error {
 	return nil
 }
+func (UnimplementedGateway) CreateComponentDependency(context.Context, string, string, ComponentDependencySpec, scope.Set, scope.Set) (*ComponentDependency, error) {
+	return &ComponentDependency{}, nil
+}
+func (UnimplementedGateway) ListComponentDependencies(context.Context, string, scope.Set) (*ComponentDependencyList, error) {
+	return &ComponentDependencyList{}, nil
+}
+func (UnimplementedGateway) DeleteComponentDependency(context.Context, string, string, string, string, scope.Set, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
@@ -956,6 +998,14 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duratio
 
 func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Set, scope.Set) (*FleetView, error) {
 	return nil, nil
+}
+
+func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string, time.Time) error {
+	return nil
 }
 
 func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {

@@ -12,36 +12,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
-	"gopkg.in/yaml.v3"
 )
 
 // shippedSpec is a seeded driver's spec, parsed as the write path parses it.
 func shippedSpec(t *testing.T, id string) *driver.Spec {
 	t.Helper()
-	var doc struct {
-		Drivers []struct {
-			ID   string         `yaml:"id"`
-			Spec map[string]any `yaml:"spec"`
-		} `yaml:"drivers"`
-	}
-	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
+	sp, err := ShippedDriverSpec(id)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range doc.Drivers {
-		if d.ID == id {
-			raw, err := json.Marshal(d.Spec)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sp, err := driver.Parse(raw)
-			if err != nil {
-				t.Fatalf("parse %s: %v", id, err)
-			}
-			return sp
-		}
-	}
-	t.Fatalf("no shipped driver %s", id)
-	return nil
+	return sp
 }
 
 // bake carries a function whole with each emit's lane, as attach does.

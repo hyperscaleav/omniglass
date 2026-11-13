@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { A } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 import Page from "../components/Page";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
@@ -89,7 +89,11 @@ export default function Simulation(): JSX.Element {
   const [adding, setAdding] = createSignal(false);
   const [addingSystem, setAddingSystem] = createSignal(false);
   const [added, setAdded] = createSignal<AddSimSystemResult | null>(null);
-  const [open, setOpen] = createSignal<string | null>(null);
+  // The open drawer is the address's ?c=, so another page can link straight
+  // to a simulated component (Platform health's device table, #1647).
+  const [params, setParams] = useSearchParams();
+  const open = () => (Array.isArray(params.c) ? params.c[0] : params.c) || null;
+  const setOpen = (id: string | null) => setParams({ c: id ?? undefined });
 
   // The highlight: each poll's risen components get a token; a timer clears the
   // token it set, so a component hit again before its highlight ends keeps the

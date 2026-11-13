@@ -52,6 +52,8 @@ var referenceFields = map[string]string{
 	"secret_type_id":     "secret_type",
 	// A notification target's bound credential (#618), by name beside its uuid.
 	"secret_id": "secret",
+	// A dependency edge's upstream component (#1648), by name beside its uuid.
+	"upstream_id": "upstream",
 	// A person target's group or person (#1341), by name beside its uuid.
 	"principal_group_id": "principal_group",
 	// An action rule's notification type (#618), by name beside its uuid.

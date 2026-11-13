@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,6 +34,52 @@ type DeviceProfile struct {
 	// Webhook declares how the simulated service is subscribed to a
 	// webhook receiver (#1370): absent for a device that posts none.
 	Webhook *WebhookSubscribe `yaml:"webhook"`
+	// Push declares a push face (#1743): absent for a device that pushes
+	// nothing.
+	Push *Push `yaml:"push"`
+}
+
+// Push is a push face: the device is an outside actor that holds a bearer
+// token and posts POST /telemetry:push to the server on its own cadence, as
+// a first-party integration does, for every system its grant names (it reads
+// them off GET /auth/me). Body is a template rendered per system to the push
+// route's JSON body, over the device's state and .Owner (the system's id)
+// and .Now (the device's clock).
+type Push struct {
+	Every string `yaml:"every"`
+	Body  string `yaml:"body"`
+}
+
+// minPushEvery is the shortest cadence a push face may declare: a pusher is
+// a sender of record, not a load generator.
+const minPushEvery = time.Second
+
+// PushEvery is the face's cadence. Its error is the reason a profile is
+// refused at load.
+func (p *Push) PushEvery() (time.Duration, error) {
+	every, err := time.ParseDuration(p.Every)
+	if err != nil {
+		return 0, fmt.Errorf("push.every %q is not a duration", p.Every)
+	}
+	if every < minPushEvery {
+		return 0, fmt.Errorf("push.every %s is under %s", every, minPushEvery)
+	}
+	return every, nil
+}
+
+// validatePush refuses a push face that could never push: no cadence, or no
+// body to send.
+func validatePush(p *DeviceProfile) error {
+	if p.Push == nil {
+		return nil
+	}
+	if _, err := p.Push.PushEvery(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(p.Push.Body) == "" {
+		return fmt.Errorf("push.body is empty: a push face renders the push route's body")
+	}
+	return nil
 }
 
 // WebhookSubscribe names the route a simulated service's admin would call to
@@ -41,6 +88,16 @@ type DeviceProfile struct {
 // webhook endpoint (ADR-1370), so its posts flow from the start.
 type WebhookSubscribe struct {
 	Subscribe string `yaml:"subscribe"`
+	// Driver names the shipped driver whose endpoint receives the service's
+	// posts, for a lab that seeds the service as a webhook sender (#1747):
+	// the plan reads the endpoint's signing input and the room identity
+	// from it. Empty when the service is only ever subscribed by hand.
+	Driver string `yaml:"driver"`
+	// Provision is the path of a POST route taking a JSON body of id that
+	// adds one room to the service's account, as its admin would. The
+	// simulator calls it for each identity bound on the service's webhook
+	// endpoint, so the service's reports name every bound room.
+	Provision string `yaml:"provision"`
 }
 
 // ProductVariant is one more product a profile simulates.
@@ -706,6 +763,9 @@ func (s *Store) loadDevices(fsys fs.FS, dir string, surfaces map[string]Surface)
 			return fmt.Errorf("%s: %w", full, err)
 		}
 		if err := validateComputed(&p); err != nil {
+			return fmt.Errorf("%s: %w", full, err)
+		}
+		if err := validatePush(&p); err != nil {
 			return fmt.Errorf("%s: %w", full, err)
 		}
 		s.Devices[p.Name] = &p

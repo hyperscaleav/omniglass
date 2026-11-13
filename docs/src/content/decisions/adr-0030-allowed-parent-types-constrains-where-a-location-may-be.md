@@ -47,5 +47,8 @@ summary: "`allowed_parent_types` constrains where a location may be placed"
   read-only-in-edit Parent field: a leaf or must-nest constraint there is closer to a boolean than
   an ordered set, deferred until a concrete need names the shape, and extending the same
   editable-Parent pattern to two more pages is a follow-up, not bundled here.
+- **Reclassify in place (#251):** a third enforcement point. `UpdateLocation` checks the final type
+  against the current parent whenever `location_type` actually changes (a restated type is not a change),
+  with the same 422 as a move; grandfathered rows stay untouched until an operator edits their type.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.

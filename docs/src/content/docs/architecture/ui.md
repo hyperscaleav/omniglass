@@ -20,7 +20,19 @@ the CRUD lists, and the detail views it opens. Its core is one pure model,
 sits, folds single-child chains, counts what a row holds in the registry's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
 renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
-place from `allowed_parent_types`, never from a type's name (ADR-0137). The views model, the renderer library, and composable
+place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
+(`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
+projection (`GET /views/platform`) with the running build, its uptime, the platform system's
+verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
+figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
+alarm on its keys) and a row per node of its platform figures, each row opening onto the node's
+platform component. Its panels and columns are the groups the view returns, named with each key's
+catalog description, so the page holds no key list. Above the table it draws **where work is lost**
+(#1646): the hops the view returns, each read from the same three delivery keys with one loss rule,
+and a hop's explainer naming its keys and its components (`components/PipelineFlow.tsx`). With a
+simulator connected the page gains a closed-loop section (#1647, `GET /views/platform/simulation`):
+each node's hops as loss ratios over a sliding window, with impaired, restarted and warming-up
+readings, its protocols and its simulated devices. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
@@ -68,6 +80,18 @@ components open in blades), editing through the one `EntityForm` (ADR-0137). The
 panel is the glance (verdict, why, context, identity and tags) and the configuration
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
+
+## Name-shaped addresses (#759, #853)
+
+A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
+
+```
+/components/mic-1
+/systems/boardroom
+/locations/hq
+```
+
+**A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
 
 ## One renderer library, two composition modes
 
@@ -181,6 +205,12 @@ Two layers, deliberately decoupled:
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
+**A breadcrumb crumb is a link.** The `Breadcrumb` primitive renders each crumb that has a destination as a
+real `<a href>` (the router's `A`) inside `<nav aria-label="Breadcrumb">`: a click navigates in-app, a
+middle-click opens a tab, the address can be copied, a screen reader announces a link in a navigation
+landmark, and the target is in the DOM. A caller hands the crumb an `href`, the address it already knows;
+the last crumb, the current page, has none and renders as plain text marked `aria-current="page"`.
+
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
@@ -223,13 +253,17 @@ interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
-outline of places. **Nodes**, the collection daemons, are monitored and
-scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
-entry rather than sitting in Admin. **Endpoints and tasks are not nav items**: an endpoint is a
+outline of places. **Nodes**, the collection daemons, are infrastructure rather than fleet
+inventory, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
+`node:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the
-platform-preferences page.
+Admin is the renamed Settings group: Users, Roles, Groups, Audit, Nodes, Status (the Platform
+health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
+here behind the same `node:read` gate as Nodes, whose rows it reads), plus the live Settings leaf, the
+platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
+alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
+longer title.
 
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:

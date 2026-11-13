@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("OMNIGLASS_DSN", "")
@@ -59,5 +62,23 @@ func TestLoadReadyFile(t *testing.T) {
 	t.Setenv("OMNIGLASS_READY_FILE", "/run/omniglass/ready.json")
 	if got := Load().ReadyFile; got != "/run/omniglass/ready.json" {
 		t.Errorf("ReadyFile = %q, want the configured path", got)
+	}
+}
+
+// A server is named for its host unless OMNIGLASS_SERVER_NAME says otherwise:
+// the name its own platform component carries, so two servers on one
+// database are two components (#1627).
+func TestLoadServerName(t *testing.T) {
+	t.Setenv("OMNIGLASS_SERVER_NAME", "")
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = DefaultServerName
+	}
+	if got := Load().ServerName; got != host {
+		t.Errorf("ServerName = %q, want the hostname %q", got, host)
+	}
+	t.Setenv("OMNIGLASS_SERVER_NAME", "api-east-1")
+	if got := Load().ServerName; got != "api-east-1" {
+		t.Errorf("ServerName = %q, want the configured name", got)
 	}
 }

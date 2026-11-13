@@ -241,7 +241,7 @@ describe("Subscriptions", () => {
   it("leads back to the profile from its breadcrumb", async () => {
     stubFetch(refuse);
     mount({ rules: [] });
-    fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Profile" }));
     expect(await screen.findByTestId("profile-page")).toBeTruthy();
   });
 });

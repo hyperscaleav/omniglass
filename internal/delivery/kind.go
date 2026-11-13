@@ -1,0 +1,55 @@
+// Package delivery is the uniform loss measurement (#1641): every telemetry
+// kind at every hop reads as one ratio, loss = (in - out) / in, where out is
+// what is accounted for (in the store, or held for the operator). A healthy pipeline reads exactly 0 for
+// every kind, so the number needs no knowledge of a kind's internals to read.
+//
+// The package is pure arithmetic and bookkeeping: the node's spool stamps
+// each batch from a Ledger, the ingest counts each item's Outcome in a Tally,
+// and a reader reconciles the landed receipts of a window (Reconcile) into
+// per-kind totals. It does no I/O.
+package delivery
+
+// Kind is a telemetry kind, the value a loss row is keyed on (never part of a
+// key name).
+type Kind string
+
+const (
+	Metric   Kind = "metric"
+	Property Kind = "property"
+	Event    Kind = "event"
+	Log      Kind = "log"
+)
+
+// Kinds is every kind, in the order a table prints them.
+var Kinds = []Kind{Metric, Property, Event, Log}
+
+// Hop is a stretch of the pipeline a kind crosses, measured on its own.
+type Hop string
+
+// The hops #1641 names. The node and ingest hops are read from the receipts,
+// the node's from the account its ledger carries (#1692); the schedule hop
+// from the counts each node's dispatcher writes as platform metrics (#1693);
+// the sim hop from the lab's closed-loop brackets, per protocol (#1694); the
+// publish hop from the push lane turn counts the server writes as platform
+// metrics (#1746). The node and the server also write their own hop's
+// delivery as platform metrics (#1659).
+const (
+	// Schedule is the hop from a run falling due to the run being made.
+	Schedule Hop = "schedule"
+	// Sim is the hop between a simulated device and the node's task: the
+	// lab's closed loop, a lab measure row and never a platform metric.
+	Sim Hop = "sim"
+	// Node is the hop from a run's output to the stream: the node's spool,
+	// settled when the stream acks a batch or the spool gives it up.
+	Node Hop = "node"
+	// Ingest is the hop from a node's spool to the store: a batch the node
+	// minted, landed (or not) by the server.
+	Ingest Hop = "ingest"
+	// Publish is the push lane's turn (#1746): from a pusher's call to the
+	// server's publisher taking its turn to mint the batch. It counts calls,
+	// not items, so its row has no kind.
+	Publish Hop = "publish"
+)
+
+// Hops is every hop name #1641 defines, and the publish hop #1746 added.
+var Hops = []Hop{Schedule, Sim, Node, Ingest, Publish}

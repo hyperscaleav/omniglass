@@ -152,8 +152,14 @@ omniglass component impairment set panel-1                   # repaired
 ```
 
 Unplugging closes the monitoring loop with nobody in between. Once the component's endpoint has
-read `down` for the official reachability rule's fire sustain ([the shipped rule](/guides/admin/rules/#the-rule-that-ships)),
+read `down` for the official reachability rule's fire sustain ([the shipped rules](/guides/admin/rules/#the-rules-that-ship)),
 the rule opens an alarm at its severity on it, the component goes to outage and stops filling its roles, and its system's verdict follows (degraded or
 out, as the role's impact says). **Catalog > Actions > Rules** shows the rule's open alarm while it
 lasts. Repair it and the next `up` reading clears the alarm and the verdict recovers. The
 [rules guide](/guides/admin/rules/) walks the same loop with a rule of your own.
+
+Loss shows from the far end too. [Platform health](/guides/operator/platform-health/#with-a-simulator)
+sets what each simulated device saw beside what the node sent and the server collected: drop an snmp
+device's packets and the node's **sent, not received** gap for snmp opens, read as impaired rather than
+lost, while the device's received count falls; repair it and the attribution clears once the window
+slides past the change.

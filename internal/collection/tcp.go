@@ -23,9 +23,13 @@ type TCPDialer interface {
 // says nothing about the target.
 func NewTCPDialer() TCPDialer { return tcpDialer{} }
 
-type tcpDialer struct{}
+// NewTalliedTCPDialer is the real TCP-connect probe counting each connection
+// it opens on the node's tally (#1639): a connection, never a request.
+func NewTalliedTCPDialer(tally *RequestTally) TCPDialer { return tcpDialer{tally: tally} }
 
-func (tcpDialer) Dial(ctx context.Context, addr string, timeout time.Duration) (float64, Reachability, error) {
+type tcpDialer struct{ tally *RequestTally }
+
+func (p tcpDialer) Dial(ctx context.Context, addr string, timeout time.Duration) (float64, Reachability, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
@@ -39,6 +43,7 @@ func (tcpDialer) Dial(ctx context.Context, addr string, timeout time.Duration) (
 		return 0, "", err // resolve/setup failure: inconclusive, not a port verdict
 	}
 	elapsed := float64(time.Since(start)) / float64(time.Millisecond)
+	p.tally.Connected(TallyTCP)
 	_ = conn.Close()
 	return elapsed, Responded, nil
 }

@@ -99,6 +99,38 @@ func TestCommandTypeAPI(t *testing.T) {
 	// "settle immediately" (ADR-0108), and what `reboot` carries.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "fire-and-forget-x", "settle_window_seconds": 0}, http.StatusCreated)
 
+	// The disruption fields (#1651) round-trip on create and read, the shipped
+	// reboot carries them, and the shapes that mean nothing are a 422 naming
+	// the field.
+	var disrupt struct {
+		Disruptive   bool `json:"disruptive"`
+		QuietSeconds int  `json:"quiet_seconds"`
+		HoldSeconds  int  `json:"hold_seconds"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
+		"name": "power-cycle", "disruptive": true, "quiet_seconds": 20, "hold_seconds": 120,
+	}, http.StatusCreated), &disrupt)
+	if !disrupt.Disruptive || disrupt.QuietSeconds != 20 || disrupt.HoldSeconds != 120 {
+		t.Fatalf("disruptive create = %+v, want true 20 120", disrupt)
+	}
+	disrupt = struct {
+		Disruptive   bool `json:"disruptive"`
+		QuietSeconds int  `json:"quiet_seconds"`
+		HoldSeconds  int  `json:"hold_seconds"`
+	}{}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/reboot", nil, http.StatusOK), &disrupt)
+	if !disrupt.Disruptive || disrupt.QuietSeconds != 15 || disrupt.HoldSeconds != 300 {
+		t.Fatalf("shipped reboot = %+v, want disruptive with quiet 15 and hold 300", disrupt)
+	}
+	if body := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
+		"name": "short-hold", "disruptive": true, "quiet_seconds": 30, "hold_seconds": 30,
+	}, http.StatusUnprocessableEntity); !strings.Contains(string(body), "hold_seconds") {
+		t.Fatalf("hold not over quiet = %s, want a 422 naming hold_seconds", body)
+	}
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "quiet-only", "quiet_seconds": 5}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/power-cycle", map[string]any{"hold_seconds": 10}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/power-cycle", map[string]any{"quiet_seconds": -1}, http.StatusUnprocessableEntity)
+
 	// A duplicate name is a 409.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-dimmer"}, http.StatusConflict)
 

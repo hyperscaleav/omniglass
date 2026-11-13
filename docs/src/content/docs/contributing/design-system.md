@@ -212,9 +212,17 @@ confirm whose body has to teach cannot be a native prompt.
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
-`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`PanelFooter`, `Badge`, `Page`, `Breadcrumb` (its crumbs are links), `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
 `BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
 the `Sidebar` / `TopBar` shell.
+
+**A polled list keys its rows (`KeyedFor`).** A polled read hands back fresh objects every time, and
+Solid's `For` rebuilds a row whose item is a new object, so over a poll every row loses the state it
+holds: an expanded chart closes, a tooltip vanishes under the pointer, a disclosure the operator
+closed opens again. `KeyedFor` takes the list and a key (`by`) and keeps a row mounted while its key
+is in the list, handing it the key's newest item, so the row's state survives the poll and its
+figures follow it. Platform health renders every level with it (server, panel, key, route, node,
+column).
 
 **A toast points at an outcome; it never holds the only copy.** Any surface raises one with
 `pushToast` (a tone, a title, an optional live body and one action), and the shell's `Toaster` draws
@@ -249,6 +257,10 @@ of the remaining pages is #784.
   is being edited, with the switch made once rather than per field. It takes the edit slot from
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
   provider (the tree pages render one body in both places).
+
+**A placeholder is not a label.** Every control gets its name from a `<label for>` (or an
+`aria-label` where no label is shown). A placeholder can say what an empty field means, but it is
+not the control's name: it vanishes once there is a value, and a screen reader cannot rely on it (#973).
 
 **A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
 as broken rather than as read-only, and an official-row blade rendered five of them at once, directly

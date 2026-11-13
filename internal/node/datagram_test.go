@@ -260,7 +260,7 @@ func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
 	if _, err := collectProbe(t.Context(), runner, task, m); err != nil {
 		t.Fatal(err)
 	}
-	gt, ok := m.blocked("ep-1", rungResponsive)
+	gt, ok := m.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.class != driver.ClassAuth || gt.rung != rungResponsive {
 		t.Fatalf("gate = %+v, %v; want the transport rung gated, class auth", gt, ok)
 	}
@@ -406,7 +406,7 @@ func TestAUDPEndpointReportsItsListenersPushes(t *testing.T) {
 	held.router.Claim(driver.LineMessage("EVT INPUT dp1"))
 	held.router.Unclaimed(driver.LineMessage("NOISE"))
 	m.closeDatagram("ep-1", held, "rebinding")
-	report := newCollectionReport(time.Minute, t0)
+	report := newCollectionReport(time.Minute, 0, t0)
 	m.reportPushes(report)
 	got := reportValues(t, report.take(t0.Add(time.Minute), publishTasks([]collection.TaskSpec{task})))["l1"]
 	if got[probekeys.PushMessageCount] != 1 || got[probekeys.PushUnclaimedCount] != 1 {
@@ -519,7 +519,7 @@ func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
 	}
 	held := rejection.Gate{Rung: string(rungResponsive), Class: driver.ClassAuth, Fingerprint: "fp-1"}.String()
 	m.reconcile(gated("fp-1", held))
-	if _, ok := m.blocked("ep-1", rungResponsive); !ok {
+	if _, ok := m.refusedAt("ep-1", rungResponsive); !ok {
 		t.Fatal("the carried-back gate was not adopted")
 	}
 	time.Sleep(300 * time.Millisecond)
@@ -574,4 +574,64 @@ func TestTheUDPRequestRungTimesAnErrorShapedAnswer(t *testing.T) {
 	if rtt, ok := got[collection.SignalUDPResponseTime]; !ok || rtt.Value <= 0 {
 		t.Fatalf("udp-response-time = %+v, want the answer's time", rtt)
 	}
+}
+
+// A panic in an endpoint's arm goroutine (#1636) is recovered, never the
+// node's end, and the arm runs again on the next reconcile: the component
+// may never have heard the subscribe the panic cut short.
+func TestAUDPArmPanicIsRecoveredAndReArmsOnTheNextReconcile(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, nvpAnswers)
+	c := newCapture()
+	hooks := c.hooks(&transitionLog{})
+	record := hooks.arm
+	var once sync.Once
+	hooks.arm = func(taskID, endpoint, line, reply string, err error) {
+		once.Do(func() { panic("arm hook blew up") })
+		record(taskID, endpoint, line, reply, err)
+	}
+	m := newSessionManager(map[string]collection.SessionDialer{}, hooks)
+	t.Cleanup(m.closeAll)
+	tasks := []collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr()))}
+	m.reconcile(tasks)
+	eventually(t, "the arm the panic cut short", func() bool { return peer.count("SUBSCRIBE INPUT") == 1 })
+	h := m.datagrams["ep-1"]
+	eventually(t, "the arm goroutine's end", func() bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return !h.arming
+	})
+	m.reconcile(tasks)
+	eventually(t, "the re-arm", func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return len(c.arms) == 1
+	})
+	if n := peer.count("SUBSCRIBE INPUT"); n != 2 {
+		t.Fatalf("the component got SUBSCRIBE INPUT %d times, want the cut-short arm and the re-arm", n)
+	}
+	m.reconcile(tasks)
+	time.Sleep(100 * time.Millisecond)
+	if n := peer.count("SUBSCRIBE INPUT"); n != 2 {
+		t.Fatalf("a clean arm re-armed again: %d subscribes", n)
+	}
+}
+
+// A socket whose reader died (a panic on its routing) is rebound and
+// re-armed on the next reconcile, not held dead until the worklist moves.
+func TestAUDPSocketWhoseReaderDiedIsReboundOnTheNextReconcile(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, nvpAnswers)
+	c := newCapture()
+	m := newDatagramManager(t, c)
+	tasks := []collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr()))}
+	m.reconcile(tasks)
+	eventually(t, "the arm at open", func() bool { return peer.count("SUBSCRIBE INPUT") == 1 })
+	dead := m.datagrams["ep-1"].sock
+	_ = dead.Close()
+	m.reconcile(tasks)
+	if m.datagrams["ep-1"] == nil || m.datagrams["ep-1"].sock == dead {
+		t.Fatal("the dead socket was kept")
+	}
+	eventually(t, "the re-arm on the new socket", func() bool { return peer.count("SUBSCRIBE INPUT") == 2 })
 }

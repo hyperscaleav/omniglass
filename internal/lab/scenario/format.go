@@ -9,7 +9,8 @@ import (
 
 // WritePlan prints a plan as `lab run --plan` shows it: a headline, the
 // systems of each standard per archetype with its sites, floors and totals,
-// each site's systems and components, and the components per product. The
+// each site's systems and components, the components per product, and the
+// pushers per profile when the scenario declares any. The
 // per-site table is narrow, so it reads at the scenario's most sites.
 func WritePlan(w io.Writer, p *Plan) error {
 	label := p.Scenario
@@ -50,6 +51,17 @@ func WritePlan(w io.Writer, p *Plan) error {
 	tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "PRODUCT\tCOMPONENTS")
 	for _, c := range p.Totals.Products {
+		fmt.Fprintf(tw, "%s\t%d\n", c.Name, c.Count)
+	}
+	if err := tw.Flush(); err != nil || len(p.Pushers) == 0 {
+		return err
+	}
+
+	// The pushers by profile: how many, never a token (#1743).
+	fmt.Fprintln(w)
+	tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "PUSHER\tCOUNT")
+	for _, c := range p.Pushers {
 		fmt.Fprintf(tw, "%s\t%d\n", c.Name, c.Count)
 	}
 	return tw.Flush()

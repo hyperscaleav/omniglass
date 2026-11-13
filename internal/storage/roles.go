@@ -513,7 +513,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return fmt.Errorf("storage: begin assign role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction); err != nil {
+	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -523,8 +523,9 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 }
 
 // assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
-// a simulated system) can create it alongside the rest and commit once.
-func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
+// a simulated system) can create it alongside the rest and commit once. A composite passes a
+// non-nil deferred to recompute health once at its own end (#915); nil recomputes here.
+func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set, deferred *healthDeferral) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -693,7 +694,7 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	// Staffing changes health: the role may have just reached quorum. The system is
 	// named explicitly rather than left to the component's assignments, so assign
 	// and unassign take the same path.
-	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
+	if err := p.recomputeOrDefer(ctx, tx, deferred, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}); err != nil {
 		return err
 	}
 	return nil

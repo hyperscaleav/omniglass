@@ -116,9 +116,9 @@ function client(me: Me) {
   return qc;
 }
 
-function mount(node: () => import("solid-js").JSX.Element, me: Me = admin) {
+function mount(node: () => import("solid-js").JSX.Element, me: Me = admin, url = "/") {
   const qc = client(me);
-  window.history.pushState({}, "", "/");
+  window.history.pushState({}, "", url);
   const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router>
@@ -256,6 +256,12 @@ describe("the Simulation page", () => {
     mount(() => <Simulation />);
     const rows = await screen.findAllByTestId("sim-row");
     fireEvent.click(rows[0]);
+    expect(await screen.findByTestId("sim-status")).toBeTruthy();
+  });
+
+  it("opens the drawer a link names in its ?c= parameter", async () => {
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}`);
     expect(await screen.findByTestId("sim-status")).toBeTruthy();
   });
 

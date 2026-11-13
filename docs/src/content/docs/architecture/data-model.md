@@ -130,6 +130,12 @@ fleet: {
     parent_id: uuid {constraint: foreign_key}
     product_id: uuid {constraint: foreign_key}
   }
+  component_dependency: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
+    upstream_id: uuid {constraint: foreign_key}
+  }
   endpoint: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -465,11 +471,17 @@ collection: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
+    platform_component_id: uuid {constraint: foreign_key}
   }
   node_log: {
     shape: sql_table
     id: bigint {constraint: primary_key}
     node_id: uuid {constraint: foreign_key}
+  }
+  platform_server: {
+    shape: sql_table
+    name: text {constraint: primary_key}
+    platform_component_id: uuid {constraint: foreign_key}
   }
   sim_impairment: {
     shape: sql_table
@@ -596,8 +608,10 @@ collection.identity_binding.conduit_id -> fleet.component.id
 collection.identity_binding.property_type_id -> telemetry.property_type.id
 collection.identity_binding.system_id -> fleet.system.id
 collection.node.location_id -> fleet.location.id
+collection.node.platform_component_id -> fleet.component.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
+collection.platform_server.platform_component_id -> fleet.component.id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
 collection.unbound_identity.conduit_id -> fleet.component.id
@@ -621,6 +635,8 @@ content.tag_binding.tag_id -> content.tag.id
 fleet.component.location_id -> fleet.location.id
 fleet.component.parent_id -> fleet.component.id
 fleet.component.product_id -> catalog.product.id
+fleet.component_dependency.component_id -> fleet.component.id
+fleet.component_dependency.upstream_id -> fleet.component.id
 fleet.endpoint.component -> fleet.component.id
 fleet.endpoint.driver_id -> catalog.driver.id
 fleet.endpoint.node_name -> collection.node.principal_id

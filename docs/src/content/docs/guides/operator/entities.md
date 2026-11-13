@@ -131,6 +131,14 @@ identity pages.
   (its default system, its label, what it inherits), so that act takes `component:update` over the
   component as well as `system:update` over the system; a **Deploy** grant over both covers it.
 
+  The same slot is on the component's edit face as **Memberships**, so a system you chose at create is
+  not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
+  change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
+  remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
+  outside your `system:update` scope, or a role the component still fills there), the reason shows in
+  the form and it stays in edit. Without `system:update` the field reads but does not edit. The
+  system's member list updates without a reload.
+
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
   placement, changeable later, see Edit), the **label** is the friendly string a human reads
@@ -442,7 +450,9 @@ and where each command stands, newest first. A command in flight wears its phase
 for its node to take it), **delivered** (its node has it, and the next observation settles it),
 **awaiting reply** or **awaiting observation**, with its settle window counting down beside it; a
 terminal one reads **settled**, **failed** or **timed out**, with why. Hover the phase for what it
-means for that command. The list refreshes every second while anything is in flight.
+means for that command. A fire-and-forget command such as a reboot has nothing to observe, so its
+node's report decides it: **settled** once the node carried it out, **failed** when it could not,
+and **timed out** when no report arrives within ten minutes of its issue. The list refreshes every second while anything is in flight.
 
 The arrow at a row's end opens the command in place: its **arc**, the issue's time and each later
 step (delivered to its node, answered, settled) as how long after the issue it came; **why** it

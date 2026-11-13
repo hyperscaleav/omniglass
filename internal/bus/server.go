@@ -18,8 +18,11 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -46,40 +49,58 @@ type Config struct {
 	// DBPoolSize is the database pool's size, the cap on WorklistWorkers;
 	// zero means no cap.
 	DBPoolSize int
+	// Metrics is the process's platform metric recorder (#1627), which the
+	// pipeline records into (#1628); nil means a recorder of the Server's own,
+	// which nothing reports.
+	Metrics *platformmetric.Recorder
+	// PlatformComponentID is the server's own component in the platform
+	// system, where its retention figures land (#1629); empty writes none.
+	PlatformComponentID string
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
 type Server struct {
-	ns              *server.Server
-	nc              *nats.Conn
-	store           Store
-	subs            []*nats.Subscription
-	consumeCtx      jetstream.ConsumeContext // the telemetry durable consumer's pull loop
-	js              jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
-	streamEpoch     string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
-	internalToken   string
-	sims            *simhub.Registry   // the simulators beside this server's nodes
-	stopSweep       chan struct{}      // ends the settlement sweep
-	stopReconcile   context.CancelFunc // ends the rule reconcile loop
-	stopCalc        context.CancelFunc // ends the calc tick
-	stopPrune       context.CancelFunc // ends the receipt retention pass
-	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
-	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
-	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
-	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
-	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
-	lane            laneTally          // the consumer lane's batches and busy time (#1517)
-	stopLaneLog     context.CancelFunc // ends the lane tally's log line
-	sweepStop       sync.Once
-	sweepDone       sync.WaitGroup
-	worklistSizes   worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
-	worklistCounts  worklistCounts     // how worklist pulls ended (#1577)
-	worklistWorkers int                // how many pulls the pool builds at once (#1577)
-	worklistQueue   chan worklistPull  // pulls waiting for a worker
-	worklistCtx     context.Context    // the pool's life; a pull's build runs under it
-	stopWorklist    context.CancelFunc // ends the pool and cancels builds in flight
-	worklistDone    sync.WaitGroup     // the pool's workers
-	ownStoreDir     string             // non-empty when the Server created (and must clean) it
+	ns                *server.Server
+	nc                *nats.Conn
+	store             Store
+	subs              []*nats.Subscription
+	consumeCtx        jetstream.ConsumeContext // the telemetry durable consumer's pull loop
+	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	push              *delivery.Publisher      // the push lane's ledger, one boot per server process (#1696)
+	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
+	internalToken     string
+	sims              *simhub.Registry   // the simulators beside this server's nodes
+	stopSweep         chan struct{}      // ends the settlement sweep
+	stopReconcile     context.CancelFunc // ends the rule reconcile loop
+	stopCalc          context.CancelFunc // ends the calc tick
+	stopPrune         context.CancelFunc // ends the receipt retention pass
+	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
+	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
+	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
+	orphans           *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
+	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
+	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
+	lane              laneTally          // the consumer lane's batches and busy time (#1517)
+	stopLaneLog       context.CancelFunc // ends the lane tally's log line
+	sweepStop         sync.Once
+	sweepDone         sync.WaitGroup
+	worklistSizes     worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
+	worklistCounts    worklistCounts     // how worklist pulls ended (#1577)
+	worklistWorkers   int                // how many pulls the pool builds at once (#1577)
+	worklistQueue     chan worklistPull  // pulls waiting for a worker
+	worklistCtx       context.Context    // the pool's life; a pull's build runs under it
+	stopWorklist      context.CancelFunc // ends the pool and cancels builds in flight
+	worklistDone      sync.WaitGroup     // the pool's workers
+	ownStoreDir       string             // non-empty when the Server created (and must clean) it
+	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
+	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
+	cons              jetstream.Consumer // the telemetry durable, read for its backlog
+	telemetry         jetstream.Stream   // OG_TELEMETRY, read for its last sequence
+	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
+	// platformComponentID is the server's own platform component, where the
+	// retention pass lands its figures (#1629); empty writes none.
+	platformComponentID string
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -91,7 +112,12 @@ func New(cfg Config, store Store) (*Server, error) {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
-		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize)}
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
+		platformComponentID: cfg.PlatformComponentID, push: delivery.NewPublisher(collection.NewBatchID(), time.Now, pushTurnWait)}
+	if s.metrics.rec == nil {
+		s.metrics.rec = platformmetric.NewRecorder(time.Now)
+	}
+	s.push.Observe(s.metrics.pushTurn)
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -173,7 +199,7 @@ func (s *Server) subscribe() error {
 		node := collection.NodeFromSubject(msg.Subject)
 		// The subject grant guarantees this node published only its own subject,
 		// so the extracted name is trusted.
-		_ = s.store.RecordHeartbeat(context.Background(), node)
+		s.recordHeartbeat(context.Background(), node)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
@@ -187,22 +213,7 @@ func (s *Server) subscribe() error {
 		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
 			return
 		}
-		pending, err := s.store.PendingNodeCommands(context.Background(), node)
-		if err != nil {
-			return // read failed; drop, the node re-pulls next tick
-		}
-		reply := collection.CommandPullReply{}
-		for _, d := range pending {
-			reply.Commands = append(reply.Commands, collection.CommandDelivery{
-				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
-				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
-			})
-		}
-		b, err := json.Marshal(reply)
-		if err != nil {
-			return
-		}
-		_ = msg.Respond(b)
+		s.answerCommands(context.Background(), node, msg.Respond)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command queue: %w", err)
@@ -212,17 +223,7 @@ func (s *Server) subscribe() error {
 	// the store re-checks the placement before stamping.
 	cs, err := nc.Subscribe(collection.CommandStatusWildcard, func(msg *nats.Msg) {
 		node := collection.NodeFromSubject(msg.Subject)
-		var st collection.CommandStatus
-		if err := json.Unmarshal(msg.Data, &st); err != nil {
-			return
-		}
-		// A report a node had no standing to make (a command dispatched to a
-		// different node, or already stamped) is logged, never silently
-		// dropped: it is either a race or a misbehaving node, and both want a
-		// trail.
-		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply); err != nil {
-			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
-		}
+		s.recordCommandStatus(context.Background(), node, msg.Data)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command status: %w", err)
@@ -233,6 +234,8 @@ func (s *Server) subscribe() error {
 		return err
 	}
 	s.startSettlementSweep()
+	s.startCheckinAge()
+	s.startCommandHealth()
 	s.startRuleReconcile()
 	s.startCalcTick()
 
@@ -247,9 +250,9 @@ func (s *Server) subscribe() error {
 	if err != nil {
 		return fmt.Errorf("bus: metric partitions: %w", err)
 	}
-	if len(created) > 0 {
-		slog.Info("metric partitions created", "facility", "retention", "created", created)
-	}
+	// What it made is told as a log line on the server's platform component
+	// too (#1708); a failed write is logged and never refuses the boot.
+	tellHousekeeping(context.Background(), s.store, s.platformComponentID, partitionNotes(created), time.Now(), partitionBootTimeout)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -315,6 +318,12 @@ func (s *Server) Shutdown() {
 	if s.stopPrune != nil {
 		s.stopPrune()
 	}
+	if s.stopCheckinAge != nil {
+		s.stopCheckinAge()
+	}
+	if s.stopCommandHealth != nil {
+		s.stopCommandHealth()
+	}
 	if s.stopRetention != nil {
 		s.stopRetention()
 	}
@@ -378,6 +387,13 @@ const (
 	publishRetryWait  = 100 * time.Millisecond
 )
 
+// pushTurnWait bounds a push lane publish's wait for its turn (#1696): one
+// stream ack is milliseconds on the embedded stream, so a healthy queue
+// clears well inside it, while a publish stalled through every attempt
+// (about publishAttempts times publishAckTimeout) answers the callers behind
+// it 503 in this time, not in that stall times their place in the queue.
+const pushTurnWait = publishAckTimeout
+
 // PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
 // satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a
 // NATS connection of its own. Publishing uses the server's internal credential, the
@@ -388,9 +404,20 @@ const (
 // stream's word that OG_TELEMETRY persisted it, which is what lets the route
 // answer 202. A store the stream refuses, or never answers, is an error after a
 // bounded retry, and the route answers 503.
+//
+// Every batch carries the push lane's ledger (#1696), minted here under the
+// server's own boot as a node's spool mints its own: a dense seq and each
+// kind's running offset, so a batch the stream stored and the ingest Termed
+// reads as missing. Publishes take their turn one at a time, so the seq
+// follows the order the stream stored them in, and a refused publish takes
+// its items back off the offsets (the pusher was answered 503 and still
+// holds them) while its seq stays spent.
 func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error {
-	_, err := s.publishTelemetry(ctx, b, collection.NewBatchID())
-	return err
+	return s.push.Publish(ctx, delivery.BatchItems(b), func(st delivery.Stamp) error {
+		b.Ledger = st.Proto()
+		_, err := s.publishTelemetry(ctx, b, collection.NewBatchID())
+		return err
+	})
 }
 
 // publishTelemetry publishes one batch under id, retrying a failed attempt up to
@@ -423,7 +450,7 @@ func (s *Server) publishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch, i
 const partitionBootTimeout = time.Minute
 
 // receiptPruneEvery is how often the server deletes telemetry receipts past
-// receiptHorizon; receiptPruneTimeout bounds one pass.
+// ReceiptHorizon; receiptPruneTimeout bounds one pass.
 const (
 	receiptPruneEvery   = time.Hour
 	receiptPruneTimeout = 5 * time.Minute
@@ -443,7 +470,7 @@ func (s *Server) startReceiptPrune() {
 		defer t.Stop()
 		for {
 			pass, done := context.WithTimeout(ctx, receiptPruneTimeout)
-			n, err := s.store.PruneTelemetryReceipts(pass, time.Now().Add(-receiptHorizon), 0)
+			n, err := s.store.PruneTelemetryReceipts(pass, time.Now().Add(-ReceiptHorizon), 0)
 			done()
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("telemetry receipt prune failed", "facility", "ingest", "error", err.Error())
@@ -473,6 +500,9 @@ var ErrNoSimulator = collection.ErrNoSimulator
 // Nodes lists the nodes whose simulator has pulled since the server
 // started.
 func (s *Server) Nodes() []string { return s.sims.Nodes() }
+
+// Forget drops a node's simulator status, for a node that was deleted.
+func (s *Server) Forget(node string) { s.sims.Forget(node) }
 
 // FireSimOperation asks the simulator beside node to run op against one of
 // its devices and returns the device's answer.
@@ -531,7 +561,7 @@ func (s *Server) subscribeSim() error {
 				sd.Impairment = &imp
 			}
 			if h, ok := hooks[d.ComponentID]; ok {
-				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret}
+				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret, Identities: h.Identities}
 			}
 			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)
@@ -591,13 +621,17 @@ func (s *Server) startSettlementSweep() {
 			case <-stop:
 				return
 			case <-t.C:
-				if err := s.store.SweepCommandSettlements(context.Background()); err != nil {
+				if err := s.sweep(writerclass.SweepCommandSettlement, func() error {
+					return s.store.SweepCommandSettlements(context.Background())
+				}); err != nil {
 					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
 				}
 				// The same tick acts on event rule streaks held for their
 				// sustain (#920): the clock for an input that sends no
 				// further sample.
-				if err := s.store.SweepEventRules(context.Background(), time.Now()); err != nil {
+				if err := s.sweep(writerclass.SweepEventRule, func() error {
+					return s.store.SweepEventRules(context.Background(), time.Now())
+				}); err != nil {
 					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
 				}
 			}
@@ -688,9 +722,15 @@ func (s *Server) calcPass(ctx context.Context) {
 	}()
 	pass, done := context.WithTimeout(ctx, calcTickTimeout)
 	defer done()
+	start := time.Now()
 	d, err := s.store.DrainCalcPending(pass, calcTickBatch)
 	if err != nil && ctx.Err() == nil {
 		slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
+	}
+	if err == nil {
+		s.metrics.max(writerclass.CalcPendingDepth, "", float64(d.Depth))
+		s.metrics.count(writerclass.CalcServedCount, "", float64(d.Served))
+		s.metrics.mean(writerclass.CalcPassDuration, "", float64(time.Since(start))/float64(time.Millisecond))
 	}
 	attrs := []any{"facility", "rules", "served", d.Served, "deferred", d.Deferred, "pending", d.Depth}
 	switch {
@@ -699,5 +739,53 @@ func (s *Server) calcPass(ctx context.Context) {
 	case d.Deferred > 0 || d.Depth > 0:
 		// A mark waiting out its backoff: every pass sees it, so it is not news.
 		slog.Debug("calc tick", attrs...)
+	}
+}
+
+// answerCommands answers a node's command pull with its rendered pending
+// commands (the read itself marks them dispatched). Every way the answer
+// fails to reach the node is logged at WARN with the node and the error
+// (#1630): the node re-pulls next tick, but a pull that keeps failing is a
+// fleet whose commands time out, and the operator needs to see why.
+func (s *Server) answerCommands(ctx context.Context, node string, respond func([]byte) error) {
+	pending, err := s.store.PendingNodeCommands(ctx, node)
+	s.request(requestCommandPull, err)
+	if err != nil {
+		slog.Warn("command pull could not read the queue", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	reply := collection.CommandPullReply{}
+	for _, d := range pending {
+		reply.Commands = append(reply.Commands, collection.CommandDelivery{
+			ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
+			EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries, Request: d.Request,
+			Disruptive: d.Disruptive, QuietSeconds: d.QuietSeconds, HoldSeconds: d.HoldSeconds, HoldEndpoints: d.HoldEndpoints,
+		})
+	}
+	b, err := json.Marshal(reply)
+	if err != nil {
+		slog.Warn("command pull reply could not be encoded", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	if err := respond(b); err != nil {
+		slog.Warn("command pull reply could not be sent", "facility", "command", "node", node, "error", err.Error())
+	}
+}
+
+// recordCommandStatus records a node's execution report. A report the server
+// cannot parse, or that the node had no standing to make (a command
+// dispatched to a different node, or already stamped), is logged at WARN,
+// never silently dropped: it is a race or a misbehaving node, and both want
+// a trail.
+func (s *Server) recordCommandStatus(ctx context.Context, node string, data []byte) {
+	var st collection.CommandStatus
+	if err := json.Unmarshal(data, &st); err != nil {
+		slog.Warn("command execution report could not be parsed", "facility", "command", "node", node, "error", err.Error())
+		return
+	}
+	err := s.store.RecordCommandExecution(ctx, node, st.ID, st.Error, st.Reply)
+	s.request(requestCommandReport, err)
+	if err != nil {
+		slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
 	}
 }

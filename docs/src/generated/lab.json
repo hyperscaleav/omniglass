@@ -74,6 +74,12 @@
       "setup": []
     },
     {
+      "id": "find-where-work-is-lost",
+      "title": "Find where work is lost",
+      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.",
+      "setup": []
+    },
+    {
       "id": "fix-a-refused-probe",
       "title": "Fix a refused probe",
       "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
@@ -118,6 +124,12 @@
       "setup": []
     },
     {
+      "id": "open-status-under-admin",
+      "title": "Open Nodes and Status from Admin",
+      "description": "From Home, find Nodes and Status under Admin in the sidebar, open Nodes where a new node is set up, then open Status and read the build the server runs.",
+      "setup": []
+    },
+    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
@@ -130,6 +142,12 @@
       "id": "read-a-multi-endpoint-vital",
       "title": "Read a vital two endpoints collect",
       "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",
+      "setup": []
+    },
+    {
+      "id": "read-platform-health",
+      "title": "Read the platform's health",
+      "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the nodes and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
       "setup": []
     },
     {
@@ -187,6 +205,12 @@
       "setup": []
     },
     {
+      "id": "watch-an-impaired-device",
+      "title": "Watch an impaired device",
+      "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+      "setup": []
+    },
+    {
       "id": "write-a-rule-as-an-expression",
       "title": "Write a rule as an expression",
       "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
@@ -199,20 +223,26 @@
       "heartbeat": "2s",
       "probe_every": "10s",
       "worklist_every": "5s",
+      "report_every": "",
+      "closed_loop_bracket": "10s",
       "for": "a learner's lab: a change in the console shows within seconds"
     },
     {
       "name": "walkthrough",
       "heartbeat": "2s",
-      "probe_every": "every check-in",
+      "probe_every": "2s",
       "worklist_every": "2s",
+      "report_every": "10s",
+      "closed_loop_bracket": "1s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
       "name": "default",
       "heartbeat": "30s",
-      "probe_every": "every check-in",
+      "probe_every": "30s",
       "worklist_every": "30s",
+      "report_every": "",
+      "closed_loop_bracket": "1m",
       "for": "the product's own defaults: what a deployment's node runs at"
     }
   ]

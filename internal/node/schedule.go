@@ -1,7 +1,9 @@
 package node
 
 import (
+	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -9,19 +11,17 @@ import (
 )
 
 // The poll schedule (#822): a driver poll declares how often it runs
-// (schedule.every, baked into its task), and the node honors it rather than
-// polling on every heartbeat. pollSchedule remembers, per task id, when each
-// poll is next due; it lives for the run (a restart polls at its first tick).
-// It gates driver polls at their own interval and reachability probes at the
-// node's probe interval (#1273), every tick when that is unset; a listener's
-// pushes are never gated, since they ride the held session as they arrive.
+// (schedule.every, baked into its task), and the node honors it. Since #1634
+// the dispatcher (scheduler.go) owns when each task is due, on a timer of its
+// own rather than the heartbeat tick; pollSchedule remembers, per task id,
+// what a run's outcome books on top of that: a failing poll's retry backoff,
+// a refused poll (#1049), the connection fingerprint each poll was booked
+// under (#1061) and what its events and log lines last landed (#1145). It
+// lives for the run and is safe for the dispatcher and its workers to share.
 type pollSchedule struct {
-	heartbeat time.Duration
-	// probeEvery is how often each reachability probe runs (#1273). Zero is
-	// every tick: the heartbeat, as before the interval existed.
-	probeEvery time.Duration
-	next       map[string]time.Time
-	backoff    map[string]time.Duration // the last retry wait of a failing poll
+	mu      sync.Mutex
+	next    map[string]time.Time
+	backoff map[string]time.Duration // the last retry wait of a failing poll
 	// refused marks a poll whose last run met a terminal refusal (#1049): it
 	// waits its interval, unless its session reads up again first.
 	refused map[string]bool
@@ -34,27 +34,32 @@ type pollSchedule struct {
 	occurred map[string]map[string]string
 }
 
-// newPollSchedule keeps the schedule for a node ticking every heartbeat,
-// which is also where a failed poll's retry backoff starts.
-func newPollSchedule(heartbeat time.Duration) *pollSchedule {
-	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}}
+// backoffBase is where a failing poll's retry wait starts (#1634): a fixed
+// second, doubling from there, never the heartbeat.
+const backoffBase = time.Second
+
+func newPollSchedule() *pollSchedule {
+	return &pollSchedule{next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}}
 }
 
 // failed rebooks a poll that ran at now and landed nothing (its fetch
-// failed): it retries after min(every, max(heartbeat, backoff)), the backoff
-// starting at the heartbeat and doubling on each consecutive failure, so a
-// 24h poll that fails during a device reboot retries in seconds, not a day,
-// and a dead device is never asked more often than every heartbeat.
+// failed): it retries after min(every, backoff), the backoff starting at
+// backoffBase and doubling on each consecutive failure, so a 24h poll that
+// fails during a device reboot retries in seconds, not a day, and a dead
+// device is never asked more often than its own interval allows.
 func (s *pollSchedule) failed(taskID string, every time.Duration, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failedLocked(taskID, every, now)
+}
+
+func (s *pollSchedule) failedLocked(taskID string, every time.Duration, now time.Time) {
 	if every <= 0 {
 		return
 	}
-	wait := s.heartbeat
+	wait := backoffBase
 	if prev, ok := s.backoff[taskID]; ok {
 		wait = 2 * prev
-	}
-	if wait < s.heartbeat {
-		wait = s.heartbeat
 	}
 	if wait > every {
 		wait = every
@@ -67,7 +72,9 @@ func (s *pollSchedule) failed(taskID string, every time.Duration, now time.Time)
 // for a Retry-After (#902) is not asked again sooner, though never later than
 // the poll's own interval.
 func (s *pollSchedule) failedAtLeast(taskID string, every time.Duration, now time.Time, atLeast time.Duration) {
-	s.failed(taskID, every, now)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failedLocked(taskID, every, now)
 	if atLeast <= 0 || every <= 0 {
 		return
 	}
@@ -79,9 +86,11 @@ func (s *pollSchedule) failedAtLeast(taskID string, every time.Duration, now tim
 	}
 }
 
-// succeeded ends a poll's failing streak; its next run stays booked from
-// its due time.
+// succeeded ends a poll's failing streak; its next run stays where the
+// dispatcher booked it.
 func (s *pollSchedule) succeeded(taskID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.backoff, taskID)
 	delete(s.refused, taskID)
 }
@@ -90,73 +99,80 @@ func (s *pollSchedule) succeeded(taskID string) {
 // backoff, its next run at its interval, unless its session is up again
 // first (releaseRefused).
 func (s *pollSchedule) refusedRun(taskID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.backoff, taskID)
 	s.refused[taskID] = true
 }
 
-// rebook forgets a poll's booking and failure backoff when its endpoint's
-// connection fingerprint moved (#1061): an address, port or secret edited in
-// place is new inputs, so the poll runs at the next tick rather than waiting
-// out a backoff built up against the old ones.
-func (s *pollSchedule) rebook(taskID, fingerprint string) {
+// book records when the dispatcher next runs a task.
+func (s *pollSchedule) book(taskID string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.next[taskID] = at
+}
+
+// rebook records the connection fingerprint a task is booked under and
+// reports whether it moved (#1061): an address, port or secret edited in
+// place is new inputs, so the booking, backoff and refusal built up against
+// the old ones are dropped and the task runs at once. A first-seen or
+// unchanged fingerprint keeps them.
+func (s *pollSchedule) rebook(taskID, fingerprint string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	prev, seen := s.fingerprint[taskID]
 	s.fingerprint[taskID] = fingerprint
 	if !seen || prev == fingerprint {
-		return
+		return false
 	}
 	delete(s.next, taskID)
 	delete(s.backoff, taskID)
 	delete(s.refused, taskID)
+	return true
 }
 
-// releaseRefused makes a refused poll due at once when its session is up
-// again: a fixed credential lands data at the next tick, not an interval
-// later. A poll that was not refused, or whose session is still down or
-// rejected, keeps its booking.
-func (s *pollSchedule) releaseRefused(taskID string, sessionUp bool) {
+// releaseRefused reports whether a refused poll is released because its
+// session is up again, so a fixed credential lands data at once, not an
+// interval later. A poll that was not refused, or whose session is still down
+// or rejected, keeps its booking.
+func (s *pollSchedule) releaseRefused(taskID string, sessionUp bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.refused[taskID] || !sessionUp {
-		return
+		return false
 	}
 	delete(s.refused, taskID)
 	delete(s.next, taskID)
+	return true
 }
 
-// nextOf is when a poll is next due (for tests and logs).
+// refusedIDs is every refused poll, sorted, for the dispatcher's release
+// sweep.
+func (s *pollSchedule) refusedIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]string, 0, len(s.refused))
+	for id := range s.refused {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// nextOf is when a task is next due, if booked.
 func (s *pollSchedule) nextOf(taskID string) (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	t, ok := s.next[taskID]
 	return t, ok
 }
 
-// due reports whether the task runs at now, and if so books its next run. A
-// task with no interval runs every tick. A task new to the schedule runs at
-// once. The next run is booked from the due time, not from now, so a tick's
-// jitter does not drift the cadence; a tick so late it missed whole
-// intervals runs once and books from now, never a catch-up burst. A task is
-// due on the tick within half a heartbeat of its due time (#1273): ticks are
-// a heartbeat apart but judged after variable work, so a tick that reached
-// the task a few milliseconds sooner than the one that booked it would
-// otherwise skip it, and an interval equal to the heartbeat would double.
-func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) bool {
-	if every <= 0 {
-		return true
-	}
-	at, booked := s.next[taskID]
-	if booked && now.Add(s.heartbeat/2).Before(at) {
-		return false
-	}
-	next := now.Add(every)
-	if booked && now.Sub(at) < every {
-		next = at.Add(every)
-	}
-	s.next[taskID] = next
-	return true
-}
-
 // retain forgets tasks that left the worklist, so no map grows for the life
 // of the run and a task that returns runs at once. Each map is swept by its
-// own keys: a task can be remembered without ever being booked (a probe at
-// the heartbeat, a poll with no schedule).
+// own keys: a task can be remembered without ever being booked.
 func (s *pollSchedule) retain(ids map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	forget(s.next, ids)
 	forget(s.backoff, ids)
 	forget(s.refused, ids)
@@ -177,6 +193,8 @@ func forget[V any](m map[string]V, ids map[string]bool) {
 // run lands its events and log lines again: the run loop's answer to a spool
 // overflow that may have dropped the batch that carried them.
 func (s *pollSchedule) forgetOccurrences() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	clear(s.occurred)
 }
 
@@ -187,6 +205,8 @@ func (s *pollSchedule) forgetOccurrences() {
 // property lane has its transition guard, and a metric is a reading each
 // run. Pure: commitChanged records what landed.
 func (s *pollSchedule) changed(taskID string, dps []collection.Sample) []collection.Sample {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	last := s.occurred[taskID]
 	out := dps[:0:0]
 	for _, d := range dps {
@@ -207,6 +227,8 @@ func (s *pollSchedule) changed(taskID string, dps []collection.Sample) []collect
 // did not see is dropped. A function whose identities rotate (#1386) holds
 // one run's slots, never every identity it has heard.
 func (s *pollSchedule) commitChanged(taskID string, seen []collection.Sample) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	next := map[string]string{}
 	for _, d := range seen {
 		if d.Lane != driver.LaneEvent && d.Lane != driver.LaneLog {

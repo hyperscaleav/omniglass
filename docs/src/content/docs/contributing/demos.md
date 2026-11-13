@@ -128,8 +128,8 @@ Write it the way an operator would work:
 
 - **One flow, the shortest honest path.** No detour, no repeated step, no step the operator would
   not take; follow the order the console invites.
-- **End every action on its result.** After a click, a typed value or a key press, wait for what
-  the console shows in answer (the drawer open, the row added, the status changed). That wait is
+- **End every action on its result.** After a click, a hover, a typed value or a key press, wait for what
+  the console shows in answer (the drawer open, the tooltip shown, the row added, the status changed). That wait is
   the assertion that makes the walkthrough a test.
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
   (component, place, system), short enough to read in the caption bar.
@@ -141,6 +141,11 @@ Write it the way an operator would work:
   in Bay 2 that nothing collects from yet), a `setup` list makes it through the API before the
   title card, with the lab's owner token; one that already exists counts as made, so a replay on a
   lab the walkthrough already ran on works. Keep it to the scene: the flow itself stays on camera.
+- **Wait for a filling console off camera with `ready`.** When the scene is only there once the lab
+  has run for a while (read-platform-health's Requests panel fills after the server's first report
+  window), a `ready` block (`goto` a console path, `wait` for a target, with its own `timeout` up to
+  three minutes) is waited for after sign-in and before the title card, so the wait never spends
+  the recording's budget. A ready that never comes fails the run naming what it waited for.
 
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.
@@ -188,7 +193,8 @@ The browser e2e tier (`make test-e2e`) and the docs screenshots (`make docs-shot
 stands omniglass up in Docker one way. Each fits the lab to what it checks: the e2e tier's is
 seeded with the `empty` scenario, so its CRUD round-trips start from a fresh install, and the
 screenshots' runs with `--no-node`, the dev fleet without the simulated wiring and with no node
-collecting from it, so a page photographed twice is the same page. The lab's banner is a fact about
+collecting from it, so a page photographed twice is the same page, and with `--platform-history`, an
+hour of made-up server figures, so platform health's sparklines draw full lines (#1790). The lab's banner is a fact about
 the lab rather than the product the docs teach, so the screenshot capture hides it.
 
 **A terminal demo** is played by VHS from its own image, pinned by digest, which bundles what VHS
