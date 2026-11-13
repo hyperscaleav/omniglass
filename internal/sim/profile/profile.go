@@ -1,4 +1,4 @@
-// Package profile loads and validates device and system profile YAML files.
+// Package profile loads and validates device profile YAML files.
 package profile
 
 import (
@@ -624,26 +624,9 @@ type Override struct {
 	Rule  string `yaml:"rule"`
 }
 
-// SystemProfile defines a room archetype, a collection of devices that form a system.
-type SystemProfile struct {
-	Name    string         `yaml:"name"`
-	Doc     Doc            `yaml:"doc"`
-	Devices []SystemDevice `yaml:"devices"`
-}
-
-// SystemDevice defines a device slot within a system profile.
-type SystemDevice struct {
-	Profile string   `yaml:"profile"`
-	Role    string   `yaml:"role"`
-	Suffix  string   `yaml:"suffix"`
-	Count   int      `yaml:"count"`
-	Tags    []string `yaml:"tags"`
-}
-
 // Store holds all loaded profiles indexed by name.
 type Store struct {
 	Devices map[string]*DeviceProfile
-	Systems map[string]*SystemProfile
 	// variants maps a product a profile lists to that profile and overlay.
 	variants map[string]variantRef
 }
@@ -684,8 +667,8 @@ func (s *Store) indexVariants() error {
 	return nil
 }
 
-// LoadStore loads device and system profiles from the given profile root directory.
-// It expects profiles/devices/*.yaml and profiles/systems/*.yaml under root.
+// LoadStore loads device profiles from the given profile root directory.
+// It expects profiles/devices/*.yaml under root.
 //
 // Thin wrapper over LoadStoreFS for callers that read a catalog from
 // disk; the simulator itself loads the embedded catalog
@@ -695,11 +678,10 @@ func LoadStore(root string) (*Store, error) {
 }
 
 // LoadStoreFS loads profiles from any fs.FS rooted at the profile
-// directory. Layout is `devices/*.yaml` and `systems/*.yaml`.
+// directory. Layout is `devices/*.yaml`.
 func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	s := &Store{
 		Devices: make(map[string]*DeviceProfile),
-		Systems: make(map[string]*SystemProfile),
 	}
 	surfaces, err := loadSurfaces(fsys, "surfaces")
 	if err != nil {
@@ -707,9 +689,6 @@ func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	}
 	if err := s.loadDevices(fsys, "devices", surfaces); err != nil {
 		return nil, fmt.Errorf("loading device profiles: %w", err)
-	}
-	if err := s.loadSystems(fsys, "systems"); err != nil {
-		return nil, fmt.Errorf("loading system profiles: %w", err)
 	}
 	if err := s.indexVariants(); err != nil {
 		return nil, fmt.Errorf("indexing products: %w", err)
@@ -871,55 +850,6 @@ func validateComputed(p *DeviceProfile) error {
 			return fmt.Errorf("%s (%q): missing required field 'kind'", ctx, c.Path)
 		default:
 			return fmt.Errorf("%s (%q): unsupported kind %q, only 'elapsed' is supported", ctx, c.Path, c.Kind)
-		}
-	}
-	return nil
-}
-
-func (s *Store) loadSystems(fsys fs.FS, dir string) error {
-	entries, err := fs.ReadDir(fsys, dir)
-	if err != nil {
-		if os.IsNotExist(err) || isFSNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		full := path.Join(dir, e.Name())
-		data, err := fs.ReadFile(fsys, full)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", full, err)
-		}
-		var p SystemProfile
-		if err := yaml.Unmarshal(data, &p); err != nil {
-			return fmt.Errorf("parsing %s: %w", full, err)
-		}
-		if p.Name == "" {
-			return fmt.Errorf("%s: missing required field 'name'", full)
-		}
-		if _, exists := s.Systems[p.Name]; exists {
-			return fmt.Errorf("duplicate system profile name: %s", p.Name)
-		}
-		s.Systems[p.Name] = &p
-	}
-	return nil
-}
-
-// Validate checks cross-profile invariants: every system profile's device
-// references point to loaded device profiles. Per-profile validation runs
-// at LoadStore time, so a malformed profile fails to load.
-func (s *Store) Validate() error {
-	for sysName, sys := range s.Systems {
-		for _, dev := range sys.Devices {
-			if _, ok := s.Devices[dev.Profile]; !ok {
-				return fmt.Errorf("system profile %q references unknown device profile %q", sysName, dev.Profile)
-			}
 		}
 	}
 	return nil

@@ -4,7 +4,7 @@ import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { systemHealthKey, type FleetHealth } from "../lib/health";
+import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -247,6 +247,51 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
     // Each alarm row opens its timeline in place (#950).
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
+  });
+
+  // The strip is where a storm is triaged from (#990): acknowledging a causing
+  // alarm must not need the component's own page.
+  describe("acknowledging from the Why strip", () => {
+    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
+    const withAck = (ack: object): FleetHealth => ({
+      ...health,
+      roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
+    }) as FleetHealth;
+
+    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+      mount(undefined, health, [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+      expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
+    });
+
+    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+      mount(undefined, health, [], [], viewer);
+      expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+    });
+
+    it("shows who acknowledged and when, and no button, on an acknowledged alarm", () => {
+      mount(undefined, withAck({ acknowledged: true, acknowledged_at: "2026-08-15T15:00:00Z", acknowledged_by: "alice" }), [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+      expect(within(strip).getByText(/acknowledged by alice/)).toBeTruthy();
+    });
+
+    it("refreshes the strip: acknowledging invalidates the system health read", async () => {
+      const fetched: string[] = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const req = input as Request;
+        fetched.push(`${req.method} ${new URL(req.url).pathname}`);
+        return new Response(JSON.stringify({ id: "al-1", acknowledged: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      });
+      const { qc } = mount(undefined, health, [], [], responder);
+      const spy = vi.spyOn(qc, "invalidateQueries");
+      fireEvent.click(within(screen.getByTestId("alarm-strip")).getByRole("button", { name: "Acknowledge" }));
+      await waitFor(() => expect(fetched.some((f) => f.startsWith("POST ") && f.endsWith("/alarms/al-1:acknowledge"))).toBe(true));
+      await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain(JSON.stringify(SYSTEM_HEALTH_PREFIX)));
+      vi.unstubAllGlobals();
+    });
   });
 
   // The report names an alarm's component by name and by uuid (#557): the

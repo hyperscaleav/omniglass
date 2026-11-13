@@ -62,14 +62,16 @@ const sign: SystemType = { id: uuidFor("st-sign"), name: "sign", label: "Signage
 const videoWall: SystemType = { id: uuidFor("st-video-wall"), name: "video-wall", label: "Video Wall", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "video-wall", abbrev: "vw", resolved_icon: "tv" };
 const interactiveSign: SystemType = { id: uuidFor("st-interactive-sign"), name: "interactive-sign", label: "Interactive Sign", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "interactive-sign", abbrev: "isgn", icon: "touchpad", resolved_icon: "touchpad" };
 
-const shipped: SystemType[] = [av, room, board, huddle, sign, videoWall, interactiveSign];
+// In the order ListSystemTypes serves: by label (#757). The tree builder groups
+// without sorting, so each level below keeps this order.
+const shipped: SystemType[] = [av, board, huddle, interactiveSign, room, sign, videoWall];
 
 describe("systemTypeTree / flattenSystemTypeTree", () => {
-  it("groups by parent_id, sorted by label at each level", () => {
+  it("groups by parent_id, keeping the received order at each level", () => {
     const roots = systemTypeTree(shipped);
     expect(roots.map((r) => r.name)).toEqual(["av"]);
     const avRoot = roots[0];
-    // Alphabetical by label: Room, Signage.
+    // As received, which is alphabetical by label: Room, Signage.
     expect(avRoot.children.map((c) => c.name)).toEqual(["room", "sign"]);
     expect(avRoot.depth).toBe(0);
     expect(avRoot.children[0].depth).toBe(1);

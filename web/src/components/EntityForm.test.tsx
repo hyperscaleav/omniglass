@@ -14,6 +14,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeValue } from "./TreeSelect.testkit";
 import { COMPONENTS_KEY } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
 
@@ -302,8 +303,8 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     const { slot } = mountComponent();
     const form = await screen.findByTestId("entity-form");
     slot().begin();
-    const primary = await within(form).findByRole("combobox", { name: /memberships/i }) as HTMLSelectElement;
-    await waitFor(() => expect(primary.value).toBe(alpha));
+    const primary = await within(form).findByLabelText("Memberships");
+    await waitFor(() => expect(treeValue(primary)).toBe("Alpha Room"));
     // The other membership is a chip with its own remove control.
     expect(within(form).getByRole("button", { name: /remove gamma room/i })).toBeTruthy();
   });
@@ -314,8 +315,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      const primary = await within(form).findByRole("combobox", { name: /memberships/i });
-      fireEvent.change(primary, { target: { value: beta } });
+      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
       await slot().save();
       expect(writes()).toEqual([
         { method: "PUT", path: `/systems/${beta}/members/${comp}` },
@@ -331,7 +331,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: gamma } });
+      await pickTree(await within(form).findByLabelText("Memberships"), "Gamma Room");
       await slot().save();
       expect(writes()).toEqual([{ method: "POST", path: `/systems/${gamma}/members/${comp}:setPrimary` }]);
     } finally { stub.mockRestore(); }
@@ -343,7 +343,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       const { slot } = mountComponent(owner, [member(alpha, "alpha", true)]);
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: "" } });
+      await pickTree(await within(form).findByLabelText("Memberships"), "None");
       await slot().save();
       expect(writes()).toEqual([{ method: "DELETE", path: `/systems/${alpha}/members/${comp}` }]);
     } finally { stub.mockRestore(); }
@@ -378,7 +378,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     slot().begin();
     await waitFor(() => expect(within(form).getByText("Alpha Room")).toBeTruthy());
     expect(within(form).getByText("Gamma Room")).toBeTruthy();
-    expect(within(form).queryByRole("combobox", { name: /memberships/i })).toBeNull();
+    expect(within(form).queryByLabelText("Memberships")).toBeNull();
     expect(within(form).queryByRole("button", { name: /remove gamma room/i })).toBeNull();
     expect(within(form).getByText(/needs.*system:update/i)).toBeTruthy();
   });
@@ -389,7 +389,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: beta } });
+      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
       await expect(slot().save()).rejects.toBeTruthy();
       expect((await within(form).findByRole("alert")).textContent).toContain("you may read system beta but not update it");
       expect(slot().editing()).toBe(true);
@@ -408,7 +408,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
         return real(filters as never);
       }) as typeof qc.invalidateQueries;
       slot().begin();
-      fireEvent.change(await within(form).findByRole("combobox", { name: /memberships/i }), { target: { value: beta } });
+      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
       await slot().save();
       expect(invalidated).toContain("system-members");
       expect(invalidated).toContain("component-systems");
@@ -451,15 +451,15 @@ describe("the one form, empty", () => {
   it("prefills the placement from `under`, the explorer's create-where-you-stand", async () => {
     mountCreate("system", uuidFor("ef-west"));
     const form = await screen.findByTestId("entity-create-form");
-    const location = within(form).getByLabelText("Location") as HTMLSelectElement;
-    await waitFor(() => expect(location.value).toBe(uuidFor("ef-west")));
+    const location = within(form).getByLabelText("Location");
+    await waitFor(() => expect(treeValue(location)).toBe("West Building"));
   });
 
   it("prefills a location's parent from `under`", async () => {
     mountCreate("location", uuidFor("ef-west"));
     const form = await screen.findByTestId("entity-create-form");
-    const parent = within(form).getByLabelText("Parent") as HTMLSelectElement;
-    await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
+    const parent = within(form).getByLabelText("Parent");
+    await waitFor(() => expect(treeValue(parent)).toBe("West Building"));
   });
 });
 
