@@ -2,7 +2,6 @@
 title: "Glossary: built data-plane terms move to the built table"
 date: 2026-11-13
 refs: [1126, 430, 1385]
-form: bullet
 ---
 
 - **Glossary: built data-plane terms move to the built table.** Seventeen data-plane terms
