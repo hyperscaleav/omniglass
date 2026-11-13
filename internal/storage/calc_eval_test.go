@@ -524,12 +524,12 @@ func TestCalcComponentRetypeWhileServing(t *testing.T) {
 	}
 }
 
-// TestCalcProductRetype proves a product's classification change brings the
-// calc rules of every component of that product in line (#1030), as
-// markComponentCalcRules does for a single component's reclassify: retyped
-// out of a rule's selector, state and marks go on every component; retyped
-// back in, the rule is marked on every component holding a value of one of
-// the rule's inputs.
+// TestCalcProductRetype proves a product's reclassification brings the calc
+// rules of every component of that product in line (#1030), as
+// TestCalcComponentRetype does for one component: retyped out of a rule's
+// selector, the state on every component goes at the drain; retyped back in,
+// the rule computes on every component holding one of its inputs without a
+// new sample.
 func TestCalcProductRetype(t *testing.T) {
 	t.Parallel()
 	r := newEvalRig(t)
@@ -567,18 +567,21 @@ func TestCalcProductRetype(t *testing.T) {
 		t.Fatalf("%d state rows on the product's components, want 2", n)
 	}
 
-	// Reclassify product to video-bar: state and marks on both components go.
+	// Reclassify product to video-bar: both components are marked, and the
+	// serve drops the state of a rule that no longer selects them.
 	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &videoBarType}); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, r.conn, state); n != 0 {
-		t.Fatalf("%d state rows after product reclassify out, want none", n)
+	if n := r.pending(); n != 2 {
+		t.Fatalf("%d marks after product reclassify out, want 2", n)
 	}
-	if n := r.pending(); n != 0 {
-		t.Fatalf("%d marks after product reclassify out, want none", n)
+	r.drain()
+	if n := count(t, r.conn, state); n != 0 {
+		t.Fatalf("%d state rows after product reclassify out and drain, want none", n)
 	}
 
-	// Reclassify back to display: marked on values held, computes on drain.
+	// Reclassify back to display: marked on values held, computes on drain
+	// with no new sample.
 	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &displayType}); err != nil {
 		t.Fatal(err)
 	}
@@ -590,12 +593,16 @@ func TestCalcProductRetype(t *testing.T) {
 		t.Fatalf("%d state rows after drain post-reclassify, want 2", n)
 	}
 
-	// Product reclassification within the selector, or a save restating the
-	// component_type, inserts no marks.
+	// A patch that leaves the type (a label, or the component_type restated)
+	// inserts no marks.
+	label := "Renamed"
+	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{Label: &label}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &displayType}); err != nil {
 		t.Fatal(err)
 	}
 	if n := r.pending(); n != 0 {
-		t.Fatalf("%d marks after re-stating component_type, want none", n)
+		t.Fatalf("%d marks after a patch leaving the type, want none", n)
 	}
 }
