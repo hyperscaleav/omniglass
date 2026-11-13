@@ -261,13 +261,16 @@ of the remaining pages is #784.
 - **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button
-  never steals the control's accessible name. A placeholder is not a label and does not provide an
-  accessible name; always pair a control with a `<label>` or `aria-label`.
+  never steals the control's accessible name.
 - **`BladeTitle`** is the **heading** of a blade: the row's label, tracked reactively.
 - **`BladeField`** is a **blade field**: a fact when the blade is being read, a `FieldRow` when it
   is being edited, with the switch made once rather than per field. It takes the edit slot from
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
   provider (the tree pages render one body in both places).
+
+**A placeholder is not a label.** Every control gets its name from a `<label for>` (or an
+`aria-label` where no label is shown). A placeholder can say what an empty field means, but it is
+not the control's name: it vanishes once there is a value, and a screen reader cannot rely on it (#973).
 
 **A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
 as broken rather than as read-only, and an official-row blade rendered five of them at once, directly
