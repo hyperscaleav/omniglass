@@ -172,6 +172,13 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   as a **calculated** sample naming the rule (`source_rule`) and its version (`source_rule_version`),
   on the lane the rule holds its output by, so event rules judge it there and downstream calc rules are
   marked in turn. An unchanged result writes no row, on either lane, so storage grows only with change.
+- **The value check.** A property output passes the check ingest applies to the same key
+  (`key.ValidateValue` against the property's data type and its validation, so an enum, a pattern or a
+  JSON schema holds for a calculated value as for a pushed one). A result the property cannot hold is
+  not a database fault and is not retried: nothing is written, the mark is not deferred, and the rule's
+  last outcome on the owner (`calc_rule_state.error`, shown in the blade's State) names the output key,
+  the value and the validator's reason. The next input change recomputes it. The metric lane needs no
+  such check: its output is already a float.
 - **Never itself.** A write knows the rule that produced it and never marks that rule, which stops a
   rule feeding itself at runtime; longer loops are refused at authoring, and a loop written around the
   gateway is out of contract
