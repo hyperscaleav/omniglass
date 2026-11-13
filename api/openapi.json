@@ -6205,6 +6205,11 @@
               "null"
             ]
           },
+          "open_alarms": {
+            "description": "How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero",
+            "format": "int64",
+            "type": "integer"
+          },
           "systems": {
             "description": "Every system the caller may read, each carrying its dots",
             "items": {
@@ -34465,7 +34470,7 @@
     },
     "/views/fleet": {
       "get": {
-        "description": "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+        "description": "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
         "operationId": "get-fleet-view",
         "responses": {
           "200": {
