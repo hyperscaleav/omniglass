@@ -14,7 +14,7 @@ import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey } from "../lib/health";
+import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } from "../lib/health";
 import { alarmRows, sinceOf } from "../lib/system_zoom";
 import { dotVerdict, leafAlarmSince } from "../lib/component_leaf";
 import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
@@ -22,7 +22,7 @@ import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
 import { componentSystems, componentSystemsKey } from "../lib/members";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemRoles, systemRolesKey, SYSTEM_ROLES_PREFIX } from "../lib/system_roles";
 import { slotStrip } from "../lib/slot_strip";
 import { contentsOf, isRoomOf, rolesOf, systemsAtPlace } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
@@ -243,7 +243,17 @@ function ComponentBody(props: { id: string }) {
     name: () => row()?.name,
     actions: () => row()?.actions ?? [],
     remove: (id) => deleteComponent(id),
-    invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
+    // A blade is page-level, so it may sit over a system workspace whose role
+    // cards and health read their own keys: refresh those too, or the deleted
+    // component's card stays and opens a blade stuck loading.
+    invalidate: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_ROLES_PREFIX] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_VERDICTS_KEY] }),
+      ]),
   });
 
   return (

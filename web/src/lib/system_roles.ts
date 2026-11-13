@@ -33,7 +33,9 @@ export type RoleSpec = RoleSpecBody;
 
 // One cache namespace per arc, so a standard and a system that share an address
 // never collide.
-export const systemRolesKey = (name: string) => ["system-roles", name] as const;
+// The prefix every system's roles share, for a write that moves them all.
+export const SYSTEM_ROLES_PREFIX = ["system-roles"] as const;
+export const systemRolesKey = (name: string) => [...SYSTEM_ROLES_PREFIX, name] as const;
 export const standardRolesKey = (id: string) => ["standard-roles", id] as const;
 
 // systemRoles reads every role this system needs filled: those its standard
