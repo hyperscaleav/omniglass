@@ -321,23 +321,26 @@ func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 // it was minted. Beside them, the first landed receipt of every other boot
 // of the same nodes minted after from, which says whether a boot that never
 // settled was ended by its node starting again (#1692).
+//
+// It reads the table once, placing each receipt by window functions over its
+// boot and its node. A correlated subquery per receipt rescans the table for
+// each one, which at 3,000 systems ran for hours and starved the ingest it
+// was measuring (#1841).
 func ReceiptsQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select row_to_json(r) from (
-		with first_in as (
-			select node, boot, min(seq) as seq from telemetry_receipt
-			where ledger is not null and minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s)
-			group by node, boot)
-		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome, t.node_loss
-		from telemetry_receipt t join first_in f on f.boot = t.boot
-		where t.ledger is not null and (t.seq >= f.seq or t.seq = (
-			select max(l.seq) from telemetry_receipt l
-			where l.boot = f.boot and l.ledger is not null and l.seq < f.seq))
-		union all
-		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome, t.node_loss
-		from telemetry_receipt t
-		where t.ledger is not null and t.minted > to_timestamp(%[1]s)
-			and t.node in (select node from first_in) and t.boot not in (select boot from first_in)
-			and t.seq = (select min(n.seq) from telemetry_receipt n where n.boot = t.boot and n.ledger is not null)
+		with ledgered as (
+			select node, boot, seq, minted, resolved, deliveries, ledger, outcome, node_loss,
+				min(seq) filter (where minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s))
+					over (partition by boot) as first_in,
+				min(seq) over (partition by boot) as boot_first
+			from telemetry_receipt where ledger is not null),
+		placed as (
+			select *, max(seq) filter (where seq < first_in) over (partition by boot) as below,
+				bool_or(first_in is not null) over (partition by node) as node_in
+			from ledgered)
+		select node, boot, seq, minted, resolved, deliveries, ledger, outcome, node_loss from placed
+		where (first_in is not null and (seq >= first_in or seq = below))
+			or (first_in is null and node_in and seq = boot_first and minted > to_timestamp(%[1]s))
 		order by node, boot, seq) r`,
 		epoch(from), epoch(to))
 }

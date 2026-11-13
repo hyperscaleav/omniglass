@@ -93,8 +93,10 @@ func (e *PlacementError) Unwrap() error { return ErrPlacementNotAllowed }
 // validatePlacement enforces a location_type's allowed_parent_types against a
 // candidate placement: parentType is the parent location's type, or nil for a
 // root placement (no parent). An empty (or unset) allowed set is
-// unconstrained. CreateLocation and the reparent path in UpdateLocation both
-// call this before writing. A childType that does not exist in the registry is
+// unconstrained. Three paths call this before writing: CreateLocation, the
+// reparent in MoveLocation, and the reclassify-in-place in UpdateLocation (the
+// final type against the current parent), so retyping cannot bypass what a move
+// would refuse. A childType that does not exist in the registry is
 // left to the insert's FK check (ErrUnknownType), not this validator.
 func (p *PG) validatePlacement(ctx context.Context, q querier, childType string, parentType *string) error {
 	// Resolved over the operator's shadow, not read from the official row: an
@@ -1122,6 +1124,16 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if err != nil {
 		return nil, err
 	}
+	// A reclassify is the third way into a placement (ADR-0030), so the final
+	// type is checked against the parent the row already has, the same refusal
+	// a move to that parent would get. Only an actual change is checked: the
+	// console restates the type on every save, and a grandfathered placement
+	// stays untouched until an operator edits its type.
+	if typePatchID != nil && *typePatchID != before.LocationTypeID {
+		if err := p.validateReclassify(ctx, tx, *typePatchID, before.ParentID); err != nil {
+			return nil, err
+		}
+	}
 	if typePatchID != nil && before.NameGenerated && *typePatchID != before.LocationTypeID {
 		newName, newOrdinal, err := generateNameForLocationType(ctx, tx, *typePatchID, before.ParentID, &before.ID)
 		if err != nil {
@@ -1172,6 +1184,26 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, fmt.Errorf("storage: commit update location: %w", err)
 	}
 	return after, nil
+}
+
+// validateReclassify checks a location retyped in place: newTypeID against the
+// type of the parent the row currently sits under (nil parentID is a root
+// placement). It resolves both to the names validatePlacement and its
+// PlacementError speak.
+func (p *PG) validateReclassify(ctx context.Context, q querier, newTypeID string, parentID *string) error {
+	var newType string
+	if err := q.QueryRow(ctx, `select name from location_type where id = $1`, newTypeID).Scan(&newType); err != nil {
+		return fmt.Errorf("storage: load location_type %q: %w", newTypeID, err)
+	}
+	var parentType *string
+	if parentID != nil {
+		var pt string
+		if err := q.QueryRow(ctx, `select t.name from location l join location_type t on t.id = l.location_type where l.id = $1`, *parentID).Scan(&pt); err != nil {
+			return fmt.Errorf("storage: load parent type of location %q: %w", *parentID, err)
+		}
+		parentType = &pt
+	}
+	return p.validatePlacement(ctx, q, newType, parentType)
 }
 
 // restatedType returns nil for a type ref that re-states what the row already

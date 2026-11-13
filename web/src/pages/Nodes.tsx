@@ -36,14 +36,16 @@ import { TASKS_KEY, listTasks } from "../lib/tasks";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
+import { pushToast } from "../lib/toast";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Nodes: the collection-daemon inventory, a config over the shared FlatList (the
 // flat sibling of the inventory TreeList). A row per node with its liveness pill
 // (derived client-side from last_heartbeat_at against the server's down window),
 // a row opening the blade detail (facts + the derived Tasks panel + an Enroll /
-// Re-enroll action), and "New node" opening the create Drawer. Day-one enrollment
-// mints a secret token shown ONCE in a modal; it is never cached or logged. The
+// Re-enroll action), and "New node" opening the create Drawer. Creating a node does
+// not enroll it: Enroll is a separate act on the blade (primary until the node is
+// enrolled) that mints a secret token shown ONCE in a modal; it is never cached or logged. The
 // tasks a node runs are DERIVED read-only plumbing, so they read as a panel on the
 // node, not a separate nav entry. Every gate is a UI hint; the server is the
 // authority.
@@ -129,8 +131,8 @@ export default function Nodes() {
           blades: { registry: { node: nodeBlade }, rootKind: "node" },
           create: {
             label: "New node",
-            can: () => can(me.data, "node", "create") && can(me.data, "node", "enroll"),
-            body: (ctx) => <CreateNodeForm close={ctx.close} onEnrolled={(out) => { setEnrollResult(out); ctx.close(); }} />,
+            can: () => can(me.data, "node", "create"),
+            body: (ctx) => <CreateNodeForm close={ctx.close} onCreated={ctx.select} />,
           },
         }}
       />
@@ -240,18 +242,20 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
     }
   }
 
-  // Parity with the component/location blades: Edit is the primary action (gated on
-  // node:update; the name is the immutable key, so it stays read-only). Enroll /
-  // Re-enroll is a node-specific act, so it moves to the secondary kebab rather than
-  // occupying the primary slot.
+  // Edit is gated on node:update (the name is the immutable key, so it stays
+  // read-only). Enroll is the next step for a node that has never been enrolled, so it
+  // takes the footer's primary slot; once enrolled, Re-enroll is a rarer act and
+  // folds into the kebab.
   edit.bind({
     editable: () => !!n() && can(me.data, "node", "update"),
     save,
     destructive: () => (canDelete() && n() ? { label: "Delete", tone: "danger", onClick: () => void removeNode() } : undefined),
+    primary: () =>
+      canEnroll() && n() && !n()!.enrolled
+        ? { label: "Enroll", onClick: () => void doEnroll(), busy }
+        : undefined,
     secondary: () =>
-      canEnroll() && n()
-        ? [{ label: n()!.enrolled ? "Re-enroll" : "Enroll", onClick: () => void doEnroll() }]
-        : [],
+      canEnroll() && n()?.enrolled ? [{ label: "Re-enroll", onClick: () => void doEnroll() }] : [],
   });
 
   return (
@@ -363,11 +367,10 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
 
 // CreateNodeForm is the new-node form the create Drawer hosts: the label
 // leads, the name (the node's address, required) follows it, plus an optional
-// location and description. Day one, a node is created then enrolled immediately,
-// so on success it invalidates the list and hands the minted token to onEnrolled,
-// which reveals it in the show-once modal (closing this Drawer). The token is never
-// held here.
-function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutput) => void }) {
+// location and description. Creating a node does not enroll it: on success it
+// invalidates the list and hands the new row to onCreated, which opens its blade,
+// where Enroll is the primary action once the device is ready to claim a token.
+function CreateNodeForm(props: { close: () => void; onCreated: (row: Node) => void }) {
   const qc = useQueryClient();
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
   // Label leads and the address follows it, stopping the moment the
@@ -398,10 +401,8 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         location: location() || undefined,
       });
       await qc.invalidateQueries({ queryKey: NODES_KEY });
-      // Day-one enrollment: mint the token now so the operator can hand it to the
-      // node deployment. Shown once (next), never cached.
-      const out = await enrollNode(created.name);
-      props.onEnrolled(out);
+      pushToast({ tone: "success", title: "Node created. Enroll it when the device is ready." });
+      props.onCreated(created);
     } catch (er) {
       setErr(describeError(er));
     } finally {
@@ -411,7 +412,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">Registers an edge node and mints its enrollment token, which is shown once.</p>
+      <p class="text-xs text-base-content/50">Registers an edge node. Enroll it from its detail when the device is ready to claim a token.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>

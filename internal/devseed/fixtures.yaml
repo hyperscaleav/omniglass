@@ -2106,6 +2106,27 @@ sim_secrets:
     label: Simulated panel login (before the rotation)
     secret_type: basic-auth
     fields: { username: admin, password: newtron-2025 }
+  # The same name planted at the two tiers below the platform, so the console's
+  # effective-secrets view has a cascade to read (#168; secrets have no system
+  # band): Boardroom A's copy wins for the room's components, and touch-a has a
+  # copy of its own, which wins on that one panel with the room's and the
+  # platform's shadowed beneath it. Chosen because only the huddle panel's
+  # console uses this name, outside the room: a node refuses a name with more
+  # than one copy cascading onto a component (#820), so the name planted here
+  # must be one no endpoint in the subtree references. The seed lands these two
+  # after every endpoint, since an attach refuses a name that has two copies.
+  - name: sim-panel-login
+    label: Boardroom A panel login
+    secret_type: basic-auth
+    owner_kind: location
+    owner: boardroom-a
+    fields: { username: admin, password: boardroom-a }
+  - name: sim-panel-login
+    label: Boardroom A touch panel login
+    secret_type: basic-auth
+    owner_kind: component
+    owner: touch-a
+    fields: { username: touch-a, password: touch-a }
   - name: sim-panel-login-rotated
     label: Simulated panel login (rotated)
     secret_type: basic-auth

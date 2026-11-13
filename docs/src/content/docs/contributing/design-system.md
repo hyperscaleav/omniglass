@@ -212,7 +212,7 @@ confirm whose body has to teach cannot be a native prompt.
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
-`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`PanelFooter`, `Badge`, `Page`, `Breadcrumb` (its crumbs are links), `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
 `BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
 the `Sidebar` / `TopBar` shell.
 
@@ -251,7 +251,8 @@ of the remaining pages is #784.
 - **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button
-  never steals the control's accessible name.
+  never steals the control's accessible name. A placeholder is not a label and does not provide an
+  accessible name; always pair a control with a `<label>` or `aria-label`.
 - **`BladeTitle`** is the **heading** of a blade: the row's label, tracked reactively.
 - **`BladeField`** is a **blade field**: a fact when the blade is being read, a `FieldRow` when it
   is being edited, with the switch made once rather than per field. It takes the edit slot from

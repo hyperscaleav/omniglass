@@ -44,11 +44,19 @@ type Grant struct {
 // root inclusively (inclusive wins). SelfIDs carries self-op roots plus any root
 // a self grant re-adds after an exclusion stripped it. All false with every list
 // empty means nothing is in scope.
+//
+// Resource is the resource Resolve resolved the set for, so the gateway can ask
+// Covers whether the set may be checked against the table in front of it (#754):
+// an empty set resolved for a resource the table's tier cannot contain is a
+// wiring mistake, not an empty grant, and the two look identical otherwise. A set
+// built by hand (the all set a system path passes, a test fixture) leaves it
+// empty and carries no resolution to check.
 type Set struct {
 	All            bool
 	IDs            []string
 	ExcludeRootIDs []string
 	SelfIDs        []string
+	Resource       string
 }
 
 // Empty reports whether the set admits nothing (no all flag, no roots of any op).
@@ -105,7 +113,7 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	// leaf-lock grants no authority to grow the tree under its node.
 	excludes := action != "read" && action != "create"
 	selfApplies := action != "create"
-	var set Set
+	set := Set{Resource: resource}
 	seen := map[string]bool{} // a root already added to IDs (subtree ops)
 	selfSeen := map[string]bool{}
 	inclusive := map[string]bool{} // a root a subtree op admits in full for this action
@@ -198,8 +206,12 @@ func Covers(resource, target string) bool {
 	return applicableKinds(resource)[target]
 }
 
-// applicableKinds returns the scope kinds that can contain a resource: "all"
-// always, plus the resource's own tier. The cross-tier cascade (a location scope
+// applicableKinds returns the scope kinds that can contain a resource: the
+// resource's own tier, or "all" alone for a fleet-wide resource. An unregistered
+// resource gets the empty map, and Registered says no for it: every gated
+// resource must land in one of the cases below, which
+// TestEveryGatedResourceRegistersItsScope (internal/api) enforces over the live
+// route set. The cross-tier cascade (a location scope
 // also covering its systems and components) is a later slice; today each fleet
 // tree entity is scoped by its own kind. interface and task are the exception:
 // they are not tree entities of their own, they hang off a component (an
@@ -263,7 +275,29 @@ func applicableKinds(resource string) map[string]bool {
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
 		return map[string]bool{"location": true, "system": true, "component": true}
+	case "audit", "command_type", "component_type", "driver", "event_type", "file",
+		"location_type", "metric_type", "node", "notification_target",
+		"notification_type", "platform", "principal", "principal_grant",
+		"principal_group", "product", "property_type", "role", "rule", "settings",
+		"severity_level", "simulation", "standard", "system_type", "tag", "template",
+		"vendor":
+		// Fleet-wide: no tier contains these, so only an all-scoped grant confers
+		// them and any other resolves to the empty set (the all-scope directory).
+		// Resolve answers "all" before it consults this map, so listing it changes
+		// no resolution: it is the registration that records the empty set as a
+		// decision rather than an omission. A resource moving onto a tier moves out
+		// of this case into its tier's, with a test.
+		return map[string]bool{"all": true}
 	default:
 		return map[string]bool{}
 	}
+}
+
+// Registered reports whether resource has an applicable-kind registration: a
+// tier that can contain it, or the fleet-wide "all". An unregistered resource
+// still resolves, to the empty set for every grant but an all-scoped one, which
+// is a silent, total denial for scoped callers only (#754); the API's
+// registration test fails make test on any gated permission naming one.
+func Registered(resource string) bool {
+	return len(applicableKinds(resource)) > 0
 }

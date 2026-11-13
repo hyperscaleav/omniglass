@@ -37,6 +37,10 @@ type Catalog interface {
 	EventPayloadSchema(name string) []byte
 	// CommandTypeExists reports whether the command-type catalog holds name.
 	CommandTypeExists(name string) bool
+	// CommandHasTarget reports whether a command type sets a target
+	// (target_property_type or target_metric_type). Fire-and-forget commands
+	// have no target and settle at their issue.
+	CommandHasTarget(name string) bool
 	// SecretTypeExists reports whether the secret-type catalog holds name.
 	SecretTypeExists(name string) bool
 	// WriterClass resolves an emitted name's writer class (ADR-0161): a
@@ -579,7 +583,7 @@ func argRefs(s string) []string {
 
 // validateSettle refuses a malformed settle declaration; httpBinding reads
 // the reply as an http answer.
-func validateSettle(c CommandBinding, httpBinding bool) error {
+func validateSettle(c CommandBinding, httpBinding bool, cat Catalog) error {
 	st := c.Settle
 	if st == nil {
 		return nil
@@ -593,6 +597,9 @@ func validateSettle(c CommandBinding, httpBinding bool) error {
 	case SettleFromResponse:
 	default:
 		return fmt.Errorf("driver: command binding %q settles from %q; want response or observe", c.CommandType, st.From)
+	}
+	if cat != nil && !cat.CommandHasTarget(c.CommandType) {
+		return fmt.Errorf("driver: command %q is fire-and-forget: it settles at its issue, so it declares no settle", c.CommandType)
 	}
 	if (st.Extract == nil) == (st.Success == nil) {
 		return fmt.Errorf("driver: command binding %q settles from its response and needs exactly one of extract or success", c.CommandType)
@@ -879,7 +886,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			if err := validateFrameRequest(what, c.Request); err != nil {
 				return err
 			}
-			if err := validateFrameSettle(c); err != nil {
+			if err := validateFrameSettle(c, cat); err != nil {
 				return err
 			}
 			if err := validateReply(s.Transport, what, c.Request); err != nil {
@@ -903,7 +910,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			if err := validateHTTPRequest(what, c.Request, true, s.Session); err != nil {
 				return err
 			}
-			if err := validateSettle(c, true); err != nil {
+			if err := validateSettle(c, true, cat); err != nil {
 				return err
 			}
 			continue
@@ -911,7 +918,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if c.Request.Line == "" {
 			return fmt.Errorf("driver: command binding %q on %s needs a line request", c.CommandType, s.Transport)
 		}
-		if err := validateSettle(c, false); err != nil {
+		if err := validateSettle(c, false, cat); err != nil {
 			return err
 		}
 		if err := validateReply(s.Transport, fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {

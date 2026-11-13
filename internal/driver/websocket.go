@@ -218,10 +218,10 @@ func (s *Spec) validateWebSocketSession() error {
 
 // validateFrameSettle refuses a websocket binding's settle extract: its
 // reply is a frame, read by a jsonpath (a JSON frame) or a regex.
-func validateFrameSettle(c CommandBinding) error {
+func validateFrameSettle(c CommandBinding, cat Catalog) error {
 	if st := c.Settle; st != nil && st.Extract != nil && (st.Extract.OID != "" || st.Extract.Key != "" || st.Extract.XPath != "") {
 		return fmt.Errorf("driver: command binding %q extracts its reply frame's value with a jsonpath or a regex", c.CommandType)
 	}
 	// A frame reads as a json answer does: a jsonpath or a regex.
-	return validateSettle(CommandBinding{CommandType: c.CommandType, Settle: c.Settle}, true)
+	return validateSettle(CommandBinding{CommandType: c.CommandType, Settle: c.Settle}, true, cat)
 }

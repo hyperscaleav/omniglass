@@ -207,6 +207,29 @@ func (p *PG) labelDrift(ctx context.Context, q querier, eng *label.Engine, kind 
 	}
 }
 
+// forUpdateSuffix locks the scanned rows IN the resolving read, which #709
+// showed is not a lock on what that read resolves: at READ COMMITTED a
+// statement's snapshot predates its wait on a row lock, and the re-read after
+// the wait refreshes the locked row but not the correlated subqueries
+// (location_name, product_handle, standard_handle, parent_name and the rest of
+// componentCols, systemCols and locationCols) already evaluated against the
+// stale snapshot. Here that is harmless, and #731 settled why rather than
+// splitting the lock out:
+//
+//   - a label reads only two kinds of input: the locked row's OWN columns
+//     (name, ordinal, product_id, standard_id, system_type_id, location_type,
+//     location_id), which the re-read refreshes, and facts the *Drift
+//     functions resolve in SEPARATE statements after this scan returns
+//     (componentPlacements, systemPlacements, the *LabelChain calls,
+//     globalLabelRule), each with a snapshot taken after the wait is over;
+//   - no label key reads a subquery-filled column, which
+//     TestNoLabelKeyReadsAScanSubqueryColumn holds by construction.
+//
+// TestALabelRecomputeWaitingOnARowLockRendersTheNamesCommittedDuringTheWait is
+// the witness: it forces a recompute to wait here while a product rename
+// commits, proves with a control statement that the subqueries DID go stale,
+// and asserts the label did not. A key that ever needs a subquery column is the
+// change that makes this hazard real; resolve it after the scan instead.
 func forUpdateSuffix(forUpdate bool) string {
 	if forUpdate {
 		return " for update"

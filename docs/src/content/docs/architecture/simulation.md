@@ -313,6 +313,17 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
+The registry is per server process, and it forgets. Deleting a node (`DELETE /nodes/{name}`) drops
+its entry at once, so neither `GET /simulation` nor `GET /nodes/{name}/simulation` can name a node
+that no longer exists. A simulator that has neither pulled nor reported for a hundred seconds (ten
+of its pulls) is dropped on the next read, so one torn down without its node being deleted ages out
+instead of reading `offline` until the server restarts; if it is still running, its next pull
+brings it back as new. Because the hits live in one process, a server run as more than one replica
+shows a simulator's status only on the replica its node's bus session landed on, and a read that
+reaches another replica sees no simulator. That is accepted while the architecture runs one
+stateless server ([scaling](/architecture/scaling/)); a shared store such as NATS KV is the path if
+it ever matters, and it is not built here.
+
 ### What an endpoint observed
 
 A hit says a device was touched; it does not say whether every request a node sent arrived, or how
