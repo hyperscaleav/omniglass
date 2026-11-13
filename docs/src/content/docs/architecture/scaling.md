@@ -146,7 +146,10 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   consumer, so adding replicas adds throughput (NATS is the coordinator,
   [workers](/architecture/workers/)).
 - **edge nodes**: one or many per site, connecting back; adding sites adds nodes
-  ([nodes](/architecture/nodes/)).
+  ([nodes](/architecture/nodes/)). Within a site, adding a node adds capacity: the server spreads the
+  site's unpinned components across its nodes by expected cost, guarded by each node's measured
+  headroom, and moves a lost node's components to its peers
+  ([load distribution across a site's nodes](/architecture/nodes/#load-distribution-across-a-sites-nodes), #1638).
 - **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
   active, failover by re-election. No separate election service.
 - **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
