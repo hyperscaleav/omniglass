@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EffectiveRoleBody, RoleSpecBody, SystemRoleBody } from "../api/api.gen";
 
 // The system-roles data layer: thin typed wrappers over the generated client.
 //
@@ -22,14 +22,14 @@ import type { components } from "../api/schema.gen";
 // surface the server's message verbatim rather than a generic failure.
 
 // A role as a SYSTEM sees it: the declaration, plus who fills it here.
-export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
+export type EffectiveRole = EffectiveRoleBody;
 // A role as its OWNER declares it (the standard's line, and the write's echo).
-export type DeclaredRole = components["schemas"]["SystemRoleBody"];
+export type DeclaredRole = SystemRoleBody;
 // The declaration body. Partial by default: what it carries changes, what it
 // omits is left alone. update_mask names the fields the write means to set
 // regardless, which is the only way to clear one (#666); accepted_types and
 // pinned_products still replace their set wholesale when written.
-export type RoleSpec = components["schemas"]["RoleSpecBody"];
+export type RoleSpec = RoleSpecBody;
 
 // One cache namespace per arc, so a standard and a system that share an address
 // never collide.

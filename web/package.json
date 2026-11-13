@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts && npm run gen:settings-schema",
+    "gen:api": "orval --config orval.config.mjs && node scripts/gen-api-paths.mjs && npm run gen:settings-schema",
     "gen:settings-schema": "node scripts/gen-settings-schema.mjs",
     "test:e2e": "playwright test"
   },
@@ -23,7 +23,6 @@
     "@lezer/highlight": "^1.2.5",
     "@solidjs/router": "^1.0.1",
     "@tanstack/solid-query": "^5.106.1",
-    "openapi-fetch": "^0.17.0",
     "solid-js": "^1.9.18"
   },
   "devDependencies": {
@@ -39,11 +38,11 @@
     "gray-matter": "^4.0.3",
     "js-yaml": "^5.5.0",
     "jsdom": "^31.0.0",
-    "openapi-typescript": "^7.13.0",
+    "orval": "^8.47.0",
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.7.3",
+    "typescript": "^7.0.2",
     "vite": "^8.3.6",
     "vite-plugin-solid": "^2.11.15",
     "vitest": "^5.1.0"
