@@ -18,6 +18,7 @@ import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import { SYSTEMS_KEY, listSystems, updateSystem, renameSystem, checkSystemName, type NameCheck } from "../lib/systems";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
+import { MEMBERSHIP_KEYS, applyMembershipSteps, bindableSystemNodes, componentSystems, componentSystemsKey, planMembershipChanges } from "../lib/members";
 import { LOCATIONS_KEY, listLocations, updateLocation, moveLocation, renameLocation, checkLocationName } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, updateComponent, renameComponent, resetComponentName, checkComponentName } from "../lib/components";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -32,6 +33,7 @@ import TreeSelect from "./TreeSelect";
 import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
+import MembershipsField from "./MembershipsField";
 import { Plus, X } from "./icons";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
@@ -73,12 +75,23 @@ function NameField(props: {
 }) {
   const [checking, setChecking] = createSignal(false);
   const [result, setResult] = createSignal<NameCheck | null>(null);
-  createEffect(on(props.name, () => setResult(null)));
+  const [checkError, setCheckError] = createSignal<string | null>(null);
+  createEffect(on(props.name, () => { setResult(null); setCheckError(null); }));
   async function runCheck() {
     setChecking(true);
-    try { setResult(await props.check(props.name().trim())); } catch { setResult(null); } finally { setChecking(false); }
+    setCheckError(null);
+    try {
+      setResult(await props.check(props.name().trim()));
+    } catch (e) {
+      setCheckError(`Check failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      setResult(null);
+    } finally {
+      setChecking(false);
+    }
   }
   const hint = () => {
+    const err = checkError();
+    if (err) return err;
     const r = result();
     if (!r) return undefined;
     if (r.valid && r.available) return "Available.";
@@ -130,7 +143,8 @@ export default function EntityForm(props: {
   const slot = props.slot;
   const [err, setErr] = createSignal<string | null>(null);
 
-  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems, enabled: props.kind === "system" }));
+  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems, enabled: props.kind !== "location" }));
+  const memberships = useQuery(() => ({ queryKey: componentSystemsKey(props.id), queryFn: () => componentSystems(props.id), enabled: props.kind === "component" }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: props.kind === "component" }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: props.kind === "system" }));
@@ -179,6 +193,23 @@ export default function EntityForm(props: {
   const [locationType, setLocationType] = createSignal("");
   const [parentName, setParentName] = createSignal("");
   const [initialParent, setInitialParent] = createSignal("");
+  // Memberships (#767): staged until Save. `undefined` is "untouched", so the
+  // field follows the server's primary (which may land after edit opens on a
+  // deep link) until the operator picks; seeding resets it, with no effect.
+  const [primaryDraft, setPrimaryDraft] = createSignal<string | undefined>(undefined);
+  const [removedMembers, setRemovedMembers] = createSignal<ReadonlySet<string>>(new Set());
+  const memberList = () => memberships.data ?? [];
+  const serverPrimary = () => memberList().find((m) => m.primary)?.system_id ?? "";
+  // Membership is its own verb (system:update on the system AND component:update
+  // on the component, the same pair the create form's System field needs), and
+  // the picker offers only systems the caller's update scope reaches.
+  const mayWriteMembership = () => canUpdate() && can(me.data, "system", "update") && bindableSystemNodes(systems.data ?? []).length > 0;
+  const membershipWhy = () => {
+    if (mayWriteMembership()) return undefined;
+    return !can(me.data, "system", "update")
+      ? "Changing a component's systems needs system:update; the memberships stay as they are."
+      : "None of the systems you can see is inside your system:update scope; the memberships stay as they are.";
+  };
 
   slot.bind({
     // Editing begins on the update verb alone; a rename-only grant reads. The
@@ -194,6 +225,10 @@ export default function EntityForm(props: {
       if (props.kind === "system") {
         setStandard((rec.standard as string) ?? "");
         setSystemType((rec.system_type as string) ?? "");
+      }
+      if (props.kind === "component") {
+        setPrimaryDraft(undefined);
+        setRemovedMembers(new Set<string>());
       }
       if (props.kind === "location") {
         setLocationType((rec.location_type as string) ?? "");
@@ -220,6 +255,12 @@ export default function EntityForm(props: {
           if (moved) await moveLocation(r.id, parentName());
         } else {
           await updateComponent(r.id, { label: pen.value() });
+          // Membership is its own verb, not a field on the patch. After the
+          // update, before the rename: addressed by uuid, so the rename moving
+          // the name changes nothing here, and a refusal keeps the face open.
+          if (mayWriteMembership()) {
+            await applyMembershipSteps(r.id, planMembershipChanges(memberList(), primaryDraft(), removedMembers()));
+          }
         }
         if (renamed) {
           if (props.kind === "system") await renameSystem(r.id, name().trim());
@@ -238,6 +279,9 @@ export default function EntityForm(props: {
         await Promise.all([
           qc.invalidateQueries({ queryKey: [...key] }),
           qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+          // Both ends of the membership relation: the component's own list and
+          // every system's member list (SystemZoom polls it), whichever write ran.
+          ...(props.kind === "component" ? MEMBERSHIP_KEYS.map((k) => qc.invalidateQueries({ queryKey: [...k] })) : []),
         ]);
       }
     },
@@ -278,9 +322,9 @@ export default function EntityForm(props: {
 
   const check = (n: string) => {
     const rec = row();
-    if (props.kind === "system") return checkSystemName(n, undefined, (rec?.location as string) || undefined);
+    if (props.kind === "system") return checkSystemName(n, (rec?.parent_id as string) || undefined, (rec?.location_id as string) || undefined);
     if (props.kind === "location") return checkLocationName(n, (rec?.parent_id as string) || undefined);
-    return checkComponentName(n, (rec?.parent as string) || undefined, (rec?.location as string) || undefined);
+    return checkComponentName(n, (rec?.parent_id as string) || undefined, (rec?.location_id as string) || undefined);
   };
 
   async function doReset() {
@@ -430,6 +474,27 @@ export default function EntityForm(props: {
         </div>
         </Show>
 
+        <Show when={props.kind === "component"}>
+          <div class={SECTION}>
+            <span class={EYEBROW}>Systems</span>
+            <MembershipsField
+              slot={slot}
+              members={memberList}
+              systems={() => systems.data ?? []}
+              writable={mayWriteMembership}
+              why={membershipWhy}
+              primary={() => primaryDraft() ?? serverPrimary()}
+              onPrimary={(id) => {
+                setPrimaryDraft(id);
+                // A system promoted to primary is no longer a chip to remove.
+                setRemovedMembers((prev) => { const next = new Set(prev); next.delete(id); return next; });
+              }}
+              removed={removedMembers}
+              onRemove={(id) => setRemovedMembers((prev) => new Set(prev).add(id))}
+            />
+          </div>
+        </Show>
+
         {/* The kind's panels are configuration (roles, properties and their
             cascade, reconciliation, endpoints): the page host's Configure tab
             carries them, and the blade stays the glance an operator landed on
@@ -502,11 +567,7 @@ export function EntityCreateForm(props: {
   // The systems a component may be bound to on create: those the caller's
   // system:update SCOPE actually reaches (#707), so the form never offers a
   // choice the platform refuses on submit.
-  const bindableSystemItems = createMemo<TreeNode[]>(() => {
-    const rows = (systems.data ?? []).filter((sy) => sy.actions?.includes("update"));
-    const present = new Set(rows.map((sy) => sy.id));
-    return rows.map((sy) => ({ id: sy.id, value: sy.id, label: entityLabel(sy), parentId: sy.parent_id && present.has(sy.parent_id) ? sy.parent_id : undefined }));
-  });
+  const bindableSystemItems = createMemo<TreeNode[]>(() => bindableSystemNodes(systems.data ?? []));
   const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
   const bindNeedsPermission = () => !can(me.data, "system", "update");
   const standardOptions = createMemo(() => standards.data ?? []);

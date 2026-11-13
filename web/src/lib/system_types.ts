@@ -97,23 +97,6 @@ export async function deleteSystemType(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// systemTypeByName indexes the flat registry by name, the join key every
-// reference (system.system_type, a node's own parent) resolves through.
-export function systemTypeByName(types: SystemType[]): Map<string, SystemType> {
-  return new Map(types.map((t) => [t.name, t] as const));
-}
-
-// resolveSystemTypeIcon reads the icon the SERVER resolved for a named type
-// (#695), falling back to "map-pin", which is what components/icons.tsx already
-// resolves an unknown key to, for a name the registry does not contain or a
-// chain that sets no icon anywhere.
-//
-// A mid-chain override still beats the root's; that rule now lives in exactly
-// one place, the gateway, rather than once here and once there.
-export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<string, SystemType>): string {
-  const t = typeName ? byName.get(typeName) : undefined;
-  return t?.resolved_icon || "map-pin";
-}
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };
 

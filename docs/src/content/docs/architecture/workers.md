@@ -75,7 +75,8 @@ attempts, so a loss reads as a ratio where 0 is healthy.
 - **The settlement tick** (every 5 s) runs two sweeps, the instances of **`sweep-duration`**,
   **`sweep-count`** and **`sweep-failure-count`**: `command-settlement` (the commands past their
   settle window) and `event-rule` (the rule streaks held for their sustain). Healthy is no failures
-  and a duration well under the 5 s it repeats on.
+  and a duration well under the 5 s it repeats on. A pass that succeeds writes its failure count 0,
+  so Platform health's Queues panel reads each sweep's failures against its passes as `0 / n` (#1769).
 
 These are all the server's own clock against its own database, so unlike ingest lag no node clock is
 in them and no skew moves them. The definitions are

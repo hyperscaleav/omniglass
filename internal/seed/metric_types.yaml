@@ -312,7 +312,7 @@ metric_types:
   - name: bus-telemetry-ack-failure-count
     data_type: int
     label: Telemetry Ack Failures
-    description: Batch deliveries whose acknowledgement the bus did not confirm over the report window, a redelivery its receipt held included; each is redelivered and its receipt keeps it from landing twice, so this costs work, not rows. As a share of ingest-batch-count, healthy is 0.
+    description: Batch deliveries whose acknowledgement the bus did not confirm over the report window, a redelivery its receipt held included; each is redelivered and its receipt keeps it from landing twice, so this costs work, not rows. Written 0 in a window of confirmed acks, so healthy reads 0, not unreported; as a share of ingest-batch-count, healthy is 0.
   - name: bus-worklist-pull-count
     data_type: int
     label: Worklist Pulls
@@ -329,7 +329,7 @@ metric_types:
   - name: bus-request-failure-count
     data_type: int
     label: Bus Request Failures
-    description: Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count.
+    description: Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count, written 0 beside a window of requests that all succeeded.
   - name: calc-pending-depth
     data_type: int
     label: Calc Backlog
@@ -364,7 +364,7 @@ metric_types:
   - name: sweep-failure-count
     data_type: int
     label: Sweep Failures
-    description: Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count.
+    description: Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count, written 0 beside a window of passes that all succeeded.
   # The push lane's one publisher (#1746), on the server's platform component:
   # every push waits for the publish turn, one at a time, and a wait past the
   # bound is refused (the API answers 503, minting nothing), so a refusal

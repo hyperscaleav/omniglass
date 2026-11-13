@@ -146,6 +146,9 @@ func newLabMeasureCmd() *cobra.Command {
 			"a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from " +
 			"it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as " +
 			"far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.\n\n" +
+			"Every database read the measure makes runs under what its run has left, and never longer than ten minutes: " +
+			"the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so " +
+			"no measure leaves a query running against the lab it measured.\n\n" +
 			"The retention probe plants a backlog of aged property rows and restarts the server to run its pass; " +
 			"--backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not " +
 			"record commit timestamps, which the ingest lag reads: bring it up again.\n\n" +

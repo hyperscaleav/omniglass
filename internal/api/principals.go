@@ -602,9 +602,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		if !revoked {
 			return nil, huma.Error404NotFound("no such session")
 		}
-		// Audit the administrator action: the acting admin is the actor, and the real
-		// actor rides context when impersonating. Recorded as an auth-domain event.
-		if err := gw.WriteAuthEvent(ctx, actorID(ctx), "revoke_session"); err != nil {
+		// Audit the administrator action: the acting admin is the actor, the target
+		// principal is recorded, and the real actor rides context when impersonating.
+		if err := gw.WriteAuthEventFor(ctx, actorID(ctx), "revoke_session", "principal", in.ID); err != nil {
 			return nil, huma.Error500InternalServerError("revoke session")
 		}
 		return nil, nil
@@ -643,9 +643,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, huma.Error500InternalServerError("revoke sessions")
 		}
 		// Audit only a revoke that actually ended something (a zero-count bulk revoke is
-		// a no-op), attributed to the acting admin (real actor rides context).
+		// a no-op), attributed to the acting admin with the target principal.
 		if n > 0 {
-			if err := gw.WriteAuthEvent(ctx, actorID(ctx), "revoke_session"); err != nil {
+			if err := gw.WriteAuthEventFor(ctx, actorID(ctx), "revoke_session", "principal", in.ID); err != nil {
 				return nil, huma.Error500InternalServerError("revoke sessions")
 			}
 		}

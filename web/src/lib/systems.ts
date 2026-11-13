@@ -59,11 +59,6 @@ export async function listSystems(): Promise<System[]> {
   return (data?.systems ?? []) as System[];
 }
 
-export async function getSystem(name: string): Promise<System> {
-  const { data, error } = await api.GET("/systems/{name}", { params: { path: { name } } });
-  if (error) throw error;
-  return data as System;
-}
 
 export type CreateSystem = {
   // Optional (#686, #688): omit it and the platform mints "<stem>-<n>" from the

@@ -292,8 +292,8 @@ export default function SystemZoom() {
     const trail = view.data ? systemCrumbs(view.data, id()) : [];
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
-      ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(`/locations/${c.id}`) })),
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
+      ...trail.map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })),
     ];
   });
 
@@ -302,7 +302,8 @@ export default function SystemZoom() {
   const retry = () => { void view.refetch(); void health.refetch(); void declared.refetch(); };
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
-  const missing = () => !!view.data && !view.isFetching && !system() && !(view.data.systems ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!view.data && !view.isFetching && !system() && (view.data.systems ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!view.data && !view.isFetching && !system() && !ambiguous();
 
   // Components open in a blade that can expand to their own view (ADR-0129's
   // altitude rule): every member, alarm, and map marker pushes the component
@@ -318,6 +319,7 @@ export default function SystemZoom() {
       <DetailGate
         noun="system"
         missing={missing()}
+        ambiguous={ambiguous()}
         pending={pending()}
         error={failure() ? describeError(failure()) : null}
         retrying={view.isFetching || health.isFetching}

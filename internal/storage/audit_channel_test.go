@@ -116,3 +116,70 @@ func TestAuditClientIsSanitized(t *testing.T) {
 		}
 	}
 }
+
+// WriteAuthEventFor round-trips resource and resource_id: a login audit has
+// resource='auth' with no target, a revoke_session audit has resource='principal'
+// and the target's id, and both record the actor. Skipped under -short.
+func TestWriteAuthEventForRoundsTripsResourceAttribution(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	zeros := make([]byte, 32)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: zeros, Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	root, _ := gw.AuthenticateBearer(ctx, zeros)
+	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice"}, scope.Set{All: true})
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+
+	// WriteAuthEvent defaults resource to 'auth' with no target.
+	if err := gw.WriteAuthEvent(ctx, root.ID, "login"); err != nil {
+		t.Fatalf("write login: %v", err)
+	}
+	// WriteAuthEventFor can target a resource: an admin revokes alice's session.
+	if err := gw.WriteAuthEventFor(ctx, root.ID, "revoke_session", "principal", alice.ID); err != nil {
+		t.Fatalf("write revoke_session: %v", err)
+	}
+
+	logEvents, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	var loginRow, revokeRow *storage.AuditEntry
+	for i := range logEvents {
+		if logEvents[i].Verb == "login" && logEvents[i].ActorID == root.ID {
+			loginRow = &logEvents[i]
+		}
+		if logEvents[i].Verb == "revoke_session" && logEvents[i].ActorID == root.ID {
+			revokeRow = &logEvents[i]
+		}
+	}
+
+	if loginRow == nil {
+		t.Fatal("no login audit event found")
+	}
+	if loginRow.Resource != "auth" || loginRow.ResourceID != "" {
+		t.Errorf("login row = resource=%q resource_id=%q, want auth (empty)", loginRow.Resource, loginRow.ResourceID)
+	}
+
+	if revokeRow == nil {
+		t.Fatal("no revoke_session audit event found")
+	}
+	if revokeRow.Resource != "principal" || revokeRow.ResourceID != alice.ID {
+		t.Errorf("revoke row = resource=%q resource_id=%q, want principal %q", revokeRow.Resource, revokeRow.ResourceID, alice.ID)
+	}
+}

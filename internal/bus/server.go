@@ -501,6 +501,9 @@ var ErrNoSimulator = collection.ErrNoSimulator
 // started.
 func (s *Server) Nodes() []string { return s.sims.Nodes() }
 
+// Forget drops a node's simulator status, for a node that was deleted.
+func (s *Server) Forget(node string) { s.sims.Forget(node) }
+
 // FireSimOperation asks the simulator beside node to run op against one of
 // its devices and returns the device's answer.
 func (s *Server) FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
@@ -618,7 +621,7 @@ func (s *Server) startSettlementSweep() {
 			case <-stop:
 				return
 			case <-t.C:
-				if err := s.sweep(sweepCommandSettlement, func() error {
+				if err := s.sweep(writerclass.SweepCommandSettlement, func() error {
 					return s.store.SweepCommandSettlements(context.Background())
 				}); err != nil {
 					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
@@ -626,7 +629,7 @@ func (s *Server) startSettlementSweep() {
 				// The same tick acts on event rule streaks held for their
 				// sustain (#920): the clock for an input that sends no
 				// further sample.
-				if err := s.sweep(sweepEventRule, func() error {
+				if err := s.sweep(writerclass.SweepEventRule, func() error {
 					return s.store.SweepEventRules(context.Background(), time.Now())
 				}); err != nil {
 					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
