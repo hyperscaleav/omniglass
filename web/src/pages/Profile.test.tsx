@@ -121,14 +121,6 @@ describe("Profile bulk revoke", () => {
   });
 });
 
-// The token drawer's lifetime field, converted by #724. It carried `min="1"
-// max="365"` from the day it was written and neither could ever fire: the
-// drawer's Create button is portaled outside the <form>, so the browser never
-// validates on the path that submits, and a 400-day token was refused by the
-// server's 422 after a round trip.
-//
-// The rule is now `tokenTtlError` and it is asserted THROUGH the surface, driving
-// the same rail button an operator clicks rather than calling the validator.
 describe("Profile form controls are labelled", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -145,6 +137,14 @@ describe("Profile form controls are labelled", () => {
   });
 });
 
+// The token drawer's lifetime field, converted by #724. It carried `min="1"
+// max="365"` from the day it was written and neither could ever fire: the
+// drawer's Create button is portaled outside the <form>, so the browser never
+// validates on the path that submits, and a 400-day token was refused by the
+// server's 422 after a round trip.
+//
+// The rule is now `tokenTtlError` and it is asserted THROUGH the surface, driving
+// the same rail button an operator clicks rather than calling the validator.
 describe("Profile token lifetime", () => {
   afterEach(() => vi.restoreAllMocks());
 
