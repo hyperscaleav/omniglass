@@ -408,11 +408,11 @@ func TestNodeReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
 	r := newNodeReport(time.Minute, 0, t0)
 	key := writerclass.WorkerBusyFraction + "/lane"
 
-	r.dispatch(dispatchWindow{poolBusy: 30 * time.Second, poolWall: 30 * time.Second, poolWorkers: 2}, t0.Add(30*time.Second))
+	r.dispatch(dispatchWindow{pool: poolWindow{busy: 30 * time.Second, capacity: 60 * time.Second}}, t0.Add(30*time.Second))
 	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[key] != 0 {
 		t.Fatalf("worker-busy-fraction emitted before its window ended: %v", mid)
 	}
-	r.dispatch(dispatchWindow{poolWall: 30 * time.Second, poolWorkers: 2}, t0.Add(time.Minute))
+	r.dispatch(dispatchWindow{pool: poolWindow{capacity: 60 * time.Second}}, t0.Add(time.Minute))
 	got := readings(r.take(t0.Add(time.Minute)))
 	if v, ok := got[key]; !ok || v != 0.25 {
 		t.Fatalf("%s = %v (written %v), want 30 s of 2 workers' 60 s, 0.25", key, v, ok)
@@ -424,5 +424,31 @@ func TestNodeReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
 	quiet := readings(r.take(t0.Add(2 * time.Minute)))
 	if v, ok := quiet[key]; !ok || v != 0 {
 		t.Fatalf("a quiet window read %s = %v (written %v), want 0", key, v, ok)
+	}
+}
+
+// A report window whose dispatch windows ran on different worker counts (a
+// pool resized between them) reads busy worker time over the worker time the
+// pool actually had, so a pool busy throughout reads exactly 1, never past it.
+func TestNodeReportReadsBusyOverThePoolsActualWorkerTime(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, 0, t0)
+	key := writerclass.WorkerBusyFraction + "/lane"
+
+	var p poolTally
+	p.open(t0, 4)
+	for range 4 {
+		p.start(t0)
+	}
+	r.dispatch(dispatchWindow{pool: p.take(t0.Add(30 * time.Second))}, t0.Add(30*time.Second))
+	var q poolTally
+	q.open(t0.Add(30*time.Second), 2)
+	for range 2 {
+		q.start(t0.Add(30 * time.Second))
+	}
+	r.dispatch(dispatchWindow{pool: q.take(t0.Add(time.Minute))}, t0.Add(time.Minute))
+	if v := readings(r.take(t0.Add(time.Minute)))[key]; v != 1 {
+		t.Fatalf("%s = %v for a pool busy throughout on 4 then 2 workers, want 1", key, v)
 	}
 }

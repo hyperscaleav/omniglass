@@ -112,12 +112,9 @@ type dispatchWindow struct {
 	// queue's cap (operator-refused-count), #1249.
 	operatorOffers   int
 	operatorRefusals int
-	// poolBusy is the lane pool's worker time spent busy over the window's
-	// length poolWall, on its poolWorkers workers: worker-busy-fraction
-	// (#1686).
-	poolBusy    time.Duration
-	poolWall    time.Duration
-	poolWorkers int
+	// pool is the lane pool's worker time spent busy against the worker
+	// time it had: worker-busy-fraction (#1686).
+	pool poolWindow
 	// schedule is the schedule hop (#1693): every due on the schedule in,
 	// every run made out, per kind the task's run produces, so a due passed
 	// over reads as that hop's loss. A run off the schedule is no due.
@@ -581,6 +578,6 @@ func (d *dispatcher) takeWindow() dispatchWindow {
 	lw := d.pool.takeWindow()
 	w.busyMax, w.queueMax = lw.busy, lw.queued
 	w.operatorOffers, w.operatorRefusals = lw.offers, lw.refused
-	w.poolBusy, w.poolWall, w.poolWorkers = lw.time.busy, lw.time.wall, lw.workers
+	w.pool = lw.pool
 	return w
 }

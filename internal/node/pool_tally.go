@@ -10,18 +10,29 @@ import "time"
 // edge.
 type poolTally struct {
 	from    time.Time     // the window's start
+	workers int           // the pool's workers, its worker time per second of window
 	busy    time.Duration // the window's time from the jobs that ended in it
 	running int           // jobs in flight
 	lead    time.Duration // over the jobs in flight, the sum of each one's start in the window past from
 }
 
-// poolWindow is a pool's busy time over a window and the window's length.
+// poolWindow is a pool's busy worker time over a window and the worker time it
+// had, the window's length times its workers: busy over capacity is its busy
+// fraction (platformmetric.BusyFraction).
 type poolWindow struct {
-	busy, wall time.Duration
+	busy, capacity time.Duration
 }
 
-// open starts the first window at at.
-func (p *poolTally) open(at time.Time) { p.from = at }
+// add merges o into w, busy time to busy time and worker time to worker time,
+// so windows on different worker counts merge to the share of the time the
+// pool actually had.
+func (w *poolWindow) add(o poolWindow) {
+	w.busy += o.busy
+	w.capacity += o.capacity
+}
+
+// open starts the first window at at, on workers workers.
+func (p *poolTally) open(at time.Time, workers int) { p.from, p.workers = at, workers }
 
 // start counts a job starting at at, and returns the stamp its end passes back.
 func (p *poolTally) start(at time.Time) time.Time {
@@ -43,16 +54,7 @@ func (p *poolTally) end(started, at time.Time) {
 // at, and starts the next window there.
 func (p *poolTally) take(at time.Time) poolWindow {
 	wall := max(at.Sub(p.from), 0)
-	w := poolWindow{busy: p.busy + time.Duration(p.running)*wall - p.lead, wall: wall}
+	w := poolWindow{busy: p.busy + time.Duration(p.running)*wall - p.lead, capacity: time.Duration(p.workers) * wall}
 	p.from, p.busy, p.lead = at, 0, 0
 	return w
-}
-
-// busyFraction is the share of a pool's worker time spent busy: busy over the
-// window's length times its workers, 0 for an empty window or no workers.
-func busyFraction(busy, wall time.Duration, workers int) float64 {
-	if wall <= 0 || workers <= 0 {
-		return 0
-	}
-	return busy.Seconds() / (wall.Seconds() * float64(workers))
 }

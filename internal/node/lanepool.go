@@ -54,12 +54,11 @@ type lanePool struct {
 
 // laneWindow is the pool's share of a dispatch window: the busy and waiting
 // high-water marks, the operator offers made against those refused, and the
-// worker time spent busy over the window's length on its workers.
+// worker time spent busy against the worker time it had.
 type laneWindow struct {
 	busy, queued    int
 	offers, refused int
-	time            poolWindow
-	workers         int
+	pool            poolWindow
 }
 
 // newLanePool is a pool of workers that stamps its jobs by clock, time.Now
@@ -73,7 +72,7 @@ func newLanePool(workers int, clock func() time.Time) *lanePool {
 	}
 	p := &lanePool{workers: workers, running: map[string]bool{}, clock: clock}
 	p.idle = sync.NewCond(&p.mu)
-	p.tally.open(clock())
+	p.tally.open(clock(), workers)
 	return p
 }
 
@@ -183,7 +182,7 @@ func (p *lanePool) takeWindow() laneWindow {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	w := laneWindow{busy: p.maxBusy, queued: p.maxQueued, offers: p.offers, refused: p.refusals,
-		time: p.tally.take(p.clock()), workers: p.workers}
+		pool: p.tally.take(p.clock())}
 	p.maxBusy, p.maxQueued = p.busy, p.queuedLocked()
 	p.offers, p.refusals = 0, 0
 	return w
