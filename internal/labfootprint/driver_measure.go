@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab"
-	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -129,14 +129,34 @@ func secretBody(s storage.SecretSpec) map[string]any {
 }
 
 // reportSettle is how long after a window its poll CPU has landed: two of
-// the platform's collection report windows, so the window that held the
-// last run has closed and its batch is written.
-func reportSettle() time.Duration {
-	if v, ok := settings.Defaults()["collection"]["report_seconds"].(int); ok && v > 0 {
-		return 2 * time.Duration(v) * time.Second
+// the lab's collection report windows, so the window that held the last run
+// has closed and its batch is written.
+func reportSettle(report time.Duration) time.Duration { return 2 * report }
+
+// reportWindowOf reads the collection report window from the settings API's
+// answer: the lab's live value, which an operator or a cadence may have
+// moved off the shipped default.
+func reportWindowOf(body []byte) (time.Duration, error) {
+	var v struct {
+		Values struct {
+			Collection struct {
+				ReportSeconds int `json:"report_seconds"`
+			} `json:"collection"`
+		} `json:"values"`
 	}
-	return 2 * time.Minute
+	if err := json.Unmarshal(body, &v); err != nil {
+		return 0, fmt.Errorf("read the settings: %w", err)
+	}
+	if v.Values.Collection.ReportSeconds <= 0 {
+		return 0, errors.New("the settings have no positive collection report_seconds")
+	}
+	return time.Duration(v.Values.Collection.ReportSeconds) * time.Second, nil
 }
+
+// driverTasksWait is how long a step waits for its tasks to reach the count
+// its components should give, since the attach compiles them a moment after
+// the add answers.
+const driverTasksWait = 30 * time.Second
 
 // MeasureDrivers brings a throwaway lab up with no fleet, measures each
 // shipped driver on a node of its own, tears the lab down, and checks
@@ -211,6 +231,15 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 		}
 	}
 
+	var settingsBody json.RawMessage
+	if _, err := h.send(ctx, http.MethodGet, api+"/settings", nil, &settingsBody); err != nil {
+		return DriverCostTable{}, fmt.Errorf("read the settings: %w", err)
+	}
+	report, err := reportWindowOf(settingsBody)
+	if err != nil {
+		return DriverCostTable{}, err
+	}
+
 	table = DriverCostTable{Date: time.Now().UTC().Format(time.DateOnly), StepTasks: cfg.StepTasks, NotMeasured: skips}
 	if img, err := h.dc.ImageInspect(ctx, h.env["LAB_IMAGE"]); err == nil && img.Config != nil {
 		table.Build = img.Config.Labels[lab.VersionLabel]
@@ -221,7 +250,7 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 	}
 	for i, t := range targets {
 		h.say("[%d/%d] %s on %s, polls %v", i+1, len(targets), t.Driver, t.Product, t.Polls)
-		row, err := h.measureDriver(ctx, eng, api, cfg, t)
+		row, err := h.measureDriver(ctx, eng, api, cfg, t, report)
 		if ctx.Err() != nil {
 			return table, ctx.Err()
 		}
@@ -243,7 +272,7 @@ type stepWindow struct{ from, to time.Time }
 
 // measureDriver measures one driver on a node of its own, its simulator
 // beside it, and removes both whatever the outcome.
-func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string, cfg DriverConfig, t DriverTarget) (DriverCost, error) {
+func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string, cfg DriverConfig, t DriverTarget, report time.Duration) (DriverCost, error) {
 	node := sweepNodeName(t.Driver)
 	if _, err := h.send(ctx, http.MethodPost, api+"/nodes", map[string]string{"name": node}, nil); err != nil {
 		return DriverCost{}, fmt.Errorf("create the node: %w", err)
@@ -258,19 +287,23 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 	if err != nil {
 		return DriverCost{}, err
 	}
-	nodeID, err := eng.RunContainer(ctx, nodeSvc, h.env["LAB_NETWORK"])
-	if err != nil {
-		return DriverCost{}, fmt.Errorf("start the node: %w", err)
-	}
-	var simID string
+	// The removal is set before the start's error is checked: a container
+	// created but not started comes back with its id and the error, and is
+	// still removed.
+	var nodeID, simID string
 	defer func() {
 		cctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		if simID != "" {
 			_ = eng.StopAndRemove(cctx, simID)
 		}
-		_ = eng.StopAndRemove(cctx, nodeID)
+		if nodeID != "" {
+			_ = eng.StopAndRemove(cctx, nodeID)
+		}
 	}()
+	if nodeID, err = eng.RunContainer(ctx, nodeSvc, h.env["LAB_NETWORK"]); err != nil {
+		return DriverCost{}, fmt.Errorf("start the node: %w", err)
+	}
 	simSvc, err := sweepSimService(h.env, node, enrolled.Token, nodeID)
 	if err != nil {
 		return DriverCost{}, err
@@ -281,6 +314,7 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 
 	per := componentsPerStep(cfg.StepTasks, t.Polls)
 	window := sweepWindow(cfg.Window, t.Polls)
+	warmup := sweepWindow(cfg.Warmup, t.Polls)
 	var steps []DriverStep
 	var windows []stepWindow
 	added := 0
@@ -290,19 +324,12 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 				return DriverCost{}, err
 			}
 		}
-		out, err := h.psql(ctx, driverTasksQuery(node))
+		tasks, err := h.waitDriverTasks(ctx, node, want*len(t.Polls))
 		if err != nil {
-			return DriverCost{}, fmt.Errorf("count the node's tasks: %w", err)
+			return DriverCost{}, fmt.Errorf("%d components: %w", want, err)
 		}
-		tasks, err := strconv.Atoi(strings.TrimSpace(out))
-		if err != nil {
-			return DriverCost{}, fmt.Errorf("count the node's tasks: %q: %w", out, err)
-		}
-		if tasks != want*len(t.Polls) {
-			return DriverCost{}, fmt.Errorf("%d components gave %d driver tasks, want %d: the attach fell back", want, tasks, want*len(t.Polls))
-		}
-		h.say("  step: %d components, %d tasks; warming up %s, then measuring %s", want, tasks, cfg.Warmup, window)
-		if err := sleep(ctx, cfg.Warmup); err != nil {
+		h.say("  step: %d components, %d tasks; warming up %s, then measuring %s", want, tasks, warmup, window)
+		if err := sleep(ctx, warmup); err != nil {
 			return DriverCost{}, err
 		}
 		s, w, err := h.measureStep(ctx, nodeID, window)
@@ -316,11 +343,11 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 	}
 	// The thread clock's figure lands with each report window, after it
 	// closes: wait for the last to land, then read every step's.
-	if err := sleep(ctx, reportSettle()); err != nil {
+	if err := sleep(ctx, reportSettle(report)); err != nil {
 		return DriverCost{}, err
 	}
 	for i, w := range windows {
-		out, err := h.psql(ctx, pollCPUQuery(node, w.from, w.to))
+		out, err := h.psql(ctx, pollCPUQuery(node, w.from, w.to, report))
 		if err != nil {
 			return DriverCost{}, fmt.Errorf("read the poll CPU: %w", err)
 		}
@@ -329,6 +356,32 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 		}
 	}
 	return AssembleDriverCost(t, steps, driverMemResidual, driverCPUResidual)
+}
+
+// waitDriverTasks waits for node's driver tasks to reach want, and fails if
+// they settle anywhere else: a count short of it means an attach fell back to
+// a probe, which is not the driver.
+func (h *harness) waitDriverTasks(ctx context.Context, node string, want int) (int, error) {
+	deadline := time.Now().Add(driverTasksWait)
+	for {
+		out, err := h.psql(ctx, driverTasksQuery(node))
+		if err != nil {
+			return 0, fmt.Errorf("count the node's tasks: %w", err)
+		}
+		tasks, err := strconv.Atoi(strings.TrimSpace(out))
+		if err != nil {
+			return 0, fmt.Errorf("count the node's tasks: %q: %w", out, err)
+		}
+		if tasks == want {
+			return tasks, nil
+		}
+		if time.Now().After(deadline) {
+			return 0, fmt.Errorf("%d driver tasks, want %d: the attach fell back", tasks, want)
+		}
+		if err := sleep(ctx, 3*time.Second); err != nil {
+			return 0, err
+		}
+	}
 }
 
 // addSimComponent adds one simulated component to node. The first waits out

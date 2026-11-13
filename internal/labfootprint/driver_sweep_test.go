@@ -184,10 +184,13 @@ func TestADriversCostIsItsSlopesPerTaskAndPerRun(t *testing.T) {
 		t.Fatalf("runs per second per task %v, want %v", target.RunsPerSecondPerTask(), rate)
 	}
 	perRun := 0.4 / rate
+	// The thread clock's mean is over runs, so the step with twice the tasks
+	// weighs twice: (3*200 + 5*400) / 600.
+	thread := (3.0*200 + 5.0*400) / 600
 	if !near(cost.MemoryPerTaskBytes, 20_000) || !near(cost.MillicoresPerTask, 0.4) ||
-		!near(cost.CPUPerRunMillis, perRun) || !near(cost.ThreadCPUPerRunMillis, 4) ||
-		!near(cost.ThreadShare, 4/perRun) || cost.Tasks != 400 {
-		t.Fatalf("cost %+v, want 20,000 B and 0.4 mc per task, %.3f ms per run (thread 4 ms)", cost, perRun)
+		!near(cost.CPUPerRunMillis, perRun) || !near(cost.ThreadCPUPerRunMillis, thread) ||
+		!near(cost.ThreadShare, thread/perRun) || cost.Tasks != 400 {
+		t.Fatalf("cost %+v, want 20,000 B and 0.4 mc per task, %.3f ms per run (thread %.3f ms)", cost, perRun, thread)
 	}
 	if strings.Join(cost.Polls, ",") != "30s,5m0s" {
 		t.Fatalf("polls %v", cost.Polls)

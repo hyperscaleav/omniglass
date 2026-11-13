@@ -84,8 +84,23 @@ func TestASimSecretIsCreatedAsTheRouteTakesIt(t *testing.T) {
 // The poll CPU is read after two report windows, so the window that held a
 // step's last run has closed and landed.
 func TestAStepsPollCPUIsReadAfterItsWindowLands(t *testing.T) {
-	if got := reportSettle(); got != 2*time.Minute {
-		t.Fatalf("settle = %s, want two of the default 60s report windows", got)
+	if got := reportSettle(10 * time.Second); got != 20*time.Second {
+		t.Fatalf("settle = %s, want two of the lab's 10s report windows", got)
+	}
+}
+
+// The report window is the lab's live setting, not the platform default: a
+// lab that runs a shorter one lands its poll CPU sooner, and one that runs
+// a longer one later.
+func TestAReportWindowIsTheLabsLiveSetting(t *testing.T) {
+	got, err := reportWindowOf([]byte(`{"values":{"collection":{"report_seconds":10}}}`))
+	if err != nil || got != 10*time.Second {
+		t.Fatalf("report window = %s, %v, want 10s", got, err)
+	}
+	for _, body := range []string{`{"values":{}}`, `{"values":{"collection":{"report_seconds":0}}}`, `not json`} {
+		if _, err := reportWindowOf([]byte(body)); err == nil {
+			t.Fatalf("%s: want an error, not a guessed window", body)
+		}
 	}
 }
 

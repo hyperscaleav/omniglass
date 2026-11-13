@@ -269,7 +269,7 @@ process, and rendered from the sweep's committed result by `make gen`:
   and add across its drivers, to read what its worklist costs beyond the idle node.
 - **CPU per run** is the same CPU spread over how often each task runs, so drivers with different
   polls compare per poll.
-- **Thread CPU per run** is the node's own `poll-cpu-time` over the same runs, and **thread share** is
+- **Thread CPU per run** is the node's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
   it over the cgroup's figure: the part of a run the polling thread does itself
   ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). A low share is a transport
   that does its I/O on another goroutine, not a cheap driver.

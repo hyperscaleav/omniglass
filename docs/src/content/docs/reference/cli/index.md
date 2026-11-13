@@ -3024,7 +3024,7 @@ The table is a host's: run it on the host class it describes, then run `go run .
 |---|---|---|---|
 | `--image` | string | (none) | the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build |
 | `--only` | stringSlice | `[]` | sweep only these drivers; empty sweeps every shipped one |
-| `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, from the repository's root |
+| `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, relative to the working directory: run it from the repository's root |
 | `--step-tasks` | int | `400` | about how many poll tasks each step adds |
 | `--warmup` | duration | `2m0s` | how long each step runs before it is measured |
 | `--window` | duration | `2m0s` | each step's measured window; a driver's slowest poll lengthens it |

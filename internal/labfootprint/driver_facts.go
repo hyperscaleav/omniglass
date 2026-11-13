@@ -22,8 +22,15 @@ const DriverCostPath = "internal/labfootprint/drivercost/shipped.json"
 // before the first sweep is committed, or one added since it ran.
 const NotYetMeasured = "not yet measured"
 
-// JSON is the table as it is committed.
+// JSON is the table as it is committed, its lists written as lists even
+// when empty.
 func (t DriverCostTable) JSON() ([]byte, error) {
+	if t.Rows == nil {
+		t.Rows = []DriverCost{}
+	}
+	if t.NotMeasured == nil {
+		t.NotMeasured = []DriverSkip{}
+	}
 	b, err := json.MarshalIndent(t, "", "  ")
 	if err != nil {
 		return nil, err
@@ -45,11 +52,11 @@ type DriverCostFact struct {
 	Product               string   `json:"product,omitempty"`
 	Polls                 []string `json:"polls,omitempty"`
 	Measured              bool     `json:"measured"`
-	MemoryPerTaskKiB      float64  `json:"memory_per_task_kib,omitempty"`
-	MillicoresPerTask     float64  `json:"millicores_per_task,omitempty"`
-	CPUPerRunMillis       float64  `json:"cpu_per_run_ms,omitempty"`
-	ThreadCPUPerRunMillis float64  `json:"thread_cpu_per_run_ms,omitempty"`
-	ThreadShare           float64  `json:"thread_share,omitempty"`
+	MemoryPerTaskKiB      *float64 `json:"memory_per_task_kib,omitempty"`
+	MillicoresPerTask     *float64 `json:"millicores_per_task,omitempty"`
+	CPUPerRunMillis       *float64 `json:"cpu_per_run_ms,omitempty"`
+	ThreadCPUPerRunMillis *float64 `json:"thread_cpu_per_run_ms,omitempty"`
+	ThreadShare           *float64 `json:"thread_share,omitempty"`
 	Reason                string   `json:"reason,omitempty"`
 }
 
@@ -76,9 +83,9 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, t DriverCostTab
 		if i := slices.IndexFunc(t.Rows, func(r DriverCost) bool { return r.Driver == tg.Driver }); i >= 0 {
 			r := t.Rows[i]
 			d.Measured = true
-			d.MemoryPerTaskKiB = r.MemoryPerTaskBytes / 1024
-			d.MillicoresPerTask, d.CPUPerRunMillis = r.MillicoresPerTask, r.CPUPerRunMillis
-			d.ThreadCPUPerRunMillis, d.ThreadShare = r.ThreadCPUPerRunMillis, r.ThreadShare
+			d.MemoryPerTaskKiB = new(r.MemoryPerTaskBytes / 1024)
+			d.MillicoresPerTask, d.CPUPerRunMillis = new(r.MillicoresPerTask), new(r.CPUPerRunMillis)
+			d.ThreadCPUPerRunMillis, d.ThreadShare = new(r.ThreadCPUPerRunMillis), new(r.ThreadShare)
 		} else if i := slices.IndexFunc(t.NotMeasured, func(s DriverSkip) bool { return s.Driver == tg.Driver }); i >= 0 {
 			d.Reason = t.NotMeasured[i].Reason
 		} else {

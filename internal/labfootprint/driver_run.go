@@ -70,6 +70,11 @@ func (v sweepVars) nodeEnv(node, token string) []string {
 	return []string{"OMNIGLASS_SERVER=" + v.server, "OMNIGLASS_NODE_NAME=" + node, "OMNIGLASS_NODE_TOKEN=" + token}
 }
 
+// sweepCadence is the product's own cadence, the one a deployed node runs, so
+// the node's background work (heartbeat, probe, worklist pull) weighs on its
+// cgroup as it would in the field rather than at the lab's fast clock.
+func sweepCadence() (lab.Cadence, error) { return lab.LookupCadence(lab.CadenceDefault, false) }
+
 // sweepNodeService is the node a driver is measured on: the lab's node, with
 // no simulator and no impairments in its process, so its cgroup's CPU and
 // memory are the node's own work.
@@ -78,9 +83,14 @@ func sweepNodeService(env map[string]string, node, token string) (lab.Service, e
 	if err != nil {
 		return lab.Service{}, err
 	}
+	cad, err := sweepCadence()
+	if err != nil {
+		return lab.Service{}, err
+	}
 	return lab.Service{
 		Name: node, Container: v.project + "-" + node + "-1", Image: v.image,
-		Cmd: []string{"node", "run", "--heartbeat", "2s", "--probe-every", "10s", "--worklist-every", "5s"},
+		Cmd: []string{"node", "run", "--heartbeat", cad.Heartbeat,
+			"--probe-every", cad.ProbeEvery, "--worklist-every", cad.WorklistEvery},
 		Env: v.nodeEnv(node, token),
 		// As the lab's nodes: root inside its own container, which the pinger
 		// and NET_ADMIN need under distroless.
@@ -100,10 +110,14 @@ func sweepSimService(env map[string]string, node, token, nodeID string) (lab.Ser
 	if err != nil {
 		return lab.Service{}, err
 	}
+	cad, err := sweepCadence()
+	if err != nil {
+		return lab.Service{}, err
+	}
 	service := node + "-sim"
 	return lab.Service{
 		Name: service, Container: v.project + "-" + service + "-1", Image: v.image,
-		Cmd: []string{"sim", "run", "--poll", "2s"},
+		Cmd: []string{"sim", "run", "--poll", cad.SimPoll},
 		Env: v.nodeEnv(node, token),
 		// Root, to bind the simulated components' ports below 1024.
 		User:      "0:0",
@@ -139,13 +153,14 @@ func driverTasksQuery(node string) string {
 		"and n.name = " + sqlLiteral(node)
 }
 
-// pollCPUQuery is the mean poll-cpu-time a node landed in [from, to), in
-// milliseconds per run.
-func pollCPUQuery(node string, from, to time.Time) string {
+// pollCPUQuery is the mean poll-cpu-time of the reports wholly inside [from,
+// to), in milliseconds per run. A report stamped T covers [T-report, T), so
+// the first one inside is stamped from+report and the last one to.
+func pollCPUQuery(node string, from, to time.Time, report time.Duration) string {
 	return "select coalesce(avg(m.value),0) from metric m " +
 		"join metric_series s on s.id = m.series_id " +
 		"join metric_type mt on mt.id = s.metric_type_id " +
 		"join node n on n.principal_id = s.collector_node_id " +
 		"where mt.name = 'poll-cpu-time' and n.name = " + sqlLiteral(node) +
-		" and m.ts >= to_timestamp(" + epochLiteral(from) + ") and m.ts < to_timestamp(" + epochLiteral(to) + ")"
+		" and m.ts >= to_timestamp(" + epochLiteral(from.Add(report)) + ") and m.ts <= to_timestamp(" + epochLiteral(to) + ")"
 }

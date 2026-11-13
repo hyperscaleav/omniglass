@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/node"
 )
 
 func TestALabsLabelsReadBackFromItsReadyFile(t *testing.T) {
@@ -151,11 +153,35 @@ func TestASweepsQueriesNameTheNodeAsALiteral(t *testing.T) {
 			t.Fatalf("task query lacks %q:\n%s", want, q)
 		}
 	}
+}
+
+// A report is stamped at its window's end, so the step's poll CPU is the
+// reports stamped from one report window into the step to its end: every
+// run they hold ran inside the step.
+func TestAStepsPollCPUIsTheReportsWhollyInsideIt(t *testing.T) {
 	from := time.Unix(100, 0)
-	q = pollCPUQuery("sweep-x", from, from.Add(time.Minute))
-	for _, want := range []string{"'poll-cpu-time'", "'sweep-x'", "to_timestamp(100.000000)", "to_timestamp(160.000000)"} {
+	q := pollCPUQuery("sweep-x", from, from.Add(2*time.Minute), time.Minute)
+	for _, want := range []string{"'poll-cpu-time'", "'sweep-x'",
+		"m.ts >= to_timestamp(160.000000)", "m.ts <= to_timestamp(220.000000)"} {
 		if !strings.Contains(q, want) {
 			t.Fatalf("cpu query lacks %q:\n%s", want, q)
+		}
+	}
+}
+
+// The sweep node runs the product's default cadence, what a deployment's
+// node runs at, so the worklist pull and the heartbeat in its cgroup are a
+// deployment's and not the lab's quicker ones.
+func TestASweepNodeRunsTheProductsCadence(t *testing.T) {
+	s, err := sweepNodeService(sweepEnv(), "sweep-x", "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := strings.Join(s.Cmd, " ")
+	for _, want := range []string{"--heartbeat " + node.DefaultHeartbeat.String(), "--probe-every " + node.DefaultProbeEvery.String(),
+		"--worklist-every " + node.DefaultWorklistEvery.String()} {
+		if !strings.Contains(cmd, want) {
+			t.Fatalf("cmd = %s, want %s", cmd, want)
 		}
 	}
 }

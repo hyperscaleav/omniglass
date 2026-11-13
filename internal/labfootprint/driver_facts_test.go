@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestTheDocsListEveryDriverThePlanKnows(t *testing.T) {
 	if len(got) != 4 {
 		t.Fatalf("drivers = %+v, want a, b, c and s once each", f.Drivers)
 	}
-	if a := got["a"]; !a.Measured || a.MemoryPerTaskKiB != 3 || a.CPUPerRunMillis != 1.2 || a.ThreadShare != 0.5 {
+	if a := got["a"]; !a.Measured || *a.MemoryPerTaskKiB != 3 || *a.CPUPerRunMillis != 1.2 || *a.ThreadShare != 0.5 {
 		t.Fatalf("a = %+v, want its measured row", a)
 	}
 	if b := got["b"]; b.Measured || !strings.Contains(b.Reason, "does not rise") || b.Product != "pb" {
@@ -83,5 +84,38 @@ func TestDriverCostFactsJSONIsCommitted(t *testing.T) {
 	}
 	if !bytes.Equal(committed, want) {
 		t.Error("docs/src/generated/drivercost.json drifted from the shipped driver cost table and plan: run make gen and commit the result")
+	}
+}
+
+// A measured figure of zero is a measurement: the docs read it as 0, not as
+// a blank the unmeasured rows leave.
+func TestAMeasuredZeroReadsAsZero(t *testing.T) {
+	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
+	f := driverCostFacts(targets, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 1024}}})
+	b, err := json.Marshal(f.Drivers[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"thread_cpu_per_run_ms":0`, `"thread_share":0`, `"millicores_per_task":0`} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("%s lacks %s", b, want)
+		}
+	}
+	f = driverCostFacts(targets[:0], []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}, DriverCostTable{})
+	if b, _ = json.Marshal(f.Drivers[0]); strings.Contains(string(b), "thread_share") {
+		t.Fatalf("an unmeasured driver has no figures: %s", b)
+	}
+}
+
+// A table that measured nothing still writes its lists, as empty ones.
+func TestAnEmptyTableWritesEmptyLists(t *testing.T) {
+	b, err := DriverCostTable{Date: "d"}.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"rows": []`, `"not_measured": []`} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("%s lacks %s", b, want)
+		}
 	}
 }

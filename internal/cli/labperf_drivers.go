@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,6 +29,30 @@ func driverSweepConfig(cmd *cobra.Command, binary, dockerHost string) (labfootpr
 	cfg.Window, _ = f.GetDuration("window")
 	out, _ := f.GetString("out")
 	return cfg, out
+}
+
+// saveDriverTable writes the sweep's table and returns the sweep's own error.
+// A sweep that stopped part way keeps the drivers it measured, since each
+// took the better part of an hour; one that measured none writes nothing.
+func saveDriverTable(w io.Writer, out string, table labfootprint.DriverCostTable, measureErr error) error {
+	if measureErr != nil && len(table.Rows) == 0 {
+		return measureErr
+	}
+	b, err := table.JSON()
+	if err != nil {
+		return errors.Join(measureErr, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return errors.Join(measureErr, err)
+	}
+	if err := os.WriteFile(out, b, 0o644); err != nil {
+		return errors.Join(measureErr, err)
+	}
+	fmt.Fprintf(w, "wrote %s: %d drivers measured, %d not\n", out, len(table.Rows), len(table.NotMeasured))
+	if measureErr != nil {
+		fmt.Fprintf(w, "the sweep stopped before its last driver: %v\n", measureErr)
+	}
+	return measureErr
 }
 
 func newLabPerfDriversCmd() *cobra.Command {
@@ -55,21 +81,7 @@ func newLabPerfDriversCmd() *cobra.Command {
 			cfg, out := driverSweepConfig(cmd, binary, daemon.Host)
 			cfg.Out, cfg.LabLog = log, log
 			table, err := labfootprint.MeasureDrivers(cmd.Context(), cfg)
-			if err != nil {
-				return err
-			}
-			b, err := table.JSON()
-			if err != nil {
-				return err
-			}
-			if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(out, b, 0o644); err != nil {
-				return err
-			}
-			fmt.Fprintf(log, "wrote %s: %d drivers measured, %d not\n", out, len(table.Rows), len(table.NotMeasured))
-			return nil
+			return saveDriverTable(log, out, table, err)
 		},
 	}
 	f := cmd.Flags()
@@ -78,6 +90,6 @@ func newLabPerfDriversCmd() *cobra.Command {
 	f.Int("step-tasks", 400, "about how many poll tasks each step adds")
 	f.Duration("warmup", 2*time.Minute, "how long each step runs before it is measured")
 	f.Duration("window", 2*time.Minute, "each step's measured window; a driver's slowest poll lengthens it")
-	f.String("out", labfootprint.DriverCostPath, "where to write the table, from the repository's root")
+	f.String("out", labfootprint.DriverCostPath, "where to write the table, relative to the working directory: run it from the repository's root")
 	return cmd
 }

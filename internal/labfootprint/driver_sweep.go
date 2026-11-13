@@ -206,16 +206,16 @@ type DriverCost struct {
 func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResidual float64) (DriverCost, error) {
 	mem := make([]SweepPoint, len(steps))
 	cpu := make([]SweepPoint, len(steps))
+	// The thread clock's mean is per run, and a step's runs scale with its
+	// tasks, so each step's mean weighs by its tasks.
 	var thread float64
-	var measured, top int
+	var weight, top int
 	for i, s := range steps {
 		mem[i] = SweepPoint{Tasks: s.Tasks, Value: s.WorkingSetBytes}
 		cpu[i] = SweepPoint{Tasks: s.Tasks, Value: s.Millicores}
 		top = max(top, s.Tasks)
-		if s.Tasks > 0 {
-			thread += s.PollCPUMillis
-			measured++
-		}
+		thread += s.PollCPUMillis * float64(s.Tasks)
+		weight += s.Tasks
 	}
 	memFit, err := FitSlope(mem, memResidual)
 	if err != nil {
@@ -236,8 +236,8 @@ func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResi
 		MemoryResidual:  memFit.Residual, CPUResidual: cpuFit.Residual,
 		Steps: steps,
 	}
-	if measured > 0 {
-		c.ThreadCPUPerRunMillis = thread / float64(measured)
+	if weight > 0 {
+		c.ThreadCPUPerRunMillis = thread / float64(weight)
 		c.ThreadShare = c.ThreadCPUPerRunMillis / c.CPUPerRunMillis
 	}
 	return c, nil
