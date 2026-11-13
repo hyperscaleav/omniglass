@@ -30,10 +30,14 @@ type collectionReport struct {
 
 // endpointTally is one endpoint's window so far.
 type endpointTally struct {
-	runs      int
-	failures  int
-	took      time.Duration
-	held      bool
+	runs     int
+	failures int
+	took     time.Duration
+	held     bool
+	// cpu is the thread CPU of the runs whose clock read (#1870), cpuRuns
+	// how many: a platform with no thread clock reads none.
+	cpu       time.Duration
+	cpuRuns   int
 	claimed   int
 	unclaimed int
 	// heldPolls is the due polls the endpoint's gate held (#1650): never
@@ -91,9 +95,10 @@ func (r *collectionReport) tally(endpoint string) *endpointTally {
 	return e
 }
 
-// poll records one driver poll run of endpoint: how long it took and whether
-// it failed (faulted and landed nothing, as the scheduler books a failure).
-func (r *collectionReport) poll(endpoint string, took time.Duration, failed bool) {
+// poll records one driver poll run of endpoint: how long it took, the CPU the
+// kernel charged it where that read, and whether it failed (faulted and
+// landed nothing, as the scheduler books a failure).
+func (r *collectionReport) poll(endpoint string, cost runCost, failed bool) {
 	if r == nil {
 		return
 	}
@@ -101,7 +106,11 @@ func (r *collectionReport) poll(endpoint string, took time.Duration, failed bool
 	defer r.mu.Unlock()
 	e := r.tally(endpoint)
 	e.runs++
-	e.took += took
+	e.took += cost.took
+	if cost.cpuRead {
+		e.cpuRuns++
+		e.cpu += cost.cpu
+	}
 	if failed {
 		e.failures++
 	}
@@ -192,7 +201,8 @@ func (r *collectionReport) due(now time.Time) bool {
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
 // moved to another node) reports nothing. A mean duration lands only for an
-// endpoint that polled, a failure, held, due, skipped, unclaimed or hold-expiry count only when nonzero, and a
+// endpoint that polled, a mean CPU time only for one whose runs read the
+// thread clock, a failure, held, due, skipped, unclaimed or hold-expiry count only when nonzero, and a
 // claimed count for every held endpoint. Ordered by task, so a publish order
 // holds still.
 func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpointReport {
@@ -210,6 +220,9 @@ func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpoi
 		}
 		if e.runs > 0 {
 			metric(probekeys.PollDuration, float64(e.took)/float64(e.runs)/float64(time.Millisecond))
+		}
+		if e.cpuRuns > 0 {
+			metric(probekeys.PollCPUTime, float64(e.cpu)/float64(e.cpuRuns)/float64(time.Millisecond))
 		}
 		if e.failures > 0 {
 			metric(probekeys.PollFailureCount, float64(e.failures))

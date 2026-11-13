@@ -283,10 +283,12 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 	if fn, err := driver.ParseBaked(task.Spec); err == nil {
 		res.Function = fn.Function
 	}
-	dps, faults := collectDriverTask(ctx, runner, task, sessions)
+	var dps []collection.Sample
+	var faults []error
+	cost := measureRun(func() { dps, faults = collectDriverTask(ctx, runner, task, sessions) })
 	// A run now is a poll run like a scheduled one, so it counts in the
-	// endpoint's collection report (#1369).
-	report.poll(task.EndpointID, time.Since(start), !landedData(dps) && len(faults) > 0)
+	// endpoint's collection report (#1369), its CPU time too (#1870).
+	report.poll(task.EndpointID, cost, !landedData(dps) && len(faults) > 0)
 	if ownRequest {
 		for _, f := range faults {
 			if terr, ok := collection.AsTerminal(f); ok {
