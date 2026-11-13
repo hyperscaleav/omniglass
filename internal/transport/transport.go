@@ -144,7 +144,9 @@ type DriverShape struct {
 }
 
 // DriverBuiltIn is the collection telemetry a driver of this shape adds to an
-// endpoint over the transport: a poll duration for a driver that polls, a push
+// endpoint over the transport: a poll duration and a poll CPU time (#1870,
+// on a node whose platform has a thread clock, every one the lab runs) for a
+// driver that polls, a push
 // count for a held or datagram endpoint whose driver listens, and a session
 // state for an endpoint whose session is held. The session rule mirrors the
 // node's (a baked driver over a held transport other than http and https, and
@@ -157,7 +159,7 @@ func DriverBuiltIn(name string, shape DriverShape) []string {
 	}
 	var out []string
 	if shape.Polls {
-		out = append(out, probekeys.PollDuration)
+		out = append(out, probekeys.PollDuration, probekeys.PollCPUTime)
 	}
 	holds := t.Held && name != "http" && name != "https" && (shape.Session || name != "tcp")
 	if holds && (shape.Polls || shape.Listeners || shape.Session) {
