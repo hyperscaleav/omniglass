@@ -803,6 +803,28 @@ command wire writes `command-dispatch-latency` at a command's first take and
 once per report window, 0 when quiet, on its node-self lane. How each is read, and why expiry keys on the execution
 stamp rather than the status, is on [commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured).
 
+What one poll costs the node is read from the kernel, not from the clock on the wall (#1870).
+`poll-duration` is mostly time spent waiting on the device, so it cannot say what a Q-SYS poll costs
+against an SNMP one. A lane worker runs each driver poll, scheduled or run now, with its goroutine
+locked to its OS thread, and reads the thread's CPU clock (`CLOCK_THREAD_CPUTIME_ID`) before and
+after: the difference is the user and system time the kernel charged that run, and none of the time
+it spent blocked on the network. The node lands the mean per run as `poll-cpu-time`, in
+milliseconds, beside `poll-duration` on the endpoint's component, once a report window
+([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)).
+The clock counts only the run's own thread. The reads and writes the run makes itself are on it, and
+so is any garbage-collector assist the run pays while it allocates; work handed to another goroutine
+is not. That leaves out a held session's or a websocket's reader goroutine (which does the session's
+reads, writes and decryption while the run waits on its answer), the HTTP client's connection
+goroutines, a helper a driver starts, and the collector's background workers, which no task is charged
+for. So read it as a floor on a poll's cost, with the node's process CPU as the ceiling, and compare
+drivers on it only within one transport: a poll over a held session reads cheaper than a direct SNMP
+or bare TCP poll that does its own I/O. The comparison across transports is the cgroup sweep of #1871.
+Reachability probes are not measured; the figure is a driver poll's. A thread locked through a run
+that blocks is parked for that run, so the node holds at most one extra thread per lane worker. A platform with no per-thread clock lands no
+`poll-cpu-time` rather than a false zero; every release platform but Windows has one. The per-driver
+cost table that reads it against the process's own cgroup is #1871
+([ADR-1870](/architecture/decisions/#adr-1870-a-polls-cpu-cost-is-its-threads-kernel-clock-cross-checked-by-the-cgroup)).
+
 ## Scheduling, concurrency, and self-observability
 
 Built (#1634, under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)): each poll and probe runs on **its own interval**, from a dispatcher with a timer of

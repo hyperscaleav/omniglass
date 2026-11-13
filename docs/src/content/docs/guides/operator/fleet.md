@@ -307,6 +307,13 @@ its health colour (green, amber, red, as in the Health column) with the componen
 under it; hover or focus a marker for its role, product, health and any alarm, and click it to
 open its panel. A dashed ring is a position nobody staffs, labelled with its role.
 
+The map redraws to the width it has. A label never runs past the edge of the map: a marker
+near a side hangs its label inward, one near the bottom puts it above its icon, and a phone
+anchors sooner than a desktop because the same position is fewer pixels from the edge. Where
+two labels would overprint, the later one moves to the other side of its icon, and when
+nothing is clear it collapses to the icon alone; hover or focus it for the same label, role
+and health as any other marker.
+
 ::screenshot{#fleet-map}
 
 Below the map, when the standard declares metrics, the **data** section stacks every one

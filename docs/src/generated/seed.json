@@ -550,6 +550,14 @@
    "description": "Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran."
   },
   {
+   "name": "poll-cpu-time",
+   "data_type": "float",
+   "unit": "ms",
+   "precision": 3,
+   "label": "Poll CPU Time",
+   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock."
+  },
+  {
    "name": "poll-failure-count",
    "data_type": "int",
    "label": "Poll Failures",
