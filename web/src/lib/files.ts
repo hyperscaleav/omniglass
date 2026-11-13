@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { FileBody } from "../api/api.gen";
 
 // The files data layer: thin typed wrappers over the generated client. A file is
 // a tenant-wide, content-addressed blob with a searchable handle (name, MIME
@@ -8,7 +8,7 @@ import type { components } from "../api/schema.gen";
 // takes an upload, download returns the blob), so this layer is pure I/O over the
 // generated client and unit-testable against a mocked fetch.
 
-export type FileRow = components["schemas"]["FileBody"];
+export type FileRow = FileBody;
 // File is the same shape under the domain name; import FileRow at call sites that
 // also touch the DOM File API, so the global File type is not shadowed.
 export type File = FileRow;

@@ -289,4 +289,36 @@ describe("BladeStack", () => {
     expect(btn.disabled).toBe(true);
     expect(btn.querySelector(".loading-spinner")).toBeTruthy();
   });
+
+  // A save that fails keeps the blade editing; its reason must sit beside Save,
+  // not only at the top of a form the operator has scrolled past.
+  it("shows a rejected save's reason in the footer, beside Save, and clears it on the next attempt", async () => {
+    let fail = true;
+    const reg: Record<string, BladeDef> = {
+      thing: {
+        Title: () => <>T</>,
+        Body: () => {
+          const e = useBladeEdit();
+          e.bind({ save: async () => { if (fail) throw { detail: "name already exists in this room" }; } });
+          return <div>body</div>;
+        },
+      },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "thing", id: "a" });
+    fireEvent.click(screen.getByLabelText("Edit"));
+    fireEvent.click(screen.getByText("Save"));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("name already exists in this room");
+    // Inside the footer that holds Save, not up in the body.
+    const footer = screen.getByText("Save").closest("footer")!;
+    expect(footer.contains(alert)).toBe(true);
+    expect(screen.getByText("body").closest("footer")).toBeNull();
+    // The slot is still editing, so the operator can fix it and retry.
+    expect(screen.getByText("Save")).toBeTruthy();
+    fail = false;
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
 });

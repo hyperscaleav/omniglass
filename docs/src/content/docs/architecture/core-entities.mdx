@@ -1067,7 +1067,7 @@ no vendor because it is not an instance of a catalog row, and no placement fact 
 read its parent would stale every descendant on a campus rename.
 
 **A rule reads placement, and that is what the recompute verb is for**
-([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
 `{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does

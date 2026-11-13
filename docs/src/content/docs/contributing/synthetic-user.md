@@ -20,7 +20,9 @@ fleet, the example fleet having a bad day, or the example fleet at enterprise si
 `make probe` brings up a throwaway [lab](/guides/lab/) of its own (the fleet picked by
 `STACK_SCENARIO`; a fresh install runs no node), visits every route in the console's route manifest, and replays
 every [walkthrough](/contributing/demos/) at machine speed, a beat after each action rather
-than a person's pace. On every surface it records:
+than a person's pace, all on that one lab in alphabetical order: unlike the recorder, which gives each
+walkthrough a lab of its own, a walkthrough here meets whatever the ones before it left behind (the
+[setup-isolation rule](/contributing/demos/) that keeps their setups apart is checked by `make test-web`). On every surface it records:
 
 - console errors and uncaught page errors;
 - every API call, its status and its time;

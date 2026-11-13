@@ -167,7 +167,7 @@
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
       "setup": [
-        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-display --product boreal-edge-55"
+        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
       ]
     },
     {
@@ -175,7 +175,7 @@
       "title": "Snooze an alarm",
       "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
       "setup": [
-        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch input lost\" --severity high"
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch controller resetting\" --severity high"
       ]
     },
     {

@@ -807,6 +807,7 @@ var platformKeysOffPage = map[string]string{
 	writerclass.CommandExecutionLatency: offNodeDetail,
 	writerclass.CommandRedeliveryCount:  offNodeDetail,
 	writerclass.CommandPullFailureCount: offNodeDetail,
+	writerclass.WorkerBusyFraction:      offNodeDetail,
 
 	writerclass.ProcessGoroutineCount: offProcess,
 	writerclass.ProcessHeapSize:       offProcess,

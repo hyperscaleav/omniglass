@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { ALARM_TIMELINE_PREFIX, acknowledgeAlarm, componentAlarmsKey } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
+import { SYSTEM_HEALTH_PREFIX } from "../lib/health";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 
@@ -25,6 +26,9 @@ export default function AcknowledgeButton(props: { component: string; alarm: { i
         qc.invalidateQueries({ queryKey: [...componentAlarmsKey(props.component)] }),
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
         qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
+        // The system page's Why strip reads the acknowledgement from the health
+        // report (#990); keyed by system, so the prefix refreshes whichever is open.
+        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
       ]);
     } catch (e) {
       setErr(describeError(e));

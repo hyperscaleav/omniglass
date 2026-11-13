@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type * as S from "../api/api.gen";
 import { entityNameError } from "./names";
 import { can, type Me } from "./auth";
 export { ENTITY_NAME_RE, entityNameError } from "./names";
@@ -11,27 +11,26 @@ export { ENTITY_NAME_RE, entityNameError } from "./names";
 // fleet reuses names across places (thirty rooms each hold a `display-1`), so a
 // name is ambiguous and the API answers it with a 409.
 
-type S = components["schemas"];
-export type SimFleet = S["SimFleetOutputBody"];
-export type SimNode = S["SimNodeBody"];
+export type SimFleet = S.SimFleetOutputBody;
+export type SimNode = S.SimNodeBody;
 // The generated schema keeps its old name for the row type; the console calls it
 // what it is, a simulated component.
-export type SimComponent = S["SimDeviceBody"];
-export type SimImpairmentStatus = S["SimImpairmentStatus"];
-export type SimProfile = S["SimProfileBody"];
-export type ComponentSim = S["ComponentSimOutputBody"];
-export type SimSurface = S["SimSurfaceBody"];
-export type SimRoute = S["SimRouteBody"];
-export type SimCommand = S["SimCommandBody"];
-export type SimOID = S["SimOIDBody"];
-export type SimResult = S["SimOperationResult"];
-export type FireInput = Omit<S["FireSimInputBody"], "$schema">;
-export type AddSimComponent = Omit<S["AddSimComponentInputBody"], "$schema">;
-export type AddSimComponentResult = S["AddSimComponentOutputBody"];
-export type SimSystemPlan = S["SimSystemPlanOutputBody"];
-export type SimRoleFill = S["SimRoleFillBody"];
-export type AddSimSystem = Omit<S["AddSimSystemInputBody"], "$schema">;
-export type AddSimSystemResult = S["AddSimSystemOutputBody"];
+export type SimComponent = S.SimDeviceBody;
+export type SimImpairmentStatus = S.SimImpairmentStatus;
+export type SimProfile = S.SimProfileBody;
+export type ComponentSim = S.ComponentSimOutputBody;
+export type SimSurface = S.SimSurfaceBody;
+export type SimRoute = S.SimRouteBody;
+export type SimCommand = S.SimCommandBody;
+export type SimOID = S.SimOIDBody;
+export type SimResult = S.SimOperationResult;
+export type FireInput = Omit<S.FireSimInputBody, "$schema">;
+export type AddSimComponent = Omit<S.AddSimComponentInputBody, "$schema">;
+export type AddSimComponentResult = S.AddSimComponentOutputBody;
+export type SimSystemPlan = S.SimSystemPlanOutputBody;
+export type SimRoleFill = S.SimRoleFillBody;
+export type AddSimSystem = Omit<S.AddSimSystemInputBody, "$schema">;
+export type AddSimSystemResult = S.AddSimSystemOutputBody;
 
 // The impairment as the console holds it: every field present, since a PUT
 // replaces the whole impairment and a field left out reads as zero.
