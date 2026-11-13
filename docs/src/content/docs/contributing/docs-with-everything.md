@@ -192,6 +192,14 @@ wraps and changes the height of the platform cards, so every shot of that page s
 the code, run `make docs-shots`, then commit the PNGs, and `make docs-shots-check` passes on
 the clean tree that follows.
 
+CI's runner is the canonical raster. The pinned browser picks its rasterizer's SIMD path from
+the host CPU, so a host without AVX2 (a generic virtual CPU) rounds some gradient pixels one
+level off from CI: repeatable on that host, and visible to an exact comparison (five pixels of
+the users page's avatar gradient, #774). When the freshness job fails only by such a residue on
+a PR that changed no UI there, adopt the job's own recapture, which it publishes to the
+`ci/docs-shots-recapture` ref (`git fetch origin ci/docs-shots-recapture`), instead of
+loosening the comparison or masking the element.
+
 ### A mask covers a box that holds still, and says that it is there
 
 A mask is painted over **the element the selector resolves to**, so what a `mask` entry

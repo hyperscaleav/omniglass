@@ -16,3 +16,8 @@ Under the exact gate, a baseline captured on a dirty tree no longer slips throug
 a dirty tree's `-dirty-<time>` id wraps the platform cards a line taller than CI's bare commit, and the shots of
 that page shift. The platform health baselines were recaptured on a committed tree, and the contributing guide now
 says to capture on one.
+
+It also exposed a residue the threshold had hidden on main: five pixels of the users page's avatar gradient,
+one green level apart, because the capturing host had no AVX2 and the pinned browser rasterized that gradient on
+a different SIMD path from CI. The users shots now come from the freshness job's own recapture, and the guide
+names CI as the canonical raster and says to adopt that recapture.
