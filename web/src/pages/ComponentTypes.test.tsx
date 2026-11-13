@@ -6,6 +6,7 @@ import ComponentTypes from "./ComponentTypes";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // Component Types (Catalog > Components: Types): the device-class genus
 // registry (ADR-0085, partially reversing ADR-0047), on the same
@@ -208,8 +209,7 @@ describe("ComponentTypes page", () => {
   it("offers the seeded tree, with Root, in the create form's Parent picker", async () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
-    const parentSelect = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const labels = Array.from(parentSelect.options).map((o) => o.textContent?.trim());
+    const labels = await treeOptions(await screen.findByLabelText("Parent"));
     expect(labels[0]).toMatch(/root/i);
     expect(labels).toContain("Display");
     expect(labels).toContain("Microphone");
@@ -237,7 +237,7 @@ describe("ComponentTypes page", () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
     fireEvent.input(await screen.findByPlaceholderText("Wireless Microphone"), { target: { value: "Boundary Mic" } });
-    fireEvent.change(screen.getByLabelText("Parent"), { target: { value: "mic" } });
+    await pickTree(screen.getByLabelText("Parent"), "Microphone");
     fireEvent.click(screen.getByRole("button", { name: /create component type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ name: "boundary-mic", label: "Boundary Mic", parent_id: "mic" });

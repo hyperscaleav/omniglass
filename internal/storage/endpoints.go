@@ -856,6 +856,10 @@ type endpointRef struct{ componentID, instance string }
 // latestRejections is latestRejection for many endpoints in one round trip, in
 // the order given (#1571): a node's worklist reads one per component endpoint,
 // and a statement each made a large site's pull cost thousands of them.
+//
+// The rejection is an observed row, so ts leads the order and not id (#712): a
+// node supplies the observed lane's ts, and a late-arriving older report must
+// not become current by being written last.
 func latestRejections(ctx context.Context, q querier, refs []endpointRef) ([]string, error) {
 	out := make([]string, len(refs))
 	if len(refs) == 0 {
@@ -959,6 +963,10 @@ type pinPair struct{ declared, pin string }
 // keyPins is keyPin for many endpoints in one round trip, in the order given
 // (#1571): a node's worklist reads one per ssh or tls endpoint, and a
 // statement each made a large site's pull cost thousands of them.
+//
+// The declared pin is the latest row by `id desc` (insertion order, #712: a
+// declared row carries no caller ts), the observed row beside it by
+// `ts desc, id desc`, because a node supplies the observed lane's ts.
 func keyPins(ctx context.Context, q querier, qs []pinQuery) ([]pinPair, error) {
 	out := make([]pinPair, len(qs))
 	if len(qs) == 0 {

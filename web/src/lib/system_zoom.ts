@@ -14,15 +14,15 @@
 // id to offer, and the first dot wins, which is the honest limit until the
 // assignment wire grows one.
 
-import type { components } from "../api/schema.gen";
+import type { EffectiveRoleBody, FleetHealthOutputBody, HealthRoleBody } from "../api/api.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
 import { sortAlarms } from "./alarms";
 import type { SeverityLevel } from "./severity";
 
-export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
-export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
+export type FleetHealth = FleetHealthOutputBody;
+export type HealthRole = HealthRoleBody;
+export type EffectiveRole = EffectiveRoleBody;
 
 export type SlotOccupant = {
   name: string;
@@ -179,6 +179,10 @@ export type AlarmRow = {
   componentId: string | null;
   roleLabel: string;
   raisedAt: string;
+  // The acknowledgement the health read carries (#990), orthogonal to cleared.
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string;
 };
 
 export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null): AlarmRow[] {
@@ -197,6 +201,9 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         componentId: a.component_id || null,
         roleLabel: entityLabel(r),
         raisedAt: a.raised_at,
+        acknowledged: a.acknowledged ?? false,
+        acknowledgedAt: a.acknowledged_at ?? null,
+        acknowledgedBy: a.acknowledged_by ?? "",
       });
     }
   }

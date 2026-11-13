@@ -234,7 +234,7 @@ is all this". Subrail and cards derive from one group table judged through the s
 filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
 are all gated away disappears with its header; secret types holds no subrail entry at all
 (`/secret-types` stays routed and gated, rendering in the pane). The naming rule
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-fleet-noun-each-registry-serves))
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
 carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
 registry's own word, and where the registry's only word is "type" the entry is Types with the
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
@@ -264,6 +264,14 @@ here behind the same `node:read` gate as Nodes, whose rows it reads), plus the l
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
 alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
 longer title.
+
+**Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
+placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
+`open_alarms` counts the alarms open on the components the caller may read), Collectors (the node
+list, shown to a caller who can read nodes) and Platform (the platform system's verdict and the
+nodes not up, same gate). Locations, Systems and Collectors open their lists; Open alarms is a plain
+figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
+permission it needs), never a dash.
 
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:

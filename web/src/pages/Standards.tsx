@@ -24,7 +24,7 @@ import {
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -62,9 +62,7 @@ export default function Standards() {
   const [params] = useSearchParams();
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
-  const rows = createMemo(() =>
-    [...(standards.data ?? [])].sort(byLabel),
-  );
+  const rows = createMemo(() => standards.data ?? []);
   // ?open=<name> opens a standard's blade: a standard created from a template lands here
   // (#1329), its ?from= carried to the notice above the list.
   const openId = () => {
@@ -294,9 +292,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
 function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v: string) => void }): JSX.Element {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const options = createMemo(() =>
-    [...(standards.data ?? [])]
-      .filter((s) => s.name !== p.exclude)
-      .sort(byLabel),
+    (standards.data ?? []).filter((s) => s.name !== p.exclude),
   );
   // Bound through the shared binder, not value=: the registry can answer after
   // the edit face is on screen, and a <select> keeps no value it has no option

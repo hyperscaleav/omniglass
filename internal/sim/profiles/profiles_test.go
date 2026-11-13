@@ -4,8 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"io/fs"
+	"path"
 	"regexp"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
 // realBrand matches real AV and UC companies and their best-known product
@@ -53,5 +60,91 @@ func TestRealBrandMatcher(t *testing.T) {
 		if realBrand.MatchString(s) {
 			t.Errorf("realBrand matched %q", s)
 		}
+	}
+}
+
+// TestCatalogCarriesNoLabSystemVocabulary holds the embedded catalog to one
+// vocabulary for simulated systems (#914): the platform's. A simulated system
+// is built to a standard from the template catalog, so the catalog embeds no
+// room archetype (systems/) or fleet manifest (fleets/) of its own, and no
+// file names a role or system type the platform's standards and system types
+// do not.
+func TestCatalogCarriesNoLabSystemVocabulary(t *testing.T) {
+	for _, dir := range []string{"systems", "fleets"} {
+		if _, err := fs.Stat(FS, dir); err == nil {
+			t.Errorf("the catalog embeds %s/: a simulated system is built from the platform's standards, not a lab %s file", dir, dir)
+		}
+	}
+
+	known := map[string]bool{}
+	for _, st := range seed.ShippedSystemTypes() {
+		known[st] = true
+	}
+	std := template.Shipped()
+	for _, tpl := range std.List(template.KindStandard) {
+		known[tpl.Name] = true
+		for _, r := range tpl.Standard.Roles {
+			known[r.Name] = true
+		}
+	}
+
+	err := fs.WalkDir(FS, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || path.Ext(p) != ".yaml" || strings.HasPrefix(p, "templates/") {
+			return err
+		}
+		data, err := fs.ReadFile(FS, p)
+		if err != nil {
+			return err
+		}
+		var doc any
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			t.Errorf("%s: %v", p, err)
+			return nil
+		}
+		for _, name := range systemVocabulary(doc) {
+			if !known[name] {
+				t.Errorf("%s names the role or system type %q, which is no standard role or system type of the platform", p, name)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// systemVocabulary is every value a decoded YAML tree gives a role or
+// system_type key.
+func systemVocabulary(n any) []string {
+	var out []string
+	switch v := n.(type) {
+	case map[string]any:
+		for k, c := range v {
+			if s, ok := c.(string); ok && (k == "role" || k == "system_type") {
+				out = append(out, s)
+				continue
+			}
+			out = append(out, systemVocabulary(c)...)
+		}
+	case []any:
+		for _, c := range v {
+			out = append(out, systemVocabulary(c)...)
+		}
+	}
+	return out
+}
+
+func TestSystemVocabularyFindsRolesAndTypes(t *testing.T) {
+	var doc any
+	src := "devices:\n  - role: video-bar\n  - nested: {system_type: Boardroom}\n  - name: kestrel\n"
+	if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, n := range systemVocabulary(doc) {
+		got[n] = true
+	}
+	if len(got) != 2 || !got["video-bar"] || !got["Boardroom"] {
+		t.Errorf("systemVocabulary = %v, want video-bar and Boardroom", got)
 	}
 }

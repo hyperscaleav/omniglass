@@ -1,4 +1,4 @@
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -56,9 +56,9 @@ export default function Variables() {
   const me = useMe();
   const variables = useQuery(() => ({ queryKey: VARIABLES_KEY, queryFn: listVariables }));
 
-  // Ordered by the label an operator reads, unlabelled last, exactly as
-  // ListVariables orders them in SQL (`order by label nulls last, name`, #613).
-  const rows = createMemo(() => [...(variables.data ?? [])].sort(byLabel));
+  // Rendered in the order ListVariables serves (`order by label nulls last, name`,
+  // #613, #757).
+  const rows = createMemo(() => variables.data ?? []);
 
   return (
     <FlatList<Variable>

@@ -160,7 +160,8 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 		return nil, err
 	}
 
-	// cur is the series' current value (its latest row); the insert appends only
+	// cur is the series' current value (its latest row, by insertion: `id desc`,
+	// seriesOrderSQL's declared rule, #712); the insert appends only
 	// when the declared value actually changes. value is the exact jsonb
 	// (ADR-0038's structured value: bool and json round-trip without loss).
 	sql := fmt.Sprintf(`
@@ -170,7 +171,7 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
-			order by ts desc, id desc
+			order by id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
@@ -207,7 +208,7 @@ func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = '`+declaredProvenance+`'
-		order by ts desc, id desc
+		order by id desc
 		limit 1`, col)
 	pv, err := scanProperty(q.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance))
 	if err != nil {
@@ -251,7 +252,7 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
-			order by ts desc, id desc
+			order by id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
@@ -376,7 +377,9 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind, ownerID, arc string) ([]EffectiveProperty, error) {
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
-	// (JSON-null value) resolving to no value. Shared by every arm.
+	// (JSON-null value) resolving to no value. Shared by every arm. Latest is
+	// by `id desc`, insertion order: a declared row carries no caller-supplied
+	// ts, so a clock stepping backwards cannot reorder it (seriesOrderSQL, #712).
 	declared := fmt.Sprintf(`
 		declared as (
 			select distinct on (s.property_type_id)
@@ -385,7 +388,7 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 			from property s
 			join inst on s.%[1]s = inst.arc
 			where s.instance = '' and s.provenance = 'declared'
-			order by s.property_type_id, s.ts desc, s.id desc
+			order by s.property_type_id, s.id desc
 		)`, oc.arcCol)
 	// The calculated value per property (#999, #1018): the latest observed or
 	// calculated row of each (property, instance='') series, kept when a calc
@@ -407,6 +410,8 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 				join inst on s.%[1]s = inst.arc
 				join property_type pt on pt.id = s.property_type_id
 				where s.instance = '' and s.provenance in ('observed', 'calculated')
+				-- ts leads here, not id: these are observed and calculated rows, whose ts
+				-- a caller may supply (seriesOrderSQL, #712).
 				order by s.property_type_id, s.ts desc, s.id desc) latest
 			where provenance = 'calculated' and source_rule_id is not null
 		)`, oc.arcCol)

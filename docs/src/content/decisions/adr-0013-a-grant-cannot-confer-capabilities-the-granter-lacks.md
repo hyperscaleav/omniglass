@@ -18,7 +18,7 @@ summary: "Grant creation is refused when the granted role's capabilities exceed 
   guard. Only the caller's **all-scope** grants count, so a capability held through a narrower grant cannot be
   conferred estate-wide (the same reason act-as requires all-scope cover). The consequence is a deliberate
   stance: **admin is bounded on purpose**, the top management role, never the superuser, and does not auto-gain
-  future resources; `owner` (`*:*`) is the break-glass superuser and the [owner-invariant](#the-owner-invariant)
+  future resources; `owner` (`*:*`) is the break-glass superuser and the [owner-invariant](/architecture/identity-access/#the-owner-invariant)
   anchor. The same cover rule must extend to role editing when it lands (you cannot edit a role above your own
   tier); tracked with that slice.
 - **Refines:** [ADR-0010](#adr-0010-impersonation-is-a-session-not-a-credential-guarded-by-capability-cover) (reuses its capability-cover primitive on the grant path).
