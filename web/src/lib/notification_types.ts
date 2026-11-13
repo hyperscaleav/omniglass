@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { NotificationTypeBody, PreviewNotificationTypeOutputBody } from "../api/api.gen";
 
 // The notification types data layer (#618): thin typed wrappers over the
 // /notification-types surface. A notification type says WHAT a message about an
@@ -7,8 +7,8 @@ import type { components } from "../api/schema.gen";
 // through the same sandbox a label rule runs in, over the alarm facts. Official
 // types ship with Omniglass and are read-only.
 
-export type NotificationTypeRow = components["schemas"]["NotificationTypeBody"];
-export type NotificationPreview = components["schemas"]["PreviewNotificationTypeOutputBody"];
+export type NotificationTypeRow = NotificationTypeBody;
+export type NotificationPreview = PreviewNotificationTypeOutputBody;
 
 export const NOTIFICATION_TYPES_KEY = ["notification_types"] as const;
 

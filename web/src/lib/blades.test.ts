@@ -160,4 +160,54 @@ describe("edit slot", () => {
     expect(slot.saving()).toBe(false); // the saving flag is cleared in finally
     disposeFn();
   });
+  // A failed save keeps the slot editing AND remembers why, so the host's footer
+  // can say it beside Save instead of leaving the operator to scroll for it.
+  it("keeps a failed save's message until the next attempt, begin or cancel", async () => {
+    let fail = true;
+    const slot = createRoot(() => createEditSlot());
+    slot.bind({ save: async () => { if (fail) throw { detail: "component name already exists" }; } });
+    expect(slot.saveError()).toBeNull();
+    slot.begin();
+    await expect(slot.save()).rejects.toBeTruthy();
+    expect(slot.saveError()).toBe("component name already exists");
+    expect(slot.editing()).toBe(true);
+    fail = false;
+    await slot.save();
+    expect(slot.saveError()).toBeNull();
+    fail = true;
+    slot.begin();
+    await expect(slot.save()).rejects.toBeTruthy();
+    slot.cancel();
+    expect(slot.saveError()).toBeNull();
+  });
+
+  it("reports a contributor's failure the same way", async () => {
+    const slot = createRoot(() => createEditSlot());
+    slot.bind({ save: async () => {} });
+    slot.onSave(async () => { throw new Error("field flush failed"); });
+    slot.begin();
+    await expect(slot.save()).rejects.toThrow();
+    expect(slot.saveError()).toBe("The operation failed.");
+  });
+
+  it("is dirty only while editing with drafts that differ from the row", () => {
+    let changed = false;
+    const slot = createRoot(() => createEditSlot());
+    expect(slot.dirty()).toBe(false); // unbound
+    slot.bind({ save: async () => {}, dirty: () => changed });
+    expect(slot.dirty()).toBe(false); // not editing
+    slot.begin();
+    expect(slot.dirty()).toBe(false);
+    changed = true;
+    expect(slot.dirty()).toBe(true);
+    slot.cancel();
+    expect(slot.dirty()).toBe(false);
+  });
+
+  it("a body that binds no dirty predicate is never dirty", () => {
+    const slot = createRoot(() => createEditSlot());
+    slot.bind({ save: async () => {} });
+    slot.begin();
+    expect(slot.dirty()).toBe(false);
+  });
 });

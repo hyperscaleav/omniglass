@@ -47,6 +47,34 @@ The node detail also carries a read-only **Self-logs** panel (backed by `GET /no
 gated by `node:read`): the node's own recent operational log lines, newest first, over the last
 24 hours, so a node that is up but misbehaving explains itself without a shell on the box.
 
+### Getting a first verdict from the command line
+
+An empty install ships no node, so an endpoint added to a component reads a null verdict until a
+node probes it. The console path above and this CLI path do the same things, in this order:
+
+```sh
+# 1. Register the node, then mint its enrollment token (shown once).
+omniglass node create --name edge-1
+omniglass node enroll edge-1
+
+# 2. Run the node with that token, in its own terminal or service. It claims its
+#    credential, pulls its worklist and starts probing.
+omniglass node run --server http://localhost:8080 --name edge-1 --token <token>
+
+# 3. Assign the endpoint to the node. The endpoint's id and name are in the reachability read.
+omniglass endpoint update <endpoint> --node edge-1
+
+# 4. Read the verdict. The first probe lands within a probe interval of the node's next worklist pull.
+omniglass component reachability list <component>
+```
+
+Until step 3, the endpoint's row carries `"verdict": null` and `"pending": "no-node"`: nothing is
+assigned to probe it. After step 3 and before the first probe lands, it reads `"pending":
+"awaiting-probe"`, and the field is gone once a verdict exists. The console's Endpoints panel says
+the same beneath the row, with a link to the Nodes page (or, once a node is assigned, to that node's
+blade). If it stays at `awaiting-probe`, the node is not running or not enrolled: check its liveness
+pill on **Nodes**.
+
 ## Endpoints
 
 An endpoint is an **API on a component** that a node reaches for, and it lives **on the
@@ -146,7 +174,9 @@ collects, add or remove the **endpoint**; there is no task create, edit, or dele
 Every component's detail carries an **Endpoints** panel showing composed reachability: is each
 of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
 transport name where it has none) and its address, a **verdict
-pill** (responding, down, stale, or unknown; a verdict is stored only when it changes, so the
+pill** (responding, down, stale, or unknown, the last for an endpoint with no verdict yet,
+whose row says why beneath it: no node is assigned to probe it, or its node has not landed a first
+probe; a verdict is stored only when it changes, so the
 pill ages an endpoint by when the server last received anything its task delivered, its **last
 seen**, and an endpoint answering every probe stays responding however long ago it last changed
 state), an **availability strip** drawn from the

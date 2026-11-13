@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleConditionBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
 import type { SeverityLevel } from "./severity";
 import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
@@ -19,20 +19,20 @@ import { entityNameError } from "./names";
 // draft a form edits and the bodies it sends) takes plain values, so the form's
 // rules are unit-tested without a component.
 
-export type EventRule = components["schemas"]["EventRuleBody"];
+export type EventRule = EventRuleBody;
 // A stored criterion is an expression (#957); a body may still send the short
 // form {op, value}, which the server lowers (eq "down" is value == "down").
-export type RuleCriteria = components["schemas"]["CriteriaBody"];
-export type RuleCriteriaInput = components["schemas"]["CriteriaInput"];
+export type RuleCriteria = CriteriaBody;
+export type RuleCriteriaInput = CriteriaInput;
 export type RuleOp = NonNullable<RuleCriteriaInput["op"]>;
 export type ShortForm = { op: RuleOp; value: string | number };
 export type RuleLane = EventRule["sample_lane"];
-export type RuleState = components["schemas"]["EventRuleStateOutputBody"];
-export type RuleOpenAlarm = components["schemas"]["RuleOpenAlarmBody"];
-export type RuleStreak = components["schemas"]["RuleStreakBody"];
-export type RuleCondition = components["schemas"]["RuleConditionBody"];
-export type CreateEventRule = components["schemas"]["CreateEventRuleInputBody"];
-export type UpdateEventRule = components["schemas"]["UpdateEventRuleInputBody"];
+export type RuleState = EventRuleStateOutputBody;
+export type RuleOpenAlarm = RuleOpenAlarmBody;
+export type RuleStreak = RuleStreakBody;
+export type RuleCondition = RuleConditionBody;
+export type CreateEventRule = CreateEventRuleInputBody;
+export type UpdateEventRule = UpdateEventRuleInputBody;
 
 export const EVENT_RULES_KEY = ["event_rules"] as const;
 export const ruleStateKey = (name: string) => ["event_rules", name, "state"] as const;

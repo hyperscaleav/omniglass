@@ -19,7 +19,7 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 ## The rail (what is generated vs written)
 
 - **Generated, never hand-written:** the OpenAPI (`api/openapi.json`), the typed SPA client
-  (`web/src/api/schema.gen.ts`), and the cobra CLI. Run `make gen` after the Go API changes; a
+  (`web/src/api/api.gen.ts` and `paths.gen.ts`, via orval), and the cobra CLI. Run `make gen` after the Go API changes; a
   non-empty diff fails the slice until committed. A route/shape change surfaces as a TS error.
 - **Hand-written:** the data layer (`web/src/lib/<entity>.ts`) and the page config
   (`web/src/pages/<Entity>.tsx`). The config is consumed by `ListView`; the genuinely tricky

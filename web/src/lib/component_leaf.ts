@@ -7,7 +7,7 @@
 import { locationIndex, type FleetView } from "./fleet";
 import { sortAlarms, type Alarm } from "./alarms";
 import type { SeverityLevel } from "./severity";
-import type { components } from "../api/schema.gen";
+import type { EffectiveMetricBody, EffectivePropertyBody } from "../api/api.gen";
 import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
@@ -119,7 +119,7 @@ export type IdentityRow = { name: string; label: string; value: unknown; sourceR
 // set, a calc rule's value, or the contract default): model, serial,
 // firmware are the point, but the rule is the value's presence, not a
 // hand-kept key list.
-export function identityRows(props: components["schemas"]["EffectivePropertyBody"][]): IdentityRow[] {
+export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
   return (props ?? [])
     .filter((p) => p.value !== null && p.value !== undefined)
     .map((p) => {
@@ -144,7 +144,7 @@ export type VitalSpread = { shown: string; count: number; instances: VitalInstan
 // vitalRows is the same rule over the metric lane, with the live-series
 // marker: a sampled row is the component speaking, an unsampled one is the
 // contract's default standing in.
-export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][]): VitalRow[] {
+export function vitalRows(metrics: EffectiveMetricBody[]): VitalRow[] {
   return (metrics ?? [])
     .filter((m) => m.value !== null && m.value !== undefined)
     .map((m) => {

@@ -4,7 +4,7 @@ import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { systemHealthKey, type FleetHealth } from "../lib/health";
+import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -247,6 +247,51 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
     // Each alarm row opens its timeline in place (#950).
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
+  });
+
+  // The strip is where a storm is triaged from (#990): acknowledging a causing
+  // alarm must not need the component's own page.
+  describe("acknowledging from the Why strip", () => {
+    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
+    const withAck = (ack: object): FleetHealth => ({
+      ...health,
+      roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
+    }) as FleetHealth;
+
+    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+      mount(undefined, health, [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+      expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
+    });
+
+    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+      mount(undefined, health, [], [], viewer);
+      expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+    });
+
+    it("shows who acknowledged and when, and no button, on an acknowledged alarm", () => {
+      mount(undefined, withAck({ acknowledged: true, acknowledged_at: "2026-08-15T15:00:00Z", acknowledged_by: "alice" }), [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+      expect(within(strip).getByText(/acknowledged by alice/)).toBeTruthy();
+    });
+
+    it("refreshes the strip: acknowledging invalidates the system health read", async () => {
+      const fetched: string[] = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const req = input as Request;
+        fetched.push(`${req.method} ${new URL(req.url).pathname}`);
+        return new Response(JSON.stringify({ id: "al-1", acknowledged: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      });
+      const { qc } = mount(undefined, health, [], [], responder);
+      const spy = vi.spyOn(qc, "invalidateQueries");
+      fireEvent.click(within(screen.getByTestId("alarm-strip")).getByRole("button", { name: "Acknowledge" }));
+      await waitFor(() => expect(fetched.some((f) => f.startsWith("POST ") && f.endsWith("/alarms/al-1:acknowledge"))).toBe(true));
+      await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain(JSON.stringify(SYSTEM_HEALTH_PREFIX)));
+      vi.unstubAllGlobals();
+    });
   });
 
   // The report names an alarm's component by name and by uuid (#557): the
@@ -857,6 +902,50 @@ describe("the place configures beside its system (#872)", () => {
   });
 });
 
+// Leaving Configure drops the face, and its drafts with it. With drafts that
+// differ from the row the operator is asked first; a clean edit leaves freely.
+describe("leaving Configure with unsaved drafts", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function dirtyConfigure() {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+    const name = await within(face).findByDisplayValue("boardroom");
+    return { face, name };
+  }
+  const overview = () => screen.getByRole("tab", { name: "Overview" });
+
+  it("asks first, and confirming discards the drafts and leaves", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { name } = await dirtyConfigure();
+    fireEvent.input(name, { target: { value: "exec-boardroom" } });
+    fireEvent.click(overview());
+    expect(ask).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());
+    expect(overview().getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("cancelling stays on Configure with the drafts intact", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { name } = await dirtyConfigure();
+    fireEvent.input(name, { target: { value: "exec-boardroom" } });
+    fireEvent.click(overview());
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("configure-face")).toBeTruthy();
+    expect((name as HTMLInputElement).value).toBe("exec-boardroom");
+    expect(screen.getByRole("tab", { name: "Configure" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not ask when editing but nothing changed, or when not editing", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await dirtyConfigure();
+    fireEvent.click(overview());
+    await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());
+    expect(ask).not.toHaveBeenCalled();
+  });
+});
+
 describe("?edit=1 lands on configure (#800)", () => {
   it("opens the configure tab editing from a bare ?edit=1 address", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
@@ -895,7 +984,9 @@ describe("the miss face (#800)", () => {
     // What a create leaves behind: the list refreshed, the view now stale.
     void r.qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] });
     await waitFor(() => expect(answer).toBeTypeOf("function"));
-    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    // The read is held open until answer, so the miss clearing here is the page
+    // seeing the refetch, not the refetch landing.
+    await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
     const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
     expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();

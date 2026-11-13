@@ -16,7 +16,7 @@ refs: [1694, 1641, 1639, 1623, 1692, 1693, 1738]
      settled between the start mark's second simulator read and the end mark's first, less the
      traffic the node does not tally; lost is what did not come back, less what is still in flight at
      the node's end read. A node that restarted adds nothing to the summed rows, as it reads no gaps
-     ([ADR-1639](/architecture/decisions/#adr-1639-the-scale-lab-closes-the-loop-from-a-pull-only-bracketed-snapshot)),
+     ([ADR-1639](/architecture/decisions/#adr-1639-the-scale-lab-closes-the-loop-from-a-pull-only-bracketed-snapshot-of-each-endpoint)),
      and the table names it (`sim not counted`) so a row never passes for every node's.
   3. **A refusal or error that came back is returned.** The device said no and the task reports it;
      the hop carried the reply. Loss is a reply that never reached the node, by cause: `withheld`,
