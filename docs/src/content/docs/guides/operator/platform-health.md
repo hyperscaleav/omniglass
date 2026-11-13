@@ -32,13 +32,36 @@ screenshots:
   # table then sits at a fixed place under the header and the closed set.
   - id: platform-health-nodes
     path: /web/platform
-    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule, Commands and Worklist."
+    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and the Checkin and Schedule groups in view, with the rest of the columns past the table's right edge."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
       - action: click
         selector: "[data-testid=server-panels-server] > summary .eyebrow"
+    mask:
+      - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
+      - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
+      - "[data-figure=checkin-age]"
+      - "[data-testid=pipeline] [role=group] >> xpath=.."
+      - "[data-testid=pipeline] ol >> xpath=.."
+  # The node table's columns run past its right edge at the docs viewport, so
+  # this shot hovers the Worklist Pull Loss header: the hover scrolls the table
+  # across to it and opens the key's description. The lab's node never checks
+  # in, so its figures read not reported.
+  - id: platform-health-node-worklist
+    path: /web/platform
+    alt: "The node table scrolled across to the Worklist group with the Worklist Pull Loss header hovered: its tooltip says the figure is the share of the node's worklist pulls the bus refused or the node could not read, 0 healthy and 1 a node running a stale worklist. The lab's node has never checked in, so its figure reads not reported."
+    steps:
+      - action: wait
+        selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
+        timeout: 150000
+      - action: click
+        selector: "[data-testid=server-panels-server] > summary .eyebrow"
+      - action: hover
+        selector: "[data-testid=platform-nodes] button[aria-label='Worklist Pull Loss']"
+      - action: wait
+        selector: "[role=tooltip]"
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
@@ -272,6 +295,8 @@ The columns are the platform keys, grouped:
 Hover a column's header, or tab to it, for what the key measures; the text is the key's description from the
 [metrics catalog](/guides/admin/metrics/), not prose written into the page. A figure the node has
 never reported reads **not reported**, never 0: a 0 would claim the node measured nothing wrong.
+
+::screenshot{#platform-health-node-worklist}
 
 The overrun, skip and expired columns are counts over a window (the collection report window, or
 the server's command pass for expired commands), written every window, 0 when nothing happened. So a
