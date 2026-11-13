@@ -1,0 +1,253 @@
+{
+  "date": "",
+  "build": "",
+  "step_tasks": 0,
+  "drivers": [
+    {
+      "driver": "boreal-beam-snmp",
+      "product": "boreal-beam-340",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "boreal-cast-api",
+      "product": "boreal-cast-m1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "boreal-edge-snmp",
+      "product": "boreal-edge-55",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "boreal-edge-web",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "ferrite-pdu-api",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "ferrite-pdu-snmp",
+      "product": "ferrite-pdu-4c",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "http-json",
+      "product": "tessellate-census-c1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "kestrel-api",
+      "product": "kestrel-vroom",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "kestrel-gaze-api",
+      "product": "kestrel-gaze-p2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "kestrel-relay-api",
+      "product": "kestrel-relay-c1",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s",
+        "5m0s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "kestrel-ws",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "lyra-arc-snmp",
+      "product": "lyra-arc-a2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "lyra-hx-snmp",
+      "product": "lyra-hx-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "meridian-mx-snmp",
+      "product": "meridian-mx-84",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "meridian-xl-snmp",
+      "product": "meridian-xl-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "newtron-core-nvp",
+      "product": "newtron-core-3",
+      "polls": [
+        "30s",
+        "30s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "newtron-nvp",
+      "product": "newtron-panel-7",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "newtron-nvp-ssh",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "newtron-nvp-telnet",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "newtron-nvp-tls",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "newtron-nvp-udp",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "newtron-panel-web",
+      "measured": false,
+      "reason": "no shipped product is on this driver"
+    },
+    {
+      "driver": "newtron-slate-nvp",
+      "product": "newtron-slate-5",
+      "polls": [
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "polaris-amp-snmp",
+      "product": "polaris-amp-4100",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "polaris-dsp-snmp",
+      "product": "polaris-dsp-16",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "recording-service-api",
+      "product": "recording-service",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "snmp-generic",
+      "product": "generic-device",
+      "polls": [
+        "1m0s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "ucc-rooms",
+      "product": "ucc-platform",
+      "polls": [
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
+    },
+    {
+      "driver": "ucc-webhook",
+      "measured": false,
+      "reason": "no polls: the driver only listens, so it runs no task to cost"
+    }
+  ]
+}
