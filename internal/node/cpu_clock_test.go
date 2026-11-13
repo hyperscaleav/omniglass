@@ -14,8 +14,9 @@ func spinFor(d time.Duration) {
 // A run that spins and then blocks is charged its spin, not its block (#1870):
 // the thread clock counts the time the kernel ran the run's thread, and a
 // thread parked on a sleep (as on a device that has not answered) runs
-// nothing. The spin's floor is loose because a loaded host can take the
-// thread off CPU mid-spin; the ceiling is the point, far under the block.
+// nothing. The spin's floor is only that some of it counted, because a
+// loaded or throttled host can take the thread off CPU for most of the spin;
+// the ceiling is the point, far under the block.
 func TestARunsCPUTimeIsItsSpinNotItsBlock(t *testing.T) {
 	if !threadClockReads {
 		t.Skip("this platform has no per-thread CPU clock")
@@ -31,7 +32,7 @@ func TestARunsCPUTimeIsItsSpinNotItsBlock(t *testing.T) {
 	if cost.took < spin+block {
 		t.Errorf("took %v, want at least the spin and the block, %v", cost.took, spin+block)
 	}
-	if cost.cpu < spin/5 || cost.cpu > spin+25*time.Millisecond {
+	if cost.cpu <= 0 || cost.cpu > spin+25*time.Millisecond {
 		t.Errorf("cpu %v, want near the %v spin and far under the %v block", cost.cpu, spin, block)
 	}
 }

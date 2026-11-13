@@ -60,6 +60,23 @@ func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool
 	return 0
 }
 
+// sameWindow waits for the endpoint's latest a and b to come from one report
+// window (one stamp), so two means read together describe the same runs.
+func (s *gateStack) sameWindow(comp, instance, a, b string) (float64, float64) {
+	s.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		ma, errA := s.gw.LatestMetricInstance(s.ctx, comp, a, instance)
+		mb, errB := s.gw.LatestMetricInstance(s.ctx, comp, b, instance)
+		if errA == nil && errB == nil && ma != nil && mb != nil && ma.TS.Equal(mb.TS) {
+			return ma.Value, mb.Value
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	s.t.Fatalf("%s and %s on %s[%s] never landed from one window", a, b, comp, instance)
+	return 0, 0
+}
+
 // TestEveryEndpointReportsItsOwnCollection drives #1369 end to end over the
 // real wire: the shipped kestrel-api driver (polls, and a held event stream
 // its listeners claim) attached to a simulated bar, and to a second bar
@@ -100,8 +117,12 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 	// Beside it, the CPU the kernel charged those polls (#1870): some, and
 	// less than their wall time, which is mostly the bar's answer.
 	s.waitMetric("bar-live", live.Name, probekeys.PollCPUTime, func(v float64) bool { return v > 0 }, "a positive mean poll CPU time")
-	if cpu, _ := s.metric("bar-live", live.Name, probekeys.PollCPUTime); cpu >= 1000 {
-		t.Errorf("the live bar's polls read %v ms of CPU each, past any plausible poll", cpu)
+	// One window's two means come from the same runs, and a run's thread
+	// cannot be on CPU longer than the run took: a CPU time that is the wall
+	// time, or more, is not the thread clock.
+	cpu, took := s.sameWindow("bar-live", live.Name, probekeys.PollCPUTime, probekeys.PollDuration)
+	if cpu >= took {
+		t.Errorf("the live bar's polls read %v ms of CPU each against %v ms of wall time; the CPU is the run's own work, under its wait on the bar", cpu, took)
 	}
 	if v, landed := s.metric("bar-live", live.Name, probekeys.PollFailureCount); landed {
 		t.Errorf("the live bar landed %v failed polls; a failure count lands only when nonzero", v)

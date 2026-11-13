@@ -20,10 +20,11 @@ type runCost struct {
 // system time the thread ran, so a run parked on the network is charged
 // nothing while it waits. The lock is what makes the thread the run's alone
 // for its length; a parked locked goroutine parks its thread, so a node holds
-// at most one extra thread per lane. What the clock misses: work fn hands to
-// another goroutine (the runtime's network poller, a driver's helper) runs on
-// another thread, and the garbage collector's background workers are charged
-// to no run.
+// at most one extra thread per lane. What the clock counts: fn's own
+// syscalls and any GC assist fn pays. What it misses: work fn hands to
+// another goroutine (a held session's reader, the HTTP client's connection
+// goroutines, a driver's helper) runs on another thread, and the garbage
+// collector's background workers are charged to no run.
 func measureRun(fn func()) runCost {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()

@@ -87,8 +87,10 @@ const (
 	// poll runs over a report window (#1870), in milliseconds: each run's
 	// thread CPU clock, user plus system, read across the run on a thread
 	// locked to it, so time blocked on the device is not in it. Work a run
-	// hands to another goroutine and the garbage collector are not either. A
-	// window with no run, or on a platform with no thread clock, lands none.
+	// hands to another goroutine (a held session's reader, the HTTP client's
+	// connection goroutines) and the collector's background workers are not
+	// either. A window with no run, or on a platform with no thread clock,
+	// lands none.
 	PollCPUTime = "poll-cpu-time"
 	// PollFailureCount is how many of an endpoint's polls failed in a report
 	// window (#1369): a run that faulted and landed nothing, or a due poll
