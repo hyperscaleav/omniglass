@@ -393,6 +393,8 @@ session:
   reprobe: 1h
 ```
 
+A command binding declares its **settle** rule to read the device's answer: `settle: { from: response, ... }` to judge the reply as success or failure (extracting a value or matching a confirmation), or `settle: { from: observe }` to wait for the next probe to report the intended value (or simply record the issue if the device answers nothing you can judge). A **fire-and-forget** command (for example `reboot`) sets no value: it has no `target_property_type` or `target_metric_type` arm in the command type catalog. Fire-and-forget commands settle at their issue (the execution report lands them or times them out) and declare no settle rule. A **settleable** command (for example `set-input`) sets a value and opens an intended one, and judges success by reading the reply or waiting for the next probe to observe it.
+
 A poll's `schedule.every` is how often the node asks the device, on the node's own timer rather
 than its heartbeat: a `10s` poll runs every ten seconds at a stable phase of its own, whatever
 the heartbeat
