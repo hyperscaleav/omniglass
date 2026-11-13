@@ -1,17 +1,16 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { PreviewEventRuleInputBody, PreviewEventRuleOutputBody, ValidateExpressionInputBody, ValidateExpressionOutputBody } from "../api/api.gen";
 
 // The expression data layer (#958, #959, #960): thin typed wrappers over
 // POST /expressions:validate (does a source compile at a site, and what may it
 // name there) and POST /event-rules:preview (what would a candidate rule have
 // done), plus the pure half the expression field renders a diagnostic with.
 
-export type ValidateExpression = components["schemas"]["ValidateExpressionInputBody"];
-export type ExpressionCheck = components["schemas"]["ValidateExpressionOutputBody"];
-export type ExpressionDiagnostic = components["schemas"]["ExpressionDiagnostic"];
-export type ExpressionBinding = components["schemas"]["ExpressionBinding"];
-export type PreviewEventRule = components["schemas"]["PreviewEventRuleInputBody"];
-export type RulePreview = components["schemas"]["PreviewEventRuleOutputBody"];
+export type ValidateExpression = ValidateExpressionInputBody;
+export type ExpressionCheck = ValidateExpressionOutputBody;
+export type { ExpressionDiagnostic, ExpressionBinding } from "../api/api.gen";
+export type PreviewEventRule = PreviewEventRuleInputBody;
+export type RulePreview = PreviewEventRuleOutputBody;
 
 export async function validateExpression(body: ValidateExpression): Promise<ExpressionCheck> {
   const { data, error } = await api.POST("/expressions:validate", { body });
