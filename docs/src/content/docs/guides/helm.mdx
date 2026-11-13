@@ -130,8 +130,8 @@ helm install og-pr-42 deploy/chart -n og-pr-42 --create-namespace \
 
 **Qualified names through Traefik:** an endpoint, secret or variable can be
 addressed by a qualified name whose slash (and `$`) is percent-encoded in the path,
-for example `GET /api/v1/endpoints/<addr>%2Fhttps` or
-`GET /api/v1/secrets/%24platform%2Fdemo-panel-login`. The chart's default Ingress
+for example `/api/v1/endpoints/<addr>%2Fhttps` or
+`/api/v1/secrets/%24platform%2Fdemo-panel-login`. The chart's default Ingress
 needs no extra setting for this: a pinned Traefik container in front of a backend
 that echoes the raw request path returned the same status as direct access, with
 the path intact, on Traefik 3.0.4, 3.6.25 and 3.7.19 (no entry point options set).
