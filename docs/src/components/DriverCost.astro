@@ -1,0 +1,75 @@
+---
+// The driver cost table, rendered from the sweep's own (docs/src/generated/
+// drivercost.json, written by make gen via cmd/labgen from internal/
+// labfootprint's DriverCostFacts: the committed sweep joined with the plan).
+// Every driver the plan knows is a row, so a driver the sweep has not measured
+// reads as such, with its reason, rather than going missing.
+//
+// Usage: <DriverCost />
+import facts from '../generated/drivercost.json';
+
+if (!facts.drivers.length) {
+  throw new Error('DriverCost: drivercost.json has no drivers; run make gen');
+}
+
+type Row = (typeof facts.drivers)[number];
+const num = (r: Row, k: string, digits: number) => {
+  const v = (r as Record<string, unknown>)[k];
+  return typeof v === 'number' ? v.toFixed(digits) : '';
+};
+const share = (r: Row) => {
+  const v = (r as Record<string, unknown>).thread_share;
+  return typeof v === 'number' ? `${Math.round(v * 100)}%` : '';
+};
+const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.join(', ') : '');
+const host = (facts as { host?: { cores?: number; memory_gib?: number } }).host;
+const measured = facts.drivers.filter((r) => r.measured).length;
+---
+
+<p class="driver-cost-source">
+  {
+    facts.date ? (
+      <>
+        Measured {facts.date} on build <code>{facts.build}</code>
+        {host && host.cores ? `, a host of ${host.cores} cores and ${host.memory_gib} GiB` : ''}, stepping about {facts.step_tasks} tasks at a
+        time. {measured} of {facts.drivers.length} drivers measured.
+      </>
+    ) : (
+      <>No sweep is committed yet: every driver reads as not yet measured.</>
+    )
+  }
+</p>
+<table class="driver-cost">
+  <thead>
+    <tr>
+      <th>Driver</th>
+      <th>Product</th>
+      <th>Polls</th>
+      <th>Memory per task (KiB)</th>
+      <th>Millicores per task</th>
+      <th>CPU per run (ms)</th>
+      <th>Thread CPU per run (ms)</th>
+      <th>Thread share</th>
+      <th>Not measured because</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      facts.drivers.map((r) => (
+        <tr>
+          <td>
+            <code>{r.driver}</code>
+          </td>
+          <td>{'product' in r && r.product ? <code>{r.product}</code> : ''}</td>
+          <td>{polls(r)}</td>
+          <td>{num(r, 'memory_per_task_kib', 1)}</td>
+          <td>{num(r, 'millicores_per_task', 3)}</td>
+          <td>{num(r, 'cpu_per_run_ms', 2)}</td>
+          <td>{num(r, 'thread_cpu_per_run_ms', 2)}</td>
+          <td>{share(r)}</td>
+          <td>{r.measured ? '' : r.reason}</td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

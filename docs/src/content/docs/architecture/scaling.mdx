@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import DriverCost from '../../../components/DriverCost.astro';
+
 Omniglass is **one Go binary**, and that is a packaging decision, not a scale ceiling. The same artifact
 runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kubernetes; you scale by
 **topology**, not by swapping products.
@@ -253,6 +255,31 @@ not a lab run. Read them together:
 The seeded `ingest-lag-high` rule opens a warning alarm on the server's component when
 `ingest-lag-max` holds over 30 s for 2 minutes, the point at which a reader of any panel is looking at
 data at least half a minute old.
+
+## What a driver costs a node
+
+A node's size is the sum of what its tasks cost it, and that cost differs by driver: a poll that parses
+a large JSON answer, one that walks an SNMP table, and one that asks a held session a short question do
+different work. The table below is each shipped driver's cost per task on one node, measured by the
+lab's [driver cost sweep](/guides/lab/#measuring-each-drivers-cost) on a node with no simulator in its
+process, and rendered from the sweep's committed result by `make gen`:
+
+- **Memory per task** and **millicores per task** are slopes: what the node's container gains in working
+  set and CPU for each task of the driver it adds. Multiply by a node's task count for that driver,
+  and add across its drivers, to read what its worklist costs beyond the idle node.
+- **CPU per run** is the same CPU spread over how often each task runs, so drivers with different
+  polls compare per poll.
+- **Thread CPU per run** is the node's own `poll-cpu-time` over the same runs, and **thread share** is
+  it over the cgroup's figure: the part of a run the polling thread does itself
+  ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). A low share is a transport
+  that does its I/O on another goroutine, not a cheap driver.
+
+<DriverCost />
+
+The figures hold for the host and build named above them and for the simulated devices, whose answers
+are smaller and quicker than many real ones; read them as the relative cost of drivers and the order
+of a node's footprint, not a promise for a given site. A shipped driver the sweep has not measured
+reads as such, with why.
 
 ## Platform configuration
 

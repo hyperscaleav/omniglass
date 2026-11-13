@@ -1,0 +1,16 @@
+---
+title: "A driver's cost is a slope on a node of its own, committed and rendered"
+date: 2026-11-13
+status: "Accepted"
+summary: "The lab measures each shipped driver's memory and CPU per task as the slope across none, N and 2N tasks on a node whose simulator runs in a container of its own, refuses a step set that is not near a line, and commits the table for make gen to render; make gen never runs the sweep, and a driver the table lacks reads as not yet measured"
+refs: [1871, 1870, 1623, 1293]
+---
+
+- **Date:** 2026-11-13 | **Status:** Accepted | **Pages:** [scaling](/architecture/scaling/#what-a-driver-costs-a-node), [nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)
+- **Decision:** (#1871.) `omniglass lab perf drivers` brings up a lab with no fleet and measures each shipped driver on a node container of its own, its simulator in a second container sharing the node's network namespace, so the node polls on its own loopback and the simulator's work lands in a different cgroup. Each driver is read at 0, N and 2N components (N bringing about `--step-tasks` tasks), each step over a window at least as long as the driver's slowest poll. Memory and CPU per task are least-squares slopes; a step off the line by more than 10% of the sweep's rise in memory, or 25% in CPU, refuses the fit and the driver is listed as not measured with the figure that failed. CPU per run (the slope over the run rate) is cross-checked by the node's mean `poll-cpu-time`, reported as the thread share. The run writes `internal/labfootprint/drivercost/shipped.json`, stamped with its host fingerprint, date and build; `make gen` joins it with the plan (every shipped driver, and every driver no shipped product uses or that declares no polls, with that reason) and renders the table on the scaling page.
+- **Consequences:** The table is a committed measurement, not a generated fact: a driver added after the last sweep shows on the page as not yet measured until a sweep is committed, so the page never omits a driver nor shows a figure no run produced. The figures hold for one host class and for simulated devices, so the page reads them as relative cost and order of magnitude. A full sweep takes hours (the five-minute polls set most drivers' windows), so it is run by hand on a test VM, like the perf gate (ADR-1787).
+- **Context:** The issue placed the table on "the sizing docs page" and listed task kind and interval as columns. There is no sizing page; the scaling page is where a node's size is read, so the table lands there. Every swept task is a driver poll, so the kind column would be constant; the driver's poll intervals stand in for the interval. A driver "without a simulator" is, in the shipped plan, a driver no shipped product is on: the simulator serves products, so those are listed as not measured with that reason.
+- **Not chosen:**
+  - **Running the sweep under `make gen`.** It needs Docker and hours; `make gen` must stay fast and offline.
+  - **Two steps.** Two points always fit a line exactly and could never show a bend, so the fit needs three.
+  - **The scale lab's nodes.** They run the simulator in process (`node run --simulate`), so their cgroups hold the devices' cost as well as the node's.
