@@ -18,7 +18,7 @@ summary: "Owner accounts are un-impersonatable by anyone; impersonate stays swep
   `owner.Covers(owner)` is true, so owner-impersonates-owner was possible. An owner is the highest-trust
   account and impersonating one is a full-takeover vector, so the explicit owner-protection rule removes it
   entirely and reads more clearly than relying on cover arithmetic. Owner detection reuses the same
-  `role='owner' and scope_kind='all'` lane as the [owner invariant](#the-owner-invariant), so it is not new
+  `role='owner' and scope_kind='all'` lane as the [owner invariant](/architecture/identity-access/#the-owner-invariant), so it is not new
   role-name branching. Scope intersection (a scoped admin acting-as within its own subtree by intersecting two
   scope Sets per row) was dropped as complexity for a narrow case; the tier model plus all-scope-only act-as is
   simpler and safe. The impersonated-vs-direct distinction an operator needs in the audit trail is already
