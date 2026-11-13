@@ -18,6 +18,7 @@ func spinFor(d time.Duration) {
 // loaded or throttled host can take the thread off CPU for most of the spin;
 // the ceiling is the point, far under the block.
 func TestARunsCPUTimeIsItsSpinNotItsBlock(t *testing.T) {
+	t.Parallel()
 	if !threadClockReads {
 		t.Skip("this platform has no per-thread CPU clock")
 	}
@@ -41,6 +42,7 @@ func TestARunsCPUTimeIsItsSpinNotItsBlock(t *testing.T) {
 // thread clock does not count it: the stated limit of the measure, held by a
 // test so a change that starts counting it (or claims to) is seen.
 func TestARunsCPUTimeLeavesOutWorkOnOtherGoroutines(t *testing.T) {
+	t.Parallel()
 	if !threadClockReads {
 		t.Skip("this platform has no per-thread CPU clock")
 	}
