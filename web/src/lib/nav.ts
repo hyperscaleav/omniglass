@@ -71,9 +71,8 @@ export const navItems: NavItem[] = [
   // every location, system and component, and the old index URLs redirect
   // there. Their workspace routes, gates, and top-bar identities
   // survive through OFF_RAIL below, the same move the catalog registries made
-  // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
-  // door.
-  { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+  // (#608). Nodes is infrastructure, not fleet inventory; setting one up is
+  // administration, so its door is under Admin below (#1767).
   // Simulation (#890): the simulated fleet a simulator beside a node serves,
   // its live hits, impairments and each component's API surface. A lab and demo
   // surface, so its door shows only while a simulator is connected.
@@ -101,12 +100,19 @@ export const navItems: NavItem[] = [
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
-    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
+    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, the collection nodes, the platform's status, and platform settings.",
     children: [
       { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "Users and service accounts: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
       { label: "Groups", path: "/groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
+      // Nodes and Platform health (#1644) are administration: enrolling a node
+      // is an admin's job, and whether Omniglass itself is well is read off the
+      // platform components every node and server already has. Both sit here
+      // (#1767; every tab is one word, so Platform health is Status), behind
+      // node:read because Status's rows are the node list.
+      { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+      { label: "Status", path: "/platform", live: true, resource: "node", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each node's check-in, schedule and command queue." },
       { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },

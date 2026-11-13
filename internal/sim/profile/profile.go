@@ -1,4 +1,4 @@
-// Package profile loads and validates device and system profile YAML files.
+// Package profile loads and validates device profile YAML files.
 package profile
 
 import (
@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,6 +34,52 @@ type DeviceProfile struct {
 	// Webhook declares how the simulated service is subscribed to a
 	// webhook receiver (#1370): absent for a device that posts none.
 	Webhook *WebhookSubscribe `yaml:"webhook"`
+	// Push declares a push face (#1743): absent for a device that pushes
+	// nothing.
+	Push *Push `yaml:"push"`
+}
+
+// Push is a push face: the device is an outside actor that holds a bearer
+// token and posts POST /telemetry:push to the server on its own cadence, as
+// a first-party integration does, for every system its grant names (it reads
+// them off GET /auth/me). Body is a template rendered per system to the push
+// route's JSON body, over the device's state and .Owner (the system's id)
+// and .Now (the device's clock).
+type Push struct {
+	Every string `yaml:"every"`
+	Body  string `yaml:"body"`
+}
+
+// minPushEvery is the shortest cadence a push face may declare: a pusher is
+// a sender of record, not a load generator.
+const minPushEvery = time.Second
+
+// PushEvery is the face's cadence. Its error is the reason a profile is
+// refused at load.
+func (p *Push) PushEvery() (time.Duration, error) {
+	every, err := time.ParseDuration(p.Every)
+	if err != nil {
+		return 0, fmt.Errorf("push.every %q is not a duration", p.Every)
+	}
+	if every < minPushEvery {
+		return 0, fmt.Errorf("push.every %s is under %s", every, minPushEvery)
+	}
+	return every, nil
+}
+
+// validatePush refuses a push face that could never push: no cadence, or no
+// body to send.
+func validatePush(p *DeviceProfile) error {
+	if p.Push == nil {
+		return nil
+	}
+	if _, err := p.Push.PushEvery(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(p.Push.Body) == "" {
+		return fmt.Errorf("push.body is empty: a push face renders the push route's body")
+	}
+	return nil
 }
 
 // WebhookSubscribe names the route a simulated service's admin would call to
@@ -41,6 +88,16 @@ type DeviceProfile struct {
 // webhook endpoint (ADR-1370), so its posts flow from the start.
 type WebhookSubscribe struct {
 	Subscribe string `yaml:"subscribe"`
+	// Driver names the shipped driver whose endpoint receives the service's
+	// posts, for a lab that seeds the service as a webhook sender (#1747):
+	// the plan reads the endpoint's signing input and the room identity
+	// from it. Empty when the service is only ever subscribed by hand.
+	Driver string `yaml:"driver"`
+	// Provision is the path of a POST route taking a JSON body of id that
+	// adds one room to the service's account, as its admin would. The
+	// simulator calls it for each identity bound on the service's webhook
+	// endpoint, so the service's reports name every bound room.
+	Provision string `yaml:"provision"`
 }
 
 // ProductVariant is one more product a profile simulates.
@@ -567,26 +624,9 @@ type Override struct {
 	Rule  string `yaml:"rule"`
 }
 
-// SystemProfile defines a room archetype, a collection of devices that form a system.
-type SystemProfile struct {
-	Name    string         `yaml:"name"`
-	Doc     Doc            `yaml:"doc"`
-	Devices []SystemDevice `yaml:"devices"`
-}
-
-// SystemDevice defines a device slot within a system profile.
-type SystemDevice struct {
-	Profile string   `yaml:"profile"`
-	Role    string   `yaml:"role"`
-	Suffix  string   `yaml:"suffix"`
-	Count   int      `yaml:"count"`
-	Tags    []string `yaml:"tags"`
-}
-
 // Store holds all loaded profiles indexed by name.
 type Store struct {
 	Devices map[string]*DeviceProfile
-	Systems map[string]*SystemProfile
 	// variants maps a product a profile lists to that profile and overlay.
 	variants map[string]variantRef
 }
@@ -627,8 +667,8 @@ func (s *Store) indexVariants() error {
 	return nil
 }
 
-// LoadStore loads device and system profiles from the given profile root directory.
-// It expects profiles/devices/*.yaml and profiles/systems/*.yaml under root.
+// LoadStore loads device profiles from the given profile root directory.
+// It expects profiles/devices/*.yaml under root.
 //
 // Thin wrapper over LoadStoreFS for callers that read a catalog from
 // disk; the simulator itself loads the embedded catalog
@@ -638,11 +678,10 @@ func LoadStore(root string) (*Store, error) {
 }
 
 // LoadStoreFS loads profiles from any fs.FS rooted at the profile
-// directory. Layout is `devices/*.yaml` and `systems/*.yaml`.
+// directory. Layout is `devices/*.yaml`.
 func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	s := &Store{
 		Devices: make(map[string]*DeviceProfile),
-		Systems: make(map[string]*SystemProfile),
 	}
 	surfaces, err := loadSurfaces(fsys, "surfaces")
 	if err != nil {
@@ -650,9 +689,6 @@ func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	}
 	if err := s.loadDevices(fsys, "devices", surfaces); err != nil {
 		return nil, fmt.Errorf("loading device profiles: %w", err)
-	}
-	if err := s.loadSystems(fsys, "systems"); err != nil {
-		return nil, fmt.Errorf("loading system profiles: %w", err)
 	}
 	if err := s.indexVariants(); err != nil {
 		return nil, fmt.Errorf("indexing products: %w", err)
@@ -706,6 +742,9 @@ func (s *Store) loadDevices(fsys fs.FS, dir string, surfaces map[string]Surface)
 			return fmt.Errorf("%s: %w", full, err)
 		}
 		if err := validateComputed(&p); err != nil {
+			return fmt.Errorf("%s: %w", full, err)
+		}
+		if err := validatePush(&p); err != nil {
 			return fmt.Errorf("%s: %w", full, err)
 		}
 		s.Devices[p.Name] = &p
@@ -811,55 +850,6 @@ func validateComputed(p *DeviceProfile) error {
 			return fmt.Errorf("%s (%q): missing required field 'kind'", ctx, c.Path)
 		default:
 			return fmt.Errorf("%s (%q): unsupported kind %q, only 'elapsed' is supported", ctx, c.Path, c.Kind)
-		}
-	}
-	return nil
-}
-
-func (s *Store) loadSystems(fsys fs.FS, dir string) error {
-	entries, err := fs.ReadDir(fsys, dir)
-	if err != nil {
-		if os.IsNotExist(err) || isFSNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		full := path.Join(dir, e.Name())
-		data, err := fs.ReadFile(fsys, full)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", full, err)
-		}
-		var p SystemProfile
-		if err := yaml.Unmarshal(data, &p); err != nil {
-			return fmt.Errorf("parsing %s: %w", full, err)
-		}
-		if p.Name == "" {
-			return fmt.Errorf("%s: missing required field 'name'", full)
-		}
-		if _, exists := s.Systems[p.Name]; exists {
-			return fmt.Errorf("duplicate system profile name: %s", p.Name)
-		}
-		s.Systems[p.Name] = &p
-	}
-	return nil
-}
-
-// Validate checks cross-profile invariants: every system profile's device
-// references point to loaded device profiles. Per-profile validation runs
-// at LoadStore time, so a malformed profile fails to load.
-func (s *Store) Validate() error {
-	for sysName, sys := range s.Systems {
-		for _, dev := range sys.Devices {
-			if _, ok := s.Devices[dev.Profile]; !ok {
-				return fmt.Errorf("system profile %q references unknown device profile %q", sysName, dev.Profile)
-			}
 		}
 	}
 	return nil

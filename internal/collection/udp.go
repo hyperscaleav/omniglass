@@ -139,7 +139,7 @@ func ListenDatagram(cfg DatagramConfig) (*DatagramConn, error) {
 		return nil, fmt.Errorf("collection: udp socket for %s: %w", cfg.Target, err)
 	}
 	c := &DatagramConn{conn: conn, peer: peer, cfg: cfg, done: make(chan struct{})}
-	go c.read()
+	goSupervised("udp reader "+cfg.Target, c.read, func(pe *PanicError) { c.fail(pe) })
 	return c, nil
 }
 
@@ -164,6 +164,9 @@ func (c *DatagramConn) fail(err error) {
 		close(c.done)
 	})
 }
+
+// Err is why the socket ended: nil while it is open.
+func (c *DatagramConn) Err() error { return c.cause() }
 
 func (c *DatagramConn) cause() error {
 	c.mu.Lock()

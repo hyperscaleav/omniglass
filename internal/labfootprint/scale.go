@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"bufio"
+	"cmp"
 	"fmt"
 	"io"
 	"math"
@@ -9,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 )
 
 // This file is the scale lab's measurement (#1556): the arithmetic of one
@@ -401,6 +405,21 @@ type ScaleRun struct {
 	Lane      Lane
 	FleetView []time.Duration
 	Drain     Drain
+	// Page is the system page loads made during the window.
+	Page PageRun
+	// Absolutes is the database's standing size, read at the window's end.
+	Absolutes Absolutes
+	// Endpoints is each node's bracketed endpoint observation; when none was
+	// read, EndpointsGap says why.
+	Endpoints    []closedloop.NodeBracket
+	EndpointsGap string
+	// Delivery is the receipts the delivery table reconciles (#1641).
+	Delivery DeliveryRead
+	// Host is the machine the lab ran on, nil when the daemon was not this
+	// one; PlanDigest is the device set the scenario at its size places
+	// (#1640). The perf gate reads both.
+	Host       *Fingerprint
+	PlanDigest string
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -448,6 +467,39 @@ type ScaleReport struct {
 	ConsumerLane Lane         `json:"consumer_lane"`
 	FleetView    Quantiles    `json:"fleet_view_ms"`
 	Drain        Drain        `json:"retention_drain"`
+	// Absolutes is what the database holds at the window's end, where the
+	// rates above are what it gains a day.
+	Absolutes Absolutes `json:"absolutes"`
+	// SystemPageFigures is the system page load, absent when no client
+	// loaded it.
+	*SystemPageFigures
+	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
+	// then says why.
+	Endpoints    *closedloop.EndpointReport `json:"endpoints,omitempty"`
+	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
+
+	// Delivery is each kind's loss across each hop it crosses (#1641), over
+	// the settled boots, one set of rows per lane (#1696), the node lane's
+	// after the sim hop's row per protocol (#1694); DeliveryEndToEnd is each
+	// kind's loss over all the node lane's hops (the push lane's one row is
+	// its own end to end); DeliveryUnsettled names each boot no ratio was read
+	// from; DeliveryEnded each boot read only as far as it landed, because its
+	// node (or, for the push lane, the server) started again (#1692).
+	Delivery          []DeliveryRow             `json:"delivery"`
+	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
+	DeliveryUnsettled []UnsettledBoot           `json:"delivery_unsettled,omitempty"`
+	DeliveryEnded     []EndedBoot               `json:"delivery_unshipped,omitempty"`
+	// DeliveryNotRead is why no receipts were read, when none were;
+	// DeliveryNote qualifies a read that was.
+	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
+	DeliveryNote    string `json:"delivery_note,omitempty"`
+
+	// Host is the machine the lab ran on, absent when the lab's daemon was
+	// not this machine's; PlanDigest is the device set the scenario at its
+	// size places. The perf gate (#1640) compares a host-dependent figure
+	// only on the baseline's host, and a run only with the baseline's plan.
+	Host       *Fingerprint `json:"host,omitempty"`
+	PlanDigest string       `json:"plan_digest,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -475,12 +527,34 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
+		Absolutes:             r.Absolutes,
+		SystemPageFigures:     SummarizePage(r.Page),
+		EndpointsGap:          r.EndpointsGap,
+		Host:                  r.Host,
+		PlanDigest:            r.PlanDigest,
+	}
+	if len(r.Endpoints) > 0 {
+		e := closedloop.SummarizeEndpoints(r.Endpoints)
+		out.Endpoints = &e
 	}
 	ms := make([]float64, len(r.Lag))
 	for i, s := range r.Lag {
 		ms[i] = s * 1000
 	}
 	out.IngestLag = QuantilesOf(ms)
+	out.Delivery = SimDeliveryOf(r.Endpoints)
+	if d := r.Delivery; !d.Read {
+		out.DeliveryNotRead = cmp.Or(d.Reason, "no receipts read")
+	} else {
+		var hops []DeliveryRow
+		hops, out.DeliveryUnsettled, out.DeliveryEnded = DeliveryOf(d)
+		out.Delivery = append(out.Delivery, WithPublish(PublishRowOf(d.Publish), WithSchedule(ScheduleRowsOf(d.Schedule), hops))...)
+		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
+		if !d.StreamClear {
+			_, why := d.Backlog.Settled(d.Published)
+			out.DeliveryNote = "unsettled: the telemetry stream had not settled when the settle ran out: " + why
+		}
+	}
 	if w.SamplesLanded > 0 {
 		out.WALBytesPerSample = float64(w.WALBytes) / float64(w.SamplesLanded)
 	}
@@ -533,6 +607,7 @@ func (r ScaleReport) Table() string {
 	line("database a day", size(r.DatabaseBytesPerDay))
 	line("WAL a day", size(r.WALBytesPerDay))
 	line("WAL a sample", count(r.WALBytesPerSample)+" B")
+	r.Absolutes.lines(line)
 	line("batches landed", count(float64(r.BatchesLanded)))
 	line("samples landed", count(float64(r.SamplesLanded)))
 	line("samples per batch", fmt.Sprintf("%.1f", r.SamplesPerBatch))
@@ -558,7 +633,21 @@ func (r ScaleReport) Table() string {
 	line("consumer lane busy", r.ConsumerLane.describe())
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
+	if p := r.SystemPageFigures; p != nil {
+		line("system page p50", ms(p.Ms.P50))
+		line("system page p95", ms(p.Ms.P95)+p.describe())
+	} else {
+		line("system page p50", "not measured")
+		line("system page p95", "not measured")
+	}
 	line("retention drain", r.Drain.describe())
+	if r.Endpoints != nil {
+		endpointTable(*r.Endpoints, &b)
+	} else if r.EndpointsGap != "" {
+		b.WriteString("\nendpoints not measured: " + r.EndpointsGap + "\n")
+	}
+	b.WriteString("\n")
+	r.deliveryTable(&b)
 	if r.IngestLagGap != nil {
 		b.WriteString("\n" + r.IngestLagGap.footer())
 	}

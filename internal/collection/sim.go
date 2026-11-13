@@ -99,6 +99,11 @@ type SimWebhook struct {
 	Path   string `json:"path"`
 	Scheme string `json:"scheme"`
 	Secret string `json:"secret,omitempty"`
+	// Identities are the values bound on the endpoint's component (#1747):
+	// a platform account's room ids, each bound to the system it stands
+	// for. The simulator adds each to the service through its profile's
+	// provision route, so the service's reports name every bound room.
+	Identities []string `json:"identities,omitempty"`
 }
 
 // SimImpairment is what is wrong with a simulated device: unplugged (dark
@@ -144,6 +149,27 @@ func SimProtocols() []string { return slices.Clone(simProtocols) }
 // hub counts only these, so a hit naming anything else is rejected rather
 // than becoming a new key in its tally.
 func IsSimProtocol(p string) bool { return slices.Contains(simProtocols, p) }
+
+// SimProtocolOf is the simulator protocol a node's transport reaches a
+// simulated device as, so a lab can reconcile what the node dialed against
+// what the device saw: a TLS transport reports as its plain one (the device
+// serves the bytes, the handshake included, on the plain face's counters).
+// icmp has none, since the kernel answers it, and neither has a push
+// transport, which no node dials.
+func SimProtocolOf(transport string) (string, bool) {
+	switch transport {
+	case "https":
+		return "http", true
+	case "wss":
+		return "websocket", true
+	case "tls":
+		return "tcp", true
+	}
+	if IsSimProtocol(transport) {
+		return transport, true
+	}
+	return "", false
+}
 
 // SimHit is one request a simulated device answered.
 type SimHit struct {

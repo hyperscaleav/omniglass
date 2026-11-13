@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -44,12 +45,12 @@ type Config struct {
 	Impairments bool
 	// Applier realizes impairments; nil is the kernel's (impair.Netlink).
 	Applier applier
-	// PushToken is the simulated booking service's token (#1370): set, the
-	// simulator pushes the bookings of the one system its principal is
-	// granted through POST /telemetry:push every PushEvery (zero takes the
-	// default). Empty, it pushes nothing.
-	PushToken string
-	PushEvery time.Duration
+	// Pushers are the outside actors the lab's scenario declared on this
+	// node (#1743): each runs as an emulator device of its profile with a
+	// push face, holding the token minted for its principal, and pushes the
+	// systems its grant names through POST /telemetry:push. None pushes
+	// nothing.
+	Pushers []Pusher
 }
 
 const (
@@ -147,11 +148,25 @@ func Run(ctx context.Context, cfg Config) error {
 		impairs.st.Reason = "impairments are off; run the simulator with --impairments (and NET_ADMIN) to enable them"
 	}
 	defer impairs.clear()
+	// The lab reads what each endpoint observed on request (#1639). The
+	// responder runs on the bus's goroutine, so it reads the impaired count
+	// the pull loop stores, never the impairer itself.
+	var impairedCount atomic.Int64
+	obs, err := subscribeObservation(nc, cfg.Name, engine, func() int { return int(impairedCount.Load()) })
+	if err != nil {
+		return fmt.Errorf("sim: subscribe observation: %w", err)
+	}
+	defer func() { _ = obs.Unsubscribe() }()
 
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
-	if cfg.PushToken != "" {
-		go newPusher(cfg.ServerURL, cfg.PushToken).run(ctx, cfg.PushEvery, log.With("pusher", pusherSource))
+	if len(cfg.Pushers) > 0 {
+		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers)
+		if err != nil {
+			return err
+		}
+		defer pushers.StopAll()
+		log.Info("pushers started", "pushers", len(cfg.Pushers))
 	}
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
@@ -179,6 +194,7 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 		}
 		impairs.reconcile(served, wants)
+		impairedCount.Store(int64(len(impairs.status().Impaired)))
 		if st := impairs.status(); st.Error != "" {
 			log.Warn("impairments did not apply", "error", st.Error)
 		}

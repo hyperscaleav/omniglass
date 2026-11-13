@@ -13,14 +13,19 @@ export default function DetailGate(props: {
   error: string | null;
   retrying?: boolean;
   onRetry: () => void;
+  ambiguous?: boolean;
   children: JSX.Element;
 }) {
   return (
     <Show
-      when={!props.missing}
+      when={!props.missing && !props.ambiguous}
       fallback={
         <div role="alert" class="alert alert-warning alert-soft text-sm">
-          <span>No {props.noun} answers this address. It may have been deleted, or the link is stale.</span>
+          <span>
+            {props.ambiguous
+              ? `More than one ${props.noun} has this name; open it from Explore.`
+              : `No ${props.noun} answers this address. It may have been deleted, or the link is stale.`}
+          </span>
         </div>
       }
     >

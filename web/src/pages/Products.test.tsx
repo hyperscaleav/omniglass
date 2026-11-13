@@ -13,6 +13,7 @@ import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { openTree, pickTree } from "../components/TreeSelect.testkit";
 
 // Products is the product catalog on the flat FlatList surface (the model a
 // component is an instance of). An official row is read-only, same
@@ -280,19 +281,14 @@ describe("Products type picker (#614)", () => {
   it("renders the seeded component_type tree, a child option after its parent", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    const typeSelect = (await screen.findByLabelText("Type")) as HTMLSelectElement;
-    const labels = Array.from(typeSelect.options).map((o) => o.textContent?.trim());
-    expect(labels).toEqual(["Display", "Interactive Display", "Touch Panel"]);
-    // The child renders indented with a leading non-breaking space run (an
-    // ordinary space would collapse in a <select>, ComponentTypeSelect.tsx);
-    // the parent and the sibling root carry none. textContent, not .text: the
-    // latter strips leading/trailing whitespace per the HTMLOptionElement
-    // spec, which would silently defeat this exact assertion.
-    const nbsp = String.fromCharCode(160);
-    const raw = Array.from(typeSelect.options).map((o) => o.textContent ?? "");
-    expect(raw[0].startsWith(nbsp)).toBe(false);
-    expect(raw[1].startsWith(nbsp)).toBe(true);
-    expect(raw[2].startsWith(nbsp)).toBe(false);
+    const options = await openTree(await screen.findByLabelText("Type"));
+    expect(options.map((o) => o.textContent)).toEqual(["Display", "Interactive Display", "Touch Panel"]);
+    // The child is indented by inline padding (drawn, not typed, so the closed
+    // value reads as the bare label); the parent and the sibling root sit at the
+    // first level.
+    const pad = options.map((o) => parseFloat(o.style.paddingLeft));
+    expect(pad[1]).toBeGreaterThan(pad[0]);
+    expect(pad[2]).toBe(pad[0]);
   });
 
   it("blocks Create product until a type is chosen, even with a label and a kind", async () => {
@@ -302,7 +298,7 @@ describe("Products type picker (#614)", () => {
     fireEvent.input(display, { target: { value: "Acme Screen" } });
     const submit = screen.getByRole("button", { name: /create product/i }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
-    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    await pickTree(await screen.findByLabelText("Type"), "Display");
     expect(submit.disabled).toBe(false);
   });
 
@@ -319,7 +315,7 @@ describe("Products type picker (#614)", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
     fireEvent.input(screen.getByPlaceholderText("Crestron TSW-1070"), { target: { value: "Acme Screen" } });
-    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    await pickTree(await screen.findByLabelText("Type"), "Display");
     fireEvent.click(screen.getByRole("button", { name: /create product/i }));
     await waitFor(() => expect(sent).toBeTruthy());
     expect((sent as { component_type: string }).component_type).toBe("display");
@@ -346,7 +342,7 @@ describe("Products icon fallback and override (#614)", () => {
   it("previews the classified type's icon on the create form until an override is typed", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    await pickTree(await screen.findByLabelText("Type"), "Display");
     // No override yet: the icon input carries the type's icon as its
     // placeholder, not a value (nothing has been typed).
     const iconInput = screen.getByLabelText("Icon") as HTMLInputElement;

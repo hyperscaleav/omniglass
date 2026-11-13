@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -568,5 +569,41 @@ func TestPersistentSession_Unsubscribe(t *testing.T) {
 		t.Errorf("got unexpected push after unsubscribe: %q", line)
 	case <-time.After(500 * time.Millisecond):
 		// expected, no push
+	}
+}
+
+// SessionIDs names the sessions open now, so a caller can follow one held
+// session while short-lived connections come and go beside it (#1784).
+func TestSessionRegistryNamesItsOpenSessions(t *testing.T) {
+	dev := NewDevice("ids-1", "ids-host", net.ParseIP("127.0.0.1"), "test", 1, map[string]any{})
+	cfg, err := CompileSessionConfig(&profile.Interface{
+		Name: "ssh", Protocol: "ssh", Port: 22, Persistent: true, LineEnding: "\r\n",
+		Subjects: []profile.Subject{{Match: "*.*", Path: "{{ .Subject }}", PushFormat: "ok"}},
+	})
+	if err != nil {
+		t.Fatalf("CompileSessionConfig: %v", err)
+	}
+	reg := NewSessionRegistry(dev, cfg, nil)
+	if ids := reg.SessionIDs(); len(ids) != 0 {
+		t.Fatalf("a fresh registry names %v, want none", ids)
+	}
+	held, err := reg.Open("held")
+	if err != nil {
+		t.Fatalf("open held: %v", err)
+	}
+	probe, err := reg.Open("probe")
+	if err != nil {
+		t.Fatalf("open probe: %v", err)
+	}
+	ids := reg.SessionIDs()
+	if len(ids) != 2 || !slices.Contains(ids, held.ID) || !slices.Contains(ids, probe.ID) {
+		t.Fatalf("SessionIDs = %v, want %s and %s", ids, held.ID, probe.ID)
+	}
+	if !slices.IsSorted(ids) {
+		t.Errorf("SessionIDs = %v, want sorted", ids)
+	}
+	reg.Close(probe)
+	if ids := reg.SessionIDs(); len(ids) != 1 || ids[0] != held.ID {
+		t.Errorf("after the probe closed SessionIDs = %v, want [%s]", ids, held.ID)
 	}
 }

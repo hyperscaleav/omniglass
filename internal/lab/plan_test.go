@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/simnode"
 
@@ -172,32 +173,102 @@ func TestPlanNodeTokenFlow(t *testing.T) {
 	}
 }
 
-// The simulated pusher's token (#1370) flows as the node's does: minted per
-// run, the node's simulator holds the plaintext, and the seed gets only its
-// hash and its non-secret prefix. A lab with no node runs no simulator, so
-// it carries none.
-func TestPlanPushTokenFlow(t *testing.T) {
+// A declared pusher's token (#1743) flows as a node's does: minted per run,
+// the emulator on the pusher's node holds the plaintext, and the seed gets
+// only its hash and its non-secret prefix, to set the pusher's credential.
+// The token is in no other service's env and not in a config hash.
+func TestPlanPusherTokenFlow(t *testing.T) {
 	o := testOptions()
-	o.PushToken, o.PushTokenHash, o.PushTokenPrefix = "ptok", "pushhash", "0a0b0c0d"
+	o.Pushers = []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+		Token: "bk_0a0b0c0d_secret", TokenHash: "pushhash", TokenPrefix: "0a0b0c0d"}}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(s.Node.Env, "OMNIGLASS_SIM_PUSH_TOKEN=ptok") {
-		t.Fatalf("node env %v, want the run's push token", s.Node.Env)
+	if want := simnode.PushersEnv + "=sim-booking-service=booking-service:bk_0a0b0c0d_secret"; !slices.Contains(s.Node.Env, want) {
+		t.Fatalf("node env %v, want %s", s.Node.Env, want)
+	}
+	if want := PusherTokensEnv + "=sim-booking-service=pushhash:0a0b0c0d"; !slices.Contains(s.Seed.Env, want) {
+		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+	}
+	for _, svc := range []Service{s.DB, s.Seed, s.Server} {
+		for _, e := range svc.Env {
+			if strings.Contains(e, "secret") {
+				t.Fatalf("%s sees the plaintext push token: %s", svc.Name, e)
+			}
+		}
+	}
+	if h := configHash(s.Node); strings.Contains(h, "secret") {
+		t.Fatal("the node's config hash carries the token")
+	}
+}
+
+// A scale lab's pushers (#1743) each ride their own site's node: every site
+// node's emulator holds the plaintext of its site's pushers and no other's,
+// and the one seed gets every pusher's hash and prefix.
+func TestPlanScaleLabGivesEachSiteNodeItsOwnPushers(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{
+		{Name: "hq-booking-1", Profile: "booking-service", Node: "edge-hq", Token: "bk_1_hq", TokenHash: "hhq", TokenPrefix: "p1"},
+		{Name: "branch-01-booking-1", Profile: "booking-service", Node: "edge-branch-01", Token: "bk_2_br", TokenHash: "hbr", TokenPrefix: "p2"},
+	}
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"edge-hq":          simnode.PushersEnv + "=hq-booking-1=booking-service:bk_1_hq",
+		"edge-regional-01": "",
+		"edge-branch-01":   simnode.PushersEnv + "=branch-01-booking-1=booking-service:bk_2_br",
+	}
+	for _, n := range s.Nodes {
+		var got string
+		for _, e := range n.Env {
+			if strings.HasPrefix(e, simnode.PushersEnv+"=") && e != simnode.PushersEnv+"=" {
+				got = e
+			}
+		}
+		if got != want[n.Name] {
+			t.Errorf("node %s carries pushers %q, want %q", n.Name, got, want[n.Name])
+		}
+	}
+	if w := PusherTokensEnv + "=hq-booking-1=hhq:p1,branch-01-booking-1=hbr:p2"; !slices.Contains(s.Seed.Env, w) {
+		t.Errorf("scale seed env %v, want %s", s.Seed.Env, w)
 	}
 	for _, e := range s.Seed.Env {
-		if strings.Contains(e, "=ptok") {
-			t.Fatalf("the seed sees the plaintext push token: %s", e)
+		if strings.Contains(e, "bk_") {
+			t.Errorf("the scale seed sees a plaintext push token: %s", e)
 		}
 	}
-	for _, want := range []string{"OMNIGLASS_LAB_PUSH_TOKEN_HASH=pushhash", "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX=0a0b0c0d"} {
-		if !slices.Contains(s.Seed.Env, want) {
-			t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
-		}
+}
+
+// A pusher planned onto a node the lab does not run would never push, so the
+// plan refuses it rather than seed a principal nothing holds.
+func TestPlanRefusesAPusherOnNoNode(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Node: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "edge-nowhere") {
+		t.Fatalf("plan with a pusher on no node: %v, want refused naming the node", err)
 	}
-	if h := configHash(s.Node); strings.Contains(h, "ptok") {
-		t.Fatal("the node's config hash carries the token")
+}
+
+// The seed's pusher token hashes round-trip, and a malformed list is refused.
+func TestPusherTokensRoundTrip(t *testing.T) {
+	ps := []Pusher{{Name: "a", TokenHash: "h1", TokenPrefix: "p1"}, {Name: "b", TokenHash: "h2", TokenPrefix: "p2"}}
+	got, err := ParsePusherTokens(FormatPusherTokens(ps))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["a"] != (PusherToken{Hash: "h1", Prefix: "p1"}) || got["b"] != (PusherToken{Hash: "h2", Prefix: "p2"}) {
+		t.Fatalf("round trip = %v", got)
+	}
+	if got, err := ParsePusherTokens(""); err != nil || len(got) != 0 {
+		t.Fatalf("empty = %v, %v; want none", got, err)
+	}
+	for _, bad := range []string{"a", "a=h1", "=h:p", "a=:p", "a=h:", "a=h:p,a=h:p"} {
+		if _, err := ParsePusherTokens(bad); err == nil {
+			t.Errorf("ParsePusherTokens(%q) took it, want refused", bad)
+		}
 	}
 }
 
@@ -219,9 +290,10 @@ func TestPlanVolumes(t *testing.T) {
 
 // A learner's lab probes every 10s (#1273): it checks in every 2s so a change
 // in the console shows within seconds, but it may run for days, and a probe
-// on every check-in writes most of its rows. A script's throwaway lab sets no
-// probe interval, so it probes on every 2s check-in: it lives for minutes, and
-// a walkthrough that waits on a probe's verdict is recorded against a budget.
+// on every check-in writes most of its rows. A script's throwaway lab probes
+// every 2s: it lives for minutes, and a walkthrough that waits on a probe's
+// verdict is recorded against a budget. Since #1634 a probe runs on the node's
+// own timer, never the check-in, so every lab names its interval.
 func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	flag := func(cmd []string, name string) string {
 		i := slices.Index(cmd, name)
@@ -245,8 +317,8 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(s.Node.Cmd, "--probe-every") {
-		t.Fatalf("a throwaway lab: %v sets a probe interval, want none (every check-in)", s.Node.Cmd)
+	if got := flag(s.Node.Cmd, "--probe-every"); got != "2s" {
+		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s", got, s.Node.Cmd)
 	}
 	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
@@ -278,6 +350,75 @@ func TestPlanNoNode(t *testing.T) {
 	}
 }
 
+// Seeded platform history (#1790) is for a capture: an hour of the server's
+// own figures lands only when a throwaway lab asks for it, so a learner's lab
+// and a scale lab never carry fabricated platform health.
+func TestPlanPlatformHistory(t *testing.T) {
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--platform-history") {
+		t.Fatalf("a lab without the option: the seed runs %v, want no --platform-history", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.PlatformHistory = true
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "--ephemeral") {
+		t.Fatalf("a learner's lab with platform history: %v, want a refusal naming --ephemeral", err)
+	}
+	o.Project, o.Ephemeral = "shots-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--platform-history") {
+		t.Fatalf("a throwaway lab with platform history: the seed runs %v, want --platform-history", s.Seed.Cmd)
+	}
+	sc := scaleOptions()
+	sc.PlatformHistory = true
+	if _, err := Plan(sc); err == nil || !strings.Contains(err.Error(), "--platform-history") {
+		t.Fatalf("a scale lab with platform history: %v, want a refusal naming --platform-history", err)
+	}
+}
+
+// A throwaway lab's collection report window (#1646): a walkthrough has a
+// minute of video, and the platform's own 60s window would land the first
+// delivery and poll figures as the recording ends, so the walkthrough
+// profile's seed sets collection.report_seconds to 10. A learner's lab keeps
+// the platform's setting (an operator's change to it survives a restart), as
+// does a throwaway lab with no node, which has no collection to report and
+// whose pages hold still for the docs shots.
+func TestPlanWalkthroughLabReportsEvery10s(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a learner's lab: the seed runs %v, want the platform's report window left as it is", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.Project, o.Ephemeral = "demo-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if got := flag(s.Seed.Cmd, "--report-seconds"); got != "10" {
+		t.Fatalf("a throwaway lab: --report-seconds %q in %v, want 10", got, s.Seed.Cmd)
+	}
+	o.NoNode = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a throwaway lab with no node: the seed runs %v, want the report window left as it is", s.Seed.Cmd)
+	}
+}
+
 // A cadence profile (#1277) names how often the lab's node checks in and
 // probes, so the lab footprint can measure a lab at the product's default
 // cadence beside the lab's own. A lab given none keeps the cadence it has
@@ -295,17 +436,18 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		cadence   string
 		ephemeral bool
 		heartbeat string
-		probe     string // "" probes on every check-in
+		probe     string
 		worklist  string
 		simPoll   string
+		bracket   string
 	}{
-		{"", false, "2s", "10s", "5s", "2s"},
-		{"", true, "2s", "", "2s", "2s"},
-		{"lab", true, "2s", "10s", "5s", "2s"},
-		{"walkthrough", false, "2s", "", "2s", "2s"},
+		{"", false, "2s", "10s", "5s", "2s", "10s"},
+		{"", true, "2s", "2s", "2s", "2s", "1s"},
+		{"lab", true, "2s", "10s", "5s", "2s", "10s"},
+		{"walkthrough", false, "2s", "2s", "2s", "2s", "1s"},
 		// The product's own: the node's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
-		{"default", true, node.DefaultHeartbeat.String(), "", node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String()},
+		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},
 	}
 	for _, c := range cases {
 		o := testOptions()
@@ -328,6 +470,27 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		}
 		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
 			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		}
+		// The server is told the bracket its closed loop takes and the
+		// cadence its node runs at (#1647), so Platform health counts the
+		// poll targets the node really ran.
+		env := map[string]string{}
+		for _, kv := range s.Server.Env {
+			k, v, _ := strings.Cut(kv, "=")
+			env[k] = v
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_BRACKET"]; got != c.bracket {
+			t.Errorf("cadence %q: closed-loop bracket %q, want %s", c.cadence, got, c.bracket)
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"]; got != c.heartbeat {
+			t.Errorf("cadence %q: closed-loop heartbeat %q, want %s", c.cadence, got, c.heartbeat)
+		}
+		if got := env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]; got != c.probe {
+			t.Errorf("cadence %q: closed-loop probe interval %q, want %q", c.cadence, got, c.probe)
+		}
+		if _, err := closedloop.ParseSettings(closedloop.RawSettings{Bracket: env["OMNIGLASS_CLOSED_LOOP_BRACKET"],
+			Heartbeat: env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"], ProbeEvery: env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]}, node.DefaultHeartbeat); err != nil {
+			t.Errorf("cadence %q: the server would refuse its closed-loop settings: %v", c.cadence, err)
 		}
 	}
 	o := testOptions()
@@ -422,6 +585,55 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 }
 
+// A kept scale lab (#1633) tells its seed so, with a hidden --keep: the seed
+// then keeps the fleet a database already holds and re-enrolls its nodes. A
+// throwaway one's seed carries no --keep, so a database holding data stays
+// refused.
+func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
+	for _, tc := range []struct {
+		ephemeral bool
+		want      string
+	}{
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --keep"},
+	} {
+		o := scaleOptions()
+		o.Ephemeral = tc.ephemeral
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(s.Seed.Cmd, " "); got != tc.want {
+			t.Errorf("ephemeral %v: seed command %q, want %q", tc.ephemeral, got, tc.want)
+		}
+	}
+}
+
+// The stop line's restart hint (#1633) is the command that brings this lab
+// back: a bare lab run for a learner's lab, and for a kept scale lab its own
+// scenario, size and --keep (and its cadence, when not the lab's own), which
+// a bare lab run would not bring back.
+func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
+	if got := RestartCommand(testOptions()); got != "omniglass lab run" {
+		t.Errorf("a learner's lab: %q", got)
+	}
+	o := scaleOptions()
+	o.Ephemeral, o.Systems, o.Cadence = false, 3000, CadenceLab
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --keep" {
+		t.Errorf("a kept scale lab: %q", got)
+	}
+	o.Cadence = CadenceDefault
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --cadence default --keep" {
+		t.Errorf("a kept scale lab at the default cadence: %q", got)
+	}
+	// A kept scale lab under a project of its own keeps its data there, so a
+	// restart without that project would start an empty lab beside it.
+	o.Cadence, o.Project = CadenceLab, "omniglass-scale-it-7"
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --project omniglass-scale-it-7 --keep" {
+		t.Errorf("a kept scale lab under its own project: %q", got)
+	}
+}
+
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
 // the ingest lag from (a row's commit time less its probe time). A dev lab's
 // does not: it pays for nothing it does not read.
@@ -463,5 +675,93 @@ func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
 	}
 	if got, err := ParseSiteNodeTokenHashes(""); err != nil || len(got) != 0 {
 		t.Errorf("empty: %v %v", got, err)
+	}
+}
+
+// The induced refusal is off by default and, set, rides to the scale seed
+// (#1698): the seed is what attaches the device that answers the key no
+// catalog holds. A dev lab has no plan for it to ride, so it is refused there.
+func TestPlanScaleLabInducesAnUnregisteredKeyOnlyWhenAsked(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed induces by default: %v", s.Seed.Cmd)
+	}
+	o := scaleOptions()
+	o.InduceUnregistered = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed command %v does not carry the knob", s.Seed.Cmd)
+	}
+	dev := testOptions()
+	dev.InduceUnregistered = true
+	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("a dev lab with the knob: %v, want a refusal naming the scale lab", err)
+	}
+}
+
+// Every service carries the fleet the lab seeded (#1719): the scenario, and
+// for a scale lab its size, so a measurement of the running lab reads them
+// from the lab itself and never from a flag that could disagree with it.
+func TestPlanStampsTheFleetOnEveryService(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    Options
+		want Fleet
+	}{
+		{"dev", testOptions(), Fleet{Scenario: DefaultScenario}},
+		{"scale", scaleOptions(), Fleet{Scenario: "corporate", Systems: 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := Plan(tc.o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, svc := range s.Services() {
+				got, err := FleetOf(svc.Labels)
+				if err != nil {
+					t.Fatalf("%s: %v", svc.Name, err)
+				}
+				if got != tc.want {
+					t.Errorf("%s: fleet %+v, want %+v", svc.Name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// FleetOf reads the fleet back from a container's labels, and refuses a
+// container a build before the labels started, or one whose size label is
+// not a count, rather than guess.
+func TestFleetOf(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		labels  map[string]string
+		want    Fleet
+		wantErr string
+	}{
+		{"scale", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "300"}, Fleet{Scenario: "corporate", Systems: 300}, ""},
+		{"dev", map[string]string{LabelLabScenario: "dev"}, Fleet{Scenario: "dev"}, ""},
+		{"unlabelled", map[string]string{LabelLab: "omniglass-scale"}, Fleet{},
+			"name no scenario: it was brought up by a build before the fleet labels, so stop it and bring it up again with this build's `lab run`"},
+		{"bad size", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "lots"}, Fleet{},
+			`size label omniglass.lab.systems="lots" is not a count of systems`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := FleetOf(tc.labels)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err %v, want it to say %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("FleetOf = %+v, %v; want %+v", got, err, tc.want)
+			}
+		})
 	}
 }

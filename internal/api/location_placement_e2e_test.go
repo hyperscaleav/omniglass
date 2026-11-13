@@ -82,3 +82,54 @@ func TestLocationPlacementAPI(t *testing.T) {
 		t.Errorf("renamed label = %q, want Room 1", renamed.Label)
 	}
 }
+
+// TestLocationReclassifyPlacementAPI drives the reclassify-in-place enforcement
+// over HTTP: PATCHing location_type to a type whose allowed_parent_types
+// excludes the current parent is the same 422 as a move, naming the type and
+// the parent's type, while resending the current type (what the console does on
+// every save) succeeds.
+func TestLocationReclassifyPlacementAPI(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.create(ownerTok, locReq{Name: "hq", LocationType: "campus"}, http.StatusCreated)
+	c.create(ownerTok, locReq{Name: "hq-b1", LocationType: "building", Parent: ptr("hq")}, http.StatusCreated)
+
+	// A campus allows only root, so retyping a building under hq into one is
+	// refused (422), naming the type and the parent's type.
+	body := c.do(ownerTok, http.MethodPatch, "/locations/hq-b1", map[string]any{"location_type": "campus"}, http.StatusUnprocessableEntity)
+	if !bytes.Contains(body, []byte("campus is not allowed under campus")) {
+		t.Errorf("reclassify 422 body = %s, want it to say campus is not allowed under campus", body)
+	}
+
+	// A floor is allowed under a campus: the reclassify succeeds.
+	body = c.do(ownerTok, http.MethodPatch, "/locations/hq-b1", map[string]any{"location_type": "floor"}, http.StatusOK)
+	var retyped locResp
+	if err := json.Unmarshal(body, &retyped); err != nil {
+		t.Fatalf("decode retyped location: %v", err)
+	}
+	if retyped.LocationType != "floor" {
+		t.Errorf("retyped location_type = %q, want floor", retyped.LocationType)
+	}
+
+	// Resending the current type alongside a label edit is not a change.
+	c.do(ownerTok, http.MethodPatch, "/locations/hq-b1", map[string]any{"location_type": "floor", "label": "Floor 1"}, http.StatusOK)
+}

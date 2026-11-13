@@ -602,6 +602,9 @@ func redactRefusalSystem(ctx context.Context, a *authenticator, gw storage.Gatew
 // (or which product it is) and what the role wants, so the operator can act
 // on the refusal rather than guess. A bare refusal would say nothing.
 func mapRoleErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}

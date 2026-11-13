@@ -1,8 +1,8 @@
 ---
 title: "Every key has one writer class, held at the Storage Gateway"
 date: 2026-10-24
-status: "Accepted, amended (#1582)"
-summary: "Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series, its time capped at the database's clock, and health only as the rollup's; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys). **Amended (#1582):** the writer is per task group inside one batch"
+status: "Accepted, amended (#1582, #1625)"
+summary: "Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series, its time capped at the database's clock, and health only as the rollup's; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys). **Amended (#1582):** the writer is per task group inside one batch. **Amended (#1625):** the platform keys take no prefix either; a platform key is reserved by its declaration in the code map, and a node lands its own platform keys on its platform component"
 ---
 
 - **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [identity and access](/architecture/identity-access/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [calculations](/architecture/calculations/), [api](/architecture/api/), [glossary](/architecture/glossary/)
@@ -79,3 +79,14 @@ summary: "Every metric, property and event type has exactly one **writer class**
   is dropped alone with the rest of the batch landing. Provenance stays per row (`collector_node_id` and
   `source_conduit_id`), so own and fanned groups in one batch keep theirs. The class a key resolves to,
   and which writers a class admits, are unchanged.
+- **Amended (#1625): the platform keys take no prefix.** Point 6 left the prefix to #1094's platform
+  metrics. They ship without one (#1094's ruling): a platform key is reserved by its declaration in the
+  `platform` map in `internal/writerclass`, as `health` is, and closed to an operator-created type by
+  that name. The collision point 6 names needs an operator type that already holds a name a release
+  later declares; under the pre-deployment stance no operator data exists to hold one, so the seed's
+  authoritative upsert stays the rule, and a release after the first external deployment that declares
+  a new platform key decides then whether its seed refuses the collision. The platform class gains a
+  second writer path beside the process's own: a node's self-report, admitted only for the declared
+  node-self keys and only on the node's own platform component
+  ([ADR-1625](#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)).
+  A platform key in any task group, push, command or calc is refused as before.

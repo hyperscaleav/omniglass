@@ -44,8 +44,8 @@ const BASELINE = process.env.DOCS_SHOTS_BASELINE ?? 'docs/screenshots/baseline';
 // character count: `d.toLocaleString()` does not zero-pad the hour, so 9:47 PM is
 // one character narrower than 11:47 PM, and fmtTime's AM is wider than its PM.
 // Two captures minutes apart share an hour and a day, so they are structurally
-// blind to exactly that class of jitter. Run the proof with DOCS_SHOTS_EXACT=1:
-// the gate's default comparison cannot see a one-pixel mask move (#774, #1081).
+// blind to exactly that class of jitter. Run the gate with it set: the
+// comparison is exact, so a one-pixel mask move fails (#774, #1081).
 const TZ = process.env.DOCS_SHOTS_TZ ?? '';
 
 async function walk(dir) {
@@ -107,7 +107,10 @@ for (const spec of specs) {
   // lab's banner alone, whenever it renders.
   await page.addStyleTag({ content: '[data-testid="lab-banner"] { display: none !important; }' });
   for (const step of spec.steps ?? []) {
-    if (step.action === 'click') await page.click(step.selector);
+    // wait holds the shot until the selector shows (a figure the lab writes a
+    // while after it comes up), for up to its timeout in ms, else two minutes.
+    if (step.action === 'wait') await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
+    else if (step.action === 'click') await page.click(step.selector);
     else if (step.action === 'hover') await page.hover(step.selector);
     else if (step.action === 'press') await page.keyboard.press(step.value);
     else if (step.action === 'fill') await page.fill(step.selector, step.value ?? '');

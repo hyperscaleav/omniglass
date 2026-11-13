@@ -28,6 +28,9 @@ type Engine struct {
 	diffPub    DiffPublisher
 	hit        func(Hit)
 	sessionPub SessionEventPublisher
+	// obs counts what every device's faces were sent and how each request
+	// settled, kept by device id so a rebuilt device counts on.
+	obs *endpointObservation
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
@@ -37,6 +40,7 @@ func NewEngine(store *profile.Store, templates fs.FS) *Engine {
 	return &Engine{
 		store:     store,
 		templates: templates,
+		obs:       newEndpointObservation(),
 	}
 }
 
@@ -257,6 +261,12 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		}
 	}
 
+	push, err := compilePush(prof.Name, prof.Push)
+	if err != nil {
+		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
+	}
+	dev.push = push
+
 	e.installSeams(dev)
 	return dev, nil
 }
@@ -317,6 +327,7 @@ func (e *Engine) startDevice(dev *Device) error {
 		}
 	}
 	dev.StartBehaviors()
+	dev.StartPush()
 	return errors.Join(errs...)
 }
 
@@ -491,6 +502,7 @@ func (e *Engine) StopAll() {
 }
 
 func (e *Engine) stopDevice(dev *Device) {
+	dev.StopPush()
 	dev.StopBehaviors()
 	dev.StopBehaviorOverrides()
 	dev.StopHTTP()
@@ -547,6 +559,7 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 // engine's current seams, so a seam set after a device starts serving reaches
 // it without writing fields its listeners are reading.
 func (e *Engine) installSeams(dev *Device) {
+	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()
 		logger, hit := e.logger, e.hit

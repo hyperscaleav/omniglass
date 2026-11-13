@@ -50,6 +50,6 @@ steps:
     caption: Close it. Nothing has been collected yet.
   - click: { role: tab, name: Overview }
     caption: Overview reads the display as it is collected, and refreshes on its own as samples land.
-  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("ICMP Reachable"):has-text("Uptime")', timeout: 20000 }
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("ICMP RTT"):has-text("Uptime")', timeout: 20000 }
     caption: Samples arrived. Vitals reads the ping and the uptime the display reports, and both endpoints read collecting.
     poster: true

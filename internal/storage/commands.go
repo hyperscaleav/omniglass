@@ -46,9 +46,11 @@ type Command struct {
 // command-issued, #395) and, when the command_type targets a property or a metric,
 // opens an `intended` series row (#394, #590) that the target's observed value
 // settles against. The intended row names this command (command_id lineage) beside
-// the caused event. A command that opens no intended value has nothing to settle and
-// is recorded settled at issue; one that does is swept by the settle-check before
-// the transaction commits, so a zero-window command returns already terminal.
+// the caused event. Every command is recorded issued. One that opens no intended
+// value (fire-and-forget) settles on its node's execution report, or times out
+// past its delivery window with none (#1630); one that does is swept by the
+// settle-check before the transaction commits, so a zero-window command returns
+// already terminal.
 // Audited. `value` is the intended value for the target (nil for a
 // fire-and-forget command); a metric target requires a JSON number. `params` is
 // the raw invocation payload stored on the command and the caused event.
@@ -73,9 +75,6 @@ type Command struct {
 // readable-but-not-actionable branch fails on.
 // commandIssuedEvent is the event type of a command's caused occurrence.
 const commandIssuedEvent = writerclass.CommandIssued
-
-// fireAndForgetReason is why a command that sets nothing reads settled.
-const fireAndForgetReason = "fire-and-forget: it sets no value, so it settles at its issue"
 
 func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error) {
 	col, err := ownerColumn(ownerKind)
@@ -159,25 +158,14 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		return nil, fmt.Errorf("storage: record caused event for %q: %w", commandType, err)
 	}
 
-	// The command row. One that opens no intended value goes straight to settled
-	// (nothing was told to a series, so there is nothing to wait on); the shipped
-	// verdict for it stays none.
-	status := "issued"
-	if !opensIntended {
-		status = "settled"
-	}
+	// The command row, issued: a command that sets nothing waits on its
+	// node's execution report like any other, so it reads issued until the
+	// node says it ran it (#1630).
 	var cmd Command
-	// A fire-and-forget command records what decided it (its issue) and
-	// why, the way every terminal command does (#1155); it writes no second
-	// lifecycle event, since nothing settled it but the issue itself.
-	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status, settled_at,
-			settled_by, reason)
-		values ($1, $2, (select id from command_type_in_effect() command_type where name = $3), $4, $5, $6, $7, $8,
-		        case when $8 = 'issued' then null else now() end,
-		        case when $8 = 'issued' then null else '`+SettledByIssue+`' end,
-		        case when $8 = 'issued' then null else '`+fireAndForgetReason+`' end)
+	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status)
+		values ($1, $2, (select id from command_type_in_effect() command_type where name = $3), $4, $5, $6, $7, 'issued')
 		returning id, ts`, col)
-	if err := tx.QueryRow(ctx, cmdSQL, ownerKind, arc, commandType, instance, params, actorID, causedID, status).Scan(&cmd.ID, &cmd.TS); err != nil {
+	if err := tx.QueryRow(ctx, cmdSQL, ownerKind, arc, commandType, instance, params, actorID, causedID).Scan(&cmd.ID, &cmd.TS); err != nil {
 		return nil, fmt.Errorf("storage: insert command %q: %w", commandType, err)
 	}
 

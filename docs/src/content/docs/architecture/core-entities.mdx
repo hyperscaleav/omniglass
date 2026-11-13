@@ -442,6 +442,12 @@ component needs `component:update` over it as well as `system:update` over the s
 principal scoped to one system binds nothing it cannot write
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
+The console edits membership from the component, over the routes above and no others: a component's
+edit face carries a **Memberships** field, the primary system as a picker and the other memberships as
+removable chips. Changing the primary is an add (if the component is not yet in that system) then
+`:setPrimary`; clearing it, or removing a chip, is a remove. Membership is its own verb, so it is
+deliberately not a field on the component's update or move.
+
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
 health); a role-less membership is not worth blocking a delete over.
@@ -572,7 +578,46 @@ system -> standard: conforms to (N:1)
 system -> location: located at (N:1)
 system -> system: parent (tree)
 location -> location: parent (tree)
+component -> component: depends on (power, host, path) {style.stroke-dash: 3}
 ```
+
+### Dependency edges: what a component needs, apart from where it sits
+
+A tree says where a component **sits**. It does not say what the component **needs**: a codec in
+a room is not powered by the room, and a touch panel nested under a logical group is not reached
+through the group. That second fact is a **dependency edge**, a row in `component_dependency`
+from the dependent (`component_id`) to what it depends on (`upstream_id`), of one of three kinds:
+
+| Kind | Reads as | Example | What it widens |
+|---|---|---|---|
+| `power` | fed from the named `outlet` of the upstream | a video bar on outlet 1 of the rack's PDU | a power command on that outlet holds the bar |
+| `host` | hosted by the upstream | a touch panel paired to the bar, a line card in its chassis | a reboot of the upstream holds the dependent too |
+| `path` | reached through the upstream | a peripheral behind a gateway | while any of the upstream's gates is closed, the dependent's in-band endpoints hold the `upstream` gate reason ([nodes](/architecture/nodes/#implicit-reachability)) |
+
+Each edge is checked as it is written: a `power` edge names its outlet and no other kind does, a
+component never depends on itself, one edge of a kind joins a pair once, and an edge that would
+close a cycle within its kind is refused (the upstream may not already depend on the dependent
+through edges of that kind). Deleting either end deletes the edge. An edge is a fact about the
+dependent, so recording or removing one costs `component:update` on the dependent and only
+`component:read` on the upstream:
+
+```bash
+omniglass component dependency create codec-1 --upstream pdu-1 --kind power --outlet 3
+omniglass component dependency list codec-1      # its upstreams and its dependents
+omniglass component dependency delete codec-1 power pdu-1
+```
+
+What the edges are for is the [hold set](/architecture/commands/#the-hold-set-follows-dependency-edges):
+which endpoints a disruptive command closes besides its own target's.
+
+<SchemaTable
+  table="component_dependency"
+  notes={{
+    component_id: 'The dependent, the component that goes down with the upstream',
+    upstream_id: 'What it depends on',
+    outlet: 'The upstream outlet that feeds it; set on a power edge only',
+  }}
+/>
 
 ### Sub-components and sub-systems
 
@@ -584,6 +629,13 @@ system's verdict rolls up to its location, never through the system tree
 ([health](/architecture/health/)); how a parent system's verdict relates to its subsystems' is
 decided with the grouping slice ([#879](https://github.com/hyperscaleav/omniglass/issues/879)). The
 **practical starting depth is 3 levels**, **not a hard cap**.
+
+**Containment is not dependency.** A parent can be a logical grouping whose children are reached
+on their own, so nesting a component under another implies nothing about power, hosting or
+reach, and a disruptive command on a parent holds none of its children for being its children.
+A chassis whose line cards really do go down with it says so with a `host` edge from each card
+([dependency edges](#dependency-edges-what-a-component-needs-apart-from-where-it-sits)), beside
+the nesting.
 
 ## Ownership: the exclusive-arc
 
@@ -1015,7 +1067,7 @@ no vendor because it is not an instance of a catalog row, and no placement fact 
 read its parent would stale every descendant on a campus rename.
 
 **A rule reads placement, and that is what the recompute verb is for**
-([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
 `{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does

@@ -206,6 +206,9 @@ type Gateway interface {
 	// ListAuditLog returns recent audit rows (newest first) for the audit read
 	// surface, resolving actor and real-actor usernames.
 	ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, error)
+	// WriteAuthEventFor records an auth event (login, logout, revoke) in the audit
+	// trail with optional target attribution, off the read/no-tx auth paths.
+	WriteAuthEventFor(ctx context.Context, actorID, verb, resource, resourceID string) error
 	// WriteAuthEvent records an auth event (login, logout) in the audit trail, off
 	// the read/no-tx auth paths.
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error
@@ -373,7 +376,7 @@ type Gateway interface {
 
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
-	// and TypeIsWithin walk the tree in Go; no DB logic.
+	// and TypeIsWithin read the ancestor chain in one recursive query and fold it in Go.
 	// The global tier of the label rules (#682): one row per entity kind,
 	// its shipped default rewritten authoritatively on every boot and an
 	// operator's override left alone, which is why they are two columns.
@@ -636,7 +639,15 @@ type Gateway interface {
 	// Refused (#1582); any other failure fails the batch, for redelivery.
 	// PruneTelemetryReceipts keeps the receipts to their horizon.
 	LandBatch(ctx context.Context, b IngestBatch) (LandResult, error)
+	// RecordTermedBatch writes the Term receipt of a batch the server Termed
+	// whole (#1691): every declared item under the cause, never landed.
+	RecordTermedBatch(ctx context.Context, b TermedBatch) error
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
+	// CountTelemetryReceipts and ListClosedLoopPollTargets are the server's
+	// closed-loop window reads (ADR-1647): a node's receipts around a window,
+	// and the poll targets the sim should see hit.
+	CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error)
+	ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
@@ -724,6 +735,14 @@ type Gateway interface {
 	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error)
 	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error)
 	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// EnsurePlatform is the boot seed's platform step (#1625): it creates the
+	// reserved platform system if absent and gives every node without one its
+	// platform component. Idempotent.
+	EnsurePlatform(ctx context.Context) error
+	// EnsureServerComponent is a server's boot step (#1627): the platform
+	// component of the server booting under identity, created the first time
+	// that identity boots.
+	EnsureServerComponent(ctx context.Context, identity string) (string, error)
 	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
@@ -896,6 +915,10 @@ type Gateway interface {
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's daily partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
+	// RetentionStatus is what the retention pass reports of storage after
+	// it runs (#1629): the metric partitions and the stored tables' and the
+	// database's on-disk bytes.
+	RetentionStatus(ctx context.Context) (RetentionStatus, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
@@ -916,6 +939,18 @@ type Gateway interface {
 	RecordWebhookCounts(ctx context.Context, counts []WebhookCount) error
 	// CollectionSettings is the effective collection namespace (#1369).
 	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
+	// DatabaseSettings is the effective database namespace (#1627).
+	DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error)
+	// RecordPlatformMetrics lands the process's own observations on the
+	// platform components, written by the process (#1625).
+	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
+	// NodeCheckins reads every claimed node's platform component and the time
+	// it last spoke, the check-in age's input (#1625).
+	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// CommandQueueHealth reads every node's command queue (#1626): the
+	// pending, oldest and stuck now, and the redelivered and expired since the
+	// previous read's Now (none for a zero since).
+	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
@@ -945,6 +980,15 @@ type Gateway interface {
 	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
 	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
 	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
+
+	// Component dependencies (#1648): an edge from a dependent to its upstream,
+	// of kind power (with the outlet), host or path. A write resolves the
+	// dependent in read then update and the upstream in read; a cycle within a
+	// kind is refused. A disruptive command's hold set follows the power and
+	// host edges (ResolveHoldSet).
+	CreateComponentDependency(ctx context.Context, actorID, component string, spec ComponentDependencySpec, read, update scope.Set) (*ComponentDependency, error)
+	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
+	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
@@ -1025,6 +1069,18 @@ type Gateway interface {
 	// three different permissions: a principal who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// PlatformView is the read behind the Platform health page (#1644): the
+	// platform system's verdict, each server's identity, and one row per node
+	// with its platform component's latest figure per PlatformViewGroups key,
+	// in a fixed number of statements. The three sets answer three
+	// permissions: node:read for the rows (all-scope, else ErrNodeForbidden),
+	// system:read for the platform verdict, component:read for the figures,
+	// verdicts and server identity; short of all-scope, each is omitted.
+	PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	// RecordServerIdentity writes the server's version and boot start time on
+	// its platform component (#1644).
+	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
@@ -1278,6 +1334,31 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 // pool_max_conns, or pgx's default. The bus holds its worklist workers under
 // it (#1577).
 func (p *PG) PoolSize() int { return int(p.pool.Config().MaxConns) }
+
+// PoolStat is the gateway pool at a moment (#1627): its connections in use,
+// idle and open against its most, and its running totals of acquires that
+// found it exhausted and the time they waited.
+type PoolStat struct {
+	Acquired          int
+	Idle              int
+	Total             int
+	Max               int
+	EmptyAcquireCount int64
+	EmptyAcquireWait  time.Duration
+}
+
+// PoolStat reads the gateway pool now.
+func (p *PG) PoolStat() PoolStat {
+	s := p.pool.Stat()
+	return PoolStat{
+		Acquired:          int(s.AcquiredConns()),
+		Idle:              int(s.IdleConns()),
+		Total:             int(s.TotalConns()),
+		Max:               int(s.MaxConns()),
+		EmptyAcquireCount: s.EmptyAcquireCount(),
+		EmptyAcquireWait:  s.EmptyAcquireWaitTime(),
+	}
+}
 
 // settingLevel reads the override rows at a scope and adapts them into a
 // settings level. The querier is a parameter because a gateway path resolving a

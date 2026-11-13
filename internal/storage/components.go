@@ -190,6 +190,10 @@ var componentConfig = scopedConfig[Component]{
 	scan: scanComponent, idOf: func(c *Component) string { return c.ID },
 	notFound: ErrComponentNotFound, forbidden: ErrComponentForbidden, occupied: ErrComponentOccupied,
 	attachPaths: attachComponentPaths,
+	// A node's platform component goes only with its node (#1625).
+	beforeDelete: func(ctx context.Context, _ *PG, tx pgx.Tx, before *Component) error {
+		return refusePlatformComponent(ctx, tx, before.ID)
+	},
 }
 
 // attachComponentPaths fills every c's Path/.PathSegments/.Renders (#627
@@ -385,6 +389,10 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 		} else if err != nil {
 			return nil, err
 		}
+		// A node's platform component takes no child (#1625).
+		if err := refusePlatformComponent(ctx, tx, parent.ID); err != nil {
+			return nil, err
+		}
 		parentID = &parent.ID
 	}
 
@@ -564,6 +572,13 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err != nil {
 		return nil, err
 	}
+	// A node's platform component stays the node product (#1625); its label
+	// is the operator's like any row's.
+	if patch.ProductName != nil {
+		if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
+			return nil, err
+		}
+	}
 	// A product reference arrives as a handle or a uuid; the column stores the
 	// uuid. An unknown one resolves to nothing and is reported by name.
 	var patchProductID *string
@@ -726,6 +741,11 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	if err != nil {
 		return nil, err
 	}
+	// A node's platform component stays unplaced in the platform system
+	// (#1625).
+	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
+		return nil, err
+	}
 	// The location arrives as a name, the column holds an id: resolve the set
 	// branch to its id while leaving nil (unchanged) and "" (clear) intact, the
 	// same three-state the system relocate uses.
@@ -762,6 +782,10 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 			if errors.Is(err, ErrComponentNotFound) {
 				return nil, ErrParentComponentNotFound
 			} else if err != nil {
+				return nil, err
+			}
+			// Nor does it take a child.
+			if err := refusePlatformComponent(ctx, tx, parent.ID); err != nil {
 				return nil, err
 			}
 			descendant, err := p.componentIsDescendant(ctx, tx, before.ID, parent.ID)
@@ -915,6 +939,10 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	if err != nil {
 		return nil, err
 	}
+	// A node's platform component keeps its node's name (#1625).
+	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
+		return nil, err
+	}
 	if err := ValidateName("component", newName); err != nil {
 		return nil, err
 	}
@@ -963,6 +991,10 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 
 	before, err := resolveScoped(ctx, tx, componentConfig, name, read, action)
 	if err != nil {
+		return nil, err
+	}
+	// A node's platform component keeps its node's name (#1625).
+	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
 		return nil, err
 	}
 	productID := ""

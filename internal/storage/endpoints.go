@@ -101,9 +101,14 @@ type Endpoint struct {
 	// Driver and DriverID record the attachment that authored this endpoint
 	// (#813): nil for a bare probe endpoint. Inputs is the effective input set
 	// supplied at attach, defaults baked, secret inputs by reference name.
-	Driver    *string
-	DriverID  *string
-	Inputs    []byte
+	Driver   *string
+	DriverID *string
+	Inputs   []byte
+	// OutOfBand marks a management path to the device (a BMC, a management
+	// port) that answers through a reboot of it (#1648): a reboot's hold
+	// leaves its gate open, a power command on the outlet feeding the
+	// device closes it.
+	OutOfBand bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -130,6 +135,8 @@ type EndpointSpec struct {
 	// tasks in the same transaction.
 	Driver *string
 	Inputs map[string]string
+	// OutOfBand marks the endpoint a management path (#1648).
+	OutOfBand bool
 	// SecretRead and CanAdmin fence the attach's secret-reference resolution to
 	// what the CALLER may read: a reference resolves only to a secret in this
 	// read scope, and an admin-sensitive one only with the admin tier. Without
@@ -158,6 +165,8 @@ type EndpointPatch struct {
 	// Transport restates the transport; a driver-attached endpoint takes
 	// only a transport its driver speaks.
 	Transport *string
+	// OutOfBand re-marks the endpoint a management path, or not (#1648).
+	OutOfBand *bool
 	// SecretRead and CanAdmin are the caller's secret scope and admin tier:
 	// an edit re-resolves every attached secret under them, so it cannot
 	// send a credential the caller could not use to a new address.
@@ -181,18 +190,18 @@ const (
 		(select n.name from node n where n.principal_id = endpoint.node_name) as node_name_ref, node_name,
 		params,
 		(select d.name from driver d where d.id = endpoint.driver_id) as driver_name, driver_id, inputs,
-		created_at, updated_at`
+		out_of_band, created_at, updated_at`
 	endpointColsJoin = `i.id, i.name, coalesce(i.label, ''), i.transport,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
 		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
 		i.params,
 		(select d2.name from driver d2 where d2.id = i.driver_id) as driver_name, i.driver_id, i.inputs,
-		i.created_at, i.updated_at`
+		i.out_of_band, i.created_at, i.updated_at`
 )
 
 func scanEndpoint(row pgx.Row) (*Endpoint, error) {
 	var it Endpoint
-	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.Driver, &it.DriverID, &it.Inputs, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.Driver, &it.DriverID, &it.Inputs, &it.OutOfBand, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -446,10 +455,10 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		}
 	}
 	it, err := scanEndpoint(tx.QueryRow(ctx, `
-		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs)
-		values ($1, $1, $2, $3, $4, $5, $6, $7)
+		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs, out_of_band)
+		values ($1, $1, $2, $3, $4, $5, $6, $7, $8)
 		returning `+endpointCols,
-		spec.Transport, componentID, nodeID, params, labelOrNull(spec.Label), driverID, inputs))
+		spec.Transport, componentID, nodeID, params, labelOrNull(spec.Label), driverID, inputs, spec.OutOfBand))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
@@ -529,10 +538,11 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 			params    = coalesce($3, params),
 			inputs    = coalesce($6, inputs),
 			label     = case when $5::boolean then $4 else label end,
+			out_of_band = coalesce($7, out_of_band),
 			updated_at = now()
 		where id = $1
 		returning `+endpointCols,
-		before.ID, nodeID, nullableJSON(params), labelVal, setLabel, nullableJSON(inputs)))
+		before.ID, nodeID, nullableJSON(params), labelVal, setLabel, nullableJSON(inputs), patch.OutOfBand))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
@@ -846,6 +856,10 @@ type endpointRef struct{ componentID, instance string }
 // latestRejections is latestRejection for many endpoints in one round trip, in
 // the order given (#1571): a node's worklist reads one per component endpoint,
 // and a statement each made a large site's pull cost thousands of them.
+//
+// The rejection is an observed row, so ts leads the order and not id (#712): a
+// node supplies the observed lane's ts, and a late-arriving older report must
+// not become current by being written last.
 func latestRejections(ctx context.Context, q querier, refs []endpointRef) ([]string, error) {
 	out := make([]string, len(refs))
 	if len(refs) == 0 {
@@ -949,6 +963,10 @@ type pinPair struct{ declared, pin string }
 // keyPins is keyPin for many endpoints in one round trip, in the order given
 // (#1571): a node's worklist reads one per ssh or tls endpoint, and a
 // statement each made a large site's pull cost thousands of them.
+//
+// The declared pin is the latest row by `id desc` (insertion order, #712: a
+// declared row carries no caller ts), the observed row beside it by
+// `ts desc, id desc`, because a node supplies the observed lane's ts.
 func keyPins(ctx context.Context, q querier, qs []pinQuery) ([]pinPair, error) {
 	out := make([]pinPair, len(qs))
 	if len(qs) == 0 {

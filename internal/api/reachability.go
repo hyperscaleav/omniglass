@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -26,6 +28,12 @@ import (
 
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
+
+// The reasons a verdict is still null (reachEndpointBody.Pending, #981).
+const (
+	pendingNoNode        = "no-node"
+	pendingAwaitingProbe = "awaiting-probe"
+)
 
 // verdictKey is the property sample that carries the per-endpoint reach
 // verdict; responsiveKey and authKey are the layer-7 rungs beside it (#812).
@@ -98,6 +106,15 @@ type reachRejectionBody struct {
 	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
+// reachGateReasonBody is a reason other than a refusal the endpoint's gate
+// holds (#1650): its kind, since when, and the task that added it.
+type reachGateReasonBody struct {
+	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"`
+	Since     time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's"`
+	Source    string    `json:"source" doc:"What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe"`
+	Component string    `json:"component,omitempty" doc:"An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind"`
+}
+
 // reachTLSBody is the handshake and certificate of an endpoint over the tls
 // handshake (tls #1035, https #902): how it verifies, the key it pins, the
 // latest handshake time, and the certificate's expiry and days left.
@@ -110,22 +127,24 @@ type reachTLSBody struct {
 }
 
 type reachEndpointBody struct {
-	ID            string               `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)"`
-	Endpoint      string               `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
-	Label         string               `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
-	Transport     string               `json:"transport" doc:"The transport (icmp, tcp, ...)"`
-	Address       string               `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
-	Node          string               `json:"node,omitempty" doc:"The node that probes this endpoint"`
-	LastSeen      *time.Time           `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
-	Verdict       *reachVerdictBody    `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
-	Responsive    *reachVerdictBody    `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
-	Authenticated *reachVerdictBody    `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
-	Session       *reachSessionBody    `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
-	Rejection     *reachRejectionBody  `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
-	TLS           *reachTLSBody        `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
-	Webhook       *endpointWebhookBody `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
-	Layers        []reachLayerBody     `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
-	History       []reachHistoryBody   `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
+	ID            string                `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)"`
+	Endpoint      string                `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
+	Label         string                `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
+	Transport     string                `json:"transport" doc:"The transport (icmp, tcp, ...)"`
+	Address       string                `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
+	Node          string                `json:"node,omitempty" doc:"The node that probes this endpoint"`
+	LastSeen      *time.Time            `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
+	Verdict       *reachVerdictBody     `json:"verdict" doc:"The latest reachability verdict, or null if none yet (pending says why)"`
+	Pending       string                `json:"pending,omitempty" enum:"no-node,awaiting-probe" doc:"Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
+	Responsive    *reachVerdictBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
+	Authenticated *reachVerdictBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
+	Session       *reachSessionBody     `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
+	Rejection     *reachRejectionBody   `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
+	GateReasons   []reachGateReasonBody `json:"gate_reasons,omitempty" doc:"Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"`
+	TLS           *reachTLSBody         `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
+	Webhook       *endpointWebhookBody  `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
+	Layers        []reachLayerBody      `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
+	History       []reachHistoryBody    `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
 
 type reachabilityOutput struct {
@@ -177,8 +196,44 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 			}
 			out.Body.Endpoints = append(out.Body.Endpoints, row)
 		}
+		if err := nameUpstreams(ctx, gw, a.scopeFor(ctx, "component", "read"), out.Body.Endpoints); err != nil {
+			return nil, huma.Error500InternalServerError("read reachability")
+		}
 		return out, nil
 	})
+}
+
+// nameUpstreams serves each upstream reason's component name beside the uuid
+// the node published as its source (#1652), resolved under the caller's read:
+// a component outside it, or gone, leaves the name absent rather than
+// disclosing it. Each source is looked up once per read.
+func nameUpstreams(ctx context.Context, gw storage.Gateway, read scope.Set, rows []reachEndpointBody) error {
+	names := map[string]string{}
+	for i := range rows {
+		for j := range rows[i].GateReasons {
+			r := &rows[i].GateReasons[j]
+			if r.Kind != "upstream" || r.Source == "" {
+				continue
+			}
+			name, seen := names[r.Source]
+			if !seen {
+				comp, err := gw.GetComponent(ctx, r.Source, read)
+				switch {
+				case err == nil:
+					name = comp.Name
+				case errors.Is(err, storage.ErrComponentNotFound):
+				default:
+					var refErr *storage.ErrPathNotFound
+					if !errors.As(err, &refErr) {
+						return err
+					}
+				}
+				names[r.Source] = name
+			}
+			r.Component = name
+		}
+	}
+	return nil
 }
 
 // composeEndpoint assembles one endpoint's reachability row from the property and
@@ -215,6 +270,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if verdict != nil {
 		row.Verdict = &reachVerdictBody{Value: verdict.Value, TS: verdict.TS}
 	}
+	row.Pending = pendingReason(row.Node, row.Verdict)
 	responsive, err := gw.LatestProperty(ctx, comp, responsiveKey, it.Name)
 	if err != nil {
 		return row, err
@@ -256,6 +312,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	}
 	if gate != nil {
 		row.Rejection = parseRejection(gate.Value)
+		row.GateReasons = parseGateReasons(gate.Value)
 	}
 	// The gate and its reason, served whatever holds a session (#1110): a
 	// probe's refusal has no session-reason to say why, and its notice and
@@ -312,6 +369,20 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.History = append(row.History, reachHistoryBody{TS: tr.TS, Value: tr.Value})
 	}
 	return row, nil
+}
+
+// pendingReason says why an endpoint has no verdict yet: no node assigned
+// means nothing will ever probe it, an assigned node just has not landed its
+// first probe. A row with a verdict is waiting on nothing (#981).
+func pendingReason(node string, verdict *reachVerdictBody) string {
+	switch {
+	case verdict != nil:
+		return ""
+	case node == "":
+		return pendingNoNode
+	default:
+		return pendingAwaitingProbe
+	}
 }
 
 // udpResponseKey and snmpResponseKey time an answered request rung (#1037,
@@ -436,6 +507,17 @@ func parseRejection(v string) *reachRejectionBody {
 		return nil
 	}
 	return &reachRejectionBody{Rung: g.Rung, Class: g.Class, PinnedKey: g.PinnedKey, OfferedKey: g.OfferedKey}
+}
+
+// parseGateReasons reads the reasons other than a refusal out of an
+// endpoint-rejection value (rejection.ParseSet), nil when none holds.
+func parseGateReasons(v string) []reachGateReasonBody {
+	_, _, others := rejection.ParseSet(v)
+	var out []reachGateReasonBody
+	for _, r := range others {
+		out = append(out, reachGateReasonBody{Kind: r.Kind, Since: r.Since, Source: r.Source})
+	}
+	return out
 }
 
 // addressFromParams renders the probed address from an endpoint's params

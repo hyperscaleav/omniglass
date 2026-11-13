@@ -21,7 +21,8 @@ import (
 // The Ferrite PDU 4C's faces (#1368): a networked rack power conditioner
 // with four switched, metered outlets. It answers over SNMP on the Ferrite arc and over a read-only JSON document,
 // each from one state: the mains voltage, the total current, and per outlet
-// its name, state and current. It cannot be switched.
+// its name, state and current. Its http-api face switches an outlet (#1653);
+// the document and the SNMP face stay read only.
 
 const (
 	ferriteOIDVoltage = "1.3.6.1.4.1.55560.1.1.0"
@@ -163,9 +164,10 @@ func TestFerritePDUServesItsStateOverSNMPAndHTTP(t *testing.T) {
 	}
 }
 
-// TestFerritePDUCannotBeSwitched: the document is read-only (the ticket's
-// line: outlet control is not here), and a refused login reads nothing.
-func TestFerritePDUCannotBeSwitched(t *testing.T) {
+// TestFerritePDUDocumentIsReadOnly: the status document cannot be written
+// (switching is the control route's, not the document's), and a refused login
+// reads nothing.
+func TestFerritePDUDocumentIsReadOnly(t *testing.T) {
 	d := startPDU(t)
 	before := pduSNMP(t, d, ferriteOutletOID(2, 4))
 	for _, method := range []string{http.MethodPost, http.MethodPut} {
@@ -186,6 +188,143 @@ func TestFerritePDUCannotBeSwitched(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a wrong password read %d, want 401", resp.StatusCode)
+	}
+}
+
+// pduSwitch posts body to the PDU's outlet control route as user/password.
+func pduSwitch(t *testing.T, d *Device, password, body string) (int, []byte) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, "http://"+faceAddr(t, d, "http-api")+"/api/outlets/state", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("ferrite", password)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/outlets/state: %v", err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, out
+}
+
+// pduTickLoad runs one load_drift step, the behavior that zeroes an off
+// outlet's current and sums the total.
+func pduTickLoad(t *testing.T, d *Device) {
+	t.Helper()
+	d.behaviorMu.Lock()
+	var b *behaviorEntry
+	for i := range d.behaviors {
+		if d.behaviors[i].Name == "load_drift" {
+			b = &d.behaviors[i]
+		}
+	}
+	d.behaviorMu.Unlock()
+	if b == nil {
+		t.Fatalf("no load_drift behavior; have %v", d.Behaviors())
+	}
+	d.tickBehavior(b)
+}
+
+// pduOutput reads outlet n (numbered from 1) from the status document.
+func pduOutput(t *testing.T, d *Device, n int) (state, current int) {
+	t.Helper()
+	code, body := pduRequest(t, d, http.MethodGet, "/pdu.json")
+	if code != http.StatusOK {
+		t.Fatalf("GET /pdu.json: %d %s", code, body)
+	}
+	var doc pduDocument
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("decode: %v\n%s", err, body)
+	}
+	o := doc.Outputs[n-1]
+	return o.State, o.Current
+}
+
+// TestFerritePDUSwitchesAnOutlet (#1653): the http-api face's control route
+// switches one outlet by its id; SNMP and the document both read the cut, the
+// next drift step zeroes the outlet's current and the total follows, and on
+// restores it. Only the named outlet moves.
+func TestFerritePDUSwitchesAnOutlet(t *testing.T) {
+	d := startPDU(t)
+	stateOID := ferriteOutletOID(2, 2)
+
+	code, body := pduSwitch(t, d, "ferrite", `{"outlet": 2, "state": "off"}`)
+	if code != http.StatusOK {
+		t.Fatalf("switch outlet 2 off: %d %s", code, body)
+	}
+	var ack struct {
+		OK     bool   `json:"ok"`
+		Outlet int    `json:"outlet"`
+		State  string `json:"state"`
+	}
+	if err := json.Unmarshal(body, &ack); err != nil || !ack.OK || ack.Outlet != 2 || ack.State != "off" {
+		t.Fatalf("ack = %s (%v), want ok for outlet 2 off", body, err)
+	}
+	if got := pduSNMP(t, d, stateOID)[stateOID]; got != "off" {
+		t.Errorf("SNMP outlet 2 state = %q, want off", got)
+	}
+	if state, _ := pduOutput(t, d, 2); state != 0 {
+		t.Errorf("document outlet 2 state = %d, want 0 (off)", state)
+	}
+	for _, n := range []int{1, 3} {
+		if got := pduSNMP(t, d, ferriteOutletOID(2, n))[ferriteOutletOID(2, n)]; got != "on" {
+			t.Errorf("outlet %d reads %q after outlet 2 was switched, want on", n, got)
+		}
+	}
+
+	pduTickLoad(t, d)
+	if _, current := pduOutput(t, d, 2); current != 0 {
+		t.Errorf("outlet 2 draws %d mA after a drift step while off, want 0", current)
+	}
+	sum := 0
+	for n := 1; n <= 4; n++ {
+		_, c := pduOutput(t, d, n)
+		sum += c
+	}
+	if got := pduSNMP(t, d, ferriteOIDCurrent)[ferriteOIDCurrent]; got != fmt.Sprint(sum) {
+		t.Errorf("total = %s mA, the outlets draw %d", got, sum)
+	}
+
+	if code, body := pduSwitch(t, d, "ferrite", `{"outlet": 2, "state": "on"}`); code != http.StatusOK {
+		t.Fatalf("switch outlet 2 on: %d %s", code, body)
+	}
+	pduTickLoad(t, d)
+	if got := pduSNMP(t, d, stateOID)[stateOID]; got != "on" {
+		t.Errorf("SNMP outlet 2 state = %q after on, want on", got)
+	}
+	if state, current := pduOutput(t, d, 2); state != 1 || current < 100 {
+		t.Errorf("outlet 2 after on and a drift step: state %d, %d mA; want on and drawing", state, current)
+	}
+}
+
+// TestFerritePDURefusesABadSwitch (#1653): an outlet the PDU does not have,
+// a state that is neither on nor off, and a wrong password are each refused,
+// and none of them moves any outlet.
+func TestFerritePDURefusesABadSwitch(t *testing.T) {
+	d := startPDU(t)
+	var oids []string
+	for n := 1; n <= 4; n++ {
+		oids = append(oids, ferriteOutletOID(2, n))
+	}
+	before := pduSNMP(t, d, oids...)
+	for _, tc := range []struct {
+		name, password, body string
+		want                 int
+	}{
+		{"outlet 0", "ferrite", `{"outlet": 0, "state": "off"}`, http.StatusBadRequest},
+		{"outlet 5", "ferrite", `{"outlet": 5, "state": "off"}`, http.StatusBadRequest},
+		{"no outlet", "ferrite", `{"state": "off"}`, http.StatusBadRequest},
+		{"unknown state", "ferrite", `{"outlet": 2, "state": "cycle"}`, http.StatusBadRequest},
+		{"wrong password", "wrong", `{"outlet": 2, "state": "off"}`, http.StatusUnauthorized},
+	} {
+		if code, body := pduSwitch(t, d, tc.password, tc.body); code != tc.want {
+			t.Errorf("%s: %d %s, want %d", tc.name, code, body, tc.want)
+		}
+	}
+	after := pduSNMP(t, d, oids...)
+	for _, oid := range oids {
+		if after[oid] != before[oid] {
+			t.Errorf("%s moved from %q to %q on a refused switch", oid, before[oid], after[oid])
+		}
 	}
 }
 

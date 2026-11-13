@@ -31,14 +31,23 @@ a caller who holds `rule:create` only on a grant bounded to a place or system is
 rule** (nor Edit, Disable or Delete without the matching permission on an all-scope grant), since the
 server would refuse the write.
 
-## The rule that ships
+## The rules that ship
 
-One rule ships with Omniglass, rendered here from the seed itself:
+Five rules ship with Omniglass, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
-It is **official**: it updates with Omniglass, so it is read-only, and the blade greys Edit and
-Delete with that reason. It is what makes an unplugged component move its system: unplug a
+All five are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
+and Delete with that reason. Four of them watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
+the server's own component when the server lands telemetry more than 30 s behind its samples for 2
+minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `node-silent` opens a high
+alarm on a node's own component once the node has gone 90 s, three heartbeats, without checking in,
+and clears when it next does ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)).
+`disk-nearly-full` opens a warning alarm on the server's component when the filesystem holding its
+data directory stays over 90% used for 2 minutes, and clears once it is back at 85% or under
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
+`retention-behind` opens a warning alarm on the server's component when a retention lane stays
+behind its window for 5 minutes ([storage](/architecture/storage/#what-a-retention-pass-reports)). `reachability-lost` is what makes an unplugged component move its system: unplug a
 simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
 its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Rules page
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system

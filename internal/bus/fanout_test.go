@@ -65,7 +65,7 @@ func TestPlanFanOut(t *testing.T) {
 		Events: []*ogv1.EventSample{{Name: "call-started", Message: "started", Identity: room("zr-a")}},
 	}
 	owners := map[storage.IdentityKey]storage.IdentityOwner{{Key: "ucc-room-id", Value: "zr-a"}: {Kind: "system", ID: "sys-a"}}
-	p := planFanOut(fanned, "conduit-1", "meetings-cloud", "webhook", owners, fanRegistry(), t0.Add(time.Hour))
+	p := planFanOut(fanned, "conduit-1", "meetings-cloud", "webhook", owners, fanRegistry(), t0.Add(time.Hour), nil)
 
 	if len(p.rows.Metrics) != 1 || len(p.rows.Events) != 1 || len(p.rows.Properties) != 0 {
 		t.Fatalf("rows = %+v, want zr-a's metric and event only", p.rows)

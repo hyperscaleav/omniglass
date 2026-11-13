@@ -88,8 +88,8 @@ func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) 
 // inside the transaction that just opened the intended value reads exactly the
 // ts that row was stamped with, so the two ends of the comparison are one
 // reading of one clock rather than two readings that happen to be close. It also
-// keeps `settled_at` in the same currency as the `now()` the insert path already
-// stamps a fire-and-forget command with.
+// keeps `settled_at` in the same currency as the `now()` the execution report
+// stamps `executed_at` with.
 //
 // Settle itself stays pure and still takes `now` as an argument. What changed is
 // who supplies it, which is the repo's own rule about the clock being an edge
@@ -112,8 +112,9 @@ func dbNow(ctx context.Context, q querier) (time.Time, error) {
 // row (the command_id lineage) and the observation it is judged on
 // (judgedObservation, ADR-0456), and stamps the terminal status with
 // settled_at in the caller's transaction. A pending
-// command stays issued; a command that opened no intended row (a pre-#590
-// fire-and-forget) has nothing to wait on and settles.
+// command stays issued; a command that opened no intended row (fire-and-
+// forget) is decided by its execution report, so here it only times out, once
+// its delivery window passes with no report (#1630).
 // ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
 // ambiguity-safe for component/system/location, #627), and the resolved arc
 // threaded into judgeCommands below rather than left for it to re-derive.
@@ -191,7 +192,10 @@ func (p *PG) pendingCommands(ctx context.Context, q querier, sql string, args ..
 // judgeCommands settles each pending command against its own intended row
 // and the observation of its target it is judged on (judgedObservation),
 // stamping a terminal verdict with settled_at; a pending verdict leaves it
-// issued.
+// issued. A command with no intended row (fire-and-forget) has no
+// observation to wait on: its execution report decides it, so here it is
+// only timed out, by the window, once its delivery window has passed with no
+// report (#1630).
 func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ownerKind, arc string, pending []pendingCommand, now time.Time) error {
 	reads := &observationReads{on: map[string]*CurrentValue{}}
 	for _, pc := range pending {
@@ -199,23 +203,51 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 		if err != nil {
 			return err
 		}
-		observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
-		if err != nil {
-			return err
-		}
 		var o settlementOutcome
 		if intended == nil {
-			o = settlementOutcome{status: "settled", by: SettledByIssue, reason: "nothing was told, so there was nothing to settle"}
-		} else if verdict := Settle(intended, observed, ct.SettleWindowSeconds, now); verdict == SettlementPending {
-			continue
-		} else if o, err = p.observationOutcome(ctx, q, ct, pc.id, verdict, intended, observed); err != nil {
-			return err
+			due, err := p.deliveryWindowPassed(ctx, q, pc.id, now)
+			if err != nil {
+				return err
+			}
+			if !due {
+				continue
+			}
+			stop, err := p.commandStop(ctx, q, pc.id)
+			if err != nil {
+				return err
+			}
+			o = settlementOutcome{status: "timed-out", by: SettledByWindow,
+				reason: deliveryTimeoutWords(ct.Name, stop.delivered, stop.carried, stop.endpoint, stop.node)}
+		} else {
+			observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
+			if err != nil {
+				return err
+			}
+			verdict := Settle(intended, observed, ct.SettleWindowSeconds, now)
+			if verdict == SettlementPending {
+				continue
+			}
+			if o, err = p.observationOutcome(ctx, q, ct, pc.id, verdict, intended, observed); err != nil {
+				return err
+			}
 		}
 		if err := recordOutcome(ctx, q, pc.id, o, now); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// deliveryWindowPassed reports a command issued longer ago than its delivery
+// window (CommandDeliveryWindow) with no execution report: the server will
+// not hand it to a node again, so nothing can still report it.
+func (p *PG) deliveryWindowPassed(ctx context.Context, q querier, id int64, now time.Time) (bool, error) {
+	var issued time.Time
+	var executed bool
+	if err := q.QueryRow(ctx, `select ts, executed_at is not null from command where id = $1`, id).Scan(&issued, &executed); err != nil {
+		return false, fmt.Errorf("storage: delivery window of command %d: %w", id, err)
+	}
+	return !executed && now.Sub(issued) > CommandDeliveryWindow, nil
 }
 
 // observationReads holds what one settle-check has read of a target's
@@ -270,7 +302,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 		where s.owner_kind = $1 and s.%[1]s = $2
 		  and s.property_type_id = (select k.id from property_type_in_effect() k where k.name = $3)
 		  and s.instance = $4 and s.provenance = 'intended'
-		order by s.ts desc, s.id desc
+		order by s.id desc
 		limit 1`, col)
 	if ct.TargetMetricType != "" {
 		// The metric lane's intended rows are its declared tier (#1275).
@@ -280,7 +312,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 		join metric_declared d on d.series_id = s.id
 		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = 'intended'
-		order by d.ts desc, d.id desc
+		order by d.id desc
 		limit 1`
 	}
 	var series string
@@ -343,15 +375,18 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 	return nil
 }
 
-// SweepCommandSettlements judges every issued command whose settle window
-// has passed, so a command nothing else settles reaches timed-out (or
-// failed) without waiting for another command or read. The server runs it
-// on a short interval.
+// SweepCommandSettlements judges every issued command whose window has
+// passed, so a command nothing else settles reaches timed-out (or failed)
+// without waiting for another command or read: a settleable command past its
+// settle window, a fire-and-forget one (which only its execution report
+// settles) past the delivery window the pending query shares (deliveryTTL,
+// #1630). The server runs it on a short interval.
 func (p *PG) SweepCommandSettlements(ctx context.Context) error {
 	rows, err := p.pool.Query(ctx, `select distinct c.owner_kind,
 			coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text, ct.name, c.instance
 		from command c join command_type ct on ct.id = c.command_type_id
-		where c.status = 'issued' and c.ts < now() - make_interval(secs => ct.settle_window_seconds)`)
+		where c.status = 'issued' and c.ts < now() - case when `+commandOpensIntendedSQL+`
+			then make_interval(secs => ct.settle_window_seconds) else interval '`+deliveryTTL+`' end`)
 	if err != nil {
 		return fmt.Errorf("storage: sweep settlements: %w", err)
 	}
@@ -439,7 +474,7 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 	switch {
 	case ct.TargetMetricType != "":
 		var v float64
-		err := q.QueryRow(ctx, `select value, ts from metric_declared where command_id = $1 order by ts desc, id desc limit 1`,
+		err := q.QueryRow(ctx, `select value, ts from metric_declared where command_id = $1 order by id desc limit 1`,
 			commandID).Scan(&v, &cv.TS)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -450,7 +485,7 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 		cv.Value = json.RawMessage(strconv.FormatFloat(v, 'g', -1, 64))
 	case ct.TargetPropertyType != "":
 		var value []byte
-		err := q.QueryRow(ctx, `select `+declaredCurrentExpr+`, ts from property where command_id = $1 order by ts desc, id desc limit 1`,
+		err := q.QueryRow(ctx, `select `+declaredCurrentExpr+`, ts from property where command_id = $1 order by id desc limit 1`,
 			commandID).Scan(&value, &cv.TS)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -502,15 +537,20 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	// The newest row of every series of the key's (a series per source and
 	// collecting node), from the tier the provenance lives in: the declared
 	// tier for intended rows, the hot tier for the rest (#1275).
+	// The intended tier orders by insertion (`id desc`), every other lane by
+	// `ts desc, id desc`: an intended row's ts is the database's, never a
+	// caller's, while a node supplies the hot tier's (#712, seriesOrderSQL).
 	newest := metricNewestSQL("s.id")
+	order := "n.ts desc, n.id desc"
 	if provenance == "intended" {
-		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.ts desc, d.id desc limit 1`
+		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.id desc limit 1`
+		order = "n.id desc"
 	}
 	sql := `select n.value, n.ts, s.provenance from metric_series s
 		cross join lateral (` + newest + `) n
 		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = $5
-		order by n.ts desc, n.id desc
+		order by ` + order + `
 		limit 1`
 	var (
 		cv CurrentValue

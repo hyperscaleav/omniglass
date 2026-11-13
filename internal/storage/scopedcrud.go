@@ -539,6 +539,9 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 	if !set.All && !scope.Covers(resource, cfg.resource) {
 		panic(fmt.Sprintf("storage: resolveRef: a scope resolved for %q cannot be checked against %q (resolving %q)", resource, cfg.resource, ref))
 	}
+	if err := checkScopeWiring(set, cfg.resource); err != nil {
+		return nil, err
+	}
 	matches, err := loadByRef(ctx, q, cfg, ref)
 	if err != nil {
 		return nil, err
@@ -693,7 +696,8 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 // "system"), and a location's scope tree is its own unrelated ancestor chain, so
 // checking it against the location table can never match and would deny every
 // non-all caller outright (the tier-mismatch defect a review caught, which is
-// why these binds were scope-blind in the first place). What resolves correctly
+// why these binds were scope-blind in the first place; resolveRef now answers
+// such a set with ErrScopeWiring, #754). What resolves correctly
 // is a scope resolved FOR the referenced tier, and the action it is resolved for
 // is read: the caller is not writing the location, it is naming one, and since
 // ADR-0100 put placement into the label data map the answer CONTAINS that row's
@@ -794,8 +798,15 @@ func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name stri
 // resolveScoped loads an entity by name and enforces the read-then-action scope
 // split: out of read scope (or ambiguous only outside it) is notFound
 // (non-disclosing), readable but out of action scope is forbidden. Same
-// same-tier guarantee as scopedGet.
+// same-tier guarantee as scopedGet. Either set resolved for a resource cfg's
+// tier cannot contain (the action set is often resolved for another resource,
+// alarm:acknowledge or command:issue on the component table) is ErrScopeWiring
+// before any query, never a refusal: an empty set from a missing registration
+// would otherwise deny every scoped caller as if their grants were empty (#754).
 func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], name string, read, action scope.Set) (*T, error) {
+	if err := checkScopeWiring(action, cfg.resource); err != nil {
+		return nil, err
+	}
 	v, err := scopedByNameInScope(ctx, q, cfg, name, cfg.resource, read)
 	if err != nil {
 		return nil, err

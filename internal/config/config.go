@@ -28,6 +28,8 @@ const (
 	// Bound to loopback by default: a node reaches it through the same host
 	// the API is on.
 	DefaultNatsAddr = "127.0.0.1:4222"
+	// DefaultServerName is the server's identity on a host with no hostname.
+	DefaultServerName = "omniglass-server"
 	// DefaultDataDir holds local server state that is not in Postgres, notably
 	// the fallback encryption key when no KEK is provided. Override with
 	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_ENCRYPTION_KEY_FILE
@@ -73,6 +75,15 @@ type Config struct {
 	// serves, for a supervisor or a test that asked for port 0. Empty means no
 	// file. Set OMNIGLASS_READY_FILE.
 	ReadyFile string
+	// ServerName is the server's identity: the name its own platform
+	// component is ensured under at boot (#1627), so each server of several
+	// on one database reports its request and query timing as itself.
+	// Defaults to the hostname. Set OMNIGLASS_SERVER_NAME.
+	ServerName string
+	// ClosedLoop is the raw closed-loop settings (#1647): the ring's bracket
+	// and the node cadence the server assumes. The server parses them at boot
+	// (closedloop.ParseSettings), so a bad value fails the boot, not this Load.
+	ClosedLoopBracket, ClosedLoopHeartbeat, ClosedLoopProbeEvery string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -95,7 +106,21 @@ func Load() Config {
 		DataDir:        firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
 		SettingsFile:   firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
 		ReadyFile:      Get("OMNIGLASS_READY_FILE"),
+		ServerName:     firstNonEmpty(Get("OMNIGLASS_SERVER_NAME"), hostname()),
+
+		ClosedLoopBracket:    Get("OMNIGLASS_CLOSED_LOOP_BRACKET"),
+		ClosedLoopHeartbeat:  Get("OMNIGLASS_CLOSED_LOOP_HEARTBEAT"),
+		ClosedLoopProbeEvery: Get("OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"),
 	}
+}
+
+// hostname is the host's name, or DefaultServerName when it has none.
+func hostname() string {
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return DefaultServerName
+	}
+	return h
 }
 
 func resolveDSN() string {

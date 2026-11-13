@@ -43,6 +43,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Pins the shipped UCC drivers to the simulated platform's own
 		// answer, so naming the shipped product is what it tests (#1282).
 		"internal/seed/ucc_drivers_test.go": true,
+		// Switches the simulated Ferrite PDU with the shipped
+		// ferrite-pdu-api driver's rendered requests, so naming the shipped
+		// product is what it tests (#1653).
+		"internal/seed/ferrite_pdu_driver_test.go": true,
 		// Drives the shipped recording service driver against its simulated
 		// service; a driver is named for its product, so the product id is
 		// in the name it loads (#1363).

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
@@ -53,25 +54,51 @@ type HTTPResult struct {
 // rung.
 func NewHTTPProber() HTTPProber { return httpProber{} }
 
-type httpProber struct{}
+// NewTalliedHTTPProber is the real HTTP probe counting its connection and its
+// request on the node's tally (#1639).
+func NewTalliedHTTPProber(tally *RequestTally) HTTPProber { return httpProber{tally: tally} }
 
-func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
+type httpProber struct{ tally *RequestTally }
+
+// probeTransport is the probe's transport: one request per connection, so a
+// connection the node opens is one the component accepts for one request.
+func probeTransport(dial func(context.Context, string, string) (net.Conn, error)) *http.Transport {
+	return &http.Transport{DialContext: dial, DisableKeepAlives: true}
+}
+
+func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	timeout := t.Timeout
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	var res HTTPResult
+	call := p.tally.call(t.Tally)
+	// The dial runs on the transport's own goroutine, which can outlive a
+	// request that timed out, so what it learns lands in dialed under mu and
+	// the probe reads a copy once the request returns.
+	var (
+		mu     sync.Mutex
+		dialed HTTPResult
+	)
 	dialer := &net.Dialer{Timeout: timeout}
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialStart := time.Now()
 		conn, err := dialer.DialContext(ctx, network, addr)
 		if err == nil {
-			res.Dialed = true
-			res.DialMS = float64(time.Since(dialStart)) / float64(time.Millisecond)
+			mu.Lock()
+			dialed.Dialed = true
+			dialed.DialMS = float64(time.Since(dialStart)) / float64(time.Millisecond)
+			mu.Unlock()
+			call.connected()
 		}
 		return conn, err
 	}
-	transport := &http.Transport{DialContext: dial, DisableKeepAlives: true}
+	transport := probeTransport(func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err == nil {
+			call.begin()
+		}
+		return conn, err
+	})
 	scheme := "http"
 	if t.TLS != nil {
 		scheme = "https"
@@ -82,16 +109,19 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 				return nil, err
 			}
 			tc, facts, err := HandshakeTLS(ctx, conn, trust, timeout)
-			res.Facts, res.HandshakeMS = facts, facts.HandshakeMS
+			mu.Lock()
+			defer mu.Unlock()
+			dialed.Facts, dialed.HandshakeMS = facts, facts.HandshakeMS
 			if err != nil {
 				if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassCertificate {
 					// The protocol answered with a certificate; it is the
 					// certificate that is refused.
-					res.Handshaken, res.Refusal = true, terr
+					dialed.Handshaken, dialed.Refusal = true, terr
 				}
 				return nil, err
 			}
-			res.Handshaken, res.Accepted = true, true
+			dialed.Handshaken, dialed.Accepted = true, true
+			call.begin()
 			return tc, nil
 		}
 	}
@@ -109,7 +139,11 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	req.Header.Set("User-Agent", "omniglass-node")
 	start := time.Now()
 	resp, err := client.Do(req)
+	mu.Lock()
+	res := dialed
+	mu.Unlock()
 	if err != nil {
+		call.settle(errOutcome(err))
 		if !res.Dialed {
 			// The L4 rung failed: classify like the tcp probe does. A failure
 			// that classifies is data; one that does not (resolve/setup) is
@@ -134,6 +168,7 @@ func (httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 		return res, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+	call.settle(statusOutcome(resp.StatusCode))
 	res.Responded = true
 	res.Status = resp.StatusCode
 	res.ResponseMS = float64(time.Since(start)) / float64(time.Millisecond)

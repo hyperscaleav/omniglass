@@ -9,6 +9,7 @@ sidebar:
 
 import LabTopology from '../../../components/LabTopology.astro';
 import LabWalkthroughs from '../../../components/LabWalkthroughs.astro';
+import PerfGateFigures from '../../../components/PerfGateFigures.astro';
 
 A **lab** is a working omniglass on your own machine, brought up by one command, to learn on. It
 runs the real server and console, its own Postgres, and an edge node that runs the simulator in its
@@ -97,7 +98,10 @@ faults below), and a plain ping. Beside them:
   so the endpoint's page reads last heard within the first two minutes.
 - **An integration pushes.** A simulated booking service pushes the HQ boardroom system's bookings
   (`booking-count`, `booking-state`) through `POST /telemetry:push`, with a token the lab mints on
-  every run for a service account that may push to that one system and do nothing else. Open the
+  every run for a service account that may push to that one system and do nothing else. It is an
+  outside actor, not a device on the network: the fleet declares it as a pusher, the way a scale
+  scenario declares its own, and the simulator beside the node runs it as an emulator device with
+  a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence). Open the
   boardroom's system page to see them; a push carries no endpoint, so there is no reachability to
   read, only the values.
 
@@ -169,6 +173,23 @@ stale the moment every owner it covers carries the tier, so a closed issue canno
 `make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
 the scale lab runs the same judgment against a lab of any size.
 
+`make test-lab` builds `omniglass:dev` first and runs the lab's integration tests against it. On a
+machine where that tag is shared (another session's lab runs it), build a private tag instead, with
+the binary stamped to match, and run the tests against it with `make test-lab-image`, which builds
+nothing. `LAB_IMAGE` names the image (it reaches the tests and `lab run` as `OMNIGLASS_LAB_IMAGE`;
+empty runs `omniglass:dev`) and `LAB_RUN` narrows the tests:
+
+```sh
+make build image TAG=mine BUILD_ID=mine
+make test-lab-image LAB_IMAGE=omniglass:mine LAB_RUN=TestIntegrationScaleDelivery
+```
+
+The lab can also be watched whole while it runs. With its simulator connected,
+[Platform health](/guides/operator/platform-health/#with-a-simulator) closes the loop over a window
+that slides every 10 seconds: every hop a request or a batch travels, from the node to the simulated
+device and back to the server, read as a loss ratio. A lab that is whole reads 0 on every gap, and every
+polled protocol draws its requests.
+
 ## Stopping it, and your data
 
 Press **Ctrl-C** in the lab's terminal (or send it SIGTERM). The lab stops and removes every
@@ -204,11 +225,15 @@ your machine's. The `server` and `db` containers carry no added capability.
 How often the node checks in, pulls its worklist and probes is its **cadence profile**. Your lab
 runs at `lab`: it checks in often and pulls its worklist every few seconds (`--worklist-every`), so
 a change you make in the console reaches it within seconds, and probes reachability less often
-(`--probe-every`), because a lab may run for days and a probe on every check-in wrote most of its
-rows. The throwaway lab each walkthrough is recorded on runs at
-`walkthrough` and probes on every check-in, since a recording is held to a time budget, so in your
+(`--probe-every`), because a lab may run for days and a probe every 2s wrote most of its rows.
+Each probe and each poll runs on its own interval, on the node's own timer, not on the check-in.
+The throwaway lab each walkthrough is recorded on runs at
+`walkthrough` and probes every 2s, since a recording is held to a time budget, so in your
 lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
-seconds longer than its recording. `default` is the product's own cadence, what a deployment's
+seconds longer than its recording. Its seed also sets the platform's report window
+(`collection.report_seconds`) to 10s, so the node's and the server's own figures, the ones
+[Platform health](/guides/operator/platform-health/) reads, land inside the recording; your lab
+reports at the platform's 60s, so those figures take up to a minute to appear. `default` is the product's own cadence, what a deployment's
 node runs at; the [lab footprint](/contributing/test-driven/#measuring-a-running-lab) measures a lab
 at each to say what that cadence costs.
 
@@ -260,11 +285,20 @@ command itself; here is when you would reach for each:
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.
+- `--keep` keeps a scale lab's data when it stops, for a run that lasts days ([a soak
+  run](#a-soak-run)). A seeded fleet's lab keeps its data already, so it refuses the flag.
 
 A few more flags are hidden from the help because they are for scripts, not for you: the repo's
 own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
 own through them (a project of its own whose data goes when it stops, held for the script, or one
-whose fleet has no node collecting from it, so the pages the docs photograph hold still). The
+whose fleet has no node collecting from it, so the pages the docs photograph hold still). One is
+for captures only: `--platform-history` seeds an hour of made-up figures on the lab's server, a sample
+a minute for each server key platform health draws except the stream positions and the ingest,
+push, bus request, telemetry ack and slow query windows (a capture's lab writes none of those live, so they are left to the
+server), so a screenshot of the page shows full sparklines rather than the few minutes a fresh lab
+has measured. Sizes end the hour on what the
+database measures, so the live line carries on from the seeded one. It needs `--ephemeral`, and a scale lab
+refuses it, so a lab you learn from or measure only ever shows what its own server measured. The
 [demos guide](/contributing/demos/) says how the repo uses them.
 
 **Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:
@@ -276,7 +310,7 @@ anything itself, so it always runs the code you built. A release binary runs
 
 ## Scale lab scenarios
 
-The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav/omniglass/issues/1357) asks how the platform behaves at 100, 1,000
+The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav/omniglass/issues/1357) asks how the platform behaves at 300, 1,000
 and 3,000 systems, so it describes an environment once and sizes it with a knob: a **scenario
 manifest** names its kinds of site (one headquarters and the offices repeated around it), the
 buildings each kind's rooms sit in, the standards placed at each kind as ratios, and the product
@@ -292,16 +326,68 @@ simulator in its own process for that site's components. Every simulated compone
 own loopback address, so a site looks like many devices rather than many ports on one address. The
 lab is up once every site's node is collecting from every component (the planted faults aside).
 
+Not everything a real fleet hears is collected. The scenario also declares each site's **outside
+actors**, the services that report to the server on their own, and the simulator beside the site's
+node runs them:
+
+- **A token pusher.** `corporate` places one booking service a site, pushing four of its systems'
+  bookings every 30 seconds through `POST /telemetry:push`. The lab mints its bearer token on every
+  run, for a service account that may push to those systems and do nothing else.
+- **A webhook sender.** `corporate` also places one meeting platform account a site (`ucc-platform`),
+  which speaks for every one of the site's systems. The lab seeds the account as a component with a
+  `ucc-webhook` endpoint and a signing key minted on every run (beside the product's polled
+  `ucc-rooms` endpoint on the site's node), and binds each system's room to its system;
+  the simulator subscribes the account to the endpoint, adds each bound room, and the account posts a
+  signed report naming every room's meeting state every 30 seconds. Its key is sealed in the server
+  and handed to the simulator alone: neither the plan, the seed's output nor a log shows it.
+
+Both arrive on the server's [push lane](#reading-the-delivery-table), so `lab measure` reads their
+loss beside the nodes'.
+
 ```sh
-omniglass lab run --scenario corporate --systems 100
+omniglass lab run --scenario corporate --systems 300
 ```
 
 A scale lab is its own Docker project, `omniglass-scale`, so it runs beside your learning lab, and
-it is throwaway: Ctrl-C removes every container, network and volume it started. Add `--plan` to
+it is throwaway: Ctrl-C removes every container, network and volume it started. With `--keep` it
+keeps its two volumes instead, the way the learning lab does, and the stop line names the command
+that picks it up again: the same scenario, size and `--keep` (and its `--project`, when not
+`omniglass-scale`). The next run re-attaches the volumes, keeps the fleet it seeded rather than
+seeding again, and enrolls each site's node afresh; a kept lab started at another scenario or size,
+or without `--keep`, is refused, naming `--fresh` to start over. Add `--plan` to
 print what a size would build without starting anything: three tables (each archetype's sites,
 floors per site, systems of each standard and totals; each site's systems and components; the
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
 `--systems`, a scenario asks for a size (one system per site at the fewest sites, up to 10,000).
+
+### Which fleet each level measures
+
+A figure from one lab level compares with a figure from the next only when both read the same fleet
+shape, so **every lab level that measures runs the `corporate` scenario at a stated size**, and a size's
+figures are compared only with the same size
+([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)). The `dev` fleet is the showcase:
+the `make lab` default, the docs screenshots, the demos and the console end-to-end tests. It carries
+broken devices and unassigned identities on purpose, so its rows, its cost and its loss share no shape
+with a corporate fleet, and it is never a measurement basis.
+
+| level | scenario and size | what it is for |
+|---|---|---|
+| `make test-lab` (the footprint and scale measure integration tests) | corporate, 20 systems | smoke: proves every figure is read, never what it is |
+| `make lab-footprint` | corporate, 20 systems | the per-container footprint on a developer machine |
+| `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
+| the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
+| `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the rung (`300` or `1000` systems) its baseline states | refuses a run of another scenario, size or device set as invalid |
+| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
+
+20 is the smallest round size past the last one that drops a product the corporate manifest names:
+16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
+18 up, through each rung of the ladder, seeds them all. A unit test
+(`TestCorporateSmokeSizeSeedsEveryProduct`) pins it, so a manifest edit that breaks the coverage fails
+there rather than in a lab.
+
+A scale lab stamps its scenario and size on its containers as labels (`omniglass.lab.scenario`,
+`omniglass.lab.systems`), and every measure reads them from the lab rather than from its own flags, so
+a report always names the fleet it read.
 
 ### How big a lab your machine can run
 
@@ -344,7 +430,7 @@ the seed included. Past it the lab removes everything it started and names what 
 site whose simulator never connected, and each site's components not up yet, by name and loopback
 address.
 
-`make scale-lab` (with `SYSTEMS=100` and `SCENARIO=corporate` by default) runs the check the scale
+`make scale-lab` (with `SYSTEMS=300` and `SCENARIO=corporate` by default) runs the check the scale
 lab is proven by: it brings a size up through `bin/omniglass lab run`, asserts one node container per
 site and every component at its own loopback address, prints the containers' memory and CPU, and
 stops the lab, asserting it left no container or network. It builds the image and stands up real
@@ -364,12 +450,14 @@ assignment triggers rather than round trips ([#1562](https://github.com/hypersca
 ### Measuring a scale lab
 
 `omniglass lab measure` says what a fleet of a size costs to run: one table, measured over a window you
-state, from a running scale lab. It is diagnostic and never a gate (ADR-0094): on a shared host the
-figures move with the neighbours, so compare runs from one machine. It is outside `make test` and CI.
+state, from a running scale lab. One measurement is diagnostic and never a gate (ADR-0094): on a shared
+host the figures move with the neighbours, so compare runs from one machine. It is outside `make test`.
+What gates is several measurements of a named size checked against a committed baseline, below in
+[Checking against the baseline](#checking-against-the-baseline).
 
 ```bash
-make scale-measure SYSTEMS=100                                    # brings a lab up, measures it, removes it
-./bin/omniglass lab measure --systems 100 --warmup 2m --window 3m # the same, with the window chosen
+make scale-measure SYSTEMS=300                                    # brings a lab up, measures it, removes it
+./bin/omniglass lab measure --systems 300 --warmup 2m --window 3m # the same, with the window chosen
 ./bin/omniglass lab measure                                       # measures the scale lab already running
 ```
 
@@ -378,18 +466,13 @@ With `--systems` it brings up a throwaway scale lab, waits for it to be ready, l
 lab and checks nothing is left. Without it, it measures the scale lab you started with
 `omniglass lab run --scenario corporate --systems N`; that lab must be one this build started, because
 the ingest lag reads the commit times Postgres records only when the lab asks it to
-(`track_commit_timestamp`), and a lab started before that says so and stops. It writes the same figures
+(`track_commit_timestamp`), and a lab started before that says so and stops. The report's first line
+names the scenario and size, read from the lab's labels, so a measure of the running lab never echoes a
+flag; a lab without them, or a `dev` lab (which has no size), says so and stops. It writes the same figures
 as JSON (`--json`, `lab-measure.json` by default, empty for none), so two runs diff.
 
-| Flag | Default | What it does |
-| --- | --- | --- |
-| `--systems` | 0 | bring up a throwaway lab of this many systems; 0 measures the running one |
-| `--scenario` | `corporate` | the scale scenario a `--systems` lab runs |
-| `--warmup` | 2m | how long the lab runs before the window starts |
-| `--window` | 5m | the window the rates, growth and usage are read over |
-| `--fleet-reads` | 20 | timed fleet view reads, spread evenly over the window |
-| `--backlog` | 150000 | aged property rows the retention probe plants; 0 skips it and its server restart |
-| `--drain-timeout` | 3m | how long the probe waits for the pass to clear the backlog |
+Every flag, its default and its meaning is in the generated
+[CLI reference](/reference/cli/#omniglass-lab-measure), which `make gen` writes from the command itself.
 
 How to read each row:
 
@@ -400,7 +483,8 @@ How to read each row:
   window's growth multiplied up to 24 hours. Row counts are inserts; the table figures are the
   relation's size on disk including its indexes, so they step in 8 KiB pages: a lane that grows
   by less than a page in the window reads `0 B`, and a short window is coarse. Receipts are the bus
-  consumer's delivery receipts (`telemetry_receipt`, which make a redelivered batch land once), and
+  consumer's delivery receipts (`telemetry_receipt`, which make a redelivered batch land once and
+  carry each batch's delivery ledger and outcome, the delivery table's source), and
   the database line is the whole database, so it also carries the logs and anything else that grew. A daily-partitioned lane
   is one relation per day, so its growth is the sum across them. Extrapolation assumes the window is
   steady: a window that includes a burst reads high.
@@ -419,10 +503,19 @@ How to read each row:
   sizes replication and backups per device rather than per day. It carries every writer's WAL (the
   receipts, the calculated metrics, the server's own rows), so it reads a little high for the raw
   lane alone; a figure far above the row's width is index and receipt cost, not the sample.
+- **database size, metric partitions, metric blocks and trends, dead tuples**: what the database holds
+  at the window's end, where the rows above are what it gains. The size is the whole database; the
+  partitions are the metric lane's daily partitions and the day the oldest starts, so retention is
+  keeping up when the oldest day moves forward and the count stays level. The blocks and trends are
+  the bytes of the two rollup tables. The dead tuples are the rows deleted or updated in `property`,
+  `log_line` and `node_log` that vacuum has not yet reclaimed, summed over their partitions; a count
+  that only climbs across a sampling run is vacuum falling behind. Each is a level, not a rate, so one
+  run reads one point, and [a sampling run](#sampling-a-scale-lab-over-time) reads its trend.
 - **`<container>` cpu, memory**: each container's CPU in millicores (a thousand is one core) over
   the window, from the cgroup's CPU time, and its working set (anonymous plus shared memory, the part
-  not reclaimable as page cache). One line each for the server, Postgres and every node, then the
-  total. A node is one site's simulators and its collection, so its cost is what that site's devices
+  not reclaimable as page cache). The working set is the median of about 30 reads taken across the
+  window, so where in the Go heap's collection cycle the window happened to end does not move it. One
+  line each for the server, Postgres and every node, then the total. A node is one site's simulators and its collection, so its cost is what that site's devices
   add; the server and Postgres are what every site's writes add up to.
 - **ingest lag p50, p95, p99**: the time from a sample's probe (the timestamp the node gave it) to the
   commit of its row, over the newest observed metric rows the window landed (up to 20,000, the count is
@@ -462,6 +555,17 @@ How to read each row:
   opens on, read through the API with a token the harness mints, spread evenly over the window so it
   is read while the lab collects, not while it idles. The reads are sequential, so these are one
   user's response times, not a load test.
+- **system page p50, p95**: the time an operator waits for the console's system page, with
+  `--page-clients N` (0, the default, skips it and the rows read `not measured`). A load is every read a
+  cold open of the page makes, all at once as the browser makes them, timed from the first request to
+  the last answer: the catalogs it labels with, the system, its health, members, roles and metrics, and
+  then one 24 hour series read for each chart the metrics answer names. N clients each make
+  `--page-loads` loads spread over the window, staggered so their loads overlap, against the system
+  `--page-system` names or the fleet view's first. A load where any read does not answer 200 is an
+  error, kept out of the times and counted in the p95 row and as `system_page_error_ratio` in the JSON,
+  0 when every load answered. The page's own test fails when the page gains or drops a read this list
+  lacks, so the load cannot drift from the page. The alarms, events and logs are not part of it: the
+  page reads them only when its activity tab is opened.
 - **retention drain**: how fast the retention pass deletes rows past their window. After the window
   the probe plants aged property rows (`--backlog`, each with a newer row of its own series, which
   the prune requires), restarts the server so its pass runs at start, and reads the count of rows
@@ -472,7 +576,509 @@ How to read each row:
   mostly drops whole daily partitions, which has no rate to read. The probe removes its rows when it
   is done, and `--backlog 0` skips it, leaving the server running as it was.
 
+#### Every request reached its endpoint and was answered
+
+Below the table, an **endpoints** block closes the loop: what every node sent, what each simulated
+endpoint saw arrive and how it answered, and what landed in the database, reconciled hop by hop.
+Each node is read through `GET /nodes/{name}/simulation/observation` at the window's start and at its
+end, and each read is a bracket of three (the simulator, the node, the simulator again; see
+[what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). The start's
+reads follow a read of the database's clock and the end's precede one, so the telemetry receipts
+that clock bounds fall inside the reads. Per protocol it prints:
+
+- **received**: the requests the node's simulators saw arrive over the window, beside how many
+  **poll targets** the window should have drawn on that protocol at least twice (each enabled poll
+  task's endpoint, at the interval its node actually runs it: a driver poll at its function's
+  schedule, a reachability probe at the node's probe interval), the connections accepted, and each
+  outcome. Many http requests read `refused`, which is not a loss: a digest-authenticated device
+  answers each first request 401 before the one that carries the credentials, as real gear does.
+- **service time**: the simulators' own time to answer, p50, p95 and p99, merged over the nodes.
+- **overlap-ratio**: the share of requests that found their face already serving one. A node sends a
+  face one request at a time, so anything above zero is a finding; the five worst faces since each
+  simulator started are named under the block.
+- **in flight high** and **arrival high**: the most requests a node's simulators held at once, per
+  protocol and over all of them, beside the node's dispatch gauges once a pool reports them.
+
+Then one line per gap, in the order a request travels:
+
+| Gap | Lost means | Masked by |
+| --- | --- | --- |
+| `connect-not-accepted` | a connection the node opened that no simulator accepted | connections still in the kernel's backlog at the end read |
+| `sent-not-received` | a request whose bytes left the node and never arrived | requests in flight at the node's end read |
+| `received-not-settled` | a request a simulator received and never settled | |
+| `answered-not-returned` | an answer a simulator gave that the node never got | answers in flight, answers late past the node's timeout (shown as `answered late`), and traffic on the protocol the node does not tally yet (#1661) |
+| `published-not-landed` | a batch the bus acknowledged with no receipt in the database | receipts landed in the 30 s before the window (the bus's acknowledgement wait), before the ingest lane drained past the start read (batches from before the window), or after its end |
+| `spool-dropped` | a batch the node's spool gave up on | |
+| `unhit-endpoint` | a poll target due at least twice whose device saw nothing on its protocol | devices past the simulator's sample of twenty, not checked against the targets (#1663) |
+
+Every figure is a lower bound: positive only where something was lost, with what could hide a loss
+printed beside it as `masked`, never folded into it. A clean run reads `0 lost` on every line.
+A loss is named per node under the totals, with the protocol and, for an unhit endpoint, the
+component. An icmp target reads `not observed by the sim`, since the kernel answers a ping. A node
+whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
+impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
+simulator that restarted inside the window reads `restarted`, since none of its figures compare.
+The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
+the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
+than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
+a lane still behind three minutes after a mark) the table ends with
+`endpoints not measured` and why, and the JSON carries it as `endpoints_not_measured`; every other
+figure is still reported.
+
+#### Reading the delivery table
+
+Below the endpoints block, the delivery table says how much telemetry the lab lost on the way in, as a
+**loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
+([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
+`node` is what the nodes collected and shipped, `push` what was pushed to the server (`POST
+/telemetry:push` and the webhook receivers). The scale lab's push lane comes from the outside actors
+its scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
+service a site, each pushing its four systems' bookings, and one meeting platform account a site,
+each posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
+beside the site's node. So every corporate lab reads push rows: metrics and properties from the
+bookings, properties and log lines from the reports. A report names the account's own demo rooms
+too, which no system binds, so the push lane's properties read some `unbound`, which is not loss.
+Anything else that pushes to the lab's server during the window, as
+`omniglass telemetry push` against it does, reads on the same lane. A healthy lab reads exactly 0
+for every kind on both:
+
+```
+delivery    lane  hop       in       out      loss     dedup  cause
+http        node  sim       540      540      0        -      -
+snmp        node  sim       310      310      0        -      -
+metric      node  schedule  4100     4100     0        0      -
+metric      node  node      1275     1275     0        0      -
+metric      node  ingest    1275     1275     0        0      -
+property    node  schedule  3020     3020     0        0      -
+property    node  node      166      166      0        0      -
+property    node  ingest    166      166      0        0      -
+event       node  node      0        0        -        0      -
+event       node  ingest    0        0        -        0      -
+log         node  node      0        0        -        0      -
+log         node  ingest    0        0        -        0      -
+pushes      push  publish   8        8        0        -      -
+metric      push  ingest    12       12       0        0      -
+property    push  ingest    24       24       0        0      -
+event       push  ingest    3        3        0        0      -
+end to end  node  metric 0  property 0  event -  log -
+publish     push  counts pushes, not items: refused-turn is a push answered 503 when its wait for the turn ran out; it minted nothing, so it is never missing at ingest
+```
+
+The node lane's rows read in the order the work crosses the hops, each kind's own in turn, and the
+push lane's follow, its publish row ahead of its ingest rows:
+
+- The **sim** rows come first, one per protocol the nodes tally (`http`, `snmp`), read from the same
+  marks as the endpoints block. They count **requests**, not items, since a simulator cannot know which
+  kinds an answer would have carried: **in** is every request the simulators settled on traffic the
+  nodes tally, **out** the replies that reached the node (`returned`). A refusal or error that came
+  back is returned: the device said no and the task reports it. The rest is loss, by cause:
+  `withheld` (the simulator kept the answer back, a wrong community or its own datagram loss),
+  `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
+  reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
+  node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
+  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
+  the window`, so a row never reads as every node's when it is not.
+  Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
+  of a `kind`, with these four outcomes.
+- The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
+  the runs due on the schedule that produce the kind and **out** the runs made, so its counts are
+  runs, not items, and its cause is `skipped`, a due passed over because the lane's last run was
+  still in flight or the pass came late. A healthy lab reads 0. The row comes before the kind's node
+  and ingest rows, and a kind no scheduled task produces (events and logs, today) has none:
+
+  ```
+  delivery    lane  hop       in       out      loss     dedup  cause
+  metric      node  schedule  4100     3690     0.1      0      skipped
+  metric      node  node      1275     1275     0        0      -
+  metric      node  ingest    1275     1275     0        0      -
+  ```
+
+  A skipped due made no item, so it never reaches the node or ingest rows: a lab whose devices answer
+  slower than their poll interval reads 0 at the node and at ingest and its loss here.
+- The **node** row is what the node minted against what its spool shipped (#1692). **in** is the
+  items the node minted in the window and the items it lost before minting them into a batch, **out**
+  the items it handed to the stream (`shipped`). Its causes are the node's own: `spool-overflow` (the
+  spool dropped its oldest batch at the count or byte cap, usually a bus outage outlasting the
+  spool), `spool-expired` (a batch aged out at 12 hours), `bus-refused` (the bus refused the batch for
+  good, too large or a bad subject), `self-log-overflow` (the node's self-log buffer dropped lines
+  before it could ship them) and `encode-failed`.
+- The **ingest** row is what was shipped against what the server accounted for. On the node lane its
+  **in** is exactly the node row's **out**; on the push lane it is the items the server minted as it
+  published each push (the batches' ledgers, plus the items of any batch that never landed), and it
+  is the push lane's only per-kind row: a push crosses no sim, schedule or node hop. **out** is the items
+  accounted for (`stored`; for properties `coalesced`, an unchanged value skipped on purpose; and
+  `unbound`, an identity no binding places, which the conduit's unbound inbox holds for the operator
+  to assign).
+- The **publish** row is the push lane's front door (#1746). Every push and webhook post waits for
+  the server's one publish turn, since the push lane publishes one batch at a time, and a wait past
+  5 seconds is refused: the pusher is answered `503` and the server mints nothing for it. The row
+  counts **pushes**, not items, since a refused push never says what it carried: **in** is every
+  push that waited for the turn, **out** those that took it (`turn-taken`), and the loss is
+  `refused-turn`. A healthy lab reads 0; a push lane that cannot keep up with its pushers reads its
+  loss here while its ingest rows still read 0, because a refused push left no hole in the ledger to
+  read as `missing`. A note under the table says so. The row is read from the server's own push lane
+  metrics ([below](#reading-the-push-lanes-turn)), not from receipts, so a lab with no pushers has no
+  publish row, and its window is the report windows that closed inside the measured one: it can lead
+  or trail the ingest rows by up to one report window (`collection.report_seconds`, a minute by
+  default). A push that took the turn and then failed to publish reads `turn-taken` here, and its items are
+  taken back off the ledger (the pusher was answered 503 and still holds them), so it reads on no
+  row below. Dedup reads `-`: a turn has no redelivery.
+
+A kind with nothing in reads `-`, never 0, and the push lane shows a kind only once its boot has
+carried one (the sample's push lane has pushed no log line).
+- **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
+  ratio, never in it, so a retry storm never moves the loss off 0.
+- **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
+  instance refused, a value invalid or empty, a group the gateway refused), `orphaned`,
+  `unidentified`, a cause the server Termed a whole batch for, or `missing`. A Termed batch reads
+  `refused-owner` (it asserted an owner on the node lane), `refused-task` (task rows outside its
+  groups), `refused-batch` (the gateway refused it whole), `refused-metadata` (its delivery metadata
+  was unreadable) or `abandoned` (its fifth delivery failed); a later copy of it that lands replaces
+  that reading with its own. An `unbound` identity is not loss: the operator has not assigned it,
+  and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
+  only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
+  outcome's count on every row, with the same keys for every kind.
+- **missing** is a batch that was shipped and never landed and left no receipt: a hole in a boot's
+  batch sequence its publisher did not account for, its items read from its neighbors' offsets. A
+  batch the node dropped leaves the same hole, but the batches after it name it, so it reads on the
+  node row under its cause and never as `missing`; a batch the server Terms whole, on either lane,
+  leaves a Term receipt and reads under its own cause. What is left cannot say why; the footer names
+  the lane and what a hole on it can be. On the node lane it reads `shipped by the node, never landed:
+  undecodable at ingest, or lost between the stream and the store`; on the push lane, `published by
+  the server, never landed: undecodable at ingest, or dropped by the stream before it was read`. A
+  push the stream refused is not one: the pusher was answered `503` and still holds its items, so
+  the server took them back off its ledger.
+- **end to end** is each kind's loss over every hop the node lane carries it across,
+  `1 - prod(1 - loss)`: a third lost at the node and nothing at ingest reads 0.3333 end to end, and in
+  the schedule example above metrics read 0.1, the schedule hop's. A hop with nothing in loses
+  nothing, so a schedule that skipped every due of a kind reads that kind's end to end as 1 though its
+  later rows read `-`. A kind with no ingest row (every boot unsettled) reads `-`: the schedule hop
+  alone does not stand for the end to end. The sim hop enters as one loss pooled over every
+  protocol's requests, composed into each kind with an ingest row: an approximation, since a lost
+  request carried some kinds and not others. With no sim rows it is the product of the kind's own
+  hops. The push lane's ingest rows are each their own end to end, and its publish row counts pushes,
+  which no kind's items compose with, so the line leaves the push lane out.
+- **unsettled** names a boot whose window's batches were not all known when `--settle-timeout`
+  ran out (no later batch said its publisher had cleared past them, or the stream had not answered
+  every batch published by then), with no ratio for it rather than a guess. A node boot reads `node <name>, boot <id>`;
+  the push lane's boot is the server process's, and reads `push lane, boot <id>`. The push lane
+  settles on the next push, so a lab whose pushers stopped before the window ended, or whose
+  server restarted after it, reads its push lane unsettled. The stream has answered them when the
+  telemetry consumer's ack floor, gauged by the server each report window, reaches the stream's last
+  sequence as read after the last of those batches was published: everything at or below the floor
+  landed or was dropped at the delivery bound, so the read settles under steady load, with the
+  consumer never empty. A note under the table gives the floor and the last sequence it had not
+  reached, or which gauge was never read, when the stream was the cause. At the platform's 60s report
+  window the settle can take four windows, so `--settle-timeout` defaults to 5 minutes.
+
+- **unshipped** names a node boot that will never settle because its node started again while its spool
+  still held batches: the spool is memory, so they went with the process. The boot is read as far as
+  it landed, and the line gives its last landed seq and when the next boot began:
+
+  ```
+  unshipped   node edge-1, boot 0193...: last seq 412 landed, boot 0193... began 2026-11-10T14:02:11Z; anything after 412 never shipped, uncounted
+  ```
+
+  Nothing that landed says how many items the dead boot minted after its last landed batch, so the
+  line names the tail without counting it; #1733 counts it on the node row.
+
+A refusal can be shown on purpose. The hidden `--induce-unregistered` brings a scale lab up with one
+simulated device answering a property key no driver registers: the seed registers the key, writes a
+copy of that device's driver whose extra poll emits it, attaches the copy, and unregisters the key
+again, so the device's tasks keep collecting a name the catalog no longer has. The property row then
+reads a loss above 0 with cause `refused-unregistered`, the metric rows still read 0, and the seed's
+summary names the device and the driver copy. It is off unless asked, and only a scale lab takes it:
+
+```
+./bin/omniglass lab run --scenario corporate --systems 30 --induce-unregistered
+```
+
+The same 23-hour window limit applies, since receipts are kept a day. A lab
+whose server predates the ledger reads `delivery not measured` with the reason, and every other figure
+is still reported. When the sim rows were read but the ingest hop was not, the table keeps the sim
+rows and ends with `ingest not measured` and the reason. When the closed loop was not read (the
+endpoints block reads `endpoints not measured`), the table has no sim rows, its end to end is the
+ingest hop alone, and it says so under the rows: `sim not measured` and the same reason.
+
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
+
+The [perf gate](#checking-against-the-baseline) reads this table as it prints it: every row with a
+loss above 0 fails the check, naming its kind, hop and cause; an unsettled boot fails it, by name; and
+a read that was not measured fails it with the reason. There is no tolerance, since a healthy lab reads
+exactly 0 by construction, and the gate never passes on a read it could not make.
+
+#### Reading the push lane's turn
+
+The publish row is the window's sum of four figures the server writes about its push lane every
+report window, on its own platform component beside its ingest lag (#1746). They are how to tell a
+push lane that is keeping up from one whose pushers queue behind each other:
+
+- **`push-lane-publish-count`**: the pushes and webhook posts that waited for the publish turn,
+  taken or refused.
+- **`push-lane-refusal-count`**: those refused because the wait passed 5 seconds, each answered
+  `503` with nothing minted. As a share of `push-lane-publish-count` it is the publish row's loss;
+  healthy is 0.
+- **`push-lane-turn-wait-p99`**, **`push-lane-turn-wait-max`**: how long a push waited for the
+  turn, in milliseconds, at the 99th percentile and at worst. A refused push counts its whole wait,
+  and so does a push whose pusher gave up first (its own timeout under 5 seconds): that wait is in
+  neither count above, since the push neither took the turn nor was refused, but it is queueing all
+  the same.
+  Healthy is a few milliseconds; a p99 that climbs toward 5,000 is the push lane about to refuse.
+  A corporate 3,000 lab pushes about 5 times a second and reads a p99 near 0.01 ms with no
+  refusals, the measurement the one publish turn stands on
+  ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
+
+Platform health shows all four on the server's [Ingest panel](/guides/operator/platform-health/#ingest),
+the refusals as a share of the publishes. The CLI reads the same panel:
+
+```bash
+omniglass view platform list | jq '.servers[].groups[] | select(.name == "ingest") | .figures[]
+  | select(.key | startswith("push-lane-")) | {key, value, observed_at}'
+```
+
+and on a scale lab, whose port is its own, the database reads every window of them:
+
+```bash
+docker compose -p omniglass-scale exec db psql -U omniglass -d omniglass -c "
+  select m.ts, mt.name, m.value from metric m
+    join metric_series s on s.id = m.series_id join metric_type mt on mt.id = s.metric_type_id
+  where mt.name like 'push-lane-%' and m.ts > now() - interval '15 minutes'
+  order by m.ts, mt.name"
+```
+
+Every corporate lab pushes, so every corporate lab writes them: a booking service and a meeting
+platform account at each site ([the manifest format](#the-manifest-format)'s `pushers:`), so the
+number of pushers grows with the sites. To read the turn at a size, run that size and measure it:
+
+```bash
+omniglass lab run --scenario corporate --systems 1000     # one terminal: the lab, until Ctrl-C
+omniglass lab measure                                      # another: measures the running lab
+make scale-measure SYSTEMS=1000                            # or bring one up, measure it, remove it
+```
+
+#### Checking against the baseline
+
+`omniglass lab perf` turns the measurement into a regression gate
+([ADR-1640](/architecture/decisions/#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)):
+it measures fresh throwaway labs of a named size and compares them with that size's committed baseline,
+so a change that makes the fleet costlier to run fails before it merges.
+
+```bash
+make perf-check SIZE=300                 # three labs at 300 systems against corporate-300.json
+make perf-check SIZE=1000                # three at 1000 against corporate-1000.json
+make perf-baseline SIZE=300              # three labs, then rewrite the 300 baseline from them
+./bin/omniglass lab perf check --size 300 --runs 1 --image omniglass:mine   # one lab, a private image
+```
+
+A size is a rung of the measuring ladder, named by its systems; where it runs is a fact of the host,
+which the baseline's fingerprint records, not of the name. A size fixes everything a run measures with, so two runs of it are comparable: the scenario and its
+systems, the warm-up, the window, the timed fleet view reads, no backlog and no system page clients. The
+window is a whole multiple of every poll interval the scenario's drivers and cadence declare, so each
+run counts the same whole rounds:
+
+<PerfGateFigures part="sizes" />
+
+Each figure is in one of three classes. **Exact** figures must be 0 whatever the baseline holds: a lost
+request, a redelivery, a dropped sample or a lost telemetry item is a bug, not a cost. **Host-independent** figures are counts
+(rows, bytes, samples), which gate on any host. **Host-dependent** figures are times and container
+usage, which gate only on the host the baseline was generated on:
+
+<PerfGateFigures />
+
+How to read the verdict table it prints, one row a figure:
+
+- **pass**: inside its tolerance, or past it by no more than the baseline's spread plus the fresh runs'
+  spread. A gated figure is the median of the runs, with the spread (highest less lowest) beside it.
+- **fail**: past its tolerance and past the combined spread. The check exits nonzero. Rows a minute and
+  samples a batch fail in either direction, since fewer rows means lost work; every other figure fails
+  only on the worse side.
+- **noisy**: the fresh runs spread wider than the tolerance, so they could not have seen a regression of
+  that size. It does not fail the check, and the table prints it first: run more labs, or run on a
+  quieter host.
+- **improved**: better than the baseline by more than its tolerance. It never fails; regenerate the
+  baseline so the gain is held.
+- **reported**: a host-dependent figure measured on a host other than the baseline's (another CPU, core
+  count or memory size). The figure is printed for the reader and gates nothing; the counted figures
+  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a test
+  VM of 8 cores and 16 GiB, for every rung) to gate them.
+
+The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one a kind a hop, named
+`delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
+`-` and is no figure). A sim hop row names its protocol in place of the kind (`delivery_loss/sim/snmp`),
+and a push-lane row names its lane first (`delivery_loss/push/ingest/metric`), so it is never folded
+into the node lane's row for the same hop and kind. The publish row counts pushes, so it names them in
+place of a kind: `delivery_loss/push/publish/pushes`. Over several runs the worst run is the
+figure, and its note says what was lost, where, and the largest outcome behind it, the same cause the
+table prints:
+
+```
+STATUS  FIGURE                          CLASS  BASELINE  OBSERVED  DELTA  SPREAD (BASE/RUNS)  TOLERANCE  NOTE
+fail    delivery_loss/ingest/property   exact  0         0.3       0.3    -                   0          property lost 3 of 10 at ingest, cause missing
+fail    delivery_unsettled_boots        exact  0         1         1      -                   0          no ratio read from node edge-hq boot 019a6c1e
+pass    delivery_loss/ingest/metric     exact  0         0         0      -                   0
+```
+
+`delivery_unsettled_boots` counts the boots no ratio was read from and names the first three, with the
+stream's backlog note when the stream was the cause. A run whose delivery read was not measured, or
+read no kind carrying items, fails as `delivery_loss` with the reason: a fleet that delivered nothing in
+the window is not a fleet that lost nothing.
+
+Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
+nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
+build places a different device set than the baseline's (the plan digest moved, so regenerate the
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+impaired, so an impaired gap can only mean a fault left on.
+
+**Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
+spread and values, the inputs and the host fingerprint, and refuses, naming each figure, when an exact
+figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance
+(a check could never gate it). Generate it on the host class it gates: every rung's baseline comes from
+a test VM of 8 cores and 16 GiB. A check anywhere else gates only the host-independent and exact
+figures. A PR that
+changes a baseline file says why in its body. `--append FILE` keeps each
+run's report as a line, so runs a baseline refused can be read again with `--samples FILE` instead of
+measured again; `--samples` also reads the last `--runs` (or `--last`) lines of a sampling run's series.
+
+The gate never runs in CI and is never a required check: a run takes a scale lab for the better part of
+an hour, and its times and usage gate only on the baseline's host class, which a GitHub runner is not
+([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
+on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
+
+### Sampling a scale lab over time
+
+One window says what a fleet costs now; whether growth, retention and vacuum keep up shows only over
+hours. `--every` samples the running lab on an interval instead, one compact JSON line a sample:
+
+```bash
+./bin/omniglass lab measure --every 10m --window 5m --append scale.jsonl --page-clients 4
+jq -r '[.seq, .ingest_lag_ms.p95, .system_page_ms.p95, .absolutes.dead_tuples.property] | @tsv' scale.jsonl
+```
+
+The lab is found, signed in to and warmed up once; then every `--every` one window is measured. Each
+line carries the one-shot report's fields at the same paths `--json` writes them, so a query written
+against one measurement reads every sample, plus `seq`, `at` (when the window closed) and
+`uptime_seconds` (how long the server had been running then, so a series whose uptime falls was
+measured across a restart). `--append` opens the file for append, creating it if missing, so a series
+stopped and started again continues the same file; without it the lines go to standard output.
+`--samples N` stops after N samples, and 0 samples until interrupted: the first Ctrl-C or SIGTERM lets
+the sample in flight finish and write its line. A sample that fails writes a line with its `error` and
+no figures, and the run goes on, so a gap in the series is visible rather than missing. Each sample
+also reads the endpoints block and the delivery table; the delivery read's `--settle-timeout` wait can
+run a sample past `--every`, and the next one then starts at once rather than skipping its slot.
+
+Sampling never restarts the server: it skips the retention probe, `--backlog` defaults to 0, and a
+`--backlog` you give is refused, as are `--systems` (sample a lab you brought up), an `--every`
+shorter than the `--window` it measures, and `--json`. The schedule's health on the nodes and command
+latency are not in a sample yet (#1625, #1626).
+
+### A soak run
+
+A soak run holds a kept scale lab up for days, at production cadence, under a service manager, with
+the sampler writing one line every interval: the evidence of whether growth, retention and vacuum
+keep up. It runs on a host of its own, so nothing else competes for the machine it measures.
+
+**Pin the build.** A soak measures one build. Build its image once and give it a tag of its own,
+named for the commit (`omniglass:soak-<shortsha>`), and run the binary built from the same commit:
+`--image` runs a server the binary does not check against itself, and a shared tag rebuilt mid-soak
+would measure two builds in one series.
+
+**The lab unit.** The service manager starts the lab, restarts it if it fails, and stops it with
+SIGTERM, which the lab treats as Ctrl-C: it removes its containers and network and keeps its volumes,
+so the restart picks up the same fleet and data. A systemd unit:
+
+```ini
+[Unit]
+Description=omniglass soak lab
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/omniglass lab run --scenario corporate --systems 3000 --cadence default --keep --image omniglass:soak-<shortsha>
+Restart=on-failure
+RestartSec=30
+# SIGTERM to the lab alone; it stops its containers and keeps its volumes.
+KillMode=mixed
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**The sampler unit.** The sampler runs beside the lab, bound to it, and appends to one series file,
+so a sampler restarted mid-soak continues the same series:
+
+```ini
+[Unit]
+Description=omniglass soak sampler
+After=omniglass-soak-lab.service
+BindsTo=omniglass-soak-lab.service
+
+[Service]
+ExecStart=/usr/local/bin/omniglass lab measure --every 15m --window 5m --append /var/lib/omniglass-soak/series.jsonl --page-clients 4
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=omniglass-soak-lab.service
+```
+
+A sample taken while the lab restarts writes its `error` line and the series goes on; the restart
+shows as `uptime_seconds` falling.
+
+**Retention inside the run.** A soak shorter than the retention windows never sees retention remove
+anything. Once the lab is up, shorten the metric window so the run crosses it: retention's
+`metric_days` on **Admin > Settings** ([how long data is kept](/guides/admin/#how-long-data-is-kept)),
+or over the API with a token of the lab's:
+
+```sh
+curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: Bearer $OMNIGLASS_TOKEN" \
+  -H 'Content-Type: application/merge-patch+json' -d '{"metric_days": 2}'
+```
+
+The setting lives in the kept database, so it survives the lab's restarts.
+
+**Reading the series.** Each line reads at the same paths as one measurement. One row a sample (a
+failed sample's `error` line skipped): when, the build, ingest lag p95, system page p95 (ms), database
+bytes, metric partitions and the server's memory (MiB):
+
+```bash
+jq -r 'select(.error == null) | [.at, .build, .ingest_lag_ms.p95, .system_page_ms.p95,
+  .absolutes.database_bytes, .absolutes.metric_partitions,
+  (.containers[] | select(.name == "server") | .working_set_mib)] | @tsv' series.jsonl
+```
+
+The first sample beside the last states the growth over the run:
+
+```bash
+jq -s 'map(select(.error == null)) | first, last | {at, build, lag_p95: .ingest_lag_ms.p95,
+  page_p95: .system_page_ms.p95, database_bytes: .absolutes.database_bytes,
+  metric_partitions: .absolutes.metric_partitions,
+  server_mib: (.containers[] | select(.name == "server") | .working_set_mib)}' series.jsonl
+```
+
+With the metric window at 2 days, retention drops its first partition on day 3, and from then the
+partition count should stop growing.
+
+**Upgrading mid-soak** keeps the data and the series: stop the sampler and the lab, install the new
+binary and its pinned image, point the lab unit at the new tag, and start both again. The kept fleet
+carries over (the seed migrates the database on every start), and the sampler appends to the same
+file, so the series goes on under a new `build`. To split it at upgrades, list the builds in order
+with how many samples each took:
+
+```bash
+jq -r 'select(.error == null) | .build' series.jsonl | uniq -c
+```
+
+A build whose scenario plan differs at the soak's size (its manifest or catalog changed) is refused by
+the kept check, and so is a rollback across a schema change, since migrations only move forward: both
+need one run with `--fresh`, which seeds the fleet over, so start a new series file with it.
+
+**Looking at it.** The lab publishes its console on the host's loopback only; reach it from your own
+machine through a tunnel, then open `http://127.0.0.1:8080/web`:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 <soak-host>
+```
 
 ### The manifest format
 
@@ -507,6 +1113,14 @@ archetypes:
     systems:
       huddle-room: 40
       mr65: 25
+pushers:                        # outside actors that report by pushing, placed at every site
+  - name: booking               # each placed one is <site>-booking-<k>
+    profile: booking-service    # a simulator profile with a push face
+    per_site: 1                 # how many each site has
+    systems: 4                  # how many of the site's systems each one pushes for
+  - name: ucc                   # each placed one is <site>-ucc-<k>
+    profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
+    per_site: 1                 # systems omitted: it speaks for every one of the site's systems
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
@@ -515,7 +1129,17 @@ the same planner: a role with a quorum of two takes two of its product, and a ch
 naming the roles of one alternate. Every product is a catalog product a simulator profile serves, so
 the lab can simulate every component it plans. Exactly one archetype is the headquarters, which takes
 no weight; every other archetype repeats and takes one. The site bounds must have a minimum of at least
-one and a maximum no lower than the minimum. The validator collects every problem at once and names
+one and a maximum no lower than the minimum. A pusher is declared like the devices are: its profile
+must have a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), and it needs
+at least one a site and at least one system to push for, since a pusher scoped to nothing could
+push nowhere; omit `systems` and it is scoped to every system of its site. The profile's face says
+which kind of actor it is. A push face makes a token pusher: a service account granted
+`telemetry:push` on its systems alone, whose token the lab mints on every run and hands only to the
+simulator that runs it, never the plan or a log. A webhook face (one naming the driver of its
+endpoint and the route that adds a room, [simulation](/architecture/simulation/#a-simulated-service-posts-from-the-start))
+makes a webhook sender: a component with an endpoint of that driver, a signing secret minted on
+every run and sealed in the server, and an identity binding per system on the driver's room
+identity, named for the system. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text

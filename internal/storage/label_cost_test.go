@@ -100,14 +100,13 @@ func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
 	}
 	large := measure(t, counter, recompute)
 
-	// Fourteen is calibration, not doctrine: the transaction pair, the advisory
+	// Twelve is calibration, not doctrine: the transaction pair, the advisory
 	// lock, the row scan, the placement batch, the global rule, one
 	// classification resolve per distinct product (each of which walks its
-	// component_type chain, two levels deeper since the OAVC tree, #802; the
-	// one-query collapse is #803), the batched UPDATE and the audit row. It is
-	// here so a change that keeps the read flat but doubles its constant is
-	// still visible.
-	assertFlatCost(t, small, large, 14)
+	// component_type chain in one statement however deep the tree), the batched
+	// UPDATE and the audit row. It is here so a change that keeps the read flat
+	// but doubles its constant is still visible.
+	assertFlatCost(t, small, large, 12)
 }
 
 // TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere: a rename of a room
@@ -216,7 +215,7 @@ func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
 		t.Errorf("a create into an empty room costs %d statements and into a room of twenty costs %d: the create is paying for its neighbours\n  empty: %q\n  busy:  %q",
 			first.n, twentyFirst.n, first.stmts, twentyFirst.stmts)
 	}
-	// Twenty-one, and every one of them named, because an unexplained ceiling is
+	// Nineteen, and every one of them named, because an unexplained ceiling is
 	// a number nobody dares lower: begin; resolve the system, the location and
 	// the product; the product's component_type and that type's chain walk; the
 	// name generator's advisory lock and its sibling-name scan; the insert; the
@@ -229,11 +228,7 @@ func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
 	// duplicated component_type walk is slice 2's, still removable and still
 	// not worth the coupling. A create that costs more than this is a round
 	// trip somebody should have to justify in a review.
-	// #802 raised this by two: the OAVC component_type tree is one to two
-	// levels deeper (leaf -> subcategory -> category root), and the type-facts
-	// walk still costs a statement per level. Collapsing the walk to one query
-	// is #803.
-	const ceiling = 21
+	const ceiling = 19
 	if twentyFirst.n > ceiling {
 		t.Errorf("a placed, system-bound, generated create costs %d statements, want at most %d\n  %q",
 			twentyFirst.n, ceiling, twentyFirst.stmts)

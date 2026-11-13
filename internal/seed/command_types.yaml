@@ -3,7 +3,11 @@
 # names one target arm, target_property_type or target_metric_type, never both (it
 # opens an intended value and settles when observed matches); a fire-and-forget
 # command has no target and just records the invocation. An unregistered or double
-# target fails the seed run naming the row.
+# target fails the seed run naming the row. A disruptive command (#1651) also
+# names quiet_seconds and hold_seconds, neither of them the settle window. A
+# power command (#1648) also names power_outlet_param, the param that carries
+# the outlet it switches: its hold set is what that outlet feeds, never the
+# PDU it is issued on.
 command_types:
   - name: set-input
     label: Set Input
@@ -16,8 +20,62 @@ command_types:
   - name: reboot
     label: Reboot
     description: >-
-      Tell a component to restart. A fire-and-forget command: it records the
-      invocation and a caused event, with no intended value to settle.
+      Tell a component to restart. A fire-and-forget command: it opens no
+      intended value, so its node's execution report settles or fails it, and it
+      times out when no report arrives within its delivery window. A disruptive
+      one: its delivery closes the gates of its hold set on that
+      node (the component's in-band endpoints and those of what it hosts), the
+      node runs nothing against them for the quiet period, then each reopens
+      on its own first up verdict, with the hold as the backstop for one that
+      never reads up.
+    settle_window_seconds: 0
+    disruptive: true
+    quiet_seconds: 15
+    hold_seconds: 300
+  # A PDU's outlet switching (#1653), issued on the PDU with the outlet as a
+  # param. Settling against the per-outlet state waits on one outlet-state
+  # property with the outlet as its instance (#1252); the next status poll
+  # reads the new state.
+  - name: outlet-off
+    label: Outlet Off
+    description: >-
+      Switch one outlet of a PDU off. A fire-and-forget command and a power
+      command: its delivery closes the gates of what that outlet feeds on the
+      node (every endpoint of a component with a power dependency on the
+      outlet, its out-of-band ones included, and the in-band endpoints of what
+      those host), never the PDU's own, so the node sends nothing to a
+      component while its power is cut. Each reopens on its own first up
+      verdict after the quiet period, with the hold as the backstop for one
+      that stays dark.
+    params_schema:
+      type: object
+      required: [outlet]
+      properties:
+        outlet:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: The outlet to switch, numbered from 1 as the PDU numbers it.
+    settle_window_seconds: 0
+    disruptive: true
+    quiet_seconds: 15
+    hold_seconds: 300
+    power_outlet_param: outlet
+  - name: outlet-on
+    label: Outlet On
+    description: >-
+      Switch one outlet of a PDU on. A fire-and-forget command that disrupts
+      nothing: restoring power holds no gate, and what the outlet feeds reads
+      up again on its own probes as it boots.
+    params_schema:
+      type: object
+      required: [outlet]
+      properties:
+        outlet:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: The outlet to switch, numbered from 1 as the PDU numbers it.
     settle_window_seconds: 0
   # The http drivers' actuations (#902).
   - name: set-volume
