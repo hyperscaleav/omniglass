@@ -18,10 +18,15 @@ import (
 // the order loadByRef's ORDER BY resolved them. Through scopedByNameInScope
 // (the path a plain GET takes) Candidates never names a row the caller could
 // not otherwise read: the id list is built AFTER the scope filter, not before.
+//
+// Addresses is each candidate's dotted address, index for index with Candidates,
+// the spelling that resolves on the same route (#1134). It is set only where the
+// resolver could render them (resolveRef); a redacted error carries neither.
 type ErrAmbiguousName struct {
 	Kind       string
 	Ref        string
 	Candidates []string
+	Addresses  []string
 }
 
 func (e *ErrAmbiguousName) Error() string {
@@ -562,7 +567,19 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 	if policy == refPolicyForbid && len(inScope) == 0 {
 		return nil, cfg.forbidden
 	}
-	return resolveMatches(cfg, ref, inScope)
+	got, err := resolveMatches(cfg, ref, inScope)
+	var ambig *ErrAmbiguousName
+	if errors.As(err, &ambig) && len(ambig.Candidates) > 0 {
+		addrs, aerr := addressesOf(ctx, q, cfg.table, ambig.Candidates)
+		if aerr != nil {
+			return nil, aerr
+		}
+		ambig.Addresses = make([]string, len(ambig.Candidates))
+		for i, id := range ambig.Candidates {
+			ambig.Addresses[i] = addrs[id]
+		}
+	}
+	return got, err
 }
 
 // scopedByName resolves an entity by REFERENCE, which is either its uuid or
