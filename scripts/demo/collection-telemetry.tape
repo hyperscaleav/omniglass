@@ -2,8 +2,9 @@
 #
 # Beside what a driver reads from the device, every endpoint carries data about its own collection,
 # built in and on by default: once a report window (collection.report_seconds, a minute), the mean
-# time of its polls, the messages its listeners claimed, and for a webhook endpoint the posts the
-# server accepted and refused. A device that only pushes still has telemetry of its own (#1369).
+# time of its polls and the CPU they cost the node (#1870), the messages its listeners claimed, and
+# for a webhook endpoint the posts the server accepted and refused. A device that only pushes still
+# has telemetry of its own (#1369).
 
 Type "# The report window, a platform setting: a minute by default"
 Enter
@@ -32,7 +33,7 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# Its endpoint's account of itself this window: mean poll time (ms), and the push its listener claimed"
+Type "# Its endpoint's account of itself this window: mean poll time and CPU time (ms), and the push its listener claimed"
 Enter
 Wait
 Type `omniglass component metric list "$bar" | jq -c '.metrics[] | select(.metric_type_name | test("^(poll|push)-")) | {metric: .metric_type_name, endpoint: .instance, value: ((.value * 10 | round) / 10)}'`
