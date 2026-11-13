@@ -48,6 +48,16 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
   is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **Lists render in server order; the SQL rule is the ordering primitive.** A registry list the
+  API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
+  otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
+  only when the operator clicks a column header, and no page or picker re-sorts a served list.
+  A new registry list picks the order up by doing nothing. `byLabel` (`lib/entities.ts`) is the
+  same rule for a list the client composes itself, where no query ordered it, and its doc comment
+  names the call sites that remain. The two halves are held together by one committed fixture
+  (`web/src/lib/label_order.fixture.json`): a storage test orders it through the real query, a web
+  test through `byLabel`, and both assert the same sequence. Ordering by the *rendered* label
+  (falling back to the name for an unlabelled row) is a separate open decision.
 - **The fleet is an outline, not a list.** Explore renders `components/Outline.tsx`, an ARIA
   tree (roving tabindex, arrows, `*`, `+`) over the pure model in `lib/outline.ts`. Its rows
   iterate stable string keys, so a rebuild (a toggle, a health read arriving) keeps each row's

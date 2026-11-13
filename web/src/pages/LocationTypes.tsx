@@ -24,7 +24,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { nameStemError } from "../lib/validate";
 import { registryLock, registryOrigin } from "../lib/catalog";
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -92,9 +92,8 @@ export default function LocationTypes() {
   const me = useMe();
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
-  // Sorted alphabetically by label then name.
-  const rows = () =>
-    [...(types.data ?? [])].sort(byLabel);
+  // The server's order: by label, unlabelled last, then name (ListLocationTypes).
+  const rows = () => types.data ?? [];
 
   const canCreate = () => can(me.data, "location_type", "create");
 
