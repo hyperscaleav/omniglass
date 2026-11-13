@@ -879,7 +879,7 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -887,12 +887,13 @@ Patches a custom command type's label, description, params schema, settle window
 | `--disruptive` | bool | `false` | Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row |
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window |
 | `--label` | string | (none) | A human label |
-| `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it |
 | `--power-outlet-param` | string | (none) | The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row |
 | `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
 | `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -2615,13 +2616,14 @@ Update an event type
 omniglass event-type update <name> [flags]
 ```
 
-Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
 | `--label` | string | (none) | A human label |
-| `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -3676,14 +3678,15 @@ Update a metric type
 omniglass metric-type update <name> [flags]
 ```
 
-Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the series measures |
 | `--label` | string | (none) | A human label |
-| `--precision` | int | `0` | Decimal places a rendered value keeps |
+| `--precision` | int | `0` | Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset |
 | `--unit` | string | (none) | The display unit of the series |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -5253,13 +5256,14 @@ Update a property
 omniglass property-type update <name> [flags]
 ```
 
-Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
+Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the property means |
 | `--label` | string | (none) | A human label |
-| `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
+| `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it |
 
 Example:
 
@@ -6152,13 +6156,13 @@ Update a standard
 omniglass standard update <id> [flags]
 ```
 
-Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
+Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | A new operator-facing label |
 | `--map` | string | (none) | The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair |
-| `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid |
+| `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard |
 
 Example:
 
