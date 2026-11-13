@@ -898,7 +898,15 @@ func checkCalcPropertyValue(ctx context.Context, tx pgx.Tx, r CalcRule, v any) e
 	if err := tx.QueryRow(ctx, `select data_type, validation from property_type where id = $1::uuid`, r.outputID).Scan(&dataType, &validation); err != nil {
 		return fmt.Errorf("storage: calc output %s data type: %w", r.OutputKey, err)
 	}
-	raw, err := json.Marshal(v)
+	// A json property holds the document the formatted text spells, as ingest
+	// validates it; string and bool hold the value itself.
+	var raw json.RawMessage
+	var err error
+	if dataType == "json" {
+		raw = json.RawMessage(rules.FormatCalcValue(v))
+	} else {
+		raw, err = json.Marshal(v)
+	}
 	if err == nil {
 		err = key.ValidateValue(dataType, raw, validation)
 	}

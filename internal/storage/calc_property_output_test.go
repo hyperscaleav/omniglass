@@ -75,6 +75,9 @@ func TestCalcPropertyOutputPassesTheValueCheck(t *testing.T) {
 		name, output, dataType, validation, input, wantSample, wantErr string
 	}{
 		{"json schema refuses text", "seat-map", "json", `{"type":"object"}`, "hdmi1", "", "seat-map"},
+		{"json schema holds object text", "seat-map", "json", `{"type":"object"}`, `{"a":1}`, `{"a":1}`, ""},
+		{"json schema refuses wrong document", "seat-map", "json", `{"type":"object"}`, `[1]`, "", "seat-map"},
+		{"json without schema refuses non-json text", "seat-map", "json", "", "hdmi1", "", "seat-map"},
 		{"enum refuses outside", "input-mode", "string", `{"enum":["hdmi1","hdmi2"]}`, "usb", "", "input-mode"},
 		{"enum holds inside", "input-mode", "string", `{"enum":["hdmi1","hdmi2"]}`, "hdmi2", "hdmi2", ""},
 		{"pattern refuses", "room-code", "string", `{"pattern":"^R[0-9]+$"}`, "lobby", "", "room-code"},

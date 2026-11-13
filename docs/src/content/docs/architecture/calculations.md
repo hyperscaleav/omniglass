@@ -174,7 +174,8 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   marked in turn. An unchanged result writes no row, on either lane, so storage grows only with change.
 - **The value check.** A property output passes the check ingest applies to the same key
   (`key.ValidateValue` against the property's data type and its validation, so an enum, a pattern or a
-  JSON schema holds for a calculated value as for a pushed one). A result the property cannot hold is
+  JSON schema holds for a calculated value as for a pushed one; a `json` property reads the result text as the JSON document, so text that is
+  not valid JSON is refused). A result the property cannot hold is
   not a database fault and is not retried: nothing is written, the mark is not deferred, and the rule's
   last outcome on the owner (`calc_rule_state.error`, shown in the blade's State) names the output key,
   the value and the validator's reason. The next input change recomputes it. The metric lane needs no
