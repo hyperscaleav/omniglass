@@ -143,6 +143,12 @@ person:
   second audit row, the same shape as a re-raise of an open condition returning the existing
   incident.
 
+The acknowledgement is readable wherever an alarm is read as a cause. A system's
+[health report](/architecture/health/) carries `acknowledged`, `acknowledged_at` and `acknowledged_by` on
+each role alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
+causing alarm in place, for an operator holding `alarm:acknowledge`, without opening each affected
+component (#990). It calls the same verb above; the strip refreshes with the report.
+
 **Un-acknowledging is not a verb.** If it turns out to matter, it is a second verb and a second
 decision, not a nullable field somebody flips
 ([#728](https://github.com/hyperscaleav/omniglass/issues/728)).

@@ -8400,6 +8400,15 @@ export interface components {
             name: string;
         };
         HealthAlarmBody: {
+            /** @description Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised */
+            acknowledged: boolean;
+            /**
+             * Format: date-time
+             * @description When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+             */
+            acknowledged_at?: string;
+            /** @description Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+            acknowledged_by?: string;
             /** @description The component the alarm is on, by name */
             component: string;
             /** @description The component's uuid */

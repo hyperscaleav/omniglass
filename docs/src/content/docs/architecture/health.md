@@ -286,6 +286,12 @@ room cannot be made to look healthy by somebody looking at it
 verdict answers "is this component out", which is a question about the condition; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
+The health report carries the acknowledgement anyway. Each alarm under `roles[].alarms[]` has
+`acknowledged`, `acknowledged_at` and `acknowledged_by`, the same fields and rules as the component's
+alarm list, so a reader of the report sees which causing alarms somebody already looked at. They
+annotate the alarm and never feed the verdict. The system page's Why strip reads them to show who
+acknowledged and when, and to offer **Acknowledge** on the rest (#990).
+
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, one at or above `high`
 one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
 verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
