@@ -155,6 +155,9 @@ func (p *PG) CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanS
 
 func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan Plan, sc PlanScopes) (*Planned, error) {
 	out := &Planned{}
+	// Health is recomputed once, after the last piece, over everything the
+	// plan staffed (#915): see healthDeferral.
+	deferred := newHealthDeferral()
 	for _, f := range plan.Standards {
 		var exists bool
 		if err := tx.QueryRow(ctx, `select exists (select 1 from standard_in_effect() standard where name = $1)`, f.Name).Scan(&exists); err != nil {
@@ -210,7 +213,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 			return nil, &PlanError{Stage: "system", Err: err}
 		}
 		spec.LocationName = loc
-		sys, err := p.createSystemTx(ctx, tx, actorID, spec, sc.SystemCreate, sc.LocationRead)
+		sys, err := p.createSystemTx(ctx, tx, actorID, spec, sc.SystemCreate, sc.LocationRead, deferred)
 		if err != nil {
 			return nil, &PlanError{Stage: "system", Err: err}
 		}
@@ -223,7 +226,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 				return nil, err
 			}
 			if pc.Role != "" {
-				if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, pc.Role, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate); err != nil {
+				if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, pc.Role, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate, deferred); err != nil {
 					return nil, &PlanError{Stage: "role", Role: pc.Role, Err: err}
 				}
 			}
@@ -248,6 +251,9 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 			return nil, err
 		}
 		out.Components = append(out.Components, c)
+	}
+	if err := deferred.flush(ctx, p, tx); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
