@@ -1,4 +1,4 @@
-## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077, the refused dials' by #1089; open: a simulated face restarted on its port at a shared address, #1116; watch for regressions)
+## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077, the refused dials' by #1089, the simulated faces restarted on claimed addresses by #1116; watch for regressions)
 
 - **Cue:** a test or fixture that serves on a literal address and port (a simulated component's face
   at `127.x.y.z:20023`, a `StartTCPSession(51325)`, a port lifted by a fixed offset); a "fresh"
