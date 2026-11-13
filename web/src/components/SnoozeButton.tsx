@@ -8,7 +8,13 @@ import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
-type Snoozable = { id: string; snoozed_until?: string; snoozed_by?: string };
+type Snoozable = { id: string; message?: string; snoozed_until?: string; snoozed_by?: string };
+
+// A control's accessible name (#1404): its visible word, then the alarm it acts
+// on, so a page of alarms offers "Snooze No route to host" and "Snooze Touch
+// input lost" rather than the same plain word per row. The visible word leads,
+// so the name still contains the label a sighted reader sees.
+const acting = (verb: string, alarm: Snoozable) => (alarm.message ? `${verb} ${alarm.message}` : verb);
 
 // Which control's duration menu is open, and the last error of each, held
 // outside the row: an alarm list that polls hands its rows new objects, so a
@@ -96,7 +102,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
       <Show
         when={!props.alarm.snoozed_until}
         fallback={
-          <Button size="xs" intent="quiet" loading={busy()} title={err() ?? "End the snooze now. If the condition is still raised, people are told again."}
+          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={err() ?? "End the snooze now. If the condition is still raised, people are told again."}
             onClick={() => void run(() => unsnoozeAlarm(props.component, props.alarm.id))}>
             Unsnooze
           </Button>
@@ -106,7 +112,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
           }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" title={err() ?? SNOOZE_TIP} disabled={busy()}>
+          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
           </Popover.Trigger>
