@@ -152,8 +152,11 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   holds one of its inputs, so a rule over stable values computes at once and an edit recomputes.
   Changing a component's product does the same for the component rules whose type selection it moves:
   a rule that now selects it is marked when it holds one of the rule's inputs, and a rule that no longer
-  does drops its mark and state there. A component staffing a system role cannot be deleted, so a
-  delete never leaves a system rule computing over a member that is gone.
+  does drops its mark and state there. Reclassifying a product (changing its component type) marks the
+  type-selecting rules on every component of the product in one statement, and the serve settles each:
+  it computes a rule a component came into and drops the state of one it left. A component staffing a
+  system role cannot be deleted, so a delete never leaves a system rule computing over a member that is
+  gone.
 - **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a
   10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
   queue and never compute a mark twice; a mark is deleted only by the transaction that computes it, so a

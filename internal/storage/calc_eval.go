@@ -1096,9 +1096,7 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 // that no longer selects it drops its mark and state there. Selection is the
 // event rules' component matcher, the one the serve rechecks by.
 func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID string) error {
-	rows, err := tx.Query(ctx, `select r.id::text, r.selector, exists (select 1 from calc_rule_input i where i.rule_id = r.id and (
-			`+metricHeldSQL("$1::uuid", "i.metric_type_id")+`
-			or exists (select 1 from property x where x.component_id = $1::uuid and x.property_type_id = i.property_type_id)))
+	rows, err := tx.Query(ctx, `select r.id::text, r.selector, `+calcInputHeldSQL("r.id", "$1::uuid")+`
 		from calc_rule r where r.enabled and r.owner_kind = 'component' order by r.id`, componentID)
 	if err != nil {
 		return fmt.Errorf("storage: find component calc rules: %w", err)
@@ -1164,6 +1162,36 @@ func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID 
 	if _, err := tx.Exec(ctx, `delete from calc_rule_state where component_id = $2::uuid and rule_id = any($1::uuid[])`,
 		dropped, componentID); err != nil {
 		return fmt.Errorf("storage: drop deselected component calc state: %w", err)
+	}
+	return nil
+}
+
+// calcInputHeldSQL is the predicate that a component holds a stored value of
+// one of a calc rule's inputs, the condition a rule marks a component by:
+// rule and component are SQL expressions for their ids.
+func calcInputHeldSQL(rule, component string) string {
+	return `exists (select 1 from calc_rule_input i where i.rule_id = ` + rule + ` and (
+			` + metricHeldSQL(component, "i.metric_type_id") + `
+			or exists (select 1 from property x where x.component_id = ` + component + ` and x.property_type_id = i.property_type_id)))`
+}
+
+// markProductCalcRules is markComponentCalcRules for every component of a
+// product whose component_type changed (#1030), in one statement: every
+// enabled component rule that selects by type is marked on each of the
+// product's components holding a value of one of its inputs or a state row
+// of its own. Selection is not judged here: the serve rechecks it, computing
+// a rule the component came into and dropping the state of one it left, so a
+// product with thousands of components is one round trip.
+func markProductCalcRules(ctx context.Context, tx pgx.Tx, productID string) error {
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+		select r.id, 'component', c.id from calc_rule r join component c on c.product_id = $1::uuid
+		where r.enabled and r.owner_kind = 'component'
+			and jsonb_array_length(coalesce(r.selector->'component_types', '[]'::jsonb)) > 0
+			and (`+calcInputHeldSQL("r.id", "c.id")+`
+				or exists (select 1 from calc_rule_state st where st.rule_id = r.id and st.component_id = c.id))
+		order by r.id, c.id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, productID); err != nil {
+		return fmt.Errorf("storage: mark product calc rules: %w", err)
 	}
 	return nil
 }
