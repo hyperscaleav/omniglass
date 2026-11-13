@@ -146,7 +146,7 @@ type WorklistReply struct {
 	ConfigGeneration int64
 	// ReportSeconds is the platform's collection report window (#1369,
 	// collection.report_seconds): how long each endpoint's collection
-	// telemetry covers. Zero (an older server) leaves the node's own.
+	// telemetry covers. Zero leaves the node's own.
 	ReportSeconds int
 }
 

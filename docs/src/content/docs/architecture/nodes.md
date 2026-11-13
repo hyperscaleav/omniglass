@@ -153,7 +153,7 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   fields (params, ladder, learned pin, last rejection, fingerprint) ride once however many tasks
   run over it, and the task specs, session blocks and credentials tasks share ride once for the
   reply, in dictionaries a task names by index. The node reads back the same tasks; a task naming
-  an entry the reply lacks fails the whole pull
+  an entry the reply lacks, or a reply with no endpoints list, fails the whole pull
   ([ADR-1583](/architecture/decisions/#adr-1583-a-nodes-worklist-travels-grouped-by-endpoint)).
 - **A large reply is compressed.** A reply past 64 KB is gzipped and marked
   `Content-Encoding: gzip`, and the node inflates it. The headquarters node of the 3,000-system

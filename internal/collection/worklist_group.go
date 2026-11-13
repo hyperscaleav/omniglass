@@ -60,36 +60,48 @@ type taskWire struct {
 	Secrets int    `json:"secrets,omitempty"`
 }
 
+// endpointFieldsOf is a task's endpoint fields, an empty list or params read
+// as none: both leave the wire alike, so they must not split a group.
 func endpointFieldsOf(t TaskSpec) endpointFields {
-	return endpointFields{ID: t.EndpointID, Name: t.EndpointName, Transport: t.Transport, Params: t.EndpointParams,
+	f := endpointFields{ID: t.EndpointID, Name: t.EndpointName, Transport: t.Transport, Params: t.EndpointParams,
 		SessionRetry: t.SessionRetry, HostKey: t.HostKey, CertificatePin: t.CertificatePin, Fingerprint: t.Fingerprint,
 		Rejection: t.Rejection, Ladder: t.Ladder, ComponentID: t.ComponentID, PathUpstreams: t.PathUpstreams}
+	if len(f.Params) == 0 {
+		f.Params = nil
+	}
+	if len(f.PathUpstreams) == 0 {
+		f.PathUpstreams = nil
+	}
+	return f
 }
 
-// dictionary numbers distinct values from 1 by their encoding, so equal
-// values built apart (a credential unsealed once per task) share an entry.
+// dictionary numbers distinct values from 1 by a key the caller derives from
+// the value, so equal values built apart (a credential unsealed once per task)
+// share an entry.
 type dictionary[T any] struct {
 	at     map[string]int
 	values []T
 }
 
-func (d *dictionary[T]) ref(v T, empty bool) (int, error) {
-	if empty {
-		return 0, nil
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return 0, err
-	}
-	if i, ok := d.at[string(b)]; ok {
-		return i, nil
+func (d *dictionary[T]) ref(key string, v T) int {
+	if i, ok := d.at[key]; ok {
+		return i
 	}
 	if d.at == nil {
 		d.at = map[string]int{}
 	}
 	d.values = append(d.values, v)
-	d.at[string(b)] = len(d.values)
-	return len(d.values), nil
+	d.at[key] = len(d.values)
+	return len(d.values)
+}
+
+// refEncoded names v by its encoding, for a value with no bytes of its own.
+func refEncoded[T any](d *dictionary[T], v T) (int, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return 0, err
+	}
+	return d.ref(string(b), v), nil
 }
 
 // groupWorklist is the reply's wire form. Tasks of one endpoint share a group
@@ -116,15 +128,19 @@ func groupWorklist(w WorklistReply) (worklistWire, error) {
 			groupsOf[t.EndpointID] = append(groupsOf[t.EndpointID], g)
 		}
 		tw := taskWire{ID: t.ID, Mode: t.Mode}
+		if len(t.Spec) > 0 {
+			tw.Spec = specs.ref(string(t.Spec), t.Spec)
+		}
 		var err error
-		if tw.Spec, err = specs.ref(t.Spec, len(t.Spec) == 0); err != nil {
-			return worklistWire{}, fmt.Errorf("collection: task %s spec: %w", t.ID, err)
+		if t.Session != nil {
+			if tw.Session, err = refEncoded(&sessions, t.Session); err != nil {
+				return worklistWire{}, fmt.Errorf("collection: task %s session: %w", t.ID, err)
+			}
 		}
-		if tw.Session, err = sessions.ref(t.Session, t.Session == nil); err != nil {
-			return worklistWire{}, fmt.Errorf("collection: task %s session: %w", t.ID, err)
-		}
-		if tw.Secrets, err = secrets.ref(t.Secrets, t.Secrets == nil); err != nil {
-			return worklistWire{}, fmt.Errorf("collection: task %s secrets: %w", t.ID, err)
+		if t.Secrets != nil {
+			if tw.Secrets, err = refEncoded(&secrets, t.Secrets); err != nil {
+				return worklistWire{}, fmt.Errorf("collection: task %s secrets: %w", t.ID, err)
+			}
 		}
 		out.Endpoints[g].Tasks = append(out.Endpoints[g].Tasks, tw)
 	}
@@ -146,8 +162,16 @@ func entry[T any](values []T, ref int, what, task string) (T, error) {
 }
 
 // ungroupWorklist is the reply a wire form carries, its tasks in id order
-// (the order the server builds them in).
+// (the order the server builds them in). Tasks of one endpoint share its
+// params, ladder and upstreams, and tasks naming one dictionary entry share
+// it: the node reads a task, never writes one.
 func ungroupWorklist(in worklistWire) (WorklistReply, error) {
+	if in.Endpoints == nil {
+		// A reply with no endpoints list is not this wire (a flat reply from a
+		// server built before #1583 reads that way). Decoding it as no tasks
+		// would tear down every session; failing the pull keeps the last one.
+		return WorklistReply{}, fmt.Errorf("collection: worklist reply carries no endpoints list")
+	}
 	out := WorklistReply{ConfigGeneration: in.ConfigGeneration, ReportSeconds: in.ReportSeconds}
 	for _, ep := range in.Endpoints {
 		for _, tw := range ep.Tasks {

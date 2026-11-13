@@ -36,8 +36,11 @@ refs: [1583, 1577, 1872, 1623]
   generator for collection types, and the wire has one producer and one consumer compiled from the
   same type, so the Go type is the single source; a generated schema would describe a contract no
   third party reads.
-- **Consequences:** a node and a server of different builds before this change cannot read each
-  other's worklist. With no deployment outside dev and the lab, no compatibility path is kept. The
+- **Consequences:** a node built after this change refuses a reply with no `endpoints` list (a flat
+  reply from an older server), so the pull fails and the node keeps its last worklist. A node built
+  before it reads a newer server's reply as no tasks and drops its sessions; server and node ship as
+  one binary and upgrade together, and with no deployment outside dev and the lab, no versioned
+  subject or compatibility path is kept. The
   learned pin and the last rejection now cost their bytes once per endpoint rather than once per
   task, so a node learning its pins grows its reply by about 31 KB at headquarters, not 343 KB.
 - **Not chosen:**
