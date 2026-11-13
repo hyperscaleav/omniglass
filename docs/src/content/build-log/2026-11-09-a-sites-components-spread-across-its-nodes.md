@@ -9,6 +9,8 @@ records the decision. Nothing in it is built yet.
 - **Unit and pool.** The component is the unit (all its node-run endpoints on one node; a
   server-hosted push endpoint stays outside it). The pool is the
   nodes at the component's location or its nearest ancestor, later a cascaded property.
+- **Reach and pushes.** Every node in a pool must reach every device in it. Shared-port pushes
+  (syslog, traps) land on any node in the pool, claimed by source address; a VIP is the operator's.
 - **Pins and balancing.** An endpoint's `node_name` stays the operator's pin. A server reconcile
   balances unpinned components on expected cost (runs a second, a listen task at a flagged
   weight), and it is sticky.

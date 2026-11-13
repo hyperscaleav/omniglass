@@ -321,6 +321,22 @@ resolved through the cascade can widen, narrow or name a pool at any level, with
 as its default. An endpoint's explicit `node_name` stays the **pin**: it pins the whole component,
 and assignment never moves it.
 
+**Every node in a pool reaches every device in it.** This is the pool's one prerequisite: any node
+may be assigned any component in its pool, so each must be able to dial each component's address.
+Assignment does not check it; the operator builds the pool so it holds.
+
+**Pushes land on any node in the pool.** A device's pushes over a shared port (syslog, SNMP traps,
+tcp and udp push; #1148, #1149, #1150) do not follow its component's assignment. Every node in the
+pool runs the pool's push listeners and claims each line by its source address, so each node's
+worklist carries the pool's push claims beside its assigned tasks, and a device may send to any of
+them. A move or a lost node then strands no sender aimed at a live peer. A sender aimed at a node
+that is down loses its pushes until it is re-pointed: failover for a single push target is a
+virtual IP the operator runs across the pool's nodes, not something omniglass manages. A shared-port
+listener is not part of the component's unit and adds nothing to its cost; a listener on a session
+a node holds (a line it dialed out) stays with the component's assigned node. Taking these pushes at
+the server instead (#1158) is the likely default for most fleets, unencrypted as much of that
+traffic is; a pool's nodes are the option for a sender that should not cross a WAN.
+
 **Capacity: expected cost balances, measured headroom guards.** The server balances on a
 component's **expected cost**, the sum over its tasks of 1 / interval (runs a second). A poll
 counts at its own interval and a reachability probe at the default probe interval (#1634). A listen
