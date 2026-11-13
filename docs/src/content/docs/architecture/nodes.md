@@ -149,10 +149,17 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   with an `Omniglass-Error` header naming the reason and no body. The node treats it as a failed
   pull, so a database blip never reaches the node as a short worklist (which would tear down the
   sessions of the tasks it dropped).
+- **A reply carries each endpoint once.** Tasks travel grouped under their endpoint, whose
+  fields (params, ladder, learned pin, last rejection, fingerprint) ride once however many tasks
+  run over it, and the task specs, session blocks and credentials tasks share ride once for the
+  reply, in dictionaries a task names by index. The node reads back the same tasks; a task naming
+  an entry the reply lacks fails the whole pull
+  ([ADR-1583](/architecture/decisions/#adr-1583-a-nodes-worklist-travels-grouped-by-endpoint)).
 - **A large reply is compressed.** A reply past 64 KB is gzipped and marked
-  `Content-Encoding: gzip`, and the node inflates it. The headquarters node of the 1,000-system
-  corporate lab (4,434 tasks) is 3.3 MB of JSON and about 463 KB on the wire, against the bus's
-  1 MB limit.
+  `Content-Encoding: gzip`, and the node inflates it. The headquarters node of the 3,000-system
+  corporate lab (8,850 tasks, every https pin learned) is 1.5 MB of JSON and about 463 KB on the
+  wire, against the bus's 1 MB limit; repeated on every task, as before #1583, it was 6.9 MB and
+  1.17 MB, over it.
 - **The server answers pulls from a bounded pool.** The node states how long it will wait in an
   `Omniglass-Timeout` header (a duration, so the clocks need not agree), and the server's deadline
   for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
