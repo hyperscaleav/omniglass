@@ -17,17 +17,18 @@ import (
 )
 
 // wantStatementsPerReportBatch is every statement one endpoint's collection
-// report batch costs (#1369): the window's poll duration and pushed message
-// count, metric lane only. Exact, as the standard batch's is.
+// report batch costs (#1369): the window's poll duration, poll CPU time
+// (#1870) and pushed message count, metric lane only. Exact, as the standard batch's is.
 const wantStatementsPerReportBatch = 13
 
 // reportBatch is one endpoint's collection report for a window, as the node
 // publishes it, its one task group (#1582): an endpoint that polls and holds a listening session, at
-// its healthiest, two rows (a failure or an unclaimed count adds one each).
+// its healthiest, three rows (a failure or an unclaimed count adds one each).
 func reportBatch(task footprint.Task, window int, end time.Time) *ogv1.TelemetryBatch {
 	ts := timestamppb.New(end)
 	return &ogv1.TelemetryBatch{NodeId: task.Node, Groups: []*ogv1.TaskGroup{{TaskId: task.ID, Ts: ts, Metrics: []*ogv1.MetricSample{
 		{Name: probekeys.PollDuration, Value: 40 + float64(window%7), Ts: ts},
+		{Name: probekeys.PollCPUTime, Value: 0.4 + float64(window%7)/10, Ts: ts},
 		{Name: probekeys.PushMessageCount, Value: float64(window % 3), Ts: ts},
 	}}}}
 }
@@ -35,8 +36,8 @@ func reportBatch(task footprint.Task, window int, end time.Time) *ogv1.Telemetry
 // TestCollectionReportFootprint holds what the collection telemetry costs
 // (#1369): one report batch per endpoint per window, delivered through the
 // real handler over the dev scenario's fleet, costs a fixed number of
-// statements and lands exactly its two rows. At the platform's one-minute
-// window that is two rows per endpoint per minute beside the standard mix's
+// statements and lands exactly its three rows. At the platform's one-minute
+// window that is three rows per endpoint per minute beside the standard mix's
 // checks, logged against them.
 func TestCollectionReportFootprint(t *testing.T) {
 	f := newFootprintFixture(t)
@@ -73,13 +74,13 @@ func TestCollectionReportFootprint(t *testing.T) {
 	t.Logf("collection report footprint, dev scenario, %d endpoints x %d windows = %d batches", len(f.tasks), windows, batches)
 	t.Logf("  statements per report batch %6.2f", float64(statements)/float64(batches))
 	t.Logf("  metric rows per window      %6.2f per endpoint (%d rows)", float64(rows)/float64(batches), rows)
-	t.Logf("  beside the standard mix     %6.1f%% at most: an endpoint that both polls and listens, against %d metric rows a check at 30 s (%.0f a minute)", 100*2/perMinute, checkRows, perMinute)
+	t.Logf("  beside the standard mix     %6.1f%% at most: an endpoint that both polls and listens, against %d metric rows a check at 30 s (%.0f a minute)", 100*3/perMinute, checkRows, perMinute)
 	if statements != wantStatementsPerReportBatch*batches {
 		t.Errorf("statements: %d over %d report batches (%.2f a batch), want exactly %d a batch; one batch issued:\n  %s",
 			statements, batches, float64(statements)/float64(batches), wantStatementsPerReportBatch,
 			strings.Join(firstBatchStatements(f.counter, statements/batches), "\n  "))
 	}
-	if want := int64(2 * batches); rows != want {
-		t.Errorf("metric rows: %d for %d report batches, want exactly %d: each window lands its two rows", rows, batches, want)
+	if want := int64(3 * batches); rows != want {
+		t.Errorf("metric rows: %d for %d report batches, want exactly %d: each window lands its three rows", rows, batches, want)
 	}
 }
