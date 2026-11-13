@@ -10,6 +10,7 @@ import ReconciliationPanel from "./ReconciliationPanel";
 import ResolutionPanel from "./ResolutionPanel";
 import ReachabilityPanel from "./ReachabilityPanel";
 import AlarmsPanel from "./AlarmsPanel";
+import FormActionBar from "./FormActionBar";
 import { useBlades, type BladeDestructive, type BladeEdit } from "../lib/blades";
 import { bindSelectValue } from "../lib/selectvalue";
 import { createPen } from "../lib/namegen";
@@ -34,10 +35,11 @@ import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
 import MembershipsField from "./MembershipsField";
-import { Plus, X } from "./icons";
+import { Plus } from "./icons";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
+import { createFormActions } from "../lib/formactions";
 
 // EntityForm (#826 slice 1): the ONE form per fleet kind. The original blade
 // vision, restored: view and edit are one component, and whether it renders
@@ -612,8 +614,7 @@ export function EntityCreateForm(props: {
     return bucketPhrase(props.kind, b, path);
   });
 
-  async function create(e: Event) {
-    e.preventDefault();
+  async function create() {
     setBusy(true);
     setFormErr(null);
     const nm = namePen.value().trim();
@@ -650,8 +651,29 @@ export function EntityCreateForm(props: {
     return { name: "mic-2 (optional)", display: "Ceiling Mic 2" };
   };
 
+  const formActions = createFormActions();
+  createEffect(() => {
+    formActions.bind({
+      submitLabel: `Create ${KIND_NOUN[props.kind]}`,
+      submitIcon: Plus,
+      submit: create,
+      busy,
+      disabled: () => busy() || !ready() || penIncomplete(!!labelDraft.data?.name, namePen),
+      cancel: props.onCancel,
+      cancelLabel: "Cancel",
+    });
+  });
+
   return (
-    <form data-testid="entity-create-form" class="flex flex-col gap-5" onSubmit={create}>
+    <form
+      data-testid="entity-create-form"
+      class="flex flex-col gap-5"
+      onSubmit={(e) => {
+        // The rail's buttons are type=button; Enter in a field still submits the form.
+        e.preventDefault();
+        if (!formActions.binding()?.disabled?.()) void create();
+      }}
+    >
       <div class="flex items-center gap-2">
         <h2 class="text-lg font-semibold tracking-tight">New {KIND_NOUN[props.kind]}</h2>
         <span class="badge badge-warning badge-sm">Draft</span>
@@ -758,14 +780,7 @@ export function EntityCreateForm(props: {
         displayPlaceholder={placeholders().display}
       />
 
-      <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-        <Button icon={X} onClick={() => props.onCancel()}>Cancel</Button>
-        <span class="flex-1" />
-        {/* A name is required only when the platform will not mint one; the
-            classification that names it stays required where it is the only
-            shape-definer (a location's type, a component's product). */}
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !ready() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create {KIND_NOUN[props.kind]}</Button>
-      </div>
+      <FormActionBar actions={formActions} inline />
 
       <div class="flex flex-col gap-1 opacity-50">
         <span class={EYEBROW}>Tags</span>

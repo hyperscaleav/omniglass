@@ -418,7 +418,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
 });
 
 describe("the one form, empty", () => {
-  function mountCreate(kind: "system" | "location" | "component", under?: string) {
+  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...ME_KEY], owner);
     qc.setQueryData([...SYSTEMS_KEY], []);
@@ -434,7 +434,7 @@ describe("the one form, empty", () => {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
-          <Route path="/x" component={() => <EntityCreateForm kind={kind} under={under} onCreated={() => {}} onCancel={() => {}} />} />
+          <Route path="/x" component={() => <EntityCreateForm kind={kind} under={under} onCreated={() => {}} onCancel={onCancel} />} />
         </Router>
       </QueryClientProvider>
     ));
@@ -460,6 +460,35 @@ describe("the one form, empty", () => {
     const form = await screen.findByTestId("entity-create-form");
     const parent = within(form).getByLabelText("Parent");
     await waitFor(() => expect(treeValue(parent)).toBe("West Building"));
+  });
+
+  it("draws Cancel and Create in one FormActionBar inline rail, Create last", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const cancel = within(form).getByRole("button", { name: /cancel/i });
+    const create = within(form).getByRole("button", { name: /create system/i });
+    const rail = cancel.closest(".border-t.border-base-300.pt-4");
+    expect(rail).toBeTruthy();
+    expect(rail!.contains(create)).toBe(true);
+    // Both right-aligned together, Cancel before Create: the template face's rail.
+    expect(cancel.parentElement).toBe(create.parentElement);
+    expect(cancel.parentElement!.classList.contains("ml-auto")).toBe(true);
+    expect(cancel.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps Create disabled until the form is ready", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+  });
+
+  it("Cancel calls onCancel", async () => {
+    const onCancel = vi.fn();
+    mountCreate("system", undefined, onCancel);
+    const form = await screen.findByTestId("entity-create-form");
+    fireEvent.click(within(form).getByRole("button", { name: /cancel/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
 
