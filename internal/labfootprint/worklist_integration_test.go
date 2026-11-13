@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +18,9 @@ import (
 
 // The worklist read (#1868) reads each node's worst pull loss reported in the
 // window, by node name: a node refused in one window reads 1 however its
-// other windows read, a node served throughout reads 0, and a reading
-// outside the window counts for nothing.
+// other windows read, a node served throughout reads 0, a reading outside
+// the window counts for nothing, and a node with no reading in the window
+// reads as unreported rather than dropping out.
 func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -36,7 +38,7 @@ func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	platform := map[string]string{}
-	for _, name := range []string{"edge-hq", "edge-a", "edge-b"} {
+	for _, name := range []string{"edge-hq", "edge-a", "edge-b", "edge-c"} {
 		n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
 		if err != nil {
 			t.Fatal(err)
@@ -52,6 +54,7 @@ func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
 		{ComponentID: platform["edge-a"], Key: writerclass.WorklistPullLossRatio, Value: 0, TS: in},
 		{ComponentID: platform["edge-b"], Key: writerclass.WorklistPullLossRatio, Value: 1, TS: from.Add(-time.Minute)},
 		{ComponentID: platform["edge-b"], Key: writerclass.WorklistPullLossRatio, Value: 0, TS: in},
+		{ComponentID: platform["edge-c"], Key: writerclass.WorklistPullLossRatio, Value: 1, TS: from.Add(-time.Minute)},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -76,11 +79,14 @@ func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ParseWorklist(strings.Join(lines, "\n"))
+	got, unreported, err := ParseWorklist(strings.Join(lines, "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 || got["edge-hq"] != 1 || got["edge-a"] != 0 || got["edge-b"] != 0 {
 		t.Errorf("read %v, want edge-hq 1, edge-a 0, edge-b 0", got)
+	}
+	if !slices.Equal(unreported, []string{"edge-c"}) {
+		t.Errorf("unreported %v, want edge-c", unreported)
 	}
 }

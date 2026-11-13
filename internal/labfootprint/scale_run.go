@@ -490,7 +490,7 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 	if run.Delivery.Read {
 		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
 	}
-	if run.Worklist, err = h.readWorklist(ctx, db0.At, db1.At); err != nil {
+	if run.Worklist, run.WorklistUnreported, err = h.readWorklist(ctx, db0.At, db1.At); err != nil {
 		run.WorklistGap = err.Error()
 		h.say("worklist pull loss not measured: %v", err)
 	}
@@ -498,12 +498,12 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 }
 
 // readWorklist reads each node's worst worklist pull loss over the window
-// (#1868). Its failure leaves the figure not measured and every other figure
-// read.
-func (h *harness) readWorklist(ctx context.Context, from, to time.Time) (map[string]float64, error) {
+// (#1868), and the nodes that reported none. Its failure leaves the figure
+// not measured and every other figure read.
+func (h *harness) readWorklist(ctx context.Context, from, to time.Time) (map[string]float64, []string, error) {
 	out, err := h.psql(ctx, WorklistQuery(from, to))
 	if err != nil {
-		return nil, fmt.Errorf("the worklist pull loss did not read: %w", err)
+		return nil, nil, fmt.Errorf("the worklist pull loss did not read: %w", err)
 	}
 	return ParseWorklist(out)
 }

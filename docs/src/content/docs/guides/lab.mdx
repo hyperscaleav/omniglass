@@ -578,7 +578,8 @@ How to read each row:
 - **worklist pull loss**: each node's worst share of worklist pulls the bus refused or the node could
   not read, over the window, read from the `worklist-pull-loss-ratio` every node reports on its own
   platform component each report window. The row prints the worst node by name and how many nodes
-  were refused, `0 %` when every pull was served. A node refused here keeps running its last worklist,
+  were refused, `0 %` when every pull was served, and counts any node that reported nothing as
+  unreported. A node refused here keeps running its last worklist,
   so the delivery table can read 0 while it misses every change made since. A read that failed, or
   found no node reporting, prints `not measured` with the reason under the table: every node reports
   the ratio every window, so finding none is no reading, not a clean one.
@@ -931,8 +932,10 @@ read no kind carrying items, fails as `delivery_loss` with the reason: a fleet t
 the window is not a fleet that lost nothing.
 
 `worklist_loss/<node>` is each node's worst worklist pull loss over the window, and any node above 0
-fails with a note naming the stale worklist it ran: a node refused on every pull reads 1. A run whose
-worklist read failed, or read no node, fails as `worklist_loss` with the reason.
+fails with a note giving the share of its pulls that failed: a node refused on every pull reads 1. The
+read starts from every node the lab holds, so a node that reported nothing in the window fails as
+missing rather than dropping out. A run whose worklist read failed, or found no node, fails as
+`worklist_loss` with the reason.
 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this

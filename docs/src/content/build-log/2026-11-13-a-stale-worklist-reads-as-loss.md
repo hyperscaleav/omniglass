@@ -14,8 +14,8 @@ refused or unreadable over the pulls made, with a window that made no pull carry
 so a node refused on every pull reads 1. The seeded `worklist-stale` rule opens a warning after two
 minutes at 1 and clears on the first pull served. Platform health gains a Worklist column in the node
 table, the ratio as a percent and red above 0. `omniglass lab measure` prints a worklist pull loss
-row and gates a new exact family, `worklist_loss/<node>`, failing any node above 0 and failing as not
-measured when the read found no node reporting.
+row and gates a new exact family, `worklist_loss/<node>`, failing any node above 0, failing a node
+that reported nothing as missing, and failing as not measured when the read found no node.
 
 Fitting the reply under the limit is #1583 and #1586; this makes any failing pull visible, whatever
 its cause.
