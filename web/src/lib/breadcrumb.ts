@@ -5,14 +5,14 @@
 // (two hand-rolled copies existed before the primitive).
 
 // A Crumb is what a caller hands the Breadcrumb component: a label, a stable
-// key, and optionally a title (the full text behind an ellipsised stub) and a
-// click. The last crumb is conventionally the current page and carries no
-// onClick.
+// key, and optionally a title (the full text behind an ellipsised stub) and an
+// href (the router address it leads to, so it renders as a real link). The
+// last crumb is conventionally the current page and carries no href.
 export type Crumb = {
   key: string;
   label: string;
   title?: string;
-  onClick?: () => void;
+  href?: string;
 };
 
 // crumbLayout returns per-crumb flex styles for a trail of `count` crumbs. The

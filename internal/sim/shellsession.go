@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -82,6 +83,8 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 	// for "\r\n" that's '\n' (and the read trims "\r\n"); for "\x00"
 	// it's '\x00' (Q-SYS QRC); for "\r" it's '\r' (some legacy gear).
 	delim := cfg.ReadDelim()
+	obsProto, _ := obsProtocolOf(protocol)
+	face := d.observe.face(strconv.Itoa(port), obsProto)
 	for {
 		select {
 		case <-sess.Closed():
@@ -117,8 +120,11 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 		if cmd == "" {
 			continue
 		}
+		// Each line is one request: queued, its answer is the device's.
+		tok := d.observe.begin(obsProto, face)
 		if cmd == "bye" || cmd == "quit" || cmd == "exit" {
 			sess.queueLine([]byte(cfg.WrapOutbound("bye")))
+			tok.end(OutcomeAnswered)
 			sess.registry.Close(sess)
 			<-pumpDone
 			return
@@ -140,6 +146,7 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 		if cmd == "help" || cmd == "?" {
 			lines := buildHelpLines(d, "\r\n")
 			sess.queueLine([]byte(lines))
+			tok.end(OutcomeAnswered)
 			continue
 		}
 
@@ -189,6 +196,7 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 			}
 		}
 		sess.releasePushes()
+		tok.end(outcomeForLine(status))
 
 		if d.Logger != nil {
 			d.Logger(RequestLog{

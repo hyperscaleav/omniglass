@@ -54,11 +54,6 @@ export async function listComponents(): Promise<Component[]> {
   return (data?.components ?? []) as Component[];
 }
 
-export async function getComponent(name: string): Promise<Component> {
-  const { data, error } = await api.GET("/components/{name}", { params: { path: { name } } });
-  if (error) throw error;
-  return data as Component;
-}
 
 export type CreateComponent = {
   // Optional (#627 Task 14): omit it and the platform mints "<stem>-<n>" from

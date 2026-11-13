@@ -158,10 +158,14 @@ export function bucketLayout(buckets: ChartBucket[], o: BucketOpts): ChartLayout
     linePath += `${linePath ? " L" : "M"}${f2(p.x)},${f2(p.y)}`;
     points.push(p);
   }
+  // The newest bucket's last is the newest reading, taken at the bucket's end
+  // (or now, for the bucket still filling): the line runs on from its avg to
+  // that dot, so the dot sits on the line and no band runs past it (#1789).
   const newest = full[full.length - 1];
   const endValue = newest.last ?? (newest.avg as number);
-  const endPoint = points[points.length - 1];
+  const endX = x(Math.min(newest.t + o.resolutionMs, o.now));
   const endY = y(endValue);
+  linePath += ` L${f2(endX)},${f2(endY)}`;
   return {
     points,
     yMin: lo,
@@ -171,9 +175,9 @@ export function bucketLayout(buckets: ChartBucket[], o: BucketOpts): ChartLayout
     // No area under the avg line: the band is a bucketed chart's fill.
     areaPath: "",
     bandPath,
-    endLabel: { x: Math.min(Math.max(endPoint.x, o.padLeft + 14), o.width - o.padRight), y: Math.max(endY - 9, 9) },
+    endLabel: { x: Math.min(Math.max(endX, o.padLeft + 14), o.width - o.padRight), y: Math.max(endY - 9, 9) },
     endValue,
-    endDot: { x: endPoint.x, y: endY },
+    endDot: { x: endX, y: endY },
     xTicks,
   };
 }

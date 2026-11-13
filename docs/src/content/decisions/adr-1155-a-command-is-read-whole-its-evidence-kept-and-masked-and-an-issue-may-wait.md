@@ -1,7 +1,7 @@
 ---
 title: "A command is read whole, its evidence kept and masked, and an issue may wait"
 date: 2026-10-25
-status: Accepted
+status: "Accepted, amended by ADR-1630"
 summary: "A command reads back from issue to settlement (#1155): GET /components/{name}/commands and /commands/{id}, gated command:read on the component tier with the read and action split, carrying each transition's time, the in-flight phase (derived, never stored), the settle mode, the evidence and a reason. The row keeps the reply, masked of the dispatched endpoint's secrets and of credential-labeled pairs before it is stored, and what decided the outcome; each terminal status lands command-settled, command-failed or command-timed-out, joining command-lifecycle. An issue may wait (1 to 120 seconds, 64 waiters, 4 a principal, a 429 before anything is issued), judging the command at its deadline"
 refs: [1155]
 ---
@@ -51,7 +51,10 @@ refs: [1155]
      this release the three names were ordinary, so a one-time backfill retires an event of them that
      no command wrote into `retired_sample`, as ADR-1100's did for `command-issued`. This amends
      [ADR-1100](#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling) point 7,
-     which named `command-issued` alone.
+     which named `command-issued` alone. **Amended by
+     [ADR-1630](#adr-1630-a-fire-and-forget-command-settles-on-its-report):** a fire-and-forget
+     command is no longer settled by its issue; its execution report or its delivery window decides
+     it, and it writes its lifecycle event then, so `settled_by` is no longer written as `issue`.
   6. **An issue may wait, bounded.** `wait` blocks the issue until the command is terminal or
      `wait_timeout` passes (1 to 120 seconds, 30 by default), polling from a tenth of a second back
      to once a second and judging the command itself once its deadline passes, so a wait answers a

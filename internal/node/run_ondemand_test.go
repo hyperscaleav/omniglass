@@ -93,7 +93,10 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		}
 		defer conn.Close(s.ctx)
 		var n int64
-		if err := conn.QueryRow(s.ctx, `select (select count(*) from property) + (select count(*) from `+storagetest.MetricRows+` metric)`).Scan(&n); err != nil {
+		// The node's own report (#1625) lands on its platform component every
+		// tick, preview or not: only the fleet's rows count here.
+		if err := conn.QueryRow(s.ctx, `select (select count(*) from property) + (select count(*) from `+storagetest.MetricRows+` metric
+			where metric.component_id is null or metric.component_id not in (select platform_component_id from node where platform_component_id is not null))`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n

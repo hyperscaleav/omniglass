@@ -16,7 +16,7 @@ var Subsystems = []Cluster{
 	{Name: "fleet", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",
 		"system", "system_member",
-		"component",
+		"component", "component_dependency",
 		"endpoint", "endpoint_live",
 	}},
 	{Name: "catalog", Tables: []string{
@@ -42,6 +42,9 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "collection", Tables: []string{
 		"node", "task", "node_log",
+		// platform_server maps a server's identity to the platform component
+		// its own measures land on (#1627), as a node's row does a node's.
+		"platform_server",
 		// sim_impairment is what an operator broke on a simulated device (#889),
 		// applied by the simulator beside its node.
 		"sim_impairment",

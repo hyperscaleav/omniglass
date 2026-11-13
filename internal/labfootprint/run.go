@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,8 +32,12 @@ type Config struct {
 	// DockerHost is the daemon the lab runs on.
 	DockerHost string
 	// Project is the throwaway lab's compose project, its own.
-	Project  string
+	Project string
+	// Scenario and Systems are the fleet the lab seeds: a scale scenario at
+	// a size (corporate at 20, the smoke rung of the measuring ladder,
+	// #1719), or a dev scenario with Systems 0.
 	Scenario string
+	Systems  int
 	Cadence  string
 	Warmup   time.Duration
 	Window   time.Duration
@@ -49,15 +54,15 @@ type Config struct {
 	LabLog io.Writer
 }
 
-// The services the harness measures, by their ready-file names.
-var services = map[string]string{"server": "LAB_SERVER", "node": "LAB_NODE", "db": "LAB_DB"}
-
 // harness is one run's live state.
 type harness struct {
 	cfg  Config
 	dc   *client.Client
 	env  map[string]string
 	http *http.Client
+	// tokens, when set, is the token reads carry and re-mint on a 401;
+	// otherwise they carry env's LAB_TOKEN.
+	tokens *tokenSource
 }
 
 func (h *harness) say(format string, a ...any) { fmt.Fprintf(h.cfg.Out, format+"\n", a...) }
@@ -82,10 +87,8 @@ func Measure(ctx context.Context, cfg Config) (rep Report, err error) {
 	ready := filepath.Join(dir, "lab.env")
 	defer func() { _ = os.Remove(ready); _ = os.Remove(dir) }()
 
-	h.say("bringing up the throwaway lab %s (scenario %s, cadence %s)", cfg.Project, cfg.Scenario, cfg.Cadence)
-	cmd := exec.Command(cfg.Binary, "lab", "run", "--ephemeral", "--project", cfg.Project, "--port", "0",
-		"--ready-file", ready, "--while-pid", strconv.Itoa(os.Getpid()),
-		"--scenario", cfg.Scenario, "--cadence", cfg.Cadence)
+	h.say("bringing up the throwaway lab %s (scenario %s at %d systems, cadence %s)", cfg.Project, cfg.Scenario, cfg.Systems, cfg.Cadence)
+	cmd := exec.Command(cfg.Binary, labRunArgs(cfg, ready, os.Getpid())...)
 	cmd.Stdout, cmd.Stderr = cfg.LabLog, cfg.LabLog
 	if err := cmd.Start(); err != nil {
 		return Report{}, fmt.Errorf("start the lab: %w", err)
@@ -102,6 +105,19 @@ func Measure(ctx context.Context, cfg Config) (rep Report, err error) {
 		return Report{}, err
 	}
 	return h.measure(ctx)
+}
+
+// labRunArgs is the `lab run` the footprint brings its throwaway lab up
+// with: ephemeral, on its own project and a free port, bound to this process,
+// at the config's scenario and cadence, and at its size when it has one.
+func labRunArgs(cfg Config, ready string, pid int) []string {
+	args := []string{"lab", "run", "--ephemeral", "--project", cfg.Project, "--port", "0",
+		"--ready-file", ready, "--while-pid", strconv.Itoa(pid),
+		"--scenario", cfg.Scenario, "--cadence", cfg.Cadence}
+	if cfg.Systems > 0 {
+		args = append(args, "--systems", strconv.Itoa(cfg.Systems))
+	}
+	return args
 }
 
 // waitReady waits for the lab's ready file, or for the lab to exit first.
@@ -176,19 +192,44 @@ func (h *harness) leftovers(ctx context.Context) ([]string, error) {
 	return left, nil
 }
 
+// footprintSystems is the size a footprint report names: the size the lab
+// was brought up at, read from its labels like its scenario (#1719), so a
+// figure is quoted at its ladder size. A dev lab has no stated size, so it
+// names the systems the database counted.
+func footprintSystems(fleet lab.Fleet, counted int) int {
+	if fleet.Systems > 0 {
+		return fleet.Systems
+	}
+	return counted
+}
+
 func (h *harness) measure(ctx context.Context) (Report, error) {
-	run := Run{Scenario: h.cfg.Scenario, Cadence: h.cfg.Cadence, Started: time.Now(),
+	// The containers are found by the project's labels: a scale scenario
+	// runs a node per site, which the ready file does not list.
+	l, err := h.discoverScale(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	fleet, err := lab.FleetOf(l.labels)
+	if err != nil {
+		return Report{}, err
+	}
+	run := Run{Scenario: fleet.Scenario, Cadence: h.cfg.Cadence, Started: time.Now(),
 		Warmup: h.cfg.Warmup, Window: h.cfg.Window, Reads: map[int][]time.Duration{}}
 	img, err := h.dc.ImageInspect(ctx, h.env["LAB_IMAGE"])
 	if err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	size, err := h.psql(ctx, fleetSizeSQL)
 	if err != nil {
 		return Report{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
-	if f := strings.Split(strings.TrimSpace(fleet), "|"); len(f) == 3 {
-		run.Systems, _ = strconv.Atoi(f[0])
+	if f := strings.Split(strings.TrimSpace(size), "|"); len(f) == 3 {
+		counted, _ := strconv.Atoi(f[0])
+		run.Systems = footprintSystems(fleet, counted)
+		if run.Systems != counted {
+			h.say("note: the lab was brought up at %d systems and its database now holds %d", run.Systems, counted)
+		}
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
 	}
@@ -211,7 +252,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 
-	db0, use0, err := h.read(ctx)
+	db0, use0, err := h.readScale(ctx, l)
 	if err != nil {
 		return Report{}, err
 	}
@@ -219,7 +260,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		if err := sleep(ctx, h.cfg.Window); err != nil {
 			return Report{}, err
 		}
-		db1, use1, err := h.read(ctx)
+		db1, use1, err := h.readScale(ctx, l)
 		if err != nil {
 			return Report{}, err
 		}
@@ -227,6 +268,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
+		w = FoldNodes(w)
 		run.Windows = append(run.Windows, w)
 		h.say("window %d of %d: %s metric rows a minute, %.0f millicores in all", i, h.cfg.Windows,
 			count(w.MetricRowsPerMinute), w.Containers["server"].Millicores+w.Containers["node"].Millicores+w.Containers["db"].Millicores)
@@ -237,27 +279,6 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 	return Summarize(run), nil
-}
-
-// read takes one reading of the database and of every container.
-func (h *harness) read(ctx context.Context) (DBCounters, map[string]Usage, error) {
-	out, err := h.psql(ctx, DBCountersQuery)
-	if err != nil {
-		return DBCounters{}, nil, fmt.Errorf("read the database counters: %w", err)
-	}
-	db, err := ParseDBCounters(out)
-	if err != nil {
-		return DBCounters{}, nil, err
-	}
-	use := map[string]Usage{}
-	for name, key := range services {
-		u, err := h.usage(ctx, h.env[key])
-		if err != nil {
-			return DBCounters{}, nil, fmt.Errorf("read the %s container: %w", name, err)
-		}
-		use[name] = u
-	}
-	return db, use, nil
 }
 
 // usage is one container's cgroup, read once through the Engine.
@@ -274,11 +295,34 @@ func (h *harness) usage(ctx context.Context, id string) (Usage, error) {
 	return UsageFromStats(s)
 }
 
+// psqlCeiling bounds a harness query whose context sets no deadline: the
+// longest any one of them may run in the database (the drain probe's plant,
+// the slowest, takes about a minute at a million rows).
+const psqlCeiling = 10 * time.Minute
+
+// statementTimeout is the statement_timeout a harness query runs under: what
+// its context has left, never more than psqlCeiling, and never zero, which
+// Postgres reads as no limit at all.
+func statementTimeout(deadline time.Time, ok bool, now time.Time) time.Duration {
+	if !ok {
+		return psqlCeiling
+	}
+	return min(psqlCeiling, max(time.Millisecond, deadline.Sub(now)))
+}
+
 // psql runs one query in the database container and returns its unaligned
-// output.
+// output. The query ends with its context, in the database too: Postgres
+// times it out at the context's deadline, and a cancelled context cancels
+// its backend, found by the application name it runs under. A psql killed
+// with its exec leaves its query running, which is how a stopped measure's
+// delivery read ran on for hours (#1841).
 func (h *harness) psql(ctx context.Context, q string) (string, error) {
+	name := fmt.Sprintf("omniglass-lab-%016x", rand.Uint64())
+	deadline, ok := ctx.Deadline()
 	ex, err := h.dc.ExecCreate(ctx, h.env["LAB_DB"], client.ExecCreateOptions{
-		Cmd:          []string{"psql", "-U", "omniglass", "-d", "omniglass", "-AtX", "-v", "ON_ERROR_STOP=1", "-c", q},
+		Cmd: []string{"psql", "-U", "omniglass", "-d", "omniglass", "-AtX", "-v", "ON_ERROR_STOP=1", "-c", q},
+		Env: []string{"PGAPPNAME=" + name,
+			fmt.Sprintf("PGOPTIONS=-c statement_timeout=%d", statementTimeout(deadline, ok, time.Now()).Milliseconds())},
 		AttachStdout: true, AttachStderr: true,
 	})
 	if err != nil {
@@ -289,8 +333,22 @@ func (h *harness) psql(ctx context.Context, q string) (string, error) {
 		return "", err
 	}
 	defer att.Close()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			att.Close()
+		case <-done:
+		}
+	}()
 	var stdout, stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, att.Reader); err != nil {
+	_, err = stdcopy.StdCopy(&stdout, &stderr, att.Reader)
+	if ctx.Err() != nil {
+		h.cancelBackend(ctx, name)
+		return "", ctx.Err()
+	}
+	if err != nil {
 		return "", err
 	}
 	in, err := h.dc.ExecInspect(ctx, ex.ID, client.ExecInspectOptions{})
@@ -301,6 +359,17 @@ func (h *harness) psql(ctx context.Context, q string) (string, error) {
 		return "", fmt.Errorf("psql exited %d: %s", in.ExitCode, strings.TrimSpace(stderr.String()))
 	}
 	return stdout.String(), nil
+}
+
+// cancelBackend cancels the query of the harness psql running under name,
+// on a context of its own, since the one it ran on has ended.
+func (h *harness) cancelBackend(ctx context.Context, name string) {
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if _, err := h.psql(cctx, fmt.Sprintf(
+		`select pg_cancel_backend(pid) from pg_stat_activity where application_name = '%s'`, name)); err != nil {
+		h.say("could not cancel the query of %s: %v", name, err)
+	}
 }
 
 // timeReads holds the server and Postgres to ReadCPUs, then times each
@@ -379,25 +448,17 @@ func (h *harness) pickSeries(ctx context.Context) ([]Series, error) {
 // get reads a URL with the lab's owner token, decoding JSON into v (nil
 // drains the body).
 func (h *harness) get(ctx context.Context, u string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	code, status, body, err := h.fetch(ctx, u)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+h.env["LAB_TOKEN"])
-	resp, err := h.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
+	if code != http.StatusOK {
+		return statusError(status, body)
 	}
 	if v == nil {
-		_, err = io.Copy(io.Discard, resp.Body)
-		return err
+		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(v)
+	return json.Unmarshal(body, v)
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

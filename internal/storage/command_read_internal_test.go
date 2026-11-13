@@ -26,6 +26,9 @@ func TestCommandPhase(t *testing.T) {
 		{"issued", SettleModeObservation, true, true, true, PhaseAwaitingObservation},
 		{"issued", SettleModeReply, true, true, true, PhaseAwaitingObservation},
 		{"issued", SettleModeObservation, false, false, false, PhaseAwaitingObservation},
+		{"issued", SettleModeNone, false, false, true, PhaseQueued},
+		{"issued", SettleModeNone, true, false, true, PhaseDelivered},
+		{"issued", SettleModeNone, false, false, false, PhaseQueued},
 		{"settled", SettleModeReply, true, true, true, "settled"},
 		{"failed", SettleModeReply, true, true, true, "failed"},
 		{"timed-out", SettleModeReply, false, false, true, "timed-out"},
@@ -86,6 +89,50 @@ func TestTimeoutWords(t *testing.T) {
 				t.Errorf("%s: %q, want it to mention %q", tc.name, got, w)
 			}
 		}
+	}
+}
+
+// A fire-and-forget command that times out says where it stopped within its
+// delivery window, and never mentions an observation: nothing was told to
+// observe.
+func TestDeliveryTimeoutWords(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name               string
+		delivered, carried bool
+		endpoint, node     string
+		want               string
+	}{
+		{"queued, node never took it", false, true, "tcp", "edge",
+			"queued for node edge, which did not take it within its 10 minute delivery window"},
+		{"delivered, no report", true, true, "tcp", "edge",
+			"delivered to node edge, which sent no execution report within its 10 minute delivery window"},
+		{"delivered, node since unplaced", true, true, "tcp", "",
+			"delivered, but no execution report arrived within its 10 minute delivery window"},
+		{"queued, endpoint on no node", false, true, "tcp", "",
+			"queued on endpoint tcp, which is placed on no node"},
+		{"carried by nothing", false, false, "", "",
+			"no endpoint of this component has a driver that binds reboot"},
+	} {
+		got := deliveryTimeoutWords("reboot", tc.delivered, tc.carried, tc.endpoint, tc.node)
+		if got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+		if strings.Contains(got, "observ") {
+			t.Errorf("%s: %q mentions an observation", tc.name, got)
+		}
+	}
+}
+
+// A fire-and-forget command's report is its outcome (#1630): a clean report
+// settles it, an execution error fails it with that error, both by the reply.
+func TestReportOutcome(t *testing.T) {
+	t.Parallel()
+	if o := reportOutcome(""); o.status != "settled" || o.by != SettledByReply || o.reason != "the node carried it out" {
+		t.Errorf("clean report = %+v, want settled by reply, carried out", o)
+	}
+	if o := reportOutcome("connection refused"); o.status != "failed" || o.by != SettledByReply || o.reason != "the execution failed: connection refused" {
+		t.Errorf("error report = %+v, want failed by reply naming the error", o)
 	}
 }
 

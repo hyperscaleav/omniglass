@@ -42,12 +42,19 @@ type KeyWriterError struct {
 	Component string
 	binding   bool
 	fanned    bool
+	// self marks a node's self-report row refused (#1625): a key that is no
+	// node-self key, or a row off the node's own platform component.
+	self bool
 }
 
 func (e *KeyWriterError) Error() string {
 	if e.binding {
 		return fmt.Sprintf("%s: a node writes only for the component and the endpoint its task ran against "+
 			"(the row's component %q; the task's component %q, endpoint %q)", e.Key, e.Owner, e.Component, e.Endpoint)
+	}
+	if e.self {
+		return fmt.Sprintf("%s: a node reports of itself only the node-self platform keys, on its own platform component "+
+			"(the row's component %q; the node's platform component %q)", e.Key, e.Owner, e.Component)
 	}
 	if e.fanned {
 		return fmt.Sprintf("%s: a conduit's fanned value lands only on an owner one of its identity bindings names "+
@@ -90,6 +97,9 @@ type KeyWriter struct {
 	// kind and id, once admitWrites has read them; a row on any other owner
 	// is refused. Fan-out writers only.
 	fanOwners map[string]bool
+	// self holds the writer to a node's self-report (#1625): Component is the
+	// node's platform component, and only a node-self key on it is admitted.
+	self bool
 }
 
 // FanoutWriter is a conduit's value fanned out to the owner its identity
@@ -391,6 +401,10 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	}
 	if w.Kind == writerclass.Node && (w.bound == "" || r.ownerKind != "component" || r.owner != w.bound) {
 		refuse.Owner, refuse.Component, refuse.binding = r.owner, w.bound, true
+		return refuse
+	}
+	if w.self && !admitNodeSelf(w, r) {
+		refuse.Owner, refuse.Component, refuse.self = r.owner, w.Component, true
 		return refuse
 	}
 	if w.Kind == writerclass.Fanout && !w.fanOwners[fanOwnerKey(r.ownerKind, r.owner)] {

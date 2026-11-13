@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -35,7 +37,7 @@ func TestDeriveMetrics(t *testing.T) {
 		},
 	}
 
-	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
+	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(metrics) != 2 {
 		t.Fatalf("derived %d metrics, want 2 (unregistered and cross-lane names dropped): %+v", len(metrics), metrics)
 	}
@@ -71,7 +73,7 @@ func TestDeriveProperties(t *testing.T) {
 		{Name: "not.registered", ValueJson: `"up"`},
 		{Name: "tcp-connect-time", ValueJson: `"3"`}, // a metric name on the property lane: refused by name
 	}}
-	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
+	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(states) != 2 {
 		t.Fatalf("states = %+v, want exactly the valid up and SN-1", states)
 	}
@@ -106,7 +108,7 @@ func TestDeriveEvents(t *testing.T) {
 		{Name: "note"},                                         // neither message nor payload: dropped
 		{Name: "not.registered", Message: "x"},
 	}}
-	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
+	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(events) != 2 {
 		t.Fatalf("events = %+v, want exactly the valid call-started and note", events)
 	}
@@ -149,9 +151,9 @@ func TestSampleTimeRule(t *testing.T) {
 			{Name: "note", Message: "x"},
 		},
 	}
-	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
-	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
-	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
+	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(metrics) != 2 || len(states) != 2 || len(events) != 2 {
 		t.Fatalf("derived %d/%d/%d, want 2 per lane", len(metrics), len(states), len(events))
 	}
@@ -170,28 +172,32 @@ func TestSampleTimeRule(t *testing.T) {
 
 	// Both absent: zero, so the insert path stamps ingest time.
 	bare := &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}}
-	if got := deriveMetrics(bare, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName)); len(got) != 1 || !got[0].TS.IsZero() {
+	if got := deriveMetrics(bare, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil); len(got) != 1 || !got[0].TS.IsZero() {
 		t.Fatalf("no ts anywhere: want the zero time for the insert path, got %+v", got)
 	}
 }
 
 // fakeMsg is a minimal jetstream.Msg double so nakOrTerm's decision (redeliver
-// vs. drop) can be unit-tested without a real embedded NATS server: only
-// Metadata, Nak, and Term are exercised, the rest are unused stubs.
+// vs. drop) can be unit-tested without a real embedded NATS server, and so a
+// test can hand handleTelemetry a batch (data and its Msg-Id header). The
+// rest are unused stubs.
 type fakeMsg struct {
 	meta    *jetstream.MsgMetadata
 	metaErr error
+	data    []byte
+	header  nats.Header
 	naked   bool
 	termed  bool
+	ackErr  error
 }
 
 func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) { return m.meta, m.metaErr }
-func (m *fakeMsg) Data() []byte                              { return nil }
-func (m *fakeMsg) Headers() nats.Header                      { return nil }
+func (m *fakeMsg) Data() []byte                              { return m.data }
+func (m *fakeMsg) Headers() nats.Header                      { return m.header }
 func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.node-a" }
 func (m *fakeMsg) Reply() string                             { return "" }
 func (m *fakeMsg) Ack() error                                { return nil }
-func (m *fakeMsg) DoubleAck(context.Context) error           { return nil }
+func (m *fakeMsg) DoubleAck(context.Context) error           { return m.ackErr }
 func (m *fakeMsg) Nak() error                                { m.naked = true; return nil }
 func (m *fakeMsg) NakWithDelay(time.Duration) error          { m.naked = true; return nil }
 func (m *fakeMsg) InProgress() error                         { return nil }
@@ -201,39 +207,50 @@ func (m *fakeMsg) TermWithReason(string) error               { m.termed = true; 
 // TestNakOrTerm proves the WorkQueue-cleanliness decision: a message under the
 // maxTelemetryDeliveries bound is redelivered (Nak), one at or past the bound is
 // dropped (Term) rather than redelivered forever, and an unreadable delivery
-// count (Metadata error) also drops rather than guessing.
+// count (Metadata error) also drops rather than guessing. A redelivery counts
+// nothing yet; a drop counts its items as lost at the server's hop (#1659).
 func TestNakOrTerm(t *testing.T) {
-	s := &Server{}
-
+	items := map[delivery.Kind]int{delivery.Metric: 2, delivery.Log: 1}
 	t.Run("below the bound redelivers", func(t *testing.T) {
+		s := &Server{}
 		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: 1}}
-		s.nakOrTerm(m)
+		s.nakOrTerm(m, termed{}, items)
 		if !m.naked || m.termed {
 			t.Fatalf("delivery 1 of %d: want Nak only, got naked=%v termed=%v", maxTelemetryDeliveries, m.naked, m.termed)
 		}
-	})
-
-	t.Run("at the bound drops", func(t *testing.T) {
-		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries}}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("delivery %d (== bound): want Term only, got naked=%v termed=%v", maxTelemetryDeliveries, m.naked, m.termed)
+		for _, rd := range s.flow.Take().Readings() {
+			if rd.Value != 0 {
+				t.Fatalf("%s[%s] = %v for a batch held for redelivery, want it counted once it settles", rd.Key, rd.Instance, rd.Value)
+			}
 		}
 	})
 
-	t.Run("past the bound drops", func(t *testing.T) {
-		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries + 3}}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("delivery past bound: want Term only, got naked=%v termed=%v", m.naked, m.termed)
-		}
-	})
-
-	t.Run("unreadable metadata drops rather than guesses", func(t *testing.T) {
-		m := &fakeMsg{metaErr: errors.New("metadata unavailable")}
-		s.nakOrTerm(m)
-		if !m.termed || m.naked {
-			t.Fatalf("metadata error: want Term only, got naked=%v termed=%v", m.naked, m.termed)
-		}
-	})
+	for _, tc := range []struct {
+		name string
+		msg  *fakeMsg
+	}{
+		{"at the bound drops", &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries}}},
+		{"past the bound drops", &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: maxTelemetryDeliveries + 3}}},
+		{"unreadable metadata drops rather than guesses", &fakeMsg{metaErr: errors.New("metadata unavailable")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Server{}
+			s.nakOrTerm(tc.msg, termed{}, items)
+			if !tc.msg.termed || tc.msg.naked {
+				t.Fatalf("want Term only, got naked=%v termed=%v", tc.msg.naked, tc.msg.termed)
+			}
+			for _, rd := range s.flow.Take().Readings() {
+				want, ok := map[string]float64{
+					writerclass.DeliveryInCount + "/metric": 2, writerclass.DeliveryOutCount + "/metric": 0, writerclass.DeliveryLossRatio + "/metric": 1,
+					writerclass.DeliveryInCount + "/log": 1, writerclass.DeliveryOutCount + "/log": 0, writerclass.DeliveryLossRatio + "/log": 1,
+				}[rd.Key+"/"+rd.Instance]
+				if !ok {
+					want = 0
+				}
+				if rd.Value != want {
+					t.Errorf("%s[%s] = %v, want %v", rd.Key, rd.Instance, rd.Value, want)
+				}
+			}
+		})
+	}
 }

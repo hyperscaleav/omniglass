@@ -103,15 +103,16 @@ export default function LocationZoom() {
     const chain = ancestors(id(), locationIndex(view.data));
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
       // The trail ends at the parent: the place itself is the page title.
-      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
+      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
     ];
   });
 
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
-  const missing = () => !!view.data && !view.isFetching && !place() && !(view.data.locations ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!view.data && !view.isFetching && !place() && (view.data.locations ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!view.data && !view.isFetching && !place() && !ambiguous();
 
   return (
     <BladesContext.Provider value={blades}>
@@ -121,6 +122,7 @@ export default function LocationZoom() {
         <DetailGate
           noun="location"
           missing={missing()}
+          ambiguous={ambiguous()}
           pending={view.isPending}
           error={view.isError ? describeError(view.error) : null}
           retrying={view.isFetching}

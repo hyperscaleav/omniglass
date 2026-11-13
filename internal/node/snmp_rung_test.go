@@ -106,7 +106,7 @@ func TestTheSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	if _, ok := got[collection.SignalSNMPResponseTime]; ok {
 		t.Fatal("an unanswered get landed a timing")
 	}
-	if _, gated := m.blocked("ep-s", rungResponsive); gated {
+	if _, gated := m.refusedAt("ep-s", rungResponsive); gated {
 		t.Fatal("a silent agent gated the endpoint; it is retryable")
 	}
 }
@@ -129,11 +129,11 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 	if a := got[collection.SignalEndpointAuthenticated]; a.Text != "no" {
 		t.Fatalf("authenticated = %+v, want no", a)
 	}
-	gt, ok := m.blocked("ep-s", rungAuthenticated)
+	gt, ok := m.refusedAt("ep-s", rungAuthenticated)
 	if !ok || gt.rung != rungAuthenticated || gt.class != driver.ClassAuth {
 		t.Fatalf("gate = %+v, %v; want the session rung gated, class auth", gt, ok)
 	}
-	if _, ok := m.blocked("ep-s", rungResponsive); ok {
+	if _, ok := m.refusedAt("ep-s", rungResponsive); ok {
 		t.Fatal("an auth refusal gated the transport rung")
 	}
 	// Beneath the gate no get is sent under the fingerprint, by the probe or
@@ -165,7 +165,7 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 		Secrets:        map[string]map[string]string{"community": {"community": "lab-ro"}},
 		Spec: json.RawMessage(`{"driver":"snmp-generic","function":"scalars","request":{"get":["1.3.6.1.2.1.1.3.0"]},
 			"emits":[{"name":"uptime","lane":"metric","extract":{"oid":"1.3.6.1.2.1.1.3.0"}}]}`)}
-	if _, gated := m.blocked(poll.EndpointID, statelessRung(poll)); !gated {
+	if _, gated := m.refusedAt(poll.EndpointID, statelessRung(poll)); !gated {
 		t.Fatal("an snmp poll is not held beneath the auth gate")
 	}
 	// The community rotated: the fingerprint moves, the gate lifts, and the

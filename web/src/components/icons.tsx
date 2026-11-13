@@ -30,9 +30,6 @@ export const LayoutDashboard: Component<P> = (p) => (
 export const Bell: Component<P> = (p) => (
   <Svg size={p.size}><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6" /><path d="M10 20a2 2 0 0 0 4 0" /></Svg>
 );
-export const Package: Component<P> = (p) => (
-  <Svg size={p.size}><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z" /><path d="M4 7.5 12 12l8-4.5" /><path d="M12 12v9" /></Svg>
-);
 export const Layers: Component<P> = (p) => (
   <Svg size={p.size}><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></Svg>
 );
@@ -53,9 +50,6 @@ export const ChevronDown: Component<P> = (p) => (
 );
 export const PanelLeft: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /></Svg>
-);
-export const Sun: Component<P> = (p) => (
-  <Svg size={p.size}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" /></Svg>
 );
 export const Moon: Component<P> = (p) => (
   <Svg size={p.size}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8" /></Svg>
@@ -181,9 +175,6 @@ export const GripVertical: Component<P> = (p) => (
 );
 export const Clock: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>
-);
-export const Star: Component<{ size?: number; filled?: boolean }> = (p) => (
-  <Svg size={p.size} fill={p.filled}><path d="m12 2 3 6.5 7 .9-5 4.8 1.3 7-6.6-3.6L5 21.2l1.3-7-5-4.8 7-.9z" /></Svg>
 );
 export const LogOut: Component<P> = (p) => (
   <Svg size={p.size}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></Svg>

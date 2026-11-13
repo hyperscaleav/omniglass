@@ -35,8 +35,17 @@ drawer and component section over them. Also built: the simulator in the node's 
 in a container of its own with every privilege the simulator can use. Also built: every
 collection method healthy in the lab (#1370): each seeded driver and each registry transport runs on
 a dev-fleet component that is no planted fault, the simulator subscribes a simulated service to its
-webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Still
-`Design`: the Helm sidecar (#892).
+webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Also
+built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
+counting what reached it and how it answered, read beside the node's own tally so a scale lab
+closes the loop. Also built: the same loop on a running server (#1647), bracketed into a sliding
+window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
+built: the [push face](#a-pusher-pushes-on-its-own-cadence) (#1743), an outside actor that reports by
+pushing as an emulator device of its profile, declared by a scenario as it declares devices, so the
+dev lab and the scale lab push through the same path. Also built: the webhook sender (#1747), a
+meeting platform a scale scenario declares per site, seeded with its own signing key and its site's
+systems as rooms, which the simulator adds and reports on through the webhook face.
+Still `Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -96,12 +105,17 @@ The level drifts as a behavior inside a band. Per-channel gain, mute and peak ar
 face but not collected: they wait on a driver naming an instance (#1252) and the full DSP class set
 (#1360).
 
-The Ferrite PDU 4C (#1368) is the read-only counterpart: the rack power conditioner answers, under the
-Ferrite enterprise arc, the mains voltage in millivolts, the total current in milliamps, and an outlet
-table of name, state and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the
-voltage, the current and each outlet's state. It has no control face: a read-only JSON document carries the
-same state, and nothing switches an outlet. Its outlets drift as behaviors, an outlet that is off draws
-nothing, and the total is always what the outlets draw.
+The Ferrite PDU 4C (#1368) is the rack power conditioner: it answers, under the Ferrite enterprise
+arc, the mains voltage in millivolts, the total current in milliamps, and an outlet table of name, state
+and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the voltage, the current and
+each outlet's state. Its control face (#1653) is a JSON API behind basic auth: `GET /pdu.json` carries the
+same state, and a POST to its `/api/outlets/state` with `{"outlet": 2, "state": "off"}` switches one outlet, so the
+next SNMP read and the next document both show it. An outlet outside 1 to 4, a state other than `on` or
+`off`, or a wrong password is refused and moves nothing. The `ferrite-pdu-api` driver carries the
+`outlet-off` and `outlet-on` commands over that face. Its outlets drift as behaviors, an outlet that is
+off draws nothing, and the total is always what the outlets draw. The simulated PDU powers nothing: a
+component fed from an outlet keeps answering while that outlet is off, so its hold ends on the first up
+verdict after the quiet period rather than on the device's return.
 
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud, Ferrite), the same
 rule the boot seed follows, and a test holds it to that.
@@ -289,6 +303,63 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
+The registry is per server process, and it forgets. Deleting a node (`DELETE /nodes/{name}`) drops
+its entry at once, so neither `GET /simulation` nor `GET /nodes/{name}/simulation` can name a node
+that no longer exists. A simulator that has neither pulled nor reported for a hundred seconds (ten
+of its pulls) is dropped on the next read, so one torn down without its node being deleted ages out
+instead of reading `offline` until the server restarts; if it is still running, its next pull
+brings it back as new. Because the hits live in one process, a server run as more than one replica
+shows a simulator's status only on the replica its node's bus session landed on, and a read that
+reaches another replica sees no simulator. That is accepted while the architecture runs one
+stateless server ([scaling](/architecture/scaling/)); a shared store such as NATS KV is the path if
+it ever matters, and it is not built here.
+
+### What an endpoint observed
+
+A hit says a device was touched; it does not say whether every request a node sent arrived, or how
+each one ended. For that, every simulated endpoint keeps an **observation**
+(`internal/sim/observe.go`): counters that never reset on read, so a reader brackets a window
+with two reads and takes the difference. It counts three units, matched one for one with what the
+node tallies sending:
+
+- a **connection**, counted where a TCP face accepts it, with a gauge of those open;
+- a **request**, one exchange (an http request, an SNMP datagram, an ssh exec, a telnet or tcp line,
+  a udp datagram, a websocket frame), counted received when it arrives and settled with exactly one
+  **outcome**: `answered` (any reply that is not a refusal or an error, a 404 included),
+  `refused` (a 401 or 403, a wrong community, a wrong password), `error` (a 5xx, a command the
+  device does not know), `dropped` (the client hung up before the answer was written) or `withheld`
+  (the simulator chose not to answer, its own planted datagram loss, so a fault never reads as
+  loss);
+- a **stream** (an event stream, a websocket upgrade), counted once as opened with a gauge of those
+  open, never a request in flight, so a held stream cannot read as stuck.
+
+Beside the counters each protocol keeps a service-time histogram (fixed buckets, eight to a power of
+two of microseconds, so histograms from many nodes merge by summing and a quantile is good to an
+eighth of its octave) and the most requests it held at once in each ten-second epoch, so a reader
+takes the peak of its own window. Each face also counts how often a request found it already
+serving one: a node should never send a face two requests at once, so an overlap names the face.
+The hot path is a fixed row per device and a few atomic adds, no map and no allocation, and a nil
+row (a test engine with no observation) is a no-op.
+
+Counters are raised and read in an order that never shows a false gap: a request is counted in
+flight before it is counted received, and its outcome is counted before it leaves flight; a reader
+takes received, then in flight, then outcomes. The node keeps the same three units where its bytes
+leave (`collection.RequestTally`, for http, snmp and tcp reachability today; session and stream
+traffic is #1661), and its spool counts every telemetry batch the bus acknowledged or dropped.
+
+`GET /nodes/{name}/simulation/observation` (`omniglass node simulation observation list <node>`)
+reads all three in order over the bus: the simulator, the node, the simulator again, so a request
+in transit between two reads is inside the bracket, never a gap. The answer is per protocol, summed
+over the node's devices, with a count of devices that saw nothing on a protocol and a sample of
+their ids (capped at twenty), and the overlapping faces likewise capped, so it stays the same size
+at any fleet. It needs `simulation:read` and an all-scope component read, since the totals span
+every component the node simulates. A scale lab reconciles it hop by hop
+([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)), and a running server does the same
+continuously: `internal/closedloop` holds the reconcile, and its ring brackets each node with a
+connected simulator once a minute (faster on a lab) and reads the last ten brackets as a sliding
+window, shown on [Platform health](/guides/operator/platform-health/#with-a-simulator). The counters
+never reset, so a window is a difference of two reads, never a total since start.
+
 ### In the node's own process
 
 `omniglass node run --simulate` runs the same simulator inside the node's process: the node's run
@@ -341,12 +412,14 @@ Beside those, the fixture's simulated endpoints wire the rest:
   right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
   https key, is derived from its id, so a key the node pinned on first use survives a simulator
   restart.
-- **A first-party pusher**: the simulated booking service, beside the node, pushes the HQ
-  boardroom system's `booking-count` (meetings left in its day) and `booking-state` (`booked` or
-  `free`) through `POST /telemetry:push` on one meeting day that repeats every day. It holds a
-  service principal whose only grant is `telemetry:push` on that one system, and reads that system
-  off its own grant (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its
-  token on every run, as it does the node's, and hands it to the simulator.
+- **A first-party pusher**: the fleet declares one pusher (`sim_pushers`), the booking service, an
+  emulator device of the `booking-service` profile run by the simulator beside the node. Its
+  [push face](#a-pusher-pushes-on-its-own-cadence) pushes the HQ boardroom system's `booking-count`
+  (meetings left in its day) and `booking-state` (`booked` or `free`) through
+  `POST /telemetry:push` on one meeting day that repeats every day. It holds a service principal
+  whose only grant is `telemetry:push` on that one system, and reads that system off its own grant
+  (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its token on every
+  run, as it does the node's, and hands it to the simulator.
 
 `TestEveryCollectionMethodRunsOnAHealthyLabComponent` holds the fleet to it: every seeded driver and
 every registry transport is attached, by an endpoint that is no planted fault, on a component a
@@ -483,7 +556,55 @@ room-naming listeners read the posts, each declaring the `ucc-room-id` identity.
 carries the platform at headquarters with both endpoints and binds four of its rooms to their
 systems; its fifth room, `zr-boardroom-b`, is bound to nothing, so its values land in the conduit's
 unbound inbox until an operator binds it ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+
+The platform also reports on its own: a `rooms_report` behavior posts the same batched
+`rooms.state` every 30 seconds, so an account no one drives is still heard. A profile that is a
+**webhook sender** (#1747) names, beside its subscribe route, the driver its endpoint takes
+(`webhook.driver`, a shipped webhook driver; a test holds every profile to one) and a provision route
+(`webhook.provision`, a POST taking a room's `id`). The device list then carries, with the
+subscription, the identity values bound on the component, and the simulator adds each one it has
+not added yet through the provision route, so a room bound later is added on the next pull and a
+restarted device has every room added again. That is how a scale scenario's meeting platform comes
+to speak for every system of its site ([the lab guide](/guides/lab/#scale-lab-scenarios)); it keeps
+the profile's five demo rooms beside them, which land in its unbound inbox until #1756 retires them.
 The lab's per-room UCC services stay beside it until #1390 retires them.
+
+### A pusher pushes on its own cadence
+
+Some outside actors are not devices on the network at all: a scheduling platform's integration
+reports the places it manages by pushing to Omniglass, and nothing polls it. A profile models one
+with a **push face** (#1743): a cadence (`push.every`, at least a second) and a body template
+(`push.body`) rendered for each system the pusher reports for, over the device's state, its id and
+its clock. The face holds a bearer token for a principal granted `telemetry:push` alone on those
+systems; it reads them off its own grant (`GET /auth/me`), renders each one's batch, and posts it
+through `POST /telemetry:push`, then does it again on every tick. A failed push (a server still
+coming up, an item the server refused) drops the grant it read, so the next tick reads it again,
+and it is logged with the device and the reason, never the token. Each system is pushed on its own:
+a grant outlives the system it names, so a refused system costs only its own push, and one tick's
+failures log once, the first named and the rest counted. The face is a primitive of the
+engine, so a pusher is a profile, not code: the shipped `booking-service` is the first, its body
+reading one meeting day (`configuration.calendar.bookings`, windows in UTC) through the
+`bookingsAt` template function.
+
+A pusher is declared, not built in. The dev fleet's fixtures declare theirs under `sim_pushers`
+(a name, a profile, the systems it reports for); a scale scenario declares its own under
+`pushers` (a name, a profile, how many per site and how many of the site's systems each reports
+for), and the shipped `corporate` scenario declares one booking service per site over four
+systems ([the lab guide](/guides/lab/#the-manifest-format)). Either way the lab takes the
+same path: the seed grants each pusher's service principal `telemetry:push` on its systems, the
+lab mints its token on every run and sets it on the principal, and the simulator beside the
+pusher's node runs it as an emulator device holding that token. The token reaches the simulator's
+environment and nowhere else: the seed is handed its hash, and neither the plan nor a log prints
+it ([ADR-1743](/architecture/decisions/#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares)).
+
+A scale scenario declares a webhook sender in the same list (#1747): its profile has a webhook
+face instead of a push face, and `systems` may be omitted to scope it to every system of its site.
+The seed makes it a component rather than a principal, with an endpoint of its profile's driver, a
+signing secret minted for that seed alone (each field random, sealed in the server, never printed),
+and a binding per system on the driver's room identity, valued with the system's name. Everything
+the seed needs is read from the profile and the driver spec, so a second platform is a profile and
+a driver, not seed code. The simulator subscribes and provisions it as above, and its signed posts
+land on the push lane with the bookings.
 
 ## Adding a simulated component
 

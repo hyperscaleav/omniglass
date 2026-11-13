@@ -215,3 +215,96 @@ func TestLocationReparentEnforcement(t *testing.T) {
 		t.Fatalf("re-move pod-b under pod-a after constraining err = %v, want ErrPlacementNotAllowed", err)
 	}
 }
+
+// TestLocationReclassifyEnforcement proves the third enforcement point of
+// allowed_parent_types: retyping a location in place is validated against its
+// CURRENT parent, so the guardrail cannot be bypassed by reclassifying instead
+// of moving. A reclassify to a type that excludes the parent is refused with
+// the same PlacementError the move path returns, one to a type that allows it
+// succeeds, a root location retyped to a type that forbids root is refused as
+// TestLocationRootPlacementRejected specifies for create, and resending the
+// current type is a no-op even when the placement is grandfathered.
+func TestLocationReclassifyEnforcement(t *testing.T) {
+	t.Parallel()
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	for _, lt := range []storage.LocationType{
+		{Name: "t-campus", Label: "T-Campus", AllowedParentTypes: []string{storage.RootPlacement}},
+		{Name: "t-building", Label: "T-Building", AllowedParentTypes: []string{storage.RootPlacement, "t-campus"}},
+		{Name: "t-room", Label: "T-Room", AllowedParentTypes: []string{"t-building"}},
+		{Name: "t-annex", Label: "T-Annex", AllowedParentTypes: []string{"t-campus", "t-building"}},
+		{Name: "t-noroot", Label: "T-Noroot", AllowedParentTypes: []string{"t-campus"}},
+	} {
+		if _, err := gw.CreateLocationType(ctx, "", lt); err != nil {
+			t.Fatalf("create %s type: %v", lt.Name, err)
+		}
+	}
+
+	mustCreate(t, gw, storage.LocationSpec{Name: "hq", LocationType: "t-campus"}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "hq-b1", LocationType: "t-building", ParentName: strptr("hq")}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "hq-x1", LocationType: "t-building", ParentName: strptr("hq")}, all)
+
+	// hq-x1 sits under a campus; t-room allows only a building parent.
+	_, err := gw.UpdateLocation(ctx, "", "hq-x1", storage.LocationPatch{LocationType: strptr("t-room")}, all, all)
+	var placementErr *storage.PlacementError
+	if !errors.As(err, &placementErr) {
+		t.Fatalf("reclassify under excluded parent err = %v, want *storage.PlacementError", err)
+	}
+	if placementErr.ChildType != "t-room" || placementErr.ParentType != "t-campus" {
+		t.Errorf("placement error = %+v, want child=t-room parent=t-campus", placementErr)
+	}
+	if !errors.Is(err, storage.ErrPlacementNotAllowed) {
+		t.Error("placement error does not match storage.ErrPlacementNotAllowed via errors.Is")
+	}
+	// The refusal wrote nothing: the type is still the one it had.
+	got, err := gw.GetLocation(ctx, "hq-x1", all)
+	if err != nil {
+		t.Fatalf("get hq-x1: %v", err)
+	}
+	if got.LocationType != "t-building" {
+		t.Errorf("type after refused reclassify = %q, want t-building", got.LocationType)
+	}
+
+	// The same refusal when the type is addressed by uuid, naming the type.
+	roomType, err := gw.GetLocationType(ctx, "t-room")
+	if err != nil {
+		t.Fatalf("get t-room type: %v", err)
+	}
+	_, err = gw.UpdateLocation(ctx, "", "hq-x1", storage.LocationPatch{LocationType: &roomType.ID}, all, all)
+	if !errors.As(err, &placementErr) || placementErr.ChildType != "t-room" {
+		t.Errorf("reclassify by uuid err = %v, want PlacementError naming t-room", err)
+	}
+
+	// A type that allows the current parent succeeds.
+	after, err := gw.UpdateLocation(ctx, "", "hq-x1", storage.LocationPatch{LocationType: strptr("t-annex")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify to allowing type: %v", err)
+	}
+	if after.LocationType != "t-annex" {
+		t.Errorf("type after reclassify = %q, want t-annex", after.LocationType)
+	}
+
+	// A root location retyped to a type that forbids root is refused.
+	_, err = gw.UpdateLocation(ctx, "", "hq", storage.LocationPatch{LocationType: strptr("t-noroot")}, all, all)
+	if !errors.As(err, &placementErr) {
+		t.Fatalf("reclassify root to t-noroot err = %v, want *storage.PlacementError", err)
+	}
+	if placementErr.ChildType != "t-noroot" || placementErr.ParentType != "" {
+		t.Errorf("placement error = %+v, want child=t-noroot parent=\"\"", placementErr)
+	}
+	// A root location retyped to a root-allowing type succeeds.
+	if _, err := gw.UpdateLocation(ctx, "", "hq", storage.LocationPatch{LocationType: strptr("t-building")}, all, all); err != nil {
+		t.Fatalf("reclassify root to root-allowing type: %v", err)
+	}
+
+	// Resending the current type is not a change: a grandfathered placement
+	// (hq-b1 sits under hq, now a t-building, which t-building does not allow)
+	// is untouched by a save that restates its type.
+	if _, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{LocationType: strptr("t-building"), Label: strptr("Building 1")}, all, all); err != nil {
+		t.Fatalf("resend current type on grandfathered placement: %v", err)
+	}
+}

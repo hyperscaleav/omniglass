@@ -36,6 +36,37 @@ type Manifest struct {
 	Sites       SiteBounds  `yaml:"sites"`
 	Standards   []Standard  `yaml:"standards"`
 	Archetypes  []Archetype `yaml:"archetypes"`
+	// Pushers are the outside actors each site has (#1743), declared like
+	// its devices: an emulator profile with a push face (a token pusher) or
+	// a webhook face (a signed-webhook sender, #1747), how many a site, and
+	// how many of the site's systems each is scoped to.
+	Pushers []Pusher `yaml:"pushers"`
+}
+
+// Pusher is one outside actor a scenario places at every site, PerSite of
+// them a site, each scoped to Systems of the site's systems, or to every one
+// when Systems is omitted. Its profile's face says what kind it is: a push
+// face (a booking service, say) makes a token pusher, whose principal the
+// lab seeds and whose token it mints per run, granted telemetry:push on its
+// systems; a webhook face (the meeting platform's account, #1747) makes a
+// signed-webhook sender, a component the lab seeds with a webhook endpoint
+// and a signing secret minted per run, its rooms bound to its systems.
+type Pusher struct {
+	Name    Ref  `yaml:"name"`
+	Profile Ref  `yaml:"profile"`
+	PerSite int  `yaml:"per_site"`
+	Systems *int `yaml:"systems"`
+	Line    int  `yaml:"-"`
+}
+
+// UnmarshalYAML decodes a pusher and keeps its line.
+func (p *Pusher) UnmarshalYAML(n *yaml.Node) error {
+	type plain Pusher
+	if err := decodeKnown(n, (*plain)(p), "name", "profile", "per_site", "systems"); err != nil {
+		return err
+	}
+	p.Line = n.Line
+	return nil
 }
 
 // SiteBounds are the fewest and the most sites the scenario resolves to,
@@ -196,7 +227,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

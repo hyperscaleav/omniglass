@@ -13,6 +13,7 @@ import {
   productGroups,
   risenHits,
   sidebarPollMs,
+  simulatorConnected,
   SIDEBAR_POLL_MS,
   SIDEBAR_IDLE_POLL_MS,
   surfaceKind,
@@ -46,6 +47,14 @@ describe("risenHits", () => {
     const seen = new Map([["a", 40]]);
     expect(risenHits(seen, [row("a", 2)])).toEqual([]);
     expect(seen.get("a")).toBe(2);
+  });
+});
+
+describe("draftOf", () => {
+  it("leaves a zero field empty, so typing a value replaces it rather than trailing a 0", () => {
+    expect(draftOf(HEALTHY)).toEqual({ unplugged: false, latency_ms: "", jitter_ms: "", loss_pct: "", rate_kbit: "" });
+    expect(draftOf({ ...HEALTHY, latency_ms: 120, loss_pct: 2.5 })).toMatchObject({ latency_ms: "120", jitter_ms: "", loss_pct: "2.5" });
+    expect(parseImpairment(draftOf(HEALTHY)).value).toEqual(HEALTHY);
   });
 });
 
@@ -166,6 +175,17 @@ describe("the sidebar's poll", () => {
     expect(sidebarPollMs({ connected: false, nodes: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(sidebarPollMs(undefined)).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(SIDEBAR_IDLE_POLL_MS).toBeGreaterThan(SIDEBAR_POLL_MS);
+  });
+});
+
+describe("simulatorConnected", () => {
+  const me = (permissions: string[]) => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  it("holds only for a simulation reader with a simulator connected (#1647)", () => {
+    expect(simulatorConnected(me(["simulation:read"]), { connected: true, nodes: [] })).toBe(true);
+    expect(simulatorConnected(me(["simulation:read"]), { connected: false, nodes: [] })).toBe(false);
+    expect(simulatorConnected(me(["simulation:read"]), undefined)).toBe(false);
+    expect(simulatorConnected(me(["node:read"]), { connected: true, nodes: [] })).toBe(false);
+    expect(simulatorConnected(undefined, { connected: true, nodes: [] })).toBe(false);
   });
 });
 

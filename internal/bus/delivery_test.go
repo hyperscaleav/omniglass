@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,12 +17,18 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
+	"github.com/hyperscaleav/omniglass/internal/labfootprint"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -587,5 +594,416 @@ func TestARefusedBatchIsDroppedAtOnce(t *testing.T) {
 	f.waitDrained(t, srv)
 	if n := store.attempts.Load(); n != 1 {
 		t.Fatalf("the refused batch was landed %d times, want once", n)
+	}
+}
+
+// The ingest hop's loss (#1641), driven through a real JetStream and a real
+// Postgres: a node publishes ledgered batches over its own subject, and the
+// lab's read reconciles their receipts into each kind's loss.
+
+// ledgerRig is a node, its credentials, and one poll task it holds.
+type ledgerRig struct {
+	deliveryFixture
+	token string
+	base  time.Time
+}
+
+const ledgerNode, ledgerBoot = "node-ledger", "boot-ledger-1"
+
+func newLedgerRig(t *testing.T) ledgerRig {
+	t.Helper()
+	f := newDeliveryFixture(t)
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: ledgerNode}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	token := "secret-ledger"
+	if _, err := f.gw.SetEnrollmentToken(f.ctx, "", ledgerNode, hashHex(token), all); err != nil {
+		t.Fatalf("mint token: %v", err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from node where name = $1), '{"target":"127.0.0.1:1"}'::jsonb)`, ledgerNode); err != nil {
+		t.Fatalf("insert endpoint: %v", err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `insert into task (id, mode, endpoint_id, enabled) values
+		('t-ledger', 'poll', (select id from endpoint where name = 'bar-1-tcp'), true)`); err != nil {
+		t.Fatalf("insert task: %v", err)
+	}
+	return ledgerRig{deliveryFixture: f, token: token, base: time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)}
+}
+
+// connect is the node's own connection to srv.
+func (r ledgerRig) connect(t *testing.T, srv *bus.Server) *nats.Conn {
+	t.Helper()
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo(ledgerNode, r.token),
+		nats.CustomInboxPrefix(collection.InboxPrefix(ledgerNode)))
+	if err != nil {
+		t.Fatalf("node connect: %v", err)
+	}
+	t.Cleanup(nc.Close)
+	return nc
+}
+
+// window is the read's window: batches 1 to 5 are minted in it, 6 and on
+// after it.
+func (r ledgerRig) window() delivery.Window {
+	return delivery.Window{From: r.base, To: r.base.Add(5 * time.Second)}
+}
+
+// ledgered is batch seq of the boot, minted seq seconds after the base: one
+// task metric and one self-log, with the ledger a node's spool stamps.
+// resolved is the highest seq every batch at or below had left the spool.
+func (r ledgerRig) ledgered(seq, resolved uint64) *ogv1.TelemetryBatch {
+	minted := r.base.Add(time.Duration(seq) * time.Second)
+	tag := fmt.Sprintf("ledger-%d", seq)
+	return &ogv1.TelemetryBatch{
+		NodeId: ledgerNode,
+		Groups: []*ogv1.TaskGroup{{TaskId: "t-ledger", Ts: timestamppb.New(minted),
+			Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: float64(seq)}}}},
+		Logs: []*ogv1.LogLine{{Message: tag, Severity: "info", Ts: timestamppb.New(minted)}},
+		Ledger: &ogv1.DeliveryLedger{Boot: ledgerBoot, Seq: seq, Minted: timestamppb.New(minted), Resolved: resolved,
+			Kinds: []*ogv1.KindCount{
+				{Kind: string(delivery.Metric), Count: 1, Before: seq - 1},
+				{Kind: string(delivery.Log), Count: 1, Before: seq - 1},
+			}},
+	}
+}
+
+// publish sends each batch on the node's subject.
+func (r ledgerRig) publish(t *testing.T, nc *nats.Conn, batches ...*ogv1.TelemetryBatch) {
+	t.Helper()
+	for _, b := range batches {
+		publishEvent(t, nc, ledgerNode, b)
+	}
+}
+
+// waitReceipts waits until the boot has n receipts and the stream is empty.
+func (r ledgerRig) waitReceipts(t *testing.T, srv *bus.Server, n int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var got int
+		if err := r.conn.QueryRow(r.ctx, `select count(*) from telemetry_receipt where boot = $1`, ledgerBoot).Scan(&got); err != nil {
+			t.Fatalf("count receipts: %v", err)
+		}
+		if got >= n {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the boot has %d receipts, want %d", got, n)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	r.waitDrained(t, srv)
+}
+
+// read is the lab's delivery read over the rig's window.
+func (r ledgerRig) read(t *testing.T) ([]labfootprint.DeliveryRow, []labfootprint.UnsettledBoot) {
+	t.Helper()
+	return r.readDelivery(t, r.window())
+}
+
+// readDelivery is the lab's delivery read over w, as lab measure makes it.
+func (f deliveryFixture) readDelivery(t *testing.T, w delivery.Window) ([]labfootprint.DeliveryRow, []labfootprint.UnsettledBoot) {
+	t.Helper()
+	rows, err := f.conn.Query(f.ctx, labfootprint.ReceiptsQuery(w.From, w.To))
+	if err != nil {
+		t.Fatalf("read receipts: %v", err)
+	}
+	var lines []string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatalf("scan a receipt: %v", err)
+		}
+		lines = append(lines, line)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read receipts: %v", err)
+	}
+	receipts, err := labfootprint.ParseReceipts(strings.Join(lines, "\n"))
+	if err != nil {
+		t.Fatalf("parse receipts: %v", err)
+	}
+	out, unsettled, ended := labfootprint.DeliveryOf(labfootprint.DeliveryRead{Read: true, Window: w, Receipts: receipts, StreamClear: true})
+	if len(ended) > 0 {
+		t.Fatalf("a boot read as ended by a later boot: %+v", ended)
+	}
+	return out, unsettled
+}
+
+// wantRow fails unless the read has an ingest row for k with these figures.
+func wantRow(t *testing.T, rows []labfootprint.DeliveryRow, k delivery.Kind, in, out, dedup uint64, outcomes map[delivery.Outcome]uint64) {
+	t.Helper()
+	wantHopRow(t, rows, delivery.Ingest, k, in, out, dedup, outcomes)
+}
+
+// wantHopRow fails unless the read has a row of hop h for k with these
+// figures.
+func wantHopRow(t *testing.T, rows []labfootprint.DeliveryRow, h delivery.Hop, k delivery.Kind, in, out, dedup uint64, outcomes map[delivery.Outcome]uint64) {
+	t.Helper()
+	for _, row := range rows {
+		if row.Kind != k || row.Hop != h {
+			continue
+		}
+		if row.In != in || row.Out != out || row.Deduplicated != dedup {
+			t.Fatalf("%s %s: in %d out %d dedup %d, want in %d out %d dedup %d", h, k, row.In, row.Out, row.Deduplicated, in, out, dedup)
+		}
+		for _, o := range delivery.OutcomesOf(h) {
+			if row.Outcomes[o] != outcomes[o] {
+				t.Fatalf("%s %s: %s = %d, want %d (all: %v)", h, k, o, row.Outcomes[o], outcomes[o], row.Outcomes)
+			}
+		}
+		wantLoss, _ := delivery.Loss(in, out)
+		if row.Loss == nil || *row.Loss != wantLoss {
+			t.Fatalf("%s %s: loss %v, want %v", h, k, row.Loss, wantLoss)
+		}
+		return
+	}
+	t.Fatalf("no %s %s row in %+v", h, k, rows)
+}
+
+// TestWithheldBatchReadsAsMissing: a boot's batch 3 never reaches the
+// stream (the node dropped it, its spool has moved past it), so its items
+// read as missing, from the offsets of its neighbors, and the rest stored.
+func TestWithheldBatchReadsAsMissing(t *testing.T) {
+	r := newLedgerRig(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, srv, 5)
+
+	rows, unsettled := r.read(t)
+	if len(unsettled) != 0 {
+		t.Fatalf("unsettled %v, want the boot settled: batch 6 resolved past the window", unsettled)
+	}
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Missing: 1})
+		// The batch carries no node account of the gap, so the node hop
+		// shipped it: the loss is the ingest's to name.
+		wantHopRow(t, rows, delivery.Node, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Shipped: 5})
+	}
+	if len(rows) != 4 {
+		t.Fatalf("rows %+v, want a node and an ingest row for metric and log only", rows)
+	}
+}
+
+// TestLowerNeighborLongBeforeTheWindowOwnsItsGap: the boot's batch 1 was
+// minted two hours before the window (the node was down in between), so
+// batch 2 is the boot's first in it. Batch 1 is still the lower neighbor
+// that owns the seqs below 2: the read finds it by seq, however long ago it
+// was minted, and the window reads loss 0 rather than batch 1's items as
+// missing.
+func TestLowerNeighborLongBeforeTheWindowOwnsItsGap(t *testing.T) {
+	r := newLedgerRig(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	first := r.ledgered(1, 0)
+	early := timestamppb.New(r.base.Add(-2 * time.Hour))
+	first.Ledger.Minted, first.Groups[0].Ts, first.Logs[0].Ts = early, early, early
+	r.publish(t, nc, first, r.ledgered(2, 1), r.ledgered(3, 2), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, srv, 6)
+
+	rows, unsettled := r.read(t)
+	if len(unsettled) != 0 {
+		t.Fatalf("unsettled %v, want the boot settled: batch 6 resolved past the window", unsettled)
+	}
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 4, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4})
+	}
+}
+
+// TestHeldBatchLandsLateAndReadsWhole: batch 1 is held in the node's spool
+// while 2 to 5 land. Until it lands the boot is unsettled and reads no
+// ratio; once it lands late, the read is loss 0.
+func TestHeldBatchLandsLateAndReadsWhole(t *testing.T) {
+	r := newLedgerRig(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	r.publish(t, nc, r.ledgered(2, 0), r.ledgered(3, 0), r.ledgered(4, 0), r.ledgered(5, 0), r.ledgered(6, 0))
+	r.waitReceipts(t, srv, 5)
+
+	rows, unsettled := r.read(t)
+	if len(rows) != 0 || len(unsettled) != 1 || unsettled[0] != (labfootprint.UnsettledBoot{Node: ledgerNode, Boot: ledgerBoot}) {
+		t.Fatalf("before batch 1 lands: rows %+v unsettled %v, want no ratio and the boot named", rows, unsettled)
+	}
+
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(7, 6))
+	r.waitReceipts(t, srv, 7)
+	rows, unsettled = r.read(t)
+	if len(unsettled) != 0 {
+		t.Fatalf("unsettled %v after batch 1 landed", unsettled)
+	}
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Stored: 5})
+	}
+}
+
+// failSeq fails every landing of one seq, as a database that never takes the
+// batch; with redeliver set it instead fails only that seq's first landing
+// after committing it, as an ack lost after the commit.
+type failSeq struct {
+	*storage.PG
+	seq       uint64
+	redeliver bool
+	attempts  atomic.Int32
+}
+
+func (s *failSeq) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
+	if b.Ledger == nil || b.Ledger.Seq != s.seq {
+		return s.PG.LandBatch(ctx, b)
+	}
+	n := s.attempts.Add(1)
+	if !s.redeliver {
+		return storage.LandResult{}, errors.New("the database blinked")
+	}
+	landed, err := s.PG.LandBatch(ctx, b)
+	if n == 1 {
+		return landed, errors.New("the ack never reached the stream")
+	}
+	return landed, err
+}
+
+// TestMaxDeliveredBatchReadsAsAbandoned: a batch that fails every delivery
+// is dropped at the bound, and the receipt it leaves names its items
+// abandoned, not missing (#1691).
+func TestMaxDeliveredBatchReadsAsAbandoned(t *testing.T) {
+	restore := bus.SetTelemetryNakDelay(20 * time.Millisecond)
+	defer restore()
+	r := newLedgerRig(t)
+	store := &failSeq{PG: r.gw, seq: 3}
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, store)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1), r.ledgered(3, 2), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, srv, 6)
+	if n := store.attempts.Load(); n != 5 {
+		t.Fatalf("batch 3 was tried %d times, want it redelivered to the bound of 5", n)
+	}
+
+	rows, unsettled := r.read(t)
+	if len(unsettled) != 0 {
+		t.Fatalf("unsettled %v", unsettled)
+	}
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Abandoned: 1})
+	}
+}
+
+// TestTermedBatchLandsALaterCopy: a batch the server Termed leaves a receipt
+// naming its cause, and a later copy of it (a node's retry past the stream's
+// duplicate window, here a fresh stream) still lands its rows: the landing
+// replaces the Term receipt, and the batch reads stored, loss 0 (#1691).
+func TestTermedBatchLandsALaterCopy(t *testing.T) {
+	restore := bus.SetTelemetryNakDelay(20 * time.Millisecond)
+	defer restore()
+	r := newLedgerRig(t)
+	const id = "batch-ledger-3"
+	third := r.ledgered(3, 2)
+
+	first, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, &failSeq{PG: r.gw, seq: 3})
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	nc := r.connect(t, first)
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1))
+	publishBatchID(t, nc, third, id)
+	r.publish(t, nc, r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, first, 6)
+	nc.Close()
+	first.Shutdown()
+	if n := r.logLines(t, "ledger-3"); n != 0 {
+		t.Fatalf("batch 3 landed %d log lines while it failed, want none", n)
+	}
+
+	second, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
+	if err != nil {
+		t.Fatalf("start the second bus: %v", err)
+	}
+	defer second.Shutdown()
+	publishBatchID(t, r.connect(t, second), third, id)
+	deadline := time.Now().Add(15 * time.Second)
+	for r.logLines(t, "ledger-3") == 0 {
+		if time.Now().After(deadline) {
+			var termed bool
+			var deliveries int
+			var outcome string
+			_ = r.conn.QueryRow(r.ctx, `select termed, deliveries, coalesce(outcome::text, '') from telemetry_receipt where boot = $1 and seq = 3`, ledgerBoot).Scan(&termed, &deliveries, &outcome)
+			t.Fatalf("the later copy of batch 3 never landed its rows: receipt termed=%v deliveries=%d outcome=%q", termed, deliveries, outcome)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	r.waitDrained(t, second)
+
+	rows, _ := r.read(t)
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Stored: 5})
+	}
+}
+
+// publishBatchID publishes ev on the rig's node subject under the
+// Nats-Msg-Id id, as a node's spool does, and waits for the stream's ack.
+func publishBatchID(t *testing.T, nc *nats.Conn, ev *ogv1.TelemetryBatch, id string) {
+	t.Helper()
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal batch: %v", err)
+	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		t.Fatalf("jetstream: %v", err)
+	}
+	if _, err := collection.PublishBatch(context.Background(), js, collection.TelemetrySubject(ledgerNode), b, id, 5*time.Second); err != nil {
+		t.Fatalf("publish batch %s: %v", id, err)
+	}
+}
+
+// logLines is how many of the node's self-log lines with message msg the
+// store holds.
+func (r ledgerRig) logLines(t *testing.T, msg string) int {
+	t.Helper()
+	var n int
+	if err := r.conn.QueryRow(r.ctx, `select count(*) from node_log where message = $1`, msg).Scan(&n); err != nil {
+		t.Fatalf("count log lines: %v", err)
+	}
+	return n
+}
+
+// TestRedeliveredBatchReadsAsDeduplicated: a batch landed, its ack lost, and
+// the stream handed it over again: the redelivery reads as deduplicated,
+// beside the ratio, and the loss stays 0.
+func TestRedeliveredBatchReadsAsDeduplicated(t *testing.T) {
+	r := newLedgerRig(t)
+	store := &failSeq{PG: r.gw, seq: 2, redeliver: true}
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, store)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	nc := r.connect(t, srv)
+	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1), r.ledgered(3, 2), r.ledgered(4, 3), r.ledgered(5, 4), r.ledgered(6, 5))
+	r.waitReceipts(t, srv, 6)
+	if n := store.attempts.Load(); n != 2 {
+		t.Fatalf("batch 2 was landed %d times, want the first and its redelivery", n)
+	}
+
+	rows, _ := r.read(t)
+	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
+		wantRow(t, rows, k, 5, 5, 1, map[delivery.Outcome]uint64{delivery.Stored: 5, delivery.Deduplicated: 1})
 	}
 }

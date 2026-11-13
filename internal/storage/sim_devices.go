@@ -105,6 +105,10 @@ type SimWebhook struct {
 	Path   string
 	Scheme string
 	Secret string
+	// Identities are the values bound on the component, in order (#1747): a
+	// platform account's room ids, which the simulator adds to the account
+	// so its reports name every bound room.
+	Identities []string
 }
 
 // simulatedBlock is the address block the dev seed and the simulated fleet's
@@ -165,6 +169,10 @@ func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWe
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
 	}
+	bound, err := p.boundValues(ctx, comps)
+	if err != nil {
+		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+	}
 	out := map[string]SimWebhook{}
 	for _, c := range comps {
 		tok, _, err := p.nodeSecretFields(ctx, WebhookTokenSecret, c)
@@ -175,9 +183,33 @@ func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWe
 		if err != nil {
 			continue
 		}
-		out[c] = SimWebhook{Path: "/api/v1/webhooks/" + tok["token"], Scheme: t.Scheme, Secret: webhookSenderSecret(t.Scheme, t.Credential)}
+		out[c] = SimWebhook{Path: "/api/v1/webhooks/" + tok["token"], Scheme: t.Scheme, Secret: webhookSenderSecret(t.Scheme, t.Credential), Identities: bound[c]}
 	}
 	return out, nil
+}
+
+// boundValues reads the distinct identity values bound on each conduit, in
+// order, keyed by conduit id.
+func (p *PG) boundValues(ctx context.Context, conduits []string) (map[string][]string, error) {
+	if len(conduits) == 0 {
+		return nil, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		select distinct conduit_id::text, value from identity_binding
+		where conduit_id = any($1::uuid[]) order by 1, 2`, conduits)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var c, v string
+		if err := rows.Scan(&c, &v); err != nil {
+			return nil, err
+		}
+		out[c] = append(out[c], v)
+	}
+	return out, rows.Err()
 }
 
 // webhookSenderSecret is the secret a sender holds for a scheme, from the

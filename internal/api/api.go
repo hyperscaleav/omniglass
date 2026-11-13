@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
@@ -78,6 +81,15 @@ type options struct {
 	// the client address a credential is stamped with and a webhook sender is
 	// limited by (#1185). Unset takes clientaddr.Default.
 	trustedProxies clientaddr.Trust
+	// requestRecorder times every API request into the server's platform
+	// metrics (#1627). Nil records nothing: a test's handler.
+	requestRecorder *platformmetric.Recorder
+	// ring is the server's closed-loop window over each node with a
+	// simulator (#1647). Nil reads as no node measured.
+	ring *closedloop.Ring
+	// log is where a route logs a failure it answers without its cause.
+	// Unset is slog.Default.
+	log *slog.Logger
 }
 
 // Option configures NewHandler.
@@ -104,6 +116,16 @@ func WithCollectionReportEvery(d time.Duration) Option {
 // WithTrustedProxies sets the peers whose X-Forwarded-For is believed
 // (OMNIGLASS_TRUSTED_PROXIES); an empty, non-nil Trust believes none.
 func WithTrustedProxies(t clientaddr.Trust) Option { return func(o *options) { o.trustedProxies = t } }
+
+// WithRequestRecorder times every API request into rec (#1627): its count,
+// mean and max duration per route template and status class, reported on the
+// server's platform component each window.
+func WithRequestRecorder(rec *platformmetric.Recorder) Option {
+	return func(o *options) { o.requestRecorder = rec }
+}
+
+// WithLogger sets where a route logs a failure it answers without its cause.
+func WithLogger(l *slog.Logger) Option { return func(o *options) { o.log = l } }
 
 // WithVersion sets the build version the MCP server reports to its clients.
 func WithVersion(v string) Option { return func(o *options) { o.version = v } }
@@ -147,8 +169,16 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	if o.trustedProxies == nil {
 		o.trustedProxies = clientaddr.Default
 	}
+	if o.log == nil {
+		o.log = slog.Default()
+	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
+		// Time every request first, so its duration covers the whole API
+		// stack; the route template it records is read after the router ran.
+		if o.requestRecorder != nil {
+			sub.Use(recordRequests(o.requestRecorder, time.Now))
+		}
 		// Capture the User-Agent and client IP before Huma, so login and self-service
 		// token creation can stamp a credential with the device and address behind it.
 		sub.Use(captureClientMeta(o.trustedProxies))
@@ -398,11 +428,17 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerRoleRoutes(api, a, gw)
 	registerMemberRoutes(api, a, gw)
 	registerIdentityBindingRoutes(api, a, gw)
+	registerComponentDependencyRoutes(api, a, gw)
 	registerAlarmRoutes(api, a, gw)
 	registerAlarmTimelineRoute(api, a, gw)
 	registerHealthRoutes(api, a, gw)
-	registerViewRoutes(api, a, gw)
-	registerNodeRoutes(api, a, gw, o.natsURL)
+	viewLog := o.log
+	if viewLog == nil {
+		viewLog = slog.Default()
+	}
+	registerViewRoutes(api, a, gw, viewLog)
+	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
+	registerNodeRoutes(api, a, gw, o.natsURL, o.simHub)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
 	registerPropertyRoutes(api, a, gw)

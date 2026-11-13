@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -373,30 +374,41 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 	}
 	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", jetStreamPublish(js))
 	big := strings.Repeat("x", int(nc.MaxPayload())+1024)
-	recs := captureLogs(t, func() {
-		if err := spool.send(selfLog(big)); err != nil {
-			t.Fatalf("send the oversized batch: %v", err)
-		}
-		if err := spool.send(selfLog("behind the oversized batch")); err != nil {
-			t.Fatalf("send the batch behind it: %v", err)
-		}
-		ctx, cancel := context.WithTimeout(f.ctx, 10*time.Second)
-		defer cancel()
-		if err := spool.drain(ctx); err != nil {
-			t.Fatalf("drain: %v (the oversized batch blocked the queue)", err)
-		}
-	})
+	// The shipper tells the drop as it goes idle, after it wakes drain, so
+	// the capture stays in place until the notice arrives rather than ending
+	// when drain returns.
+	h := &recordingHandler{}
+	prior := slog.Default()
+	slog.SetDefault(slog.New(h))
+	defer slog.SetDefault(prior)
+	if err := spool.send(selfLog(big)); err != nil {
+		t.Fatalf("send the oversized batch: %v", err)
+	}
+	if err := spool.send(selfLog("behind the oversized batch")); err != nil {
+		t.Fatalf("send the batch behind it: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(f.ctx, 10*time.Second)
+	defer cancel()
+	if err := spool.drain(ctx); err != nil {
+		t.Fatalf("drain: %v (the oversized batch blocked the queue)", err)
+	}
 	f.waitNodeLog(t, "behind the oversized batch", 15*time.Second)
 	if !spool.takeOverflow() {
 		t.Fatal("the spool dropped a batch and did not report it to the run loop")
 	}
-	told := false
-	for _, r := range recs {
-		if v, ok := attr(r, "dropped"); ok && v.Int64() == 1 {
-			told = true
+	told := func() bool {
+		for _, r := range h.all() {
+			if v, ok := attr(r, "dropped"); ok && v.Int64() == 1 {
+				return true
+			}
 		}
+		return false
 	}
-	if !told {
+	deadline := time.Now().Add(5 * time.Second)
+	for !told() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !told() {
 		t.Fatal("the dropped batch was never told with its count")
 	}
 }
