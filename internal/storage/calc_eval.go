@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
@@ -474,7 +475,12 @@ func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcO
 		return err
 	}
 	if out.value != nil && out.err == "" && len(out.missing) == 0 {
-		if err := p.writeCalcOutput(ctx, tx, r, owner, out.value); err != nil {
+		err := p.writeCalcOutput(ctx, tx, r, owner, out.value)
+		var refused *calcOutputRefusal
+		if errors.As(err, &refused) {
+			// A rule outcome: nothing was written, and a retry cannot succeed.
+			out.value, out.err = nil, refused.Error()
+		} else if err != nil {
 			return err
 		}
 	}
@@ -868,8 +874,46 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 		return p.writeMetricSamples(ctx, tx, w, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 			Value: f, Source: calcSource, TS: ts}})
 	}
+	if err := checkCalcPropertyValue(ctx, tx, r, v); err != nil {
+		return err
+	}
 	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, false)
+}
+
+// calcOutputRefusal is a property output's value the property cannot hold: a
+// rule's outcome (recorded in its state), not a database fault, so it is not
+// retried.
+type calcOutputRefusal struct{ msg string }
+
+func (e *calcOutputRefusal) Error() string { return e.msg }
+
+// checkCalcPropertyValue holds a property output to the check ingest applies
+// (key.ValidateValue against the property's data type and validation), read
+// by the id the rule holds the output by. A refusal names the output key and
+// the validator's reason.
+func checkCalcPropertyValue(ctx context.Context, tx pgx.Tx, r CalcRule, v any) error {
+	var dataType string
+	var validation []byte
+	if err := tx.QueryRow(ctx, `select data_type, validation from property_type where id = $1::uuid`, r.outputID).Scan(&dataType, &validation); err != nil {
+		return fmt.Errorf("storage: calc output %s data type: %w", r.OutputKey, err)
+	}
+	// A json property holds the document the formatted text spells, as ingest
+	// validates it; string and bool hold the value itself.
+	var raw json.RawMessage
+	var err error
+	if dataType == "json" {
+		raw = json.RawMessage(rules.FormatCalcValue(v))
+	} else {
+		raw, err = json.Marshal(v)
+	}
+	if err == nil {
+		err = key.ValidateValue(dataType, raw, validation)
+	}
+	if err != nil {
+		return &calcOutputRefusal{msg: fmt.Sprintf("output %s refused %s: %v", r.OutputKey, rules.FormatCalcValue(v), err)}
+	}
+	return nil
 }
 
 // calcOutputRefresh is how old a metric calc output's newest row may grow
