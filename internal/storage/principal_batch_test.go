@@ -253,7 +253,7 @@ func describePrincipal(pr Principal) string {
 	for _, g := range pr.Grants {
 		group := "direct"
 		if g.GroupID != nil {
-			group = "group:" + deref(g.GroupName)
+			group = "group:" + deref(g.GroupName) + "/" + deref(g.GroupLabel)
 		}
 		s += fmt.Sprintf(" grant(%s,%s,%s,%s,%s)", g.Role, g.ScopeKind, deref(g.ScopeID), g.ScopeOp, group)
 	}
