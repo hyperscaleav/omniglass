@@ -17,6 +17,10 @@ export interface FlatOption {
   value: string;
   label: string;
   depth: number;
+  // The labels of the nodes above this one, root first (empty at a root): the
+  // placement a picker shows beside a closed selection, where the depth the
+  // open list draws is not on screen.
+  ancestors: string[];
 }
 
 // pathTo returns the labels from the root down to and including the given node,
@@ -58,13 +62,13 @@ export function flattenTree(nodes: TreeNode[], excludeSubtreeOf?: string): FlatO
   for (const list of children.values()) list.sort(bySibling);
 
   const out: FlatOption[] = [];
-  const walk = (key: string | null, depth: number) => {
+  const walk = (key: string | null, depth: number, ancestors: string[]) => {
     for (const n of children.get(key) ?? []) {
       if (n.id === excludeSubtreeOf) continue;
-      out.push({ value: n.value, label: n.label, depth });
-      walk(n.id, depth + 1);
+      out.push({ value: n.value, label: n.label, depth, ancestors });
+      walk(n.id, depth + 1, [...ancestors, n.label]);
     }
   };
-  walk(null, 0);
+  walk(null, 0, []);
   return out;
 }

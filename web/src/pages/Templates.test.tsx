@@ -14,6 +14,7 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { uuidFor } from "../lib/testids";
 import { standardRolesKey } from "../lib/system_roles";
+import { pickTree } from "../components/TreeSelect.testkit";
 
 // The Templates page (#1329): the catalog across four kinds, filtered by the
 // URL's ?kind=, each row a blade that renders what the template creates from
@@ -242,7 +243,7 @@ describe("Templates page", () => {
     const b = await blade("A floor of meeting rooms");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-place");
-    fireEvent.change(within(form).getByLabelText("Parent place"), { target: { value: "hq.west" } });
+    await pickTree(within(form).getByLabelText("Parent place"), "West");
     fireEvent.input(within(form).getByLabelText("Name"), { target: { value: "level-9" } });
     fireEvent.click(screen.getByRole("button", { name: /start places/i }));
     await waitFor(() => expect(landed).toBe(`/locations/${LVL_ID}?from=meeting-floor`));

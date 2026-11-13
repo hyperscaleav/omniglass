@@ -184,7 +184,7 @@ in the tick resolve in one read, however many conduits its groups name. A refuse
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
 | Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
-| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-1-2-gib-a-day)) |
+| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)) |
 | Ingest lag p99 | | under 5 s |
 
 The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
@@ -220,7 +220,7 @@ day. Receipts are pruned at a day, so this is the table's standing size, not unb
 is about 1% of the metric table the same fleet writes in a day. The earlier 0.5 GiB target was set for
 the narrow receipt before every batch carried its accounting, and even a compacted receipt with the
 ledger is past it, so the target is 1.2 GiB
-([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-1-2-gib-a-day)).
+([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)).
 
 ### Scale up or scale out: what the figures say
 

@@ -365,7 +365,7 @@ export default function Profile() {
             </div>
             <div>
               <label class="eyebrow mb-1.5 block" for="profile-email">Email</label>
-              <input id="profile-email" type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly />
+              <input id="profile-email" type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly placeholder="not set" />
               <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
             </div>
             <Note note={profileMsg()} />

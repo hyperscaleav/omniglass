@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { AlarmBody, AlarmTimelineEntryBody } from "../api/api.gen";
 import { compareSeverity, type SeverityLevel } from "./severity";
 
 // The alarms data layer: thin typed wrappers over the generated client, plus the
@@ -15,7 +15,7 @@ import { compareSeverity, type SeverityLevel } from "./severity";
 // Clearing keeps the row: what was wrong and when it was wrong outlives the fix,
 // which is the point of the recorded history.
 
-export type Alarm = components["schemas"]["AlarmBody"];
+export type Alarm = AlarmBody;
 
 // Both the active set and the recent history come from one route, so one cache
 // key covers both and clearing an alarm invalidates a single entry.
@@ -152,7 +152,7 @@ export function splitAlarms(list: Alarm[], levels?: SeverityLevel[] | null): { a
 
 // ---- an alarm's timeline (#950) ---------------------------------------------
 
-export type AlarmTimelineEntry = components["schemas"]["AlarmTimelineEntryBody"];
+export type AlarmTimelineEntry = AlarmTimelineEntryBody;
 
 // Every alarm's timeline shares one prefix, so an acknowledge or a clear can
 // refresh whichever timeline is open.

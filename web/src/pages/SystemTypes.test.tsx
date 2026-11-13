@@ -6,6 +6,7 @@ import SystemTypes from "./SystemTypes";
 import { SYSTEM_TYPES_KEY, type SystemType } from "../lib/system_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // System Types (Catalog > Systems: Types): the coarse space taxonomy
 // (ADR-0096), on the same official/custom FlatList pattern as Component Types
@@ -166,8 +167,7 @@ describe("SystemTypes page", () => {
   it("offers the shipped tree, with Root, in the create form's Parent picker", async () => {
     mount();
     fireEvent.click(screen.getByText("New system type"));
-    const parentSelect = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const labels = Array.from(parentSelect.options).map((o) => o.textContent?.trim());
+    const labels = await treeOptions(await screen.findByLabelText("Parent"));
     expect(labels[0]).toMatch(/root/i);
     expect(labels).toContain("AV");
     expect(labels).toContain("Boardroom");
@@ -186,7 +186,7 @@ describe("SystemTypes page", () => {
     mount();
     fireEvent.click(screen.getByText("New system type"));
     fireEvent.input(await screen.findByPlaceholderText("Huddle Room"), { target: { value: "Lecture Hall" } });
-    fireEvent.change(screen.getByLabelText("Parent"), { target: { value: "room" } });
+    await pickTree(screen.getByLabelText("Parent"), "Room");
     fireEvent.click(screen.getByRole("button", { name: /create system type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ name: "lecture-hall", label: "Lecture Hall", parent_id: "room" });

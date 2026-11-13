@@ -116,7 +116,7 @@ image:
 # command tree (internal/cli/api_gen.go), the MCP tool catalog and its reference
 # page (internal/mcp/catalog_gen.go, docs/, via mcpgen), the CLI reference page
 # (from that command tree, into docs/), the protobuf telemetry wire, the typed SPA
-# client (web/src/api/schema.gen.ts), and the schema facts the docs render
+# client (web/src/api/api.gen.ts and paths.gen.ts, via orval), and the schema facts the docs render
 # storage tables from (docs/src/generated/schema.json, via erdgen). The spec is
 # the seam every downstream client is generated from. Run after any API change;
 # the results are committed and reviewed like code.
@@ -498,9 +498,9 @@ docs-shots: all
 # masked in the baseline through each page's frontmatter, so the pinned
 # browser's rasters are byte-stable and a nonzero diff is a real,
 # un-recaptured UI change. The clean shots the docs embed are not diffed;
-# their masked regions legitimately move every capture. DOCS_SHOTS_EXACT=1
-# compares every pixel instead of through pixelmatch's perceptual threshold
-# (#774): with DOCS_SHOTS_TZ, it is how a mask is proven to hold (#1081).
+# their masked regions legitimately move every capture. The comparison is
+# exact, every pixel in every channel (#774); with DOCS_SHOTS_TZ it is how a
+# mask is proven to hold (#1081).
 # The temp dirs are repo-relative so they land inside the capture container's mount.
 docs-shots-check: all
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp/clean $$tmp/baseline; \
