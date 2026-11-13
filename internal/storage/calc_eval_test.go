@@ -523,3 +523,79 @@ func TestCalcComponentRetypeWhileServing(t *testing.T) {
 		t.Fatalf("%d state rows after leaving the selector, want none", n)
 	}
 }
+
+// TestCalcProductRetype proves a product's classification change brings the
+// calc rules of every component of that product in line (#1030), as
+// markComponentCalcRules does for a single component's reclassify: retyped
+// out of a rule's selector, state and marks go on every component; retyped
+// back in, the rule is marked on every component holding a value of one of
+// the rule's inputs.
+func TestCalcProductRetype(t *testing.T) {
+	t.Parallel()
+	r := newEvalRig(t)
+	p := storagetest.MintProduct(t, r.ctx, r.gw, "display")
+	displayType := p.ComponentType
+	videoBarType := "video-bar"
+
+	// Create two components of product P (display type).
+	comp1, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "product-target-1", ProductName: &p.Name}, r.all, r.all, r.all, r.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comp2, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "product-target-2", ProductName: &p.Name}, r.all, r.all, r.all, r.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a rule selecting display type.
+	spec := avgSpec("display-mean")
+	spec.Selector = storage.CalcRuleSelector{ComponentTypes: []string{displayType}}
+	if _, err := r.create(spec); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add metrics to both components, drain so state rows exist.
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: comp1.ID, Key: "room-temperature", Value: 20, Source: "test", TS: time.Now()},
+		{OwnerKind: "component", OwnerID: comp2.ID, Key: "room-temperature", Value: 21, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.drain()
+	state := `select count(*) from calc_rule_state where component_id in ('` + comp1.ID + `', '` + comp2.ID + `')`
+	if n := count(t, r.conn, state); n != 2 {
+		t.Fatalf("%d state rows on the product's components, want 2", n)
+	}
+
+	// Reclassify product to video-bar: state and marks on both components go.
+	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &videoBarType}); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, r.conn, state); n != 0 {
+		t.Fatalf("%d state rows after product reclassify out, want none", n)
+	}
+	if n := r.pending(); n != 0 {
+		t.Fatalf("%d marks after product reclassify out, want none", n)
+	}
+
+	// Reclassify back to display: marked on values held, computes on drain.
+	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &displayType}); err != nil {
+		t.Fatal(err)
+	}
+	if n := r.pending(); n != 2 {
+		t.Fatalf("%d marks after product reclassify back, want 2", n)
+	}
+	r.drain()
+	if n := count(t, r.conn, state); n != 2 {
+		t.Fatalf("%d state rows after drain post-reclassify, want 2", n)
+	}
+
+	// Product reclassification within the selector, or a save restating the
+	// component_type, inserts no marks.
+	if _, err := r.gw.UpdateProduct(r.ctx, "", p.Name, storage.ProductPatch{ComponentType: &displayType}); err != nil {
+		t.Fatal(err)
+	}
+	if n := r.pending(); n != 0 {
+		t.Fatalf("%d marks after re-stating component_type, want none", n)
+	}
+}

@@ -450,6 +450,12 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		componentTypeID = &ctid
 	}
 	setLabel, labelVal := labelPatch(patch.Label)
+	// Get the before component_type_id to detect changes.
+	var beforeComponentTypeID string
+	if err := tx.QueryRow(ctx, `select component_type_id::text from product where id = (select id from `+refRows("product", id)+` t where `+registryRefCol(id)+` = $1)`, id).
+		Scan(&beforeComponentTypeID); err != nil {
+		return nil, fmt.Errorf("storage: get before component_type_id: %w", err)
+	}
 	m, err := scanProduct(tx.QueryRow(ctx, `
 		update product set
 			label      = case when $10::boolean then $2 else label end,
@@ -487,6 +493,14 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	// the uuid the before-image already carries, so a later rename cannot orphan it.
 	if err := writeAuditRes(ctx, tx, actorID, "update", "product", auditImageID(before), before, after); err != nil {
 		return nil, err
+	}
+	// A product's component_type change moves every component's calc rule selection
+	// (#1030), marking rules that now select them and dropping marks and state for
+	// rules that no longer do, the same as a component retype does (#1015).
+	if componentTypeID != nil && beforeComponentTypeID != *componentTypeID {
+		if err := p.markProductCalcRules(ctx, tx, m.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update product: %w", err)
