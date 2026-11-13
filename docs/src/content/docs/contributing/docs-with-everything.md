@@ -186,6 +186,12 @@ passed a surface token swap. One caveat: a real UI change that falls entirely in
 region is invisible to the gate, which is the price of masking and the reason a mask names the
 smallest box that holds still around what moves.
 
+Capture on a committed tree. The console shows the build id it was built from, and a dirty
+tree stamps a long `-dirty-<time>` id where CI's clean checkout stamps a bare commit, which
+wraps and changes the height of the platform cards, so every shot of that page shifts. Commit
+the code, run `make docs-shots`, then commit the PNGs, and `make docs-shots-check` passes on
+the clean tree that follows.
+
 ### A mask covers a box that holds still, and says that it is there
 
 A mask is painted over **the element the selector resolves to**, so what a `mask` entry

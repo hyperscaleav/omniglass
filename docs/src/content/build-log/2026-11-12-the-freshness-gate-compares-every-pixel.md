@@ -11,3 +11,8 @@ is `ok` without decoding) and on a mismatch counts every pixel that differs in a
 `DOCS_SHOTS_MAX_RATIO` still applies, to that exact count. pixelmatch stays in the dev locator
 `web/e2e/shot-jitter.mjs`, where a perceptual diff is the point. `DOCS_SHOTS_EXACT` is gone: the default is
 what it opted into, and a mask is proven to hold by `DOCS_SHOTS_TZ=… make docs-shots-check`.
+
+Under the exact gate, a baseline captured on a dirty tree no longer slips through: the console shows the build id,
+a dirty tree's `-dirty-<time>` id wraps the platform cards a line taller than CI's bare commit, and the shots of
+that page shift. The platform health baselines were recaptured on a committed tree, and the contributing guide now
+says to capture on one.
