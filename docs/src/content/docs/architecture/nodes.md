@@ -803,6 +803,23 @@ command wire writes `command-dispatch-latency` at a command's first take and
 once per report window, 0 when quiet, on its node-self lane. How each is read, and why expiry keys on the execution
 stamp rather than the status, is on [commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured).
 
+What one poll costs the node is read from the kernel, not from the clock on the wall (#1870).
+`poll-duration` is mostly time spent waiting on the device, so it cannot say what a Q-SYS poll costs
+against an SNMP one. A lane worker runs each driver poll, scheduled or run now, with its goroutine
+locked to its OS thread, and reads the thread's CPU clock (`CLOCK_THREAD_CPUTIME_ID`) before and
+after: the difference is the user and system time the kernel charged that run, and none of the time
+it spent blocked on the network. The node lands the mean per run as `poll-cpu-time`, in
+milliseconds, beside `poll-duration` on the endpoint's component, once a report window
+([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)).
+The clock counts only the run's own thread, so it leaves out work handed to other goroutines (the Go
+runtime's network poller, a helper goroutine a driver starts) and the garbage collector's background
+workers, which no task is charged for: read it as a floor on a poll's cost, and the node's process
+CPU as the ceiling. A thread locked through a run that blocks is parked for that run, so the node
+holds at most one extra thread per lane worker. A platform with no per-thread clock lands no
+`poll-cpu-time` rather than a false zero; every release platform but Windows has one. The per-driver
+cost table that reads it against the process's own cgroup is #1871
+([ADR-1870](/architecture/decisions/#adr-1870-a-polls-cpu-cost-is-its-threads-kernel-clock-cross-checked-by-the-cgroup)).
+
 ## Scheduling, concurrency, and self-observability
 
 Built (#1634, under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)): each poll and probe runs on **its own interval**, from a dispatcher with a timer of

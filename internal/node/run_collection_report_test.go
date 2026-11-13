@@ -97,6 +97,12 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 
 	// The live bar's polls answer: their mean time lands, and no failure.
 	s.waitMetric("bar-live", live.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")
+	// Beside it, the CPU the kernel charged those polls (#1870): some, and
+	// less than their wall time, which is mostly the bar's answer.
+	s.waitMetric("bar-live", live.Name, probekeys.PollCPUTime, func(v float64) bool { return v > 0 }, "a positive mean poll CPU time")
+	if cpu, _ := s.metric("bar-live", live.Name, probekeys.PollCPUTime); cpu >= 1000 {
+		t.Errorf("the live bar's polls read %v ms of CPU each, past any plausible poll", cpu)
+	}
 	if v, landed := s.metric("bar-live", live.Name, probekeys.PollFailureCount); landed {
 		t.Errorf("the live bar landed %v failed polls; a failure count lands only when nonzero", v)
 	}

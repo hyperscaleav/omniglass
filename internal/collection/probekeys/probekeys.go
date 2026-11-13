@@ -83,6 +83,13 @@ const (
 	// polls, scheduled or run now, answered or failed, from its request to
 	// its last emit. A window with no run lands none.
 	PollDuration = "poll-duration"
+	// PollCPUTime is the mean CPU the kernel charged an endpoint's driver
+	// poll runs over a report window (#1870), in milliseconds: each run's
+	// thread CPU clock, user plus system, read across the run on a thread
+	// locked to it, so time blocked on the device is not in it. Work a run
+	// hands to another goroutine and the garbage collector are not either. A
+	// window with no run, or on a platform with no thread clock, lands none.
+	PollCPUTime = "poll-cpu-time"
 	// PollFailureCount is how many of an endpoint's polls failed in a report
 	// window (#1369): a run that faulted and landed nothing, or a due poll
 	// the endpoint's gate refused, as the scheduler books a failure. Landed
@@ -142,7 +149,7 @@ var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
-	CollectionFailed, PollDuration, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
+	CollectionFailed, PollDuration, PollCPUTime, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
 	HoldExpiryCount,
 }
 
