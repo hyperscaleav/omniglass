@@ -163,3 +163,18 @@ func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
 		t.Fatal("IsPush reads the registry's flag, false for an unknown name")
 	}
 }
+
+// A node dials every transport but a push one and udp, which binds a local
+// port: those are the transports whose bare endpoint must name a target
+// (#1187). An unknown name is dialed by no one.
+func TestIsDialedIsEveryTransportButPushAndUDP(t *testing.T) {
+	for _, tr := range transport.All() {
+		want := tr.Name != "webhook" && tr.Name != "udp"
+		if got := transport.IsDialed(tr.Name); got != want {
+			t.Errorf("IsDialed(%s) = %v, want %v", tr.Name, got, want)
+		}
+	}
+	if transport.IsDialed("nope") {
+		t.Error("IsDialed of an unknown name = true")
+	}
+}

@@ -19,7 +19,9 @@ import (
 // endpointParams is the address config a probe reads off a task's endpoint.
 // A tcp probe needs the dial target (host:port) and an optional connect timeout;
 // an icmp probe needs the echo target (host or IP), an optional echo count, and
-// an optional per-run timeout.
+// an optional per-run timeout. The storage gateway refuses a bare dialed
+// endpoint's params without a target at write (#1187); the node's skip of an
+// empty target stays as defence in depth.
 type endpointParams struct {
 	Target   string `json:"target"`
 	Count    int    `json:"count,omitempty"`

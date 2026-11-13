@@ -2861,7 +2861,7 @@
             "type": "boolean"
           },
           "params": {
-            "description": "Address/target settings (jsonb); an attach derives them from the inputs instead"
+            "description": "Address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https); an attach derives them from the inputs instead"
           },
           "transport": {
             "description": "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set",
@@ -5109,7 +5109,7 @@
             "type": "boolean"
           },
           "params": {
-            "description": "The address/target settings (jsonb)"
+            "description": "The address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https)"
           },
           "transport": {
             "description": "The transport name (the wire this endpoint speaks over), from the code registry",
@@ -17399,7 +17399,7 @@
             "type": "boolean"
           },
           "params": {
-            "description": "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
+            "description": "Replace the address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
           },
           "transport": {
             "description": "The transport: a driver-attached endpoint takes only one its driver speaks",

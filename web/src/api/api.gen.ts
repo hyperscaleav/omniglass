@@ -1637,7 +1637,7 @@ export type CreateEndpointInputBody = {
   node?: string;
   /** Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
   out_of_band?: boolean;
-  /** Address/target settings (jsonb); an attach derives them from the inputs instead */
+  /** Address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https); an attach derives them from the inputs instead */
   params?: unknown;
   /** A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
   transport?: string;
@@ -2878,7 +2878,7 @@ export type EndpointBody = {
   node_id?: string;
   /** A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
   out_of_band: boolean;
-  /** The address/target settings (jsonb) */
+  /** The address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https) */
   params?: unknown;
   /** The transport name (the wire this endpoint speaks over), from the code registry */
   transport: string;
@@ -7639,7 +7639,7 @@ export type UpdateEndpointInputBody = {
   node?: string;
   /** Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
   out_of_band?: boolean;
-  /** Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
+  /** Replace the address/target settings (jsonb): target as host[:port] (required on every transport a node dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
   params?: unknown;
   /** The transport: a driver-attached endpoint takes only one its driver speaks */
   transport?: string;

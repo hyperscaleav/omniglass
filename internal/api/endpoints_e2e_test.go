@@ -186,6 +186,53 @@ func TestEndpointAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": tlsOffered}, http.StatusOK)
 }
 
+// TestEndpointParamsMustNameATarget replays the synthetic user's finding
+// (#1187): `endpoint create --transport tcp --params '{"host":..,"port":..}'`
+// returned 201 and the node then skipped the task forever. A bare dialed
+// endpoint's params are refused unless they carry target, on create (422) and
+// on an edit (400, the patch family), each message naming target. Skipped
+// under -short.
+func TestEndpointParamsMustNameATarget(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, seededDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-t"}, all, all, all, all); err != nil {
+		t.Fatalf("create comp-t: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	status, body := c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{
+		"transport": "tcp", "component": "comp-t", "params": map[string]any{"host": "127.0.0.1", "port": 8080}})
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "target") {
+		t.Fatalf("create with host and port = %d %s, want 422 naming target", status, body)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "icmp", "component": "comp-t", "params": map[string]any{}}, http.StatusUnprocessableEntity)
+
+	ep := createEndpoint(c, ownerTok, map[string]any{"transport": "tcp", "component": "comp-t", "params": map[string]any{"target": "127.0.0.1:8080"}})
+	status, body = c.send(ownerTok, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"params": map[string]any{"host": "127.0.0.1", "port": 8080}})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "target") {
+		t.Fatalf("edit to host and port = %d %s, want 400 naming target", status, body)
+	}
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"params": map[string]any{"target": "127.0.0.1:9090"}}, http.StatusOK)
+}
+
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the
 // gateway resolves the create body's "component" field through
 // resolveScopedRef (ruling 2, #627), and on more than one in-scope match that
