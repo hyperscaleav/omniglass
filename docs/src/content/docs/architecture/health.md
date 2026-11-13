@@ -212,6 +212,17 @@ naming the old parent covers the old one. A `:move` that changes no parent recom
 Deleting a **location** needs no trigger: a location holding anything cannot be deleted (`on delete
 restrict` throughout), so a deletable location is empty and already healthy.
 
+A **composite write** (a planned or simulated system and its role slots, one transaction) recomputes
+**once, before commit**, not once per piece. Each piece would otherwise record its own transition: a
+system born with every role empty is `incomplete`, and filling its slots one by one would write
+`incomplete` and then `healthy` milliseconds apart, an edge no reader could observe because the write is
+atomic, and cost a pass over the whole chain per slot. So the create and assign bodies take an optional
+deferral and, when given one, name their owners to it instead of recomputing; the composite then runs
+the one recompute over the union of components, systems and the locations above them. The history holds
+one edge per owner and chain level, the final state, and the cost no longer grows with the slot count.
+Every single write (an assign, an add, a create, a move) passes no deferral and recomputes inline, as
+above. The lock order is unchanged, since the one recompute is the last health work in the transaction.
+
 A **missing trigger is a hole in the history**: the honest cost of this design, and why the list is
 enumerated, not inferred.
 
