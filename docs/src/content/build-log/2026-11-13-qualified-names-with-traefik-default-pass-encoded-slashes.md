@@ -1,13 +1,15 @@
 ---
-title: "Qualified names with Traefik default pass percent-encoded slashes (#1138)"
+title: "Qualified names pass through the chart's default Traefik ingress (#1138)"
 date: 2026-11-13
 refs: [1138, 1133]
 ---
 
-Qualified names in the operator API address resources by a path containing slashes
-(e.g., `campus.room-a.$comp.display-1/https` for an endpoint), with slashes percent-encoded
-in the URL path (`/endpoints/campus.room-a.%24comp.display-1%2Fhttps`). The chart's default
-Traefik ingress (v3.0) passes these encoded characters through to the backend without
-rejection, so qualified names work by default. Documented in the Helm guide that Traefik v3.0
-has no restrictions on encoded slashes; if the in-cluster Traefik is upgraded to v3.1 or later,
-the operator should verify the entry point's `encodedCharacters` setting permits `%2F` and `%24`.
+A qualified name rides the URL path with its slash and `$` percent-encoded
+(`%2F`, `%24`), and the chart's default ingress class is Traefik, which could have
+rejected an encoded slash at the edge. `scripts/test-traefik-encoded-slashes.sh`
+runs pinned Traefik containers in front of a backend that echoes the raw request
+path and asserts the ingress status equals the direct status with the path intact.
+It passes on Traefik 3.0.4, 3.6.25 and 3.7.19 with no entry point options, so the
+chart needs no setting; the finding and versions are recorded in the Helm guide.
+Setting `allowEncodedSlash: false` on the entry point makes the same check fail
+with a 400, so the check does detect a rejecting edge.
