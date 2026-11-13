@@ -36,6 +36,12 @@ type nodeReport struct {
 
 	overruns int
 	skipped  int
+	// poolBusy and poolWall are the lane pool's busy worker time and its
+	// dispatch windows' length over the report window, on poolWorkers
+	// workers: worker-busy-fraction (#1686).
+	poolBusy    time.Duration
+	poolWall    time.Duration
+	poolWorkers int
 	// flow is the items the spool settled in the window, per kind: in for
 	// every item a batch carried once it was acked or lost, out for the
 	// acked (#1659).
@@ -97,6 +103,9 @@ func (r *nodeReport) dispatch(w dispatchWindow, at time.Time) {
 	}
 	r.overruns += w.overruns
 	r.skipped += w.skips
+	r.poolBusy += w.poolBusy
+	r.poolWall += w.poolWall
+	r.poolWorkers = w.poolWorkers
 	r.schedule.Merge(w.schedule)
 	if w.runs > 0 {
 		r.sample(writerclass.ScheduleLateness, platformmetric.Millis(w.lateMax), at, "")
@@ -169,6 +178,9 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 		} {
 			r.sample(c.key, float64(c.n), now, "")
 		}
+		// One pool serves every kind of work today, so the fraction is
+		// the lane pool's (#1686); per-kind pools get an instance each.
+		r.sample(writerclass.WorkerBusyFraction, busyFraction(r.poolBusy, r.poolWall, r.poolWorkers), now, "lane")
 		for _, rd := range r.flow.Readings() {
 			r.sample(rd.Key, rd.Value, now, rd.Instance)
 		}
@@ -176,6 +188,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			r.sample(rd.Key, rd.Value, now, rd.Instance)
 		}
 		r.overruns, r.skipped, r.flow, r.schedule = 0, 0, delivery.Counts{}, delivery.Counts{}
+		r.poolBusy, r.poolWall = 0, 0
 		r.win.close(now)
 	}
 	out := r.samples

@@ -320,7 +320,7 @@ func TestADisruptedEndpointHoldsItsPollsAndAnswersAtOnce(t *testing.T) {
 		t.Fatalf("run now = %+v, want gated by disrupted, naming the command", reply)
 	}
 	var answered []collection.RunReply
-	takeRun(t.Context(), runRoute{node: "edge", sessions: l.sessions, pool: newLanePool(1)},
+	takeRun(t.Context(), runRoute{node: "edge", sessions: l.sessions, pool: newLanePool(1, nil)},
 		collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}},
 		func(r collection.RunReply) { answered = append(answered, r) })
 	if len(answered) != 1 || answered[0].GateReason != string(reasonDisrupted) {

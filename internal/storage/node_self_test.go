@@ -23,11 +23,14 @@ func (f groupFixture) platformComponentOf(t *testing.T, node string) string {
 }
 
 // selfInstances is the instances a node reports key under: a session state
-// for session-held-count, every kind for a delivery key (#1659), else none.
+// for session-held-count, the pool for worker-busy-fraction (#1686), every
+// kind for a delivery key (#1659), else none.
 func selfInstances(key string) []string {
 	switch key {
 	case writerclass.SessionHeldCount:
 		return []string{"open"}
+	case writerclass.WorkerBusyFraction:
+		return []string{"lane"}
 	case writerclass.DeliveryInCount, writerclass.DeliveryOutCount, writerclass.DeliveryLossRatio:
 		out := make([]string, 0, len(delivery.Kinds))
 		for _, k := range delivery.Kinds {

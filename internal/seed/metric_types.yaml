@@ -96,6 +96,11 @@ metric_types:
     data_type: int
     label: Schedule Skips
     description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet.
+  - name: worker-busy-fraction
+    data_type: float
+    unit: ratio
+    label: Worker Busy
+    description: Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle.
   - name: spool-batch-count
     data_type: int
     label: Spool Depth

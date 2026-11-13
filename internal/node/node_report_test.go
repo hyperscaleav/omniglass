@@ -398,3 +398,31 @@ func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
 		}
 	}
 }
+
+// #1686: the pool's busy time over the report window's dispatch windows reads
+// as one worker-busy-fraction when the window ends: busy worker time over the
+// pool's whole worker time, under the instance lane.
+func TestNodeReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, 0, t0)
+	key := writerclass.WorkerBusyFraction + "/lane"
+
+	r.dispatch(dispatchWindow{poolBusy: 30 * time.Second, poolWall: 30 * time.Second, poolWorkers: 2}, t0.Add(30*time.Second))
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[key] != 0 {
+		t.Fatalf("worker-busy-fraction emitted before its window ended: %v", mid)
+	}
+	r.dispatch(dispatchWindow{poolWall: 30 * time.Second, poolWorkers: 2}, t0.Add(time.Minute))
+	got := readings(r.take(t0.Add(time.Minute)))
+	if v, ok := got[key]; !ok || v != 0.25 {
+		t.Fatalf("%s = %v (written %v), want 30 s of 2 workers' 60 s, 0.25", key, v, ok)
+	}
+	if _, dup := got[key+"#dup"]; dup {
+		t.Fatalf("%s emitted twice in one window", key)
+	}
+
+	quiet := readings(r.take(t0.Add(2 * time.Minute)))
+	if v, ok := quiet[key]; !ok || v != 0 {
+		t.Fatalf("a quiet window read %s = %v (written %v), want 0", key, v, ok)
+	}
+}
