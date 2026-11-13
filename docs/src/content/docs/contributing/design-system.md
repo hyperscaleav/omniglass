@@ -258,6 +258,10 @@ of the remaining pages is #784.
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
   provider (the tree pages render one body in both places).
 
+**A placeholder is not a label.** Every control gets its name from a `<label for>` (or an
+`aria-label` where no label is shown). A placeholder can say what an empty field means, but it is
+not the control's name: it vanishes once there is a value, and a screen reader cannot rely on it (#973).
+
 **A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
 as broken rather than as read-only, and an official-row blade rendered five of them at once, directly
 below three plain facts, so the same read-only state had two appearances on one panel

@@ -28,6 +28,8 @@ import (
 type SimHub interface {
 	SimStatus(node string) (simhub.Status, bool)
 	Nodes() []string
+	// Forget drops a node's status when the node is deleted.
+	Forget(node string)
 	FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error)
 	EndpointObservation(ctx context.Context, node string) (collection.EndpointObservation, error)
 }
