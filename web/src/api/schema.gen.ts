@@ -10821,6 +10821,11 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
+            /**
+             * @description Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+             * @enum {string}
+             */
+            pending?: "no-node" | "awaiting-probe";
             /** @description The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
             rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
@@ -10831,7 +10836,7 @@ export interface components {
             tls?: components["schemas"]["ReachTLSBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
-            /** @description The latest reachability verdict, or null if none yet */
+            /** @description The latest reachability verdict, or null if none yet (pending says why) */
             verdict: components["schemas"]["ReachVerdictBody"];
             /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
             webhook?: components["schemas"]["EndpointWebhookBody"];
