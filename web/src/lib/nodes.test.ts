@@ -67,7 +67,7 @@ describe("nodes data layer", () => {
 });
 
 // nodeStatus derives the liveness pill client-side from last_heartbeat_at against
-// the server's down window (OMNIGLASS_NODE_DOWN_AFTER, default 90s). It is pure, so
+// the node-silent rule's 90s window. It is pure, so
 // a fixed `now` pins the three outcomes and the exact boundary.
 describe("nodeStatus", () => {
   const node = (last?: string): Node => ({ name: "n", enrolled: true, last_heartbeat_at: last, tags: {} });

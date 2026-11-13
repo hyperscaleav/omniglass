@@ -1,0 +1,141 @@
+{
+  "inputs": {
+    "size": "1000",
+    "scenario": "corporate",
+    "systems": 1000,
+    "warmup_seconds": 120,
+    "window_seconds": 300,
+    "fleet_reads": 100,
+    "plan_digest": "fd2341d6c762cbb075501b2440983aa65c43c00a7a29a033254be2f96e2bcbb6"
+  },
+  "host": {
+    "cpu": "QEMU Virtual CPU version 2.5+",
+    "cores": 8,
+    "memory_gib": 16,
+    "go": "go1.26.0",
+    "build": "a2146a82"
+  },
+  "runs": 3,
+  "figures": [
+    {
+      "name": "metric_rows_per_minute_per_system",
+      "median": 60.559198673108405,
+      "spread": 0.14142348436301688,
+      "values": [
+        60.559198673108405,
+        60.47002229910668,
+        60.6114457834697
+      ]
+    },
+    {
+      "name": "property_rows_per_minute_per_system",
+      "median": 0.05533379775747705,
+      "spread": 0.0035523472002463655,
+      "values": [
+        0.05533379775747705,
+        0.058672631516834266,
+        0.0551202843165879
+      ]
+    },
+    {
+      "name": "database_bytes_per_day_per_system",
+      "median": 11956133.688684776,
+      "spread": 200250.83086241968,
+      "values": [
+        11956133.688684776,
+        11756928.569399796,
+        11957179.400262216
+      ]
+    },
+    {
+      "name": "wal_bytes_per_sample",
+      "median": 329.8904644778599,
+      "spread": 2.524913005900487,
+      "values": [
+        330.14761367955634,
+        327.62270067365586,
+        329.8904644778599
+      ]
+    },
+    {
+      "name": "samples_per_batch",
+      "median": 33.66695832877611,
+      "spread": 0.12233825357221662,
+      "values": [
+        33.66695832877611,
+        33.63165955584728,
+        33.753997809419495
+      ]
+    },
+    {
+      "name": "endpoint_latency_p95_ms/http",
+      "median": 0.092,
+      "spread": 0,
+      "values": [
+        0.092,
+        0.092,
+        0.092
+      ]
+    },
+    {
+      "name": "endpoint_latency_p95_ms/snmp",
+      "median": 0.168,
+      "spread": 0.015999999999999986,
+      "values": [
+        0.168,
+        0.168,
+        0.184
+      ]
+    },
+    {
+      "name": "endpoint_latency_p95_ms/tcp",
+      "median": 0.1,
+      "spread": 0.007999999999999993,
+      "values": [
+        0.1,
+        0.1,
+        0.108
+      ]
+    },
+    {
+      "name": "ingest_lag_p95_ms",
+      "median": 1030.9569999999999,
+      "spread": 73.94800000000009,
+      "values": [
+        1102.721,
+        1028.773,
+        1030.9569999999999
+      ]
+    },
+    {
+      "name": "server_millicores",
+      "median": 436.88136406443226,
+      "spread": 4.808014916569277,
+      "values": [
+        434.7050281871179,
+        436.88136406443226,
+        439.51304310368715
+      ]
+    },
+    {
+      "name": "server_working_set_mib",
+      "median": 128.841796875,
+      "spread": 1.705078125,
+      "values": [
+        128.841796875,
+        127.66796875,
+        129.373046875
+      ]
+    },
+    {
+      "name": "fleet_view_p95_ms",
+      "median": 66.194628,
+      "spread": 1.8027379999999908,
+      "values": [
+        66.553619,
+        64.750881,
+        66.194628
+      ]
+    }
+  ]
+}

@@ -179,12 +179,12 @@ the same for one group and for fifty. Before the transaction, the identity bindi
 in the tick resolve in one read, however many conduits its groups name. A refused group costs its siblings nothing
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
-| At 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
+| Corporate at 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
 | --- | --- | --- |
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
 | Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
-| Receipts a day | grows with the sample count | under 0.5 GiB |
+| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)) |
 | Ingest lag p99 | | under 5 s |
 
 The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
@@ -192,11 +192,64 @@ prints the measured figures (batches landed, samples per batch, batches a second
 bytes a sample, the ingest lag at p50, p95 and p99, consumer redeliveries, and the ingest consumer
 lane's busy fraction and service time a batch) for a scale lab
 ([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
-when the slice's pull request records it. The lane's busy fraction is the figure that says whether the
+when the slice's pull request records it. A figure here is always quoted with the scenario and size it
+was read at, and compares only with the same scenario at the same size: every lab level that measures runs
+the `corporate` scenario on the ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
+fleet is the showcase, never a measurement basis
+([which fleet each level measures](/guides/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the
 single consumer is the ceiling: the stream is a work queue with one message in flight, so the handler's
 share of the wall clock is the lane's utilisation, and a lag that sits at the node's one-second spool
 flush while the lane is mostly idle is not a consumer bottleneck
 ([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
+
+A faster lane is only a win if it still lands everything, so the same run reads every telemetry
+kind's **loss ratio** across the node hop and the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
+batch carries on its receipt
+([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
+delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
+above 0 instead of a win, and the [perf gate](/guides/lab/#checking-against-the-baseline) fails such a
+run, naming the kind, the hop and the cause, with no tolerance (#1640, #1695). The accounting rides on the receipt
+rather than on new rows, and its cost shows in the receipts' own figure. The receipt stores its ledger
+as a (count, before) pair per kind slot and its outcome as (code, n) pairs, integer arrays under slots
+and codes that never move, because a jsonb object repeated every kind and outcome name on every batch
+(#1699). On a three-system corporate lab that took receipts a day from 219 to 151 MiB, about 942 to
+669 bytes a batch at about 2.8 batches a second, and WAL a sample from 510 to 486 B, with loss 0 on
+every kind and hop; part of what remains is the dead tuple the outcome update leaves until vacuum. At
+the 18 batches a second the table above expects of corporate at 1,000 systems, that is about 1 GiB a
+day. Receipts are pruned at a day, so this is the table's standing size, not unbounded growth, and it
+is about 1% of the metric table the same fleet writes in a day. The earlier 0.5 GiB target was set for
+the narrow receipt before every batch carried its accounting, and even a compacted receipt with the
+ledger is past it, so the target is 1.2 GiB
+([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)).
+
+### Scale up or scale out: what the figures say
+
+A running server reports the figures that make this call on its own platform component, every report
+window (#1628; [messaging](/architecture/messaging/#measuring-the-pipeline),
+[workers](/architecture/workers/#measuring-the-ticks)), so the evidence is the fleet's own history,
+not a lab run. Read them together:
+
+- **The lane is the ceiling.** `ingest-lane-busy` near 1, `bus-consumer-pending` growing window over
+  window and `ingest-lag-max` climbing: the one consumer with one batch in flight is saturated. A
+  bigger box helps only as far as it shortens each batch's landing (a faster database, a lower
+  `db-pool-wait-duration`); past that the lane needs to run in parallel, which waits on sequencing per
+  publisher ([workers](/architecture/workers/#one-machinery-several-consumers)); #1517 measures where
+  the ceiling sits in a scale lab. This is the scale-out signal.
+- **The database or the process is the ceiling.** `db-pool-wait-count` nonzero with
+  `db-pool-acquired` at `db-pool-max`, or `process-cpu-seconds` divided by the window near the cores
+  the server has, while the lane is not saturated: the server is starved, not the design. Scale up (more
+  cores, a larger pool, a faster database) before adding a replica that would share the same database.
+- **The lag is not the server's.** `ingest-lag` high while `ingest-lane-busy` is low and the backlog
+  near 0: the samples arrive late (a node's spool holding through an outage, a slow WAN) or the node's
+  clock is behind the server's. The lag is commit time minus the node's `ts`, two clocks
+  subtracted, so a skew reads as lag and a negative lag is a node clock ahead; fix the clock, not the
+  server (#419).
+- **A tick is the ceiling.** `calc-pending-depth` growing while `calc-pass-duration` nears its second,
+  or `outbox-due-age` growing, says that tick, not ingest, has fallen behind.
+
+The seeded `ingest-lag-high` rule opens a warning alarm on the server's component when
+`ingest-lag-max` holds over 30 s for 2 minutes, the point at which a reader of any panel is looking at
+data at least half a minute old.
 
 ## Platform configuration
 

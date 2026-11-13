@@ -619,6 +619,15 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recompute systems: %v", err)
 	}
+	// The boot seed's platform system (#1625) moves too; this test is about
+	// the operator's row.
+	operator := sysChanges[:0]
+	for _, ch := range sysChanges {
+		if ch.Name != storage.PlatformSystemName {
+			operator = append(operator, ch)
+		}
+	}
+	sysChanges = operator
 	if len(sysChanges) != 1 || sysChanges[0].To != "Boardroom at Room A" {
 		t.Fatalf("system recompute = %+v, want one row labelled %q", sysChanges, "Boardroom at Room A")
 	}
@@ -807,6 +816,11 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 	}
 	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name | upper}}"); err != nil {
 		t.Fatalf("location rule: %v", err)
+	}
+	// The boot seed's platform system (#1625) predates the rules; the verb
+	// brings it there, as it would for any operator's row.
+	if _, err := gw.RecomputeLabels(ctx, "", "system", all, all); err != nil {
+		t.Fatalf("recompute the seeded systems: %v", err)
 	}
 
 	roomA := makeRoomWithLabel(t, gw, ctx, "room-a", "204A")

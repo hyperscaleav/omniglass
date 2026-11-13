@@ -51,6 +51,8 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/components", shell: "protected", page: "FleetRedirect", smoke: "/components" },
   { path: "/components/:id", shell: "protected", page: "Components", smoke: `/components/${UNKNOWN_UUID}` },
   { path: "/nodes", shell: "protected", page: "Nodes", smoke: "/nodes" },
+  // Platform health (#1644): Omniglass's own health, read off the platform components.
+  { path: "/platform", shell: "protected", page: "PlatformHealth", smoke: "/platform" },
   // The simulated fleet (#890); its sidebar door shows only while a simulator
   // is connected, but the route is always registered (and smoked, so its
   // disconnected face renders without a console error too).

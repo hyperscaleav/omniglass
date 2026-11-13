@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,8 @@ import (
 // the simulated block (127.60.0.0/16, which only the seed allocates). A
 // database with no lab mark hands out nothing; a real device's webhook, or
 // one on another loopback address, never; and the node's own worklist
-// carries neither the token nor the key.
+// carries neither the token nor the key. A platform account's bound room ids
+// (#1747) ride its subscription, so the simulator can add each room.
 func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -71,6 +73,18 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		}
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
 			Params: []byte(`{"target":"` + target + `"}`)}, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The simulated service is a platform account speaking for two rooms
+	// (#1747): the room ids bound on it ride its subscription, in order, so
+	// the simulator adds each to the account.
+	sc := storage.IdentityBindingScopes{ComponentRead: all, ComponentUpdate: all, SystemRead: all, SystemUpdate: all}
+	for room, sys := range map[string]string{"room-2": "sys-b", "room-1": "sys-a"} {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: sys}, all, all); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gw.PutIdentityBinding(ctx, "", "ucc-sim", "ucc-room-id", room, storage.IdentityBindingOwner{Kind: "system", Name: sys}, sc); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -121,8 +135,8 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, got := pull()
-	want := collection.SimWebhook{Path: "/api/v1/webhooks/" + simTok, Scheme: "hmac", Secret: key}
-	if w := got["ucc-sim"]; w == nil || *w != want {
+	want := collection.SimWebhook{Path: "/api/v1/webhooks/" + simTok, Scheme: "hmac", Secret: key, Identities: []string{"room-1", "room-2"}}
+	if w := got["ucc-sim"]; w == nil || !reflect.DeepEqual(*w, want) {
 		t.Fatalf("the simulated service's subscription = %+v, want %+v", w, want)
 	}
 	for _, other := range []string{"ucc-real", "ucc-local"} {

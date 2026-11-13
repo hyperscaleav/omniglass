@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=schema.json
+# Booking Service, a room-booking platform's first-party integration (#1743)
+#
+# An outside actor, not a device on the network: a scheduling platform
+# that reports the bookings of the places it manages by pushing them to
+# Omniglass, as a first-party integration does. It has no interface to
+# poll. Its push face holds a bearer token for a principal granted
+# telemetry:push alone on the systems it books, reads those systems off
+# its own grant (GET /auth/me), and posts each one's batch through
+# POST /telemetry:push every 30 seconds. A scenario declares it as a
+# pusher; the lab seeds its principal and mints its token per run.
+#
+# Pushed datapoints (per system it is granted):
+#   booking-count  (metric)   , meetings left in the day, the one running included
+#   booking-state  (property) , booked while a meeting runs, free between
+#
+# The meeting day is configuration.calendar.bookings, windows in UTC that
+# repeat every day, so a walkthrough reads the same on any run.
+
+name: booking-service
+manufacturer: Shinra Cloud
+model: "Booking Service (integration)"
+device_type: cloud-service
+slug_prefix: booking
+
+doc:
+  summary: "Room-booking platform's integration: pushes each booked place's day through /telemetry:push"
+  description: |
+    A scheduling platform's first-party integration. It pushes each
+    system it is granted its booking count (meetings left today) and
+    booking state (booked or free) through POST /telemetry:push with a
+    bearer token, on one meeting day that repeats every day. No
+    interface: nothing polls it, it reports.
+  tags: [cloud, scheduling, integration, push]
+
+interfaces: []
+
+push:
+  every: 30s
+  body: |
+    {{- $b := bookingsAt .Now .State.configuration.calendar.bookings -}}
+    {"owner":{"kind":"system","ref":{{ marshal .Owner }}},
+     "source":"sim-booking-service",
+     "metrics":[{"name":"booking-count","value":{{ $b.Remaining }}}],
+     "properties":[{"name":"booking-state","value":{{ marshal $b.State }}}]}
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+  configuration:
+    calendar:
+      bookings: ["09:00-10:00", "10:30-11:30", "13:00-14:00", "15:00-16:30"]

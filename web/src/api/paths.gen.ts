@@ -614,6 +614,34 @@ export interface paths {
       error: og.issueComponentCommandResponseError["data"];
     };
   };
+  "/components/{name}/dependencies": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listComponentDependenciesResponseSuccess["data"];
+      error: og.listComponentDependenciesResponseError["data"];
+    };
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createComponentDependency>[1]>;
+      bodyRequired: true;
+      data: og.createComponentDependencyResponseSuccess["data"];
+      error: og.createComponentDependencyResponseError["data"];
+    };
+  };
+  "/components/{name}/dependencies/{kind}/{upstream}": {
+    delete: {
+      path: { "name": string; "kind": string; "upstream": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteComponentDependencyResponseSuccess["data"];
+      error: og.deleteComponentDependencyResponseError["data"];
+    };
+  };
   "/components/{name}/effective-secrets": {
     get: {
       path: { "name": string };
@@ -1700,6 +1728,16 @@ export interface paths {
       bodyRequired: true;
       data: og.addNodeSimulationComponentResponseSuccess["data"];
       error: og.addNodeSimulationComponentResponseError["data"];
+    };
+  };
+  "/nodes/{name}/simulation/observation": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getNodeSimulationObservationResponseSuccess["data"];
+      error: og.getNodeSimulationObservationResponseError["data"];
     };
   };
   "/nodes/{name}/simulation/systems": {
@@ -3352,6 +3390,26 @@ export interface paths {
       bodyRequired: false;
       data: og.getFleetViewResponseSuccess["data"];
       error: og.getFleetViewResponseError["data"];
+    };
+  };
+  "/views/platform": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getPlatformViewResponseSuccess["data"];
+      error: og.getPlatformViewResponseError["data"];
+    };
+  };
+  "/views/platform/simulation": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getPlatformSimulationViewResponseSuccess["data"];
+      error: og.getPlatformSimulationViewResponseError["data"];
     };
   };
   "/webhooks/{token}": {

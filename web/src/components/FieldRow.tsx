@@ -2,6 +2,7 @@ import { Show, children, createUniqueId, type JSX } from "solid-js";
 import InfoTip from "./InfoTip";
 import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
+import { FieldLabelProvider } from "../lib/fieldlabel";
 
 // FieldRow is the console's one form-field wrapper: a label above its control,
 // with an optional (i) tooltip beside the label (and an optional docs link) and
@@ -59,19 +60,25 @@ export type FieldRowProps =
 export default function FieldRow(p: FieldRowProps): JSX.Element {
   const label = () => (p.bind ? IDENTITY_LABELS[p.bind] : p.label!);
   const id = createUniqueId();
+  const labelId = `${id}-label`;
   // Resolve the control once. children() memoizes, so inspecting the node and
   // rendering it use the SAME instance (reading props.children twice would
   // re-resolve to a different element, leaving `for` pointing at a phantom id).
   // Solid JSX is eager DOM: the control is a live element, or several for a
   // fragment. Label the element so `<label for>` targets it and never pollutes
   // its accessible name.
-  const resolved = children(() => p.children);
-  const control = resolved.toArray().find((c): c is Element => c instanceof Element);
+  const resolved = children(() => <FieldLabelProvider value={labelId}>{p.children}</FieldLabelProvider>);
+  const first = resolved.toArray().find((c): c is Element => c instanceof Element);
+  // A composite control (TreeSelect: a group wrapping a Kobalte trigger button)
+  // marks the one labelable part with data-field-target; the label points there,
+  // since a <label for> aimed at the group div labels nothing.
+  const control = first?.querySelector("[data-field-target]") ?? first;
   if (control && !control.id) control.id = id;
   return (
     <div class="flex flex-col" classList={{ "gap-1": !p.eyebrow, "gap-1.5": !!p.eyebrow }}>
       <span class="flex items-center gap-1.5">
         <label
+          id={labelId}
           class={p.eyebrow ? "eyebrow" : "text-[12px] font-medium text-base-content/70"}
           for={control?.id ?? id}
         >

@@ -34,6 +34,9 @@ and the server prunes `metric` and `property` samples to their retention windows
 provenance-aware floor, and `log_line` and `node_log` by severity band
 ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+Each pass's figures (per lane removed and behind, the mark lags, the table sizes) land as platform
+metrics on the server's own platform component, from the pass the boot runs onward, with a seeded
+`retention-behind` rule ([below](#what-a-retention-pass-reports), #1671).
 See [implementation status](/architecture/status/).
 :::
 
@@ -41,9 +44,14 @@ Postgres is the **relational system of record** (entities, events, alarms, actio
 
 Built today, the ingest consumer writes a batch's every sink (`metric`, `property`, `event`,
 `log_line`, `node_log`) in **one transaction** whose first statement inserts the batch's
-**receipt**, `telemetry_receipt (batch_id, landed_at)`, keyed by the subject the batch arrived on and
-its `Nats-Msg-Id`: all or nothing, and a batch id that already landed writes nothing, so a
-redelivery lands each row once, raw log lines included, though a log line has no key of its own.
+**receipt** (`telemetry_receipt`), keyed by the subject the batch arrived on and its `Nats-Msg-Id`:
+all or nothing, and a batch id that already landed lands no rows and only counts one more delivery on
+its receipt, so a redelivery lands each row once, raw log lines included, though a log line has no key
+of its own. The receipt also carries the batch's delivery ledger and what became of each of its items,
+written in the same transaction. A batch the consumer Terms whole leaves a **Term receipt** marked
+`termed`, its items under the cause; it is not a landing, so a later copy of the batch lands over it
+and replaces it (#1691)
+([accounting](/architecture/messaging/#accounting-every-item-the-loss-ratio), [ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio)).
 Receipts are pruned past a day by the server
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
@@ -109,6 +117,19 @@ Column schemas live with each owning feature: [samples](/architecture/properties
   hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
   for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)
   for how scope and ambiguity are then decided against the resolved candidate set.
+- **A row lock that must cover a read is its own statement.** At READ COMMITTED a statement's
+  snapshot is taken when it begins, before it waits on a row lock, and when the lock is released only
+  the locked row is re-read: a correlated subquery in the same statement keeps what the old snapshot
+  saw. So `FOR UPDATE` on a resolving read serialises two writers without making the second read what
+  the first wrote (#709, the registry fork). The registry fork takes its lock in a statement of its
+  own (`lockRegistryRow`), and the read that follows is a new statement with a new snapshot. The label
+  recompute is the one place that keeps `FOR UPDATE` on its row scan, and why it may is recorded beside
+  it (#731): a label renders from the locked row's own columns, which the re-read refreshes, and from
+  facts resolved by separate statements after the scan, never from the scan's subquery columns. A
+  test pins that no label key reads one, and a contention test forces a recompute to wait mid-scan
+  while a product rename commits and shows that the scan's subqueries went stale and the label did
+  not. A component moved into a location while that location's label is edited is a separate window,
+  open as #1805.
 
 ## Migrations: three buckets, kept separate
 
@@ -176,7 +197,7 @@ the two in one migration. Three buckets, never conflated:
   gained the ability to read facts on OTHER rows: it is now a fleet-wide question the gateway
   answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
   rather than a list nobody updated passing
-  ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+  ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
@@ -240,9 +261,10 @@ The immutable, append-only records: the lineage targets and what a backtest read
 - **`node_log`** (a **node's** self-logs, the same payload shape without the owner arc, split by origin, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for operator writes; secret decrypts always recorded, [audit](/architecture/audit/)).
 
+The platform's own narration is `log_line` too, on the platform component of the process that tells it, not a table of its own: the server's housekeeping notes land on the server's component ([what a retention pass reports](#what-a-retention-pass-reports), [ADR-1708](/architecture/decisions/#adr-1708-the-platforms-self-narration-is-log-lines-on-its-platform-component-not-a-table-of-its-own)).
+
 :::design[Target design, tracked in #430]
 - **`session_log`** (connection-lifecycle transitions, node-reported, [nodes](/architecture/nodes/#sessions)); the built session (#816) needed none: its state is the `session-state` property and its reasons are node logs ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)), so this table waits on per-session counters earning it;
-- **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg / config-sync, [workers](/architecture/workers/));
 - the **`collection_log`** companion (the cheap per-run execution record).
 :::
 
@@ -586,12 +608,73 @@ its samples is the install's. The boot seed never writes it. The lane's own prun
 overridden type, and the pass gives each one a lane of its own, pruned to its window with the same
 floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 
+### What a retention pass reports
+
+Each pass lands its figures as platform metrics on the server's component in the platform system,
+written as the process, so no node, push or operator can write them (#1629; the keys are listed on
+the [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself) page, rendered from the
+code). One pass writes one sample per key and instance, at the pass's end:
+
+- **`retention-deleted-count`** and **`retention-behind`**, one each per lane the pass pruned, the
+  instance the lane's own name: `metric`, `property`, `metric_trend`, a type's override lane
+  (`metric/<type>`), a log band (`log_line/info`, `node_log/warn`). A lane added later reports under
+  its name with no change to the reporter. The deleted count is the rows the chunks removed; a day
+  dropped whole is not counted there.
+- **`retention-behind`** for `metric_trend compaction` and `metric_block compaction`, and
+  **`retention-window-days`** (instance `metric`), when the pass ran the compactions (it skips them on
+  a metric window out of range).
+- **`retention-pass-duration`** (seconds), **`retention-pass-failure-count`**, and
+  **`metric-partition-created-count`** and **`metric-partition-dropped-count`**, the days the pass
+  created ahead and dropped whole.
+- **`metric-trend-mark-lag`** (hours) and **`metric-block-mark-lag`** (days): now less each
+  compaction's mark, once it has one. A healthy trend mark trails by a day and an hour or so (it closes
+  each hour that ended a day ago), and a healthy block mark by one to two days.
+- From one status read after the prunes: **`metric-partition-count`**, **`metric-oldest-day-age`**
+  (days from the oldest partition's start to now, to read against `retention-window-days`),
+  **`table-bytes`** per stored table (`metric` summed over its day partitions, `metric_trend`,
+  `metric_block`, `property`, `log_line`, `node_log`) and **`database-bytes`**. A failed status read
+  loses only these; the pass's own figures still land. The log tables' oldest row is not read: with no
+  index leading on `ts` it is a full scan, so the behind flags and deleted counts stand in until #1417
+  partitions them.
+
+Beside the figures, a pass tells what it did in words, as `log_line` rows on the same component
+(#1708): source `omniglass-server`, facility `retention`, one line per kind of work the pass did, each
+with the message the process's log carries and its counts as attributes. **Rows pruned past their
+retention window** (the deleted count per lane, their total, the lanes left behind), **metric hours
+closed into trends**, **metric days folded into blocks**, and **metric partitions rolled** are info; a
+failed pass is a warning carrying its error. The boot's partition check writes **metric partitions
+created** when it made any. A pass that did nothing writes nothing, and none raises an event: a pass is
+routine, not a condition. The line goes through the Storage Gateway like any component's; a failed
+write is one warning in the process's log, never retried and never failing the pass, and a server with
+no platform component (a test harness) writes none. The lines age out with the info and warning bands
+they sit in, like any other.
+
+**Behind and failed read differently.** A lane is *behind* when the pass stopped at its chunk budget
+with rows still past the window, which is normal after a long outage or a window shortened: the next
+pass comes a minute later and catches up. A *failure* is an error (a statement that failed, a window
+out of range), counted in `retention-pass-failure-count`; a lane whose prune failed is also flagged
+behind, since it did not reach its window. So a failure count above zero is a fault to read in the
+server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
+**`retention-behind`** rule reads the second: a lane flagged 1 for five minutes, several catch-up
+passes, opens a warning alarm on the server's component naming the lane, and the first pass that
+reads it 0 clears it (a lane that leaves the report while flagged keeps its alarm open, #1673). The
+four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
+healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
+the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)
+rather than at 0, and the sizes, ages and window are levels to read against each other.
+
+The component is the one the boot ensures for the server's identity
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)), before the
+bus starts, so the pass the boot runs reports too (#1671). A boot whose ensure fails logs a WARN
+naming the identity and the cause and starts anyway: it prunes on its schedule as before and writes
+none of these figures until a boot whose ensure succeeds.
+
 ::::design[Target design: the metric lane is partitioned (#1275); the other append-only tables are tracked in #1417, and the `raw_sample` buffer in #430]
 
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning, rolled by the server: no `pg_partman`, no `pg_cron`). The firehose (`metric`) is the partitioning-critical one, and is built ([above](#the-narrow-metric-lane)); `event`, `log_line` and `node_log` are not yet. `property` is not partitioned: sparse by construction.
-- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band (with an optional install-wide override per band for `node_log`, #1350), in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
+- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band (with an optional install-wide override per band for `node_log`, #1350), in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
 
@@ -651,8 +734,11 @@ refuses so an operator can mend it.
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
 connection config so it observes every statement the gateway issues, whichever method issued it.
 That whole-pool reach is the point: the read paths query the pool directly, so a wrapper around a
-call argument cannot see them. It is where an OpenTelemetry pgx tracer attaches, and it is the seam
-the test harness counts round trips through, which is how a LIST is held to a constant number of
+call argument cannot see them. The server installs one, `storage.SlowQueryTracer`, which counts and
+logs every statement that runs past `database.slow_query_ms`
+([self-monitoring](/architecture/collection/#self-monitoring-the-servers-account-of-itself), #1627).
+It is where an OpenTelemetry pgx tracer attaches, and it is the seam the test harness counts round
+trips through, which is how a LIST is held to a constant number of
 queries rather than an N+1 ([counting round trips](/contributing/test-driven/#counting-round-trips-not-timing-them)).
 
 A node's **worklist pull** is held to the same rule: it costs a flat handful of statements however many
@@ -663,6 +749,17 @@ the tasks name. The secret read walks the component and location chains once for
 each chain row carries the component it was walked up from, so a candidate secret covers only the
 component of its own reference, never a sibling's: the confinement a per-component resolve gave, kept
 in one statement. A shared credential (a location's, the platform's) unseals once per pull.
+
+The **component_type walk** is one statement too. Resolving a type's facts (stem, icon, abbrev, label
+rule, default tags) or asking whether it sits under another climbs `parent_id` through a single
+recursive query, bounded at 32 nodes, that returns the chain nearest first with each node's operator
+shadow beside it. The first-non-null fold and the per-node fork rule
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))
+run in Go over those rows, so the cost does not grow with the depth of the tree: the OAVC taxonomy's
+leaf, subcategory and category root
+([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional))
+cost what a flat registry did, and the label recompute and a generated-name create are held to the
+ceilings they had before it (#803).
 
 :::design[Embedded Postgres, tracked in #19]
 Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's

@@ -323,3 +323,38 @@ func TestExecuteDelivery(t *testing.T) {
 		t.Fatal("a dead device reported success")
 	}
 }
+
+// A websocket endpoint's probe is an http GET / (#1034) that lands on the
+// face's own listener, so it tallies under websocket, where the sim counts
+// it; an http endpoint's probe stays on http (#1647).
+func TestAProbeTalliesUnderItsEndpointsTransport(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		transport string
+		want      collection.TallyTransport
+	}{
+		{"http", collection.TallyHTTP},
+		{"https", collection.TallyHTTP},
+		{"websocket", collection.TallyWebSocket},
+		{"wss", collection.TallyWebSocket},
+	} {
+		t.Run(tc.transport, func(t *testing.T) {
+			t.Parallel()
+			fake := &tallyRecordingHTTPFake{}
+			task := collection.TaskSpec{ID: "p", Transport: tc.transport, EndpointID: "ep", EndpointParams: json.RawMessage(`{"target":"a:443"}`)}
+			if _, err := collectProbe(t.Context(), &collection.Runner{HTTP: fake}, task, nil); err != nil {
+				t.Fatal(err)
+			}
+			if len(fake.tallies) != 1 || fake.tallies[0] != tc.want {
+				t.Fatalf("a %s probe tallied under %v, want %v", tc.transport, fake.tallies, tc.want)
+			}
+		})
+	}
+}
+
+type tallyRecordingHTTPFake struct{ tallies []collection.TallyTransport }
+
+func (f *tallyRecordingHTTPFake) Probe(_ context.Context, t collection.HTTPTask) (collection.HTTPResult, error) {
+	f.tallies = append(f.tallies, t.Tally)
+	return collection.HTTPResult{Dialed: true, Responded: true, Handshaken: true, Accepted: true, Reason: collection.Responded}, nil
+}

@@ -99,6 +99,7 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 		probs = append(probs, checkArchetype(a, declared, archetypes)...)
 	}
 	probs = append(probs, checkSiteBounds(m)...)
+	probs = append(probs, checkPushers(m, cat)...)
 
 	if len(probs) > 0 {
 		sort.SliceStable(probs, func(i, j int) bool { return probs[i].Line < probs[j].Line })
@@ -323,6 +324,42 @@ func checkArchetype(a Archetype, standards, seen map[string]int) []Problem {
 		ratios[st.Name] = true
 		if r.Weight < 1 {
 			add(st.Line, "standard %q has ratio %d at archetype %q; a ratio is a whole number above zero", st.Name, r.Weight, name)
+		}
+	}
+	return probs
+}
+
+// checkPushers checks each pusher declaration (#1743): a name, unique, an
+// emulator profile with a push face or a webhook sender's face (#1747), at
+// least one a site, and at least one system to scope each to when systems are
+// given, since a pusher granted nothing pushes nothing. Omitted, they are
+// every system of the site.
+func checkPushers(m *Manifest, cat Catalog) []Problem {
+	var probs []Problem
+	add := func(line int, format string, args ...any) {
+		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
+	}
+	seen := map[string]int{}
+	for _, p := range m.Pushers {
+		name := p.Name.Name
+		switch {
+		case !legalName(name):
+			add(lineOr(p.Name.Line, p.Line), "pusher name %q is not a name (lowercase letters, digits and dashes, at most %d)", name, maxNameLen)
+		case seen[name] != 0:
+			add(lineOr(p.Name.Line, p.Line), "pusher %q is declared twice (first on line %d)", name, seen[name])
+		default:
+			seen[name] = lineOr(p.Name.Line, p.Line)
+		}
+		pusher := cat.Pusher != nil && cat.Pusher(p.Profile.Name)
+		sender := cat.Sender != nil && cat.Sender(p.Profile.Name)
+		if !pusher && !sender {
+			add(lineOr(p.Profile.Line, p.Line), "profile %q of pusher %q has no push face and no webhook face, so it cannot push", p.Profile.Name, name)
+		}
+		if p.PerSite < 1 {
+			add(p.Line, "pusher %q has per_site %d; a declared pusher places at least one a site", name, p.PerSite)
+		}
+		if p.Systems != nil && *p.Systems < 1 {
+			add(p.Line, "pusher %q has no systems to scope it to; give it systems of at least 1", name)
 		}
 	}
 	return probs

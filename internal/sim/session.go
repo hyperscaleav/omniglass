@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -370,6 +371,20 @@ func (r *SessionRegistry) SessionCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.sessions)
+}
+
+// SessionIDs names the sessions open now, sorted. A caller follows one held
+// session by its ID while short-lived connections (a reachability probe's
+// dial) open and close beside it.
+func (r *SessionRegistry) SessionIDs() []string {
+	r.mu.Lock()
+	ids := make([]string, 0, len(r.sessions))
+	for id := range r.sessions {
+		ids = append(ids, id)
+	}
+	r.mu.Unlock()
+	slices.Sort(ids)
+	return ids
 }
 
 // Fanout publishes push lines for every active subscription whose

@@ -750,7 +750,7 @@ export type CollectionSettings = {
 };
 
 /**
- * Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+ * Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
  */
 export type CommandBodyPhase = typeof CommandBodyPhase[keyof typeof CommandBodyPhase];
 
@@ -766,7 +766,7 @@ export const CommandBodyPhase = {
 } as const;
 
 /**
- * How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)
+ * How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)
  */
 export type CommandBodySettleMode = typeof CommandBodySettleMode[keyof typeof CommandBodySettleMode];
 
@@ -778,7 +778,7 @@ export const CommandBodySettleMode = {
 } as const;
 
 /**
- * What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence
+ * What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
  */
 export type CommandBodySettledBy = typeof CommandBodySettledBy[keyof typeof CommandBodySettledBy];
 
@@ -845,10 +845,12 @@ export type CommandBody = {
   component: string;
   /** The component's uuid, the stable form of component */
   component_id: string;
-  /** When its settle window closes; a command still issued past it is timed out by the next sweep */
+  /** When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep */
   deadline: string;
   /** When a node last took it from its queue */
   delivered_at?: string;
+  /** How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again */
+  delivery_count: number;
   /** The driver whose binding renders and settles it, by name */
   driver?: string;
   /** The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
@@ -859,6 +861,8 @@ export type CommandBody = {
   exec_error?: string;
   /** When its node's execution report landed */
   executed_at?: string;
+  /** When a node first took it from its queue; a redelivery moves delivered_at, not this */
+  first_delivered_at?: string;
   /** The command's id: with its component, its address (a command has no name) */
   id: number;
   /** The series discriminator it was issued with, if any */
@@ -877,19 +881,19 @@ export type CommandBody = {
   observed?: CommandObservation;
   /** The invocation params */
   params?: unknown;
-  /** Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
+  /** Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
   phase: CommandBodyPhase;
   /** Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out */
   reason?: string;
   /** The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
   reply?: string;
-  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing) */
+  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it) */
   settle_mode: CommandBodySettleMode;
   /** How long it waits for its evidence */
   settle_window_seconds: number;
   /** When it reached its terminal status */
   settled_at?: string;
-  /** What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence */
+  /** What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report */
   settled_by?: CommandBodySettledBy;
   /** The event its terminal status put there: command-settled, command-failed or command-timed-out */
   settled_event_id?: number;
@@ -907,6 +911,10 @@ export type CommandTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   description?: string;
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
+  disruptive: boolean;
+  /** A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
+  hold_seconds: number;
   /** The command type's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -914,6 +922,10 @@ export type CommandTypeBody = {
   official: boolean;
   /** A JSON Schema fragment for the invocation params */
   params_schema?: unknown;
+  /** Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
+  power_outlet_param?: string;
+  /** A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive */
+  quiet_seconds: number;
   /** How long the device is given to actuate before a mismatch is a failed command */
   settle_window_seconds: number;
   /** The metric this command sets (the other arm of the arc; never set together with target_property_type) */
@@ -978,6 +990,37 @@ export type ComponentBody = {
   system_count: number;
   /** The primary system's id, the canonical handle */
   system_id?: string;
+};
+
+/**
+ * How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)
+ */
+export type ComponentDependencyBodyKind = typeof ComponentDependencyBodyKind[keyof typeof ComponentDependencyBodyKind];
+
+
+export const ComponentDependencyBodyKind = {
+  power: 'power',
+  host: 'host',
+  path: 'path',
+} as const;
+
+export type ComponentDependencyBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Name of the dependent component, the one that goes down with the upstream */
+  component: string;
+  /** The dependent component's uuid */
+  component_id: string;
+  /** When the edge was recorded */
+  created_at: string;
+  /** How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway) */
+  kind: ComponentDependencyBodyKind;
+  /** The upstream's outlet that feeds the component; set on a power edge only */
+  outlet?: string;
+  /** Name of the component it depends on */
+  upstream: string;
+  /** The upstream component's uuid */
+  upstream_id: string;
 };
 
 export type MetricInstanceBody = {
@@ -1378,6 +1421,13 @@ export type CreateCommandTypeInputBody = {
   readonly $schema?: string;
   /** What the command does */
   description?: string;
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
+  disruptive?: boolean;
+  /**
+     * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+     * @minimum 0
+     */
+  hold_seconds?: number;
   /** A human label */
   label?: string;
   /**
@@ -1388,6 +1438,16 @@ export type CreateCommandTypeInputBody = {
   /** A JSON Schema fragment for the params */
   params_schema?: unknown;
   /**
+     * Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type
+     * @maxLength 64
+     */
+  power_outlet_param?: string;
+  /**
+     * A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type
+     * @minimum 0
+     */
+  quiet_seconds?: number;
+  /**
      * The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.
      * @minimum 0
      */
@@ -1396,6 +1456,35 @@ export type CreateCommandTypeInputBody = {
   target_metric_type?: string;
   /** The property this command sets, for settlement (at most one target arm) */
   target_property_type?: string;
+};
+
+/**
+ * How it depends: power, host or path
+ */
+export type CreateComponentDependencyInputBodyKind = typeof CreateComponentDependencyInputBodyKind[keyof typeof CreateComponentDependencyInputBodyKind];
+
+
+export const CreateComponentDependencyInputBodyKind = {
+  power: 'power',
+  host: 'host',
+  path: 'path',
+} as const;
+
+export type CreateComponentDependencyInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** How it depends: power, host or path */
+  kind: CreateComponentDependencyInputBodyKind;
+  /**
+     * The upstream's outlet that feeds this component: required on a power edge, refused on any other
+     * @maxLength 64
+     */
+  outlet?: string;
+  /**
+     * Name or uuid of the component this one depends on, or a dotted address
+     * @minLength 1
+     */
+  upstream: string;
 };
 
 /**
@@ -1528,7 +1617,7 @@ export type CreateDriverInputBody = {
 /**
  * The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest
  */
-export type CreateEndpointInputBodyInputs = {[key: string]: string};
+export type CreateEndpointInputBodyInputs = {[key: string]: string | number};
 
 export type CreateEndpointInputBody = {
   /** A URL to the JSON Schema for this object. */
@@ -1546,6 +1635,8 @@ export type CreateEndpointInputBody = {
   label?: string;
   /** Node placement, by name or id */
   node?: string;
+  /** Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
+  out_of_band?: boolean;
   /** Address/target settings (jsonb); an attach derives them from the inputs instead */
   params?: unknown;
   /** A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
@@ -2562,6 +2653,15 @@ export type CriteriaErrorBody = {
   message: string;
 };
 
+export type DatabaseSettings = {
+  /**
+     * Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off
+     * @minimum 0
+     * @maximum 600000
+     */
+  slow_query_ms: number;
+};
+
 export type DownloadFileOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2776,12 +2876,105 @@ export type EndpointBody = {
   node?: string;
   /** The placed node's id; the stable form of node */
   node_id?: string;
+  /** A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
+  out_of_band: boolean;
   /** The address/target settings (jsonb) */
   params?: unknown;
   /** The transport name (the wire this endpoint speaks over), from the code registry */
   transport: string;
   /** A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list */
   webhook?: EndpointWebhookBody;
+};
+
+export type EpochHigh = {
+  e: number;
+  m: number;
+};
+
+export type GaugeReading = {
+  current: number;
+  /** @nullable */
+  high_water?: EpochHigh[] | null;
+};
+
+export type TallyCounters = {
+  answered: number;
+  connections: number;
+  error: number;
+  in_flight: number;
+  refused: number;
+  sent: number;
+  timed_out: number;
+  transport: string;
+};
+
+export type RequestTallySnapshot = {
+  at: string;
+  batches_acknowledged: number;
+  batches_dropped: number;
+  busy_workers?: GaugeReading;
+  node: string;
+  queue_depth?: GaugeReading;
+  started: string;
+  /** @nullable */
+  transports?: TallyCounters[] | null;
+};
+
+export type SimFaceOverlap = {
+  component: string;
+  component_id: string;
+  face: string;
+  overlapped: number;
+  protocol: string;
+  received: number;
+};
+
+export type SimProtocolObservation = {
+  accepted?: number;
+  answered?: number;
+  dropped?: number;
+  error?: number;
+  in_flight?: number;
+  /** @nullable */
+  in_flight_high?: EpochHigh[] | null;
+  /**
+     * @nullable
+     * @items.minimum 0
+     */
+  latency?: number[] | null;
+  open_connections?: number;
+  open_streams?: number;
+  overlapped?: number;
+  protocol: string;
+  received?: number;
+  refused?: number;
+  served?: number;
+  streams_opened?: number;
+  unhit?: number;
+  /** @nullable */
+  unhit_sample?: string[] | null;
+  withheld?: number;
+};
+
+export type SimObservation = {
+  at: string;
+  devices: number;
+  /** @nullable */
+  faces?: SimFaceOverlap[] | null;
+  faces_overlapped?: number;
+  impaired: number;
+  node: string;
+  /** @nullable */
+  protocols: SimProtocolObservation[] | null;
+  started: string;
+};
+
+export type EndpointObservation = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  node: RequestTallySnapshot;
+  sim_after: SimObservation;
+  sim_before: SimObservation;
 };
 
 export type EnrollOutputBody = {
@@ -3211,6 +3404,12 @@ export type FleetDotBody = {
 };
 
 export type HealthAlarmBody = {
+  /** Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised */
+  acknowledged: boolean;
+  /** When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at */
+  acknowledged_at?: string;
+  /** Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+  acknowledged_by?: string;
   /** The component the alarm is on, by name */
   component: string;
   /** The component's uuid */
@@ -3328,6 +3527,8 @@ export type FleetViewOutputBody = {
      * @nullable
      */
   locations: FleetLocationBody[] | null;
+  /** How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero */
+  open_alarms?: number;
   /**
      * Every system the caller may read, each carrying its dots
      * @nullable
@@ -3563,6 +3764,25 @@ export type ListCommandsOutputBody = {
   commands: CommandBody[] | null;
   /** The component, by name */
   component: string;
+};
+
+export type ListComponentDependenciesOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The component, as addressed */
+  component: string;
+  /**
+     * What depends on this component, ordered by kind then dependent name
+     * @nullable
+     */
+  dependents: ComponentDependencyBody[] | null;
+  /** How many more edges this component has whose other end is outside the caller's component:read: counted, never named */
+  hidden: number;
+  /**
+     * What this component depends on, ordered by kind then upstream name
+     * @nullable
+     */
+  upstreams: ComponentDependencyBody[] | null;
 };
 
 export type SystemMemberBody = {
@@ -5263,6 +5483,16 @@ export type OwnerStruct = {
   ref: string;
 };
 
+export type PlatformAlarmBody = {
+  /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
+  key?: string;
+  message: string;
+  raised_at: string;
+  /** The name of the rule that raised the alarm; absent for a hand-raised alarm */
+  rule?: string;
+  severity: string;
+};
+
 export type PlatformBindingInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5271,6 +5501,485 @@ export type PlatformBindingInputBody = {
      * @minLength 1
      */
   value: string;
+};
+
+export type PlatformFigureBody = {
+  /** When the sample was taken */
+  observed_at: string;
+  value: number;
+};
+
+export type PlatformKeyBody = {
+  /** The metric type's catalog description, the column's tooltip */
+  description?: string;
+  /** The metric type's label, the column header */
+  label: string;
+  /** The metric type's name: the key a node's figures are indexed by */
+  name: string;
+  /** The metric type's unit, when it has one */
+  unit?: string;
+};
+
+export type PlatformGroupBody = {
+  /**
+     * The group's columns, in order, each with its catalog facts
+     * @nullable
+     */
+  keys: PlatformKeyBody[] | null;
+  /** The group's title over its columns */
+  label: string;
+  /** The group's stable handle */
+  name: string;
+};
+
+export type PlatformInstanceFigureBody = {
+  /** The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key */
+  instance: string;
+  /** The key the figure is a sample of */
+  key: string;
+  /** When the sample was taken */
+  observed_at: string;
+  value: number;
+};
+
+/**
+ * The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read
+ */
+export type PlatformNodeBodyFigures = {[key: string]: PlatformFigureBody};
+
+export type PlatformNodeBody = {
+  /** The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted */
+  component?: string;
+  enrolled: boolean;
+  /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
+  figures?: PlatformNodeBodyFigures;
+  label: string;
+  /** The node's last heartbeat; absent when it has never sent one */
+  last_heartbeat_at?: string;
+  /** The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
+  loss?: number;
+  name: string;
+  /** The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  verdict?: string;
+};
+
+export type PlatformPanelKeyBody = {
+  /** The metric type's catalog description, the row's tooltip */
+  description?: string;
+  /** The metric type's label, the row's title */
+  label: string;
+  /** The metric type's name: the key the panel's figures carry */
+  name: string;
+  /** The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone */
+  of?: string;
+  /** Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first */
+  rank?: number;
+  /** The metric type's unit, when it has one */
+  unit?: string;
+};
+
+export type PlatformPanelBody = {
+  /**
+     * The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure
+     * @nullable
+     */
+  figures: PlatformInstanceFigureBody[] | null;
+  /**
+     * The panel's keys, in order, each with its catalog facts
+     * @nullable
+     */
+  keys: PlatformPanelKeyBody[] | null;
+  /** The panel's title */
+  label: string;
+  /** The panel's stable handle */
+  name: string;
+};
+
+/**
+ * The kind of item
+ */
+export type PlatformPipelineEndKindBodyKind = typeof PlatformPipelineEndKindBodyKind[keyof typeof PlatformPipelineEndKindBodyKind];
+
+
+export const PlatformPipelineEndKindBodyKind = {
+  metric: 'metric',
+  property: 'property',
+  event: 'event',
+  log: 'log',
+} as const;
+
+export type PlatformPipelineEndKindBody = {
+  /** The kind of item */
+  kind: PlatformPipelineEndKindBodyKind;
+  /** The last hour's end to end loss */
+  last_hour?: number;
+  /** The current newest windows' end to end loss */
+  newest?: number;
+};
+
+export type PlatformPipelineEndBody = {
+  /** The last hour's end to end loss */
+  last_hour?: number;
+  /** The current newest windows' end to end loss */
+  newest?: number;
+};
+
+/**
+ * The kind of item, the series instance
+ */
+export type PlatformPipelineKindBodyKind = typeof PlatformPipelineKindBodyKind[keyof typeof PlatformPipelineKindBodyKind];
+
+
+export const PlatformPipelineKindBodyKind = {
+  metric: 'metric',
+  property: 'property',
+  event: 'event',
+  log: 'log',
+} as const;
+
+export type PlatformPipelineFigureBody = {
+  /**
+     * Items the hop took in over the span (delivery-in-count summed)
+     * @minimum 0
+     */
+  in: number;
+  /** (in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in */
+  loss?: number;
+  /**
+     * Items the hop handed on over the span (delivery-out-count summed)
+     * @minimum 0
+     */
+  out: number;
+};
+
+export type PlatformPipelineKindBody = {
+  /** The kind of item, the series instance */
+  kind: PlatformPipelineKindBodyKind;
+  /** Every window over the last hour, summed */
+  last_hour: PlatformPipelineFigureBody;
+  /** Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+  newest: PlatformPipelineFigureBody;
+  /** When the newest window was written, current or not */
+  newest_at?: string;
+};
+
+export type PlatformPipelineSpanBody = {
+  /** Every window over the last hour, summed */
+  last_hour: PlatformPipelineFigureBody;
+  /** Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+  newest: PlatformPipelineFigureBody;
+  /** When the newest window was written, current or not */
+  newest_at?: string;
+};
+
+export type PlatformPipelineComponentBody = {
+  /** The platform component that recorded this share of the hop, where its series live */
+  component: string;
+  /**
+     * The component's figures per kind it carried
+     * @nullable
+     */
+  kinds: PlatformPipelineKindBody[] | null;
+  /** The component's name */
+  name: string;
+  /** The component's figures, every kind summed */
+  total: PlatformPipelineSpanBody;
+};
+
+/**
+ * Which platform components record the hop
+ */
+export type PlatformPipelineHopBodyComponentClass = typeof PlatformPipelineHopBodyComponentClass[keyof typeof PlatformPipelineHopBodyComponentClass];
+
+
+export const PlatformPipelineHopBodyComponentClass = {
+  node: 'node',
+  server: 'server',
+} as const;
+
+/**
+ * The hop's name, as the delivery model names it
+ */
+export type PlatformPipelineHopBodyId = typeof PlatformPipelineHopBodyId[keyof typeof PlatformPipelineHopBodyId];
+
+
+export const PlatformPipelineHopBodyId = {
+  schedule: 'schedule',
+  sim: 'sim',
+  node: 'node',
+  ingest: 'ingest',
+} as const;
+
+export type PlatformPipelineHopBody = {
+  /**
+     * Each component's share of the hop, in name order; the shares sum to the hop's figures
+     * @nullable
+     */
+  by_component: PlatformPipelineComponentBody[] | null;
+  /** Which platform components record the hop */
+  component_class: PlatformPipelineHopBodyComponentClass;
+  /** What the hop does and what counts as out and as lost there */
+  description: string;
+  /** The hop's name, as the delivery model names it */
+  id: PlatformPipelineHopBodyId;
+  /**
+     * The keys the hop's figures are read from, the same three on every hop
+     * @nullable
+     */
+  keys: string[] | null;
+  /**
+     * The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent
+     * @nullable
+     */
+  kinds: PlatformPipelineKindBody[] | null;
+  /** The hop's title */
+  label: string;
+  /** The hop's figures, every kind summed */
+  total: PlatformPipelineSpanBody;
+};
+
+export type PlatformPipelineBody = {
+  /**
+     * Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one
+     * @nullable
+     */
+  end_to_end: PlatformPipelineEndKindBody[] | null;
+  /** The same over every kind summed per hop */
+  end_to_end_total: PlatformPipelineEndBody;
+  /**
+     * The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own
+     * @nullable
+     */
+  hops: PlatformPipelineHopBody[] | null;
+  /**
+     * The delivery keys' catalog facts, the explainer the page shows
+     * @nullable
+     */
+  keys: PlatformKeyBody[] | null;
+};
+
+export type PlatformServerBody = {
+  /**
+     * The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries
+     * @nullable
+     */
+  alarms: PlatformAlarmBody[] | null;
+  /** The server's platform component uuid */
+  component: string;
+  /**
+     * The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own
+     * @nullable
+     */
+  groups: PlatformPanelBody[] | null;
+  /** The server's platform component name */
+  name: string;
+  /** When the server's current boot started (server-started-at); uptime is read_at minus this */
+  started_at?: string;
+  /** The server component's recorded verdict */
+  verdict: string;
+  /** The build the server runs, as its boot wrote it (server-version); absent before a boot has written it */
+  version?: string;
+};
+
+/**
+ * Requests the device saw over the window, by protocol.
+ */
+export type PlatformSimulationDeviceReceived = {[key: string]: number};
+
+export type PlatformSimulationDevice = {
+  /** The component's name; empty when it is no longer one of the node's simulated devices. */
+  component: string;
+  component_id: string;
+  /** Whether the simulator impairs the device at the window's end. */
+  impaired: boolean;
+  /** Requests the device saw over the window, by protocol. */
+  received: PlatformSimulationDeviceReceived;
+  /** Whether it is a poll target due over the window that the simulator never saw. */
+  unhit: boolean;
+};
+
+/**
+ * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.
+ */
+export type PlatformSimulationGapReading = typeof PlatformSimulationGapReading[keyof typeof PlatformSimulationGapReading];
+
+
+export const PlatformSimulationGapReading = {
+  loss: 'loss',
+  impaired: 'impaired',
+  restarted: 'restarted',
+  not_observed_by_the_sim: 'not observed by the sim',
+} as const;
+
+export type PlatformSimulationGap = {
+  /** Answers the node gave up on before they arrived. */
+  answered_late: number;
+  /** How many were lost at the hop over the window, past its masking term. */
+  count: number;
+  /** The hop a request or a batch was lost at, in travel order. */
+  gap: string;
+  /** How many went into the hop over the window: the ratio's denominator. */
+  in: number;
+  /** How many the masking term accounts for, not counted as lost. */
+  masked: number;
+  /** What the masking term is, empty when the gap has none. */
+  masked_by: string;
+  /** The protocol the gap is on; empty for a batch gap, which is per node. */
+  protocol: string;
+  /**
+     * count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.
+     * @nullable
+     */
+  ratio: number | null;
+  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful. */
+  reading: PlatformSimulationGapReading;
+};
+
+/**
+ * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+ */
+export type PlatformSimulationNodeState = typeof PlatformSimulationNodeState[keyof typeof PlatformSimulationNodeState];
+
+
+export const PlatformSimulationNodeState = {
+  warming_up: 'warming up',
+  measured: 'measured',
+  restarted: 'restarted',
+} as const;
+
+export type Quantiles = {
+  n: number;
+  p50: number;
+  p95: number;
+  p99: number;
+};
+
+export type PlatformSimulationProtocol = {
+  /** Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request. */
+  accepted: number;
+  /** Requests it answered. */
+  answered: number;
+  /** The most requests on the protocol the simulator held at once. */
+  in_flight_high: number;
+  /** The simulator's service time in milliseconds; n is 0 when it timed nothing. */
+  latency_ms: Quantiles;
+  /** Enabled poll targets the window should have drawn on the protocol at least twice. */
+  poll_targets: number;
+  protocol: string;
+  /** Requests the simulator received on the protocol over the window. */
+  received: number;
+};
+
+export type PlatformSimulationReceipts = {
+  /** Of those, the ones landed after the end, acknowledged before the end read. */
+  after_end: number;
+  /** Batches the ingest lane held at the end. The server does not read it, so it is 0. */
+  backlog: number;
+  /** Batches landed from the margin before the window's start to the bracket after its end. */
+  landed: number;
+  /** Of those, the ones landed before the start: a batch acknowledged before the start read. */
+  margin: number;
+};
+
+export type PlatformSimulationNode = {
+  /** How many brackets the server holds for the node. */
+  brackets: number;
+  /**
+     * The node's busy-worker high water; null until a node reports it.
+     * @nullable
+     */
+  busy_workers: number | null;
+  /** @nullable */
+  devices: PlatformSimulationDevice[] | null;
+  /**
+     * The window's last bracket; null while warming up.
+     * @nullable
+     */
+  end: string | null;
+  /** Why the last bracket or its reads failed; empty when they did not. */
+  error: string;
+  /**
+     * Every gap over the window in travel order; null while warming up.
+     * @nullable
+     */
+  gaps: PlatformSimulationGap[] | null;
+  /** The most requests the simulator held at once over every protocol. */
+  in_flight_high: number;
+  node: string;
+  /** @nullable */
+  protocols: PlatformSimulationProtocol[] | null;
+  /**
+     * The node's dispatch queue depth; null until a node reports it.
+     * @nullable
+     */
+  queue_depth: number | null;
+  receipts: PlatformSimulationReceipts;
+  /**
+     * The window's first bracket; null while warming up.
+     * @nullable
+     */
+  start: string | null;
+  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart. */
+  state: PlatformSimulationNodeState;
+};
+
+export type PlatformSimulationViewOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** How often the server brackets each node. */
+  bracket_seconds: number;
+  /**
+     * Each node with a connected simulator; empty when none is.
+     * @nullable
+     */
+  nodes: PlatformSimulationNode[] | null;
+  /** The server's clock at the read. */
+  read_at: string;
+  /** A full window's length. */
+  window_seconds: number;
+};
+
+export type PlatformSystemBody = {
+  /** The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
+  id: string;
+  name: string;
+  /** The platform system's recorded verdict, the same one its health read serves */
+  verdict: string;
+};
+
+export type PlatformViewOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
+  figures_read: boolean;
+  /**
+     * The node table's column groups, in order: the page renders these and has no key list of its own
+     * @nullable
+     */
+  groups: PlatformGroupBody[] | null;
+  /** True when this server runs as an omniglass lab */
+  lab: boolean;
+  /**
+     * The hops a node's loss composes: the ones its own platform component records
+     * @nullable
+     */
+  loss_hops: string[] | null;
+  /**
+     * One row per node, in name order
+     * @nullable
+     */
+  nodes: PlatformNodeBody[] | null;
+  /** Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read */
+  pipeline?: PlatformPipelineBody;
+  /** The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock */
+  read_at: string;
+  /**
+     * Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read
+     * @nullable
+     */
+  servers: PlatformServerBody[] | null;
+  /** The platform system and its verdict; absent without a fleet-wide system read */
+  system?: PlatformSystemBody;
 };
 
 export type RunIdentity = {
@@ -5709,11 +6418,33 @@ export type RaiseAlarmInputBody = {
   severity: string;
 };
 
+/**
+ * Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ */
+export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
+
+
+export const ReachEndpointBodyPending = {
+  'no-node': 'no-node',
+  'awaiting-probe': 'awaiting-probe',
+} as const;
+
 export type ReachVerdictBody = {
   /** When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
   ts: string;
   /** The latest stored verdict value (up/down) */
   value: string;
+};
+
+export type ReachGateReasonBody = {
+  /** An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
+  component?: string;
+  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+  kind: string;
+  /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
+  since: string;
+  /** What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe */
+  source: string;
 };
 
 export type ReachHistoryBody = {
@@ -5805,6 +6536,11 @@ export type ReachEndpointBody = {
   /** The endpoint's derived name (its transport) */
   endpoint: string;
   /**
+     * Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection
+     * @nullable
+     */
+  gate_reasons?: ReachGateReasonBody[] | null;
+  /**
      * The recent verdict transitions, oldest first, for the availability strip
      * @nullable
      */
@@ -5822,6 +6558,8 @@ export type ReachEndpointBody = {
   layers: ReachLayerBody[] | null;
   /** The node that probes this endpoint */
   node?: string;
+  /** Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  pending?: ReachEndpointBodyPending;
   /** The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
   rejection?: ReachRejectionBody;
   /** The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
@@ -5832,7 +6570,7 @@ export type ReachEndpointBody = {
   tls?: ReachTLSBody;
   /** The transport (icmp, tcp, ...) */
   transport: string;
-  /** The latest reachability verdict, or null if none yet */
+  /** The latest reachability verdict, or null if none yet (pending says why) */
   verdict: ReachVerdictBody;
   /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
   webhook?: EndpointWebhookBody;
@@ -6387,6 +7125,7 @@ export type UISettings = {
 
 export type Settings = {
   collection: CollectionSettings;
+  database: DatabaseSettings;
   keybindings: Keybindings;
   label: LabelSettings;
   notification: NotificationSettings;
@@ -6808,10 +7547,27 @@ export type UpdateCommandTypeInputBody = {
   readonly $schema?: string;
   /** What the command does */
   description?: string;
+  /** Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row */
+  disruptive?: boolean;
+  /**
+     * A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+     * @minimum 0
+     */
+  hold_seconds?: number;
   /** A human label */
   label?: string;
   /** A JSON Schema fragment (replaces wholesale) */
   params_schema?: unknown;
+  /**
+     * The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row
+     * @maxLength 64
+     */
+  power_outlet_param?: string;
+  /**
+     * A disruptive type's quiet period in seconds
+     * @minimum 0
+     */
+  quiet_seconds?: number;
   /**
      * The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
      * @minimum 0
@@ -6867,7 +7623,7 @@ export type UpdateDriverInputBody = {
 /**
  * A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential
  */
-export type UpdateEndpointInputBodyInputs = {[key: string]: string};
+export type UpdateEndpointInputBodyInputs = {[key: string]: string | number};
 
 export type UpdateEndpointInputBody = {
   /** A URL to the JSON Schema for this object. */
@@ -6881,6 +7637,8 @@ export type UpdateEndpointInputBody = {
   label?: string;
   /** Reassign the node placement, by name or id */
   node?: string;
+  /** Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
+  out_of_band?: boolean;
   /** Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
   params?: unknown;
   /** The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -9913,7 +10671,7 @@ export const getUpdateCommandTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+ * Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
  * @summary Update a command type
  */
 export const updateCommandType = async (name: string,
@@ -10961,6 +11719,157 @@ return ogFetch<issueComponentCommandResponse>(getIssueComponentCommandUrl(name,p
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(issueCommandInputBody)
+  }
+);}
+
+
+
+export type listComponentDependenciesResponse200 = {
+  data: ListComponentDependenciesOutputBody
+  status: 200
+}
+
+export type listComponentDependenciesResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listComponentDependenciesResponseSuccess = (listComponentDependenciesResponse200) & {
+  headers: Headers;
+};
+export type listComponentDependenciesResponseError = (listComponentDependenciesResponseDefault) & {
+  headers: Headers;
+};
+
+export type listComponentDependenciesResponse = (listComponentDependenciesResponseSuccess | listComponentDependenciesResponseError)
+
+export const getListComponentDependenciesUrl = (name: string,) => {
+
+
+
+
+  return `/components/${name}/dependencies`
+}
+
+/**
+ * This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+ * @summary List what a component depends on and what depends on it
+ */
+export const listComponentDependencies = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentDependenciesResponse> => {
+
+  return ogFetch<listComponentDependenciesResponse>(getListComponentDependenciesUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createComponentDependencyResponse201 = {
+  data: ComponentDependencyBody
+  status: 201
+}
+
+export type createComponentDependencyResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createComponentDependencyResponseSuccess = (createComponentDependencyResponse201) & {
+  headers: Headers;
+};
+export type createComponentDependencyResponseError = (createComponentDependencyResponseDefault) & {
+  headers: Headers;
+};
+
+export type createComponentDependencyResponse = (createComponentDependencyResponseSuccess | createComponentDependencyResponseError)
+
+export const getCreateComponentDependencyUrl = (name: string,) => {
+
+
+
+
+  return `/components/${name}/dependencies`
+}
+
+/**
+ * Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+ * @summary Record that a component depends on another
+ */
+export const createComponentDependency = async (name: string,
+    createComponentDependencyInputBody: NonReadonly<CreateComponentDependencyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentDependencyResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createComponentDependencyResponse>(getCreateComponentDependencyUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createComponentDependencyInputBody)
+  }
+);}
+
+
+
+export type deleteComponentDependencyResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteComponentDependencyResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteComponentDependencyResponseSuccess = (deleteComponentDependencyResponse204) & {
+  headers: Headers;
+};
+export type deleteComponentDependencyResponseError = (deleteComponentDependencyResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteComponentDependencyResponse = (deleteComponentDependencyResponseSuccess | deleteComponentDependencyResponseError)
+
+export const getDeleteComponentDependencyUrl = (name: string,
+    kind: 'power' | 'host' | 'path',
+    upstream: string,) => {
+
+
+
+
+  return `/components/${name}/dependencies/${kind}/${upstream}`
+}
+
+/**
+ * Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+ * @summary Remove a component's dependency on another
+ */
+export const deleteComponentDependency = async (name: string,
+    kind: 'power' | 'host' | 'path',
+    upstream: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentDependencyResponse> => {
+
+  return ogFetch<deleteComponentDependencyResponse>(getDeleteComponentDependencyUrl(name,kind,upstream),
+  {
+    ...options,
+    method: 'DELETE'
+
+
   }
 );}
 
@@ -12924,7 +13833,7 @@ export const getPreviewDriverUrl = () => {
 }
 
 /**
- * Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+ * Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
  * @summary Preview a driver spec's polls through a node
  */
 export const previewDriver = async (previewDriverInputBody: NonReadonly<PreviewDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewDriverResponse> => {
@@ -13230,7 +14139,7 @@ export const getUpdateEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+ * Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
  * @summary Update an endpoint
  */
 export const updateEndpoint = async (endpoint: string,
@@ -13298,7 +14207,7 @@ export const getRunEndpointPollUrl = (endpoint: string,
 }
 
 /**
- * Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+ * Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
  * @summary Run an endpoint's poll now
  */
 export const runEndpointPoll = async (endpoint: string,
@@ -16536,7 +17445,7 @@ export const getDeleteNodeUrl = (name: string,) => {
 }
 
 /**
- * Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+ * Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
  * @summary Delete a node
  */
 export const deleteNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNodeResponse> => {
@@ -16797,6 +17706,50 @@ return ogFetch<addNodeSimulationComponentResponse>(getAddNodeSimulationComponent
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(addSimComponentInputBody)
+  }
+);}
+
+
+
+export type getNodeSimulationObservationResponse200 = {
+  data: EndpointObservation
+  status: 200
+}
+
+export type getNodeSimulationObservationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getNodeSimulationObservationResponseSuccess = (getNodeSimulationObservationResponse200) & {
+  headers: Headers;
+};
+export type getNodeSimulationObservationResponseError = (getNodeSimulationObservationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getNodeSimulationObservationResponse = (getNodeSimulationObservationResponseSuccess | getNodeSimulationObservationResponseError)
+
+export const getGetNodeSimulationObservationUrl = (name: string,) => {
+
+
+
+
+  return `/nodes/${name}/simulation/observation`
+}
+
+/**
+ * What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
+ * @summary Get a node's endpoint observation
+ */
+export const getNodeSimulationObservation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeSimulationObservationResponse> => {
+
+  return ogFetch<getNodeSimulationObservationResponse>(getGetNodeSimulationObservationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
@@ -25615,12 +26568,100 @@ export const getGetFleetViewUrl = () => {
 }
 
 /**
- * Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+ * Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
  * @summary Read the whole in-scope fleet in one call
  */
 export const getFleetView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getFleetViewResponse> => {
 
   return ogFetch<getFleetViewResponse>(getGetFleetViewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getPlatformViewResponse200 = {
+  data: PlatformViewOutputBody
+  status: 200
+}
+
+export type getPlatformViewResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getPlatformViewResponseSuccess = (getPlatformViewResponse200) & {
+  headers: Headers;
+};
+export type getPlatformViewResponseError = (getPlatformViewResponseDefault) & {
+  headers: Headers;
+};
+
+export type getPlatformViewResponse = (getPlatformViewResponseSuccess | getPlatformViewResponseError)
+
+export const getGetPlatformViewUrl = () => {
+
+
+
+
+  return `/views/platform`
+}
+
+/**
+ * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+ * @summary Read Omniglass's own health in one call
+ */
+export const getPlatformView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformViewResponse> => {
+
+  return ogFetch<getPlatformViewResponse>(getGetPlatformViewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getPlatformSimulationViewResponse200 = {
+  data: PlatformSimulationViewOutputBody
+  status: 200
+}
+
+export type getPlatformSimulationViewResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getPlatformSimulationViewResponseSuccess = (getPlatformSimulationViewResponse200) & {
+  headers: Headers;
+};
+export type getPlatformSimulationViewResponseError = (getPlatformSimulationViewResponseDefault) & {
+  headers: Headers;
+};
+
+export type getPlatformSimulationViewResponse = (getPlatformSimulationViewResponseSuccess | getPlatformSimulationViewResponseError)
+
+export const getGetPlatformSimulationViewUrl = () => {
+
+
+
+
+  return `/views/platform/simulation`
+}
+
+/**
+ * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+ * @summary Read what each simulator saw against what the platform collected
+ */
+export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {
+
+  return ogFetch<getPlatformSimulationViewResponse>(getGetPlatformSimulationViewUrl(),
   {
     ...options,
     method: 'GET'

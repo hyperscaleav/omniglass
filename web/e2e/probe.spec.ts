@@ -11,7 +11,7 @@ import { locate, parseWalkthrough, runSetup } from "./walkthroughlib.mjs";
 // digest.mjs reduces it to the digest an agent reads. Run by web/e2e/probe.sh
 // on a lab; skipped when OG_PROBE_OUT is unset, so the e2e tier never runs it
 // by accident. A walkthrough's setup is made first, with the owner token in
-// OG_TOKEN, as the recorder makes it.
+// OG_TOKEN, and its ready condition waited for, as the recorder does both.
 //
 // Routes come first and walkthroughs after, since a walkthrough may change
 // what a route shows (one renames a place).
@@ -144,7 +144,7 @@ test.describe("probe", () => {
       const w = parseWalkthrough(readFileSync(join(WALKTHROUGHS, file), "utf8"), file);
       // Room for every step's own wait, so a slow step is the walkthrough's
       // recorded failure rather than the test runner's timeout.
-      test.setTimeout(30_000 + w.steps.reduce((t: number, s: { timeout?: number }) => t + (s.timeout ?? STEP_TIMEOUT), 0));
+      test.setTimeout(30_000 + (w.ready?.timeout ?? 0) + w.steps.reduce((t: number, s: { timeout?: number }) => t + (s.timeout ?? STEP_TIMEOUT), 0));
       const page = await ctx.newPage();
       watch(page, surface);
       emit({ kind: "visit", surface });
@@ -153,6 +153,14 @@ test.describe("probe", () => {
         await runSetup(w.setup, { base: process.env.OG_E2E_BASE as string, token: process.env.OG_TOKEN, fetch });
       } catch (e) {
         failed = { step: 0, reason: (e as Error).message, still: "" };
+      }
+      if (!failed && w.ready) {
+        try {
+          await page.goto("/web" + w.ready.path, { waitUntil: "load", timeout: STEP_TIMEOUT });
+          await locate(page, w.ready.target).filter({ visible: true }).first().waitFor({ state: "visible", timeout: w.ready.timeout });
+        } catch (e) {
+          failed = { step: 0, reason: `not ready: ${(e as Error).message.split("\n")[0]}`, still: "" };
+        }
       }
       for (const step of failed ? [] : w.steps) {
         try {
@@ -196,6 +204,7 @@ async function replay(page: Page, step: any) {
   }
   const el = locate(page, step.target);
   if (step.kind === "click") await el.click({ timeout: STEP_TIMEOUT });
+  else if (step.kind === "hover") await el.hover({ timeout: STEP_TIMEOUT });
   else if (step.kind === "type") {
     await el.click({ timeout: STEP_TIMEOUT });
     await el.pressSequentially(step.text, { timeout: STEP_TIMEOUT });

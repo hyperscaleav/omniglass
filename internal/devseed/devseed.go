@@ -42,27 +42,94 @@ type Doc struct {
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
-	Alarms            []Alarm           `yaml:"alarms"`
-	PropertyValues    []Property        `yaml:"property_values"`
-	SimSecrets        []SimSecret       `yaml:"sim_secrets"`
-	SimEndpoints      []SimEndpoint     `yaml:"sim_endpoints"`
-	SimComponents     []Component       `yaml:"sim_components"`
+	// ComponentDependencies are the fleet's dependency edges (#1648): a
+	// component fed from a PDU's outlet, or hosted by another component.
+	ComponentDependencies []ComponentDependency `yaml:"component_dependencies"`
+	Alarms                []Alarm               `yaml:"alarms"`
+	PropertyValues        []Property            `yaml:"property_values"`
+	SimSecrets            []SimSecret           `yaml:"sim_secrets"`
+	SimEndpoints          []SimEndpoint         `yaml:"sim_endpoints"`
+	SimComponents         []Component           `yaml:"sim_components"`
 	// SimIdentityBindings tie the simulated conduit's room ids to the
 	// systems they are the rooms of (#1282).
 	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
-	// SimPusher is the simulated first-party pusher (#1370), granted with
-	// the simulated fleet only.
-	SimPusher *SimPusher `yaml:"sim_pusher"`
+	// SimPushers are the simulated fleet's outside actors (#1370, #1743),
+	// granted with the simulated fleet only.
+	SimPushers []SimPusher `yaml:"sim_pushers"`
 }
 
-// SimSecret is a platform secret the simulated fleet's endpoints reference
-// (#1059): seeded with the simulated fleet only, beside the SNMP community,
-// so a fleet without the simulator (the docs screenshots) carries none.
+// ComponentDependency is one fixture dependency edge (#1648): Component
+// depends on Upstream by Kind (power, host or path), a power edge naming the
+// Upstream's Outlet that feeds it. Both ends are fixture keys.
+type ComponentDependency struct {
+	Component string `yaml:"component"`
+	Upstream  string `yaml:"upstream"`
+	Kind      string `yaml:"kind"`
+	Outlet    string `yaml:"outlet"`
+}
+
+// seedComponentDependencies records the fixture's dependency edges through
+// the gateway's own write, each end by the uuid the seed made. An edge
+// already recorded is a no-op, so a re-seed writes nothing.
+func seedComponentDependencies(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs map[string]string) error {
+	all := scope.Set{All: true}
+	for _, d := range doc.ComponentDependencies {
+		comp, ok := compIDs[d.Component]
+		if !ok {
+			return fmt.Errorf("devseed: dependency names component key %q, which the fleet has no component for", d.Component)
+		}
+		up, ok := compIDs[d.Upstream]
+		if !ok {
+			return fmt.Errorf("devseed: dependency names upstream key %q, which the fleet has no component for", d.Upstream)
+		}
+		_, err := gw.CreateComponentDependency(ctx, actorID, comp, storage.ComponentDependencySpec{Upstream: up, Kind: d.Kind, Outlet: d.Outlet}, all, all)
+		if err != nil && !errors.Is(err, storage.ErrDependencyExists) {
+			return fmt.Errorf("devseed: record %s depends on %s by %s: %w", d.Component, d.Upstream, d.Kind, err)
+		}
+	}
+	return nil
+}
+
+// SimSecret is a secret the simulated fleet's endpoints reference (#1059):
+// seeded with the simulated fleet only, beside the SNMP community, so a fleet
+// without the simulator (the docs screenshots) carries none. It is a platform
+// secret unless OwnerKind says otherwise (#168): "location" or "component",
+// with Owner the fixture KEY of that location or component. The same Name at
+// more than one tier is the planted cascade the effective-secrets view reads.
 type SimSecret struct {
 	Name       string            `yaml:"name"`
 	Label      string            `yaml:"label"`
 	SecretType string            `yaml:"secret_type"`
+	OwnerKind  string            `yaml:"owner_kind"`
+	Owner      string            `yaml:"owner"`
 	Fields     map[string]string `yaml:"fields"`
+}
+
+// secretSpec is the gateway spec for a fixture secret: a platform one when it
+// names no owner kind, else owned by the location or component its Owner key
+// resolves to (an id, a legal reference wherever a name is, ADR-0062).
+func (s SimSecret) secretSpec(locIDs, compIDs map[string]string) (storage.SecretSpec, error) {
+	spec := storage.SecretSpec{Name: s.Name, Label: s.Label, SecretType: s.SecretType, OwnerKind: "platform", Fields: s.Fields}
+	var ids map[string]string
+	switch s.OwnerKind {
+	case "", "platform":
+		if s.Owner != "" {
+			return spec, fmt.Errorf("devseed: platform secret %q names owner %q", s.Name, s.Owner)
+		}
+		return spec, nil
+	case "location":
+		ids = locIDs
+	case "component":
+		ids = compIDs
+	default:
+		return spec, fmt.Errorf("devseed: secret %q has owner_kind %q, want platform, location or component", s.Name, s.OwnerKind)
+	}
+	id, ok := ids[s.Owner]
+	if !ok {
+		return spec, fmt.Errorf("devseed: secret %q names unknown %s key %q", s.Name, s.OwnerKind, s.Owner)
+	}
+	spec.OwnerKind, spec.OwnerName = s.OwnerKind, &id
+	return spec, nil
 }
 
 // SimEndpoint is one more endpoint on a simulated component, beside the one
@@ -651,6 +718,12 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		}
 	}
 
+	// Dependency edges: after the components, so both ends resolve to the
+	// uuids the seed made (a name is unique only in its placement).
+	if err := seedComponentDependencies(ctx, gw, actorID, doc, compIDs); err != nil {
+		return err
+	}
+
 	// Alarms: raised last of the fleet writes, since the component must exist and
 	// be staffed for the alarm to reach anything above it. RaiseAlarm recomputes
 	// health in the same transaction, so the verdicts the console reads are moved
@@ -760,19 +833,27 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
 		return err
 	}
-	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
+	if err := seedSimEndpoints(ctx, gw, actorID, base, locIDs, compIDs, opts.SimPortOffset); err != nil {
+		return err
+	}
+	if err := seedSimSecrets(ctx, gw, actorID, base, locIDs, compIDs, true); err != nil {
 		return err
 	}
 	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
 		return err
 	}
-	if p := base.SimPusher; p != nil {
-		sysID, ok := sysIDs[p.System]
-		if !ok {
-			return fmt.Errorf("devseed: the simulated pusher names unknown system key %q", p.System)
+	for _, p := range base.SimPushers {
+		if len(p.Systems) == 0 {
+			return fmt.Errorf("devseed: the simulated pusher %s names no system", p.Name)
 		}
-		if err := GrantPusher(ctx, gw, actorID, p.Service, sysID); err != nil {
-			return err
+		for _, key := range p.Systems {
+			sysID, ok := sysIDs[key]
+			if !ok {
+				return fmt.Errorf("devseed: the simulated pusher %s names unknown system key %q", p.Name, key)
+			}
+			if err := GrantPusher(ctx, gw, actorID, p.Name, sysID); err != nil {
+				return err
+			}
 		}
 	}
 	// The breadth RTT series, after the endpoints they are the node's account

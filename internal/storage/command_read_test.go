@@ -81,7 +81,8 @@ func newStatusRig(t *testing.T, settle string) *statusRig {
 			{"name": "login", "kind": "secret", "secret_type": "basic-auth", "required": true}],
 		"polls": [{"name": "status", "schedule": {"every": "30s"}, "request": {"line": "GET INPUT"},
 			"emits": [{"name": "video-input", "extract": {"regex": "^INPUT (\\S+)$"}}]}],
-		"commands": [{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}%s}]}`, settleField)
+		"commands": [{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}%s},
+			{"command_type": "reboot", "request": {"line": "REBOOT"}}]}`, settleField)
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "status-proto", Label: "Status Proto", Version: "1.0.0", Spec: []byte(spec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
@@ -512,9 +513,10 @@ func TestListComponentCommandsFilters(t *testing.T) {
 	}
 }
 
-// A fire-and-forget command reads settled at its issue, decided by the
-// issue, with nothing told to settle; a command no driver binds sits
-// awaiting observation, since no node will ever take it.
+// A fire-and-forget command reads issued and queued for its node, then
+// delivered once the node takes it, then settled by its execution report
+// (#1630); a command no driver binds sits awaiting observation, since no
+// node will ever take it.
 func TestFireAndForgetAndUndeliverableReads(t *testing.T) {
 	t.Parallel()
 	r := newStatusRig(t, valueReply)
@@ -523,8 +525,18 @@ func TestFireAndForgetAndUndeliverableReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := r.read(t, ff.ID)
-	if rec.Status != "settled" || rec.SettledBy != storage.SettledByIssue || rec.SettleMode != storage.SettleModeNone || rec.Intended != nil || rec.Reason == "" {
-		t.Fatalf("fire-and-forget = status %q by %q mode %q intended %s reason %q", rec.Status, rec.SettledBy, rec.SettleMode, rec.Intended, rec.Reason)
+	if rec.Status != "issued" || rec.SettledBy != "" || rec.SettleMode != storage.SettleModeNone || rec.Intended != nil || rec.Phase != storage.PhaseQueued {
+		t.Fatalf("fire-and-forget at issue = status %q by %q mode %q intended %s phase %q", rec.Status, rec.SettledBy, rec.SettleMode, rec.Intended, rec.Phase)
+	}
+	r.dispatch(t, ff.ID)
+	if rec = r.read(t, ff.ID); rec.Status != "issued" || rec.Phase != storage.PhaseDelivered {
+		t.Fatalf("fire-and-forget once delivered = status %q phase %q, want issued and delivered", rec.Status, rec.Phase)
+	}
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", ff.ID, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if rec = r.read(t, ff.ID); rec.Status != "settled" || rec.SettledBy != storage.SettledByReply || rec.Phase != "settled" {
+		t.Fatalf("fire-and-forget once carried out = status %q by %q phase %q, want settled by its report", rec.Status, rec.SettledBy, rec.Phase)
 	}
 	cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", r.compID, "set-volume", "", json.RawMessage(`40`), nil)
 	if err != nil {

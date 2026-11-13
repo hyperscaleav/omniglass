@@ -1195,13 +1195,17 @@ components:
           description: The component's uuid, the stable form of component
           type: string
         deadline:
-          description: When its settle window closes; a command still issued past it is timed out by the next sweep
+          description: When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep
           format: date-time
           type: string
         delivered_at:
           description: When a node last took it from its queue
           format: date-time
           type: string
+        delivery_count:
+          description: "How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again"
+          format: int64
+          type: integer
         driver:
           description: The driver whose binding renders and settles it, by name
           type: string
@@ -1216,6 +1220,10 @@ components:
           type: string
         executed_at:
           description: When its node's execution report landed
+          format: date-time
+          type: string
+        first_delivered_at:
+          description: When a node first took it from its queue; a redelivery moves delivered_at, not this
           format: date-time
           type: string
         id:
@@ -1246,7 +1254,7 @@ components:
         params:
           description: The invocation params
         phase:
-          description: "Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"
+          description: "Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"
           enum:
             - queued
             - delivered
@@ -1263,7 +1271,7 @@ components:
           description: The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands
           type: string
         settle_mode:
-          description: "How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)"
+          description: "How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)"
           enum:
             - reply
             - observation
@@ -1278,7 +1286,7 @@ components:
           format: date-time
           type: string
         settled_by:
-          description: "What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence"
+          description: "What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report"
           enum:
             - issue
             - reply
@@ -1325,6 +1333,7 @@ components:
         - settle_window_seconds
         - deadline
         - issued_at
+        - delivery_count
       type: object
     CommandObservation:
       additionalProperties: false
@@ -1351,6 +1360,13 @@ components:
           type: string
         description:
           type: string
+        disruptive:
+          description: "The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target"
+          type: boolean
+        hold_seconds:
+          description: "A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"
+          format: int64
+          type: integer
         id:
           description: The command type's uuid, the stable form of name
           type: string
@@ -1362,6 +1378,13 @@ components:
           type: boolean
         params_schema:
           description: A JSON Schema fragment for the invocation params
+        power_outlet_param:
+          description: "Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type"
+          type: string
+        quiet_seconds:
+          description: "A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"
+          format: int64
+          type: integer
         settle_window_seconds:
           description: How long the device is given to actuate before a mismatch is a failed command
           format: int64
@@ -1376,6 +1399,9 @@ components:
         - id
         - name
         - settle_window_seconds
+        - disruptive
+        - quiet_seconds
+        - hold_seconds
         - official
       type: object
     ComponentBody:
@@ -1459,6 +1485,50 @@ components:
         - system_count
         - name_generated
         - label_generated
+      type: object
+    ComponentDependencyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentDependencyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: Name of the dependent component, the one that goes down with the upstream
+          type: string
+        component_id:
+          description: The dependent component's uuid
+          type: string
+        created_at:
+          description: When the edge was recorded
+          format: date-time
+          type: string
+        kind:
+          description: "How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)"
+          enum:
+            - power
+            - host
+            - path
+          type: string
+        outlet:
+          description: The upstream's outlet that feeds the component; set on a power edge only
+          type: string
+        upstream:
+          description: Name of the component it depends on
+          type: string
+        upstream_id:
+          description: The upstream component's uuid
+          type: string
+      required:
+        - component
+        - component_id
+        - upstream
+        - upstream_id
+        - kind
+        - created_at
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -1784,6 +1854,14 @@ components:
         description:
           description: What the command does
           type: string
+        disruptive:
+          description: "The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again"
+          type: boolean
+        hold_seconds:
+          description: "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type"
+          format: int64
+          minimum: 0
+          type: integer
         label:
           description: A human label
           type: string
@@ -1793,6 +1871,15 @@ components:
           type: string
         params_schema:
           description: A JSON Schema fragment for the params
+        power_outlet_param:
+          description: "Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type"
+          maxLength: 64
+          type: string
+        quiet_seconds:
+          description: "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type"
+          format: int64
+          minimum: 0
+          type: integer
         settle_window_seconds:
           description: "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."
           format: int64
@@ -1806,6 +1893,41 @@ components:
           type: string
       required:
         - name
+      type: object
+    CreateComponentDependencyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentDependencyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        kind:
+          description: "How it depends: power, host or path"
+          enum:
+            - power
+            - host
+            - path
+          examples:
+            - power
+          type: string
+        outlet:
+          description: "The upstream's outlet that feeds this component: required on a power edge, refused on any other"
+          examples:
+            - "3"
+          maxLength: 64
+          type: string
+        upstream:
+          description: Name or uuid of the component this one depends on, or a dotted address
+          examples:
+            - pdu-1
+          minLength: 1
+          type: string
+      required:
+        - upstream
+        - kind
       type: object
     CreateComponentFromTemplateInputBody:
       additionalProperties: false
@@ -2009,7 +2131,9 @@ components:
           type: string
         inputs:
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
           description: The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest
           type: object
         label:
@@ -2019,6 +2143,9 @@ components:
         node:
           description: Node placement, by name or id
           type: string
+        out_of_band:
+          description: Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open
+          type: boolean
         params:
           description: Address/target settings (jsonb); an attach derives them from the inputs instead
         transport:
@@ -3328,6 +3455,19 @@ components:
         value:
           description: "The short form's threshold: text for a property, a number for a metric"
       type: object
+    DatabaseSettings:
+      additionalProperties: false
+      properties:
+        slow_query_ms:
+          default: 500
+          description: Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off
+          format: int64
+          maximum: 600000
+          minimum: 0
+          type: integer
+      required:
+        - slow_query_ms
+      type: object
     DownloadFileOutputBody:
       additionalProperties: false
       properties:
@@ -3695,6 +3835,9 @@ components:
         node_id:
           description: The placed node's id; the stable form of node
           type: string
+        out_of_band:
+          description: "A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it"
+          type: boolean
         params:
           description: The address/target settings (jsonb)
         transport:
@@ -3707,6 +3850,28 @@ components:
         - id
         - name
         - transport
+        - out_of_band
+      type: object
+    EndpointObservation:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EndpointObservation.json
+          format: uri
+          readOnly: true
+          type: string
+        node:
+          $ref: "#/components/schemas/RequestTallySnapshot"
+        sim_after:
+          $ref: "#/components/schemas/SimObservation"
+        sim_before:
+          $ref: "#/components/schemas/SimObservation"
+      required:
+        - sim_before
+        - node
+        - sim_after
       type: object
     EndpointWebhookBody:
       additionalProperties: false
@@ -3811,6 +3976,19 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    EpochHigh:
+      additionalProperties: false
+      properties:
+        e:
+          format: int64
+          type: integer
+        m:
+          format: int64
+          type: integer
+      required:
+        - e
+        - m
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -4479,6 +4657,10 @@ components:
           type:
             - array
             - "null"
+        open_alarms:
+          description: How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero
+          format: int64
+          type: integer
         systems:
           description: Every system the caller may read, each carrying its dots
           items:
@@ -4489,6 +4671,21 @@ components:
       required:
         - locations
         - systems
+      type: object
+    GaugeReading:
+      additionalProperties: false
+      properties:
+        current:
+          format: int64
+          type: integer
+        high_water:
+          items:
+            $ref: "#/components/schemas/EpochHigh"
+          type:
+            - array
+            - "null"
+      required:
+        - current
       type: object
     GrantBody:
       additionalProperties: false
@@ -4560,6 +4757,16 @@ components:
     HealthAlarmBody:
       additionalProperties: false
       properties:
+        acknowledged:
+          description: Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised
+          type: boolean
+        acknowledged_at:
+          description: When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+          format: date-time
+          type: string
+        acknowledged_by:
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          type: string
         component:
           description: The component the alarm is on, by name
           type: string
@@ -4582,6 +4789,7 @@ components:
         - severity
         - message
         - raised_at
+        - acknowledged
       type: object
     HealthOutputBody:
       additionalProperties: false
@@ -5105,6 +5313,43 @@ components:
       required:
         - component
         - commands
+      type: object
+    ListComponentDependenciesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentDependenciesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: The component, as addressed
+          type: string
+        dependents:
+          description: What depends on this component, ordered by kind then dependent name
+          items:
+            $ref: "#/components/schemas/ComponentDependencyBody"
+          type:
+            - array
+            - "null"
+        hidden:
+          description: "How many more edges this component has whose other end is outside the caller's component:read: counted, never named"
+          format: int64
+          type: integer
+        upstreams:
+          description: What this component depends on, ordered by kind then upstream name
+          items:
+            $ref: "#/components/schemas/ComponentDependencyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - upstreams
+        - dependents
+        - hidden
       type: object
     ListComponentMembershipsOutputBody:
       additionalProperties: false
@@ -7146,6 +7391,27 @@ components:
         - created_at
         - updated_at
       type: object
+    PlatformAlarmBody:
+      additionalProperties: false
+      properties:
+        key:
+          description: The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm
+          type: string
+        message:
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        rule:
+          description: The name of the rule that raised the alarm; absent for a hand-raised alarm
+          type: string
+        severity:
+          type: string
+      required:
+        - severity
+        - message
+        - raised_at
+      type: object
     PlatformBindingInputBody:
       additionalProperties: false
       properties:
@@ -7162,6 +7428,762 @@ components:
           type: string
       required:
         - value
+      type: object
+    PlatformFigureBody:
+      additionalProperties: false
+      properties:
+        observed_at:
+          description: When the sample was taken
+          format: date-time
+          type: string
+        value:
+          format: double
+          type: number
+      required:
+        - value
+        - observed_at
+      type: object
+    PlatformGroupBody:
+      additionalProperties: false
+      properties:
+        keys:
+          description: The group's columns, in order, each with its catalog facts
+          items:
+            $ref: "#/components/schemas/PlatformKeyBody"
+          type:
+            - array
+            - "null"
+        label:
+          description: The group's title over its columns
+          type: string
+        name:
+          description: The group's stable handle
+          type: string
+      required:
+        - name
+        - label
+        - keys
+      type: object
+    PlatformInstanceFigureBody:
+      additionalProperties: false
+      properties:
+        instance:
+          description: The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key
+          type: string
+        key:
+          description: The key the figure is a sample of
+          type: string
+        observed_at:
+          description: When the sample was taken
+          format: date-time
+          type: string
+        value:
+          format: double
+          type: number
+      required:
+        - key
+        - instance
+        - value
+        - observed_at
+      type: object
+    PlatformKeyBody:
+      additionalProperties: false
+      properties:
+        description:
+          description: The metric type's catalog description, the column's tooltip
+          type: string
+        label:
+          description: The metric type's label, the column header
+          type: string
+        name:
+          description: "The metric type's name: the key a node's figures are indexed by"
+          type: string
+        unit:
+          description: The metric type's unit, when it has one
+          type: string
+      required:
+        - name
+        - label
+      type: object
+    PlatformNodeBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted
+          type: string
+        enrolled:
+          type: boolean
+        figures:
+          additionalProperties:
+            $ref: "#/components/schemas/PlatformFigureBody"
+          description: "The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"
+          type: object
+        label:
+          type: string
+        last_heartbeat_at:
+          description: The node's last heartbeat; absent when it has never sent one
+          format: date-time
+          type: string
+        loss:
+          description: The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read
+          format: double
+          type: number
+        name:
+          type: string
+        verdict:
+          description: The node's platform component verdict, which tones the row; absent without a fleet-wide component read
+          type: string
+      required:
+        - name
+        - label
+        - enrolled
+      type: object
+    PlatformPanelBody:
+      additionalProperties: false
+      properties:
+        figures:
+          description: "The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure"
+          items:
+            $ref: "#/components/schemas/PlatformInstanceFigureBody"
+          type:
+            - array
+            - "null"
+        keys:
+          description: The panel's keys, in order, each with its catalog facts
+          items:
+            $ref: "#/components/schemas/PlatformPanelKeyBody"
+          type:
+            - array
+            - "null"
+        label:
+          description: The panel's title
+          type: string
+        name:
+          description: The panel's stable handle
+          type: string
+      required:
+        - name
+        - label
+        - keys
+        - figures
+      type: object
+    PlatformPanelKeyBody:
+      additionalProperties: false
+      properties:
+        description:
+          description: The metric type's catalog description, the row's tooltip
+          type: string
+        label:
+          description: The metric type's label, the row's title
+          type: string
+        name:
+          description: "The metric type's name: the key the panel's figures carry"
+          type: string
+        of:
+          description: The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone
+          type: string
+        rank:
+          description: "Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first"
+          format: int64
+          type: integer
+        unit:
+          description: The metric type's unit, when it has one
+          type: string
+      required:
+        - name
+        - label
+      type: object
+    PlatformPipelineBody:
+      additionalProperties: false
+      properties:
+        end_to_end:
+          description: "Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one"
+          items:
+            $ref: "#/components/schemas/PlatformPipelineEndKindBody"
+          type:
+            - array
+            - "null"
+        end_to_end_total:
+          $ref: "#/components/schemas/PlatformPipelineEndBody"
+          description: The same over every kind summed per hop
+        hops:
+          description: "The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own"
+          items:
+            $ref: "#/components/schemas/PlatformPipelineHopBody"
+          type:
+            - array
+            - "null"
+        keys:
+          description: The delivery keys' catalog facts, the explainer the page shows
+          items:
+            $ref: "#/components/schemas/PlatformKeyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - keys
+        - hops
+        - end_to_end
+        - end_to_end_total
+      type: object
+    PlatformPipelineComponentBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The platform component that recorded this share of the hop, where its series live
+          type: string
+        kinds:
+          description: The component's figures per kind it carried
+          items:
+            $ref: "#/components/schemas/PlatformPipelineKindBody"
+          type:
+            - array
+            - "null"
+        name:
+          description: The component's name
+          type: string
+        total:
+          $ref: "#/components/schemas/PlatformPipelineSpanBody"
+          description: The component's figures, every kind summed
+      required:
+        - component
+        - name
+        - kinds
+        - total
+      type: object
+    PlatformPipelineEndBody:
+      additionalProperties: false
+      properties:
+        last_hour:
+          description: The last hour's end to end loss
+          format: double
+          type: number
+        newest:
+          description: The current newest windows' end to end loss
+          format: double
+          type: number
+      type: object
+    PlatformPipelineEndKindBody:
+      additionalProperties: false
+      properties:
+        kind:
+          description: The kind of item
+          enum:
+            - metric
+            - property
+            - event
+            - log
+          type: string
+        last_hour:
+          description: The last hour's end to end loss
+          format: double
+          type: number
+        newest:
+          description: The current newest windows' end to end loss
+          format: double
+          type: number
+      required:
+        - kind
+      type: object
+    PlatformPipelineFigureBody:
+      additionalProperties: false
+      properties:
+        in:
+          description: Items the hop took in over the span (delivery-in-count summed)
+          format: int64
+          minimum: 0
+          type: integer
+        loss:
+          description: (in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in
+          format: double
+          type: number
+        out:
+          description: Items the hop handed on over the span (delivery-out-count summed)
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - in
+        - out
+      type: object
+    PlatformPipelineHopBody:
+      additionalProperties: false
+      properties:
+        by_component:
+          description: Each component's share of the hop, in name order; the shares sum to the hop's figures
+          items:
+            $ref: "#/components/schemas/PlatformPipelineComponentBody"
+          type:
+            - array
+            - "null"
+        component_class:
+          description: Which platform components record the hop
+          enum:
+            - node
+            - server
+          type: string
+        description:
+          description: What the hop does and what counts as out and as lost there
+          type: string
+        id:
+          description: The hop's name, as the delivery model names it
+          enum:
+            - schedule
+            - sim
+            - node
+            - ingest
+          type: string
+        keys:
+          description: The keys the hop's figures are read from, the same three on every hop
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        kinds:
+          description: The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent
+          items:
+            $ref: "#/components/schemas/PlatformPipelineKindBody"
+          type:
+            - array
+            - "null"
+        label:
+          description: The hop's title
+          type: string
+        total:
+          $ref: "#/components/schemas/PlatformPipelineSpanBody"
+          description: The hop's figures, every kind summed
+      required:
+        - id
+        - label
+        - description
+        - component_class
+        - keys
+        - kinds
+        - total
+        - by_component
+      type: object
+    PlatformPipelineKindBody:
+      additionalProperties: false
+      properties:
+        kind:
+          description: The kind of item, the series instance
+          enum:
+            - metric
+            - property
+            - event
+            - log
+          type: string
+        last_hour:
+          $ref: "#/components/schemas/PlatformPipelineFigureBody"
+          description: Every window over the last hour, summed
+        newest:
+          $ref: "#/components/schemas/PlatformPipelineFigureBody"
+          description: Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour
+        newest_at:
+          description: When the newest window was written, current or not
+          format: date-time
+          type: string
+      required:
+        - kind
+        - newest
+        - last_hour
+      type: object
+    PlatformPipelineSpanBody:
+      additionalProperties: false
+      properties:
+        last_hour:
+          $ref: "#/components/schemas/PlatformPipelineFigureBody"
+          description: Every window over the last hour, summed
+        newest:
+          $ref: "#/components/schemas/PlatformPipelineFigureBody"
+          description: Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour
+        newest_at:
+          description: When the newest window was written, current or not
+          format: date-time
+          type: string
+      required:
+        - newest
+        - last_hour
+      type: object
+    PlatformServerBody:
+      additionalProperties: false
+      properties:
+        alarms:
+          description: The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries
+          items:
+            $ref: "#/components/schemas/PlatformAlarmBody"
+          type:
+            - array
+            - "null"
+        component:
+          description: The server's platform component uuid
+          type: string
+        groups:
+          description: "The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own"
+          items:
+            $ref: "#/components/schemas/PlatformPanelBody"
+          type:
+            - array
+            - "null"
+        name:
+          description: The server's platform component name
+          type: string
+        started_at:
+          description: When the server's current boot started (server-started-at); uptime is read_at minus this
+          format: date-time
+          type: string
+        verdict:
+          description: The server component's recorded verdict
+          type: string
+        version:
+          description: The build the server runs, as its boot wrote it (server-version); absent before a boot has written it
+          type: string
+      required:
+        - component
+        - name
+        - verdict
+        - groups
+        - alarms
+      type: object
+    PlatformSimulationDevice:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component's name; empty when it is no longer one of the node's simulated devices.
+          type: string
+        component_id:
+          type: string
+        impaired:
+          description: Whether the simulator impairs the device at the window's end.
+          type: boolean
+        received:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: Requests the device saw over the window, by protocol.
+          type: object
+        unhit:
+          description: Whether it is a poll target due over the window that the simulator never saw.
+          type: boolean
+      required:
+        - component_id
+        - component
+        - received
+        - impaired
+        - unhit
+      type: object
+    PlatformSimulationGap:
+      additionalProperties: false
+      properties:
+        answered_late:
+          description: Answers the node gave up on before they arrived.
+          format: int64
+          type: integer
+        count:
+          description: How many were lost at the hop over the window, past its masking term.
+          format: int64
+          type: integer
+        gap:
+          description: The hop a request or a batch was lost at, in travel order.
+          type: string
+        in:
+          description: "How many went into the hop over the window: the ratio's denominator."
+          format: int64
+          type: integer
+        masked:
+          description: How many the masking term accounts for, not counted as lost.
+          format: int64
+          type: integer
+        masked_by:
+          description: What the masking term is, empty when the gap has none.
+          type: string
+        protocol:
+          description: The protocol the gap is on; empty for a batch gap, which is per node.
+          type: string
+        ratio:
+          description: count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.
+          format: double
+          type:
+            - number
+            - "null"
+        reading:
+          description: "How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful."
+          enum:
+            - loss
+            - impaired
+            - restarted
+            - not observed by the sim
+          type: string
+      required:
+        - gap
+        - protocol
+        - count
+        - in
+        - ratio
+        - masked
+        - masked_by
+        - answered_late
+        - reading
+      type: object
+    PlatformSimulationNode:
+      additionalProperties: false
+      properties:
+        brackets:
+          description: How many brackets the server holds for the node.
+          format: int64
+          type: integer
+        busy_workers:
+          description: The node's busy-worker high water; null until a node reports it.
+          format: int64
+          type:
+            - integer
+            - "null"
+        devices:
+          items:
+            $ref: "#/components/schemas/PlatformSimulationDevice"
+          type:
+            - array
+            - "null"
+        end:
+          description: The window's last bracket; null while warming up.
+          format: date-time
+          type:
+            - string
+            - "null"
+        error:
+          description: Why the last bracket or its reads failed; empty when they did not.
+          type: string
+        gaps:
+          description: Every gap over the window in travel order; null while warming up.
+          items:
+            $ref: "#/components/schemas/PlatformSimulationGap"
+          type:
+            - array
+            - "null"
+        in_flight_high:
+          description: The most requests the simulator held at once over every protocol.
+          format: int64
+          type: integer
+        node:
+          type: string
+        protocols:
+          items:
+            $ref: "#/components/schemas/PlatformSimulationProtocol"
+          type:
+            - array
+            - "null"
+        queue_depth:
+          description: The node's dispatch queue depth; null until a node reports it.
+          format: int64
+          type:
+            - integer
+            - "null"
+        receipts:
+          $ref: "#/components/schemas/PlatformSimulationReceipts"
+        start:
+          description: The window's first bracket; null while warming up.
+          format: date-time
+          type:
+            - string
+            - "null"
+        state:
+          description: warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+          enum:
+            - warming up
+            - measured
+            - restarted
+          type: string
+      required:
+        - node
+        - state
+        - start
+        - end
+        - brackets
+        - error
+        - gaps
+        - receipts
+        - protocols
+        - in_flight_high
+        - queue_depth
+        - busy_workers
+        - devices
+      type: object
+    PlatformSimulationProtocol:
+      additionalProperties: false
+      properties:
+        accepted:
+          description: Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request.
+          format: int64
+          type: integer
+        answered:
+          description: Requests it answered.
+          format: int64
+          type: integer
+        in_flight_high:
+          description: The most requests on the protocol the simulator held at once.
+          format: int64
+          type: integer
+        latency_ms:
+          $ref: "#/components/schemas/Quantiles"
+          description: The simulator's service time in milliseconds; n is 0 when it timed nothing.
+        poll_targets:
+          description: Enabled poll targets the window should have drawn on the protocol at least twice.
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        received:
+          description: Requests the simulator received on the protocol over the window.
+          format: int64
+          type: integer
+      required:
+        - protocol
+        - accepted
+        - received
+        - answered
+        - latency_ms
+        - poll_targets
+        - in_flight_high
+      type: object
+    PlatformSimulationReceipts:
+      additionalProperties: false
+      properties:
+        after_end:
+          description: Of those, the ones landed after the end, acknowledged before the end read.
+          format: int64
+          type: integer
+        backlog:
+          description: Batches the ingest lane held at the end. The server does not read it, so it is 0.
+          format: int64
+          type: integer
+        landed:
+          description: Batches landed from the margin before the window's start to the bracket after its end.
+          format: int64
+          type: integer
+        margin:
+          description: "Of those, the ones landed before the start: a batch acknowledged before the start read."
+          format: int64
+          type: integer
+      required:
+        - landed
+        - margin
+        - backlog
+        - after_end
+      type: object
+    PlatformSimulationViewOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PlatformSimulationViewOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        bracket_seconds:
+          description: How often the server brackets each node.
+          format: int64
+          type: integer
+        nodes:
+          description: Each node with a connected simulator; empty when none is.
+          items:
+            $ref: "#/components/schemas/PlatformSimulationNode"
+          type:
+            - array
+            - "null"
+        read_at:
+          description: The server's clock at the read.
+          format: date-time
+          type: string
+        window_seconds:
+          description: A full window's length.
+          format: int64
+          type: integer
+      required:
+        - read_at
+        - window_seconds
+        - bracket_seconds
+        - nodes
+      type: object
+    PlatformSystemBody:
+      additionalProperties: false
+      properties:
+        id:
+          description: "The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained"
+          type: string
+        name:
+          type: string
+        verdict:
+          description: The platform system's recorded verdict, the same one its health read serves
+          type: string
+      required:
+        - id
+        - name
+        - verdict
+      type: object
+    PlatformViewOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PlatformViewOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        figures_read:
+          description: True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported
+          type: boolean
+        groups:
+          description: "The node table's column groups, in order: the page renders these and has no key list of its own"
+          items:
+            $ref: "#/components/schemas/PlatformGroupBody"
+          type:
+            - array
+            - "null"
+        lab:
+          description: True when this server runs as an omniglass lab
+          type: boolean
+        loss_hops:
+          description: "The hops a node's loss composes: the ones its own platform component records"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        nodes:
+          description: One row per node, in name order
+          items:
+            $ref: "#/components/schemas/PlatformNodeBody"
+          type:
+            - array
+            - "null"
+        pipeline:
+          $ref: "#/components/schemas/PlatformPipelineBody"
+          description: "Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read"
+        read_at:
+          description: "The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock"
+          format: date-time
+          type: string
+        servers:
+          description: Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read
+          items:
+            $ref: "#/components/schemas/PlatformServerBody"
+          type:
+            - array
+            - "null"
+        system:
+          $ref: "#/components/schemas/PlatformSystemBody"
+          description: The platform system and its verdict; absent without a fleet-wide system read
+      required:
+        - read_at
+        - lab
+        - figures_read
+        - servers
+        - groups
+        - nodes
+        - loss_hops
       type: object
     PollRunBody:
       additionalProperties: false
@@ -8011,6 +9033,27 @@ components:
         - owner_kind
         - owner
       type: object
+    Quantiles:
+      additionalProperties: false
+      properties:
+        "n":
+          format: int64
+          type: integer
+        p50:
+          format: double
+          type: number
+        p95:
+          format: double
+          type: number
+        p99:
+          format: double
+          type: number
+      required:
+        - p50
+        - p95
+        - p99
+        - "n"
+      type: object
     RaiseAlarmInputBody:
       additionalProperties: false
       properties:
@@ -8046,6 +9089,13 @@ components:
         endpoint:
           description: The endpoint's derived name (its transport)
           type: string
+        gate_reasons:
+          description: "Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"
+          items:
+            $ref: "#/components/schemas/ReachGateReasonBody"
+          type:
+            - array
+            - "null"
         history:
           description: The recent verdict transitions, oldest first, for the availability strip
           items:
@@ -8073,6 +9123,12 @@ components:
         node:
           description: The node that probes this endpoint
           type: string
+        pending:
+          description: "Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"
+          enum:
+            - no-node
+            - awaiting-probe
+          type: string
         rejection:
           $ref: "#/components/schemas/ReachRejectionBody"
           description: The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds
@@ -8090,7 +9146,7 @@ components:
           type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
-          description: The latest reachability verdict, or null if none yet
+          description: The latest reachability verdict, or null if none yet (pending says why)
         webhook:
           $ref: "#/components/schemas/EndpointWebhookBody"
           description: "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
@@ -8101,6 +9157,27 @@ components:
         - verdict
         - layers
         - history
+      type: object
+    ReachGateReasonBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: "An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind"
+          type: string
+        kind:
+          description: "The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"
+          type: string
+        since:
+          description: "When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's"
+          format: date-time
+          type: string
+        source:
+          description: "What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe"
+          type: string
+      required:
+        - kind
+        - since
+        - source
       type: object
     ReachHistoryBody:
       additionalProperties: false
@@ -8496,6 +9573,40 @@ components:
         system_type_id:
           description: "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row."
           type: string
+      type: object
+    RequestTallySnapshot:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        batches_acknowledged:
+          format: int64
+          type: integer
+        batches_dropped:
+          format: int64
+          type: integer
+        busy_workers:
+          $ref: "#/components/schemas/GaugeReading"
+        node:
+          type: string
+        queue_depth:
+          $ref: "#/components/schemas/GaugeReading"
+        started:
+          format: date-time
+          type: string
+        transports:
+          items:
+            $ref: "#/components/schemas/TallyCounters"
+          type:
+            - array
+            - "null"
+      required:
+        - node
+        - at
+        - started
+        - batches_acknowledged
+        - batches_dropped
       type: object
     ResetPasswordInputBody:
       additionalProperties: false
@@ -9564,6 +10675,8 @@ components:
       properties:
         collection:
           $ref: "#/components/schemas/CollectionSettings"
+        database:
+          $ref: "#/components/schemas/DatabaseSettings"
         keybindings:
           $ref: "#/components/schemas/Keybindings"
         label:
@@ -9581,6 +10694,7 @@ components:
         - retention
         - collection
         - notification
+        - database
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
@@ -9757,6 +10871,31 @@ components:
         - hits_by_protocol
         - impaired
       type: object
+    SimFaceOverlap:
+      additionalProperties: false
+      properties:
+        component:
+          type: string
+        component_id:
+          type: string
+        face:
+          type: string
+        overlapped:
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        received:
+          format: int64
+          type: integer
+      required:
+        - component_id
+        - component
+        - face
+        - protocol
+        - received
+        - overlapped
+      type: object
     SimFleetOutputBody:
       additionalProperties: false
       properties:
@@ -9840,6 +10979,46 @@ components:
         - oid
         - path
       type: object
+    SimObservation:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        devices:
+          format: int64
+          type: integer
+        faces:
+          items:
+            $ref: "#/components/schemas/SimFaceOverlap"
+          type:
+            - array
+            - "null"
+        faces_overlapped:
+          format: int64
+          type: integer
+        impaired:
+          format: int64
+          type: integer
+        node:
+          type: string
+        protocols:
+          items:
+            $ref: "#/components/schemas/SimProtocolObservation"
+          type:
+            - array
+            - "null"
+        started:
+          format: date-time
+          type: string
+      required:
+        - node
+        - at
+        - started
+        - devices
+        - impaired
+        - protocols
+      type: object
     SimOperationResult:
       additionalProperties: false
       properties:
@@ -9920,6 +11099,76 @@ components:
             - "null"
       required:
         - profiles
+      type: object
+    SimProtocolObservation:
+      additionalProperties: false
+      properties:
+        accepted:
+          format: int64
+          type: integer
+        answered:
+          format: int64
+          type: integer
+        dropped:
+          format: int64
+          type: integer
+        error:
+          format: int64
+          type: integer
+        in_flight:
+          format: int64
+          type: integer
+        in_flight_high:
+          items:
+            $ref: "#/components/schemas/EpochHigh"
+          type:
+            - array
+            - "null"
+        latency:
+          items:
+            format: int64
+            minimum: 0
+            type: integer
+          type:
+            - array
+            - "null"
+        open_connections:
+          format: int64
+          type: integer
+        open_streams:
+          format: int64
+          type: integer
+        overlapped:
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        received:
+          format: int64
+          type: integer
+        refused:
+          format: int64
+          type: integer
+        served:
+          format: int64
+          type: integer
+        streams_opened:
+          format: int64
+          type: integer
+        unhit:
+          format: int64
+          type: integer
+        unhit_sample:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        withheld:
+          format: int64
+          type: integer
+      required:
+        - protocol
       type: object
     SimRoleFillBody:
       additionalProperties: false
@@ -10822,6 +12071,42 @@ components:
       required:
         - values
       type: object
+    TallyCounters:
+      additionalProperties: false
+      properties:
+        answered:
+          format: int64
+          type: integer
+        connections:
+          format: int64
+          type: integer
+        error:
+          format: int64
+          type: integer
+        in_flight:
+          format: int64
+          type: integer
+        refused:
+          format: int64
+          type: integer
+        sent:
+          format: int64
+          type: integer
+        timed_out:
+          format: int64
+          type: integer
+        transport:
+          type: string
+      required:
+        - transport
+        - connections
+        - sent
+        - in_flight
+        - answered
+        - refused
+        - error
+        - timed_out
+      type: object
     TaskBody:
       additionalProperties: false
       properties:
@@ -11493,11 +12778,28 @@ components:
         description:
           description: What the command does
           type: string
+        disruptive:
+          description: Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row
+          type: boolean
+        hold_seconds:
+          description: A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+          format: int64
+          minimum: 0
+          type: integer
         label:
           description: A human label
           type: string
         params_schema:
           description: A JSON Schema fragment (replaces wholesale)
+        power_outlet_param:
+          description: The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row
+          maxLength: 64
+          type: string
+        quiet_seconds:
+          description: A disruptive type's quiet period in seconds
+          format: int64
+          minimum: 0
+          type: integer
         settle_window_seconds:
           description: The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
           format: int64
@@ -11591,7 +12893,9 @@ components:
           type: string
         inputs:
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
           description: "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"
           type: object
         label:
@@ -11601,6 +12905,9 @@ components:
         node:
           description: Reassign the node placement, by name or id
           type: string
+        out_of_band:
+          description: Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone
+          type: boolean
         params:
           description: "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
         transport:
@@ -13535,7 +14842,7 @@ paths:
       summary: Get a command type
       x-omniglass-permission: command_type:read
     patch:
-      description: Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+      description: Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
       operationId: update-command-type
       parameters:
         - description: The command type's name
@@ -14233,6 +15540,119 @@ paths:
         destructive: true
         open_world: true
       x-omniglass-permission: command:issue
+  /components/{name}/dependencies:
+    get:
+      description: "This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404."
+      operationId: list-component-dependencies
+      parameters:
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - codec-1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentDependenciesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List what a component depends on and what depends on it
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:read
+    post:
+      description: "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404)."
+      operationId: create-component-dependency
+      parameters:
+        - description: Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - codec-1
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentDependencyInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentDependencyBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Record that a component depends on another
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:update
+  /components/{name}/dependencies/{kind}/{upstream}:
+    delete:
+      description: "Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either."
+      operationId: delete-component-dependency
+      parameters:
+        - description: Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - codec-1
+            type: string
+        - description: The edge's kind
+          in: path
+          name: kind
+          required: true
+          schema:
+            description: The edge's kind
+            enum:
+              - power
+              - host
+              - path
+            examples:
+              - power
+            type: string
+        - description: Name or uuid of the upstream component, or a dotted address
+          in: path
+          name: upstream
+          required: true
+          schema:
+            description: Name or uuid of the upstream component, or a dotted address
+            examples:
+              - pdu-1
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a component's dependency on another
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:update
   /components/{name}/effective-secrets:
     get:
       description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."
@@ -15473,7 +16893,7 @@ paths:
       x-omniglass-permission: driver:rename
   /drivers:preview:
     post:
-      description: "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview."
+      description: "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview."
       operationId: preview-driver
       requestBody:
         content:
@@ -15627,7 +17047,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:read
     patch:
-      description: "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split."
+      description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split."
       operationId: update-endpoint
       parameters:
         - description: The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does
@@ -15664,7 +17084,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /endpoints/{endpoint}/polls/{poll}:run:
     post:
-      description: "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split."
+      description: "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split."
       operationId: run-endpoint-poll
       parameters:
         - description: The endpoint, as <component>/<endpoint name> or its id
@@ -17426,7 +18846,7 @@ paths:
       x-omniglass-permission: node:create
   /nodes/{name}:
     delete:
-      description: "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
+      description: "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
       operationId: delete-node
       parameters:
         - description: The node's unique name
@@ -17592,6 +19012,33 @@ paths:
           description: Error
       summary: Add a simulated component
       x-omniglass-permission: simulation:update
+  /nodes/{name}/simulation/observation:
+    get:
+      description: "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503."
+      operationId: get-node-simulation-observation
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointObservation"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a node's endpoint observation
+      x-omniglass-permission: simulation:read
   /nodes/{name}/simulation/systems:
     post:
       description: "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422."
@@ -22637,7 +24084,7 @@ paths:
       x-omniglass-permission: vendor:rename
   /views/fleet:
     get:
-      description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read."
+      description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read."
       operationId: get-fleet-view
       responses:
         "200":
@@ -22654,6 +24101,44 @@ paths:
           description: Error
       summary: Read the whole in-scope fleet in one call
       x-omniglass-permission: location:read
+  /views/platform:
+    get:
+      description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read."
+      operationId: get-platform-view
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformViewOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read Omniglass's own health in one call
+      x-omniglass-permission: node:read
+  /views/platform/simulation:
+    get:
+      description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read."
+      operationId: get-platform-simulation-view
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSimulationViewOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read what each simulator saw against what the platform collected
+      x-omniglass-permission: simulation:read
   /webhooks/{token}:
     get:
       description: "A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is."

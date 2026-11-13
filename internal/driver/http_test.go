@@ -20,6 +20,7 @@ func httpCatalog() fakeCatalog {
 	c.lanes["power-state"] = "property"
 	c.lanes["firmware-version"] = "property"
 	c.commands["set-volume"] = true
+	c.commandTargets["set-volume"] = true
 	c.secrets["bearer-token"] = true
 	c.secrets["api-key"] = true
 	return c

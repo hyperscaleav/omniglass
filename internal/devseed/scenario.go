@@ -123,6 +123,7 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 	out.Systems = append([]System(nil), base.Systems...)
 	out.Members = append([]Member(nil), base.Members...)
 	out.RoleAssignments = append([]RoleAssignment(nil), base.RoleAssignments...)
+	out.ComponentDependencies = append([]ComponentDependency(nil), base.ComponentDependencies...)
 
 	rooms := selfContainedRooms(base)
 	if len(rooms) == 0 || p.Sites <= 0 || p.RoomCopies <= 0 {
@@ -145,6 +146,10 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 	sysAt := map[string]string{}
 	for _, s := range base.Systems {
 		sysAt[s.Key] = s.Location
+	}
+	compAt := map[string]string{}
+	for _, c := range base.Components {
+		compAt[c.Key] = c.Location
 	}
 
 	for site := 1; site <= p.Sites; site++ {
@@ -204,6 +209,13 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 				for _, ra := range base.RoleAssignments {
 					if sysAt[ra.System] == l.Key {
 						out.RoleAssignments = append(out.RoleAssignments, RoleAssignment{System: copyKey(ra.System), Role: ra.Role, Component: copyKey(ra.Component)})
+					}
+				}
+				for _, d := range base.ComponentDependencies {
+					if compAt[d.Component] == l.Key && compAt[d.Upstream] == l.Key {
+						cd := d
+						cd.Component, cd.Upstream = copyKey(d.Component), copyKey(d.Upstream)
+						out.ComponentDependencies = append(out.ComponentDependencies, cd)
 					}
 				}
 			}

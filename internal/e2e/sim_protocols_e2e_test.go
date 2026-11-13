@@ -148,7 +148,7 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	nodeEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-p", "OMNIGLASS_NODE_TOKEN="+nodeTok)
 	for _, args := range [][]string{
 		{"sim", "run", "--port-offset", fmt.Sprint(protocolsPortShift), "--poll", "300ms"},
-		{"node", "run", "--server", server, "--name", "edge-p", "--token", nodeTok, "--heartbeat", "1s", "--worklist-every", "1s"},
+		{"node", "run", "--server", server, "--name", "edge-p", "--token", nodeTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
 	} {
 		pctx, stop := context.WithCancel(ctx)
 		p := exec.CommandContext(pctx, binPath, args...)

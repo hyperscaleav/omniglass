@@ -289,7 +289,7 @@ omniglass auth logout
 The authenticated principal, its permissions, and grants
 
 ```
-omniglass auth me [flags]
+omniglass auth me
 ```
 
 Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
@@ -806,9 +806,13 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
+| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again |
+| `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
+| `--power-outlet-param` | string | (none) | Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type |
+| `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
 | `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
 | `--target-property-type` | string | (none) | The property this command sets, for settlement (at most one target arm) |
@@ -875,13 +879,17 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
+| `--disruptive` | bool | `false` | Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row |
+| `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window |
 | `--label` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--power-outlet-param` | string | (none) | The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row |
+| `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
 | `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
@@ -1182,6 +1190,64 @@ Example:
 
 ```sh
 omniglass component delete <name>
+```
+
+### `omniglass component dependency`
+
+Commands for the dependency resource
+
+#### `omniglass component dependency create`
+
+Record that a component depends on another
+
+```
+omniglass component dependency create <name> [flags]
+```
+
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--kind` | string | (none) | How it depends: power, host or path |
+| `--outlet` | string | (none) | The upstream's outlet that feeds this component: required on a power edge, refused on any other |
+| `--upstream` | string | (none) | Name or uuid of the component this one depends on, or a dotted address |
+
+Example:
+
+```sh
+omniglass component dependency create codec-1 --kind kind --upstream upstream
+```
+
+#### `omniglass component dependency delete`
+
+Remove a component's dependency on another
+
+```
+omniglass component dependency delete <name> <kind> <upstream>
+```
+
+Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+
+Example:
+
+```sh
+omniglass component dependency delete codec-1 power pdu-1
+```
+
+#### `omniglass component dependency list`
+
+List what a component depends on and what depends on it
+
+```
+omniglass component dependency list <name>
+```
+
+This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component dependency list codec-1
 ```
 
 ### `omniglass component effective-secret`
@@ -2039,7 +2105,7 @@ Preview a driver spec's polls through a node
 omniglass driver preview [flags]
 ```
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2139,6 +2205,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
 | `--node` | string | (none) | Node placement, by name or id |
+| `--out-of-band` | bool | `false` | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
 | `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
 | `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
@@ -2208,7 +2275,7 @@ Run an endpoint's poll now
 omniglass endpoint poll run <endpoint> <poll> [flags]
 ```
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2265,13 +2332,14 @@ Update an endpoint
 omniglass endpoint update <endpoint> [flags]
 ```
 
-Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
+| `--out-of-band` | bool | `false` | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
 | `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
@@ -2702,30 +2770,102 @@ A working omniglass on Docker, to learn on
 
 ### `omniglass lab measure`
 
-Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view times and the retention drain
+Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval
 
 ```
 omniglass lab measure [flags]
 ```
 
-Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, and the retention pass's drain rate. It writes the same figures as JSON so two runs compare.
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
 When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
 
+The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
+
+Every database read the measure makes runs under what its run has left, and never longer than ten minutes: the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so no measure leaves a query running against the lab it measured.
+
 The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
+
+--page-clients N times the console's system page as an operator feels it: N clients each load the page --page-loads times across the window, making every read a cold open of the page makes, timed from the first request to the last answer. A load with any read that does not answer 200 counts as an error and stays out of the times.
+
+--every samples the lab already running on an interval instead of measuring it once. The lab is found and warmed up once; then every --every one window is measured and written as one JSON line holding the same fields at the same paths as --json, plus the sample's sequence, end time and the server's uptime. Lines go to --append (opened for append, so a series resumes into the same file) or to standard output. --samples stops after that many; 0 samples until interrupted, finishing the sample in flight. A sample that fails writes a line with its error and no figures, and the run goes on. Sampling skips the retention probe, which restarts the server.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart |
+| `--append` | string | (none) | append each sample's line to this file, created if missing; empty writes to standard output |
+| `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling) |
 | `--drain-timeout` | duration | `3m0s` | how long the retention probe waits for the pass to clear the backlog |
-| `--fleet-reads` | int | `20` | how many timed fleet view reads, spread over the window |
+| `--every` | duration | `0s` | sample the running lab on this interval, one JSON line a sample; 0 measures once |
+| `--fleet-reads` | int | `100` | how many timed fleet view reads, spread over the window |
 | `--json` | string | `lab-measure.json` | also write the figures here as JSON; empty writes none |
+| `--page-clients` | int | `0` | how many clients load the console's system page at once across the window; 0 skips the load |
+| `--page-loads` | int | `20` | how many timed system page loads each client makes, spread over the window |
+| `--page-system` | string | (none) | the system whose page the clients load, by name; empty loads the fleet view's first |
+| `--samples` | int | `0` | stop after this many samples; 0 samples until interrupted |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
+| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
-| `--warmup` | duration | `2m0s` | how long the lab runs before the window starts |
+| `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
+
+### `omniglass lab perf`
+
+Check a fresh scale lab against the committed performance baseline, or regenerate it
+
+#### `omniglass lab perf baseline`
+
+Measure fresh scale labs and write the size's baseline from them
+
+```
+omniglass lab perf baseline [flags]
+```
+
+Brings up --runs throwaway scale labs of the size, one after another, and writes the baseline the check compares with: each gated figure's median, spread and values, the inputs the runs measured with and the host they ran on. It refuses, naming each, when an exact figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance, which a check could never gate. The baseline is a host's: generate it on the host class it gates, and commit the file in a reviewed change.
+
+--systems, --warmup, --window and --fleet-reads override the size's inputs, for a throwaway baseline a quick check can run against; the committed baselines use the size's own.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--append` | string | (none) | keep each fresh run's report as a line in this file, which --samples reads again |
+| `--fleet-reads` | int | `0` | override the size's timed fleet view reads; 0 is the size's |
+| `--image` | string | (none) | the omniglass image each lab runs (lab run's --image); empty is this binary's own build |
+| `--last` | int | `0` | with --samples: how many samples from the series' end to read; 0 reads --runs |
+| `--out` | string | (none) | where to write the baseline; empty is the size's committed file under internal/labfootprint/baseline |
+| `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
+| `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
+| `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
+| `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
+| `--systems` | int | `0` | override the size's systems; 0 is the size's |
+| `--warmup` | duration | `0s` | override the size's warmup; 0 is the size's |
+| `--window` | duration | `0s` | override the size's window; 0 is the size's |
+
+#### `omniglass lab perf check`
+
+Measure fresh scale labs and fail when a figure regressed past the baseline
+
+```
+omniglass lab perf check [flags]
+```
+
+Brings up --runs throwaway scale labs one after another, each measured with the baseline's own inputs (scenario, systems, warmup, window and fleet reads, with the retention probe off), and compares the runs with the baseline. It prints one row a figure and exits nonzero when any reads fail, or when the runs are invalid.
+
+The exact figures (every closed-loop gap, an ingest lag not measured, redeliveries, each kind's delivery loss) fail at any value but 0. The host-independent figures (rows a minute, growth and WAL per system, samples a batch) gate on any host. The host-dependent figures (latency, CPU, memory, fleet view time) gate only on the host the baseline was generated on; on another they read reported. A gated figure is the median of the runs, and fails only past its tolerance and past the runs' combined spread. Runs that spread past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: refresh the baseline.
+
+Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted or carried an impairment during the window.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--append` | string | (none) | keep each fresh run's report as a line in this file, which --samples reads again |
+| `--baseline` | string | (none) | the baseline to check against; empty is the size's committed one under internal/labfootprint/baseline |
+| `--image` | string | (none) | the omniglass image each lab runs (lab run's --image); empty is this binary's own build |
+| `--json` | string | (none) | also write the verdict here as JSON |
+| `--last` | int | `0` | with --samples: how many samples from the series' end to read; 0 reads --runs |
+| `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
+| `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
+| `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
+| `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
 
 ### `omniglass lab run`
 
@@ -2743,6 +2883,7 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 |---|---|---|---|
 | `--fresh` | bool | `false` | remove the lab's data first and start over from the seed |
 | `--image` | string | (none) | run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about |
+| `--keep` | bool | `false` | a scale lab: keep its data when it stops, so the next run with the same scenario, size and --keep picks up where it left off (--fresh starts over) |
 | `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
 | `--plan` | bool | `false` | print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing |
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
@@ -3395,7 +3536,7 @@ omniglass location-type update room
 Serve the omniglass MCP tools over stdio, for a local agent
 
 ```
-omniglass mcp [flags]
+omniglass mcp
 ```
 
 Serves the omniglass MCP server over stdio by relaying to the server's /mcp endpoint with your token, so a local agent (Claude Code, or any MCP client that launches a command) drives omniglass through the same generated tools, with your permissions and scope, audited as you via MCP. Configure the agent to run `omniglass mcp` with OMNIGLASS_SERVER and OMNIGLASS_TOKEN in its environment. Standard output carries only the MCP protocol; anything else goes to standard error.
@@ -3616,7 +3757,7 @@ Delete a node
 omniglass node delete <name>
 ```
 
-Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
 
 Example:
 
@@ -3744,12 +3885,14 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 |---|---|---|---|
 | `--heartbeat` | duration | `30s` | heartbeat interval |
 | `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container) |
+| `--lane-workers` | int | `16` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS) |
 | `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
 | `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
 | `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
 | `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
-| `--probe-every` | duration | `0s` | how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
+| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 | `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull |
@@ -3789,6 +3932,26 @@ Example:
 
 ```sh
 omniglass node simulation <name>
+```
+
+#### `omniglass node simulation observation`
+
+Commands for the observation resource
+
+##### `omniglass node simulation observation list`
+
+Get a node's endpoint observation
+
+```
+omniglass node simulation observation list <name>
+```
+
+What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
+
+Example:
+
+```sh
+omniglass node simulation observation list <name>
 ```
 
 ### `omniglass node update`
@@ -6158,7 +6321,7 @@ omniglass system get <name>
 Read every system's health verdict
 
 ```
-omniglass system health [flags]
+omniglass system health
 ```
 
 The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
@@ -7338,12 +7501,52 @@ Read the whole in-scope fleet in one call
 omniglass view fleet list
 ```
 
-Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
 
 Example:
 
 ```sh
 omniglass view fleet list
+```
+
+### `omniglass view platform`
+
+Commands for the platform resource
+
+#### `omniglass view platform list`
+
+Read Omniglass's own health in one call
+
+```
+omniglass view platform list
+```
+
+Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+
+Example:
+
+```sh
+omniglass view platform list
+```
+
+#### `omniglass view platform simulation`
+
+Commands for the simulation resource
+
+##### `omniglass view platform simulation list`
+
+Read what each simulator saw against what the platform collected
+
+```
+omniglass view platform simulation list
+```
+
+Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+
+Example:
+
+```sh
+omniglass view platform simulation list
 ```
 
 ## `omniglass webhook`

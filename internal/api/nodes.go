@@ -94,7 +94,7 @@ type claimOutput struct {
 // the :enroll custom method (mint a token) and the public :claim exchange (a node
 // presents its token, gets its NATS credential). natsURL is the address the claim
 // reply hands back so the node needs only the server URL.
-func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string) {
+func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string, hub SimHub) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-nodes",
 		Extensions:  mcpExposed(),
@@ -185,10 +185,14 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		Path:          "/nodes/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a node",
-		Description:   "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
+		Description:   "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
 	}, "node", "delete"), func(ctx context.Context, in *nodePathInput) (*struct{}, error) {
 		if err := gw.DeleteNode(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "delete")); err != nil {
 			return nil, mapNodeErr(err)
+		}
+		// The deleted node's simulator status goes with it; a nil hub (no bus) has none.
+		if hub != nil {
+			hub.Forget(in.Name)
 		}
 		return nil, nil
 	})
@@ -234,6 +238,9 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 }
 
 func mapNodeErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}

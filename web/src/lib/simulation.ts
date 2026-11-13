@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type * as S from "../api/api.gen";
 import { entityNameError } from "./names";
+import { can, type Me } from "./auth";
 export { ENTITY_NAME_RE, entityNameError } from "./names";
 
 // The simulation data layer (#890): thin typed wrappers over the generated client
@@ -63,6 +64,14 @@ export const BLINK_MS = 700;
 // sidebarPollMs: the sidebar's interval for the fleet it last read.
 export function sidebarPollMs(f: SimFleet | undefined): number {
   return f?.connected ? SIDEBAR_POLL_MS : SIDEBAR_IDLE_POLL_MS;
+}
+
+// simulatorConnected is the nav's "simulator" condition (#890): a principal
+// who can read simulation, with a simulator connected to the server. The
+// sidebar's Simulation door and Platform health's simulation section (#1647)
+// both wait on it, so they appear and disappear together.
+export function simulatorConnected(me: Me | null | undefined, f: SimFleet | undefined): boolean {
+  return can(me, "simulation", "read") && f?.connected === true;
 }
 
 export async function getSimulation(): Promise<SimFleet> {
@@ -195,13 +204,17 @@ export type ImpairmentDraft = {
 };
 export type ImpairmentErrors = Partial<Record<"latency_ms" | "jitter_ms" | "loss_pct" | "rate_kbit", string>>;
 
+// draftOf is a stored impairment as the form's fields. A zero field is empty
+// (its placeholder reads 0), so a value typed into it replaces the zero
+// rather than trailing it ("0100").
 export function draftOf(i: Impairment): ImpairmentDraft {
+  const text = (n: number) => (n === 0 ? "" : String(n));
   return {
     unplugged: i.unplugged,
-    latency_ms: String(i.latency_ms),
-    jitter_ms: String(i.jitter_ms),
-    loss_pct: String(i.loss_pct),
-    rate_kbit: String(i.rate_kbit),
+    latency_ms: text(i.latency_ms),
+    jitter_ms: text(i.jitter_ms),
+    loss_pct: text(i.loss_pct),
+    rate_kbit: text(i.rate_kbit),
   };
 }
 

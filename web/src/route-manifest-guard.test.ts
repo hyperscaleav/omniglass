@@ -38,6 +38,11 @@ describe("route manifest", () => {
     }
   });
 
+  it("carries the Platform health page, on the protected shell (#1644)", () => {
+    const r = ROUTE_MANIFEST.find((e) => e.path === "/platform");
+    expect(r).toMatchObject({ shell: "protected", page: "PlatformHealth", smoke: "/platform" });
+  });
+
   it("keeps paths unique", () => {
     const paths = ROUTE_MANIFEST.map((r) => `${r.shell}:${r.path}`);
     expect(new Set(paths).size).toBe(paths.length);

@@ -3,6 +3,7 @@ package api
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
@@ -97,6 +98,55 @@ func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
 	for _, key := range keys {
 		if !probekeys.IsNodeOnly(key) {
 			t.Errorf("the reachability read serves %s as the node's, but probekeys does not rule it node-only", key)
+		}
+	}
+}
+
+// The gate is a reason set (#1650): the read serves every reason beside the
+// refusal, its kind, since and source, and an endpoint held unreachable alone
+// carries no refusal.
+func TestParseGateReasonsServesEveryReasonBesideTheRefusal(t *testing.T) {
+	t.Parallel()
+	both := "authenticated auth fp-a;unreachable 2026-11-09T14:03:00Z probe-1"
+	if got := parseRejection(both); got == nil || got.Rung != "authenticated" || got.Class != "auth" {
+		t.Fatalf("parseRejection(%q) = %+v, want the refusal", both, got)
+	}
+	got := parseGateReasons(both)
+	if len(got) != 1 || got[0].Kind != "unreachable" || !got[0].Since.Equal(time.Date(2026, 11, 9, 14, 3, 0, 0, time.UTC)) || got[0].Source != "probe-1" {
+		t.Fatalf("parseGateReasons(%q) = %+v, want unreachable since the first down", both, got)
+	}
+	alone := "unreachable 2026-11-09T14:03:00Z probe-1"
+	if got := parseRejection(alone); got != nil {
+		t.Fatalf("unreachable alone read as a refusal: %+v", got)
+	}
+	if got := parseGateReasons(alone); len(got) != 1 {
+		t.Fatalf("parseGateReasons(%q) = %+v, want the one reason", alone, got)
+	}
+	if got := parseGateReasons("none"); got != nil {
+		t.Fatalf("an open gate served reasons %+v", got)
+	}
+}
+
+// TestPendingReason holds why a verdict is null (#981): an endpoint no node
+// probes is waiting on an assignment, an assigned one on its first probe, and a
+// row with a verdict is waiting on nothing, so the field is absent.
+func TestPendingReason(t *testing.T) {
+	t.Parallel()
+	verdict := &reachVerdictBody{Value: "up"}
+	cases := []struct {
+		name    string
+		node    string
+		verdict *reachVerdictBody
+		want    string
+	}{
+		{"no node, no verdict", "", nil, pendingNoNode},
+		{"node assigned, no verdict", "edge-1", nil, pendingAwaitingProbe},
+		{"node assigned, verdict", "edge-1", verdict, ""},
+		{"no node, verdict", "", verdict, ""},
+	}
+	for _, c := range cases {
+		if got := pendingReason(c.node, c.verdict); got != c.want {
+			t.Errorf("%s: pendingReason(%q, %v) = %q, want %q", c.name, c.node, c.verdict, got, c.want)
 		}
 	}
 }

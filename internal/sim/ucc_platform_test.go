@@ -177,3 +177,43 @@ func TestARefusedStartLeavesTheRoomListReadable(t *testing.T) {
 		}
 	}
 }
+
+// A scale lab's platform account learns its rooms the way an admin adds
+// them (#1747): POST /api/rooms with an id joins the room to the account,
+// idle, while a room the account already knows keeps its call, and an id
+// that is not a name is refused. The account then reports every room on its
+// own, on a schedule, so a lab's bound rooms are heard without anyone
+// calling the report route.
+func TestTheUCCPlatformAddsRoomsAndReportsOnItsOwn(t *testing.T) {
+	d := uccPlatform(t)
+	uccCall(t, d, http.MethodPost, "/api/rooms", `{"id":"hq-conf-1"}`)
+	uccCall(t, d, http.MethodPost, "/api/rooms", `{"id":"zr-huddle-north"}`)
+	rooms := readRooms(t, d)
+	if rooms["hq-conf-1"] != "idle" || rooms["zr-huddle-north"] != "in-call" || len(rooms) != 6 {
+		t.Fatalf("rooms = %v, want hq-conf-1 added idle and zr-huddle-north still in a call", rooms)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewBufferString(`{"id":"a.b"}`))
+	req.Header.Set("X-UCC-Token", "ucc-lab-token")
+	d.ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Error("a room id with a dot was accepted")
+	}
+	if _, ok := readRooms(t, d)["a"]; ok {
+		t.Error("a refused room id still wrote state")
+	}
+
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reports := 0
+	for _, b := range store.Devices["ucc-platform"].Behaviors {
+		if b.Emit != nil && b.Emit.Headers["X-UCC-Event"] == "rooms.state" && b.Emit.Sign != nil && b.Schedule.Interval != "" {
+			reports++
+		}
+	}
+	if reports != 1 {
+		t.Fatalf("%d scheduled, signed rooms.state behaviors, want one", reports)
+	}
+}

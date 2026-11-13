@@ -110,7 +110,23 @@ type TelemetryBatch struct {
 	// Set only on a node's lane: a node batch that carries task samples in the
 	// top-level lanes (task_id, metrics, properties, events, task_logs) instead
 	// of in groups is refused. The API push lane keeps using the top-level fields.
-	Groups        []*TaskGroup `protobuf:"bytes,14,rep,name=groups,proto3" json:"groups,omitempty"`
+	Groups []*TaskGroup `protobuf:"bytes,14,rep,name=groups,proto3" json:"groups,omitempty"`
+	// node_self is the node's report of itself (#1625): its schedule, spool,
+	// sessions and process, platform metrics on the node's own platform
+	// component. Like logs (field 7) it names no task and no owner: the server
+	// resolves the owner from the publishing node, never from the batch, and
+	// lands each sample under the platform writer. A sample whose name is not a
+	// declared node-self platform key is refused. Set only on a node's lane.
+	NodeSelf *NodeSelf `protobuf:"bytes,15,opt,name=node_self,json=nodeSelf,proto3" json:"node_self,omitempty"`
+	// ledger is the publisher's delivery accounting for this batch (#1641):
+	// which boot minted it, its dense sequence in that boot, and how many items
+	// of each kind it carries and the boot minted before it. The server reads a
+	// gap in a boot's sequence as items that never landed, and the offsets say
+	// how many of each kind. On a node's lane the boot is the node's spool's,
+	// stamped under its lock and encoded once, so every retry carries it
+	// unchanged; on the API push lane it is the server's own, minted as the
+	// server publishes each batch (#1696).
+	Ledger        *DeliveryLedger `protobuf:"bytes,16,opt,name=ledger,proto3" json:"ledger,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -236,6 +252,380 @@ func (x *TelemetryBatch) GetGroups() []*TaskGroup {
 	return nil
 }
 
+func (x *TelemetryBatch) GetNodeSelf() *NodeSelf {
+	if x != nil {
+		return x.NodeSelf
+	}
+	return nil
+}
+
+func (x *TelemetryBatch) GetLedger() *DeliveryLedger {
+	if x != nil {
+		return x.Ledger
+	}
+	return nil
+}
+
+// DeliveryLedger is one batch's place in its boot's delivery count (#1641).
+// A boot is one start of a node's spool, or of the server's push lane
+// publisher (#1696).
+type DeliveryLedger struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// boot is a UUIDv7 minted once when the node's spool, or the server's push
+	// lane publisher, starts.
+	Boot string `protobuf:"bytes,1,opt,name=boot,proto3" json:"boot,omitempty"`
+	// seq is dense from 1 per boot, minted when the batch is flushed.
+	Seq uint64 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
+	// minted is the publisher's clock when seq was minted.
+	Minted *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=minted,proto3" json:"minted,omitempty"`
+	// resolved is the highest seq of this boot at or below which every batch
+	// had its answer (left the spool, acked or dropped; on the push lane, the
+	// stream's ack or refusal) when this one was minted: a gap at or below it
+	// can no longer fill.
+	Resolved uint64 `protobuf:"varint,4,opt,name=resolved,proto3" json:"resolved,omitempty"`
+	// kinds is one count per telemetry kind the boot has minted any of.
+	Kinds []*KindCount `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	// dropped is each run of this boot's batches the spool gave up on (#1692),
+	// carried by every batch minted after the drop until one of them is acked:
+	// the server reads a gap those runs cover as the node hop's loss, under
+	// their cause, and not as missing at ingest.
+	Dropped []*DroppedRun `protobuf:"bytes,6,rep,name=dropped,proto3" json:"dropped,omitempty"`
+	// lost is the items this boot lost before any batch carried them (#1692),
+	// running totals from the boot's start by cause and kind, so any landed
+	// batch says what was lost up to it.
+	Lost          []*LostCount `protobuf:"bytes,7,rep,name=lost,proto3" json:"lost,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeliveryLedger) Reset() {
+	*x = DeliveryLedger{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeliveryLedger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeliveryLedger) ProtoMessage() {}
+
+func (x *DeliveryLedger) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeliveryLedger.ProtoReflect.Descriptor instead.
+func (*DeliveryLedger) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *DeliveryLedger) GetBoot() string {
+	if x != nil {
+		return x.Boot
+	}
+	return ""
+}
+
+func (x *DeliveryLedger) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *DeliveryLedger) GetMinted() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Minted
+	}
+	return nil
+}
+
+func (x *DeliveryLedger) GetResolved() uint64 {
+	if x != nil {
+		return x.Resolved
+	}
+	return 0
+}
+
+func (x *DeliveryLedger) GetKinds() []*KindCount {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
+func (x *DeliveryLedger) GetDropped() []*DroppedRun {
+	if x != nil {
+		return x.Dropped
+	}
+	return nil
+}
+
+func (x *DeliveryLedger) GetLost() []*LostCount {
+	if x != nil {
+		return x.Lost
+	}
+	return nil
+}
+
+// DroppedRun is a run of consecutive seqs of one boot the node's spool
+// dropped for one cause, and the items of each kind they carried.
+type DroppedRun struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cause is spool-overflow, spool-expired or bus-refused.
+	Cause string `protobuf:"bytes,1,opt,name=cause,proto3" json:"cause,omitempty"`
+	// from_seq and to_seq bound the run, both included.
+	FromSeq uint64 `protobuf:"varint,2,opt,name=from_seq,json=fromSeq,proto3" json:"from_seq,omitempty"`
+	ToSeq   uint64 `protobuf:"varint,3,opt,name=to_seq,json=toSeq,proto3" json:"to_seq,omitempty"`
+	// kinds is the items of each kind the run carried; before is unset.
+	Kinds         []*KindCount `protobuf:"bytes,4,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DroppedRun) Reset() {
+	*x = DroppedRun{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DroppedRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DroppedRun) ProtoMessage() {}
+
+func (x *DroppedRun) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DroppedRun.ProtoReflect.Descriptor instead.
+func (*DroppedRun) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DroppedRun) GetCause() string {
+	if x != nil {
+		return x.Cause
+	}
+	return ""
+}
+
+func (x *DroppedRun) GetFromSeq() uint64 {
+	if x != nil {
+		return x.FromSeq
+	}
+	return 0
+}
+
+func (x *DroppedRun) GetToSeq() uint64 {
+	if x != nil {
+		return x.ToSeq
+	}
+	return 0
+}
+
+func (x *DroppedRun) GetKinds() []*KindCount {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
+// LostCount is one cause's running count of one kind's items a boot lost
+// before minting them into a batch.
+type LostCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cause is self-log-overflow or encode-failed.
+	Cause string `protobuf:"bytes,1,opt,name=cause,proto3" json:"cause,omitempty"`
+	// kind is metric, property, event or log.
+	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	// count is the items lost since the boot began.
+	Count         uint64 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LostCount) Reset() {
+	*x = LostCount{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LostCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LostCount) ProtoMessage() {}
+
+func (x *LostCount) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LostCount.ProtoReflect.Descriptor instead.
+func (*LostCount) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LostCount) GetCause() string {
+	if x != nil {
+		return x.Cause
+	}
+	return ""
+}
+
+func (x *LostCount) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *LostCount) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// KindCount is one telemetry kind's count on a DeliveryLedger.
+type KindCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is metric, property, event or log.
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// count is the items of this kind in this batch.
+	Count uint64 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	// before is the items of this kind this boot minted before this batch.
+	Before        uint64 `protobuf:"varint,3,opt,name=before,proto3" json:"before,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KindCount) Reset() {
+	*x = KindCount{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KindCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KindCount) ProtoMessage() {}
+
+func (x *KindCount) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KindCount.ProtoReflect.Descriptor instead.
+func (*KindCount) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *KindCount) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *KindCount) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *KindCount) GetBefore() uint64 {
+	if x != nil {
+		return x.Before
+	}
+	return 0
+}
+
+// NodeSelf is a node's self-report (#1625): platform metrics about the node
+// itself. Each sample's instance is empty but where the key discriminates
+// (session-held-count carries the session state).
+type NodeSelf struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Metrics       []*MetricSample        `protobuf:"bytes,1,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeSelf) Reset() {
+	*x = NodeSelf{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeSelf) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeSelf) ProtoMessage() {}
+
+func (x *NodeSelf) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeSelf.ProtoReflect.Descriptor instead.
+func (*NodeSelf) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *NodeSelf) GetMetrics() []*MetricSample {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
 // TaskGroup is one task's samples from one node tick (#1582). It is the unit of
 // refusal: a group the gateway refuses (an unknown owner, a value the schema
 // rejects) is dropped alone, its sibling groups in the same batch land, and the
@@ -268,7 +658,7 @@ type TaskGroup struct {
 
 func (x *TaskGroup) Reset() {
 	*x = TaskGroup{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -280,7 +670,7 @@ func (x *TaskGroup) String() string {
 func (*TaskGroup) ProtoMessage() {}
 
 func (x *TaskGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -293,7 +683,7 @@ func (x *TaskGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskGroup.ProtoReflect.Descriptor instead.
 func (*TaskGroup) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TaskGroup) GetTaskId() string {
@@ -352,7 +742,7 @@ type Owner struct {
 
 func (x *Owner) Reset() {
 	*x = Owner{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -364,7 +754,7 @@ func (x *Owner) String() string {
 func (*Owner) ProtoMessage() {}
 
 func (x *Owner) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -377,7 +767,7 @@ func (x *Owner) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Owner.ProtoReflect.Descriptor instead.
 func (*Owner) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Owner) GetKind() string {
@@ -428,7 +818,7 @@ type MetricSample struct {
 
 func (x *MetricSample) Reset() {
 	*x = MetricSample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +830,7 @@ func (x *MetricSample) String() string {
 func (*MetricSample) ProtoMessage() {}
 
 func (x *MetricSample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +843,7 @@ func (x *MetricSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricSample.ProtoReflect.Descriptor instead.
 func (*MetricSample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{3}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MetricSample) GetName() string {
@@ -525,7 +915,7 @@ type PropertySample struct {
 
 func (x *PropertySample) Reset() {
 	*x = PropertySample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -537,7 +927,7 @@ func (x *PropertySample) String() string {
 func (*PropertySample) ProtoMessage() {}
 
 func (x *PropertySample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -550,7 +940,7 @@ func (x *PropertySample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PropertySample.ProtoReflect.Descriptor instead.
 func (*PropertySample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{4}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PropertySample) GetName() string {
@@ -620,7 +1010,7 @@ type EventSample struct {
 
 func (x *EventSample) Reset() {
 	*x = EventSample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +1022,7 @@ func (x *EventSample) String() string {
 func (*EventSample) ProtoMessage() {}
 
 func (x *EventSample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,7 +1035,7 @@ func (x *EventSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventSample.ProtoReflect.Descriptor instead.
 func (*EventSample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{5}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EventSample) GetName() string {
@@ -704,7 +1094,7 @@ type Identity struct {
 
 func (x *Identity) Reset() {
 	*x = Identity{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -716,7 +1106,7 @@ func (x *Identity) String() string {
 func (*Identity) ProtoMessage() {}
 
 func (x *Identity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -729,7 +1119,7 @@ func (x *Identity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Identity.ProtoReflect.Descriptor instead.
 func (*Identity) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{6}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Identity) GetKey() string {
@@ -770,7 +1160,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -782,7 +1172,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -795,7 +1185,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{7}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *LogLine) GetMessage() string {
@@ -865,7 +1255,7 @@ var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xce\x04\n" +
+	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x05\n" +
 	"\x0eTelemetryBatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
@@ -882,10 +1272,36 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"properties\x12*\n" +
 	"\x06events\x18\f \x03(\v2\x12.og.v1.EventSampleR\x06events\x12+\n" +
 	"\ttask_logs\x18\r \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\x12(\n" +
-	"\x06groups\x18\x0e \x03(\v2\x10.og.v1.TaskGroupR\x06groups\x1a9\n" +
+	"\x06groups\x18\x0e \x03(\v2\x10.og.v1.TaskGroupR\x06groups\x12,\n" +
+	"\tnode_self\x18\x0f \x01(\v2\x0f.og.v1.NodeSelfR\bnodeSelf\x12-\n" +
+	"\x06ledger\x18\x10 \x01(\v2\x15.og.v1.DeliveryLedgerR\x06ledger\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"\x8f\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"\x81\x02\n" +
+	"\x0eDeliveryLedger\x12\x12\n" +
+	"\x04boot\x18\x01 \x01(\tR\x04boot\x12\x10\n" +
+	"\x03seq\x18\x02 \x01(\x04R\x03seq\x122\n" +
+	"\x06minted\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x06minted\x12\x1a\n" +
+	"\bresolved\x18\x04 \x01(\x04R\bresolved\x12&\n" +
+	"\x05kinds\x18\x05 \x03(\v2\x10.og.v1.KindCountR\x05kinds\x12+\n" +
+	"\adropped\x18\x06 \x03(\v2\x11.og.v1.DroppedRunR\adropped\x12$\n" +
+	"\x04lost\x18\a \x03(\v2\x10.og.v1.LostCountR\x04lost\"|\n" +
+	"\n" +
+	"DroppedRun\x12\x14\n" +
+	"\x05cause\x18\x01 \x01(\tR\x05cause\x12\x19\n" +
+	"\bfrom_seq\x18\x02 \x01(\x04R\afromSeq\x12\x15\n" +
+	"\x06to_seq\x18\x03 \x01(\x04R\x05toSeq\x12&\n" +
+	"\x05kinds\x18\x04 \x03(\v2\x10.og.v1.KindCountR\x05kinds\"K\n" +
+	"\tLostCount\x12\x14\n" +
+	"\x05cause\x18\x01 \x01(\tR\x05cause\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x04R\x05count\"M\n" +
+	"\tKindCount\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x16\n" +
+	"\x06before\x18\x03 \x01(\x04R\x06before\"9\n" +
+	"\bNodeSelf\x12-\n" +
+	"\ametrics\x18\x01 \x03(\v2\x13.og.v1.MetricSampleR\ametrics\"\x8f\x02\n" +
 	"\tTaskGroup\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12-\n" +
@@ -954,50 +1370,63 @@ func file_proto_og_v1_telemetry_proto_rawDescGZIP() []byte {
 	return file_proto_og_v1_telemetry_proto_rawDescData
 }
 
-var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_og_v1_telemetry_proto_goTypes = []any{
 	(*TelemetryBatch)(nil),        // 0: og.v1.TelemetryBatch
-	(*TaskGroup)(nil),             // 1: og.v1.TaskGroup
-	(*Owner)(nil),                 // 2: og.v1.Owner
-	(*MetricSample)(nil),          // 3: og.v1.MetricSample
-	(*PropertySample)(nil),        // 4: og.v1.PropertySample
-	(*EventSample)(nil),           // 5: og.v1.EventSample
-	(*Identity)(nil),              // 6: og.v1.Identity
-	(*LogLine)(nil),               // 7: og.v1.LogLine
-	nil,                           // 8: og.v1.TelemetryBatch.LabelsEntry
-	nil,                           // 9: og.v1.MetricSample.LabelsEntry
-	nil,                           // 10: og.v1.PropertySample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*DeliveryLedger)(nil),        // 1: og.v1.DeliveryLedger
+	(*DroppedRun)(nil),            // 2: og.v1.DroppedRun
+	(*LostCount)(nil),             // 3: og.v1.LostCount
+	(*KindCount)(nil),             // 4: og.v1.KindCount
+	(*NodeSelf)(nil),              // 5: og.v1.NodeSelf
+	(*TaskGroup)(nil),             // 6: og.v1.TaskGroup
+	(*Owner)(nil),                 // 7: og.v1.Owner
+	(*MetricSample)(nil),          // 8: og.v1.MetricSample
+	(*PropertySample)(nil),        // 9: og.v1.PropertySample
+	(*EventSample)(nil),           // 10: og.v1.EventSample
+	(*Identity)(nil),              // 11: og.v1.Identity
+	(*LogLine)(nil),               // 12: og.v1.LogLine
+	nil,                           // 13: og.v1.TelemetryBatch.LabelsEntry
+	nil,                           // 14: og.v1.MetricSample.LabelsEntry
+	nil,                           // 15: og.v1.PropertySample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 }
 var file_proto_og_v1_telemetry_proto_depIdxs = []int32{
-	11, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
-	8,  // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
-	7,  // 2: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
-	2,  // 3: og.v1.TelemetryBatch.owner:type_name -> og.v1.Owner
-	3,  // 4: og.v1.TelemetryBatch.metrics:type_name -> og.v1.MetricSample
-	4,  // 5: og.v1.TelemetryBatch.properties:type_name -> og.v1.PropertySample
-	5,  // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
-	7,  // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
-	1,  // 8: og.v1.TelemetryBatch.groups:type_name -> og.v1.TaskGroup
-	11, // 9: og.v1.TaskGroup.ts:type_name -> google.protobuf.Timestamp
-	3,  // 10: og.v1.TaskGroup.metrics:type_name -> og.v1.MetricSample
-	4,  // 11: og.v1.TaskGroup.properties:type_name -> og.v1.PropertySample
-	5,  // 12: og.v1.TaskGroup.events:type_name -> og.v1.EventSample
-	7,  // 13: og.v1.TaskGroup.task_logs:type_name -> og.v1.LogLine
-	11, // 14: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
-	9,  // 15: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
-	6,  // 16: og.v1.MetricSample.identity:type_name -> og.v1.Identity
-	11, // 17: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
-	10, // 18: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
-	6,  // 19: og.v1.PropertySample.identity:type_name -> og.v1.Identity
-	11, // 20: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
-	6,  // 21: og.v1.EventSample.identity:type_name -> og.v1.Identity
-	11, // 22: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	16, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
+	13, // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
+	12, // 2: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
+	7,  // 3: og.v1.TelemetryBatch.owner:type_name -> og.v1.Owner
+	8,  // 4: og.v1.TelemetryBatch.metrics:type_name -> og.v1.MetricSample
+	9,  // 5: og.v1.TelemetryBatch.properties:type_name -> og.v1.PropertySample
+	10, // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
+	12, // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
+	6,  // 8: og.v1.TelemetryBatch.groups:type_name -> og.v1.TaskGroup
+	5,  // 9: og.v1.TelemetryBatch.node_self:type_name -> og.v1.NodeSelf
+	1,  // 10: og.v1.TelemetryBatch.ledger:type_name -> og.v1.DeliveryLedger
+	16, // 11: og.v1.DeliveryLedger.minted:type_name -> google.protobuf.Timestamp
+	4,  // 12: og.v1.DeliveryLedger.kinds:type_name -> og.v1.KindCount
+	2,  // 13: og.v1.DeliveryLedger.dropped:type_name -> og.v1.DroppedRun
+	3,  // 14: og.v1.DeliveryLedger.lost:type_name -> og.v1.LostCount
+	4,  // 15: og.v1.DroppedRun.kinds:type_name -> og.v1.KindCount
+	8,  // 16: og.v1.NodeSelf.metrics:type_name -> og.v1.MetricSample
+	16, // 17: og.v1.TaskGroup.ts:type_name -> google.protobuf.Timestamp
+	8,  // 18: og.v1.TaskGroup.metrics:type_name -> og.v1.MetricSample
+	9,  // 19: og.v1.TaskGroup.properties:type_name -> og.v1.PropertySample
+	10, // 20: og.v1.TaskGroup.events:type_name -> og.v1.EventSample
+	12, // 21: og.v1.TaskGroup.task_logs:type_name -> og.v1.LogLine
+	16, // 22: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
+	14, // 23: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
+	11, // 24: og.v1.MetricSample.identity:type_name -> og.v1.Identity
+	16, // 25: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
+	15, // 26: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
+	11, // 27: og.v1.PropertySample.identity:type_name -> og.v1.Identity
+	16, // 28: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
+	11, // 29: og.v1.EventSample.identity:type_name -> og.v1.Identity
+	16, // 30: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_proto_og_v1_telemetry_proto_init() }
@@ -1011,7 +1440,7 @@ func file_proto_og_v1_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_og_v1_telemetry_proto_rawDesc), len(file_proto_og_v1_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

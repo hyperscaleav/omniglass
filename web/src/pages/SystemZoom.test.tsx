@@ -4,7 +4,7 @@ import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { systemHealthKey, type FleetHealth } from "../lib/health";
+import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -17,6 +17,7 @@ import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
+import { SYSTEM_PAGE_READS } from "../lib/system_page_reads.gen";
 import { TAGS_KEY } from "../lib/tags";
 import { COMPONENTS_KEY } from "../lib/components";
 import { PRODUCTS_KEY } from "../lib/products";
@@ -246,6 +247,51 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
     // Each alarm row opens its timeline in place (#950).
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
+  });
+
+  // The strip is where a storm is triaged from (#990): acknowledging a causing
+  // alarm must not need the component's own page.
+  describe("acknowledging from the Why strip", () => {
+    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
+    const withAck = (ack: object): FleetHealth => ({
+      ...health,
+      roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
+    }) as FleetHealth;
+
+    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+      mount(undefined, health, [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+      expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
+    });
+
+    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+      mount(undefined, health, [], [], viewer);
+      expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+    });
+
+    it("shows who acknowledged and when, and no button, on an acknowledged alarm", () => {
+      mount(undefined, withAck({ acknowledged: true, acknowledged_at: "2026-08-15T15:00:00Z", acknowledged_by: "alice" }), [], [], responder);
+      const strip = screen.getByTestId("alarm-strip");
+      expect(within(strip).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+      expect(within(strip).getByText(/acknowledged by alice/)).toBeTruthy();
+    });
+
+    it("refreshes the strip: acknowledging invalidates the system health read", async () => {
+      const fetched: string[] = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const req = input as Request;
+        fetched.push(`${req.method} ${new URL(req.url).pathname}`);
+        return new Response(JSON.stringify({ id: "al-1", acknowledged: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      });
+      const { qc } = mount(undefined, health, [], [], responder);
+      const spy = vi.spyOn(qc, "invalidateQueries");
+      fireEvent.click(within(screen.getByTestId("alarm-strip")).getByRole("button", { name: "Acknowledge" }));
+      await waitFor(() => expect(fetched.some((f) => f.startsWith("POST ") && f.endsWith("/alarms/al-1:acknowledge"))).toBe(true));
+      await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain(JSON.stringify(SYSTEM_HEALTH_PREFIX)));
+      vi.unstubAllGlobals();
+    });
   });
 
   // The report names an alarm's component by name and by uuid (#557): the
@@ -748,7 +794,7 @@ describe("the place is context, the system the subject (#872)", () => {
   // outline down to this system's row, not at the top of the fleet.
   it("links Explore back to this system's row in the outline", async () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
     expect(await screen.findByTestId("fleet-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
   });
@@ -1082,5 +1128,117 @@ describe("the system view refreshes (#940)", () => {
     const before = screen.getByTestId("since-line").textContent;
     await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(screen.getByTestId("since-line").textContent).not.toBe(before);
+  });
+});
+
+// The lab's system page load (lab measure --page-clients) replays the reads
+// this page makes on a cold open from the list the Go side generates. This
+// guard fails when the page gains or drops a read the list does not carry, so
+// the timed load keeps matching what an operator's browser actually fetches.
+describe("the lab's system page load", () => {
+  it("makes exactly the reads a cold open of the page makes", async () => {
+    const id = uuidFor("szp-sys");
+    const reads = new Set<string>();
+    const json = (b: unknown) =>
+      Promise.resolve(new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const u = new URL(req.url);
+        const path = u.pathname.replace(/^\/api\/v1/, "");
+        const query = u.search.replace(/instance=[^&]*/, "instance={instance}");
+        reads.add(
+          (path.replace(id, "{system}").replace(/\/metrics\/[^/]+\/samples$/, "/metrics/{metric}/samples") + query),
+        );
+        if (path === "/views/fleet") return json(view);
+        if (path === "/auth/me") return json({ username: "admin", permissions: ["*:*"], fleet_permissions: ["*:*"] });
+        if (path === `/systems/${id}/metrics`)
+          return json({
+            metrics: [
+              { metric_type_name: "cpu-load", from_contract: false, is_sampled: true, instance: "core-0" },
+              { metric_type_name: "uptime", from_contract: true, is_sampled: false, instance: "" },
+            ],
+          });
+        return json({});
+      }),
+    );
+    try {
+      const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+      window.history.pushState({}, "", `/web/systems/${id}`);
+      render(() => (
+        <QueryClientProvider client={qc}>
+          <Router base="/web">
+            <Route path="/systems/:id" component={Systems} />
+          </Router>
+        </QueryClientProvider>
+      ));
+      await waitFor(() => expect(reads.has("/systems/{system}/metrics/{metric}/samples?hours=24&resolution=300")).toBe(true));
+      await new Promise((r) => setTimeout(r, 200));
+      expect([...reads].sort()).toEqual([...SYSTEM_PAGE_READS].sort());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("ambiguous name addresses (#853)", () => {
+  it("a name-shaped address with two systems with same name shows ambiguous message", async () => {
+    const ambigView: FleetView = {
+      locations: [
+        {
+          id: uuidFor("szp-room"),
+          name: "boardroom-a",
+          label: "Boardroom A",
+          location_type: "room",
+          location_type_id: uuidFor("szpt-room"),
+          parent: "",
+          verdict: "degraded",
+        },
+      ],
+      systems: [
+        {
+          id: uuidFor("szp-sys"),
+          name: "boardroom",
+          label: "Boardroom",
+          location: uuidFor("szp-room"),
+          verdict: "degraded",
+          dots: [],
+        },
+        {
+          id: uuidFor("szp-dup"),
+          name: "boardroom",
+          label: "Boardroom Duplicate",
+          location: null,
+          verdict: "healthy",
+          dots: [],
+        },
+      ],
+    } as unknown as FleetView;
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    seedSeverityLevels(qc);
+    qc.setQueryData([...FLEET_VIEW_KEY], ambigView);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", icon: "door-open", official: true, forked: false, allowed_parent_types: [] }]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], []);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], []);
+    window.history.pushState({}, "", `/web/systems/boardroom`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/systems/:id" component={Systems} />
+          <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => {
+      expect(screen.getByText(/More than one system/i)).toBeTruthy();
+      expect(window.location.pathname).toBe(`/web/systems/boardroom`);
+    });
   });
 });

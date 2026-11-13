@@ -33,6 +33,10 @@ type PlanOptions struct {
 	NodeFor func(site string) string
 	// PortOffset is the simulator's lift for ports below 1024 (see Options).
 	PortOffset int
+	// InduceUnregistered makes one simulated device answer a property key no
+	// catalog registers (#1698), so its samples are refused: off by default,
+	// and only with Endpoints. See InduceSpec.
+	InduceUnregistered bool
 }
 
 // PlanPhase is the time one stage of a seed took.
@@ -44,7 +48,17 @@ type PlanPhase struct {
 // PlanResult is what a SeedPlan wrote and where the time went.
 type PlanResult struct {
 	Locations, Systems, Components, Roles, Endpoints int
-	Phases                                           []PlanPhase
+	// Pushers is the outside actors seeded (#1743): one service principal
+	// each, granted the pusher role on its systems, holding no token.
+	Pushers int
+	// Senders is the webhook senders seeded (#1747): one component each,
+	// counted in Components, with one webhook endpoint (not counted in
+	// Endpoints, which is the simulated fleet's), its own signing secret and
+	// a binding per system it speaks for.
+	Senders int
+	Phases  []PlanPhase
+	// Induced is the device InduceUnregistered attached, nil when off.
+	Induced *Induced
 }
 
 // locationRow is one location of a plan; Parent is the key of another, empty
@@ -55,7 +69,8 @@ type locationRow struct{ Key, Name, Label, Type, Parent string }
 type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 
 // componentRow is one component of a plan: a product placed in a room of Site,
-// filling Role of System. Its name is the platform's to mint.
+// filling Role of System. Its name is the platform's to mint. A webhook
+// sender's component (#1747) is placed at its site and fills no role.
 type componentRow struct{ Key, Product, Site, Room, System, Role string }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -66,6 +81,7 @@ type planRows struct {
 	Locations  []locationRow
 	Systems    []systemRow
 	Components []componentRow
+	Senders    []senderRow
 }
 
 // rowsOf flattens a plan. Pure.
@@ -101,6 +117,13 @@ func rowsOf(p *scenario.Plan) planRows {
 				}
 			}
 		}
+		for _, ps := range site.Pushers {
+			if !ps.Webhook {
+				continue
+			}
+			r.Components = append(r.Components, componentRow{Key: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+		}
 	}
 	return r
 }
@@ -128,24 +151,67 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	}
 	run.done("standards")
 	rows := rowsOf(p)
-	compIDs, err := seedRows(ctx, gw, actorID, rows, run) // by creation order, parallel to rows.Components
+	senders, err := shippedSenders(rows)
 	if err != nil {
 		return res, err
 	}
-	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)
+	sysIDs, compIDs, err := seedRows(ctx, gw, actorID, rows, run) // compIDs by creation order, parallel to rows.Components
+	if err != nil {
+		return res, err
+	}
+	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)
+	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
+	if err != nil {
+		return res, err
+	}
+	res.Pushers = n
+	run.done("pushers")
+	if res.Senders, err = seedPlanSenders(ctx, gw, actorID, senders, compIDs, sysIDs); err != nil {
+		return res, err
+	}
+	run.done("senders")
 	if opts.Endpoints {
-		n, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
+		n, induced, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
 			return res, err
 		}
-		res.Endpoints = n
+		res.Endpoints, res.Induced = n, induced
+	} else if opts.InduceUnregistered {
+		return res, fmt.Errorf("devseed: an induced refusal needs the simulated fleet's endpoints")
 	}
 	return res, nil
 }
 
+// seedPlanPushers seeds each pusher the plan declares as its own service
+// principal, granted the pusher role on exactly its systems (GrantPusher,
+// the shape the dev fleet's pusher takes). Its token is the lab's to mint
+// per run, so none is set here.
+func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p *scenario.Plan, sysIDs map[string]string) (int, error) {
+	n := 0
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			if ps.Webhook {
+				continue // a sender speaks as its component (seedPlanSenders)
+			}
+			for _, sys := range ps.Systems {
+				id, ok := sysIDs[sys]
+				if !ok {
+					return n, fmt.Errorf("devseed: pusher %s is scoped to system %q, which the plan does not seed", ps.Name, sys)
+				}
+				if err := GrantPusher(ctx, gw, actorID, ps.Name, id); err != nil {
+					return n, err
+				}
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
 // seedRows creates the plan's rows through the Gateway's Create methods, one
-// transaction each, and returns the component ids in creation order.
-func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows planRows, run *planRun) ([]string, error) {
+// transaction each, and returns the system ids by key and the component ids
+// in creation order.
+func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows planRows, run *planRun) (map[string]string, []string, error) {
 	all := scope.Set{All: true}
 	locIDs := make(map[string]string, len(rows.Locations))
 	for _, l := range rows.Locations {
@@ -156,7 +222,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		}
 		created, err := gw.CreateLocation(ctx, actorID, spec, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create location %q: %w", l.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}
 		locIDs[l.Key] = created.ID
 	}
@@ -168,7 +234,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 			Name: s.Name, Label: s.Label, StandardID: &std, SystemTypeID: &st, LocationName: &loc,
 		}, all, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create system %q: %w", s.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create system %q: %w", s.Key, err)
 		}
 		sysIDs[s.Key] = created.ID
 	}
@@ -178,16 +244,19 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		prod, loc := c.Product, locIDs[c.Room]
 		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
-			return nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
+			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
 		compIDs = append(compIDs, created.ID)
 	}
 	run.done("components")
 	for i, c := range rows.Components {
+		if c.Role == "" {
+			continue // a sender fills no role
+		}
 		if err := gw.AssignRole(ctx, actorID, sysIDs[c.System], c.Role, compIDs[i], all, all, all, all); err != nil {
-			return nil, fmt.Errorf("devseed: staff %s of %q: %w", c.Role, c.System, err)
+			return nil, nil, fmt.Errorf("devseed: staff %s of %q: %w", c.Role, c.System, err)
 		}
 	}
 	run.done("roles")
-	return compIDs, nil
+	return sysIDs, compIDs, nil
 }

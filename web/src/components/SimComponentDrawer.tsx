@@ -354,6 +354,7 @@ function ImpairmentSection(props: {
       <input
         inputmode="decimal"
         autocomplete="off"
+        placeholder="0"
         class="input input-bordered w-full font-data tnum"
         classList={{ "input-error": !!props.errors[k] }}
         value={props.draft[k]}

@@ -26,6 +26,14 @@ type Catalog struct {
 	Within func(componentType, accepted string) bool
 	// SystemType says whether a system type of that name is registered.
 	SystemType func(name string) bool
+	// Pusher says whether an emulator profile of that name has a push face,
+	// so a scenario may declare it as a pusher (#1743).
+	Pusher func(profile string) bool
+	// Sender says whether an emulator profile of that name is a webhook
+	// sender a scenario may declare (#1747): it has a webhook face naming
+	// the driver that receives it, and a product of the same name the
+	// simulator serves, so the lab seeds it as a component.
+	Sender func(profile string) bool
 }
 
 var (
@@ -75,6 +83,15 @@ func loadShipped() (Catalog, error) {
 		},
 		Within:     func(have, accepted string) bool { return within(parents, have, accepted) },
 		SystemType: func(name string) bool { return systemTypes[name] },
+		Pusher: func(name string) bool {
+			p, ok := store.Devices[name]
+			return ok && p.Push != nil
+		},
+		Sender: func(name string) bool {
+			p, ok := store.Devices[name]
+			_, product := products[name]
+			return ok && product && p.Webhook != nil && p.Webhook.Driver != ""
+		},
 	}, nil
 }
 

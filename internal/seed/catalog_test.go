@@ -34,3 +34,34 @@ func TestShippedCatalogAccessors(t *testing.T) {
 		t.Errorf("ShippedSystemTypes = %v, want meeting and sign among them", types)
 	}
 }
+
+// Every shipped product names its driver, and every driver's polls read as
+// durations: the perf gate's window is checked against them (#1640). The
+// test holds the shape, not a product: each driver a product names is a
+// shipped driver, and each poll interval is longer than zero.
+func TestShippedDriverPollsReadEveryDriversSchedule(t *testing.T) {
+	polls := ShippedDriverPolls()
+	if len(polls) == 0 {
+		t.Fatal("ShippedDriverPolls is empty")
+	}
+	for driver, every := range polls {
+		for _, d := range every {
+			if d <= 0 {
+				t.Errorf("driver %s has a poll every %s, want longer than zero", driver, d)
+			}
+		}
+	}
+	named := 0
+	for _, p := range ShippedProducts() {
+		if p.Driver == "" {
+			continue
+		}
+		named++
+		if _, ok := polls[p.Driver]; !ok {
+			t.Errorf("product %s names driver %s, which is no shipped driver", p.Name, p.Driver)
+		}
+	}
+	if named == 0 {
+		t.Error("no shipped product names a driver")
+	}
+}

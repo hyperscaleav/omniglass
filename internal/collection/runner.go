@@ -235,6 +235,10 @@ type HTTPTask struct {
 	Target  string
 	Timeout time.Duration
 	TLS     *TLSTrust
+	// Tally is the transport the probe counts under (#1647): http by
+	// default, websocket for a websocket endpoint's probe, so the node's
+	// row pairs with the listener the sim counts it on.
+	Tally TallyTransport
 }
 
 // TelnetTask is the parsed telnet reachability unit (#1033): the dial

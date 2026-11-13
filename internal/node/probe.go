@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -31,156 +31,190 @@ type endpointParams struct {
 	TLSMode string `json:"tls-mode,omitempty"`
 }
 
-// runTasks executes every probe task in the worklist and publishes one telemetry
-// Event per task to the node's own telemetry subject. The node stamps NO
-// component identity: the Event carries only the task_id and the measurements;
-// the server binds the owner at ingest. A probe that cannot be attempted (bad
-// params, unresolved host, no capability) is skipped, not fatal, so one bad task
-// never stalls the rest of the worklist. tcp and icmp are the wired probe types;
-// their samples ride the same pipeline (the ingest consumer does not branch
-// on probe type).
-func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string, report *collectionReport, now time.Time) error {
-	present := make(map[string]bool, len(wl.Tasks))
-	for _, task := range wl.Tasks {
-		present[task.ID] = true
+// collector runs one task when the dispatcher hands it a lane (#1634): a
+// driver poll or a reachability probe, publishing what it landed to the
+// node's own telemetry subject. The node stamps NO component identity: the
+// Event carries only the task_id and the measurements; the server binds the
+// owner at ingest. A task that cannot be attempted (bad params, unresolved
+// host, no capability) lands a collection-failed story, never a false down,
+// so one bad task never stalls the rest. Workers run many tasks at once, so
+// the transition memories (verdicts, faultseen) are held under memMu; the
+// schedule, the report and the spool hold their own locks.
+type collector struct {
+	out      *telemetrySpool
+	node     string
+	runner   *collection.Runner
+	sessions *sessionManager
+	sched    *pollSchedule
+	report   *collectionReport
+	clock    func() time.Time
+	// wake asks the run loop for a pass: a probe verdict may have moved a
+	// gate that holds polls.
+	wake func()
+	// every is a task's interval, the cap on its retry backoff: the
+	// dispatcher's, which fills in an interval a poll does not declare.
+	every func(collection.TaskSpec) time.Duration
+	// pings shares the informational ping of a host among its probes in one
+	// probe slot (#1249).
+	pings pingShare
+
+	memMu     sync.Mutex
+	verdicts  map[string]string
+	faultseen map[string]string
+}
+
+func newCollector(out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport) *collector {
+	return &collector{out: out, node: node, runner: runner, sessions: sessions, sched: sched, report: report,
+		clock: time.Now, wake: func() {}, every: pollInterval, verdicts: map[string]string{}, faultseen: map[string]string{}}
+}
+
+// forgetTransitions drops the remembered verdicts and faults, so each lands
+// again: the run loop's answer to a spool overflow that may have dropped the
+// batch that carried them.
+func (c *collector) forgetTransitions() {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	clear(c.verdicts)
+	clear(c.faultseen)
+}
+
+// run is the dispatcher's work: one run of task. A publish that fails is
+// logged; the spool holds what it can and the next run tries again.
+func (c *collector) run(ctx context.Context, task collection.TaskSpec) {
+	var err error
+	if driver.IsBaked(task.Spec) {
+		err = c.runPoll(ctx, task)
+	} else {
+		err = c.runProbe(ctx, task)
 	}
-	sched.retain(present)
-	for _, task := range wl.Tasks {
-		// A standing listen task runs no tick of its own: it is what holds
-		// its endpoint's session (the session manager reconciles it, #816),
-		// and its listeners arm over that session with #817. Skip without a
-		// collection-failed, since an armed-later task is not a fault.
-		if task.Mode == "listen" {
-			continue
-		}
-		// A driver poll (a baked function, #814) interprets rather than
-		// probes: fetch over the transport, locate and type each emit. Its
-		// faults are per-emit collection-failed stories beside whatever
-		// samples still landed, so a payload missing one value never
-		// silently drops the rest. Faults publish transition-only (like the
-		// reachability verdict): a static misconfiguration that faults every
-		// tick lands one event, not one per tick forever, so a stuck driver
-		// does not flood the event lane.
-		if driver.IsBaked(task.Spec) {
-			// A driver poll runs on its declared schedule (#822), not on
-			// every heartbeat.
-			interval := pollInterval(task)
-			if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
-				// The endpoint's stream is making its first attempt under
-				// this fingerprint (#1038): the poll waits a tick for its
-				// verdict rather than sending the credential beside it.
-				continue
-			}
-			sched.rebook(task.ID, task.Fingerprint)
-			// A poll that rides the held session is released when it comes
-			// up; an http poll is its own request, and an up stream beside it
-			// says nothing of what refused it (#1038).
-			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID) && !driver.IsHTTP(task.Transport))
-			if !sched.due(task.ID, interval, now) {
-				continue
-			}
-			var dps []collection.Sample
-			var faults []error
-			// An http poll is its own request even beside a held stream
-			// (#1038): it answers to the gate itself, as a stateless poll does.
-			ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
-			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
-				// A stateless poll on a gated endpoint is not retried under
-				// the fingerprint it was refused under (#1056 ruling).
-				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
-				report.refused(task.EndpointID)
-			} else {
-				started := time.Now()
-				dps, faults = collectDriverTask(ctx, runner, task, sessions)
-				// The run's own account of itself (#1369): how long it took,
-				// answered or failed, and whether it failed as bookPollRun
-				// reads a failure, faulted and landed nothing.
-				report.poll(task.EndpointID, time.Since(started), !landedData(dps) && len(faults) > 0)
-				if ownRequest {
-					for _, f := range faults {
-						if terr, ok := collection.AsTerminal(f); ok {
-							sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
-						}
-					}
-				}
-			}
-			bookPollRun(sched, task.ID, interval, now, dps, faults)
-			current := ""
+	if err != nil {
+		slog.Warn("task publish failed", "facility", "collection", "task", task.ID, "error", err.Error())
+	}
+}
+
+// runPoll runs a driver poll (a baked function, #814), which interprets
+// rather than probes: fetch over the transport, locate and type each emit.
+// Its faults are per-emit collection-failed stories beside whatever samples
+// still landed, so a payload missing one value never silently drops the
+// rest. Faults publish transition-only (like the reachability verdict): a
+// static misconfiguration that faults every run lands one event, not one per
+// run forever, so a stuck driver does not flood the event lane.
+func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error {
+	interval := c.every(task)
+	// An http poll is its own request even beside a held stream (#1038): it
+	// answers to the gate itself, as a stateless poll does.
+	ownRequest := c.sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
+	gt, refused := c.sessions.refusedAt(task.EndpointID, statelessRung(task))
+	refused = refused && ownRequest
+	var dps []collection.Sample
+	var faults []error
+	if refused {
+		// A stateless poll on a gated endpoint is not retried under the
+		// fingerprint it was refused under (#1056 ruling).
+		faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
+		c.report.refused(task.EndpointID)
+	} else {
+		started := time.Now()
+		dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions)
+		// The run's own account of itself (#1369): how long it took,
+		// answered or failed, and whether it failed as bookPollRun reads a
+		// failure, faulted and landed nothing.
+		c.report.poll(task.EndpointID, time.Since(started), !landedData(dps) && len(faults) > 0)
+		if ownRequest {
 			for _, f := range faults {
-				current += f.Error() + "\n"
-			}
-			if current != faultseen[task.ID] {
-				for _, f := range faults {
-					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
-					if pubErr := publishCollectionFailed(out, node, task.ID, f); pubErr != nil {
-						return pubErr
-					}
-				}
-				// Remembered only once published, so a fault set whose publish
-				// failed is told again next tick rather than lost.
-				faultseen[task.ID] = current
-			}
-			// The run is booked on what it fetched; what it lands is held to
-			// change for its events and log lines (#1145), so a status
-			// page's last error lands when it changes, not every tick.
-			if n := clampedCount(dps); n > 0 {
-				slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
-			}
-			if landed := sched.changed(task.ID, dps); len(landed) > 0 {
-				if err := publishBatch(out, node, task.ID, landed); err != nil {
-					return err
+				if terr, ok := collection.AsTerminal(f); ok {
+					c.sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
 				}
 			}
-			sched.commitChanged(task.ID, dps)
-			continue
 		}
-		// A reachability probe runs at the node's probe interval (#1273),
-		// every tick when none is set, and at once when its endpoint's
-		// fingerprint moved, as a driver poll does.
-		if sched.probeEvery > 0 {
-			sched.rebook(task.ID, task.Fingerprint)
-		}
-		if !sched.due(task.ID, sched.probeEvery, now) {
-			continue
-		}
-		// The ladder's informational ping runs beside the probe, bounded,
-		// so gear that drops ICMP costs the tick nothing extra.
-		pinged := make(chan []collection.Sample, 1)
-		go func(task collection.TaskSpec) { pinged <- pingInformational(ctx, runner, task, nil) }(task)
-		dps, err := collectProbe(ctx, runner, task, sessions)
-		pings := <-pinged // joined here, before any path leaves the iteration
-		if err != nil {
-			// A skipped task is the node's own operational story AND a
-			// collection fact (#812): log it as a self-log, and land a
-			// collection-failed event naming the task, so the failure is
-			// visible on the component's timeline rather than only in the
-			// node's own logs. Never a false-down state sample.
-			slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
-			if pubErr := publishCollectionFailed(out, node, task.ID, err); pubErr != nil {
+	}
+	// A retry waits its backoff from the run's end (#1634): from its start,
+	// a device that takes longer than the wait to time out would be asked
+	// again the moment it finished.
+	bookPollRun(c.sched, task.ID, interval, c.clock(), dps, faults)
+	current := ""
+	for _, f := range faults {
+		current += f.Error() + "\n"
+	}
+	c.memMu.Lock()
+	if current != c.faultseen[task.ID] {
+		for _, f := range faults {
+			slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
+			if pubErr := publishCollectionFailed(c.out, c.node, task.ID, f); pubErr != nil {
+				c.memMu.Unlock()
 				return pubErr
 			}
-			continue // unusable config or inconclusive probe: skip, no false down
 		}
-		if dps == nil {
-			continue // an unwired transport: nothing to publish
-		}
-		// Compute and, on a transition only, append the endpoint reachability
-		// verdict as a state sample. The node remembers the last verdict per
-		// task and emits endpoint-reachable only on a flip or first observation,
-		// so the state series is transition-only, not one row per tick. The key is
-		// the task id, not the endpoint name: endpoint names are unique only per
-		// component, so a node routinely probes two components' endpoints that
-		// share a friendly name (the default is the protocol), and a name-keyed map
-		// would suppress the second one's verdict. The task id is node-unique (a
-		// content hash over the endpoint). The property lane's transition guard,
-		// held in the ingest's insert, is the net for a node restart.
-		dps = appendVerdict(dps, task.ID, verdicts)
-		dps = append(dps, pings...)
-		if err := publishBatch(out, node, task.ID, dps); err != nil {
+		// Remembered only once published, so a fault set whose publish
+		// failed is told again next run rather than lost.
+		c.faultseen[task.ID] = current
+	}
+	c.memMu.Unlock()
+	// The run is booked on what it fetched; what it lands is held to change
+	// for its events and log lines (#1145), so a status page's last error
+	// lands when it changes, not every run.
+	if n := clampedCount(dps); n > 0 {
+		slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
+	}
+	if landed := c.sched.changed(task.ID, dps); len(landed) > 0 {
+		if err := publishBatch(c.out, c.node, task.ID, landed); err != nil {
 			return err
 		}
 	}
+	c.sched.commitChanged(task.ID, dps)
 	return nil
+}
+
+// runProbe runs a reachability probe; tcp and icmp and the transports' own
+// rungs ride the same pipeline (the ingest consumer does not branch on probe
+// type).
+func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) error {
+	// The ladder's informational ping runs beside the probe, bounded, so
+	// gear that drops ICMP costs the run nothing extra.
+	// began is when the probe read the device: its verdict is judged at
+	// it, so an up from a probe in flight across a disruptive delivery
+	// cannot release the disruption (#1651).
+	began := c.clock()
+	pinged := make(chan []collection.Sample, 1)
+	go func() { pinged <- c.sharedPing(ctx, task) }()
+	dps, err := collectProbe(ctx, c.runner, task, c.sessions)
+	pings := <-pinged // joined here, before any path leaves
+	if err != nil {
+		// A skipped task is the node's own operational story AND a
+		// collection fact (#812): log it as a self-log, and land a
+		// collection-failed event naming the task, so the failure is visible
+		// on the component's timeline rather than only in the node's own
+		// logs. Never a false-down state sample.
+		slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
+		return publishCollectionFailed(c.out, c.node, task.ID, err)
+	}
+	if dps == nil {
+		return nil // an unwired transport: nothing to publish
+	}
+	// The verdict feeds the endpoint's gate (#1650): the second down in a
+	// row closes it as unreachable, the next up reopens it, and the
+	// dispatcher is woken to release or hold the endpoint's polls. A probe
+	// that could not be attempted left above and never reaches here, and a
+	// refusal's own down reading is no verdict (probeVerdict).
+	if up, ok := probeVerdict(dps); ok {
+		c.sessions.verdict(task.EndpointID, task.ID, up, began)
+		c.wake()
+	}
+	// Compute and, on a transition only, append the endpoint reachability
+	// verdict as a state sample. The node remembers the last verdict per task
+	// and emits endpoint-reachable only on a flip or first observation, so
+	// the state series is transition-only, not one row per run. The key is
+	// the task id, not the endpoint name: endpoint names are unique only per
+	// component, so a node routinely probes two components' endpoints that
+	// share a friendly name (the default is the protocol), and a name-keyed
+	// map would suppress the second one's verdict. The task id is node-unique
+	// (a content hash over the endpoint). The property lane's transition
+	// guard, held in the ingest's insert, is the net for a node restart.
+	c.memMu.Lock()
+	dps = appendVerdict(dps, task.ID, c.verdicts)
+	c.memMu.Unlock()
+	dps = append(dps, pings...)
+	return publishBatch(c.out, c.node, task.ID, dps)
 }
 
 // bookPollRun books a poll's next run from what its run landed. A run that
@@ -224,7 +258,7 @@ func landedData(dps []collection.Sample) bool {
 }
 
 // pollInterval reads a driver poll's declared cadence off its baked spec;
-// zero (run every tick) when it declares none or does not parse, where the
+// zero (the dispatcher runs it at the heartbeat) when it declares none or does not parse, where the
 // poll itself then faults by name.
 func pollInterval(task collection.TaskSpec) time.Duration {
 	fn, err := driver.ParseBaked(task.Spec)
@@ -402,6 +436,16 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 	return collectTask(ctx, runner, task)
 }
 
+// probeTally is the transport an http probe counts under (#1647): a
+// websocket endpoint's GET / lands on the face's own listener, which the sim
+// counts as websocket.
+func probeTally(transport string) collection.TallyTransport {
+	if transport == "websocket" || transport == "wss" {
+		return collection.TallyWebSocket
+	}
+	return collection.TallyHTTP
+}
+
 // collectHTTPSProbe runs the https probe on the gate (#902), as the tls
 // probe does: with the transport rung gated (a changed key, a certificate
 // that failed verification) only the TCP connect runs, so no handshake
@@ -413,7 +457,7 @@ func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task coll
 	if err != nil {
 		return nil, err
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, t)
 	}
 	var p endpointParams
@@ -425,7 +469,7 @@ func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task coll
 	if trust.Mode == driver.TLSModePin {
 		trust.Pin = sessions.certPinOf(task)
 	}
-	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust})
+	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust, Tally: probeTally(task.Transport)})
 	if err != nil {
 		return nil, err
 	}
@@ -449,10 +493,10 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 		return nil, err
 	}
 	t.HostKeyPin = task.HostKey
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, collection.TCPTask{Target: t.Target, Timeout: t.Timeout})
 	}
-	if _, ok := sessions.blocked(task.EndpointID, rungAuthenticated); ok {
+	if _, ok := sessions.refusedAt(task.EndpointID, rungAuthenticated); ok {
 		t.Username, t.Password = "", ""
 	}
 	dps, res, err := runner.CollectSSHResult(ctx, t)
@@ -481,7 +525,7 @@ func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collec
 	if err != nil {
 		return nil, err
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, t)
 	}
 	var p endpointParams
@@ -553,16 +597,9 @@ const informationalPingTimeout = 500 * time.Millisecond
 // the verdict is judged, so a component that blocks ping never reads down
 // for it; a node that cannot ping lands nothing.
 func pingInformational(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, dps []collection.Sample) []collection.Sample {
-	if task.Ladder == nil || !task.Ladder.Ping || task.Transport == "icmp" || runner.Ping == nil {
+	host, ok := pingHost(runner, task)
+	if !ok {
 		return dps
-	}
-	t, err := parseTCPTask(task)
-	if err != nil {
-		return dps
-	}
-	host, _, err := net.SplitHostPort(t.Target)
-	if err != nil {
-		host = t.Target
 	}
 	pings, err := runner.CollectICMP(ctx, collection.ICMPTask{Target: host, Timeout: informationalPingTimeout})
 	if err != nil {
@@ -607,6 +644,7 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 		if err != nil {
 			return nil, err
 		}
+		t.Tally = probeTally(task.Transport)
 		return runner.CollectHTTP(ctx, t)
 	case "telnet":
 		t, err := parseTCPTask(task)

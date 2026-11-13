@@ -1,0 +1,21 @@
+{
+  "rule": "A row with no label sorts last; otherwise by label, then by name. SQL: `order by label nulls last, name`. TypeScript: byLabel in entities.ts. internal/storage/label_order_test.go orders `rows` through the real ListTags query and web/src/lib/entities.test.ts orders them through byLabel; both assert `order`, so the two halves cannot drift apart. Labels are one case and ASCII on purpose: collation is not what this pins.",
+  "rows": [
+    { "name": "zz-spaces-only", "label": "   " },
+    { "name": "m-tie-b", "label": "Same" },
+    { "name": "charlie", "label": "Charlie" },
+    { "name": "aaa-blank", "label": "" },
+    { "name": "zzz-first-by-label", "label": "Alpha" },
+    { "name": "m-tie-a", "label": "Same" },
+    { "name": "bravo", "label": "Bravo" }
+  ],
+  "order": [
+    "zzz-first-by-label",
+    "bravo",
+    "charlie",
+    "m-tie-a",
+    "m-tie-b",
+    "aaa-blank",
+    "zz-spaces-only"
+  ]
+}

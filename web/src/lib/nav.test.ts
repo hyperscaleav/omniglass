@@ -41,21 +41,45 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("has no Inventory group: Explore is the fleet's one door and Nodes stands top-level (#798, #826)", () => {
+  it("has no Inventory group: Explore is the fleet's one door (#798, #826)", () => {
     const labels = navItems.map((i) => i.label);
     expect(labels).not.toContain("Inventory");
     expect(labels).toContain("Explore");
-    expect(labels).toContain("Nodes");
     // The index entries left the rail but not the app: each keeps its gate and
     // identity through OFF_RAIL, like the catalog registries before them.
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
+  // Nodes and Platform health (#1644) are administration, so both doors sit
+  // under Admin (#1767) behind node:read: enrolling a node is an admin's job,
+  // and Status's rows are the node list. Platform health keeps its page name;
+  // only the door is one word.
+  it("keeps Nodes and Status under Admin, and only for a node:read holder", () => {
+    expect(rail([">"])).not.toContain("Nodes");
+    expect(section("Admin", ["node:read"])).toContain("Nodes");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Nodes");
+    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]);
+    expect(sectionLabel("/web/nodes")).toBe("Nodes");
+    expect(rail([">"])).not.toContain("Status");
+    expect(rail([">"])).not.toContain("Platform health");
+    expect(section("Admin", ["node:read"])).toContain("Status");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
+    expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
+    expect(sectionLabel("/web/platform")).toBe("Status");
+  });
+
+  // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
+  // A tab needing two words is a sign it names a page rather than a door.
+  it("labels every sidebar tab with one word", () => {
+    const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
+    expect(labels.filter((l) => /\s/.test(l))).toEqual([]);
+  });
+
   it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Nodes", () => {
     const out = filterNav(navItems, (tokens) => !["location", "system", "component"].includes(tokens[0]));
-    const labels = out.map((i) => i.label);
-    expect(labels).not.toContain("Explore");
-    expect(labels).toContain("Nodes"); // gated on node:read, which this filter allows
+    expect(out.map((i) => i.label)).not.toContain("Explore");
+    // gated on node:read, which this filter allows
+    expect(out.find((i) => i.label === "Admin")!.children!.map((c) => c.label)).toContain("Nodes");
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -201,11 +225,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Nodes", "Status", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only the ungated Settings soon-stub under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Settings"]);
+  it("shows a bare *:read viewer only Nodes, Status and the ungated Settings under Admin", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Nodes", "Status", "Settings"]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {

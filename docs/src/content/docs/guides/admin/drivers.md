@@ -131,7 +131,7 @@ private key; a `session.login` beside it only answers keyboard-interactive quest
 nothing declared answers, such as a one-time code, rejects the session), `session.pty` asks for a
 terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
-naming both keys, which the gate carries as data (`endpoint-rejection` ends with the pinned and the
+naming both keys, which the gate carries as data (the refusal's entry in `endpoint-rejection` ends with the pinned and the
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be
@@ -393,10 +393,14 @@ session:
   reprobe: 1h
 ```
 
-A poll's `schedule.every` is how often the node asks the device, at the node's heartbeat
-granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll whose fetch fails
-(the device rebooting, say) retries sooner, on a backoff that starts at the heartbeat and doubles
-up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
+A command binding declares its **settle** rule to read the device's answer: `settle: { from: response, ... }` to judge the reply as success or failure (extracting a value or matching a confirmation), or `settle: { from: observe }` to wait for the next probe to report the intended value (or simply record the issue if the device answers nothing you can judge). A **fire-and-forget** command (for example `reboot`) sets no value: it has no `target_property_type` or `target_metric_type` arm in the command type catalog. Fire-and-forget commands settle at their issue (the execution report lands them or times them out) and declare no settle rule. A **settleable** command (for example `set-input`) sets a value and opens an intended one, and judges success by reading the reply or waiting for the next probe to observe it.
+
+A poll's `schedule.every` is how often the node asks the device, on the node's own timer rather
+than its heartbeat: a `10s` poll runs every ten seconds at a stable phase of its own, whatever
+the heartbeat
+([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)).
+A poll whose fetch fails (the device rebooting, say) retries sooner, on a backoff that starts at
+one second and doubles up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
 whatever the schedule. Changing a spec (or its version) reaches the endpoints already attached through it: their tasks
 re-derive in the update's own transaction, under its one audit row, and the next poll runs the
 new spec; an official spec a new release ships reaches them at boot the same way.
@@ -558,5 +562,8 @@ against, masked of the secret it used; a secret input must be one you may reveal
 hands it to the target you name. A preview runs a poll that is its own request (http, https, snmp, a
 tcp line); a poll riding a held session (telnet, ssh, a websocket, a tls line, a login session) is
 attached first and run now (`endpoint:run`), which lands its samples and is refused, with the reason,
-while the endpoint is gated. Both are operator grants, audited
+while the endpoint is gated. A preview aimed at a device already attached takes its turn with that
+endpoint's own work, never sending beside it, and is refused the same way (409, naming the reason)
+while the endpoint is gated; a node too busy to queue another answers 429, so retry in a moment.
+Both are operator grants, audited
 ([collection](/architecture/collection/#on-demand-validate-preview-and-run-a-poll-now)).
