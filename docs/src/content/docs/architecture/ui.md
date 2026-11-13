@@ -265,6 +265,14 @@ platform-preferences page. **Every sidebar tab is one word**, a group, a leaf an
 alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
 longer title.
 
+**Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
+placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
+`open_alarms` counts the alarms open on the components the caller may read), Collectors (the node
+list, shown to a caller who can read nodes) and Platform (the platform system's verdict and the
+nodes not up, same gate). Locations, Systems and Collectors open their lists; Open alarms is a plain
+figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
+permission it needs), never a dash.
+
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:
 config lifecycle (stale templates), control-plane health (rules failing to evaluate, samples dropped

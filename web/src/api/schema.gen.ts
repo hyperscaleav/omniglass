@@ -5573,7 +5573,7 @@ export interface paths {
         };
         /**
          * Read the whole in-scope fleet in one call
-         * @description Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+         * @description Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
          */
         get: operations["get-fleet-view"];
         put?: never;
@@ -8348,6 +8348,11 @@ export interface components {
             readonly $schema?: string;
             /** @description Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read */
             locations: components["schemas"]["FleetLocationBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero
+             */
+            open_alarms?: number;
             /** @description Every system the caller may read, each carrying its dots */
             systems: components["schemas"]["FleetSystemBody"][] | null;
         };
