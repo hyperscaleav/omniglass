@@ -9108,6 +9108,12 @@ components:
         node:
           description: The node that probes this endpoint
           type: string
+        pending:
+          description: "Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"
+          enum:
+            - no-node
+            - awaiting-probe
+          type: string
         rejection:
           $ref: "#/components/schemas/ReachRejectionBody"
           description: The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds
@@ -9125,7 +9131,7 @@ components:
           type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
-          description: The latest reachability verdict, or null if none yet
+          description: The latest reachability verdict, or null if none yet (pending says why)
         webhook:
           $ref: "#/components/schemas/EndpointWebhookBody"
           description: "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"

@@ -312,6 +312,13 @@ carries as data, and offers **Trust this key**: a confirm that teaches why a key
 the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
 the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
+An endpoint with no verdict yet says why (#981): the reachability read carries `pending` beside the
+null `verdict`, derived at read time and never stored. `no-node` means the endpoint has no node
+assigned, so nothing will probe it until one is (a fresh install ships none); `awaiting-probe` means
+a node is assigned and its first probe has not landed. The field is absent once a verdict exists and
+on a push endpoint, which has no verdict to wait for. The CLI prints it in the read's JSON, and the
+Endpoints panel shows it beneath the row with a link to the Nodes page or the assigned node's blade.
+
 ### The connection fingerprint and the layered gate
 
 Built (#1056 ruling, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
