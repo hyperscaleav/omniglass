@@ -550,6 +550,14 @@
    "description": "Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran."
   },
   {
+   "name": "poll-cpu-time",
+   "data_type": "float",
+   "unit": "ms",
+   "precision": 3,
+   "label": "Poll CPU Time",
+   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock."
+  },
+  {
    "name": "poll-failure-count",
    "data_type": "int",
    "label": "Poll Failures",
@@ -648,6 +656,14 @@
    "data_type": "int",
    "label": "Schedule Skips",
    "description": "Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet."
+  },
+  {
+   "name": "worker-busy-fraction",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worker Busy",
+   "description": "Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
   },
   {
    "name": "spool-batch-count",

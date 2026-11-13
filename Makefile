@@ -116,7 +116,7 @@ image:
 # command tree (internal/cli/api_gen.go), the MCP tool catalog and its reference
 # page (internal/mcp/catalog_gen.go, docs/, via mcpgen), the CLI reference page
 # (from that command tree, into docs/), the protobuf telemetry wire, the typed SPA
-# client (web/src/api/schema.gen.ts), and the schema facts the docs render
+# client (web/src/api/api.gen.ts and paths.gen.ts, via orval), and the schema facts the docs render
 # storage tables from (docs/src/generated/schema.json, via erdgen). The spec is
 # the seam every downstream client is generated from. Run after any API change;
 # the results are committed and reviewed like code.

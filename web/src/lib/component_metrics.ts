@@ -3,9 +3,9 @@
 // (contract default until a sample arrives, is_sampled marks the live
 // series); the server does the resolving, this file only fetches.
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EffectiveMetricBody } from "../api/api.gen";
 
-export type EffectiveMetric = components["schemas"]["EffectiveMetricBody"];
+export type EffectiveMetric = EffectiveMetricBody;
 
 export const effectiveMetricsKey = (component: string) => ["component-metrics", component] as const;
 

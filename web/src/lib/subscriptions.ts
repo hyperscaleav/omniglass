@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { PersonalRuleBody, RuleMatchBody } from "../api/api.gen";
 import { can, useMe } from "./auth";
 import { entityNameError } from "./names";
 
@@ -10,8 +10,8 @@ import { entityNameError } from "./names";
 // non-disclosing 404) and gated by notification:subscribe, which the viewer
 // floor holds.
 
-export type Subscription = components["schemas"]["PersonalRuleBody"];
-export type RuleMatch = components["schemas"]["RuleMatchBody"];
+export type Subscription = PersonalRuleBody;
+export type RuleMatch = RuleMatchBody;
 
 export const TRANSITIONS = ["raised", "cleared"] as const;
 export type Transition = (typeof TRANSITIONS)[number];

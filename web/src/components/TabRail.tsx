@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
+import type { LeaveGuard } from "../lib/leave_guard";
 
 // TabRail: the workspace's facet switcher (#790). A facet is a URL fact
 // (`?tab=<key>`, the #763 deep-link rule), so a reload or a pasted link lands
@@ -7,7 +8,10 @@ import { useSearchParams } from "@solidjs/router";
 // canonical address clean. One facet is no workspace: the rail renders only
 // once there are two.
 // The rail's URL fact is `?tab=`.
-export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string }) {
+//
+// `guard` is the page's leave guard (lib/leave_guard): switching to ANOTHER
+// facet asks it first, so unsaved Configure drafts are not dropped silently.
+export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string; guard?: LeaveGuard }) {
   const [params, setParams] = useSearchParams();
   const name = () => "tab";
   const active = () => {
@@ -37,7 +41,10 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
               // intent, consumed once): left in the address it pinned the page
               // to Configure, so Overview, the bare address, resolved straight
               // back to it and re-entered edit on every return.
-              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key, edit: undefined })}
+              onClick={() => {
+                if (t.key !== active() && props.guard && !props.guard.confirmLeave()) return;
+                setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key, edit: undefined });
+              }}
             >
               {t.label}
             </button>

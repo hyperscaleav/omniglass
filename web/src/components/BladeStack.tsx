@@ -3,6 +3,7 @@ import { Dynamic, Portal } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
+import SaveError from "./SaveError";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -165,7 +166,7 @@ export default function BladeStack(props: {
                         tooltip when the wrapper itself is focus-visible, the keyboard
                         path. */}
                     <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary() || editLock() != null || deleteLock() != null}>
-                      <PanelFooter dimmed={!isTop()}>
+                      <PanelFooter dimmed={!isTop()} notice={<SaveError slot={edit} />}>
                         <Show
                           when={deleteLock()}
                           fallback={
@@ -220,7 +221,7 @@ export default function BladeStack(props: {
                                   fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
                                 >
                                   <Button icon={X} onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</Button>
-                                  <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => {}); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
+                                  <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => { /* the slot keeps the reason; SaveError shows it in this footer */ }); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
                                 </Show>
                               </Show>
                             }
