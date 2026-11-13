@@ -160,6 +160,15 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   corporate lab (8,850 tasks, every https pin learned) is 1.5 MB of JSON and about 463 KB on the
   wire, against the bus's 1 MB limit; repeated on every task, as before #1583, it was 6.9 MB and
   1.17 MB, over it.
+- **A worklist grows only when the node learns.** An unchanged node's worklist is the same bytes on
+  every build. Two fields come from what the node published back, not from what an operator
+  declared: an ssh endpoint's host key or a TLS endpoint's (tls, https, wss) certificate pin once the node
+  trusts a key on first use, and the endpoint's last rejection. Each rides once, on its endpoint's
+  entry, so the size changes only when a pin is learned or dropped, a rejection appears or clears,
+  or an operator changes what the node runs. A replaced pin is the same length. On the 3,000-system
+  corporate soak the headquarters node learned 440 https pins in its first minute; repeated on each
+  of its 4,831 https tasks, as before #1583, they took the reply past the 1 MB limit (#1872), and a
+  reply over the limit is refused on every pull, so the node keeps running its last worklist.
 - **The server answers pulls from a bounded pool.** The node states how long it will wait in an
   `Omniglass-Timeout` header (a duration, so the clocks need not agree), and the server's deadline
   for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
