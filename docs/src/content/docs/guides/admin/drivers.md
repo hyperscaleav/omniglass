@@ -185,6 +185,8 @@ A udp driver speaks the line protocol as datagrams ([udp](/architecture/collecti
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
 input, the local port its endpoint binds, which its requests leave from and the component's pushes
 arrive on (unset, the node picks one, which suits a component that answers to a request's source).
+A datagram counts as the component's when it comes from the component's address, from any port, so gear
+that answers from a separate send socket works; one from any other address is dropped and logged.
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
 late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
 times a lost datagram is re-sent within
