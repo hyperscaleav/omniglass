@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -169,15 +170,24 @@ describe("Rules page", () => {
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
   });
 
-  it("renders rule expressions without ligatures to show operators verbatim", async () => {
-    mount(admin, [reach], { state: false });
-    fireEvent.click(screen.getByText("Reachability lost"));
-    const b = await blade();
-    const expr = within(b).getByTestId("rule-fire-expr") as HTMLElement;
-    expect(expr).toBeTruthy();
-    // The element has the font-data class which applies font-variant-ligatures: none
-    // from app.css, rendering operators like !=, ==, >= verbatim without ligatures.
-    expect(expr.classList.contains("font-data")).toBe(true);
+  // #1013: JetBrains Mono draws `==` as one bar and `!=` as a not-equals sign,
+  // so a criterion would read as characters nobody can type. The stylesheet's
+  // data-font rule turns ligatures off once, for every code rendering; loading
+  // the real app.css lets jsdom resolve the cascade the browser does.
+  it("renders a rule's criteria in the typed characters, not ligatures", async () => {
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync("src/app.css", "utf8");
+    document.head.append(sheet);
+    try {
+      mount(admin, [reach], { state: false });
+      fireEvent.click(screen.getByText("Reachability lost"));
+      const b = await blade();
+      for (const id of ["rule-fire-expr", "rule-clear-expr"]) {
+        expect(getComputedStyle(within(b).getByTestId(id)).fontVariantLigatures).toBe("none");
+      }
+    } finally {
+      sheet.remove();
+    }
   });
 
   it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
