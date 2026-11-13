@@ -68,7 +68,7 @@ unit Omniglass monitors; places are folders and metadata; components are pieces 
 A system's view is its place card (type, tags, the place's own panel) above the system card
 (verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
 URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
-occupant state on each marker, ADR-0128, the data), Activity (the history, the events, the
+occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
 logs), and Configure (the one form). A place holding exactly one system lands on it; a place
 holding none or several keeps its own view, a brief card per system and the outline rooted
 there; a component's view carries its place card, marked as its own or its system's. The
