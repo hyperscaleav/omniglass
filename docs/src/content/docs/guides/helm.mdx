@@ -127,3 +127,12 @@ helm install og-pr-42 deploy/chart -n og-pr-42 --create-namespace \
   --set ingress.host=og-pr-42.preview.hyperscaleav.com \
   --set fullnameOverride=omniglass
 ```
+
+**Qualified names with Traefik:** The operator API supports addressing resources
+by qualified name (e.g., `POST /api/v1/endpoints/campus.room%2Fhttps` to reach an
+endpoint at a path containing a slash). Traefik v3.0 passes percent-encoded
+characters through to the backend by default, so qualified names work without
+additional configuration. If the in-cluster Traefik is upgraded to v3.1 or later,
+verify that the entry point's `encodedCharacters` setting permits `%2F` and `%24`;
+the chart's default Ingress does not configure this, so it inherits the
+controller's defaults.
