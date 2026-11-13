@@ -43,6 +43,19 @@ it deadlocks. ADR-0138 resolves it without weakening the boundary:
    test first; else the autopilot scopes the next thin cut itself and files the marked
    definition. Approved definitions always outrank self-scoping, which is the main
    steering lever.
+
+   **A branch another session owns is skipped, never adopted.** An idle session (a rate
+   limit, a long review) can leave an unpushed branch that looks abandoned; once the
+   autopilot copied one, shipped it, and opened a second PR for the same issue while the
+   original session opened a third. So before it resumes or adopts any existing branch or
+   worktree, it runs `scripts/branch-owned.sh <branch>`, which prints `owned <reason>` or
+   `free`. A branch is owned when it is checked out in a locked worktree (the harness locks
+   a live session's), when a claim file sits beside its worktree (the hook for a harness
+   that exposes session claims; a missing file is no claim), or when its tip commit or any
+   file in its worktree changed inside the window (24 hours; `AUTOPILOT_OWNED_WINDOW_HOURS`
+   overrides). An owned candidate is passed over and the next rung fires. When the autopilot
+   does adopt a `free` branch it did not create, it comments on the issue first and says so
+   in the PR body. The day report names every branch skipped as owned and why.
 3. **Build.** The normal lifecycle: worktree off `origin/main`, the failing test first,
    green commits, docs with everything, primitive first. Any operator surface takes the
    [`/assess-ui`](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/assess-ui)
