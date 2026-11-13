@@ -535,7 +535,10 @@ excess is how far the gap since the task's own previous scheduled start strays f
 early or late, so a poll keeping its interval reads 0 and a skipped slot reads a whole interval. A
 task's first run, and a run off the schedule (a held or refused poll released), reads no gap.
 `tick-duration` is the longest dispatch pass of the window and `tick-overrun-count` the dues that met
-their own run still in flight. Every count is a loss count, 0
+their own run still in flight. `worker-busy-fraction` is a level, not a count: the lane pool's
+worker time spent running over the report window, divided by the window's length times the pool's
+workers, so 0 is idle and 1 is every worker busy all window. A run still in flight when the window
+ends counts the part it has run, and its remainder lands in the next window (#1686). Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and the
 dispatcher writes that hop too, runs due in and runs made out per kind at the instance
 `schedule/{kind}` (#1693). The node hop already reads as that ratio (#1659): per item kind as
