@@ -1,5 +1,22 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type {
+  PlatformAlarmBody,
+  PlatformInstanceFigureBody,
+  PlatformNodeBody,
+  PlatformPanelBody,
+  PlatformPanelKeyBody,
+  PlatformPipelineBody,
+  PlatformPipelineComponentBody,
+  PlatformPipelineFigureBody,
+  PlatformPipelineHopBody,
+  PlatformPipelineKindBody,
+  PlatformServerBody,
+  PlatformSimulationDevice,
+  PlatformSimulationGap,
+  PlatformSimulationNode,
+  PlatformSimulationViewOutputBody,
+  PlatformViewOutputBody,
+} from "../api/api.gen";
 import { nodeStatus, type Node, type NodeStatus } from "./nodes";
 import { durationText } from "./timeline";
 import { describeError } from "./format";
@@ -16,20 +33,20 @@ import { humanSize } from "./files";
 //     read_at, the server's clock at the read, so the header and the rows never
 //     disagree about what "now" is.
 
-export type PlatformView = components["schemas"]["PlatformViewOutputBody"];
-export type PlatformNode = components["schemas"]["PlatformNodeBody"];
-export type PlatformServer = components["schemas"]["PlatformServerBody"];
-export type PlatformPipeline = components["schemas"]["PlatformPipelineBody"];
-export type PlatformPipelineHop = components["schemas"]["PlatformPipelineHopBody"];
-export type PlatformPipelineComponent = components["schemas"]["PlatformPipelineComponentBody"];
-export type PlatformPipelineFigure = components["schemas"]["PlatformPipelineFigureBody"];
-export type PipelineKind = components["schemas"]["PlatformPipelineKindBody"]["kind"];
+export type PlatformView = PlatformViewOutputBody;
+export type PlatformNode = PlatformNodeBody;
+export type PlatformServer = PlatformServerBody;
+export type PlatformPipeline = PlatformPipelineBody;
+export type PlatformPipelineHop = PlatformPipelineHopBody;
+export type PlatformPipelineComponent = PlatformPipelineComponentBody;
+export type PlatformPipelineFigure = PlatformPipelineFigureBody;
+export type PipelineKind = PlatformPipelineKindBody["kind"];
 // The kind selector's choice: every kind summed, or one.
 export type PipelineKindChoice = PipelineKind | "all";
-export type PlatformPanel = components["schemas"]["PlatformPanelBody"];
-export type PlatformPanelKey = components["schemas"]["PlatformPanelKeyBody"];
-export type PlatformAlarm = components["schemas"]["PlatformAlarmBody"];
-export type PlatformInstanceFigure = components["schemas"]["PlatformInstanceFigureBody"];
+export type PlatformPanel = PlatformPanelBody;
+export type PlatformPanelKey = PlatformPanelKeyBody;
+export type PlatformAlarm = PlatformAlarmBody;
+export type PlatformInstanceFigure = PlatformInstanceFigureBody;
 
 export const PLATFORM_VIEW_KEY = ["platform-view"] as const;
 
@@ -114,10 +131,10 @@ export function notUpCount(v: PlatformView): number {
 // a lab faster (internal/closedloop). Every gap is a loss ratio, 0 healthy. The derivations
 // below decide only order and tone; every count is the server's.
 
-export type PlatformSimulation = components["schemas"]["PlatformSimulationViewOutputBody"];
-export type PlatformSimNode = components["schemas"]["PlatformSimulationNode"];
-export type PlatformSimGap = components["schemas"]["PlatformSimulationGap"];
-export type PlatformSimDevice = components["schemas"]["PlatformSimulationDevice"];
+export type PlatformSimulation = PlatformSimulationViewOutputBody;
+export type PlatformSimNode = PlatformSimulationNode;
+export type PlatformSimGap = PlatformSimulationGap;
+export type PlatformSimDevice = PlatformSimulationDevice;
 
 export const PLATFORM_SIM_KEY = ["platform-simulation"] as const;
 

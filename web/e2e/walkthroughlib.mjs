@@ -35,6 +35,9 @@
 //     - post: /components                           # an API path (under /api/v1)
 //       body: { name: bay-2-display, product: boreal-edge-55, location: bay-2 }
 //
+// The probe replays every walkthrough on one stack, so two setups may not claim the
+// same component or alarm when a step changes it (setupCollisions, #1404).
+//
 // An optional `ready` waits off camera, after the setup and before the title
 // card, for a state the scene needs that only time makes (#1645: the server's
 // first report window), so that wait never counts against the budget. It opens
@@ -117,9 +120,15 @@ const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
 const TOP = ['title', 'description', 'setup', 'ready', 'steps'];
 
-/** @type {(v: unknown) => v is Record<string, any>} */
+/**
+ * @param {unknown} v
+ * @returns {v is Record<string, any>}
+ */
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-/** @type {(v: unknown) => v is string} */
+/**
+ * @param {unknown} v
+ * @returns {v is string}
+ */
 const isStr = (v) => typeof v === 'string' && v.trim() !== '';
 
 // A target is a selector string, or { role, name, exact? }, or (for wait only)
@@ -343,6 +352,55 @@ export async function runSetup(setup, { base, token, fetch }) {
     const text = (await res.text().catch(() => '')).slice(0, 300);
     throw new Error(`walkthrough setup ${i + 1}: ${item.method} ${item.path} answered ${res.status}${text ? `: ${text}` : ''}`);
   }
+}
+
+// What a setup item claims (#1404): a component it creates, or an alarm it
+// raises on one (the component and the dedup key). Any other create claims
+// nothing the lint can name.
+/**
+ * @param {SetupItem} item
+ * @returns {{ key: string, what: string } | null}
+ */
+function setupClaim({ path, body }) {
+  if (path === '/components' && isStr(body.name)) return { key: `component:${body.name}`, what: `component "${body.name}"` };
+  const on = /^\/components\/([^/]+)\/alarms$/.exec(path)?.[1];
+  if (on && isStr(body.dedup_key)) return { key: `alarm:${on}/${body.dedup_key}`, what: `alarm "${body.dedup_key}" on ${on}` };
+  return null;
+}
+
+// The setup-isolation lint (#1404). The recorder gives every walkthrough a lab
+// of its own, but the probe replays them all, in alphabetical order, on one
+// stack, where an existing create (409) counts as made. So two walkthroughs
+// whose setups claim the same component or alarm share it, and a step of one
+// that changes it (any click, type, select or key press) is state the other
+// meets: it passes recorded and fails probed. Returns one problem per claim
+// shared by two or more walkthroughs when any of them acts, empty when none.
+/**
+ * @param {{ id: string, setup: SetupItem[], steps: Step[] }[]} walkthroughs
+ * @returns {string[]}
+ */
+export function setupCollisions(walkthroughs) {
+  /** @type {Map<string, { what: string, ids: string[] }>} */
+  const claims = new Map();
+  for (const w of walkthroughs) {
+    for (const item of w.setup) {
+      const claim = setupClaim(item);
+      if (!claim) continue;
+      const held = claims.get(claim.key) ?? { what: claim.what, ids: [] };
+      if (!held.ids.includes(w.id)) held.ids.push(w.id);
+      claims.set(claim.key, held);
+    }
+  }
+  const changes = (/** @type {string} */ id) => walkthroughs.find((w) => w.id === id)?.steps.some((s) => ACTIONS.includes(s.kind)) ?? false;
+  /** @type {string[]} */
+  const problems = [];
+  for (const { what, ids } of claims.values()) {
+    const changing = ids.filter(changes);
+    if (ids.length > 1 && changing.length) {
+      problems.push(`walkthroughs ${ids.join(', ')} both set up ${what} and ${changing.join(', ')} ${changing.length > 1 ? 'change' : 'changes'} it: give each its own`);
+    }
+  }
+  return problems;
 }
 
 // Parses and validates a walkthrough's YAML text; a syntax error names the file.

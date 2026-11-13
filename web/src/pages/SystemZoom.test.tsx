@@ -940,7 +940,9 @@ describe("the miss face (#800)", () => {
     // What a create leaves behind: the list refreshed, the view now stale.
     void r.qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] });
     await waitFor(() => expect(answer).toBeTypeOf("function"));
-    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    // The read is held open until answer, so the miss clearing here is the page
+    // seeing the refetch, not the refetch landing.
+    await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
     const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
     expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
