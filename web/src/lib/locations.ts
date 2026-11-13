@@ -42,11 +42,6 @@ export async function listLocations(): Promise<Location[]> {
   return (data?.locations ?? []) as Location[];
 }
 
-export async function getLocation(name: string): Promise<Location> {
-  const { data, error } = await api.GET("/locations/{name}", { params: { path: { name } } });
-  if (error) throw error;
-  return data as Location;
-}
 
 export type CreateLocation = {
   // Optional (#687, #688): omit it and the platform mints one from the
