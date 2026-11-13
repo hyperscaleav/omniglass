@@ -18,3 +18,5 @@ refs: [1126, 430, 1385]
   (#430, #137, #1251, #1395). The `## Design-only terms` intro now says a term is design in whole
   or in part, since a neighboring column or row of a few of them is live, rather than that nothing
   is implemented.
+  `event_rule` (#819, #938) and `severity level` moved out of the Alarm-chain fence the same way, and the
+  intro now says a fence or row names the open tracking issue or the ADR that decided the design.
