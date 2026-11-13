@@ -310,6 +310,7 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 			return DriverCost{}, err
 		}
 		s.Components, s.Tasks = want, tasks
+		h.say("    working set %.1f MiB, %.1f millicores", s.WorkingSetBytes/(1<<20), s.Millicores)
 		steps = append(steps, s)
 		windows = append(windows, w)
 	}
