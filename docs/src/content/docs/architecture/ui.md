@@ -234,7 +234,7 @@ is all this". Subrail and cards derive from one group table judged through the s
 filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
 are all gated away disappears with its header; secret types holds no subrail entry at all
 (`/secret-types` stays routed and gated, rendering in the pane). The naming rule
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-fleet-noun-each-registry-serves))
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
 carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
 registry's own word, and where the registry's only word is "type" the entry is Types with the
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups

@@ -47,7 +47,7 @@ which live on NATS and sink to PG asynchronously ([samples](/architecture/proper
 
 An event **carries its alarm** in a nullable `alarm_id` (#948, written from #949): a rule's fire event
 names the alarm it opened and its clear event the alarm it resolved, set null if the alarm row goes;
-an event no rule wrote, or one an informational rule wrote, leaves it null. The **lineage** columns ([ADR-0066](/architecture/decisions/#adr-0066-a-raw-log-ingest-lane-and-the-event-lineage-columns)) name what produced the event; the flat `correlation_id` threads the causal chain.
+an event no rule wrote, or one an informational rule wrote, leaves it null. The **lineage** columns ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) name what produced the event; the flat `correlation_id` threads the causal chain.
 
 <SchemaTable
   table="event"

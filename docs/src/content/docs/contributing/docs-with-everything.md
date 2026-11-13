@@ -109,6 +109,13 @@ adding entries add two files.
   in the tree), which renames its file and rewrites every reference across the docs, code comments, and
   skills.
 
+**Cite an ADR by the slug of its current title.** An ADR's heading id on the decision log is
+github-slugger's slug of its `title:`, so a link is `/architecture/decisions/#adr-NNNN-<title-slug>` (or
+`#adr-NNNN-...` from inside the log). Reword a title and every link that spelled the old one silently lands
+at the top of the page, so the docs build checks it: `docs/scripts/check-decision-anchors.mjs` runs after
+`astro build` and fails on any link into the log whose fragment is not a heading id on the built page.
+When you retitle an ADR, the build names the links to fix.
+
 The frontmatter is a small line grammar (a double-quoted or single-quoted string, a list of integers like
 `[1234]`, or a bare word), read identically by the docs build and by `internal/docslint`, which checks every
 entry's shape and fails an entry written into a log page instead of its own file. An entry body carries
