@@ -2603,7 +2603,7 @@ export const CreateVendorInputBodyKind = {
 export type CreateVendorInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** A glyph key, e.g. crestron-logo */
+  /** A glyph key, e.g. boreal-logo */
   icon?: string;
   /** The role the organization plays */
   kind?: CreateVendorInputBodyKind;

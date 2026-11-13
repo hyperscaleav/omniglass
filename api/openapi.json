@@ -4392,7 +4392,7 @@
             "type": "string"
           },
           "icon": {
-            "description": "A glyph key, e.g. crestron-logo",
+            "description": "A glyph key, e.g. boreal-logo",
             "type": "string"
           },
           "kind": {

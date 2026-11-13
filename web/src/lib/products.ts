@@ -2,8 +2,8 @@ import { api } from "../api/client";
 import { type ComponentType, resolveComponentTypeIcon } from "./component_types";
 
 // The products data layer: thin typed wrappers over the generated client for the
-// product catalog (the model a component is an instance of, e.g. "Crestron
-// TSW-1070"). A product is addressed by its kebab name (ADR-0062: the uuid is
+// product catalog (the model a component is an instance of, e.g. "Kestrel
+// VRoom"). A product is addressed by its kebab name (ADR-0062: the uuid is
 // identity, the name is what an operator reads and types); official
 // (seed-owned) rows are read-only past creation, refused server-side on
 // update/delete. A product carries a kind (device/app/service; vm retired,

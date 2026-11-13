@@ -7380,7 +7380,7 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--icon` | string | (none) | A glyph key, e.g. crestron-logo |
+| `--icon` | string | (none) | A glyph key, e.g. boreal-logo |
 | `--kind` | string | (none) | The role the organization plays |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |

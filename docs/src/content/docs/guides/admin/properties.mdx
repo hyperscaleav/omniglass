@@ -85,8 +85,8 @@ and optionally marks it **required**.
 | a **standard** | the systems that conform to it | **Catalog, under Systems: [Standards](/guides/admin/standards/)** | `standard:update` / `:delete` |
 | a **location type** | the locations of that type | **Catalog, under Locations: [Types](/guides/admin/location-types/)** | `location_type:update` / `:delete` |
 
-Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung QM55 is what makes
-every QM55 in the fleet carry those three, with the same names and the same types, without touching
+Declaring `serial-number`, `firmware-version`, and `model-number` on a Boreal Edge 55 is what makes
+every Edge 55 in the fleet carry those three, with the same names and the same types, without touching
 a component. Declaring `room-capacity` on Huddle Room does the same for every huddle room. Type and
 validation are **not** repeated in the contract, they stay on the catalog entry, so a property means
 one thing everywhere. A contract cannot declare a **reserved** key (a node's own probe and session
