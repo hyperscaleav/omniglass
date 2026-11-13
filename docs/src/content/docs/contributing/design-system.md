@@ -361,6 +361,12 @@ async gap to lose a value in. A select whose value **starts empty and only ever 
 operator moved it** (a create form, an "Add a component..." picker) has nothing stored to lose, and
 its first option is the placeholder the fallback would land on anyway.
 
+`TreeSelect` is the third shape: it is a Kobalte Select, not a native `<select>`, and it does not use
+`bindSelectValue`. It derives the selected option from its `value` and its options together, so a
+value set before the options load selects once they arrive. The closed trigger shows the bare label
+(the indent and the `└` glyph are drawn by CSS on the open list, never typed into the text), with the
+ancestor path as muted context beside it.
+
 ### How an entity's identity reads
 
 Every entity carries the same identity triad: an **id** (a uuid, immutable), a **name** (the
