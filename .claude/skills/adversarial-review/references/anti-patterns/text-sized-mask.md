@@ -12,12 +12,11 @@
   is the size of the text, and the text's width moves with the clock (`fmtTime` prints a month
   name, a bare day and AM or PM; `toLocaleString` leaves the hour bare; `durationText` reads 9s
   or 17s). The baseline then moves by a column of pixels with no UI change: every recapture
-  rewrites it, churning unrelated PRs, and the zero-tolerance gate holds only while its
-  perceptual threshold happens to absorb the moved edge (#774), and would fail outright once the
-  edge crossed pixels it can see. The audit trail's When column moved 7px, 8,400 changed pixels
-  the gate scored 0.000% (#773); the entity blade's and a system summary card's since-lines moved
-  1px between 01:57 AM and 06:59 PM, 64 and 160 changed pixels the gate scored as zero too
-  (#1081). The overcorrection fails silently the other way: the row mask that first fixed #1081
+  rewrites it, churning unrelated PRs, and the gate fails every such move now that
+  it compares exactly (#774). It once scored them zero through a perceptual threshold: the audit
+  trail's When column moved 7px, 8,400 changed pixels the gate scored 0.000% (#773); the entity
+  blade's and a system summary card's since-lines moved 1px between 01:57 AM and 06:59 PM, 64 and
+  160 changed pixels (#1081). The overcorrection fails silently the other way: the row mask that first fixed #1081
   hid the verdict badge from the last two baselines that still gated it.
 - **Fix:** paint a box the text cannot resize. Name a container the layout pins (the cell,
   `>> xpath=ancestor::td[1]`, pinned by its column descriptor; a whole row only where what follows
@@ -26,8 +25,8 @@
   whose left edge stays put: not right-aligned or centered), sized from the widest value a
   capture can render in the console's face, which the capture refuses by name if the value
   outgrows it. The text stays the target only where its width is fixed by construction (a
-  36-character uuid in a monospace face). Prove it exactly with the clock moved
-  (`DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=… make docs-shots-check`; the gate's default comparison
-  scores the defect zero, and two captures minutes apart share an hour and prove nothing), and
+  36-character uuid in a monospace face). Prove it with the clock moved
+  (`DOCS_SHOTS_TZ=… make docs-shots-check`, which compares exactly; two captures minutes apart
+  share an hour and prove nothing), and
   add the value to `web/e2e/shotmask.spec.ts`, which reads the page's own entry, drives the
   capture's mask code, and fails a mask whose box tracks its value or covers what it keeps.

@@ -302,7 +302,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 		where s.owner_kind = $1 and s.%[1]s = $2
 		  and s.property_type_id = (select k.id from property_type_in_effect() k where k.name = $3)
 		  and s.instance = $4 and s.provenance = 'intended'
-		order by s.ts desc, s.id desc
+		order by s.id desc
 		limit 1`, col)
 	if ct.TargetMetricType != "" {
 		// The metric lane's intended rows are its declared tier (#1275).
@@ -312,7 +312,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 		join metric_declared d on d.series_id = s.id
 		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = 'intended'
-		order by d.ts desc, d.id desc
+		order by d.id desc
 		limit 1`
 	}
 	var series string
@@ -474,7 +474,7 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 	switch {
 	case ct.TargetMetricType != "":
 		var v float64
-		err := q.QueryRow(ctx, `select value, ts from metric_declared where command_id = $1 order by ts desc, id desc limit 1`,
+		err := q.QueryRow(ctx, `select value, ts from metric_declared where command_id = $1 order by id desc limit 1`,
 			commandID).Scan(&v, &cv.TS)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -485,7 +485,7 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 		cv.Value = json.RawMessage(strconv.FormatFloat(v, 'g', -1, 64))
 	case ct.TargetPropertyType != "":
 		var value []byte
-		err := q.QueryRow(ctx, `select `+declaredCurrentExpr+`, ts from property where command_id = $1 order by ts desc, id desc limit 1`,
+		err := q.QueryRow(ctx, `select `+declaredCurrentExpr+`, ts from property where command_id = $1 order by id desc limit 1`,
 			commandID).Scan(&value, &cv.TS)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -537,15 +537,20 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	// The newest row of every series of the key's (a series per source and
 	// collecting node), from the tier the provenance lives in: the declared
 	// tier for intended rows, the hot tier for the rest (#1275).
+	// The intended tier orders by insertion (`id desc`), every other lane by
+	// `ts desc, id desc`: an intended row's ts is the database's, never a
+	// caller's, while a node supplies the hot tier's (#712, seriesOrderSQL).
 	newest := metricNewestSQL("s.id")
+	order := "n.ts desc, n.id desc"
 	if provenance == "intended" {
-		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.ts desc, d.id desc limit 1`
+		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.id desc limit 1`
+		order = "n.id desc"
 	}
 	sql := `select n.value, n.ts, s.provenance from metric_series s
 		cross join lateral (` + newest + `) n
 		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = $5
-		order by n.ts desc, n.id desc
+		order by ` + order + `
 		limit 1`
 	var (
 		cv CurrentValue
