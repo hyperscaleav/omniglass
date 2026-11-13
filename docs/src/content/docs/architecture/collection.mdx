@@ -616,7 +616,7 @@ The poll types and listeners in the `transport` registry and the operator config
 
 ### Poll protocols and their config
 
-Built today: the `icmp` and `tcp` probes, and the layer-7 `http` and `ssh` probes (#812): http
+Every built transport that dials has a probe (the table below): the `icmp` and `tcp` probes, and the layer-7 probes such as `http` and `ssh` (#812): http
 draws a real response off the API (any status is an answer), ssh runs a real key exchange and,
 when the params carry a credential, tries it. The ladder facts each observes: an accepting port
 whose API never answers is **reached but not responsive**, and a completed SSH exchange that
@@ -624,21 +624,31 @@ refuses the credential is **responded but not authenticated**. A task whose conf
 lands a `collection-failed` event naming the task, never a silent skip. A probe's config rides
 the endpoint's `params` JSON, unmarshalled on the node:
 
-| transport | shape | config (`endpoint.params`) | samples |
-|---|---|---|---|
-| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable` (a property, `up`/`down`), `icmp-rtt-avg` (fixed) |
-| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open` (a property, `open`/`closed`), `tcp-connect-time` (fixed) |
-| `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive`; one `GET /` with no credential, any status an answer |
-| `https` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (as `tls`) | the tcp pair, `tls-handshake-time`, `endpoint-responsive` (the handshake is the rung), `http-response-time` when a response follows, and the certificate facts as `tls` lands them; no credential |
-| `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
-| `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
-| `tls` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (`verify`, `pin` or `skip`; derived from the driver's `tls-mode` input, verify when unset) | the tcp pair, `tls-handshake-time` (one per probe the component answered), `endpoint-responsive`, and for a certificate the mode accepted `tls-certificate-expiry` and `tls-certificate-days-left` |
-| `websocket` | inline probe | as `http` | as `http`: a credential-free `GET /` is the rung, so reachability stays observed beneath a refused upgrade (#1034) |
-| `wss` | inline probe | as `https` | as `https`: the handshake is the rung, then a credential-free `GET /` |
-| `udp` | the driver's request rung | `target` (`host:port`), `timeout`, `listen-port` (derived from the driver's `listen-port` input; unset, the node picks one) | `endpoint-responsive` (here the verdict too), `udp-response-time` (one per probe the component answered); never `tcp-open`. A bare `udp` endpoint has no request to send and lands nothing |
+<SeededSet kind="transports" of="probes" />
 
-The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
-(#816) that polls, commands, and listeners share (#817). So is the `telnet` row (#1033): the same line
+The table is generated from the transport registry and the probe keys, and a test drives each built
+transport's probe against a fake wire, passing and refused, and fails when it lands a key its entry
+does not declare or an entry declares one it never lands, so it cannot drift from the code. What a
+row cannot say:
+
+- A probe lands a key only when its fact exists: the connect time only on an open port, a timing
+  only from an answer (a lost request lands none), the certificate's expiry and days left only for a
+  certificate the `tls-mode` accepted, and `endpoint-authenticated` only when a credential was tried.
+  `endpoint-reachable` is the verdict the node rolls the samples into, landed on a transition.
+- `tls-mode` is `verify`, `pin` or `skip`, derived from the driver's `tls-mode` input (verify when
+  unset); `https` and `wss` take it as `tls` does, and `listen-port` is derived from a udp driver's
+  input of that name (unset, the node picks one).
+- `http` draws one `GET /` with no credential, any status an answer, and `websocket` and `wss` run
+  the probe of `http` and `https`, so reachability stays observed beneath a refused upgrade (#1034).
+  The login of `telnet` and `ssh` is the held session's auth step, never the probe's; `ssh`'s
+  `username` and `password` are optional (secret references arrive with the driver spec).
+- `udp` and `snmp` have no port to open: their rung is the driver's named request answered
+  (`snmp` gets `sysUpTime.0` with the endpoint's community, a secret the worklist unseals, not a
+  param), so `endpoint-responsive` is the verdict there too and neither lands `tcp-open`. A bare
+  `udp` endpoint has no request to send and lands nothing.
+
+The `tcp` row above is built in its driver form as well: the line protocol over `tcp` holds a session
+(#816) that polls, commands, and listeners share (#817). So is `telnet` (#1033): the same line
 protocol behind a telnet filter that strips option negotiation and refuses every option (DO is
 answered WONT, WILL is answered DONT, a literal 0xFF escaped), its login the driver's login dialog run
 as the session's auth step on establish and every recover; proven against the simulated panel's

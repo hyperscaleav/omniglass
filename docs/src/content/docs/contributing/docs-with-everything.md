@@ -36,6 +36,12 @@ table.column references (against the generated schema facts), plus the badge-fen
 coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
 drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
+A worked example of the rule: the collection page's per-transport probe table (each transport's
+rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/node`
+drives each built transport's probe and fails when what it lands differs from what its entry
+declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
+
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
