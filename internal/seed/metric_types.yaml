@@ -73,6 +73,12 @@ metric_types:
     data_type: int
     label: Worklist Tasks
     description: Tasks in the worklist the node installed, sampled on each install.
+  - name: worklist-pull-loss-ratio
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Worklist Pull Loss
+    description: The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist.
   - name: tick-duration
     data_type: float
     unit: ms

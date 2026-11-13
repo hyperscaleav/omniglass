@@ -464,7 +464,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	worklists := make(chan collection.WorklistReply, 1)
 	pctx, stopPulls := context.WithCancel(ctx)
 	var pulls sync.WaitGroup
-	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, worklists) })
+	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, self, worklists) })
 	defer func() { stopPulls(); pulls.Wait() }()
 
 	// Commands are pulled each heartbeat on a goroutine of their own, one
@@ -721,8 +721,9 @@ func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, l
 // pullWorklists pulls the node's worklist every interval, jittered, until ctx
 // ends, handing each one to out in place of any the loop has not taken. A
 // failed pull is logged with the running count and retried on backoff; the
-// node runs the worklist it has meanwhile (#1577).
-func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, out chan collection.WorklistReply) {
+// node runs the worklist it has meanwhile (#1577). Each pull, served or
+// refused, is tallied on self toward the window's worklist pull loss (#1868).
+func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, self *nodeReport, out chan collection.WorklistReply) {
 	attempt, failures := 0, 0
 	for wait := jitterInterval(every, rand.Float64()); sleepCtx(ctx, wait); {
 		next, err := pullWorklist(ctx, nc, name)
@@ -730,6 +731,7 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 			if ctx.Err() != nil {
 				return
 			}
+			self.worklistPulled(true)
 			attempt++
 			failures++
 			wait = pullBackoff(attempt, rand.Float64())
@@ -737,6 +739,7 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 				"attempt", attempt, "retry_in", wait.String(), "failures", failures, "error", err.Error())
 			continue
 		}
+		self.worklistPulled(false)
 		attempt = 0
 		wait = jitterInterval(every, rand.Float64())
 		// Only this goroutine sends, so once a stale worklist is taken back

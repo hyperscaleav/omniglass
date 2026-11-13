@@ -29,6 +29,13 @@
       "about": "each telemetry kind's loss across each hop (#1641), per hop and kind"
     },
     {
+      "family": "worklist_loss",
+      "class": "exact",
+      "tolerance": 0,
+      "two_sided": false,
+      "about": "each node's worst share of worklist pulls the bus refused (#1868), per node"
+    },
+    {
       "family": "delivery_unsettled_boots",
       "class": "exact",
       "tolerance": 0,

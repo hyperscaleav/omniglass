@@ -617,6 +617,14 @@
    "description": "Tasks in the worklist the node installed, sampled on each install."
   },
   {
+   "name": "worklist-pull-loss-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worklist Pull Loss",
+   "description": "The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist."
+  },
+  {
    "name": "tick-duration",
    "data_type": "float",
    "unit": "ms",
@@ -4010,6 +4018,18 @@
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
    "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "worklist-stale",
+   "label": "Worklist stale",
+   "description": "Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.",
+   "sample_key": "worklist-pull-loss-ratio",
+   "fire": "value == 1",
+   "clear": "value \u003c 1",
+   "fire_sustain": "2m",
+   "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
   },

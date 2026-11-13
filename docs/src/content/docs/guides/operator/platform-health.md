@@ -32,7 +32,7 @@ screenshots:
   # table then sits at a fixed place under the header and the closed set.
   - id: platform-health-nodes
     path: /web/platform
-    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule and Commands."
+    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule, Commands and Worklist."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -257,6 +257,13 @@ The columns are the platform keys, grouped:
 - **Schedule**: how late its collection ticks run, and how many overran or were skipped.
 - **Commands**: how many commands wait for it, the oldest one's age, and how many are stuck or
   expired.
+- **Worklist**: **Worklist Pull Loss** is the share of the node's worklist pulls in the newest report
+  window that the bus refused or the node could not read, as a percent. A node whose pull fails keeps
+  running its last worklist, so every other figure can read healthy while no change made since (a new
+  task, a rotated credential, a gate) reaches it. 0% is healthy and anything above it turns red; a
+  window with no pull carries the last pull's outcome, so a node refused on every pull reads 100%
+  until one is served. Two minutes at 100% raises the seeded **Worklist stale** warning on the node's
+  platform component, cleared by the first pull served.
 - **Loss**: **Node Loss** is the node's own share of [where work is lost](#where-work-is-lost): the
   end to end over the last hour of the hops its own component records (the node hop today), every
   kind summed. 0% is healthy; a node whose hops took nothing in reads **not reported**. Its series

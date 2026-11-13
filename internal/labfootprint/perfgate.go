@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -335,6 +336,21 @@ func exactFamilies() []exactFamily {
 				// delivered nothing in the window lost everything it sent.
 				if len(out) == 0 {
 					return []exactReading{{Name: "delivery_loss", Missing: true, Note: "not measured: no telemetry kind carried items in the window"}}
+				}
+				return out
+			}},
+		{Family: "worklist_loss", About: "each node's worst share of worklist pulls the bus refused (#1868), per node",
+			Read: func(r ScaleReport) []exactReading {
+				if gap := r.worklistGap(); gap != "" {
+					return []exactReading{{Name: "worklist_loss", Missing: true, Note: "not measured: " + gap}}
+				}
+				var out []exactReading
+				for _, n := range slices.Sorted(maps.Keys(r.WorklistLoss)) {
+					x := exactReading{Name: "worklist_loss/" + n, Value: r.WorklistLoss[n]}
+					if x.Value > 0 {
+						x.Note = fmt.Sprintf("%s ran a stale worklist: the bus refused %.0f%% of its pulls in a window", n, 100*x.Value)
+					}
+					out = append(out, x)
 				}
 				return out
 			}},

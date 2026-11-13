@@ -144,6 +144,15 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
   not up rather than as up with nothing to do. After it, a failed pull keeps the last good
   worklist, every task and every session of it.
+- **A failed pull is counted, so a stale worklist reads as loss (#1868).** Keeping the last
+  worklist hides the failure: the node's tasks still match the database until the first change for
+  it, so every delivery hop reads 0 while the node misses every change. The node reports
+  `worklist-pull-loss-ratio` on its node-self lane every report window, the pulls refused or
+  unreadable over the pulls made; a window with no pull carries the last outcome, so a node refused
+  on every pull reads 1. The seeded `worklist-stale` rule opens a warning after two minutes at 1,
+  [Platform health](/guides/operator/platform-health/#the-node-table) shows it as the node's
+  Worklist column, and `omniglass lab measure` fails its `worklist_loss` gate on any node above 0
+  ([the lab guide](/guides/lab/#measuring-a-scale-lab)).
 - **The server fails a pull whole, and says why.** A worklist the server cannot read in full (a
   transient storage error), or that is still over the bus's `max_payload` compressed, is answered
   with an `Omniglass-Error` header naming the reason and no body. The node treats it as a failed
@@ -152,7 +161,8 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
 - **A large reply is compressed.** A reply past 64 KB is gzipped and marked
   `Content-Encoding: gzip`, and the node inflates it. The headquarters node of the 1,000-system
   corporate lab (4,434 tasks) is 3.3 MB of JSON and about 463 KB on the wire, against the bus's
-  1 MB limit.
+  1 MB limit. At 3,000 systems (8,850 tasks) it is 1.17 MB compressed and refused on every pull
+  after the first; fitting it is #1583 and #1586.
 - **The server answers pulls from a bounded pool.** The node states how long it will wait in an
   `Omniglass-Timeout` header (a duration, so the clocks need not agree), and the server's deadline
   for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
@@ -800,7 +810,8 @@ waits) and `command-stuck-count`, and, over the window since its last read (zero
 command wire writes `command-dispatch-latency` at a command's first take and
 `command-execution-latency` at its report, one sample per command. The node itself counts
 `command-pull-failure-count`, the pulls of its queue that got no answer or one it could not read,
-once per report window, 0 when quiet, on its node-self lane. How each is read, and why expiry keys on the execution
+once per report window, 0 when quiet, on its node-self lane. Its worklist pulls report the same way
+as a ratio, `worklist-pull-loss-ratio` ([above](#pulling-the-worklist)). How each is read, and why expiry keys on the execution
 stamp rather than the status, is on [commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured).
 
 ## Scheduling, concurrency, and self-observability

@@ -398,3 +398,75 @@ func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
 		}
 	}
 }
+
+// TestNodeReportReadsTheWorklistPullLossOncePerWindow (#1868): a node whose
+// worklist pulls are refused runs its last worklist, so each window carries
+// the share of its pulls refused, 0 when every pull was served, 1 when none
+// was; a window with no pull in it carries the last pull's outcome, so a node
+// backed off between attempts still reads stale.
+func TestNodeReportReadsTheWorklistPullLossOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, 0, t0)
+	key := writerclass.WorklistPullLossRatio
+
+	r.worklistPulled(true)
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[key] != 0 {
+		t.Fatalf("%s emitted before its window ended: %v", key, mid)
+	}
+	r.worklistPulled(true)
+	got := readings(r.take(t0.Add(time.Minute)))
+	if got[key] != 1 {
+		t.Errorf("every pull refused: %s = %v, want 1", key, got[key])
+	}
+	if _, dup := got[key+"#dup"]; dup {
+		t.Errorf("%s emitted twice in one window", key)
+	}
+
+	// No pull in the window: the last one was refused, so still 1.
+	if quiet := readings(r.take(t0.Add(2 * time.Minute))); quiet[key] != 1 {
+		t.Errorf("a window with no pull after a refused one read %v, want 1", quiet[key])
+	}
+
+	r.worklistPulled(true)
+	r.worklistPulled(false)
+	r.worklistPulled(false)
+	r.worklistPulled(false)
+	if mixed := readings(r.take(t0.Add(3 * time.Minute))); mixed[key] != 0.25 {
+		t.Errorf("one of four refused: %s = %v, want 0.25", key, mixed[key])
+	}
+
+	// No pull in the window: the last one was served, so 0, and written.
+	quiet := readings(r.take(t0.Add(4 * time.Minute)))
+	if v, ok := quiet[key]; !ok || v != 0 {
+		t.Errorf("a window with no pull after a served one read %v (written %v), want 0", v, ok)
+	}
+
+	var none *nodeReport
+	none.worklistPulled(true)
+}
+
+// TestNodeReportTalliesWorklistPullsFromThePullLoopSafely: the worklist is
+// pulled on its own goroutine (#1577) while the heartbeat takes the report;
+// under -race neither races and no pull is lost from the windows' tallies.
+func TestNodeReportTalliesWorklistPullsFromThePullLoopSafely(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, 0, t0)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 100 {
+			r.worklistPulled(true)
+		}
+	})
+	for i := range 50 {
+		got := readings(r.take(t0.Add(time.Duration(i+1) * time.Minute)))[writerclass.WorklistPullLossRatio]
+		if got != 0 && got != 1 {
+			t.Fatalf("every pull refused, yet a window read %v", got)
+		}
+	}
+	wg.Wait()
+	if got := readings(r.take(t0.Add(time.Hour)))[writerclass.WorklistPullLossRatio]; got != 1 {
+		t.Fatalf("after 100 refused pulls the ratio read %v, want 1", got)
+	}
+}

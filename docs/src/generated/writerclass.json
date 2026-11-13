@@ -139,6 +139,7 @@
       "tick-overrun-count",
       "webhook-post-count",
       "webhook-refusal-count",
+      "worklist-pull-loss-ratio",
       "worklist-task-count"
     ],
     "admits": [
