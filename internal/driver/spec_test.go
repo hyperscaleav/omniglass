@@ -12,11 +12,12 @@ import (
 // way the storage gateway does against the live catalogs: lanes for emitted
 // names, existence for command types and secret types.
 type fakeCatalog struct {
-	lanes     map[string]string // emitted name -> lane ("metric" | "property")
-	commands  map[string]bool
-	secrets   map[string]bool
-	calcOwned map[string]bool   // names a calc rule outputs
-	schemas   map[string][]byte // event type -> payload_schema
+	lanes          map[string]string // emitted name -> lane ("metric" | "property")
+	commands       map[string]bool
+	commandTargets map[string]bool // which commands have a target
+	secrets        map[string]bool
+	calcOwned      map[string]bool   // names a calc rule outputs
+	schemas        map[string][]byte // event type -> payload_schema
 }
 
 func (f fakeCatalog) LaneOf(name string) (string, bool) {
@@ -24,6 +25,7 @@ func (f fakeCatalog) LaneOf(name string) (string, bool) {
 	return lane, ok
 }
 func (f fakeCatalog) CommandTypeExists(name string) bool    { return f.commands[name] }
+func (f fakeCatalog) CommandHasTarget(name string) bool     { return f.commandTargets[name] }
 func (f fakeCatalog) SecretTypeExists(name string) bool     { return f.secrets[name] }
 func (f fakeCatalog) EventPayloadSchema(name string) []byte { return f.schemas[name] }
 func (f fakeCatalog) WriterClass(name string) writerclass.Class {
@@ -37,8 +39,9 @@ func catalog() fakeCatalog {
 			"model-number": "property",
 			"video-input":  "property",
 		},
-		commands: map[string]bool{"set-input": true, "reboot": true},
-		secrets:  map[string]bool{"snmp-community": true, "basic-auth": true},
+		commands:       map[string]bool{"set-input": true, "reboot": true},
+		commandTargets: map[string]bool{"set-input": true},
+		secrets:        map[string]bool{"snmp-community": true, "basic-auth": true},
 	}
 }
 

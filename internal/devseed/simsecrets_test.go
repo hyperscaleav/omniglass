@@ -88,3 +88,95 @@ func faceDemands(p *profile.DeviceProfile, secretType string, fields map[string]
 	}
 	return false
 }
+
+// TestPlantedSecretsAreNotReferencedBeneathTheirOwner: a node refuses a secret
+// name with more than one copy cascading onto a component (#820, it does not
+// rank them as the effective view does), so a name planted below the platform
+// must be referenced by no endpoint on a component the extra copy covers: the
+// location's whole subtree, or the one component. Every owner a fixture secret
+// names must also resolve, and sit over a platform copy to shadow.
+func TestPlantedSecretsAreNotReferencedBeneathTheirOwner(t *testing.T) {
+	t.Parallel()
+	doc, err := Fixtures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	locs, comps := map[string]string{}, map[string]string{}
+	parent, placed := map[string]string{}, map[string]string{}
+	for _, l := range doc.Locations {
+		locs[l.Key], parent[l.Key] = l.Key, l.Parent
+	}
+	for _, c := range append(append([]Component(nil), doc.Components...), doc.SimComponents...) {
+		comps[c.Key], placed[c.Key] = c.Key, c.Location
+	}
+	// covers: the component sits in the location (or is the component) the copy is owned by.
+	covers := func(s SimSecret, comp string) bool {
+		if s.OwnerKind == "component" {
+			return comp == s.Owner
+		}
+		for l := placed[comp]; l != ""; l = parent[l] {
+			if l == s.Owner {
+				return true
+			}
+		}
+		return false
+	}
+	platform := map[string]bool{}
+	for _, s := range doc.SimSecrets {
+		if s.OwnerKind == "" {
+			platform[s.Name] = true
+		}
+	}
+	attached := map[string]bool{}
+	for _, name := range simfleet.AttachSecret {
+		attached[name] = true
+	}
+	planted := 0
+	for _, s := range doc.SimSecrets {
+		if _, err := s.secretSpec(locs, comps); err != nil {
+			t.Error(err)
+			continue
+		}
+		if s.OwnerKind == "" {
+			continue
+		}
+		planted++
+		if !platform[s.Name] {
+			t.Errorf("%s is planted at %s %s with no platform copy beneath it", s.Name, s.OwnerKind, s.Owner)
+		}
+		if attached[s.Name] {
+			t.Errorf("%s is planted at %s %s, and the plan's attaches reference it on every component", s.Name, s.OwnerKind, s.Owner)
+		}
+		for _, e := range doc.SimEndpoints {
+			for _, ref := range e.Inputs {
+				if ref == s.Name && covers(s, e.Component) {
+					t.Errorf("%s is planted at %s %s, and the endpoint %q on %s references it: the node would refuse the ambiguous name",
+						s.Name, s.OwnerKind, s.Owner, e.Label, e.Component)
+				}
+			}
+		}
+	}
+	if planted == 0 {
+		t.Fatal("the fixture plants no secret below the platform")
+	}
+}
+
+// TestSecretSpecRejectsABadOwner: an owner the fixture does not declare, a
+// platform secret naming one, and an unknown kind each fail the seed loudly.
+func TestSecretSpecRejectsABadOwner(t *testing.T) {
+	t.Parallel()
+	ids := map[string]string{"room": "room-id"}
+	for name, s := range map[string]SimSecret{
+		"unknown key":      {Name: "x", OwnerKind: "location", Owner: "nope"},
+		"platform + owner": {Name: "x", Owner: "room"},
+		"unknown kind":     {Name: "x", OwnerKind: "system", Owner: "room"},
+	} {
+		if _, err := s.secretSpec(ids, ids); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	spec, err := SimSecret{Name: "x", OwnerKind: "component", Owner: "room"}.secretSpec(nil, ids)
+	if err != nil || spec.OwnerKind != "component" || spec.OwnerName == nil || *spec.OwnerName != "room-id" {
+		t.Errorf("component owner = %+v, %v", spec, err)
+	}
+}

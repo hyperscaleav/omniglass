@@ -129,6 +129,22 @@ describe("Profile bulk revoke", () => {
 //
 // The rule is now `tokenTtlError` and it is asserted THROUGH the surface, driving
 // the same rail button an operator clicks rather than calling the validator.
+describe("Profile form controls are labelled", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("resolves Username and Email inputs via getByLabelText for accessibility", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    mount(false);
+    // Both Username and Email inputs should be resolvable by their label text for screen readers.
+    const username = screen.getByLabelText("Username");
+    const email = screen.getByLabelText("Email");
+    expect(username).toBeTruthy();
+    expect(email).toBeTruthy();
+  });
+});
+
 describe("Profile token lifetime", () => {
   afterEach(() => vi.restoreAllMocks());
 

@@ -90,14 +90,46 @@ func seedComponentDependencies(ctx context.Context, gw storage.Gateway, actorID 
 	return nil
 }
 
-// SimSecret is a platform secret the simulated fleet's endpoints reference
-// (#1059): seeded with the simulated fleet only, beside the SNMP community,
-// so a fleet without the simulator (the docs screenshots) carries none.
+// SimSecret is a secret the simulated fleet's endpoints reference (#1059):
+// seeded with the simulated fleet only, beside the SNMP community, so a fleet
+// without the simulator (the docs screenshots) carries none. It is a platform
+// secret unless OwnerKind says otherwise (#168): "location" or "component",
+// with Owner the fixture KEY of that location or component. The same Name at
+// more than one tier is the planted cascade the effective-secrets view reads.
 type SimSecret struct {
 	Name       string            `yaml:"name"`
 	Label      string            `yaml:"label"`
 	SecretType string            `yaml:"secret_type"`
+	OwnerKind  string            `yaml:"owner_kind"`
+	Owner      string            `yaml:"owner"`
 	Fields     map[string]string `yaml:"fields"`
+}
+
+// secretSpec is the gateway spec for a fixture secret: a platform one when it
+// names no owner kind, else owned by the location or component its Owner key
+// resolves to (an id, a legal reference wherever a name is, ADR-0062).
+func (s SimSecret) secretSpec(locIDs, compIDs map[string]string) (storage.SecretSpec, error) {
+	spec := storage.SecretSpec{Name: s.Name, Label: s.Label, SecretType: s.SecretType, OwnerKind: "platform", Fields: s.Fields}
+	var ids map[string]string
+	switch s.OwnerKind {
+	case "", "platform":
+		if s.Owner != "" {
+			return spec, fmt.Errorf("devseed: platform secret %q names owner %q", s.Name, s.Owner)
+		}
+		return spec, nil
+	case "location":
+		ids = locIDs
+	case "component":
+		ids = compIDs
+	default:
+		return spec, fmt.Errorf("devseed: secret %q has owner_kind %q, want platform, location or component", s.Name, s.OwnerKind)
+	}
+	id, ok := ids[s.Owner]
+	if !ok {
+		return spec, fmt.Errorf("devseed: secret %q names unknown %s key %q", s.Name, s.OwnerKind, s.Owner)
+	}
+	spec.OwnerKind, spec.OwnerName = s.OwnerKind, &id
+	return spec, nil
 }
 
 // SimEndpoint is one more endpoint on a simulated component, beside the one
@@ -801,7 +833,10 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
 		return err
 	}
-	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
+	if err := seedSimEndpoints(ctx, gw, actorID, base, locIDs, compIDs, opts.SimPortOffset); err != nil {
+		return err
+	}
+	if err := seedSimSecrets(ctx, gw, actorID, base, locIDs, compIDs, true); err != nil {
 		return err
 	}
 	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
