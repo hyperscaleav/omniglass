@@ -1171,6 +1171,9 @@ earns its own tier only when composing the entity reads in the browser would be 
   else. A renderer draws a mark per component across the whole fleet, so a component **row** per
   mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
+  Beside the tiers it carries `open_alarms`, one number: the alarms open (not cleared) on the
+  components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
+  for a caller with no component read.
 - `GET /views/platform` (`node:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
   server's build and start time with its panel groups (each key's current figure, a key written

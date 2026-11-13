@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
@@ -474,7 +475,12 @@ func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcO
 		return err
 	}
 	if out.value != nil && out.err == "" && len(out.missing) == 0 {
-		if err := p.writeCalcOutput(ctx, tx, r, owner, out.value); err != nil {
+		err := p.writeCalcOutput(ctx, tx, r, owner, out.value)
+		var refused *calcOutputRefusal
+		if errors.As(err, &refused) {
+			// A rule outcome: nothing was written, and a retry cannot succeed.
+			out.value, out.err = nil, refused.Error()
+		} else if err != nil {
 			return err
 		}
 	}
@@ -868,8 +874,46 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 		return p.writeMetricSamples(ctx, tx, w, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 			Value: f, Source: calcSource, TS: ts}})
 	}
+	if err := checkCalcPropertyValue(ctx, tx, r, v); err != nil {
+		return err
+	}
 	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, false)
+}
+
+// calcOutputRefusal is a property output's value the property cannot hold: a
+// rule's outcome (recorded in its state), not a database fault, so it is not
+// retried.
+type calcOutputRefusal struct{ msg string }
+
+func (e *calcOutputRefusal) Error() string { return e.msg }
+
+// checkCalcPropertyValue holds a property output to the check ingest applies
+// (key.ValidateValue against the property's data type and validation), read
+// by the id the rule holds the output by. A refusal names the output key and
+// the validator's reason.
+func checkCalcPropertyValue(ctx context.Context, tx pgx.Tx, r CalcRule, v any) error {
+	var dataType string
+	var validation []byte
+	if err := tx.QueryRow(ctx, `select data_type, validation from property_type where id = $1::uuid`, r.outputID).Scan(&dataType, &validation); err != nil {
+		return fmt.Errorf("storage: calc output %s data type: %w", r.OutputKey, err)
+	}
+	// A json property holds the document the formatted text spells, as ingest
+	// validates it; string and bool hold the value itself.
+	var raw json.RawMessage
+	var err error
+	if dataType == "json" {
+		raw = json.RawMessage(rules.FormatCalcValue(v))
+	} else {
+		raw, err = json.Marshal(v)
+	}
+	if err == nil {
+		err = key.ValidateValue(dataType, raw, validation)
+	}
+	if err != nil {
+		return &calcOutputRefusal{msg: fmt.Sprintf("output %s refused %s: %v", r.OutputKey, rules.FormatCalcValue(v), err)}
+	}
+	return nil
 }
 
 // calcOutputRefresh is how old a metric calc output's newest row may grow
@@ -1096,9 +1140,7 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 // that no longer selects it drops its mark and state there. Selection is the
 // event rules' component matcher, the one the serve rechecks by.
 func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID string) error {
-	rows, err := tx.Query(ctx, `select r.id::text, r.selector, exists (select 1 from calc_rule_input i where i.rule_id = r.id and (
-			`+metricHeldSQL("$1::uuid", "i.metric_type_id")+`
-			or exists (select 1 from property x where x.component_id = $1::uuid and x.property_type_id = i.property_type_id)))
+	rows, err := tx.Query(ctx, `select r.id::text, r.selector, `+calcInputHeldSQL("r.id", "$1::uuid")+`
 		from calc_rule r where r.enabled and r.owner_kind = 'component' order by r.id`, componentID)
 	if err != nil {
 		return fmt.Errorf("storage: find component calc rules: %w", err)
@@ -1164,6 +1206,36 @@ func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID 
 	if _, err := tx.Exec(ctx, `delete from calc_rule_state where component_id = $2::uuid and rule_id = any($1::uuid[])`,
 		dropped, componentID); err != nil {
 		return fmt.Errorf("storage: drop deselected component calc state: %w", err)
+	}
+	return nil
+}
+
+// calcInputHeldSQL is the predicate that a component holds a stored value of
+// one of a calc rule's inputs, the condition a rule marks a component by:
+// rule and component are SQL expressions for their ids.
+func calcInputHeldSQL(rule, component string) string {
+	return `exists (select 1 from calc_rule_input i where i.rule_id = ` + rule + ` and (
+			` + metricHeldSQL(component, "i.metric_type_id") + `
+			or exists (select 1 from property x where x.component_id = ` + component + ` and x.property_type_id = i.property_type_id)))`
+}
+
+// markProductCalcRules is markComponentCalcRules for every component of a
+// product whose component_type changed (#1030), in one statement: every
+// enabled component rule that selects by type is marked on each of the
+// product's components holding a value of one of its inputs or a state row
+// of its own. Selection is not judged here: the serve rechecks it, computing
+// a rule the component came into and dropping the state of one it left, so a
+// product with thousands of components is one round trip.
+func markProductCalcRules(ctx context.Context, tx pgx.Tx, productID string) error {
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+		select r.id, 'component', c.id from calc_rule r join component c on c.product_id = $1::uuid
+		where r.enabled and r.owner_kind = 'component'
+			and jsonb_array_length(coalesce(r.selector->'component_types', '[]'::jsonb)) > 0
+			and (`+calcInputHeldSQL("r.id", "c.id")+`
+				or exists (select 1 from calc_rule_state st where st.rule_id = r.id and st.component_id = c.id))
+		order by r.id, c.id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, productID); err != nil {
+		return fmt.Errorf("storage: mark product calc rules: %w", err)
 	}
 	return nil
 }

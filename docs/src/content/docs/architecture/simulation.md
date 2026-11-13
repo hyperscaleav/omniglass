@@ -18,9 +18,8 @@ monitoring loop work against a fleet they can break on purpose.
 
 :::note[Partial]
 Built: the engine in `internal/sim` (ported from the retired omniglass-lab project, #886): the
-embedded catalog of device and system profiles, response templates and fleet manifests; the
-fleet compiler, which expands a manifest into devices with stable hostnames, serials and
-addresses; and the engine, which serves every protocol surface a device declares, with behaviors and
+embedded catalog of device profiles, surfaces and response templates; the identity helpers
+(`internal/sim/fleet`) that give a device its serial, MAC and address and name a system; and the engine, which serves every protocol surface a device declares, with behaviors and
 computed fields over shared state, follows a changing fleet in place, and reports every
 connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
@@ -51,15 +50,14 @@ Still `Design`: the Helm sidecar (#892).
 ## The catalog
 
 Everything a simulated device is comes from the embedded catalog (`internal/sim/profiles`), so
-the binary needs nothing on disk:
+the binary needs nothing on disk. The catalog holds devices and nothing above them: no room archetype
+and no fleet layout, because a simulated system is a system built to a standard
+([below](#adding-a-simulated-system), [fleets](#fleets)).
 
 - a **device profile** declares a model's identity, its protocol surfaces (protocol, port, auth, the
   routes, commands, OIDs and subscription subjects each one answers), its behaviors (values that
   drift on an interval), its computed fields (values derived on read, such as uptime from a boot
   epoch) and its default state;
-- a **system profile** declares a room archetype: which device profiles fill which roles;
-- an **fleet manifest** declares sites, buildings and rooms and which system profile fills each,
-  with an address block per site;
 - **templates** render responses from live state, so a device's HTTP status route and its CLI
   `show channels` read the same values.
 
@@ -122,10 +120,22 @@ rule the boot seed follows, and a test holds it to that.
 
 ## Fleets
 
-The compiler expands a manifest against the catalog into a flat device list. Every device gets a
-location-based hostname, a stable slug, a serial and MAC derived from the slug, and the next
-address in its site's block. A recompile of the same manifest yields the same fleet, so a
-simulated device keeps its identity across restarts.
+The catalog defines no fleet, only the devices a fleet is made of. A fleet is one of two things, and
+both are built from the platform's standards:
+
+- a **dev fleet**: the dev seed's own systems, each component a profile serves given an address and
+  endpoints on the dev node ([the dev fleet](#the-dev-fleet));
+- a **scale lab scenario**: a manifest (`internal/lab/scenario/manifests`) that names standards from the
+  template catalog, the system type each is classified under, the shipped catalog product filling each
+  of a standard's roles, and how many sites of which shape hold how many systems of each. It resolves
+  at a size to a plan, and the [lab](/guides/lab/#scale-lab-scenarios) seeds the plan. A product the
+  simulator does not serve is refused, so a scenario cannot invent a device.
+
+Neither has a vocabulary of its own: a role is a standard's role, a system type a registered one, a
+product a catalog product the catalog's device profiles serve. A device's identity is the one
+function of its id wherever it is listed: `fleet.Enrich` fills the blank hostname, serial, MAC and
+address a profile leaves, and the same id yields the same serial across restarts and reseeds.
+`fleet.NameGenerator` mints a system's friendly name, spread across its space and stable for a seed.
 
 ## One device, every protocol, one state
 
@@ -636,9 +646,11 @@ components from its next pull. The plan and the write are the **planned-system p
 [system template](/architecture/templates/) also builds on: the pure planner
 (`internal/systemplan`) takes each role's candidate products as an input (here the products the
 simulator serves), and the planned create (`storage.CreatePlan`) lands places, systems, their
-components, endpoints, declared values and role assignments in one transaction. The lab's room archetypes in the catalog (`profiles/systems`) remain
-only as the input of the simulator's internal fleet compiler (#914); they are not how an operator
-adds a system ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names)).
+components, endpoints, declared values and role assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
+fleet manifests are retired (#914), and a scale lab scenario is the same standards-plus-counts
+([fleets](#fleets)). The standard is the archetype
+([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names),
+[ADR-0914](/architecture/decisions/#adr-0914-the-simulator-catalog-carries-no-fleet-or-room-archetype-vocabulary)).
 
 ## In the console
 
