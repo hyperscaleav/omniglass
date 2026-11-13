@@ -169,6 +169,17 @@ describe("Rules page", () => {
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
   });
 
+  it("renders rule expressions without ligatures to show operators verbatim", async () => {
+    mount(admin, [reach], { state: false });
+    fireEvent.click(screen.getByText("Reachability lost"));
+    const b = await blade();
+    const expr = within(b).getByTestId("rule-fire-expr") as HTMLElement;
+    expect(expr).toBeTruthy();
+    // The element has the font-data class which applies font-variant-ligatures: none
+    // from app.css, rendering operators like !=, ==, >= verbatim without ligatures.
+    expect(expr.classList.contains("font-data")).toBe(true);
+  });
+
   it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
     const broken: EventRule = { ...hot, name: "broken", label: "Broken", enabled: true,
       criteria_error: { field: "fire_criteria", line: 1, column: 7, message: "invalid operation: > (mismatched types bool and float64)" } };

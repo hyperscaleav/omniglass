@@ -285,7 +285,7 @@
   --og-font-data: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 html { font-family: var(--og-font-ui); }
-.font-data, .mono, .tnum { font-family: var(--og-font-data); }
+.font-data, .mono, .tnum { font-family: var(--og-font-data); font-variant-ligatures: none; }
 .tnum { font-variant-numeric: tabular-nums; }
 html[data-type="mono"] { --og-font-ui: var(--og-font-data); }
 /* the brand wordmark reads better uppercase in the all-mono face. */

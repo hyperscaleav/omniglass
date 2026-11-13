@@ -531,7 +531,10 @@ Two families: **IBM Plex Sans** for UI text and **JetBrains Mono** for data, IDs
 by `--og-font-ui` and `--og-font-data` in `web/src/app.css`. Both are **self-hosted**. The console
 loads no stylesheet and preconnects to no host off its own origin, because a console that needs a
 third party to render is a console that renders wrong on the closed campus and AV networks this
-product is deployed into ([ADR-0121](/architecture/decisions/)).
+product is deployed into ([ADR-0121](/architecture/decisions/)). The data font renders with
+`font-variant-ligatures: none`, so operators like `!=`, `==`, and `>=` display verbatim without
+JetBrains Mono ligatures (≠, ═, ≥), ensuring they read correctly to screen readers and copy
+without substitution.
 
 The files are vendored under `web/public/fonts/`, which Vite copies verbatim into the build that
 `internal/webui/spa_embed.go` compiles into the binary, so the faces ship inside the one artifact and
