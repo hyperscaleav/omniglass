@@ -2131,7 +2131,9 @@ components:
           type: string
         inputs:
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
           description: The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest
           type: object
         label:
@@ -4655,6 +4657,10 @@ components:
           type:
             - array
             - "null"
+        open_alarms:
+          description: How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero
+          format: int64
+          type: integer
         systems:
           description: Every system the caller may read, each carrying its dots
           items:
@@ -4751,6 +4757,16 @@ components:
     HealthAlarmBody:
       additionalProperties: false
       properties:
+        acknowledged:
+          description: Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised
+          type: boolean
+        acknowledged_at:
+          description: When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+          format: date-time
+          type: string
+        acknowledged_by:
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          type: string
         component:
           description: The component the alarm is on, by name
           type: string
@@ -4773,6 +4789,7 @@ components:
         - severity
         - message
         - raised_at
+        - acknowledged
       type: object
     HealthOutputBody:
       additionalProperties: false
@@ -9106,6 +9123,12 @@ components:
         node:
           description: The node that probes this endpoint
           type: string
+        pending:
+          description: "Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"
+          enum:
+            - no-node
+            - awaiting-probe
+          type: string
         rejection:
           $ref: "#/components/schemas/ReachRejectionBody"
           description: The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds
@@ -9123,7 +9146,7 @@ components:
           type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
-          description: The latest reachability verdict, or null if none yet
+          description: The latest reachability verdict, or null if none yet (pending says why)
         webhook:
           $ref: "#/components/schemas/EndpointWebhookBody"
           description: "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
@@ -12870,7 +12893,9 @@ components:
           type: string
         inputs:
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
           description: "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"
           type: object
         label:
@@ -24059,7 +24084,7 @@ paths:
       x-omniglass-permission: vendor:rename
   /views/fleet:
     get:
-      description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read."
+      description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read."
       operationId: get-fleet-view
       responses:
         "200":

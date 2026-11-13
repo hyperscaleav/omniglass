@@ -5573,7 +5573,7 @@ export interface paths {
         };
         /**
          * Read the whole in-scope fleet in one call
-         * @description Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+         * @description Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
          */
         get: operations["get-fleet-view"];
         put?: never;
@@ -6922,7 +6922,7 @@ export interface components {
             driver?: string;
             /** @description The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest */
             inputs?: {
-                [key: string]: string;
+                [key: string]: string | number;
             };
             /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for */
             label?: string;
@@ -8348,6 +8348,11 @@ export interface components {
             readonly $schema?: string;
             /** @description Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read */
             locations: components["schemas"]["FleetLocationBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero
+             */
+            open_alarms?: number;
             /** @description Every system the caller may read, each carrying its dots */
             systems: components["schemas"]["FleetSystemBody"][] | null;
         };
@@ -8400,6 +8405,15 @@ export interface components {
             name: string;
         };
         HealthAlarmBody: {
+            /** @description Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised */
+            acknowledged: boolean;
+            /**
+             * Format: date-time
+             * @description When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+             */
+            acknowledged_at?: string;
+            /** @description Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+            acknowledged_by?: string;
             /** @description The component the alarm is on, by name */
             component: string;
             /** @description The component's uuid */
@@ -10821,6 +10835,11 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
+            /**
+             * @description Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+             * @enum {string}
+             */
+            pending?: "no-node" | "awaiting-probe";
             /** @description The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
             rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
@@ -10831,7 +10850,7 @@ export interface components {
             tls?: components["schemas"]["ReachTLSBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
-            /** @description The latest reachability verdict, or null if none yet */
+            /** @description The latest reachability verdict, or null if none yet (pending says why) */
             verdict: components["schemas"]["ReachVerdictBody"];
             /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
             webhook?: components["schemas"]["EndpointWebhookBody"];
@@ -12933,7 +12952,7 @@ export interface components {
             readonly $schema?: string;
             /** @description A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
             inputs?: {
-                [key: string]: string;
+                [key: string]: string | number;
             };
             /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
             label?: string;

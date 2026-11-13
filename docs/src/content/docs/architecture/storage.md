@@ -117,6 +117,19 @@ Column schemas live with each owning feature: [samples](/architecture/properties
   hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
   for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)
   for how scope and ambiguity are then decided against the resolved candidate set.
+- **A row lock that must cover a read is its own statement.** At READ COMMITTED a statement's
+  snapshot is taken when it begins, before it waits on a row lock, and when the lock is released only
+  the locked row is re-read: a correlated subquery in the same statement keeps what the old snapshot
+  saw. So `FOR UPDATE` on a resolving read serialises two writers without making the second read what
+  the first wrote (#709, the registry fork). The registry fork takes its lock in a statement of its
+  own (`lockRegistryRow`), and the read that follows is a new statement with a new snapshot. The label
+  recompute is the one place that keeps `FOR UPDATE` on its row scan, and why it may is recorded beside
+  it (#731): a label renders from the locked row's own columns, which the re-read refreshes, and from
+  facts resolved by separate statements after the scan, never from the scan's subquery columns. A
+  test pins that no label key reads one, and a contention test forces a recompute to wait mid-scan
+  while a product rename commits and shows that the scan's subqueries went stale and the label did
+  not. A component moved into a location while that location's label is edited is a separate window,
+  open as #1805.
 
 ## Migrations: three buckets, kept separate
 
@@ -184,7 +197,7 @@ the two in one migration. Three buckets, never conflated:
   gained the ability to read facts on OTHER rows: it is now a fleet-wide question the gateway
   answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
   rather than a list nobody updated passing
-  ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+  ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
@@ -736,6 +749,17 @@ the tasks name. The secret read walks the component and location chains once for
 each chain row carries the component it was walked up from, so a candidate secret covers only the
 component of its own reference, never a sibling's: the confinement a per-component resolve gave, kept
 in one statement. A shared credential (a location's, the platform's) unseals once per pull.
+
+The **component_type walk** is one statement too. Resolving a type's facts (stem, icon, abbrev, label
+rule, default tags) or asking whether it sits under another climbs `parent_id` through a single
+recursive query, bounded at 32 nodes, that returns the chain nearest first with each node's operator
+shadow beside it. The first-non-null fold and the per-node fork rule
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))
+run in Go over those rows, so the cost does not grow with the depth of the tree: the OAVC taxonomy's
+leaf, subcategory and category root
+([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional))
+cost what a flat registry did, and the label recompute and a generated-name create are held to the
+ceilings they had before it (#803).
 
 :::design[Embedded Postgres, tracked in #19]
 Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's

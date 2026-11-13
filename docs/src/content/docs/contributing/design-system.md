@@ -48,6 +48,16 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
   is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **Lists render in server order; the SQL rule is the ordering primitive.** A registry list the
+  API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
+  otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
+  only when the operator clicks a column header, and no page or picker re-sorts a served list.
+  A new registry list picks the order up by doing nothing. `byLabel` (`lib/entities.ts`) is the
+  same rule for a list the client composes itself, where no query ordered it, and its doc comment
+  names the call sites that remain. The two halves are held together by one committed fixture
+  (`web/src/lib/label_order.fixture.json`): a storage test orders it through the real query, a web
+  test through `byLabel`, and both assert the same sequence. Ordering by the *rendered* label
+  (falling back to the name for an unlabelled row) is a separate open decision.
 - **The fleet is an outline, not a list.** Explore renders `components/Outline.tsx`, an ARIA
   tree (roving tabindex, arrows, `*`, `+`) over the pure model in `lib/outline.ts`. Its rows
   iterate stable string keys, so a rebuild (a toggle, a health read arriving) keeps each row's
@@ -212,7 +222,7 @@ confirm whose body has to teach cannot be a native prompt.
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
-`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`PanelFooter`, `Badge`, `Page`, `Breadcrumb` (its crumbs are links), `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
 `BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
 the `Sidebar` / `TopBar` shell.
 
@@ -257,6 +267,10 @@ of the remaining pages is #784.
   is being edited, with the switch made once rather than per field. It takes the edit slot from
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
   provider (the tree pages render one body in both places).
+
+**A placeholder is not a label.** Every control gets its name from a `<label for>` (or an
+`aria-label` where no label is shown). A placeholder can say what an empty field means, but it is
+not the control's name: it vanishes once there is a value, and a screen reader cannot rely on it (#973).
 
 **A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
 as broken rather than as read-only, and an official-row blade rendered five of them at once, directly
@@ -346,6 +360,12 @@ select over a **hard-coded or generated list** (`PRODUCT_KINDS`, a settings fiel
 async gap to lose a value in. A select whose value **starts empty and only ever moves because the
 operator moved it** (a create form, an "Add a component..." picker) has nothing stored to lose, and
 its first option is the placeholder the fallback would land on anyway.
+
+`TreeSelect` is the third shape: it is a Kobalte Select, not a native `<select>`, and it does not use
+`bindSelectValue`. It derives the selected option from its `value` and its options together, so a
+value set before the options load selects once they arrive. The closed trigger shows the bare label
+(the indent and the `└` glyph are drawn by CSS on the open list, never typed into the text), with the
+ancestor path as muted context beside it.
 
 ### How an entity's identity reads
 

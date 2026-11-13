@@ -179,6 +179,10 @@ export type AlarmRow = {
   componentId: string | null;
   roleLabel: string;
   raisedAt: string;
+  // The acknowledgement the health read carries (#990), orthogonal to cleared.
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string;
 };
 
 export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null): AlarmRow[] {
@@ -197,6 +201,9 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         componentId: a.component_id || null,
         roleLabel: entityLabel(r),
         raisedAt: a.raised_at,
+        acknowledged: a.acknowledged ?? false,
+        acknowledgedAt: a.acknowledged_at ?? null,
+        acknowledgedBy: a.acknowledged_by ?? "",
       });
     }
   }

@@ -202,23 +202,42 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 	return nil
 }
 
+// seedSimSecrets lands the fixture's simulated secrets of one kind through the
+// gateway: the platform ones (planted false) or the copies planted below the
+// platform (planted true, #168), each owned by the location or component its
+// Owner key names. A secret that exists is kept, so a re-run changes nothing.
+func seedSimSecrets(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, locIDs, compIDs map[string]string, planted bool) error {
+	all := scope.Set{All: true}
+	for _, s := range doc.SimSecrets {
+		if (s.OwnerKind != "" && s.OwnerKind != "platform") != planted {
+			continue
+		}
+		spec, err := s.secretSpec(locIDs, compIDs)
+		if err != nil {
+			return err
+		}
+		if _, err := gw.CreateSecret(ctx, actorID, spec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
+			return fmt.Errorf("devseed: create simulated secret %s (%s): %w", s.Name, spec.OwnerKind, err)
+		}
+	}
+	return nil
+}
+
 // seedSimEndpoints lands the fixture's extra simulated endpoints (#1059): the
-// secrets they reference, then each endpoint as a driver attach at its
+// platform secrets they reference, then each endpoint as a driver attach at its
 // component's simulated address (the host an endpoint the plan gave it already
 // targets), the driver's declared port lifted as the simulator lifts it, on
 // the dev node, with its ssh host key pinned where the fixture names one
 // (#1078). Idempotent: a secret that exists is kept, and a component that
 // already holds an endpoint of the driver's transport is left alone, so a
 // re-run changes nothing. Runs after seedSimFleet, which gives every simulated
-// component its address.
-func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs map[string]string, portOffset int) error {
+// component its address. The copies planted below the platform (#168) are not
+// seeded here: an attach refuses a secret name that has more than one copy to
+// choose from (#820), so they land after every endpoint (seedSimSecrets).
+func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, locIDs, compIDs map[string]string, portOffset int) error {
 	all := scope.Set{All: true}
-	for _, s := range doc.SimSecrets {
-		if _, err := gw.CreateSecret(ctx, actorID, storage.SecretSpec{
-			Name: s.Name, Label: s.Label, SecretType: s.SecretType, OwnerKind: "platform", Fields: s.Fields,
-		}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
-			return fmt.Errorf("devseed: create simulated secret %s: %w", s.Name, err)
-		}
+	if err := seedSimSecrets(ctx, gw, actorID, doc, locIDs, compIDs, false); err != nil {
+		return err
 	}
 	if len(doc.SimEndpoints) == 0 {
 		return nil

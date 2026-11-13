@@ -9,6 +9,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { pickTree } from "../components/TreeSelect.testkit";
 
 // The Locations route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
@@ -250,8 +251,8 @@ describe("Locations create identity", () => {
     await waitFor(() => expect(key.value).toBe("room"));
     expect(screen.getByText(/Unique at the fleet root/)).toBeTruthy();
 
-    const parentSelect = screen.getByText("Root (no parent)").closest("select") as HTMLSelectElement;
-    fireEvent.change(parentSelect, { target: { value: hqB1.id } });
+    const parentSelect = screen.getByText("Root (no parent)").closest("button") as HTMLElement;
+    await pickTree(parentSelect, "HQ B1");
     await waitFor(() => expect(screen.getByText(/Unique under HQ \/ HQ B1/)).toBeTruthy());
     // Context only: the path never lands in the field the operator types into,
     // which still holds the name the route drafted.

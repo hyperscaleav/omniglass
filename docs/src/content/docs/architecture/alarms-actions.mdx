@@ -116,7 +116,7 @@ and a rule's open alarms.
 ## Acknowledgement: a fact about a person
 
 An alarm's **raised** state is a fact about its **condition**: the one-open invariant is per
-`(component, dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarm-carries-its-condition-identity)),
+`(component, dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)),
 and it is the condition, not a person, that decides whether the alarm is still up. An
 **acknowledgement** is a fact about a **person**: somebody has seen this. The two are therefore
 **orthogonal**, stored as two nullable columns rather than one `status` enum, and an alarm sits in
@@ -142,6 +142,12 @@ person:
   acknowledge), so a second acknowledgement keeps the first person and the first time and writes no
   second audit row, the same shape as a re-raise of an open condition returning the existing
   incident.
+
+The acknowledgement is readable wherever an alarm is read as a cause. A system's
+[health report](/architecture/health/) carries `acknowledged`, `acknowledged_at` and `acknowledged_by` on
+each role alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
+causing alarm in place, for an operator holding `alarm:acknowledge`, without opening each affected
+component (#990). It calls the same verb above; the strip refreshes with the report.
 
 **Un-acknowledging is not a verb.** If it turns out to matter, it is a second verb and a second
 decision, not a nullable field somebody flips
