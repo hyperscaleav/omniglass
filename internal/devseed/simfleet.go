@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"strings"
@@ -43,6 +44,18 @@ var simSecrets = []storage.SecretSpec{
 		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
 	{Name: simfleet.RecordingKeySecret, Label: "Simulated recording service api key", SecretType: "api-key",
 		OwnerKind: "platform", Fields: map[string]string{"key": "recording-lab-key"}},
+}
+
+// SimSecretSpecs is a copy of the platform secrets the simulated fleet's
+// attaches reference, for a harness that lands a simulated component through
+// the API rather than the dev seed (the lab's driver cost sweep, #1871).
+func SimSecretSpecs() []storage.SecretSpec {
+	out := make([]storage.SecretSpec, len(simSecrets))
+	for i, s := range simSecrets {
+		s.Fields = maps.Clone(s.Fields)
+		out[i] = s
+	}
+	return out
 }
 
 // seedSimFleet lands the plan through the gateway: the community secret,
