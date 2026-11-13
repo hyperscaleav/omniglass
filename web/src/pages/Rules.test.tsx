@@ -13,7 +13,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
-import { expressionText, typeExpression } from "../components/ExpressionField.testing";
+import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -95,13 +95,9 @@ const blade = () =>
     return el as HTMLElement;
   });
 
-// The expression editor loads CodeMirror lazily, and until its chunk mounts
-// "Fires when" labels a host div (non-labellable). The first test to open an
-// expression field used to pay the cold chunk transform inside its own wait,
-// which a loaded full run overran. Load the chunk once, before any test, so
-// every mount is warm and the wait below only covers the mount itself.
-beforeAll(() => import("../components/expressionEditorView"));
+beforeAll(warmExpressionEditor);
 
+// Until the editor mounts, "Fires when" labels a host div (non-labellable).
 const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
 
 function json(body: unknown, status = 200) {
