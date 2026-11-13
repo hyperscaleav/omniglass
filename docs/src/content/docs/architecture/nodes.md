@@ -880,6 +880,13 @@ itself, and only in the keys declared as its own. Figures the node reads every t
 the worst lateness and gap excess of the runs it dispatched, the spool depth, the sessions held by
 state, the Go process figures) go every tick; counts (dues met in flight, skipped intervals) go once
 per report window, every window, 0 when quiet, so a count returns to 0 after the window that had it.
+The [lane pool](#the-endpoint-lane)'s busy share, `worker-busy-fraction` (#1686), is a level read once
+per report window: the worker time spent running polls, probes, commands and runs, over the worker
+time the pool had (each dispatch window's length times its workers, summed), from 0 (idle) to 1
+(every worker busy all window). It is the node's headroom: near 1, dues start to wait for a worker.
+The node runs one pool for every kind of discrete work, so the figure carries the single instance
+`lane` rather than one per kind
+([ADR-1686](/architecture/decisions/#adr-1686-a-node-reads-one-busy-fraction-for-its-one-lane-pool)).
 The node hop's **delivery** goes the same way (#1659): per item kind as the instance,
 `delivery-in-count` (items that settled at the spool this window), `delivery-out-count` (the ones the
 stream acked) and `delivery-loss-ratio`, `(in - out) / in`, 0 when nothing came in. An item settles
@@ -984,12 +991,15 @@ because the last run was still in flight (`poll-skipped-count`), both landed onl
 over due is the endpoint's schedule loss, 0 when healthy. Each heartbeat window the dispatcher also
 keeps its own account: the longest pass (`tick-duration`), the dues that met their run in flight
 (`tick-overrun-count`), every due passed over (`schedule-skip-count`), the latest dispatch past its
-due (`dispatch-late-ms`), and the most workers busy (`worker-busy-count`) and dispatches waiting
-(`dispatch-queue-depth`) at once. The node sends them as its own platform metrics in the node-self
+due, and the pool's busy worker time. The node sends them as its own platform metrics in the node-self
 block ([above](#self-monitoring-the-node-reports-itself)), the latest dispatch as
 `schedule-lateness` and, beside it, the worst gap between two scheduled starts of a task off its
-interval as `schedule-gap-excess`; it also says the window in a `dispatch window` self-log line, only
-for a window that passed a due over, so a node keeping its schedule logs nothing.
+interval as `schedule-gap-excess`; the busy time adds up across the report window and lands once, when
+it ends, as `worker-busy-fraction`. The window's high-water
+marks, the most workers busy and dispatches waiting at once (`worker-busy-count`,
+`dispatch-queue-depth`), are not metrics: the node says them, with the window's other figures, in a
+`dispatch window` self-log line, only for a window that passed a due over or refused an operator's
+request, so a node keeping its schedule logs nothing.
 
 ::::design[Target design: a probe concurrency apart from the pool, a per-task deadline, and the remaining `node.self` counts, tracked in #1094 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
 The probes run at a **high fixed concurrency** (`gateConcurrency`) with short timeouts, so the cheap
