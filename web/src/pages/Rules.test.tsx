@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -95,8 +95,13 @@ const blade = () =>
     return el as HTMLElement;
   });
 
-// The expression editor loads CodeMirror lazily; until it mounts, "Fires when"
-// labels a host div, so under a loaded full run the default 1s wait is too short.
+// The expression editor loads CodeMirror lazily, and until its chunk mounts
+// "Fires when" labels a host div (non-labellable). The first test to open an
+// expression field used to pay the cold chunk transform inside its own wait,
+// which a loaded full run overran. Load the chunk once, before any test, so
+// every mount is warm and the wait below only covers the mount itself.
+beforeAll(() => import("../components/expressionEditorView"));
+
 const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
 
 function json(body: unknown, status = 200) {
