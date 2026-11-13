@@ -157,7 +157,7 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   every build. Two fields come from what the node published back, not from what an operator
   declared: an ssh or tls endpoint's key pin once the node trusts a key on first use, and the
   endpoint's last rejection. Each rides every task of its endpoint, so a fleet's first contact grows
-  each reply once, and the size then holds. On the 3,000-system corporate soak the headquarters
+  each reply once, and the size then holds until a pin is replaced or a gate moves. On the 3,000-system corporate soak the headquarters
   node learned 440 https pins in its first minute; its 4,831 https tasks gained 71 bytes each,
   taking the reply from 938 KB to 1,171 KB on the wire, past the 1 MB limit (#1872). Grouping the
   wire by endpoint carries each pin once (#1583).
