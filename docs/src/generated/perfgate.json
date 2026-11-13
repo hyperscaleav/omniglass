@@ -33,7 +33,7 @@
       "class": "exact",
       "tolerance": 0,
       "two_sided": false,
-      "about": "each node's worst share of worklist pulls the bus refused (#1868), per node"
+      "about": "each node's worst share of worklist pulls refused or unreadable (#1868), per node"
     },
     {
       "family": "delivery_unsettled_boots",
