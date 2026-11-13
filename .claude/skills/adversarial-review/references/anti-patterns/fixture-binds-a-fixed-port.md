@@ -28,6 +28,8 @@
   or an httptest server's address after closing it (a close in line or in a subtest, or a deferred
   close in a function that returns the address), with a short list of excused uses (a listen port
   the code under test must be told, picked again on a collision). It reads `Listen*` calls and
-  httptest servers only: a port released through a wrapper, such as a simulated face's
-  `StopTCPSession` and a restart on the same port, is a review cue, not a guard hit. The testcontainer form of the class is
+  httptest servers only; a port released through a wrapper, a simulated face's `StopTCPSession` and
+  a restart on the same port, is the guard `TestNoTestRestartsAFaceAtALiteralAddress`'s: it fails a
+  test that restarts a face at a literal loopback address (the sim package's own six are excused
+  until #1881). The testcontainer form of the class is
   `fixed-testcontainer-port`.
