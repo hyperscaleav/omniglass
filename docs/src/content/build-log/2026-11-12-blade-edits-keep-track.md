@@ -9,7 +9,8 @@ refreshes the system roles and health reads, so a system page no longer shows th
 staffing a role. A failed Save shows its reason in the footer beside Save (a new `SaveError`, fed by the
 edit slot) instead of only at the top of the form, and the blade footer no longer swallows the
 rejection. Leaving Configure with unsaved drafts asks first (`lib/leave_guard.ts`, asked by the tab
-rail): confirm discards, cancel stays. The Configure face is keyed on the route id in the system,
+rail), a component's staged membership changes counted among the drafts: confirm discards, cancel
+stays. The Configure face is keyed on the route id in the system,
 location and component pages, so moving to another entity starts a fresh edit. A component that staffs
 a role is still refused by the server with a 409, and the blade says so. Panel drafts (fields,
 tags) are not part of the dirty check yet.

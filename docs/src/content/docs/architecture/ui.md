@@ -240,7 +240,8 @@ hang off it (#854):
 3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
    asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
    discards the drafts; cancelling stays on Configure with them intact. The guard covers the form's
-   own drafts; a router-wide guard (a link out of the page, closing the tab) is not built.
+   own drafts, a component's staged memberships (a picked primary, a removed chip) included; a
+   router-wide guard (a link out of the page, closing the tab) is not built.
 
 A changed route id resets the edit too: each host keys its Configure face on the id
 (`<Show when={id()} keyed>`), so another place, system or component is a new face with a fresh slot and

@@ -212,8 +212,15 @@ export default function EntityForm(props: {
   };
 
   // What the drafts held when seeded, so the slot can say whether the operator
-  // has changed anything (the Configure tab asks before dropping them).
-  const draftState = () => JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName()]);
+  // has changed anything (the Configure tab asks before dropping them). The
+  // staged memberships count: a primary picked back to the server's own is no
+  // change, and an untouched primary never reads as one when the server's lands.
+  const stagedPrimary = () => {
+    const p = primaryDraft();
+    return p === undefined || p === serverPrimary() ? null : p;
+  };
+  const draftState = () =>
+    JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName(), stagedPrimary(), [...removedMembers()].sort()]);
   let seeded = "";
 
   slot.bind({
