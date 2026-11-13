@@ -95,10 +95,12 @@ const blade = () =>
     return el as HTMLElement;
   });
 
+// Until the editor mounts, "Fires when" labels a non-labellable host div; the
+// chunk is loaded once, before any test, so a test's wait covers only the
+// mount and not a cold load (see warmExpressionEditor).
 beforeAll(warmExpressionEditor);
 
-// Until the editor mounts, "Fires when" labels a host div (non-labellable).
-const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
+const firesWhen = () => screen.findByLabelText("Fires when");
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
