@@ -41,6 +41,9 @@ type nodeReport struct {
 	// had over the report window's dispatch windows: worker-busy-fraction
 	// (#1686).
 	pool poolWindow
+	// laneCount is how many lanes the pool runs (#1869), reported every
+	// window as lane-worker-count.
+	laneCount int
 	// flow is the items the spool settled in the window, per kind: in for
 	// every item a batch carried once it was acked or lost, out for the
 	// acked (#1659).
@@ -196,6 +199,13 @@ func (p *worklistPulls) lossRatio() float64 {
 	return float64(refused) / float64(attempts)
 }
 
+// lanes records how many lanes the pool runs, reported every window.
+func (r *nodeReport) lanes(n int) {
+	if r != nil {
+		r.laneCount = n
+	}
+}
+
 // worklist records the size of a worklist the node just installed.
 func (r *nodeReport) worklist(tasks int, at time.Time) {
 	if r == nil {
@@ -226,6 +236,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 		// One pool serves every kind of work today, so the fraction is
 		// the lane pool's (#1686); per-kind pools get an instance each.
 		r.sample(writerclass.WorkerBusyFraction, platformmetric.BusyFraction(r.pool.busy, r.pool.capacity), now, "lane")
+		r.sample(writerclass.LaneWorkerCount, float64(r.laneCount), now, "lane")
 		for _, rd := range r.flow.Readings() {
 			r.sample(rd.Key, rd.Value, now, rd.Instance)
 		}

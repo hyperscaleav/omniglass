@@ -4072,7 +4072,7 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 |---|---|---|---|
 | `--heartbeat` | duration | `30s` | heartbeat interval |
 | `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container) |
-| `--lane-workers` | int | `16` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS) |
+| `--lane-workers` | string | `auto` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled; auto sizes them from the CPU and memory the node may use (env OMNIGLASS_LANE_WORKERS) |
 | `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
 | `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
 | `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |

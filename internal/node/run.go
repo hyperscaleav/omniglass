@@ -66,7 +66,8 @@ type Config struct {
 	ProbeEvery time.Duration
 	// LaneWorkers is how many endpoint lanes run at once (#1634, #1249):
 	// each runs one request to its endpoint at a time, an operator's ahead
-	// of the scheduled. Zero is DefaultLaneWorkers.
+	// of the scheduled. Zero sizes them from the CPU and memory the node may
+	// use (#1869, AutoLaneWorkers).
 	LaneWorkers int
 	// WorklistEvery is how often the node pulls its worklist, on a goroutine
 	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
@@ -407,7 +408,10 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	d = newDispatcher(dispatchConfig{workers: cfg.LaneWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
+	lanes, lanesFrom := resolveLaneWorkers(cfg.LaneWorkers, AutoLaneWorkers)
+	logger.Info("lane workers", "facility", "collection", "workers", lanes, "source", lanesFrom)
+	self.lanes(lanes)
+	d = newDispatcher(dispatchConfig{workers: lanes, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})
 	coll.every, coll.wake = d.interval, d.kick
 	// Shutdown waits for the runs in flight before the sessions close

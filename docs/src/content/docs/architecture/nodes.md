@@ -657,9 +657,10 @@ Built (#1634, #1249,
 [ADR-1249](/architecture/decisions/#adr-1249-the-endpoint-lane-runs-one-request-at-a-time-operator-work-first),
 under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)):
 every discrete request the node makes rides **its endpoint's lane** on the node's bounded worker
-pool (`--lane-workers`, default 16, or `OMNIGLASS_LANE_WORKERS`). A lane is the unit of exclusion:
-one request in flight per endpoint, while two endpoints of one component, or of fifty, run side by
-side, so a slow device holds only its own lane. The node's work splits by shape:
+pool (`--lane-workers`, or `OMNIGLASS_LANE_WORKERS`, default `auto`, [below](#sizing-the-pool)). A
+lane is the unit of exclusion: one request in flight per endpoint, while two endpoints of one
+component, or of fifty, run side by side, so a slow device holds only its own lane. The node's work
+splits by shape:
 
 - **discrete work** rides the lane: scheduled polls and probes from the
   [dispatcher](#scheduling-concurrency-and-self-observability), and an operator's commands, run nows
@@ -707,6 +708,29 @@ component-wide exclusion, which keys that component's lane on the component, not
 flight to one endpoint comes only from a held session's declared pool size (#1254, default 1), since
 connection and order semantics differ per protocol.
 ::::
+
+
+### Sizing the pool
+
+Built (#1869, [ADR-1869](/architecture/decisions/#adr-1869-a-node-sizes-its-lane-pool-from-its-cpu-and-memory)):
+with `--lane-workers auto`, the default, a node sizes its pool from the CPU and memory it may use,
+not from a fixed count. The CPU count alone is the wrong measure, because a lane spends most of a
+run waiting on its device: a poll that costs a few milliseconds of CPU waits a couple of hundred on
+the answer, so one CPU keeps dozens of runs in flight. The node reads its limits from its cgroup
+(`cpu.max` and `memory.max`, the tightest of its own and every parent's, so a container's quota
+binds) and falls back to the host's CPUs and memory for any limit the cgroup leaves open, then takes
+the tighter of two bounds:
+
+- **CPU:** half the CPUs (the rest is the node's reports, worklist and sends) times a run's whole
+  time over its CPU time. At a run of 4.4 ms of CPU waiting 200 ms, about 23 lanes a CPU.
+- **Memory:** a quarter of the memory, at 1 MiB a lane.
+
+The result is clamped to 4 to 256: a node on a sliver of a CPU still runs a few endpoints at once,
+and one on a large host does not open more connections than a fleet's devices welcome. A number
+sets the pool outright. The node logs the count it took and why at boot (`lane workers`, with the
+limits it read and where it read each), and reports it as `lane-worker-count` under the instance
+`lane`, once per report window beside `worker-busy-fraction`, so the pool's size and how busy it is
+read side by side.
 
 ## Implicit reachability
 
@@ -909,6 +933,8 @@ The [lane pool](#the-endpoint-lane)'s busy share, `worker-busy-fraction` (#1686)
 per report window: the worker time spent running polls, probes, commands and runs, over the worker
 time the pool had (each dispatch window's length times its workers, summed), from 0 (idle) to 1
 (every worker busy all window). It is the node's headroom: near 1, dues start to wait for a worker.
+The pool's size lands beside it, `lane-worker-count` under the same instance, once per window
+([above](#sizing-the-pool)).
 The node runs one pool for every kind of discrete work, so the figure carries the single instance
 `lane` rather than one per kind
 ([ADR-1686](/architecture/decisions/#adr-1686-a-node-reads-one-busy-fraction-for-its-one-lane-pool)).
@@ -970,7 +996,7 @@ cost table that reads it against the process's own cgroup is #1871
 Built (#1634, under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)): each poll and probe runs on **its own interval**, from a dispatcher with a timer of
 its own, not on the heartbeat. Every task sits once in a due-time heap; the dispatcher sleeps until
 the earliest due, hands each due task to its endpoint's lane on the bounded worker pool
-(`--lane-workers`, default 16, [above](#the-endpoint-lane)), and books the task's next due.
+(`--lane-workers`, sized to the node by default, [above](#sizing-the-pool)), and books the task's next due.
 The heartbeat publishes liveness, pulls commands, ships the spool and takes the dispatcher's window;
 it sets no task's cadence
 ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own),

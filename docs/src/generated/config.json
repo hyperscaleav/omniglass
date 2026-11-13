@@ -138,8 +138,9 @@
   },
   {
    "key": "OMNIGLASS_LANE_WORKERS",
+   "default": "auto",
    "scope": "node",
-   "doc": "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"
+   "doc": "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted; auto sizes them from the CPU and memory the node may use"
   },
   {
    "key": "DOCKER_HOST",
