@@ -200,14 +200,19 @@ func (p *pendingSSH) Open(in Inbound, ch ChannelOptions) (HeldConn, error) {
 	// Bridge the channel onto a pipe whose near end keeps deadlines.
 	near, far := net.Pipe()
 	client := p.client
-	go func() {
+	// A bridge that panics ends the pipe, which ends the line reader.
+	endPipe := func(*PanicError) {
+		_ = far.Close()
+		_ = stdin.Close()
+	}
+	goSupervised("ssh bridge from "+p.target, func() {
 		_, _ = io.Copy(far, stdout)
 		_ = far.Close()
-	}()
-	go func() {
+	}, endPipe)
+	goSupervised("ssh bridge to "+p.target, func() {
 		_, _ = io.Copy(stdin, far)
 		_ = stdin.Close()
-	}()
+	}, endPipe)
 	conn := &sshChannelConn{Conn: near, close: func() {
 		_ = sess.Close()
 		_ = client.Close()

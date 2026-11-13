@@ -70,6 +70,18 @@ interfaces:
           - { path: configuration.webhook.secret, value: '{{ or .Request.Body.secret "" }}' }
           - { path: configuration.webhook.fault, value: '{{ or .Request.Body.fault "" }}', enum: ["", bad-signature, stale, redeliver] }
 
+      # A room joins the account, as the platform's admin adds one (#1747):
+      # the simulator calls this for each room a scale lab binds on the
+      # account's webhook endpoint, so the batched report names it. A room
+      # the account already knows keeps its call; a new one reads idle.
+      - match: "POST /api/rooms"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "Add a room to the account (idle until a meeting starts)", tags: [api, rooms] }
+        example: |
+          {"id": "hq-conf-1"}
+        mutations:
+          - { path: 'status.rooms.{{ segment .Request.Body.id }}.state', value: '{{ or (.State | get "status" | get "rooms" | get .Request.Body.id | get "state") "idle" }}', enum: [idle, in-call] }
+
       # A meeting starts in one room: the room's state flips and the
       # platform posts room.meeting.started naming the room by id. A room
       # id the account has not seen yet joins it (a room added on the
@@ -130,12 +142,33 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
+# The account's periodic digest (#1747): every thirty seconds it posts the
+# same batched rooms.state report the report route posts, so a scale lab's
+# account is heard on its own. Before the account is subscribed its target
+# is empty and nothing is sent.
+behaviors:
+  - name: rooms_report
+    schedule:
+      interval: 30s
+    emit:
+      url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+      body: '{"event":"rooms.state","rooms":[{{ $sep := "" }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}{"room_id":"{{ $id }}","state":"{{ index $r "state" }}"}{{ $sep = "," }}{{ end }}],"ts":{{ now }}}'
+      headers: { X-UCC-Event: rooms.state }
+      sign: *ucc-sign
+
 # How the simulator subscribes this service to its webhook endpoint (#1370,
 # ADR-1370): the subscribe route above, called with the endpoint's URL and
 # signing key when the service's component holds a webhook endpoint, as the
 # service's own admin would. A lab's posts flow from the start.
+#
+# driver and provision make it a scale lab's webhook sender (#1747): the lab
+# seeds a ucc-webhook endpoint on its component, and the simulator adds each
+# room bound on that endpoint to the account through the provision route, so
+# the account's periodic report names every bound room.
 webhook:
   subscribe: /api/webhooks
+  driver: ucc-webhook
+  provision: /api/rooms
 
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }

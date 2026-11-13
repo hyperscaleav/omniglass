@@ -87,6 +87,30 @@
    "deprecated": "OMNIGLASS_ENCRYPTION_KEY_FILE"
   },
   {
+   "key": "OMNIGLASS_SERVER_NAME",
+   "default": "the hostname",
+   "scope": "server",
+   "doc": "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"
+  },
+  {
+   "key": "OMNIGLASS_CLOSED_LOOP_BRACKET",
+   "default": "1m",
+   "scope": "server",
+   "doc": "how often the server brackets each node with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"
+  },
+  {
+   "key": "OMNIGLASS_CLOSED_LOOP_HEARTBEAT",
+   "default": "30s",
+   "scope": "server",
+   "doc": "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"
+  },
+  {
+   "key": "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY",
+   "default": "every check-in",
+   "scope": "server",
+   "doc": "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"
+  },
+  {
    "key": "OMNIGLASS_SERVER",
    "scope": "cli",
    "doc": "server base URL the CLI and the node use when --server is omitted, read when the command runs"
@@ -105,6 +129,17 @@
    "key": "OMNIGLASS_NODE_TOKEN",
    "scope": "node",
    "doc": "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"
+  },
+  {
+   "key": "OMNIGLASS_NODE_SESSION_DIALS",
+   "default": "16",
+   "scope": "node",
+   "doc": "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"
+  },
+  {
+   "key": "OMNIGLASS_LANE_WORKERS",
+   "scope": "node",
+   "doc": "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"
   },
   {
    "key": "DOCKER_HOST",
@@ -138,19 +173,14 @@
    "doc": "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"
   },
   {
-   "key": "OMNIGLASS_LAB_PUSH_TOKEN_HASH",
+   "key": "OMNIGLASS_LAB_PUSHER_TOKENS",
    "scope": "cli",
-   "doc": "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"
+   "doc": "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"
   },
   {
-   "key": "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX",
+   "key": "OMNIGLASS_SIM_PUSHERS",
    "scope": "cli",
-   "doc": "set by omniglass lab run for its seed one-off: the non-secret prefix of the simulated pusher's token, never set by hand"
-  },
-  {
-   "key": "OMNIGLASS_SIM_PUSH_TOKEN",
-   "scope": "cli",
-   "doc": "the simulated booking service's token, with which omniglass node run --simulate pushes a system's bookings to the server; set by omniglass lab run, read when the command runs and never printed by help"
+   "doc": "the outside actors omniglass node run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"
   },
   {
    "key": "OMNIGLASS_TEST_ADMIN_DSN",

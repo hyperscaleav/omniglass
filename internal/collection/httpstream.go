@@ -350,7 +350,10 @@ func (p *pendingStream) Open(in Inbound, _ ChannelOptions) (HeldConn, error) {
 		return nil, errors.New("collection: the stream opened with no answer")
 	}
 	c := &streamConn{conn: p.conn, body: p.resp.Body, in: in, format: p.format, resume: p.resume, resumedFrom: p.resumedFrom, done: make(chan struct{})}
-	go c.read()
+	goSupervised("stream reader "+p.target, c.read, func(pe *PanicError) {
+		c.die(pe)
+		_ = c.conn.Close()
+	})
 	return c, nil
 }
 

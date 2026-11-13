@@ -1,0 +1,80 @@
+{
+  "id": "watch-an-impaired-device",
+  "title": "Watch an impaired device",
+  "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "With a simulator connected, Platform health closes the loop. Every gap reads 0 and every device is drawing its polls.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "projector-1 is polled over snmp. Open it in its drawer on the Simulation page.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "type",
+      "caption": "Drop every packet toward it, in the kernel, before the simulated device sees it.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Save. The simulator applies it on its next pull.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "goto",
+      "caption": "Back on Platform health, the loop runs on. The window is the last 10 seconds on this lab.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "The node sent snmp requests the simulator never received. The gap opens, read as impaired, not lost.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "wait",
+      "caption": "Below, projector-1 reads impaired, and the snmp requests it received fall toward 0.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Open projector-1 again.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Repair it. Every request reaches it again.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "goto",
+      "caption": "The window still holds the change, so the gap still reads impaired.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "wait",
+      "caption": "Once the window slides past the change, the gap reads 0 and the attribution clears.",
+      "still": "step-11.png"
+    }
+  ],
+  "poster": "step-06.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 56.2,
+    "bytes": 1180911,
+    "previewBytes": 835778
+  }
+}

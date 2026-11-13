@@ -9,7 +9,8 @@ import (
 // A profile's webhook subscribe route (#1370) is a POST route it declares on
 // an http interface, so the simulator's subscribe call reaches the mutations
 // that point the service's posts at a receiver. Every profile that posts
-// webhooks (an emit whose url reads the configured target) declares one.
+// webhooks (an emit whose url reads the configured target) declares one, and
+// a provision route it names (#1747) is a POST route too.
 func TestEveryWebhookSenderDeclaresItsSubscribeRoute(t *testing.T) {
 	store, err := profile.LoadStoreFS(FS)
 	if err != nil {
@@ -43,6 +44,8 @@ func TestEveryWebhookSenderDeclaresItsSubscribeRoute(t *testing.T) {
 			t.Errorf("%s posts webhooks but declares no webhook.subscribe route, so the simulator cannot point it at its endpoint", name)
 		case p.Webhook != nil && !routes["POST "+p.Webhook.Subscribe]:
 			t.Errorf("%s webhook.subscribe %q names no POST route on its http interfaces", name, p.Webhook.Subscribe)
+		case p.Webhook != nil && p.Webhook.Provision != "" && !routes["POST "+p.Webhook.Provision]:
+			t.Errorf("%s webhook.provision %q names no POST route on its http interfaces, so the simulator cannot add a bound room", name, p.Webhook.Provision)
 		}
 	}
 	if senders == 0 {

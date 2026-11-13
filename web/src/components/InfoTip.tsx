@@ -1,4 +1,5 @@
 import { Tooltip } from "@kobalte/core/tooltip";
+import { A } from "@solidjs/router";
 import { Show, children, type JSX } from "solid-js";
 import { Info } from "./icons";
 
@@ -12,10 +13,14 @@ import { Info } from "./icons";
 // An optional href renders a "learn more" link at the end of the content and
 // widens the close delay so the pointer can travel into the tooltip to click it.
 //
+// An in-app href (`sameTab`) opens in the console itself, through the router's
+// link (so it carries the console's base, /web): a platform panel's key points
+// at its series on the server's component.
+//
 // Children replace the (i) with a trigger of their own (a ladder rung's chip,
 // #1059), styled by `class`; the label is then the trigger's whole accessible
 // name rather than "More about" it, since the chip is the thing being named.
-export default function InfoTip(props: { text: string; label?: string; href?: string; hrefText?: string; class?: string; children?: JSX.Element }) {
+export default function InfoTip(props: { text: string; label?: string; href?: string; hrefText?: string; sameTab?: boolean; class?: string; children?: JSX.Element }) {
   // Resolved once: reading props.children twice (the branch, then the slot)
   // would build the trigger's content twice.
   const trigger = children(() => props.children);
@@ -41,15 +46,23 @@ export default function InfoTip(props: { text: string; label?: string; href?: st
         <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-base-content shadow-lg">
           {props.text}
           <Show when={props.href}>
-            {" "}
-            <a
-              href={props.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link link-primary whitespace-nowrap font-medium"
-            >
-              {props.hrefText ?? "Learn more"} &#8599;
-            </a>
+            {(href) => (
+              <>
+                {" "}
+                <Show
+                  when={props.sameTab}
+                  fallback={
+                    <a href={href()} target="_blank" rel="noopener noreferrer" class="link link-primary whitespace-nowrap font-medium">
+                      {props.hrefText ?? "Learn more"} {"\u2197"}
+                    </a>
+                  }
+                >
+                  <A href={href()} class="link link-primary whitespace-nowrap font-medium">
+                    {props.hrefText ?? "Learn more"} {"\u2192"}
+                  </A>
+                </Show>
+              </>
+            )}
           </Show>
         </Tooltip.Content>
       </Tooltip.Portal>

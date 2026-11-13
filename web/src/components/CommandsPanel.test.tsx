@@ -165,6 +165,19 @@ describe("CommandsPanel", () => {
     expect(detail.textContent).toContain("dev");
   });
 
+  it("tells a redelivered command's first delivery and how many times a node took it", () => {
+    const issued = Date.now() - 70_000;
+    const iso = (ms: number) => new Date(issued + ms).toISOString();
+    mount({
+      rows: [command({ id: 5, phase: "awaiting-reply", issued_at: iso(0), first_delivered_at: iso(2000), delivered_at: iso(62_000), delivery_count: 3 })],
+    });
+    fireEvent.click(within(screen.getByTestId("command-5")).getByRole("button", { name: /Details of set-volume command 5/ }));
+    const detail = within(screen.getByTestId("command-5")).getByTestId("command-detail");
+    const delivered = within(detail).getAllByRole("listitem").find((li) => li.dataset.step === "delivered")!;
+    expect(delivered.textContent).toContain("+1m 2s");
+    expect(within(delivered).getByTestId("command-delivery-note").textContent).toBe("delivered 3 times, first +2.0s");
+  });
+
   it("shows an observation-settled command's sample, with no wire it never rode", () => {
     mount();
     fireEvent.click(within(screen.getByTestId("command-2")).getByRole("button", { name: /Details of set-input/ }));

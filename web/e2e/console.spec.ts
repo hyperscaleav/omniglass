@@ -285,8 +285,11 @@ test.describe("operator console", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
     await expect(page.getByTestId("place-card")).toBeVisible();
     // The Explore crumb goes back up to where you were: the outline opened
-    // down to this row and selected.
-    await page.getByTestId("breadcrumb").getByRole("button", { name: "Explore" }).click();
+    // down to this row and selected. The crumb is a link (#875), its
+    // address in the DOM.
+    const exploreCrumb = page.getByTestId("breadcrumb").getByRole("link", { name: "Explore" });
+    await expect(exploreCrumb).toHaveAttribute("href", `/web/explore?node=${systemId}`);
+    await exploreCrumb.click();
     await page.waitForURL(new RegExp(`/web/explore\\?node=${systemId}$`));
     await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
@@ -372,5 +375,180 @@ test.describe("operator console", () => {
     await expect(blade).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/action-rules/${rule}`)).status()).toBe(404);
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
+  });
+
+  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per node", async ({ page }) => {
+    await page.goto("/web/");
+    const tile = page.getByTestId("home-platform");
+    await expect(tile).toContainText(/not up/);
+    await tile.click();
+    await page.waitForURL(/\/web\/platform$/);
+
+    // The header: the build the server booted, how long it has been up, and the
+    // platform system's verdict, all read from the platform's own components.
+    const header = page.getByTestId("platform-header");
+    await expect(header.getByTestId("platform-version").first()).not.toHaveText(/not reported/);
+    await expect(header.getByTestId("platform-uptime").first()).not.toHaveText(/not reported/);
+    await expect(header.getByTestId("platform-verdict")).toContainText(/healthy|incomplete|degraded|outage/);
+    await expect(page.getByTestId("platform-lab")).toBeVisible();
+
+    // A row for every enrolled node, and a checkin figure on each that has
+    // checked in (the empty scenario enrolls none; the read-platform-health
+    // walkthrough drives a live row).
+    const nodes = (await (await page.request.get("/api/v1/nodes")).json()) as {
+      nodes?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
+    };
+    for (const n of (nodes.nodes ?? []).filter((x) => x.enrolled)) {
+      const row = page.getByTestId(`platform-node-${n.name}`);
+      await expect(row).toBeVisible();
+      if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
+    }
+  });
+
+  // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
+  // with its node and the simulator beside it, nothing impaired. Once the ring
+  // holds a window the section reads measured for every node, and a healthy
+  // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
+  // sim does not observe the hop), and every protocol with a poll target
+  // reached the simulator: requests it received, or, for a probe that only
+  // connects or logs in and asks nothing (ssh, telnet), connections its
+  // listener accepted.
+  test("platform health @simulator: every simulated node reads measured, no gap open, every polled protocol reached", async ({ page }) => {
+    test.skip(!process.env.OG_E2E_SIMULATOR, "needs a lab with a simulator (run.sh's second phase)");
+    test.setTimeout(150_000);
+    await page.goto("/web/platform");
+    const section = page.getByTestId("platform-simulation");
+    await expect(section).toBeVisible({ timeout: 30_000 });
+    const cards = section.locator("[data-testid^=platform-sim-][data-state]");
+    await expect(cards.first()).toBeVisible({ timeout: 30_000 });
+
+    // The ring fills: a window and the bracket after it, at the lab's bracket,
+    // over a fleet the scenario has finished seeding (a window bracketed
+    // before its poll tasks existed counts no target).
+    await expect
+      .poll(
+        async () =>
+          (
+            await cards.evaluateAll((els) =>
+              els.map((e) => {
+                const polled = [...e.querySelectorAll("[data-testid=platform-sim-protocol]")].some((r) => Number(r.getAttribute("data-poll-targets")) > 0);
+                return `${e.getAttribute("data-state")}${polled ? " polled" : ""}`;
+              }),
+            )
+          ).join(","),
+        { timeout: 120_000, intervals: [2_000] },
+      )
+      .toMatch(/^measured polled(,measured polled)*$/);
+
+    for (const card of await cards.all()) {
+      const node = await card.getAttribute("data-testid");
+      const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
+        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
+      );
+      expect(gaps.length, `${node} reads its gaps`).toBeGreaterThan(0);
+      for (const g of gaps) expect(["0", ""], `${node} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+
+      const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
+        els.map((e) => ({
+          protocol: e.getAttribute("data-protocol"),
+          targets: Number(e.getAttribute("data-poll-targets")),
+          accepted: Number(e.getAttribute("data-accepted")),
+          received: Number(e.getAttribute("data-received")),
+        })),
+      );
+      expect(polled.filter((p) => p.targets > 0).length, `${node} has a polled protocol`).toBeGreaterThan(0);
+      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${node} received a polled request`).toBe(true);
+      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${node} ${p.protocol} received or accepted`).toBeGreaterThan(0);
+    }
+  });
+
+  test("platform health: where work is lost draws every hop the view serves, its ratio 0 for every kind it carried, and lists each hop's components", async ({ page }) => {
+    type Figure = { in: number; out: number; loss?: number };
+    type Pipeline = {
+      hops: { id: string; label: string; kinds: { kind: string; last_hour: Figure }[] | null; total: { last_hour: Figure }; by_component: { name: string }[] | null }[] | null;
+    };
+    await page.goto("/web/platform");
+    const flow = page.getByTestId("pipeline");
+    await expect(flow).toBeVisible();
+
+    // The hops are the view's, in its order; the empty scenario enrolls no node,
+    // so a hop here may carry nothing yet (not reported, never a fake 0) and the
+    // find-where-work-is-lost walkthrough drives the live figures on the dev lab.
+    const view = (await (await page.request.get("/api/v1/views/platform")).json()) as { pipeline?: Pipeline };
+    const hops = view.pipeline?.hops ?? [];
+    expect(hops.length).toBeGreaterThan(0);
+    await expect(flow.locator("[data-hop]")).toHaveCount(hops.length);
+    for (const [i, h] of hops.entries()) {
+      const button = flow.locator("[data-hop]").nth(i);
+      await expect(button).toHaveAttribute("data-hop", h.id);
+      await expect(button).toContainText(h.label);
+      const carried = (h.kinds ?? []).filter((k) => k.last_hour.in > 0);
+      if (carried.length === 0) {
+        await expect(button.getByTestId("hop-loss")).toHaveText(/not reported|nothing in/);
+        continue;
+      }
+      // A hop that took work in shows a nonzero in and a 0% ratio, for all kinds
+      // summed and for each kind it carried.
+      await expect(button.getByTestId("hop-in")).not.toHaveText("0");
+      await expect(button.getByTestId("hop-loss")).toHaveText("0%");
+      for (const k of carried) {
+        await flow.getByRole("group", { name: "Kind" }).getByRole("button", { name: new RegExp(`^${k.kind}$`, "i") }).click();
+        await expect(button.getByTestId("hop-loss")).toHaveText("0%");
+      }
+      await flow.getByRole("group", { name: "Kind" }).getByRole("button", { name: "All" }).click();
+
+      // Selecting the hop opens its explainer, a row per component that records it.
+      await button.click();
+      const detail = flow.getByTestId("pipeline-hop-detail");
+      await expect(detail).toContainText(h.label);
+      for (const c of h.by_component ?? []) await expect(detail.getByTestId(`pipeline-component-${c.name}`)).toBeVisible();
+      await button.click();
+      await expect(detail).toHaveCount(0);
+    }
+  });
+
+  test("platform health: after a report window each server panel shows a figure and the ingest lag sparkline has points", async ({ page }) => {
+    // A report window is a minute by default; the first lands one window after
+    // boot, the ingest lag one window after a batch commits.
+    test.setTimeout(240_000);
+
+    // The empty scenario runs no node, so nothing is ingested on its own: push
+    // one sample through the ingest lane, a few seconds old, so the server has a
+    // lag to report.
+    const name = `e2e-ingest-${Date.now()}`;
+    expect((await page.request.post("/api/v1/components", { data: { name, product: "generic-device" } })).ok()).toBeTruthy();
+    const pushed = await page.request.post("/api/v1/telemetry:push", {
+      data: {
+        owner: { kind: "component", ref: name },
+        metrics: [{ name: "room-temperature", value: 21.5, ts: new Date(Date.now() - 3_000).toISOString() }],
+      },
+    });
+    expect(pushed.status()).toBe(202);
+
+    // Wait out the window on the view the page reads, not on the page.
+    type View = { servers?: { groups?: { name: string; figures?: { key: string }[] }[] }[] };
+    await expect
+      .poll(
+        async () => {
+          const v = (await (await page.request.get("/api/v1/views/platform")).json()) as View;
+          const groups = v.servers?.[0]?.groups ?? [];
+          const reported = (g: string) => (groups.find((x) => x.name === g)?.figures ?? []).length > 0;
+          const lag = (groups.find((x) => x.name === "ingest")?.figures ?? []).some((f) => f.key === "ingest-lag");
+          return ["requests", "ingest", "queues", "retention"].every(reported) && lag;
+        },
+        { timeout: 200_000, intervals: [5_000] },
+      )
+      .toBe(true);
+
+    await page.goto("/web/platform");
+    const set = page.locator("[data-testid^=server-panels-]").first();
+    await expect(set).toHaveAttribute("open", "");
+    for (const panel of ["requests", "ingest", "queues", "retention"]) {
+      const rows = set.getByTestId(`server-panel-${panel}`).locator("tr[data-testid^=panel-row-]");
+      await expect(rows.filter({ hasNotText: /not reported/ }).first()).toBeVisible();
+    }
+    await expect(set.locator("tr[data-testid=panel-row-ingest-lag] [data-testid=sparkline]")).toBeVisible();
+
+    expect((await page.request.delete(`/api/v1/components/${name}`)).ok()).toBeTruthy();
   });
 });

@@ -70,6 +70,18 @@ var Registry = []Var{
 		Doc: "the encryption key's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
 	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server", Deprecated: "OMNIGLASS_ENCRYPTION_KEY_FILE",
 		Doc: "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
+	{Key: "OMNIGLASS_SERVER_NAME", Default: "the hostname", Scope: "server",
+		Doc: "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"},
+	// The closed loop on Platform health (#1647, ADR-1647): how often the
+	// server brackets each node with a simulator, and the cadence it assumes
+	// for those nodes, which it is not told. omniglass lab run sets all three
+	// from its cadence profile.
+	{Key: "OMNIGLASS_CLOSED_LOOP_BRACKET", Default: "1m", Scope: "server",
+		Doc: "how often the server brackets each node with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"},
+	{Key: "OMNIGLASS_CLOSED_LOOP_HEARTBEAT", Default: "30s", Scope: "server",
+		Doc: "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"},
+	{Key: "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY", Default: "every check-in", Scope: "server",
+		Doc: "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",
@@ -78,6 +90,10 @@ var Registry = []Var{
 		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
 	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
 		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
+	{Key: "OMNIGLASS_NODE_SESSION_DIALS", Default: "16", Scope: "node",
+		Doc: "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"},
+	{Key: "OMNIGLASS_LANE_WORKERS", Scope: "node",
+		Doc: "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"},
 	// omniglass lab run finds its Docker daemon the way the docker CLI does
 	// (#1194): these three, then the platform's default socket or pipe.
 	{Key: "DOCKER_HOST", Scope: "cli",
@@ -92,12 +108,10 @@ var Registry = []Var{
 		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
 	{Key: "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES", Scope: "cli",
 		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"},
-	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_HASH", Scope: "cli",
-		Doc: "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"},
-	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX", Scope: "cli",
-		Doc: "set by omniglass lab run for its seed one-off: the non-secret prefix of the simulated pusher's token, never set by hand"},
-	{Key: "OMNIGLASS_SIM_PUSH_TOKEN", Scope: "cli",
-		Doc: "the simulated booking service's token, with which omniglass node run --simulate pushes a system's bookings to the server; set by omniglass lab run, read when the command runs and never printed by help"},
+	{Key: "OMNIGLASS_LAB_PUSHER_TOKENS", Scope: "cli",
+		Doc: "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"},
+	{Key: "OMNIGLASS_SIM_PUSHERS", Scope: "cli",
+		Doc: "the outside actors omniglass node run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

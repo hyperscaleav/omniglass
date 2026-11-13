@@ -66,7 +66,8 @@ type propertySet struct {
 // writePropertySamples is the property lane's sample-write path for one
 // writer, in the caller's transaction (writePropertySets).
 func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite, transitionOnly bool) error {
-	return p.writePropertySets(ctx, tx, []propertySet{{w: w, evs: evs}}, transitionOnly)
+	_, err := p.writePropertySets(ctx, tx, []propertySet{{w: w, evs: evs}}, transitionOnly)
+	return err
 }
 
 // propertyOwnerKinds is the order a property batch lands its owner kinds in,
@@ -92,10 +93,10 @@ var propertyOwnerKinds = []string{"component", "system", "location", "node"}
 // owner kind in one statement (#1582), so a tick of many task groups costs
 // the statements of one; a series it carries more than once lands one row at
 // a time, in order, so each row's guard reads the row before it.
-func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySet, transitionOnly bool) error {
+func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySet, transitionOnly bool) (coalesced int, err error) {
 	w, err := sharedWriter(writeProperty, sets, func(s propertySet) KeyWriter { return s.w })
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var evs []PropertySampleWrite
 	var arcs []string
@@ -105,7 +106,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		rows := make([]keyedWrite, len(setEvs))
 		for i, ev := range setEvs {
 			if _, err := ownerColumn(ev.OwnerKind); err != nil {
-				return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+				return 0, fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
 			// The arc stores the owner's primary key. Resolving here, once per
 			// row (mirrors InsertMetricSamples/InsertEvents/InsertLogLines),
@@ -117,7 +118,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 			// collection hot path.
 			arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
 			if err != nil {
-				return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+				return 0, fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
 			arcs = append(arcs, arc)
 			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
@@ -126,37 +127,37 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		// Every row is held to its key's writer class, and to the owner it will
 		// land on, before anything lands.
 		if err := admitWrites(ctx, tx, writeProperty, set.w, rows); err != nil {
-			return err
+			return 0, err
 		}
 		evs = append(evs, setEvs...)
 	}
 	if len(evs) == 0 {
-		return nil
+		return 0, nil
 	}
 	if transitionOnly {
 		if err := lockPropertySeries(ctx, tx, evs, arcs); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	// Settlement only cares about properties a command type targets; learn
 	// which once per batch, and read the transaction's clock once.
 	now, err := dbNow(ctx, tx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	targeted, err := commandTargetedProperties(ctx, tx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// The event rules reading this batch's keys judge each sample as it lands
 	// (#919), in this transaction.
 	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// Marked before any sample lands (writeMetricSets says why).
 	if err := p.markCalcPending(ctx, tx, marks, w.rule()); err != nil {
-		return err
+		return 0, err
 	}
 	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
 	clock := sampleClock{q: tx, now: now}
@@ -167,7 +168,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 			ts = time.Now().UTC()
 		}
 		if stamps[i], err = clock.cap(ctx, ev.Key, ts); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	carried := make(map[string]int, len(evs))
@@ -254,7 +255,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 			}
 		}
 		if err := insert(kind, once); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	// An observation may be what a pending command was waiting on: the owners
@@ -274,41 +275,42 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 				where exists (select 1 from command c where c.status = 'issued' and c.owner_kind = t.kind
 					and coalesce(c.component_id, c.system_id, c.location_id, c.node_id) = t.arc::uuid)`, kinds, owners)
 			if err != nil {
-				return fmt.Errorf("storage: owners awaiting a command: %w", err)
+				return 0, fmt.Errorf("storage: owners awaiting a command: %w", err)
 			}
 			for rows.Next() {
 				var ord int64
 				if err := rows.Scan(&ord); err != nil {
 					rows.Close()
-					return err
+					return 0, err
 				}
 				settles[at[ord-1]] = true
 			}
 			rows.Close()
 			if err := rows.Err(); err != nil {
-				return fmt.Errorf("storage: owners awaiting a command: %w", err)
+				return 0, fmt.Errorf("storage: owners awaiting a command: %w", err)
 			}
 		}
 	}
 	for i, ev := range evs {
 		if carried[propertySeriesLockKey(ev.OwnerKind, arcs[i], ev.Key, ev.Instance)] > 1 {
 			if err := insert(ev.OwnerKind, []int{i}); err != nil {
-				return err
+				return 0, err
 			}
 		}
 		if !landed[i] {
+			coalesced++
 			continue // an unchanged value: the series is transition-only
 		}
 		if settles[i] {
 			if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, now); err != nil {
-				return err
+				return 0, err
 			}
 		}
 		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, stamps[i], ev.Value); err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return eval.stampJudged(ctx, tx)
+	return coalesced, eval.stampJudged(ctx, tx)
 }
 
 // lockPropertySeries takes the transition lock of every property series the

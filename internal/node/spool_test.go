@@ -3,8 +3,10 @@ package node
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -12,9 +14,10 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
+	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // The node's telemetry spool (#454, folded into #453): a batch the stream has
@@ -360,10 +363,19 @@ func TestSpoolBoundsItsBytes(t *testing.T) {
 	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
 	at := time.Unix(1_000_000, 0)
 	s.now = func() time.Time { return at }
-	one, _ := proto.Marshal(&ogv1.TelemetryBatch{NodeId: "edge", Ts: timestamppb.New(at), Groups: []*ogv1.TaskGroup{tagged("b1")}})
-	s.maxBytes = 2*len(one) + 1
 	queueTagged(t, s, "b1")
 	waitIdle(t, s)
+	// The batches behind b1 carry a ledger up to four bytes longer (their
+	// metric offset and resolved are no longer 0, #1641), and once b1 is
+	// dropped up to 40 more naming the drop (#1692), so the cap holds two of
+	// them and never three.
+	s.mu.Lock()
+	size := len(s.queue[0].data)
+	if 3*size <= 2*(size+4+40)+1 {
+		t.Fatalf("a batch of %d bytes is too small for the cap to tell two from three", size)
+	}
+	s.maxBytes = 2*(size+4+40) + 1
+	s.mu.Unlock()
 	for i := 2; i <= 4; i++ {
 		queueTagged(t, s, fmt.Sprintf("b%d", i))
 	}
@@ -897,5 +909,303 @@ func TestSpoolShipsPushedSamplesAtOnce(t *testing.T) {
 	}
 	if got := batches[0].GetGroups()[1].GetTaskId(); got != "pushed" {
 		t.Fatalf("second group is task %q, want the pushed one", got)
+	}
+}
+
+// TestSpoolTalliesEveryBatchAcknowledgedOrDropped (#1639): the lab reconciles
+// what the node published against what landed, so the spool counts each batch
+// the stream acknowledged and each it gave up on, an overflow or a refusal.
+// A retry of a held batch is not counted twice.
+func TestSpoolTalliesEveryBatchAcknowledgedOrDropped(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{down: true}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	tally := collection.NewRequestTally()
+	s.tally = tally
+	s.maxBatches = 3
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	for i := 2; i <= 5; i++ {
+		queueTagged(t, s, fmt.Sprintf("b%d", i))
+	}
+	tick(t, s) // still down: a retry counts nothing
+	pub.setDown(false)
+	tick(t, s)
+	snap := tally.Snapshot(time.Now())
+	if snap.BatchesAcknowledged != 3 || snap.BatchesDropped != 2 {
+		t.Fatalf("acknowledged %d dropped %d, want 3 and 2", snap.BatchesAcknowledged, snap.BatchesDropped)
+	}
+}
+
+func TestSpoolTalliesARefusedBatchAsDropped(t *testing.T) {
+	t.Parallel()
+	publish := func(string, []byte, string) (ackWait, error) { return nil, nats.ErrMaxPayload }
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
+	tally := collection.NewRequestTally()
+	s.tally = tally
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	snap := tally.Snapshot(time.Now())
+	if snap.BatchesAcknowledged != 0 || snap.BatchesDropped != 1 {
+		t.Fatalf("acknowledged %d dropped %d, want 0 and 1", snap.BatchesAcknowledged, snap.BatchesDropped)
+	}
+}
+
+// ledgers is the delivery ledger of every batch the stream stored, in order.
+func (p *stubPublisher) ledgers(t *testing.T) []delivery.Stamp {
+	t.Helper()
+	var out []delivery.Stamp
+	for _, ev := range p.shippedBatches(t) {
+		if ev.GetLedger() == nil {
+			t.Fatal("a shipped batch carries no delivery ledger")
+		}
+		out = append(out, delivery.FromProto(ev.GetLedger()))
+	}
+	return out
+}
+
+// TestSpoolStampsOneBootAndADenseSeq (#1641): every batch a spool ships,
+// flushed groups and whole batches sent alike, carries the spool's one boot
+// and a seq dense from 1 in queue order.
+func TestSpoolStampsOneBootAndADenseSeq(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	queueTagged(t, s, "a")
+	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
+		t.Fatal(err)
+	}
+	queueTagged(t, s, "b")
+	_ = s.add(tagged("c"))
+	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 5 {
+		t.Fatalf("%d batches shipped, want 5", len(ls))
+	}
+	for i, l := range ls {
+		if l.Boot == "" || l.Boot != ls[0].Boot {
+			t.Fatalf("batch %d boot %q, want the spool's one boot %q", i, l.Boot, ls[0].Boot)
+		}
+		if l.Seq != uint64(i+1) {
+			t.Fatalf("batch %d seq %d, want %d", i, l.Seq, i+1)
+		}
+		if l.Minted.IsZero() {
+			t.Fatalf("batch %d carries no minted time", i)
+		}
+	}
+	other := newTelemetrySpool("og.v1.telemetry.edge", "edge", (&stubPublisher{}).publish)
+	if other.ledger.Boot() == ls[0].Boot {
+		t.Fatal("a second spool start reused the first's boot")
+	}
+}
+
+// TestSpoolLedgerCountsEachKind (#1641): a batch's count per kind is the
+// items it carries, before is what the boot minted ahead of it, and a whole
+// batch's self-logs count as log, its node-self samples as metric.
+func TestSpoolLedgerCountsEachKind(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	_ = s.add(&ogv1.TaskGroup{TaskId: "a",
+		Metrics:    []*ogv1.MetricSample{{Name: "m", Value: 1}, {Name: "m", Value: 2}},
+		Properties: []*ogv1.PropertySample{{Name: "p", ValueJson: `"on"`}},
+		TaskLogs:   []*ogv1.LogLine{{Message: "x"}, {Message: "y"}, {Message: "z"}},
+	})
+	_ = s.add(&ogv1.TaskGroup{TaskId: "b", Events: []*ogv1.EventSample{{Name: "e", Message: "up"}}})
+	s.flush()
+	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge",
+		Logs:     []*ogv1.LogLine{{Message: "1"}, {Message: "2"}},
+		NodeSelf: &ogv1.NodeSelf{Metrics: []*ogv1.MetricSample{{Name: "spool-batch-count", Value: 0}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	queueTagged(t, s, "c")
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 3 {
+		t.Fatalf("%d batches, want 3", len(ls))
+	}
+	want := []delivery.Declared{
+		{delivery.Metric: {Count: 2}, delivery.Property: {Count: 1}, delivery.Event: {Count: 1}, delivery.Log: {Count: 3}},
+		{delivery.Metric: {Count: 1, Before: 2}, delivery.Property: {Before: 1}, delivery.Event: {Before: 1}, delivery.Log: {Count: 2, Before: 3}},
+		{delivery.Metric: {Count: 1, Before: 3}, delivery.Property: {Before: 1}, delivery.Event: {Before: 1}, delivery.Log: {Before: 5}},
+	}
+	for i := range want {
+		if fmt.Sprint(ls[i].Kinds) != fmt.Sprint(want[i]) {
+			t.Errorf("batch %d kinds %v, want %v", i+1, ls[i].Kinds, want[i])
+		}
+	}
+}
+
+// TestSpoolResolvedNeverPassesAQueuedBatch (#1641): resolved is the highest
+// seq below which nothing is still queued when a batch is minted, so it never
+// reaches a batch held for a retry, and it moves past the held batches only
+// once the resend from the head has shipped them.
+func TestSpoolResolvedNeverPassesAQueuedBatch(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	queueTagged(t, s, "1") // nothing before it: resolved 0
+	waitIdle(t, s)
+	pub.setDown(true)
+	queueTagged(t, s, "2") // 1 acked: resolved 1; 2 fails and holds
+	waitIdle(t, s)
+	queueTagged(t, s, "3") // 2 still queued: resolved 1
+	tick(t, s)             // the resend from the head fails again
+	queueTagged(t, s, "4") // 2 and 3 still queued: resolved 1
+	pub.setDown(false)
+	tick(t, s)             // 2, 3, 4 ship
+	queueTagged(t, s, "5") // every batch before it acked: resolved 4
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	var seqs, resolved []uint64
+	for _, l := range ls {
+		seqs = append(seqs, l.Seq)
+		resolved = append(resolved, l.Resolved)
+	}
+	if fmt.Sprint(seqs) != "[1 2 3 4 5]" || fmt.Sprint(resolved) != "[0 1 1 1 4]" {
+		t.Fatalf("seqs %v resolved %v, want [1 2 3 4 5] and [0 1 1 1 4]", seqs, resolved)
+	}
+}
+
+// TestSpoolRetryCarriesTheSameLedger (#1641): the ledger is encoded once at
+// the flush, so a retry ships it unchanged with the rest of the bytes.
+func TestSpoolRetryCarriesTheSameLedger(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	now := time.Unix(1_000_000, 0)
+	var nmu sync.Mutex
+	s.now = func() time.Time { nmu.Lock(); defer nmu.Unlock(); return now }
+	pub.setDown(true)
+	queueTagged(t, s, "a")
+	waitIdle(t, s)
+	nmu.Lock()
+	now = now.Add(time.Minute)
+	nmu.Unlock()
+	pub.setDown(false)
+	tick(t, s)
+	pub.mu.Lock()
+	attempts := append([]publishAttempt(nil), pub.attempts...)
+	pub.mu.Unlock()
+	if len(attempts) != 2 || !bytes.Equal(attempts[0].data, attempts[1].data) {
+		t.Fatalf("%d attempts; want 2 with identical bytes", len(attempts))
+	}
+	var ev ogv1.TelemetryBatch
+	if err := proto.Unmarshal(attempts[1].data, &ev); err != nil {
+		t.Fatal(err)
+	}
+	l := delivery.FromProto(ev.GetLedger())
+	if l.Seq != 1 || !l.Minted.Equal(time.Unix(1_000_000, 0)) {
+		t.Fatalf("retried ledger %+v; want seq 1 minted at the first flush", l)
+	}
+}
+
+// TestAnOverflowedBatchIsCountedUnderItsCauseOnTheNextLedger (#1692): a
+// batch the spool drops at its cap leaves a gap in the boot's seqs; the next
+// batch minted names the gap's cause and items, the run grows as later drops
+// extend it, and once a batch carrying it is acked no later batch does.
+func TestAnOverflowedBatchIsCountedUnderItsCauseOnTheNextLedger(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{down: true}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	s.maxBatches = 3
+	queueTagged(t, s, "b1")
+	waitIdle(t, s) // b1 failed: held, nothing with the stream
+	for i := 2; i <= 5; i++ {
+		queueTagged(t, s, fmt.Sprintf("b%d", i)) // b4 drops b1, b5 drops b2
+	}
+	pub.setDown(false)
+	tick(t, s)
+	queueTagged(t, s, "b6") // minted after both drops, before any ack carried them
+	waitIdle(t, s)
+	queueTagged(t, s, "b7") // minted after b6, which carried the run, was acked
+	waitIdle(t, s)
+
+	ls := pub.ledgers(t)
+	if got := fmt.Sprint(pub.tags()); got != "[b3 b4 b5 b6 b7]" {
+		t.Fatalf("shipped %s, want [b3 b4 b5 b6 b7]", got)
+	}
+	want := map[uint64]string{
+		3: "[]",
+		4: "[]",
+		5: `[{"cause":"spool-overflow","from":1,"to":1,"items":{"metric":1}}]`,
+		6: `[{"cause":"spool-overflow","from":1,"to":2,"items":{"metric":2}}]`,
+		7: "[]",
+	}
+	for _, l := range ls {
+		got := "[]"
+		if len(l.Loss.Dropped) > 0 {
+			b, err := json.Marshal(l.Loss.Dropped)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = string(b)
+		}
+		if got != want[l.Seq] {
+			t.Fatalf("batch seq %d carries dropped %s, want %s", l.Seq, got, want[l.Seq])
+		}
+	}
+}
+
+// TestARefusedBatchIsTheNodesLossOnTheNextLedger (#1692): a batch the bus
+// refuses for good is dropped as bus-refused, and the next batch says so.
+func TestARefusedBatchIsTheNodesLossOnTheNextLedger(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	refuse := true
+	var mu sync.Mutex
+	publish := func(subject string, data []byte, id string) (ackWait, error) {
+		mu.Lock()
+		r := refuse
+		refuse = false
+		mu.Unlock()
+		if r {
+			return nil, nats.ErrMaxPayload
+		}
+		return pub.publish(subject, data, id)
+	}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	queueTagged(t, s, "b2")
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 1 || ls[0].Seq != 2 {
+		t.Fatalf("stored %+v, want only seq 2", ls)
+	}
+	d := ls[0].Loss.Dropped
+	if len(d) != 1 || d[0].Cause != delivery.BusRefused || d[0].From != 1 || d[0].To != 1 || d[0].Items[delivery.Metric] != 1 {
+		t.Fatalf("seq 2 carries dropped %+v, want seq 1's one metric as bus-refused", d)
+	}
+}
+
+// TestSelfLogsTheBufferDroppedAreTheNodesLoss (#1692): self-log lines the
+// capture buffer dropped never reached a batch; the self-report that drains
+// it carries their count as self-log-overflow, a running total.
+func TestSelfLogsTheBufferDroppedAreTheNodesLoss(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(sink)
+	for i := 0; i < maxBufferedLogs+3; i++ {
+		logger.Info("chatty", "i", i)
+	}
+	publishSelf(s, "edge", sink, nil)
+	logger.Info("one more")
+	publishSelf(s, "edge", sink, nil)
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 2 {
+		t.Fatalf("%d self-reports stored, want 2", len(ls))
+	}
+	for i, l := range ls {
+		if got := l.Loss.Lost[delivery.SelfLogOverflow][delivery.Log]; got != 3 {
+			t.Fatalf("self-report %d carries %d lines lost, want the boot's running 3", i, got)
+		}
 	}
 }

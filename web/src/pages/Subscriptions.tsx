@@ -1,5 +1,4 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
-import { useNavigate } from "@solidjs/router";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import Button from "../components/Button";
@@ -62,7 +61,6 @@ type Note = { tone: "success" | "error"; text: string } | null;
 
 export default function Subscriptions(): JSX.Element {
   const me = useMe();
-  const navigate = useNavigate();
   const subs = useSubscriptions();
   const writes = useSubscriptionWrites();
   const canSubscribe = () => can(me.data, "notification", "subscribe");
@@ -106,7 +104,7 @@ export default function Subscriptions(): JSX.Element {
   return (
     <Page
       title={title}
-      breadcrumb={<Breadcrumb crumbs={[{ key: "profile", label: "Profile", onClick: () => navigate("/profile") }, { key: "subscriptions", label: "Alarm subscriptions" }]} />}
+      breadcrumb={<Breadcrumb crumbs={[{ key: "profile", label: "Profile", href: "/profile" }, { key: "subscriptions", label: "Alarm subscriptions" }]} />}
       actions={
         <Show when={canSubscribe() && rows().length > 0}>
           <Button intent="action" icon={Plus} disabled={atCap()} title={atCap() ? `You own the most subscriptions a person may (${SUBSCRIPTION_CAP})` : undefined} onClick={() => setEditing("new")}>

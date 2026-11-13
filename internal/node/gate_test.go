@@ -20,21 +20,21 @@ func TestGateBlocksItsRungAndAboveForItsFingerprint(t *testing.T) {
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"})
-	if _, ok := g.blocked("ep-1", rungAuthenticated); !ok {
+	if _, ok := g.refusedAt("ep-1", rungAuthenticated); !ok {
 		t.Fatal("an auth refusal did not gate the authenticated rung")
 	}
-	if _, ok := g.blocked("ep-1", rungResponsive); ok {
+	if _, ok := g.refusedAt("ep-1", rungResponsive); ok {
 		t.Fatal("an auth refusal gated the rung below it")
 	}
 	g.observe("ep-1", "fp-b", "")
-	if _, ok := g.blocked("ep-1", rungAuthenticated); ok {
+	if _, ok := g.refusedAt("ep-1", rungAuthenticated); ok {
 		t.Fatal("a changed fingerprint left the gate up")
 	}
 
 	g.observe("ep-2", "fp-c", "")
 	g.record("ep-2", "fp-c", &collection.TerminalError{Class: driver.ClassHostKey, Reason: "the host key changed"})
 	for _, r := range []rung{rungResponsive, rungAuthenticated} {
-		if _, ok := g.blocked("ep-2", r); !ok {
+		if _, ok := g.refusedAt("ep-2", r); !ok {
 			t.Fatalf("a host-key refusal did not gate %s", r)
 		}
 	}
@@ -55,7 +55,7 @@ func TestGateHoldsAcrossARestartFromItsPublishedRejection(t *testing.T) {
 
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", published)
-	if gt, ok := restarted.blocked("ep-1", rungAuthenticated); !ok || gt.class != driver.ClassAuth {
+	if gt, ok := restarted.refusedAt("ep-1", rungAuthenticated); !ok || gt.class != driver.ClassAuth {
 		t.Fatalf("a restarted node lost the gate: %+v, %v", gt, ok)
 	}
 	// It never saw the refusal, so it has no reason to publish (#1110).
@@ -64,7 +64,7 @@ func TestGateHoldsAcrossARestartFromItsPublishedRejection(t *testing.T) {
 	}
 	other := newGates()
 	other.observe("ep-1", "fp-new", published)
-	if _, ok := other.blocked("ep-1", rungAuthenticated); ok {
+	if _, ok := other.refusedAt("ep-1", rungAuthenticated); ok {
 		t.Fatal("a rejection published under another fingerprint gated this one")
 	}
 	if got := rejectionOf(rungAuthenticated, "auth", "fp-a"); got != published {
@@ -80,7 +80,7 @@ func TestGateClearsWhenTheRungPasses(t *testing.T) {
 	if !g.clear("ep-1") {
 		t.Fatal("clearing a gate reported nothing cleared")
 	}
-	if _, ok := g.blocked("ep-1", rungAuthenticated); ok {
+	if _, ok := g.refusedAt("ep-1", rungAuthenticated); ok {
 		t.Fatal("a cleared gate still blocks")
 	}
 	if g.clear("ep-1") {
@@ -104,7 +104,7 @@ func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
 	if !ok || gt.Class != driver.ClassHostKey || gt.Rung != "responsive" || gt.PinnedKey != pinned || gt.OfferedKey != offered {
 		t.Fatalf("published %q, want the host-key gate with both keys", published)
 	}
-	if held, _ := g.blocked("ep-1", rungResponsive); held.refusal().Offered != offered || held.refusal().Pinned != pinned {
+	if held, _ := g.refusedAt("ep-1", rungResponsive); held.refusal().Offered != offered || held.refusal().Pinned != pinned {
 		t.Fatalf("a gated attempt's refusal lost the keys: %+v", held.refusal())
 	}
 

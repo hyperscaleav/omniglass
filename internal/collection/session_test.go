@@ -3,8 +3,11 @@ package collection_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -106,6 +109,7 @@ type fakeSessionDialer struct {
 	dials     int
 	gate      chan struct{} // non-nil: the first dial waits for it to close
 	timesOut  func() bool   // handed to every connection made
+	panics    string        // non-empty: every dial panics with it
 }
 
 func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration, in collection.Inbound) (collection.HeldConn, error) {
@@ -123,6 +127,9 @@ func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Dura
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.dials++
+	if d.panics != "" {
+		panic(d.panics)
+	}
 	if d.refuse {
 		return nil, errors.New("connection refused")
 	}
@@ -804,4 +811,319 @@ func TestHostKeyPinKnowsWhatItLearned(t *testing.T) {
 	if empty := collection.NewLearnedHostKeyPin(""); empty.Learned() {
 		t.Fatal("an empty carried pin reads learned")
 	}
+}
+
+// #1636: a panic on a session-layer goroutine is the session's failure, never
+// the process's. The reader's panic below is the capability's own: a real
+// line session over a loopback socket, an Inbound that panics on one pushed
+// line (a driver's listener route meeting bytes it did not expect).
+
+// pushOnFirstAccept serves a held line connection that pushes line on its
+// first accepted connection only, then answers nothing; it counts accepts.
+func pushOnFirstAccept(t *testing.T, line string) (addr string, accepts *atomic.Int32) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	accepts = &atomic.Int32{}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			if accepts.Add(1) == 1 {
+				_, _ = c.Write([]byte(line + "\r\n"))
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				_, _ = io.Copy(io.Discard, c)
+			}(c)
+		}
+	}()
+	return ln.Addr().String(), accepts
+}
+
+// panickyInbound panics on a line carrying its trigger and claims the rest.
+type panickyInbound struct{ trigger string }
+
+func (p panickyInbound) Claim(msg driver.Message) bool {
+	if strings.Contains(msg.Data, p.trigger) {
+		panic("listener route met " + msg.Data)
+	}
+	return true
+}
+func (p panickyInbound) Unclaimed(driver.Message) {}
+
+func TestSessionReaderPanicRecoversThroughTheFailurePath(t *testing.T) {
+	captureLogs(t)
+	addr, accepts := pushOnFirstAccept(t, "EVT boom")
+	r := newRecorder()
+	s := collection.StartSession(collection.SessionConfig{
+		Target: addr, Timeout: time.Second, Dialer: collection.NewLineSessionDialer(),
+		OnTransition: r.onTransition, Backoff: r.backoff, Inbound: panickyInbound{trigger: "boom"},
+	})
+	t.Cleanup(s.Close)
+	r.waitStates(t, establishing, up, recovering, up)
+	r.mu.Lock()
+	reason := r.seen[2].Reason
+	attempts := append([]int(nil), r.attempts...)
+	r.mu.Unlock()
+	if !strings.HasPrefix(reason, "panic: ") || !strings.Contains(reason, "EVT boom") {
+		t.Fatalf("recovering reason = %q, want the panic's value behind panic:", reason)
+	}
+	// The redial's connect completes in the kernel before the listener's
+	// Accept returns, so the session can read up before the count moves.
+	deadline := time.Now().Add(3 * time.Second)
+	for accepts.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if accepts.Load() != 2 {
+		t.Fatalf("accepted %d connections, want the redial after the panic", accepts.Load())
+	}
+	// The panic is a failed attempt: the redial waited its backoff.
+	if len(attempts) == 0 || attempts[0] != 1 {
+		t.Fatalf("backoff attempts = %v, want the redial to wait attempt 1's", attempts)
+	}
+}
+
+// A session that panics on every attempt reads down at the attempt budget,
+// as any other failure does.
+func TestSessionThatPanicsOnEveryDialReadsDown(t *testing.T) {
+	captureLogs(t)
+	d, r := &fakeSessionDialer{panics: "dial blew up"}, newRecorder()
+	startTestSession(t, d, r)
+	r.waitStates(t, establishing, down)
+	if n := d.dialCount(); n < collection.SessionAttemptBudget {
+		t.Fatalf("down after %d attempts, want the budget of %d", n, collection.SessionAttemptBudget)
+	}
+	if reason := r.lastTransition().Reason; !strings.Contains(reason, "last: panic: dial blew up") {
+		t.Fatalf("down reason = %q, want the panic as the last cause", reason)
+	}
+}
+
+// An arm that panics is a failed attempt whose connection is closed, never
+// held open behind the panic.
+func TestSessionArmPanicClosesTheConnectionAndFails(t *testing.T) {
+	captureLogs(t)
+	d := &fakeSessionDialer{timesOut: func() bool { panic("arm frame parse") }}
+	r := newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{Arm: []string{"SUBSCRIBE INPUT"}})
+	r.waitStates(t, establishing, down)
+	if reason := r.lastTransition().Reason; !strings.Contains(reason, "arming failed: panic: arm frame parse") {
+		t.Fatalf("down reason = %q, want the arm's panic", reason)
+	}
+	d.mu.Lock()
+	conns := append([]*fakeHeldConn(nil), d.conns...)
+	d.mu.Unlock()
+	for i, c := range conns[:collection.SessionAttemptBudget] {
+		if !c.isClosed() {
+			t.Fatalf("connection %d was left open behind its arm's panic", i)
+		}
+	}
+}
+
+// A panic in the machine itself (here its backoff) is a failed attempt too:
+// the machine runs on, and the session reads up once nothing panics.
+func TestSessionMachinePanicIsAFailedAttempt(t *testing.T) {
+	captureLogs(t)
+	before := collection.PanicsRecovered()
+	d, r := &fakeSessionDialer{refuse: true}, newRecorder()
+	var once sync.Once
+	s := collection.StartSession(collection.SessionConfig{
+		Target: "10.0.0.9:51325", Dialer: d, OnTransition: r.onTransition,
+		Backoff: func(attempt int) time.Duration {
+			once.Do(func() {
+				d.setRefuse(false)
+				panic("backoff blew up")
+			})
+			return r.backoff(attempt)
+		},
+	})
+	t.Cleanup(s.Close)
+	r.waitStates(t, establishing, up)
+	if n := collection.PanicsRecovered() - before; n < 1 {
+		t.Fatal("the machine's panic was not counted")
+	}
+	if got, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second); err != nil || got != "echo GET INPUT" {
+		t.Fatalf("exchange after the machine's panic = %q, %v", got, err)
+	}
+}
+
+// A transition hook that panics is logged and the machine runs on: the hook
+// is the node's, the session is the device's.
+func TestSessionTransitionHookPanicIsContained(t *testing.T) {
+	captureLogs(t)
+	d, r := &fakeSessionDialer{}, newRecorder()
+	s := collection.StartSession(collection.SessionConfig{
+		Target: "10.0.0.9:51325", Dialer: d, Backoff: r.backoff,
+		OnTransition: func(tr collection.SessionTransition) {
+			r.onTransition(tr)
+			if tr.State == collection.SessionEstablishing {
+				panic("publish blew up")
+			}
+		},
+	})
+	t.Cleanup(s.Close)
+	r.waitStates(t, establishing, up)
+	if d.dialCount() != 1 {
+		t.Fatalf("dialed %d times, want the one connection", d.dialCount())
+	}
+}
+
+// Bounded establish: sessions sharing dial slots dial no more at once than
+// the slots allow, a session waiting for one reads establishing, and every
+// one comes up as slots free.
+func TestSessionDialsShareTheSlots(t *testing.T) {
+	release := make(chan struct{})
+	d := &blockingDialer{release: release}
+	slots := collection.NewDialSlots(2)
+	recs := make([]*recorder, 10)
+	for i := range recs {
+		recs[i] = newRecorder()
+		s := collection.StartSession(collection.SessionConfig{
+			Target: "10.0.0.9:51325", Dialer: d, OnTransition: recs[i].onTransition, Backoff: recs[i].backoff, Dials: slots,
+		})
+		t.Cleanup(s.Close)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for d.inFlight() < 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if p := d.peakInFlight(); p != 2 {
+		t.Fatalf("peak dials in flight = %d, want the 2 slots", p)
+	}
+	for i, r := range recs {
+		if got := r.states(); !equalStates(got, []collection.SessionState{establishing}) {
+			t.Fatalf("session %d reads %v while waiting, want establishing", i, got)
+		}
+	}
+	close(release)
+	for _, r := range recs {
+		r.waitStates(t, establishing, up)
+	}
+	if p := d.peakInFlight(); p > 2 {
+		t.Fatalf("peak dials in flight = %d after release, want at most 2", p)
+	}
+}
+
+// An exchange against a session still waiting for its dial slot rides the
+// first-dial wait, on its own budget.
+func TestSessionExchangeWaitsForADialSlot(t *testing.T) {
+	slots := collection.NewDialSlots(1)
+	hold := make(chan struct{})
+	held := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: &blockingDialer{release: hold}, Dials: slots})
+	t.Cleanup(held.Close)
+	deadline := time.Now().Add(3 * time.Second)
+	for !slotTaken(slots) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	d, r := &fakeSessionDialer{}, newRecorder()
+	s := startTestSessionWith(t, d, r, collection.SessionConfig{Dials: slots})
+	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond); err == nil || !strings.Contains(err.Error(), "establishing") {
+		t.Fatalf("exchange while waiting for a slot = %v, want the first-dial wait to expire naming establishing", err)
+	}
+	go func() { time.Sleep(20 * time.Millisecond); close(hold) }()
+	if got, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second); err != nil || got != "echo GET INPUT" {
+		t.Fatalf("exchange once the slot freed = %q, %v", got, err)
+	}
+}
+
+// The slots bound a session's first dial, the establish a node restart
+// storms, never a redial: an endpoint that blackholes its dials holds a slot
+// a whole dial timeout each attempt, so a fleet with a few of them would
+// queue every healthy session's recovery behind theirs.
+func TestSessionRedialDoesNotWaitForADialSlot(t *testing.T) {
+	slots := collection.NewDialSlots(1)
+	d, r := &fakeSessionDialer{}, newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{Dials: slots})
+	r.waitStates(t, establishing, up)
+	dead := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: &blockingDialer{release: make(chan struct{})}, Dials: slots})
+	t.Cleanup(dead.Close)
+	deadline := time.Now().Add(3 * time.Second)
+	for !slotTaken(slots) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !slotTaken(slots) {
+		t.Fatal("the blackholed first dial never took the slot")
+	}
+	d.last().kill(errors.New("connection reset by peer"))
+	r.waitStates(t, establishing, up, recovering, up)
+}
+
+func slotTaken(s collection.DialSlots) bool { return len(s) == cap(s) }
+
+// blockingDialer holds every dial until release closes, counting how many
+// are in flight at once.
+type blockingDialer struct {
+	release chan struct{}
+	mu      sync.Mutex
+	now     int
+	peak    int
+}
+
+func (d *blockingDialer) Dial(ctx context.Context, _ string, _ time.Duration, in collection.Inbound) (collection.HeldConn, error) {
+	d.mu.Lock()
+	d.now++
+	d.peak = max(d.peak, d.now)
+	d.mu.Unlock()
+	defer func() {
+		d.mu.Lock()
+		d.now--
+		d.mu.Unlock()
+	}()
+	select {
+	case <-d.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	c := newFakeHeldConn()
+	c.in = in
+	return c, nil
+}
+
+func (d *blockingDialer) inFlight() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.now
+}
+
+func (d *blockingDialer) peakInFlight() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.peak
+}
+
+// A session in its endpoint's quiet period (a disruptive command, #1651)
+// dials nothing until the period ends: the connection the reboot dropped is
+// redialed at the end of the quiet, not on the backoff.
+func TestSessionDialsNothingDuringItsQuietPeriod(t *testing.T) {
+	d, r, clock := &fakeSessionDialer{}, newRecorder(), newFakeClock()
+	var mu sync.Mutex
+	var quietUntil time.Time
+	s := startTestSessionWith(t, d, r, collection.SessionConfig{After: clock.After, Now: clock.Now,
+		Quiet: func() time.Time {
+			mu.Lock()
+			defer mu.Unlock()
+			return quietUntil
+		}})
+	r.waitStates(t, establishing, up)
+	mu.Lock()
+	quietUntil = clock.Now().Add(15 * time.Second)
+	mu.Unlock()
+	d.last().kill(errors.New("connection reset by peer"))
+	r.waitStates(t, establishing, up, recovering)
+	clock.Advance(14*time.Second, time.Second)
+	if n := d.dialCount(); n != 1 {
+		t.Fatalf("dialed %d times during the quiet period, want only the first dial", n)
+	}
+	clock.Advance(2*time.Second, time.Second)
+	r.waitStates(t, establishing, up, recovering, up)
+	if n := d.dialCount(); n != 2 {
+		t.Fatalf("dialed %d times, want one redial after the quiet period", n)
+	}
+	_ = s
 }

@@ -312,9 +312,10 @@ func (p *pendingWS) Open(in Inbound, _ ChannelOptions) (HeldConn, error) {
 		ws: p.ws, target: p.target, in: in, ping: p.ping,
 		asks: make(chan lineAsk, 1), frames: make(chan wsFrame, 16), done: make(chan struct{}),
 	}
-	go c.read()
-	go c.route()
-	go c.keepalive()
+	failPanic := func(pe *PanicError) { c.fail(pe) }
+	goSupervised("websocket reader "+p.target, c.read, failPanic)
+	goSupervised("websocket router "+p.target, c.route, failPanic)
+	goSupervised("websocket keepalive "+p.target, c.keepalive, failPanic)
 	return c, nil
 }
 

@@ -1,0 +1,87 @@
+---
+// The perf gate's tables, rendered from the gate's own (docs/src/generated/
+// perfgate.json, written by make gen via cmd/labgen from internal/labfootprint's
+// PerfGateFacts). The gate judges a run from these tables, so this page cannot
+// name a figure, a tolerance or a size the gate does not use.
+//
+// Usage: <PerfGateFigures /> for the figures and how each is judged,
+// <PerfGateFigures part="sizes" /> for the named lab sizes and their baselines.
+import facts from '../generated/perfgate.json';
+
+interface Props {
+  part?: 'figures' | 'sizes';
+}
+
+const { part = 'figures' } = Astro.props;
+if (!facts.figures.length || !facts.sizes.length) {
+  throw new Error('PerfGateFigures: perfgate.json has no figures or sizes; run make gen');
+}
+
+type Figure = (typeof facts.figures)[number];
+const rule = (f: Figure) => {
+  if (f.class === 'exact') return 'must equal the baseline';
+  const pct = `${Math.round(f.tolerance * 100)}%`;
+  return f.two_sided ? `within ${pct} either way` : `no more than ${pct} worse`;
+};
+const minutes = (s: number) => (s % 60 === 0 ? `${s / 60} min` : `${s} s`);
+---
+
+{
+  part === 'figures' ? (
+    <table class="perf-gate-figures">
+      <thead>
+        <tr>
+          <th>Figure</th>
+          <th>Class</th>
+          <th>Rule</th>
+          <th>Unit</th>
+          <th>What it is</th>
+        </tr>
+      </thead>
+      <tbody>
+        {facts.figures.map((f) => (
+          <tr>
+            <td>
+              <code>{f.family}</code>
+            </td>
+            <td>{f.class}</td>
+            <td>{rule(f)}</td>
+            <td>{'unit' in f && f.unit ? f.unit : 'count'}</td>
+            <td>{f.about}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <table class="perf-gate-sizes">
+      <thead>
+        <tr>
+          <th>Size</th>
+          <th>Lab</th>
+          <th>Warmup</th>
+          <th>Window</th>
+          <th>Fleet reads</th>
+          <th>Baseline file</th>
+        </tr>
+      </thead>
+      <tbody>
+        {facts.sizes.map((s) => (
+          <tr>
+            <td>
+              <code>{s.name}</code>
+            </td>
+            <td>
+              {s.scenario} at {s.systems} systems
+            </td>
+            <td>{minutes(s.warmup_seconds)}</td>
+            <td>{minutes(s.window_seconds)}</td>
+            <td>{s.fleet_reads}</td>
+            <td>
+              <code>{s.file}</code>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

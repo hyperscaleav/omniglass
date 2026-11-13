@@ -48,9 +48,11 @@ const (
 	SettleModeNone        = "none"
 )
 
-// What decided a terminal command, recorded in settled_by: its issue (it set
-// nothing, so nothing settles it), its execution report, an observation of
-// its target, or its settle window closing on no evidence.
+// What decided a terminal command, recorded in settled_by: its execution
+// report, an observation of its target, or its window closing on no evidence
+// (the settle window, or a fire-and-forget command's delivery window). Issue
+// is historical: before #1630 a fire-and-forget command read settled at its
+// issue, and the column still admits the rows that did.
 const (
 	SettledByIssue       = "issue"
 	SettledByReply       = "reply"
@@ -86,8 +88,9 @@ type CommandRecord struct {
 	TargetKind          string
 	Target              string
 	SettleWindowSeconds int
-	// Deadline is when the settle window closes: past it, a command with no
-	// evidence is timed out by the next sweep.
+	// Deadline is when the settle window closes (a fire-and-forget command's
+	// delivery window, #1630): past it, a command with no evidence is timed
+	// out by the next sweep.
 	Deadline   time.Time
 	Status     string
 	Phase      string
@@ -102,6 +105,12 @@ type CommandRecord struct {
 	ObservedAt    *time.Time
 	IssuedAt      time.Time
 	DeliveredAt   *time.Time
+	// FirstDeliveredAt is when a node first took it; DeliveredAt moves on a
+	// redelivery, this does not (#1626).
+	FirstDeliveredAt *time.Time
+	// DeliveryCount is how many times a node has taken it: 0 queued, 1
+	// delivered once, more when it went silent and was redelivered.
+	DeliveryCount int
 	ExecutedAt    *time.Time
 	SettledAt     *time.Time
 	// Endpoint is the endpoint the command rides: the one a node took it
@@ -131,10 +140,19 @@ type CommandFilter struct {
 // awaiting the reply (by how it settles) until its report lands, then
 // awaiting the observation that settles it. A command no endpoint can carry
 // is awaiting observation from its issue: no node will take it, and only a
-// sample of its target (a push, a poll) can settle it. Pure.
+// sample of its target (a push, a poll) can settle it. A fire-and-forget
+// command (mode none) has no observation to wait on: it is queued until a node
+// takes it, even when none can (its delivery window then times it out), and
+// delivered until its report decides it (#1630). Pure.
 func CommandPhase(status, mode string, delivered, executed, deliverable bool) string {
 	if status != "issued" {
 		return status
+	}
+	if mode == SettleModeNone {
+		if delivered || executed {
+			return PhaseDelivered
+		}
+		return PhaseQueued
 	}
 	switch {
 	case executed || !deliverable:
@@ -180,7 +198,7 @@ const commandRideSQL = `left join lateral (
 
 // commandReadCols is the read shape, in the order scanCommandRecord reads it.
 var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.instance, c.params, c.status,
-	c.dispatched_at, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
+	c.dispatched_at, c.first_dispatched_at, c.delivery_count, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
 	coalesce(c.settled_by, ''), c.observed_value, c.observed_at, c.caused_event_id, c.settled_event_id,
 	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
@@ -235,7 +253,7 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 		spec                        []byte
 	)
 	if err := row.Scan(&r.ID, &r.IssuedAt, &r.ComponentID, &r.Component, &r.CommandType, &r.Instance, &r.Params, &r.Status,
-		&r.DeliveredAt, &r.ExecutedAt, &r.SettledAt, &r.ExecError, &r.Reply, &r.Reason,
+		&r.DeliveredAt, &r.FirstDeliveredAt, &r.DeliveryCount, &r.ExecutedAt, &r.SettledAt, &r.ExecError, &r.Reply, &r.Reason,
 		&r.SettledBy, &r.ObservedValue, &r.ObservedAt, &r.CausedEventID, &r.SettledEventID,
 		&r.IssuerID, &username, &service, &nodeName,
 		&r.SettleWindowSeconds, &propTarget, &metricTarget, &intendedProp, &intendedMetric,
@@ -263,8 +281,11 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 	case intendedMetric != nil:
 		r.Intended = json.RawMessage(strconv.FormatFloat(*intendedMetric, 'g', -1, 64))
 	}
-	r.Deadline = r.IssuedAt.Add(time.Duration(r.SettleWindowSeconds) * time.Second)
 	r.SettleMode = SettleModeOf(specs.binding(r.Driver, spec, r.CommandType), r.TargetKind != "" && r.Intended != nil)
+	r.Deadline = r.IssuedAt.Add(time.Duration(r.SettleWindowSeconds) * time.Second)
+	if r.SettleMode == SettleModeNone {
+		r.Deadline = r.IssuedAt.Add(CommandDeliveryWindow)
+	}
 	r.Phase = CommandPhase(r.Status, r.SettleMode, r.DeliveredAt != nil, r.ExecutedAt != nil, r.EndpointID != "")
 	return &r, nil
 }

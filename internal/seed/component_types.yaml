@@ -258,6 +258,26 @@ component_types:
     stem: network
     abbrev: net
     icon: network
+  # The platform's own parts (#1094): what Omniglass itself runs as, each one a
+  # component in the reserved platform system. A node is the first; the server
+  # joins in a later slice.
+  - id: platform
+    label: Platform
+    stem: platform
+    abbrev: plat
+    icon: server
+  - id: omniglass-node
+    label: Omniglass Node
+    parent_id: platform
+    stem: node
+    abbrev: node
+    icon: cpu
+  - id: omniglass-server
+    label: Omniglass Server
+    parent_id: platform
+    stem: server
+    abbrev: srv
+    icon: server
   # ── The generic floor (outside the OAVC tree by design) ─────────────────
   - id: generic-device
     label: Generic Device

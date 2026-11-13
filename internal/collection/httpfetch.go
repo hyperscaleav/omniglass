@@ -81,9 +81,21 @@ type HTTPFetcher interface {
 // NewHTTPFetcher returns the real http fetcher.
 func NewHTTPFetcher() HTTPFetcher { return httpFetcher{} }
 
-type httpFetcher struct{}
+// NewTalliedHTTPFetcher is the real http fetcher counting each connection and
+// each request (a digest challenge and its answer are two) on the node's
+// tally (#1639).
+func NewTalliedHTTPFetcher(tally *RequestTally) HTTPFetcher { return httpFetcher{tally: tally} }
 
-func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, error) {
+type httpFetcher struct{ tally *RequestTally }
+
+// fetchTransport is the fetcher's transport: one request per connection, so
+// the node's connections reconcile against the component's accepts.
+func fetchTransport(dialer *net.Dialer, x HTTPExchange) *http.Transport {
+	return &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout,
+		MaxResponseHeaderBytes: maxResponseHeaderBytes}
+}
+
+func (f httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, error) {
 	if x.Timeout <= 0 {
 		x.Timeout = defaultTCPTimeout
 	}
@@ -91,8 +103,21 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 		x.BodyCap = DefaultBodyCap
 	}
 	dialer := &net.Dialer{Timeout: x.Timeout}
-	tr := &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout,
-		MaxResponseHeaderBytes: maxResponseHeaderBytes}
+	tr := fetchTransport(dialer, x)
+	// Each attempt is its own call: the dial (on the transport's goroutine)
+	// begins the attempt that is current, and the loop settles it.
+	var current atomic.Pointer[tallyCall]
+	if f.tally != nil {
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c, err := dialer.DialContext(ctx, network, addr)
+			if err == nil {
+				call := current.Load()
+				call.connected()
+				call.begin()
+			}
+			return c, err
+		}
+	}
 	if x.TLS != nil {
 		trust := *x.TLS
 		tr.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -100,10 +125,13 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 			if err != nil {
 				return nil, err
 			}
+			call := current.Load()
+			call.connected()
 			tc, _, err := HandshakeTLS(ctx, c, trust, x.Timeout)
 			if err != nil {
 				return nil, err
 			}
+			call.begin()
 			return tc, nil
 		}
 	}
@@ -144,12 +172,20 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 		req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
 			WroteRequest: func(httptrace.WroteRequestInfo) { wrote.Store(true) },
 		}))
+		call := f.tally.call(TallyHTTP)
+		current.Store(call)
 		resp, err := client.Do(req)
 		if err != nil {
+			call.settle(errOutcome(err))
 			return HTTPAnswer{}, redactedRequestError(req, x, err, wrote.Load())
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, x.BodyCap+1))
 		_ = resp.Body.Close()
+		if err != nil {
+			call.settle(errOutcome(err))
+		} else {
+			call.settle(statusOutcome(resp.StatusCode))
+		}
 		if err != nil {
 			return HTTPAnswer{}, &httpTransportError{msg: fmt.Sprintf("collection: %s %s: reading the body: %s", req.Method, x.redactedURL(req.URL),
 				Scrub(err.Error(), x.Credential, x.Redact...)), cause: err, sent: true}
