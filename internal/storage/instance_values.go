@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -143,7 +144,7 @@ func (p *PG) latestObservedValues(ctx context.Context, q querier, ownerKind, own
 	} else if err != nil {
 		return nil, err
 	}
-	return readPropertyValues(ctx, q, ownerID, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
+	return readPropertyValues(ctx, q, ownerID, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
 }
 
 // readPropertyValues runs a per-instance property read whose rows are
@@ -217,6 +218,22 @@ func (p *PG) latestObservedTargetValues(ctx context.Context, q querier, ct *Comm
 	}
 }
 
+// sameValue reports whether two current values mean the same JSON value: the
+// one comparison every reader that sets an observed value beside a declared or
+// intended one shares (Settle, worstCaseValue, agreeingValue). Both are
+// already typed (observedValueExpr), so what is left is spelling: 3 and 3.0,
+// or an object's key order and spacing. Pure.
+func sameValue(a, b json.RawMessage) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
+}
+
 // worstCaseValue is reconciliation's reduction of the observed instances of a
 // key against want (ADR-0456): drift when any instance disagrees with want,
 // and the value shown is then the newest disagreeing one, else the newest
@@ -229,7 +246,7 @@ func worstCaseValue(want json.RawMessage, values []CurrentValue) (*CurrentValue,
 	}
 	if want != nil {
 		for i := range values {
-			if !bytes.Equal(values[i].Value, want) {
+			if !sameValue(values[i].Value, want) {
 				return &values[i], true
 			}
 		}
@@ -249,7 +266,7 @@ func agreeingValue(intended *CurrentValue, values []CurrentValue) *CurrentValue 
 	}
 	if intended != nil {
 		for i := range values {
-			if bytes.Equal(values[i].Value, intended.Value) {
+			if sameValue(values[i].Value, intended.Value) {
 				return &values[i]
 			}
 		}
