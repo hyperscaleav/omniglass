@@ -1084,9 +1084,10 @@ of sources to keep. The operator configures the component to send to the node's 
 endpoint's port (and opens the node's firewall for it); a shared node port routed by source address
 was rejected, since two endpoints behind one address (the IP-to-serial gateway shape) would be
 indistinguishable. The listen port is derived into the endpoint's params as `host` and `port` are,
-so editing it moves the connection fingerprint. A datagram from any source but the endpoint's
+so editing it moves the connection fingerprint. A datagram from any address but the endpoint's
 component is counted, self-logged once per tick (`foreign datagrams dropped`, with the count and the
-last source), and dropped, never published.
+last source), and dropped, never published; the component's address on any port is the component,
+so gear that answers from a separate send socket or an ephemeral port still reads responsive.
 
 An open udp port cannot be detected, so the **transport rung is the driver's named request
 answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
