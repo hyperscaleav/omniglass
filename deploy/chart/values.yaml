@@ -10,6 +10,12 @@ server:
   # chart deployment is TLS-fronted at the edge. Set false only for a
   # plaintext-http deployment.
   secureCookies: true
+  # Additional environment variables to pass to the server container.
+  # Rendered as EnvVar entries after OMNIGLASS_DSN and OMNIGLASS_SECURE_COOKIES.
+  extraEnv: []
+  # Additional environment sources (ConfigMap or Secret refs) to pass to the server.
+  # Rendered as EnvFromSource entries.
+  envFrom: []
   resources:
     requests:
       cpu: 25m
