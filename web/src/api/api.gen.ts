@@ -22027,7 +22027,7 @@ export const getPatchSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
+ * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
  * @summary Update a settings namespace
  */
 export const patchSettingsNamespace = async (namespace: string,
