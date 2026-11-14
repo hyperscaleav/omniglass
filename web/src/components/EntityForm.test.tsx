@@ -361,6 +361,26 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     } finally { stub.mockRestore(); }
   });
 
+  // The staged memberships are drafts like the form's own fields (#854): a
+  // tab switch after changing only a membership asks before dropping it.
+  it("a picked primary alone makes the face dirty", async () => {
+    const { slot } = mountComponent();
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    expect(slot().dirty()).toBe(false);
+    await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
+    expect(slot().dirty()).toBe(true);
+  });
+
+  it("a removed chip alone makes the face dirty", async () => {
+    const { slot } = mountComponent();
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    expect(slot().dirty()).toBe(false);
+    fireEvent.click(await within(form).findByRole("button", { name: /remove gamma room/i }));
+    expect(slot().dirty()).toBe(true);
+  });
+
   it("writes nothing when the memberships were not touched", async () => {
     const { writes, stub } = stubWrites();
     try {
@@ -383,7 +403,9 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     expect(within(form).getByText(/needs.*system:update/i)).toBeTruthy();
   });
 
-  it("renders the server's refusal inline and leaves the face in edit", async () => {
+  // The refusal rides the slot's saveError, which every host draws beside Save
+  // (SaveError, #854), so it is in sight on a form scrolled to its last section.
+  it("records the server's refusal for the footer and leaves the face in edit", async () => {
     const { stub } = stubWrites({ method: "PUT", match: "/members/", status: 403, detail: "you may read system beta but not update it" });
     try {
       const { slot } = mountComponent();
@@ -391,7 +413,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       slot().begin();
       await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
       await expect(slot().save()).rejects.toBeTruthy();
-      expect((await within(form).findByRole("alert")).textContent).toContain("you may read system beta but not update it");
+      expect(slot().saveError()).toContain("you may read system beta but not update it");
       expect(slot().editing()).toBe(true);
     } finally { stub.mockRestore(); }
   });

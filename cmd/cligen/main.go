@@ -337,12 +337,42 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		Args:        args,
 		ArgExamples: argExamples,
 		Short:       op.Summary,
-		Long:        op.Description,
+		Long:        withArgHelp(op.Description, op, args),
 	}
 	c.Body = bodyFields(doc, op)
 	c.Query = queryFields(op)
 	c.Example = example(words, args, argExamples, c.Body)
 	return c
+}
+
+// repeatedNameHelp is the line a tree-entity argument's help carries: a name is
+// not unique, so a repeated one is refused and the operator is told how to say
+// which row they mean (#1134).
+const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead"
+
+// withArgHelp appends an Arguments section to a command's long help: each path
+// argument that the API addresses by a dotted address (its OpenAPI description
+// says so) is documented with that description and the repeated-name rule. An
+// argument that is a single global token, or a uuid alone, has no such rule and
+// gets no line.
+func withArgHelp(long string, op operation, args []string) string {
+	var lines []string
+	for _, a := range args {
+		for _, p := range op.Parameters {
+			if p.In == "path" && p.Name == a && strings.Contains(p.Description, "dotted address") {
+				lines = append(lines, fmt.Sprintf("  <%s>  %s; %s.", a, strings.TrimSuffix(p.Description, "."), repeatedNameHelp))
+				break
+			}
+		}
+	}
+	if len(lines) == 0 {
+		return long
+	}
+	help := "Arguments:\n" + strings.Join(lines, "\n")
+	if long == "" {
+		return help
+	}
+	return long + "\n\n" + help
 }
 
 // pathParamExample is the first example the operation's path parameter carries,

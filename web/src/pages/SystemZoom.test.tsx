@@ -902,6 +902,50 @@ describe("the place configures beside its system (#872)", () => {
   });
 });
 
+// Leaving Configure drops the face, and its drafts with it. With drafts that
+// differ from the row the operator is asked first; a clean edit leaves freely.
+describe("leaving Configure with unsaved drafts", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function dirtyConfigure() {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+    const name = await within(face).findByDisplayValue("boardroom");
+    return { face, name };
+  }
+  const overview = () => screen.getByRole("tab", { name: "Overview" });
+
+  it("asks first, and confirming discards the drafts and leaves", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { name } = await dirtyConfigure();
+    fireEvent.input(name, { target: { value: "exec-boardroom" } });
+    fireEvent.click(overview());
+    expect(ask).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());
+    expect(overview().getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("cancelling stays on Configure with the drafts intact", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { name } = await dirtyConfigure();
+    fireEvent.input(name, { target: { value: "exec-boardroom" } });
+    fireEvent.click(overview());
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("configure-face")).toBeTruthy();
+    expect((name as HTMLInputElement).value).toBe("exec-boardroom");
+    expect(screen.getByRole("tab", { name: "Configure" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not ask when editing but nothing changed, or when not editing", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await dirtyConfigure();
+    fireEvent.click(overview());
+    await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());
+    expect(ask).not.toHaveBeenCalled();
+  });
+});
+
 describe("?edit=1 lands on configure (#800)", () => {
   it("opens the configure tab editing from a bare ?edit=1 address", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
@@ -940,7 +984,9 @@ describe("the miss face (#800)", () => {
     // What a create leaves behind: the list refreshed, the view now stale.
     void r.qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] });
     await waitFor(() => expect(answer).toBeTypeOf("function"));
-    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    // The read is held open until answer, so the miss clearing here is the page
+    // seeing the refetch, not the refetch landing.
+    await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
     const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
     expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();

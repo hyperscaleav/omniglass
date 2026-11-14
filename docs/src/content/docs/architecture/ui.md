@@ -68,7 +68,7 @@ unit Omniglass monitors; places are folders and metadata; components are pieces 
 A system's view is its place card (type, tags, the place's own panel) above the system card
 (verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
 URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
-occupant state on each marker, ADR-0128, the data), Activity (the history, the events, the
+occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
 logs), and Configure (the one form). A place holding exactly one system lands on it; a place
 holding none or several keeps its own view, a brief card per system and the outline rooted
 there; a component's view carries its place card, marked as its own or its system's. The
@@ -224,6 +224,28 @@ signals, and the name-to-uuid redirect keeps its query string so a name-shaped e
 resolution. Every URL-reachable state is also a state the
 [docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
 what retired the one-shot handoffs.
+
+**A blade or workspace edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
+blade stack and by the Configure face) is the one place that knows an editor is open, so three rules
+hang off it (#854):
+
+1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
+   components list, the fleet view, the system roles and health reads (prefix keys, so every system's
+   copy), and the verdict read. A component that staffs a role is refused by the server (409,
+   referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
+2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
+   (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
+   Configure footer), where the operator's eyes are, not at the top of a long form. A save that
+   rejects is never swallowed silently.
+3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
+   asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
+   discards the drafts; cancelling stays on Configure with them intact. The guard covers the form's
+   own drafts, a component's staged memberships (a picked primary, a removed chip) included; a
+   router-wide guard (a link out of the page, closing the tab) is not built.
+
+A changed route id resets the edit too: each host keys its Configure face on the id
+(`<Show when={id()} keyed>`), so another place, system or component is a new face with a fresh slot and
+drafts, never the previous entity's half-typed edit under the new page.
 
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
 grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries

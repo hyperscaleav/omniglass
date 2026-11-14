@@ -150,7 +150,7 @@ holds the lab to that, tier by tier, and a gap fails naming the owner and the ti
 
 | Tier | Holds for | What must be there |
 | --- | --- | --- |
-| **built-in** | every component, endpoint by endpoint | the data the node and the platform write about an endpoint whatever its device: reachability and its rung, a response time once the device answers, a poll duration, a held session's state and the push count of its listeners (`node-probe`), and a webhook's post count (`platform`) |
+| **built-in** | every component, endpoint by endpoint | the data the node and the platform write about an endpoint whatever its device: reachability and its rung, a response time once the device answers, a poll duration and its CPU time, a held session's state and the push count of its listeners (`node-probe`), and a webhook's post count (`platform`) |
 | **collected** | every component | at least one value from the device's own API that is a class signal (a power state, a mute, a scene), beyond its identity (model, serial, firmware) and `uptime` |
 | **system** | every system | at least one value of its own, collected or calculated |
 
@@ -575,6 +575,14 @@ How to read each row:
   next. It measures the property lane, whose retention deletes in chunks; the metric lane's retention
   mostly drops whole daily partitions, which has no rate to read. The probe removes its rows when it
   is done, and `--backlog 0` skips it, leaving the server running as it was.
+- **worklist pull loss**: each node's worst share of worklist pulls the bus refused or the node could
+  not read, over the window, read from the `worklist-pull-loss-ratio` every node reports on its own
+  platform component each report window. The row prints the worst node by name and how many nodes
+  were refused, `0 %` when every pull was served, and counts any node that reported nothing as
+  unreported. A node refused here keeps running its last worklist,
+  so the delivery table can read 0 while it misses every change made since. A read that failed, or
+  found no node reporting, prints `not measured` with the reason under the table: every node reports
+  the ratio every window, so finding none is no reading, not a clean one.
 
 #### Every request reached its endpoint and was answered
 
@@ -922,6 +930,12 @@ pass    delivery_loss/ingest/metric     exact  0         0         0      -     
 stream's backlog note when the stream was the cause. A run whose delivery read was not measured, or
 read no kind carrying items, fails as `delivery_loss` with the reason: a fleet that delivered nothing in
 the window is not a fleet that lost nothing.
+
+`worklist_loss/<node>` is each node's worst worklist pull loss over the window, and any node above 0
+fails with a note giving the share of its pulls that failed: a node refused on every pull reads 1. The
+read starts from every node the lab holds, so a node that reported nothing in the window fails as
+missing rather than dropping out. A run whose worklist read failed, or found no node, fails as
+`worklist_loss` with the reason.
 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this

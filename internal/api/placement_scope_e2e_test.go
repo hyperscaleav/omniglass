@@ -364,16 +364,16 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 
 	create := map[string]any{"name": "panel-1", "product": f.product.Name, "parent": f.rackID, "location": "1"}
 	status, body := f.c.send(f.narrow, http.MethodPost, "/components", create)
-	if status != http.StatusConflict {
-		t.Fatalf("create against an in-scope-ambiguous location = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("create against an in-scope-ambiguous location = %d, want 404\nbody: %s", status, body)
 	}
 	for _, id := range []string{eastOne, westOne} {
 		if !strings.Contains(string(body), id) {
-			t.Errorf("409 body = %s, want it to name the in-scope candidate %s the operator has to choose between", body, id)
+			t.Errorf("404 body = %s, want it to name the in-scope candidate %s the operator has to choose between", body, id)
 		}
 	}
 	if strings.Contains(string(body), hiddenOne) {
-		t.Fatalf("409 body = %s, leaks the out-of-scope room's uuid %s", body, hiddenOne)
+		t.Fatalf("404 body = %s, leaks the out-of-scope room's uuid %s", body, hiddenOne)
 	}
 
 	// A uuid from the list is a spelling that resolves, so the answer is
@@ -394,12 +394,12 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	// The owner, whose scope holds all three, is refused with all three named:
 	// the two-row list above is this caller's scope, not the fleet's shape.
 	status, body = f.c.send(f.owner, http.MethodPost, "/components", create)
-	if status != http.StatusConflict {
-		t.Fatalf("owner create against the ambiguous location = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("owner create against the ambiguous location = %d, want 404\nbody: %s", status, body)
 	}
 	for _, id := range []string{eastOne, westOne, hiddenOne} {
 		if !strings.Contains(string(body), id) {
-			t.Errorf("owner 409 body = %s, want it to name candidate %s", body, id)
+			t.Errorf("owner 404 body = %s, want it to name candidate %s", body, id)
 		}
 	}
 }
