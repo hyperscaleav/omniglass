@@ -157,6 +157,21 @@ func TestASweepsQueriesNameTheNodeAsALiteral(t *testing.T) {
 	}
 }
 
+// The node's installed worklist is matched against every enabled task the
+// server holds for it, probes included, since the worklist carries both.
+func TestANodesWorklistQueriesReadTheInstalledAndTheHeld(t *testing.T) {
+	q := installedWorklistQuery("sweep-o'brien")
+	for _, want := range []string{"'worklist-task-count'", "'sweep-o''brien'", "order by m.ts desc limit 1"} {
+		if !strings.Contains(q, want) {
+			t.Fatalf("installed query lacks %q:\n%s", want, q)
+		}
+	}
+	q = heldTasksQuery("sweep-o'brien")
+	if !strings.Contains(q, "t.enabled") || !strings.Contains(q, "'sweep-o''brien'") || strings.Contains(q, "mode") || strings.Contains(q, "driver") {
+		t.Fatalf("held query is not every enabled task of the node:\n%s", q)
+	}
+}
+
 // A report is stamped at its window's end, so the step's poll CPU is the
 // reports stamped from one report window into the step to its end: every
 // run they hold ran inside the step.

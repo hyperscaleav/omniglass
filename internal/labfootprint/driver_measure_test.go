@@ -143,6 +143,7 @@ func TestOnlyAMemoryMissIsSweptAgain(t *testing.T) {
 		{"memory missed", driverAttempt{row: DriverCost{MemoryNotMeasured: "not a line"}}, true},
 		{"neither fit", driverAttempt{err: noFitError("d memory: x; d cpu: y")}, true},
 		{"broke", driverAttempt{err: errors.New("start the node: no")}, false},
+		{"worklist undelivered", driverAttempt{err: worklistUndeliveredError{installed: 16000, held: 24000}}, false},
 	} {
 		if got := c.a.wantsBiggerStep(); got != c.want {
 			t.Fatalf("%s: wantsBiggerStep = %v, want %v", c.name, got, c.want)
@@ -172,5 +173,44 @@ func TestADriversKeptSweepIsItsMostMeasured(t *testing.T) {
 	}
 	if _, err = keptAttempt([]driverAttempt{{err: noFitError("x")}, {err: errors.New("broke")}}); err == nil || err.Error() != "broke" {
 		t.Fatalf("no row at all: %v, want the last error", err)
+	}
+}
+
+// A step whose worklist the node never installed measured a node running
+// an older one (#1586): the server refuses a reply over the bus's payload
+// cap and the node keeps what it had. The sweep halves the step, never back
+// to one already swept, until the worklist arrives; and a step that missed
+// memory below the refused one grows no further than half of it.
+func TestAWorklistTheNodeNeverTookHalvesTheStep(t *testing.T) {
+	refused := driverAttempt{err: worklistUndeliveredError{installed: 16000, held: 24000}}
+	missed := driverAttempt{row: DriverCost{MemoryNotMeasured: "not a line"}}
+	measured := driverAttempt{row: DriverCost{Driver: "d"}}
+	for _, c := range []struct {
+		name                string
+		a                   driverAttempt
+		step, prev, maxStep int
+		want, wantMax       int
+	}{
+		{"refused after a miss", refused, 6400, 1600, 6400, 3200, 3200},
+		{"refused first", refused, 6400, 0, 6400, 3200, 3200},
+		{"refused down to the step before", refused, 3200, 1600, 3200, 0, 3200},
+		{"a miss under a refusal's cap", missed, 1600, 0, 3200, 3200, 3200},
+		{"a miss at the cap", missed, 3200, 1600, 3200, 0, 3200},
+		{"a miss grows", missed, 1600, 0, 6400, 6400, 6400},
+		{"measured", measured, 1600, 0, 6400, 0, 6400},
+	} {
+		got, gotMax, ok := nextAttempt(c.a, c.step, c.prev, c.maxStep)
+		if got != c.want || ok != (c.want > 0) || (ok && gotMax != c.wantMax) {
+			t.Fatalf("%s: nextAttempt = %d, %d, %v; want %d, %d", c.name, got, gotMax, ok, c.want, c.wantMax)
+		}
+	}
+}
+
+func TestAnUndeliveredWorklistSaysWhatTheNodeRuns(t *testing.T) {
+	got := worklistUndeliveredError{installed: 16000, held: 24000}.Error()
+	for _, want := range []string{"16000", "24000", "max payload", "#1586"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("%q lacks %q", got, want)
+		}
 	}
 }

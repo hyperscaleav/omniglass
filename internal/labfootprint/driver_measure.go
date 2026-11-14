@@ -258,19 +258,23 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 	for i, t := range targets {
 		h.say("[%d/%d] %s on %s, polls %v", i+1, len(targets), t.Driver, t.Product, t.Polls)
 		var attempts []driverAttempt
-		for step, more := cfg.StepTasks, true; more; {
+		for step, prev, maxStep := cfg.StepTasks, 0, cfg.MaxStepTasks; ; {
 			row, err := h.measureDriver(ctx, eng, api, cfg, t, step, report)
 			if ctx.Err() != nil {
 				return table, ctx.Err()
 			}
 			a := driverAttempt{row: row, err: err}
 			attempts = append(attempts, a)
-			if !a.wantsBiggerStep() {
+			next, nextMax, more := nextAttempt(a, step, prev, maxStep)
+			if !more {
 				break
 			}
-			if step, more = nextStepTasks(step, cfg.MaxStepTasks); more {
-				h.say("  memory did not show at this step: sweeping again at %d tasks a step", step)
+			if a.worklistUndelivered() {
+				h.say("  %v: sweeping again at %d tasks a step", err, next)
+			} else {
+				h.say("  memory did not show at this step: sweeping again at %d tasks a step", next)
 			}
+			step, prev, maxStep = next, step, nextMax
 		}
 		row, err := keptAttempt(attempts)
 		if err != nil {
@@ -311,6 +315,44 @@ func (a driverAttempt) wantsBiggerStep() bool {
 		return errors.As(a.err, &nf)
 	}
 	return a.row.MemoryNotMeasured != ""
+}
+
+// worklistUndelivered is whether the node never installed the worklist of
+// the attempt's step.
+func (a driverAttempt) worklistUndelivered() bool {
+	var wu worklistUndeliveredError
+	return errors.As(a.err, &wu)
+}
+
+// worklistUndeliveredError is a step whose worklist the node never
+// installed: the server refuses a reply over the bus's max payload, and the
+// node runs on with the last one it took (#1586), so the step measured a
+// smaller one than it was sized for.
+type worklistUndeliveredError struct{ installed, held int }
+
+func (e worklistUndeliveredError) Error() string {
+	return fmt.Sprintf("the node installed %d of the %d tasks the server holds for it: "+
+		"a worklist over the bus's max payload is not delivered (#1586)", e.installed, e.held)
+}
+
+// nextAttempt is the step a driver is swept again at after attempt a at
+// step, prev the step swept before it (0 for none), and the cap the sweep
+// after it grows to. A worklist the node never took halves the step and
+// caps the sweep there, down to but not onto the step before; a memory miss
+// grows the step to the cap; anything else is done.
+func nextAttempt(a driverAttempt, step, prev, maxStep int) (int, int, bool) {
+	if a.worklistUndelivered() {
+		half := step / 2
+		if half <= prev {
+			return 0, maxStep, false
+		}
+		return half, half, true
+	}
+	if !a.wantsBiggerStep() {
+		return 0, maxStep, false
+	}
+	next, ok := nextStepTasks(step, maxStep)
+	return next, maxStep, ok
 }
 
 // figures is how many of memory and CPU an attempt measured.
@@ -418,6 +460,9 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 		if err := sleep(ctx, warmup); err != nil {
 			return DriverCost{}, err
 		}
+		if err := h.waitWorklistInstalled(ctx, node); err != nil {
+			return DriverCost{}, fmt.Errorf("%d components: %w", want, err)
+		}
 		s, w, err := h.measureStep(ctx, nodeID, window)
 		if err != nil {
 			return DriverCost{}, err
@@ -470,6 +515,46 @@ func (h *harness) waitDriverTasks(ctx context.Context, node string, want int) (i
 			return 0, err
 		}
 	}
+}
+
+// waitWorklistInstalled waits for the node to report a worklist of every
+// task the server holds for it, and fails with what it did install if it
+// does not: past the warmup the node has pulled several times, so a count
+// short of the server's is a reply it never got.
+func (h *harness) waitWorklistInstalled(ctx context.Context, node string) error {
+	deadline := time.Now().Add(driverTasksWait)
+	for {
+		held, err := h.psqlInt(ctx, heldTasksQuery(node))
+		if err != nil {
+			return fmt.Errorf("count the node's tasks: %w", err)
+		}
+		installed, err := h.psqlInt(ctx, installedWorklistQuery(node))
+		if err != nil {
+			return fmt.Errorf("read the node's worklist: %w", err)
+		}
+		if installed == held {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return worklistUndeliveredError{installed: installed, held: held}
+		}
+		if err := sleep(ctx, 3*time.Second); err != nil {
+			return err
+		}
+	}
+}
+
+// psqlInt runs a query of one whole number.
+func (h *harness) psqlInt(ctx context.Context, q string) (int, error) {
+	out, err := h.psql(ctx, q)
+	if err != nil {
+		return 0, err
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(out), 64)
+	if err != nil {
+		return 0, fmt.Errorf("%q: %w", out, err)
+	}
+	return int(f), nil
 }
 
 // addSimComponent adds one simulated component to node. The first waits out

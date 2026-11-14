@@ -147,6 +147,26 @@ func sweepWindow(window time.Duration, polls []time.Duration) time.Duration {
 	return max(window, slices.Max(polls))
 }
 
+// heldTasksQuery counts every enabled task the server holds for a node, the
+// driver's polls and the components' probes: the worklist it sends.
+func heldTasksQuery(node string) string {
+	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
+		"join node n on n.principal_id = i.node_name " +
+		"where t.enabled and n.name = " + sqlLiteral(node)
+}
+
+// installedWorklistQuery reads the size of the worklist a node last
+// installed, which it reports from its platform component, named for it; -1
+// before its first.
+func installedWorklistQuery(node string) string {
+	return "select coalesce((select m.value from metric m " +
+		"join metric_series s on s.id = m.series_id " +
+		"join metric_type mt on mt.id = s.metric_type_id " +
+		"join component c on c.id = s.component_id " +
+		"where mt.name = 'worklist-task-count' and c.name = " + sqlLiteral(node) +
+		" order by m.ts desc limit 1), -1)"
+}
+
 // driverTasksQuery counts the enabled driver polls a node runs.
 func driverTasksQuery(node string) string {
 	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
