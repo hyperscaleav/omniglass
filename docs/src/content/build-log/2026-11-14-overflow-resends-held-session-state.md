@@ -17,6 +17,7 @@ calls it when the spool reports an overflow, beside the forgetting it already di
 transition-only behavior is otherwise unchanged. The resend goes through the spool, so a resend that
 is dropped raises the overflow again and the next tick repeats it. The nodes page names what an
 overflow resends. ADR-0453's point 4 already says the node sends current state again, so it needs no
-amendment. A unit test cuts the bus under a held session, overflows a one-batch spool, restores the
-bus and asserts the next tick publishes the state, the verdict and the fault once each, and another
+amendment. A unit test cuts the bus, drops a held session's connection so it reports recovering,
+overflows a one-batch spool past that batch, restores the bus and asserts the next tick publishes the
+recovering state, the verdict and the fault once each, with the state reaching the bus; another
 asserts a tick without an overflow publishes nothing.
