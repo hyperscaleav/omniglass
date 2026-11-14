@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -336,6 +337,28 @@ func exactFamilies() []exactFamily {
 				if len(out) == 0 {
 					return []exactReading{{Name: "delivery_loss", Missing: true, Note: "not measured: no telemetry kind carried items in the window"}}
 				}
+				return out
+			}},
+		{Family: "worklist_loss", About: "each node's worst share of worklist pulls refused or unreadable (#1868), per node",
+			Read: func(r ScaleReport) []exactReading {
+				if gap := r.worklistGap(); gap != "" {
+					return []exactReading{{Name: "worklist_loss", Missing: true, Note: "not measured: " + gap}}
+				}
+				var out []exactReading
+				for _, n := range slices.Sorted(maps.Keys(r.WorklistLoss)) {
+					x := exactReading{Name: "worklist_loss/" + n, Value: r.WorklistLoss[n]}
+					if x.Value > 0 {
+						x.Note = fmt.Sprintf("%.0f%% of %s's worklist pulls failed, refused or unreadable, in its worst window", 100*x.Value, n)
+					}
+					out = append(out, x)
+				}
+				// A node that reported nothing fails its reading: every
+				// running node reports the ratio every window.
+				for _, n := range r.WorklistUnreported {
+					out = append(out, exactReading{Name: "worklist_loss/" + n, Missing: true,
+						Note: n + " reported no worklist pull loss in the window"})
+				}
+				slices.SortFunc(out, func(a, b exactReading) int { return strings.Compare(a.Name, b.Name) })
 				return out
 			}},
 		{Family: "delivery_unsettled_boots", About: "node boots whose batches had not all settled when the read ran out",

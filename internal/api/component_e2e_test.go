@@ -254,9 +254,9 @@ func TestComponentRequiresProduct(t *testing.T) {
 	}
 }
 
-// TestGetComponentByAmbiguousNameIs409 is the DDL-and-refusal-ship-together
+// TestGetComponentByAmbiguousNameIs404 is the DDL-and-refusal-ship-together
 // half of #627 proved over HTTP: mapComponentErr must translate
-// storage.ErrAmbiguousName to a 409 (via the shared mapRefErr, moved into this
+// storage.ErrAmbiguousName to a 404 (#1134, via the shared mapRefErr, moved into this
 // task from its original later slot) rather than falling through to its
 // default 500. Landing the migration without this wiring would turn a
 // routine duplicate-name lookup into an unmapped internal error the moment two
@@ -264,7 +264,7 @@ func TestComponentRequiresProduct(t *testing.T) {
 // created twice in different placement buckets (unplaced, and under a
 // parent), which #627 makes legal, so GET by the now-ambiguous bare name has
 // no single answer and must be refused, not guessed. Skipped under -short.
-func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
+func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -291,23 +291,23 @@ func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "dup-1", "product": "generic-device", "parent": "holder"}, http.StatusCreated)
 
 	status, body := c.send(ownerTok, http.MethodGet, "/components/dup-1", nil)
-	if status != http.StatusConflict {
-		t.Fatalf("get ambiguous bare name status = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("get ambiguous bare name status = %d, want 404\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-1") {
-		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 
 // TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates drives
 // ruling 2 (scope decides before ambiguity) over the CREATE path, not just
-// the read path TestGetComponentByAmbiguousNameIs409 already covers: a
+// the read path TestGetComponentByAmbiguousNameIs404 already covers: a
 // deploy principal scoped to one component's subtree posts a bare parent
 // name that is ambiguous FLEET-WIDE but unique within its own scope, and the
-// create must resolve to the in-scope row cleanly (not 409, not a coin-flip
+// create must resolve to the in-scope row cleanly (not a 404, not a coin-flip
 // onto the wrong "shared") rather than the pre-fix scope-blind resolve that
 // would either land on the wrong parent or refuse a create that should
-// succeed. It then drives the true 409: two in-scope matches for the same
+// succeed. It then drives the true ambiguity: two in-scope matches for the same
 // bare name, and asserts the response body carries neither in-scope uuid it
 // cannot yet distinguish between NOR the out-of-scope uuid the caller was
 // never allowed to see, closing the disclosure C2 named (mapRefErr's
@@ -381,7 +381,7 @@ func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *test
 
 	// A second "shared", under wingB this time, makes the bare name
 	// ambiguous WITHIN the caller's own scope too: now there is no single
-	// answer, and the create must 409, not guess wingA's.
+	// answer, and the create must be refused, not guess wingA's.
 	var wingBShared struct {
 		ID string `json:"id"`
 	}
@@ -389,14 +389,14 @@ func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *test
 		t.Fatalf("decode wingB/shared: %v", err)
 	}
 	status, body := c.send(deployTok, http.MethodPost, "/components", map[string]any{"name": "leaf-2", "product": "generic-device", "parent": "shared"})
-	if status != http.StatusConflict {
-		t.Fatalf("create with in-scope-ambiguous parent status = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("create with in-scope-ambiguous parent status = %d, want 404\nbody: %s", status, body)
 	}
 	// The out-of-scope uuid must never appear in the body (the disclosure
 	// C2 named); the two in-scope candidates MAY appear, per mapRefErr's
 	// contract of listing only what the caller's own scope proved exists.
 	if strings.Contains(string(body), outOfScopeShared.ID) {
-		t.Fatalf("409 body = %s, leaks the out-of-scope shared's uuid %s", body, outOfScopeShared.ID)
+		t.Fatalf("404 body = %s, leaks the out-of-scope shared's uuid %s", body, outOfScopeShared.ID)
 	}
 }
 

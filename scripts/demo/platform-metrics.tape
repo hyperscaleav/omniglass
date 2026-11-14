@@ -4,7 +4,8 @@
 # lands its own schedule and runtime readings on that component as plain metrics (no prefix on the
 # keys), and the server writes checkin-age beside them every 15 s, the seconds since the node last
 # checked in. The rows are Omniglass's own: an operator may relabel them, not rename them (#1625,
-# ADR-1625).
+# ADR-1625). Once a report window the node also lands its lane pool's busy share,
+# worker-busy-fraction, a level from 0 to 1 read as headroom (#1686).
 
 Type "# The platform system: reserved to Omniglass, unplaced, one member per node"
 Enter
@@ -17,7 +18,7 @@ Enter
 Wait
 
 Hide
-Type `demo_until 150 'omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"checkin-age\" or .metric_type_name == \"schedule-lateness\" or .metric_type_name == \"process-goroutine-count\")] | length == 3"'`
+Type `demo_until 150 'omniglass component metric list edge-hq | jq -e "[.metrics[] | select(.metric_type_name == \"checkin-age\" or .metric_type_name == \"schedule-lateness\" or .metric_type_name == \"process-goroutine-count\" or .metric_type_name == \"worker-busy-fraction\")] | length == 4"'`
 Enter
 Wait@180s
 Type "clear"
@@ -34,6 +35,12 @@ Type "# How late each poll ran against its schedule, and the node's own process"
 Enter
 Wait
 Type `omniglass component metric list edge-hq | jq -c '.metrics[] | select(.metric_type_name | test("^(schedule-lateness|schedule-gap-excess|process-goroutine-count)$")) | {metric: .metric_type_name, value}'`
+Enter
+Wait
+Type "# Once a report window: how busy the lane pool was, 0 idle to 1 every worker busy"
+Enter
+Wait
+Type `omniglass component metric list edge-hq | jq -c '.metrics[] | select(.metric_type_name == "worker-busy-fraction") | {metric: .metric_type_name, pool: .instance, level: (.value >= 0 and .value <= 1)}'`
 Enter
 Wait
 Type "# The server writes checkin-age every 15 s: seconds since the node last checked in"

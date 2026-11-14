@@ -29,6 +29,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // failingWorklist is the gateway with a worklist read that fails while down
@@ -291,4 +292,78 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	pollUntil(t, 5*time.Second, "no failed pull naming the read failure in the node's logs", func() bool {
 		return nodeLogged(t, ctx, gw, nodeName, "worklist pull failed, the node keeps its last worklist", "worklist read failed")
 	})
+}
+
+// A node whose worklist pulls are refused runs its last worklist, and says so
+// (#1868): each report window lands worklist-pull-loss-ratio on its platform
+// component, 1 while every pull is refused and 0 again once one is served.
+// edge-hq's worklist outgrew the bus's payload ceiling and every pull after
+// its first was refused while each other loss ratio read 0.
+func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	token := enrolledNode(t, ctx, gw, "edge-w")
+
+	var down atomic.Bool
+	var failFirst atomic.Int64
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, failingWorklist{gw, &down, &failFirst})
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
+	defer apiSrv.Close()
+
+	runCtx, stop := context.WithCancel(ctx)
+	ran := make(chan error, 1)
+	go func() {
+		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-w", Token: token,
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 200 * time.Millisecond,
+			WorklistEvery: 200 * time.Millisecond, ReportEvery: 500 * time.Millisecond})
+		ran <- err
+	}()
+	defer func() {
+		stop()
+		if err := <-ran; err != nil {
+			t.Errorf("node run: %v", err)
+		}
+	}()
+
+	var component string
+	pollUntil(t, 10*time.Second, "edge-w never got a platform component", func() bool {
+		n, err := gw.GetNode(ctx, "edge-w", scope.Set{All: true})
+		if err != nil || n.PlatformComponentID == nil {
+			return false
+		}
+		component = *n.PlatformComponentID
+		return true
+	})
+	loss := func() float64 {
+		m, err := gw.LatestMetric(ctx, component, writerclass.WorklistPullLossRatio)
+		if err != nil {
+			t.Fatalf("latest %s: %v", writerclass.WorklistPullLossRatio, err)
+		}
+		if m == nil {
+			return -1
+		}
+		return m.Value
+	}
+	pollUntil(t, 10*time.Second, "a node served its worklist never read 0", func() bool { return loss() == 0 })
+
+	down.Store(true)
+	pollUntil(t, 15*time.Second, "a node refused every pull never read 1", func() bool { return loss() == 1 })
+
+	down.Store(false)
+	pollUntil(t, 15*time.Second, "a node served again never read 0", func() bool { return loss() == 0 })
 }
