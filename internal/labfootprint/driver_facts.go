@@ -46,13 +46,15 @@ func ReadDriverCostTable(b []byte) (DriverCostTable, error) {
 }
 
 // DriverCostFact is one shipped driver as the docs list it: its measured
-// cost, or why it has none.
+// cost, or why it has none; a measured driver with one figure the sweep could
+// not fit carries that figure's reason too.
 type DriverCostFact struct {
 	Driver                string   `json:"driver"`
 	Product               string   `json:"product,omitempty"`
 	Polls                 []string `json:"polls,omitempty"`
 	Measured              bool     `json:"measured"`
 	MemoryPerTaskKiB      *float64 `json:"memory_per_task_kib,omitempty"`
+	MemoryWarmMiB         *float64 `json:"memory_warm_mib,omitempty"`
 	MillicoresPerTask     *float64 `json:"millicores_per_task,omitempty"`
 	CPUPerRunMillis       *float64 `json:"cpu_per_run_ms,omitempty"`
 	ThreadCPUPerRunMillis *float64 `json:"thread_cpu_per_run_ms,omitempty"`
@@ -83,9 +85,16 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, t DriverCostTab
 		if i := slices.IndexFunc(t.Rows, func(r DriverCost) bool { return r.Driver == tg.Driver }); i >= 0 {
 			r := t.Rows[i]
 			d.Measured = true
-			d.MemoryPerTaskKiB = new(r.MemoryPerTaskBytes / 1024)
-			d.MillicoresPerTask, d.CPUPerRunMillis = new(r.MillicoresPerTask), new(r.CPUPerRunMillis)
-			d.ThreadCPUPerRunMillis, d.ThreadShare = new(r.ThreadCPUPerRunMillis), new(r.ThreadShare)
+			if r.MemoryNotMeasured == "" {
+				d.MemoryPerTaskKiB, d.MemoryWarmMiB = new(r.MemoryPerTaskBytes/1024), new(r.MemoryWarmBytes/(1<<20))
+			}
+			if r.CPUNotMeasured == "" {
+				d.MillicoresPerTask, d.CPUPerRunMillis = new(r.MillicoresPerTask), new(r.CPUPerRunMillis)
+				d.ThreadShare = new(r.ThreadShare)
+			}
+			d.ThreadCPUPerRunMillis = new(r.ThreadCPUPerRunMillis)
+			d.Reason = strings.Join(slices.DeleteFunc([]string{r.MemoryNotMeasured, r.CPUNotMeasured},
+				func(s string) bool { return s == "" }), "; ")
 		} else if i := slices.IndexFunc(t.NotMeasured, func(s DriverSkip) bool { return s.Driver == tg.Driver }); i >= 0 {
 			d.Reason = t.NotMeasured[i].Reason
 		} else {

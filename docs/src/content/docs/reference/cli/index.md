@@ -3016,7 +3016,7 @@ Measure what each shipped driver's polls cost a node, and write the table the do
 omniglass lab perf drivers [flags]
 ```
 
-Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at --step-tasks and twice that many poll tasks; the table is the slope of the node's memory and CPU over its task count, with the threads' own CPU per run from poll-cpu-time beside it. A driver whose steps do not fit a line is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
+Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A figure whose steps do not fit a line is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
 
 The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit both files in a reviewed change.
 

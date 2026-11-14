@@ -184,61 +184,81 @@ type DriverStep struct {
 // thread's own clock (#1870). ThreadShare is the thread clock over the
 // cgroup: the part of a run the clock sees, the rest being work the run
 // hands to other goroutines (a held session's reader, the report, the GC).
+// MemoryWarmBytes is the node's one-off jump when its first tasks land (its
+// lanes start, its heap grows to working size), apart from the slope.
+// Memory and CPU are judged apart: a figure whose steps are not a line is
+// left at zero with its reason in MemoryNotMeasured or CPUNotMeasured.
 type DriverCost struct {
 	Driver                string       `json:"driver"`
 	Product               string       `json:"product"`
 	Polls                 []string     `json:"polls"`
 	Tasks                 int          `json:"tasks"`
 	MemoryPerTaskBytes    float64      `json:"memory_per_task_bytes"`
+	MemoryWarmBytes       float64      `json:"memory_warm_bytes"`
 	MillicoresPerTask     float64      `json:"millicores_per_task"`
 	CPUPerRunMillis       float64      `json:"cpu_per_run_ms"`
 	ThreadCPUPerRunMillis float64      `json:"thread_cpu_per_run_ms"`
 	ThreadShare           float64      `json:"thread_share"`
 	MemoryResidual        float64      `json:"memory_residual"`
 	CPUResidual           float64      `json:"cpu_residual"`
+	MemoryNotMeasured     string       `json:"memory_not_measured,omitempty"`
+	CPUNotMeasured        string       `json:"cpu_not_measured,omitempty"`
 	Steps                 []DriverStep `json:"steps"`
 }
 
-// AssembleDriverCost fits a driver's steps: memory per task within
-// memResidual of a line, CPU per task within cpuResidual (CPU is the
-// noisier read). A step set that does not fit is refused, naming which
-// figure, rather than written down as a cost.
+// AssembleDriverCost fits a driver's steps. Memory per task is the slope
+// over the loaded steps, within memResidual of a line, and the idle step
+// sits apart as the warm cost; CPU per task is the slope over every step,
+// within cpuResidual (CPU is the noisier read, and has no warm jump). Each
+// figure that does not fit is left out with its reason; a driver with
+// neither is refused, naming both.
 func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResidual float64) (DriverCost, error) {
-	mem := make([]SweepPoint, len(steps))
-	cpu := make([]SweepPoint, len(steps))
+	var mem, cpu []SweepPoint
 	// The thread clock's mean is per run, and a step's runs scale with its
 	// tasks, so each step's mean weighs by its tasks.
-	var thread float64
+	var thread, idle float64
 	var weight, top int
-	for i, s := range steps {
-		mem[i] = SweepPoint{Tasks: s.Tasks, Value: s.WorkingSetBytes}
-		cpu[i] = SweepPoint{Tasks: s.Tasks, Value: s.Millicores}
+	hasIdle := false
+	for _, s := range steps {
+		cpu = append(cpu, SweepPoint{Tasks: s.Tasks, Value: s.Millicores})
+		if s.Tasks > 0 {
+			mem = append(mem, SweepPoint{Tasks: s.Tasks, Value: s.WorkingSetBytes})
+		} else {
+			idle, hasIdle = s.WorkingSetBytes, true
+		}
 		top = max(top, s.Tasks)
 		thread += s.PollCPUMillis * float64(s.Tasks)
 		weight += s.Tasks
-	}
-	memFit, err := FitSlope(mem, memResidual)
-	if err != nil {
-		return DriverCost{}, fmt.Errorf("%s memory: %w", t.Driver, err)
-	}
-	cpuFit, err := FitSlope(cpu, cpuResidual)
-	if err != nil {
-		return DriverCost{}, fmt.Errorf("%s cpu: %w", t.Driver, err)
 	}
 	polls := make([]string, len(t.Polls))
 	for i, p := range t.Polls {
 		polls[i] = p.String()
 	}
-	c := DriverCost{
-		Driver: t.Driver, Product: t.Product, Polls: polls, Tasks: top,
-		MemoryPerTaskBytes: memFit.PerTask, MillicoresPerTask: cpuFit.PerTask,
-		CPUPerRunMillis: cpuFit.PerTask / t.RunsPerSecondPerTask(),
-		MemoryResidual:  memFit.Residual, CPUResidual: cpuFit.Residual,
-		Steps: steps,
-	}
+	c := DriverCost{Driver: t.Driver, Product: t.Product, Polls: polls, Tasks: top, Steps: steps}
 	if weight > 0 {
 		c.ThreadCPUPerRunMillis = thread / float64(weight)
-		c.ThreadShare = c.ThreadCPUPerRunMillis / c.CPUPerRunMillis
+	}
+	memFit, memErr := FitSlope(mem, memResidual)
+	if memErr != nil {
+		c.MemoryNotMeasured = fmt.Sprintf("%s memory: %v", t.Driver, memErr)
+	} else {
+		c.MemoryPerTaskBytes, c.MemoryResidual = memFit.PerTask, memFit.Residual
+		if hasIdle {
+			c.MemoryWarmBytes = memFit.Intercept - idle
+		}
+	}
+	cpuFit, cpuErr := FitSlope(cpu, cpuResidual)
+	if cpuErr != nil {
+		c.CPUNotMeasured = fmt.Sprintf("%s cpu: %v", t.Driver, cpuErr)
+	} else {
+		c.MillicoresPerTask, c.CPUResidual = cpuFit.PerTask, cpuFit.Residual
+		c.CPUPerRunMillis = cpuFit.PerTask / t.RunsPerSecondPerTask()
+		if c.ThreadCPUPerRunMillis > 0 {
+			c.ThreadShare = c.ThreadCPUPerRunMillis / c.CPUPerRunMillis
+		}
+	}
+	if memErr != nil && cpuErr != nil {
+		return DriverCost{}, fmt.Errorf("%s; %s", c.MemoryNotMeasured, c.CPUNotMeasured)
 	}
 	return c, nil
 }

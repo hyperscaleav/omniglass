@@ -976,15 +976,18 @@ in turn on a node that runs only the node:
   loopback while the simulator's work lands in a different cgroup. The node runs the product's own
   cadence (the heartbeat, probe and worklist pull a deployed node runs, not the lab's quicker clock),
   so its background work weighs on the figures as it would in the field.
-- **Three steps.** The node is measured holding none of the driver's components, then N, then 2N,
+- **Four steps.** The node is measured holding none of the driver's components, then N, 2N and 3N,
   where N components bring about `--step-tasks` tasks (each component brings one task per poll the
   driver declares). Each step warms up, then reads the node container's cgroup across a window long
   enough for the driver's slowest poll to run: CPU between the window's ends, and the working set
   (memory less file cache) as the median of reads spread across it.
-- **A line, or a refusal.** Memory per task and millicores per task are the slopes across the three
-  steps. A step off the line by more than a tenth of the sweep's rise in memory, or a quarter in CPU,
-  refuses the fit, and the driver is listed as not measured with the figure that failed, never
-  written down as a cost.
+- **A line, or a refusal.** Millicores per task is the slope across all four steps. Memory per task
+  is the slope across the three loaded steps alone: a node's memory jumps when its first tasks land
+  (its lanes start and its heap grows to its working size) and then rises by a slope, so the idle
+  step sits apart, and the loaded line's value at zero tasks over the idle node is the **warm cost**,
+  paid once. A step off its line by more than a tenth of the rise in memory, or a quarter in CPU,
+  refuses that figure, which is listed as not measured with why, never written down as a cost; the
+  other figure still stands, and only a driver with neither is left out.
 - **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
   node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
   polling thread's kernel clock, averaged over the reports wholly inside each step's window and read

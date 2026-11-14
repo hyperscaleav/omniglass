@@ -175,6 +175,7 @@ func TestADriversCostIsItsSlopesPerTaskAndPerRun(t *testing.T) {
 		{Components: 0, Tasks: 0, WorkingSetBytes: 30e6, Millicores: 5},
 		{Components: 100, Tasks: 200, WorkingSetBytes: 34e6, Millicores: 5 + 0.4*200, PollCPUMillis: 3},
 		{Components: 200, Tasks: 400, WorkingSetBytes: 38e6, Millicores: 5 + 0.4*400, PollCPUMillis: 5},
+		{Components: 300, Tasks: 600, WorkingSetBytes: 42e6, Millicores: 5 + 0.4*600, PollCPUMillis: 4},
 	}
 	cost, err := AssembleDriverCost(target, steps, 0.1, 0.2)
 	if err != nil {
@@ -184,20 +185,97 @@ func TestADriversCostIsItsSlopesPerTaskAndPerRun(t *testing.T) {
 		t.Fatalf("runs per second per task %v, want %v", target.RunsPerSecondPerTask(), rate)
 	}
 	perRun := 0.4 / rate
-	// The thread clock's mean is over runs, so the step with twice the tasks
-	// weighs twice: (3*200 + 5*400) / 600.
-	thread := (3.0*200 + 5.0*400) / 600
+	// The thread clock's mean is over runs, so the step with more tasks
+	// weighs more: (3*200 + 5*400 + 4*600) / 1200.
+	thread := (3.0*200 + 5.0*400 + 4.0*600) / 1200
 	if !near(cost.MemoryPerTaskBytes, 20_000) || !near(cost.MillicoresPerTask, 0.4) ||
 		!near(cost.CPUPerRunMillis, perRun) || !near(cost.ThreadCPUPerRunMillis, thread) ||
-		!near(cost.ThreadShare, thread/perRun) || cost.Tasks != 400 {
+		!near(cost.ThreadShare, thread/perRun) || cost.Tasks != 600 {
 		t.Fatalf("cost %+v, want 20,000 B and 0.4 mc per task, %.3f ms per run (thread %.3f ms)", cost, perRun, thread)
+	}
+	if cost.MemoryWarmBytes != 0 || cost.MemoryNotMeasured != "" || cost.CPUNotMeasured != "" {
+		t.Fatalf("a straight sweep has no warm cost and both figures: %+v", cost)
 	}
 	if strings.Join(cost.Polls, ",") != "30s,5m0s" {
 		t.Fatalf("polls %v", cost.Polls)
 	}
-	// A CPU sweep that is not a line is refused, naming which figure.
-	steps[1].Millicores = 400
-	if _, err := AssembleDriverCost(target, steps, 0.1, 0.2); err == nil || !strings.Contains(err.Error(), "cpu") {
-		t.Fatalf("a bent cpu sweep: %v, want a refusal naming cpu", err)
+}
+
+// A node's memory jumps when its first tasks land (its lanes start, its heap
+// grows to its working size) and then rises by a slope. The slope is fitted
+// over the loaded steps only, and the jump is the warm cost: the loaded
+// line at zero tasks over the idle node. CPU has no such jump and is fitted
+// over every step. The read that found it: an SNMP driver's working set
+// went 15.8, 25.9, 27.4 MiB at 0, 400, 800 tasks.
+func TestAWarmUpJumpIsAFixedCostNotPartOfTheSlope(t *testing.T) {
+	target := DriverTarget{Driver: "d", Product: "p", Polls: []time.Duration{time.Minute}}
+	const mb = 1 << 20
+	steps := []DriverStep{
+		{Tasks: 0, WorkingSetBytes: 15.8 * mb, Millicores: 0.5},
+		{Tasks: 400, WorkingSetBytes: 25.9 * mb, Millicores: 21.2, PollCPUMillis: 2},
+		{Tasks: 800, WorkingSetBytes: 27.4 * mb, Millicores: 41.4, PollCPUMillis: 2},
+		{Tasks: 1200, WorkingSetBytes: 28.9 * mb, Millicores: 61.6, PollCPUMillis: 2},
+	}
+	cost, err := AssembleDriverCost(target, steps, 0.1, 0.25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost.MemoryNotMeasured != "" || !near(cost.MemoryPerTaskBytes, 1.5*mb/400) {
+		t.Fatalf("memory %+v, want the loaded steps' slope of %.0f B a task", cost, 1.5*mb/400)
+	}
+	if !near(cost.MemoryWarmBytes, 24.4*mb-15.8*mb) {
+		t.Fatalf("warm %.0f B, want the loaded line at zero (24.4 MiB) over idle (15.8 MiB)", cost.MemoryWarmBytes)
+	}
+	// Least squares over all four steps: 40,700 / 800,000.
+	if cost.CPUNotMeasured != "" || !near(cost.MillicoresPerTask, 0.050875) {
+		t.Fatalf("cpu %+v, want 0.050875 mc a task over every step", cost)
+	}
+}
+
+// Memory and CPU are judged apart: a figure that is not a line is not
+// written down, with its reason, and the other still is. Only a driver with
+// neither is refused.
+func TestMemoryAndCPUAreJudgedApart(t *testing.T) {
+	target := DriverTarget{Driver: "d", Product: "p", Polls: []time.Duration{time.Minute}}
+	line := func() []DriverStep {
+		return []DriverStep{
+			{Tasks: 0, WorkingSetBytes: 30e6, Millicores: 5},
+			{Tasks: 200, WorkingSetBytes: 34e6, Millicores: 85, PollCPUMillis: 3},
+			{Tasks: 400, WorkingSetBytes: 38e6, Millicores: 165, PollCPUMillis: 3},
+			{Tasks: 600, WorkingSetBytes: 42e6, Millicores: 245, PollCPUMillis: 3},
+		}
+	}
+	bentMem := line()
+	bentMem[2].WorkingSetBytes = 50e6
+	cost, err := AssembleDriverCost(target, bentMem, 0.1, 0.2)
+	if err != nil {
+		t.Fatalf("a bent memory sweep refused the driver: %v", err)
+	}
+	if !strings.Contains(cost.MemoryNotMeasured, "not a line") || cost.MemoryPerTaskBytes != 0 || cost.MemoryWarmBytes != 0 {
+		t.Fatalf("bent memory %+v, want no memory figure and its reason", cost)
+	}
+	if cost.CPUNotMeasured != "" || !near(cost.MillicoresPerTask, 0.4) {
+		t.Fatalf("bent memory %+v, want the cpu figure kept", cost)
+	}
+
+	bentCPU := line()
+	bentCPU[1].Millicores = 400
+	cost, err = AssembleDriverCost(target, bentCPU, 0.1, 0.2)
+	if err != nil {
+		t.Fatalf("a bent cpu sweep refused the driver: %v", err)
+	}
+	if !strings.Contains(cost.CPUNotMeasured, "not a line") || cost.MillicoresPerTask != 0 || cost.CPUPerRunMillis != 0 || cost.ThreadShare != 0 {
+		t.Fatalf("bent cpu %+v, want no cgroup cpu figure and its reason", cost)
+	}
+	if cost.MemoryNotMeasured != "" || !near(cost.MemoryPerTaskBytes, 20_000) || !near(cost.ThreadCPUPerRunMillis, 3) {
+		t.Fatalf("bent cpu %+v, want memory and the thread clock kept", cost)
+	}
+
+	both := line()
+	both[2].WorkingSetBytes = 50e6
+	both[1].Millicores = 400
+	if _, err := AssembleDriverCost(target, both, 0.1, 0.2); err == nil ||
+		!strings.Contains(err.Error(), "memory") || !strings.Contains(err.Error(), "cpu") {
+		t.Fatalf("both bent: %v, want a refusal naming memory and cpu", err)
 	}
 }

@@ -3,7 +3,8 @@
 // drivercost.json, written by make gen via cmd/labgen from internal/
 // labfootprint's DriverCostFacts: the committed sweep joined with the plan).
 // Every driver the plan knows is a row, so a driver the sweep has not measured
-// reads as such, with its reason, rather than going missing.
+// reads as such, with its reason, rather than going missing, and so does a
+// figure the sweep could not fit beside one it could.
 //
 // Usage: <DriverCost />
 import facts from '../generated/drivercost.json';
@@ -46,11 +47,12 @@ const measured = facts.drivers.filter((r) => r.measured).length;
       <th>Product</th>
       <th>Polls</th>
       <th>Memory per task (KiB)</th>
+      <th>Warm memory (MiB)</th>
       <th>Millicores per task</th>
       <th>CPU per run (ms)</th>
       <th>Thread CPU per run (ms)</th>
       <th>Thread share</th>
-      <th>Not measured because</th>
+      <th>Not measured</th>
     </tr>
   </thead>
   <tbody>
@@ -63,11 +65,12 @@ const measured = facts.drivers.filter((r) => r.measured).length;
           <td>{'product' in r && r.product ? <code>{r.product}</code> : ''}</td>
           <td>{polls(r)}</td>
           <td>{num(r, 'memory_per_task_kib', 1)}</td>
+          <td>{num(r, 'memory_warm_mib', 1)}</td>
           <td>{num(r, 'millicores_per_task', 3)}</td>
           <td>{num(r, 'cpu_per_run_ms', 2)}</td>
           <td>{num(r, 'thread_cpu_per_run_ms', 2)}</td>
           <td>{share(r)}</td>
-          <td>{r.measured ? '' : r.reason}</td>
+          <td>{'reason' in r && r.reason ? r.reason : ''}</td>
         </tr>
       ))
     }

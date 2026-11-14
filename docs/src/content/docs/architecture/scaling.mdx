@@ -266,7 +266,9 @@ process, and rendered from the sweep's committed result by `make gen`:
 
 - **Memory per task** and **millicores per task** are slopes: what the node's container gains in working
   set and CPU for each task of the driver it adds. Multiply by a node's task count for that driver,
-  and add across its drivers, to read what its worklist costs beyond the idle node.
+  and add across its drivers, to read what its worklist costs beyond the idle node. **Warm memory** is
+  paid once rather than per task: the jump a node's working set takes when its first tasks of the
+  driver land, before the slope.
 - **CPU per run** is the same CPU spread over how often each task runs, so drivers with different
   polls compare per poll.
 - **Thread CPU per run** is the node's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
@@ -279,7 +281,7 @@ process, and rendered from the sweep's committed result by `make gen`:
 The figures hold for the host and build named above them and for the simulated devices, whose answers
 are smaller and quicker than many real ones; read them as the relative cost of drivers and the order
 of a node's footprint, not a promise for a given site. A shipped driver the sweep has not measured
-reads as such, with why.
+reads as such, with why, and so does a figure the sweep could not fit when the driver's other one stands.
 
 ## Platform configuration
 

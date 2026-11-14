@@ -49,10 +49,10 @@ func TestASweepCanBeNarrowedToNamedDrivers(t *testing.T) {
 	}
 }
 
-// Each driver is measured idle, then at one load, then twice it, so the
-// line has an intercept and two points to fit.
-func TestADriverIsMeasuredIdleThenAtTwoLoads(t *testing.T) {
-	if got := stepComponents(200); !slices.Equal(got, []int{0, 200, 400}) {
+// Each driver is measured idle, then at three loads: memory fits its slope
+// over the loaded steps alone, so it needs three of them to show a bend.
+func TestADriverIsMeasuredIdleThenAtThreeLoads(t *testing.T) {
+	if got := stepComponents(200); !slices.Equal(got, []int{0, 200, 400, 600}) {
 		t.Fatalf("steps = %v", got)
 	}
 }

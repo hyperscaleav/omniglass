@@ -108,8 +108,10 @@ func pickDrivers(targets []DriverTarget, skips []DriverSkip, only []string) ([]D
 }
 
 // stepComponents are the component counts a driver is measured at: none,
-// then n, then 2n, so the fit has an idle node and two loads.
-func stepComponents(n int) []int { return []int{0, n, 2 * n} }
+// then n, 2n and 3n. CPU fits every step; memory fits the three loads alone
+// (the idle node sits apart as the warm cost), and three is the fewest that
+// can show a bend.
+func stepComponents(n int) []int { return []int{0, n, 2 * n, 3 * n} }
 
 func sweepComponentName(node string, i int) string { return fmt.Sprintf("%s-%04d", node, i) }
 
@@ -259,8 +261,15 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 			table.NotMeasured = append(table.NotMeasured, DriverSkip{Driver: t.Driver, Reason: err.Error()})
 			continue
 		}
-		h.say("  %.0f B and %.2f millicores per task, %.3f ms per run (the thread clock read %.3f ms)",
-			row.MemoryPerTaskBytes, row.MillicoresPerTask, row.CPUPerRunMillis, row.ThreadCPUPerRunMillis)
+		mem := fmt.Sprintf("%.0f B per task over %.1f MiB warm", row.MemoryPerTaskBytes, row.MemoryWarmBytes/(1<<20))
+		if row.MemoryNotMeasured != "" {
+			mem = "memory not measured: " + row.MemoryNotMeasured
+		}
+		cpu := fmt.Sprintf("%.2f millicores per task, %.3f ms per run", row.MillicoresPerTask, row.CPUPerRunMillis)
+		if row.CPUNotMeasured != "" {
+			cpu = "cpu not measured: " + row.CPUNotMeasured
+		}
+		h.say("  %s; %s (the thread clock read %.3f ms per run)", mem, cpu, row.ThreadCPUPerRunMillis)
 		table.Rows = append(table.Rows, row)
 	}
 	slices.SortFunc(table.NotMeasured, func(a, b DriverSkip) int { return strings.Compare(a.Driver, b.Driver) })
