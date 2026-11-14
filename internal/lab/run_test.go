@@ -29,6 +29,8 @@ type fakeEngine struct {
 	published  string
 	nextID     int
 	host       HostResources
+	// cmds is each service's command as it was run.
+	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
 	seedHangs bool
 }
@@ -131,6 +133,10 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	}
 	f.states[id] = st
 	f.created = append(f.created, "container "+svc.Name)
+	if f.cmds == nil {
+		f.cmds = map[string][]string{}
+	}
+	f.cmds[svc.Name] = svc.Cmd
 	return id, nil
 }
 func (f *fakeEngine) Inspect(_ context.Context, id string) (ContainerState, error) {

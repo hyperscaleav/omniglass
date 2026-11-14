@@ -100,14 +100,24 @@ func (r *Runner) step(stage, detail string) { r.say("  %-10s %s", stage, detail)
 // PreflightError; a failure after tears down what was created.
 func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	start := time.Now()
+	if cfg.Scale() != (cfg.ScaleRun != nil) {
+		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
+	}
+	var host HostResources
+	if cfg.ScaleRun != nil {
+		// A scale lab's Postgres is sized from the host (#1930), so the
+		// host is read before the plan.
+		var err error
+		if host, err = ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory); err != nil {
+			return nil, err
+		}
+		cfg.HostMemBytes = host.MemBytes
+	}
 	spec, err := Plan(cfg.Options)
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Scale() != (cfg.ScaleRun != nil) {
-		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
-	}
-	if cfg.Image, err = r.preflight(ctx, spec, cfg); err != nil {
+	if cfg.Image, err = r.preflight(ctx, spec, cfg, host); err != nil {
 		return nil, err
 	}
 	lab, err := r.up(ctx, spec, cfg)
@@ -165,10 +175,10 @@ func (e *heldForGone) Error() string {
 // lab already holding the project, the console's port, and the image.
 // It returns the image choice as the image found settles it: an override
 // that is the binary's own build is no override worth a warning.
-func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageChoice, error) {
+func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config, host HostResources) (ImageChoice, error) {
 	c := cfg.Image
 	if cfg.ScaleRun != nil {
-		if err := r.checkCapacity(ctx, cfg); err != nil {
+		if err := r.checkCapacity(cfg, host); err != nil {
 			return c, err
 		}
 	}

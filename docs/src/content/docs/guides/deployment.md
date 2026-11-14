@@ -28,3 +28,28 @@ Pick the path that fits where you are running it:
 Once a server is up, the first owner is minted with the trusted direct-database lane
 (`omniglass bootstrap`), covered in [the CLI guide](/guides/cli/#authentication); from there,
 managing accounts and access moves to the [admin guide](/guides/admin/).
+
+## Sizing PostgreSQL
+
+Postgres ships with settings sized for a small machine it shares with other work, and a fleet's
+telemetry is a steady stream of writes. Set these in `postgresql.conf` (or as `-c` flags on the
+`postgres` command); the scale lab runs with the same set, so a figure it measures is one a sized
+production database would see:
+
+| setting | value | why |
+|---|---|---|
+| `shared_buffers` | a quarter of the host's memory, up to 8 GB | the stock 128 MB holds a fraction of the recent telemetry, so reads that should hit memory go to disk |
+| `max_wal_size` | `8GB` | the stock 1 GB had a 3,000-system soak checkpointing on WAL volume four times as often as on its timer, with commits stalling behind each checkpoint |
+| `checkpoint_timeout` | `15min` | with the larger WAL, spaces checkpoints out to one each 15 minutes |
+| `wal_compression` | `lz4` | compresses the full-page images each checkpoint forces into the WAL, for a little CPU |
+| `track_io_timing`, `track_wal_io_timing` | `on` | records time spent in reads and WAL writes, so `pg_stat_io` says when the disk is the bottleneck |
+
+Leave `synchronous_commit` on. Turning it off trades durability for throughput: a crash loses the
+last transactions the server already acknowledged, and an acknowledged sample that disappears is the
+loss the platform exists to measure. `track_commit_timestamp=on` is needed only by
+[`omniglass lab measure`](/guides/lab/#measuring-a-scale-lab), which reads ingest lag from commit
+times.
+
+In a container, `shared_buffers` is not held in `/dev/shm`: Postgres maps it as anonymous memory, and
+`/dev/shm` holds only the small segments parallel queries share, so Docker's default 64 MB is enough.
+Count the buffers against the container's memory limit instead.

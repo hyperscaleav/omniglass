@@ -293,6 +293,10 @@ type Options struct {
 	// a property loss caused by refused-unregistered. Off by default; the
 	// seed does the work.
 	InduceUnregistered bool
+	// HostMemBytes is the Docker host's memory, which a scale lab's
+	// Postgres is sized from (#1930): the runner reads it before planning.
+	// Zero is a host not read.
+	HostMemBytes int64
 }
 
 // SiteNode is one site's node in a scale lab: its name, the enrollment
@@ -303,6 +307,51 @@ type SiteNode struct {
 	Token      string
 	TokenHash  string
 	Components int
+}
+
+// A scale lab's shared_buffers (#1930): a quarter of the host, no less than
+// Postgres's own default and no more than 8 GB, so the nodes beside it keep
+// theirs; a host not read gets a size an 8 GB laptop carries.
+const (
+	sharedBuffersFloorMiB   = 128
+	sharedBuffersCeilingMiB = 8 << 10
+	sharedBuffersUnreadMiB  = 1 << 10
+)
+
+// PostgresSharedBuffers is a scale lab's shared_buffers for a host of
+// memBytes, in Postgres's own units (MB is MiB to it).
+func PostgresSharedBuffers(memBytes int64) string {
+	mib := int64(sharedBuffersUnreadMiB)
+	if memBytes > 0 {
+		mib = min(max(memBytes/4>>20, sharedBuffersFloorMiB), sharedBuffersCeilingMiB)
+	}
+	return strconv.FormatInt(mib, 10) + "MB"
+}
+
+// postgresCmd is a scale lab's database command: Postgres sized for the
+// fleet it simulates (#1930). The stock 128 MB of shared buffers and 1 GB of
+// WAL had the 3,000 soak checkpointing on WAL volume four times as often as
+// on time, and a commit stalled behind each one. Larger buffers and WAL with
+// a 15 minute timeout space checkpoints out, lz4 shrinks the full-page images
+// each checkpoint forces, and I/O timing makes pg_stat_io say where a stall
+// went. synchronous_commit stays on: the bus acks a batch once its commit
+// returns, and assumes it durable.
+func postgresCmd(memBytes int64) []string {
+	cmd := []string{"postgres"}
+	for _, setting := range []string{
+		// `lab measure` reads each row's ingest lag from its commit time
+		// (#1556), which Postgres keeps only when asked at start.
+		"track_commit_timestamp=on",
+		"shared_buffers=" + PostgresSharedBuffers(memBytes),
+		"max_wal_size=8GB",
+		"checkpoint_timeout=15min",
+		"wal_compression=lz4",
+		"track_io_timing=on",
+		"track_wal_io_timing=on",
+	} {
+		cmd = append(cmd, "-c", setting)
+	}
+	return cmd
 }
 
 // Scale reports whether the options make a scale lab.
@@ -552,9 +601,7 @@ func Plan(o Options) (Spec, error) {
 			"login on the first run, and enrolls the node afresh.",
 	}
 	if o.Scale() {
-		// The scale lab's measurement reads each row's ingest lag from its
-		// commit time (#1556), which Postgres keeps only when asked at start.
-		spec.DB.Cmd = []string{"postgres", "-c", "track_commit_timestamp=on"}
+		spec.DB.Cmd = postgresCmd(o.HostMemBytes)
 	}
 	spec.Server = Service{
 		Name: "server", Container: o.Project + "-server-1", Image: o.Image,

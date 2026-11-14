@@ -223,11 +223,7 @@ func ScaleHost(ctx context.Context, eng Engine, forcedMem int64) (HostResources,
 
 // checkCapacity refuses a scale lab the host cannot fit, before anything is
 // created, naming the estimate, the host, and the largest size that fits.
-func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
-	host, err := ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory)
-	if err != nil {
-		return err
-	}
+func (r *Runner) checkCapacity(cfg Config, host HostResources) error {
 	sites, comps := scaleTotals(cfg.Options)
 	c, err := AssessCapacity(*cfg.ScaleRun, host, cfg.Systems, sites, comps)
 	if err != nil {

@@ -425,6 +425,13 @@ choosing, so you can see where a smaller machine's ceiling sits without one. The
 model, not a promise: it was measured at small sizes, and [`omniglass lab measure`](#measuring-a-scale-lab)
 measures a running lab.
 
+**A scale lab's Postgres is sized for the host**, the way a production one is
+([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
+host's memory (128 MB at least, 8 GB at most, and the forced `--host-memory` when one is given), with
+checkpoints spread to 15 minutes and 8 GB of WAL, compressed. The buffers fill as the lab reads, so a
+lab that has run a while holds more memory than the estimate's 170 MiB for the server and Postgres. A
+`dev` lab runs the image's stock Postgres, which is plenty for the fleet it simulates.
+
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
 the seed included. Past it the lab removes everything it started and names what was not up: each
 site whose simulator never connected, and each site's components not up yet, by name and loopback

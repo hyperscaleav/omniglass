@@ -96,6 +96,33 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 	}
 }
 
+// A scale lab's Postgres is sized from the Docker host it runs on, read
+// before the plan: the host's own report, or the forced limit that stands in
+// for it.
+func TestScaleRunSizesPostgresFromTheHost(t *testing.T) {
+	srv := scaleServer(t, testSites, nil, nil)
+	for name, tc := range map[string]struct {
+		host, forced int64
+		want         string
+	}{
+		"the host's own": {32 << 30, 0, "shared_buffers=8192MB"},
+		"a forced limit": {32 << 30, 8 << 30, "shared_buffers=2048MB"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+			eng.host.MemBytes = tc.host
+			cfg := scaleConfig()
+			cfg.ScaleRun.HostMemory = tc.forced
+			if _, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(eng.cmds["db"], " "); !strings.Contains(got, tc.want) {
+				t.Fatalf("the database ran %q, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
 // A size the host cannot fit is refused before anything is created, naming
 // the largest size that fits; a host too small for any is told so.
 func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
