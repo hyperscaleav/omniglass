@@ -258,6 +258,21 @@ jobs:
             echo "failed=1" >>"$GITHUB_OUTPUT"
           fi
 
+      # The leg travels already inside a directory named for it, and combine
+      # merges the legs into one path, so every leg lands at
+      # LEGS/demo-leg-<id>/ however many there are: download-artifact v8
+      # extracts a pattern's lone match into the path itself, with no
+      # directory of its own (#1885).
+      - name: Wrap the leg in its own directory
+        if: ${{ !cancelled() }}
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          out=web/e2e/walkthroughs/out
+          [ "$KIND" != tape ] || out=scripts/demo/out
+          mkdir -p "$RUNNER_TEMP/leg"
+          mv "$out" "$RUNNER_TEMP/leg/demo-leg-$ID"
+
       # The recorder's whole out/ (the demo's files, its failed.txt and its
       # stack-up mark, the lab's logs): combine reads the leg from it, and
       # the artifact keeps a failed demo's partial output.
@@ -266,7 +281,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: demo-leg-${{ matrix.id }}
-          path: ${{ matrix.kind == 'tape' && 'scripts/demo/out/' || 'web/e2e/walkthroughs/out/' }}
+          path: ${{ runner.temp }}/leg/
           if-no-files-found: warn
           overwrite: true
           retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
@@ -313,6 +328,7 @@ jobs:
         with:
           pattern: demo-leg-*
           path: ${{ runner.temp }}/legs
+          merge-multiple: true
 
       - name: Stage the evidence
         id: stage
@@ -416,6 +432,9 @@ jobs:
             parent=$(g rev-parse refs/evidence/parent)
             parents=(-p "$parent")
           fi
+          # A run where no demo recorded stages an empty tree, which no
+          # artifact carries; its comment and clip still say what happened.
+          mkdir -p "$staged/tree"
           g --work-tree="$staged/tree" -C "$staged/tree" add -A .
           tree=$(g write-tree)
           if [ -n "$parent" ] && [ "$(g rev-parse "${parent}^{tree}")" = "$tree" ]; then
