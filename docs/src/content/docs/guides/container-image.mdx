@@ -19,7 +19,8 @@ automatically. See [Platforms](#platforms) for how that is built.
 ## Where it ships
 
 The `image` workflow builds and pushes to the GitHub Container Registry on every
-push to `main`, every same-repo pull request, and every release tag. A fork PR builds the image but
+push to `main` and every same-repo pull request; a release's `v<version>` image is pushed by the
+release workflow instead. A fork PR builds the image but
 does not push it (a fork run has no registry credential), so a fork branch never
 gets a published tag:
 
