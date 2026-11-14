@@ -493,8 +493,8 @@ pins keep today's cascade.
 **The worklist pull carries one more request header**, the generation the node is running (the
 two-phase confirmation above); under the endpoint-by-endpoint sync it rides the manifest request
 beside the set digest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). A move reaches both nodes on their next worklist pull
-(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later
-([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
+(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later (#1945,
+[ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 

@@ -3,7 +3,7 @@ title: "A node syncs its worklist endpoint by endpoint, against a manifest"
 date: 2026-11-14
 status: "Accepted"
 summary: "Amends ADR-1577's target (item 5): a node no longer pulls its whole worklist in one reply. It pulls a manifest (the ordered config generation, a set digest, and each endpoint's id and content digest), is answered unchanged when it holds that set, and otherwise fetches only the endpoints whose digest moved, in batches capped by bytes. The only reply that grows with the node is the manifest, at about 62 B an endpoint, so the bus's 1 MB limit moves from about 3,000 systems on one site to about 16,800 endpoints on one node. It adds no state on the server, so it does not wait on #1250; a key-value cache, if one comes later, is keyed per endpoint, never per node"
-refs: [1586, 1577, 1583, 1584, 1581, 1250, 1872, 1638, 1623]
+refs: [1586, 1577, 1583, 1584, 1581, 1250, 1872, 1638, 1623, 1945]
 ---
 
 - **Date:** 2026-11-14 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/#pulling-the-worklist), [messaging](/architecture/messaging/), [scaling](/architecture/scaling/)
@@ -62,7 +62,7 @@ refs: [1586, 1577, 1583, 1584, 1581, 1250, 1872, 1638, 1623]
      optimisation behind the same requests, one entry per endpoint (`<node>.<endpoint>`), each far
      under the limit. It would hold resolved secrets at rest, so it, and only it, waits on
      [#1250](https://github.com/hyperscaleav/omniglass/issues/1250). The change nudge on
-     `og.v1.worklist-changed.<node>` stays a separate trigger (a change that must reach its node in
+     `og.v1.worklist-changed.<node>` stays a separate trigger (#1945: a change that must reach its node in
      under a second).
 - **Measured (2026-11-14):** on the 3,000-system corporate soak (read-only) the headquarters node
   runs 1,609 endpoints. A manifest entry is a 36-byte id and a 64-character sha256 digest; a
