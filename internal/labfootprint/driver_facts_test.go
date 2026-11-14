@@ -126,3 +126,19 @@ func TestAnEmptyTableWritesEmptyLists(t *testing.T) {
 		}
 	}
 }
+
+// Each row carries the step it was measured at, since a driver re-swept at
+// a bigger step reads at that one, and a warm cost that did not show is a
+// blank with its reason, not a zero.
+func TestADriversFactsCarryItsStepAndAMissingWarm(t *testing.T) {
+	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
+	f := driverCostFacts(targets, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", StepTasks: 1600,
+		MemoryPerTaskBytes: 4096, WarmNotMeasured: "a memory: the loaded line starts below the idle node"}}})
+	d := f.Drivers[0]
+	if d.StepTasks != 1600 {
+		t.Fatalf("step %d, want 1600", d.StepTasks)
+	}
+	if d.MemoryWarmMiB != nil || d.MemoryPerTaskKiB == nil || !strings.Contains(d.Reason, "below the idle node") {
+		t.Fatalf("fact %+v, want memory per task, no warm, and the warm's reason", d)
+	}
+}

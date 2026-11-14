@@ -107,8 +107,10 @@ func TestASweepNeedsTheLabsReadyVariables(t *testing.T) {
 	}
 }
 
-func TestASweepNodeIsNamedForItsDriver(t *testing.T) {
-	if got := sweepNodeName("kestrel-relay-api"); got != "sweep-kestrel-relay-api" {
+// A node is named for its driver and its step, since a driver re-swept at a
+// bigger step takes a fresh node beside the first.
+func TestASweepNodeIsNamedForItsDriverAndStep(t *testing.T) {
+	if got := sweepNodeName("kestrel-relay-api", 1600); got != "sweep-kestrel-relay-api-1600" {
 		t.Fatalf("node = %q", got)
 	}
 }

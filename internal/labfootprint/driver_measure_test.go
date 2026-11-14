@@ -1,6 +1,7 @@
 package labfootprint
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -111,5 +112,65 @@ func TestTheShippedPlanNamesEveryDriverOnce(t *testing.T) {
 	tt, ss, err := pickDrivers(targets, skips, []string{"http-json", "ucc-webhook"})
 	if err != nil || len(tt) != 1 || len(ss) != 1 {
 		t.Fatalf("picked %v %v: %v", tt, ss, err)
+	}
+}
+
+// A driver whose memory does not show at a step is swept again at four
+// times it, up to the cap, and the last step short of the cap is the cap
+// itself: a cheap driver's few KiB a task is inside the noise at 400 tasks
+// and a line at a few thousand.
+func TestAStepTooSmallToSeeMemoryGrowsToTheCap(t *testing.T) {
+	for _, c := range []struct{ step, cap, want int }{
+		{400, 6400, 1600}, {1600, 6400, 6400}, {2000, 6400, 6400}, {6400, 6400, 0}, {400, 400, 0}, {400, 0, 0},
+	} {
+		got, ok := nextStepTasks(c.step, c.cap)
+		if got != c.want || ok != (c.want > 0) {
+			t.Fatalf("nextStepTasks(%d, %d) = %d, %v; want %d", c.step, c.cap, got, ok, c.want)
+		}
+	}
+}
+
+// Only a sweep whose memory did not fit is taken again: one that measured
+// it is done, and one that failed for any other reason (the node never
+// came up) would fail the same way at a bigger step.
+func TestOnlyAMemoryMissIsSweptAgain(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		a    driverAttempt
+		want bool
+	}{
+		{"measured", driverAttempt{row: DriverCost{Driver: "d"}}, false},
+		{"memory missed", driverAttempt{row: DriverCost{MemoryNotMeasured: "not a line"}}, true},
+		{"neither fit", driverAttempt{err: noFitError("d memory: x; d cpu: y")}, true},
+		{"broke", driverAttempt{err: errors.New("start the node: no")}, false},
+	} {
+		if got := c.a.wantsBiggerStep(); got != c.want {
+			t.Fatalf("%s: wantsBiggerStep = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Of a driver's attempts the one kept measured the most figures, and of
+// those the biggest step: a bigger step that lost the CPU fit does not
+// replace a smaller one that had it, and one that broke keeps what came
+// before it.
+func TestADriversKeptSweepIsItsMostMeasured(t *testing.T) {
+	small := DriverCost{StepTasks: 400, MemoryNotMeasured: "noise"}
+	bigNoCPU := DriverCost{StepTasks: 1600, MemoryNotMeasured: "noise", CPUNotMeasured: "bent"}
+	big := DriverCost{StepTasks: 6400}
+	got, err := keptAttempt([]driverAttempt{{row: small}, {row: bigNoCPU}})
+	if err != nil || got.StepTasks != 400 {
+		t.Fatalf("kept %+v, %v; want the 400 step, which had cpu", got, err)
+	}
+	got, err = keptAttempt([]driverAttempt{{row: small}, {row: bigNoCPU}, {row: big}})
+	if err != nil || got.StepTasks != 6400 {
+		t.Fatalf("kept %+v, %v; want the 6400 step, which had both", got, err)
+	}
+	got, err = keptAttempt([]driverAttempt{{row: small}, {err: errors.New("broke")}})
+	if err != nil || got.StepTasks != 400 {
+		t.Fatalf("kept %+v, %v; want the 400 step over the broken one", got, err)
+	}
+	if _, err = keptAttempt([]driverAttempt{{err: noFitError("x")}, {err: errors.New("broke")}}); err == nil || err.Error() != "broke" {
+		t.Fatalf("no row at all: %v, want the last error", err)
 	}
 }

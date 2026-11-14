@@ -3016,13 +3016,14 @@ Measure what each shipped driver's polls cost a node, and write the table the do
 omniglass lab perf drivers [flags]
 ```
 
-Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A figure whose steps do not fit a line is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
+Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
 
 The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit both files in a reviewed change.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--image` | string | (none) | the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build |
+| `--max-step-tasks` | int | `6400` | the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once |
 | `--only` | stringSlice | `[]` | sweep only these drivers; empty sweeps every shipped one |
 | `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, relative to the working directory: run it from the repository's root |
 | `--step-tasks` | int | `400` | about how many poll tasks each step adds |

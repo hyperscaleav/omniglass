@@ -25,6 +25,7 @@ func driverSweepConfig(cmd *cobra.Command, binary, dockerHost string) (labfootpr
 	cfg.Image, _ = f.GetString("image")
 	cfg.Only, _ = f.GetStringSlice("only")
 	cfg.StepTasks, _ = f.GetInt("step-tasks")
+	cfg.MaxStepTasks, _ = f.GetInt("max-step-tasks")
 	cfg.Warmup, _ = f.GetDuration("warmup")
 	cfg.Window, _ = f.GetDuration("window")
 	out, _ := f.GetString("out")
@@ -63,9 +64,10 @@ func newLabPerfDriversCmd() *cobra.Command {
 			"simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver " +
 			"is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the " +
 			"node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm " +
-			"cost), with the threads' own CPU per run from poll-cpu-time beside it. A figure whose steps do not fit a " +
-			"line is listed as not measured, with why. The sweep takes hours: each " +
-			"step's window holds the driver's slowest poll.\n\n" +
+			"cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit " +
+			"a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap " +
+			"driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed " +
+			"as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.\n\n" +
 			"The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit " +
 			"both files in a reviewed change.",
 		Args: cobra.NoArgs,
@@ -89,6 +91,7 @@ func newLabPerfDriversCmd() *cobra.Command {
 	f.String("image", "", "the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build")
 	f.StringSlice("only", nil, "sweep only these drivers; empty sweeps every shipped one")
 	f.Int("step-tasks", 400, "about how many poll tasks each step adds")
+	f.Int("max-step-tasks", 6400, "the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once")
 	f.Duration("warmup", 2*time.Minute, "how long each step runs before it is measured")
 	f.Duration("window", 2*time.Minute, "each step's measured window; a driver's slowest poll lengthens it")
 	f.String("out", labfootprint.DriverCostPath, "where to write the table, relative to the working directory: run it from the repository's root")

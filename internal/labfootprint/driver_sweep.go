@@ -185,14 +185,18 @@ type DriverStep struct {
 // cgroup: the part of a run the clock sees, the rest being work the run
 // hands to other goroutines (a held session's reader, the report, the GC).
 // MemoryWarmBytes is the node's one-off jump when its first tasks land (its
-// lanes start, its heap grows to working size), apart from the slope.
-// Memory and CPU are judged apart: a figure whose steps are not a line is
-// left at zero with its reason in MemoryNotMeasured or CPUNotMeasured.
+// lanes start, its heap grows to working size), apart from the slope; a
+// loaded line that starts below the idle node shows no jump, and leaves it
+// at zero with why in WarmNotMeasured. Memory and CPU are judged apart: a
+// figure whose steps are not a line is left at zero with its reason in
+// MemoryNotMeasured or CPUNotMeasured. StepTasks is the step the driver was
+// measured at.
 type DriverCost struct {
 	Driver                string       `json:"driver"`
 	Product               string       `json:"product"`
 	Polls                 []string     `json:"polls"`
 	Tasks                 int          `json:"tasks"`
+	StepTasks             int          `json:"step_tasks"`
 	MemoryPerTaskBytes    float64      `json:"memory_per_task_bytes"`
 	MemoryWarmBytes       float64      `json:"memory_warm_bytes"`
 	MillicoresPerTask     float64      `json:"millicores_per_task"`
@@ -203,6 +207,7 @@ type DriverCost struct {
 	CPUResidual           float64      `json:"cpu_residual"`
 	MemoryNotMeasured     string       `json:"memory_not_measured,omitempty"`
 	CPUNotMeasured        string       `json:"cpu_not_measured,omitempty"`
+	WarmNotMeasured       string       `json:"warm_not_measured,omitempty"`
 	Steps                 []DriverStep `json:"steps"`
 }
 
@@ -243,8 +248,11 @@ func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResi
 		c.MemoryNotMeasured = fmt.Sprintf("%s memory: %v", t.Driver, memErr)
 	} else {
 		c.MemoryPerTaskBytes, c.MemoryResidual = memFit.PerTask, memFit.Residual
-		if hasIdle {
-			c.MemoryWarmBytes = memFit.Intercept - idle
+		if warm := memFit.Intercept - idle; hasIdle && warm >= 0 {
+			c.MemoryWarmBytes = warm
+		} else if hasIdle {
+			c.WarmNotMeasured = fmt.Sprintf("%s warm: the loaded line starts %.1f MiB below the idle node, "+
+				"so the first tasks filled heap it already held and no jump shows", t.Driver, -warm/(1<<20))
 		}
 	}
 	cpuFit, cpuErr := FitSlope(cpu, cpuResidual)
@@ -258,7 +266,13 @@ func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResi
 		}
 	}
 	if memErr != nil && cpuErr != nil {
-		return DriverCost{}, fmt.Errorf("%s; %s", c.MemoryNotMeasured, c.CPUNotMeasured)
+		return DriverCost{}, noFitError(c.MemoryNotMeasured + "; " + c.CPUNotMeasured)
 	}
 	return c, nil
 }
+
+// noFitError is a driver neither of whose figures fits a line: its steps
+// were measured, and were noise.
+type noFitError string
+
+func (e noFitError) Error() string { return string(e) }

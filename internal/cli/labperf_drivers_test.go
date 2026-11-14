@@ -24,8 +24,8 @@ func TestADriverSweepsFlagsAreItsConfig(t *testing.T) {
 	if cfg.Project != driverSweepProject || cfg.Binary != "/bin/og" || cfg.DockerHost != "unix:///d.sock" || cfg.Image != "omniglass:x" {
 		t.Fatalf("config = %+v", cfg)
 	}
-	if cfg.StepTasks != 100 || cfg.Window != 90*time.Second || cfg.Warmup != 2*time.Minute {
-		t.Fatalf("steps = %d, window %s, warmup %s", cfg.StepTasks, cfg.Window, cfg.Warmup)
+	if cfg.StepTasks != 100 || cfg.MaxStepTasks != 6400 || cfg.Window != 90*time.Second || cfg.Warmup != 2*time.Minute {
+		t.Fatalf("steps = %d up to %d, window %s, warmup %s", cfg.StepTasks, cfg.MaxStepTasks, cfg.Window, cfg.Warmup)
 	}
 	if !slices.Equal(cfg.Only, []string{"http-json", "kestrel-relay-api"}) {
 		t.Fatalf("only = %v", cfg.Only)

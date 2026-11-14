@@ -279,3 +279,30 @@ func TestMemoryAndCPUAreJudgedApart(t *testing.T) {
 		t.Fatalf("both bent: %v, want a refusal naming memory and cpu", err)
 	}
 }
+
+// A loaded line that starts below the idle node is no warm cost: the first
+// tasks filled heap the idle node already held, so the jump does not show.
+// The memory slope still stands; the warm figure is left out, with why. The
+// read that found it: a session driver's working set went 30.3, 83.8, 144.8,
+// 206 MiB at 0, 400, 800, 1200 tasks, a line that meets zero tasks 18 MiB
+// under the idle node.
+func TestAWarmBelowIdleIsNotAWarmCost(t *testing.T) {
+	target := DriverTarget{Driver: "d", Product: "p", Polls: []time.Duration{time.Minute}}
+	const mb = 1 << 20
+	steps := []DriverStep{
+		{Tasks: 0, WorkingSetBytes: 30.3 * mb, Millicores: 1},
+		{Tasks: 400, WorkingSetBytes: 83.8 * mb, Millicores: 41, PollCPUMillis: 2},
+		{Tasks: 800, WorkingSetBytes: 144.8 * mb, Millicores: 81, PollCPUMillis: 2},
+		{Tasks: 1200, WorkingSetBytes: 206 * mb, Millicores: 121, PollCPUMillis: 2},
+	}
+	cost, err := AssembleDriverCost(target, steps, 0.1, 0.25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost.MemoryNotMeasured != "" || cost.MemoryPerTaskBytes <= 0 {
+		t.Fatalf("memory %+v, want the slope kept", cost)
+	}
+	if cost.MemoryWarmBytes != 0 || !strings.Contains(cost.WarmNotMeasured, "below the idle node") {
+		t.Fatalf("warm %.0f B, %q; want no warm figure and why", cost.MemoryWarmBytes, cost.WarmNotMeasured)
+	}
+}

@@ -127,7 +127,9 @@ func sweepSimService(env map[string]string, node, token, nodeID string) (lab.Ser
 	}, nil
 }
 
-func sweepNodeName(driver string) string { return "sweep-" + driver }
+// sweepNodeName is a driver's node at a step: a driver swept again at a
+// bigger step takes a fresh node, its first one's rows still in the lab.
+func sweepNodeName(driver string, step int) string { return fmt.Sprintf("sweep-%s-%d", driver, step) }
 
 // componentsPerStep is how many components move a driver's task count by
 // about target: each component brings one task per poll.

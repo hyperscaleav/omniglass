@@ -45,8 +45,11 @@ type DriverConfig struct {
 	Project string
 	// Image is the build measured; empty is the lab's default.
 	Image string
-	// StepTasks is about how many tasks each step adds.
-	StepTasks int
+	// StepTasks is about how many tasks each step adds. A driver whose
+	// memory does not fit a line at it is swept again at four times the
+	// step, up to MaxStepTasks; zero sweeps each driver once.
+	StepTasks    int
+	MaxStepTasks int
 	// Warmup is how long a step runs before it is measured; Window is the
 	// least a step is measured for (a driver's slowest poll lengthens it).
 	Warmup time.Duration
@@ -61,12 +64,13 @@ type DriverConfig struct {
 // DriverCostTable is a sweep's result: each measured driver's cost, and
 // each driver it did not measure with the reason.
 type DriverCostTable struct {
-	Host        *Fingerprint `json:"host,omitempty"`
-	Date        string       `json:"date"`
-	Build       string       `json:"build"`
-	StepTasks   int          `json:"step_tasks"`
-	Rows        []DriverCost `json:"rows"`
-	NotMeasured []DriverSkip `json:"not_measured"`
+	Host         *Fingerprint `json:"host,omitempty"`
+	Date         string       `json:"date"`
+	Build        string       `json:"build"`
+	StepTasks    int          `json:"step_tasks"`
+	MaxStepTasks int          `json:"max_step_tasks,omitempty"`
+	Rows         []DriverCost `json:"rows"`
+	NotMeasured  []DriverSkip `json:"not_measured"`
 }
 
 // driverRunArgs is the `lab run` a sweep brings its lab up with: ephemeral,
@@ -242,7 +246,8 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 		return DriverCostTable{}, err
 	}
 
-	table = DriverCostTable{Date: time.Now().UTC().Format(time.DateOnly), StepTasks: cfg.StepTasks, NotMeasured: skips}
+	table = DriverCostTable{Date: time.Now().UTC().Format(time.DateOnly), StepTasks: cfg.StepTasks,
+		MaxStepTasks: cfg.MaxStepTasks, NotMeasured: skips}
 	if img, err := h.dc.ImageInspect(ctx, h.env["LAB_IMAGE"]); err == nil && img.Config != nil {
 		table.Build = img.Config.Labels[lab.VersionLabel]
 	}
@@ -252,16 +257,31 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 	}
 	for i, t := range targets {
 		h.say("[%d/%d] %s on %s, polls %v", i+1, len(targets), t.Driver, t.Product, t.Polls)
-		row, err := h.measureDriver(ctx, eng, api, cfg, t, report)
-		if ctx.Err() != nil {
-			return table, ctx.Err()
+		var attempts []driverAttempt
+		for step, more := cfg.StepTasks, true; more; {
+			row, err := h.measureDriver(ctx, eng, api, cfg, t, step, report)
+			if ctx.Err() != nil {
+				return table, ctx.Err()
+			}
+			a := driverAttempt{row: row, err: err}
+			attempts = append(attempts, a)
+			if !a.wantsBiggerStep() {
+				break
+			}
+			if step, more = nextStepTasks(step, cfg.MaxStepTasks); more {
+				h.say("  memory did not show at this step: sweeping again at %d tasks a step", step)
+			}
 		}
+		row, err := keptAttempt(attempts)
 		if err != nil {
 			h.say("  not measured: %v", err)
 			table.NotMeasured = append(table.NotMeasured, DriverSkip{Driver: t.Driver, Reason: err.Error()})
 			continue
 		}
 		mem := fmt.Sprintf("%.0f B per task over %.1f MiB warm", row.MemoryPerTaskBytes, row.MemoryWarmBytes/(1<<20))
+		if row.WarmNotMeasured != "" {
+			mem = fmt.Sprintf("%.0f B per task, no warm jump", row.MemoryPerTaskBytes)
+		}
 		if row.MemoryNotMeasured != "" {
 			mem = "memory not measured: " + row.MemoryNotMeasured
 		}
@@ -276,13 +296,70 @@ func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTabl
 	return table, nil
 }
 
+// driverAttempt is one sweep of a driver at one step.
+type driverAttempt struct {
+	row DriverCost
+	err error
+}
+
+// wantsBiggerStep is whether a sweep's memory missed for want of signal:
+// its steps were measured and memory was not a line. A sweep that broke
+// would break the same way at a bigger step.
+func (a driverAttempt) wantsBiggerStep() bool {
+	if a.err != nil {
+		var nf noFitError
+		return errors.As(a.err, &nf)
+	}
+	return a.row.MemoryNotMeasured != ""
+}
+
+// figures is how many of memory and CPU an attempt measured.
+func (a driverAttempt) figures() int {
+	if a.err != nil {
+		return -1
+	}
+	n := 0
+	if a.row.MemoryNotMeasured == "" {
+		n++
+	}
+	if a.row.CPUNotMeasured == "" {
+		n++
+	}
+	return n
+}
+
+// nextStepTasks is the step a driver is swept again at: four times this
+// one, held to the cap, and none once the cap is reached.
+func nextStepTasks(step, maxStep int) (int, bool) {
+	if step >= maxStep {
+		return 0, false
+	}
+	return min(4*step, maxStep), true
+}
+
+// keptAttempt is the attempt a driver's row comes from: the one with the
+// most figures measured, the bigger step on a tie. With no row at all it is
+// the last attempt's error.
+func keptAttempt(attempts []driverAttempt) (DriverCost, error) {
+	best := -1
+	for i, a := range attempts {
+		if a.err == nil && (best < 0 || a.figures() >= attempts[best].figures()) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return DriverCost{}, attempts[len(attempts)-1].err
+	}
+	return attempts[best].row, nil
+}
+
 // stepWindow is when one step was measured.
 type stepWindow struct{ from, to time.Time }
 
 // measureDriver measures one driver on a node of its own, its simulator
 // beside it, and removes both whatever the outcome.
-func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string, cfg DriverConfig, t DriverTarget, report time.Duration) (DriverCost, error) {
-	node := sweepNodeName(t.Driver)
+func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string, cfg DriverConfig, t DriverTarget, step int, report time.Duration) (DriverCost, error) {
+	node := sweepNodeName(t.Driver, step)
 	if _, err := h.send(ctx, http.MethodPost, api+"/nodes", map[string]string{"name": node}, nil); err != nil {
 		return DriverCost{}, fmt.Errorf("create the node: %w", err)
 	}
@@ -321,7 +398,7 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 		return DriverCost{}, fmt.Errorf("start the simulator: %w", err)
 	}
 
-	per := componentsPerStep(cfg.StepTasks, t.Polls)
+	per := componentsPerStep(step, t.Polls)
 	window := sweepWindow(cfg.Window, t.Polls)
 	warmup := sweepWindow(cfg.Warmup, t.Polls)
 	var steps []DriverStep
@@ -364,7 +441,9 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 			return DriverCost{}, fmt.Errorf("read the poll CPU: %q: %w", out, err)
 		}
 	}
-	return AssembleDriverCost(t, steps, driverMemResidual, driverCPUResidual)
+	c, err := AssembleDriverCost(t, steps, driverMemResidual, driverCPUResidual)
+	c.StepTasks = step
+	return c, err
 }
 
 // waitDriverTasks waits for node's driver tasks to reach want, and fails if

@@ -53,6 +53,7 @@ type DriverCostFact struct {
 	Product               string   `json:"product,omitempty"`
 	Polls                 []string `json:"polls,omitempty"`
 	Measured              bool     `json:"measured"`
+	StepTasks             int      `json:"step_tasks,omitempty"`
 	MemoryPerTaskKiB      *float64 `json:"memory_per_task_kib,omitempty"`
 	MemoryWarmMiB         *float64 `json:"memory_warm_mib,omitempty"`
 	MillicoresPerTask     *float64 `json:"millicores_per_task,omitempty"`
@@ -65,18 +66,19 @@ type DriverCostFact struct {
 // DriverCostFacts is the docs' driver cost table: where and on what build
 // the sweep ran, and every driver the plan knows.
 type DriverCostFacts struct {
-	Host      *Fingerprint     `json:"host,omitempty"`
-	Date      string           `json:"date"`
-	Build     string           `json:"build"`
-	StepTasks int              `json:"step_tasks"`
-	Drivers   []DriverCostFact `json:"drivers"`
+	Host         *Fingerprint     `json:"host,omitempty"`
+	Date         string           `json:"date"`
+	Build        string           `json:"build"`
+	StepTasks    int              `json:"step_tasks"`
+	MaxStepTasks int              `json:"max_step_tasks,omitempty"`
+	Drivers      []DriverCostFact `json:"drivers"`
 }
 
 // driverCostFacts joins the plan with a measured table: each planned driver
 // takes its row, the sweep's reason it has none, or NotYetMeasured; each
 // driver the plan skips takes the plan's reason.
 func driverCostFacts(targets []DriverTarget, skips []DriverSkip, t DriverCostTable) DriverCostFacts {
-	f := DriverCostFacts{Host: t.Host, Date: t.Date, Build: t.Build, StepTasks: t.StepTasks}
+	f := DriverCostFacts{Host: t.Host, Date: t.Date, Build: t.Build, StepTasks: t.StepTasks, MaxStepTasks: t.MaxStepTasks}
 	for _, tg := range targets {
 		d := DriverCostFact{Driver: tg.Driver, Product: tg.Product}
 		for _, p := range tg.Polls {
@@ -84,16 +86,19 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, t DriverCostTab
 		}
 		if i := slices.IndexFunc(t.Rows, func(r DriverCost) bool { return r.Driver == tg.Driver }); i >= 0 {
 			r := t.Rows[i]
-			d.Measured = true
+			d.Measured, d.StepTasks = true, r.StepTasks
 			if r.MemoryNotMeasured == "" {
-				d.MemoryPerTaskKiB, d.MemoryWarmMiB = new(r.MemoryPerTaskBytes/1024), new(r.MemoryWarmBytes/(1<<20))
+				d.MemoryPerTaskKiB = new(r.MemoryPerTaskBytes / 1024)
+				if r.WarmNotMeasured == "" {
+					d.MemoryWarmMiB = new(r.MemoryWarmBytes / (1 << 20))
+				}
 			}
 			if r.CPUNotMeasured == "" {
 				d.MillicoresPerTask, d.CPUPerRunMillis = new(r.MillicoresPerTask), new(r.CPUPerRunMillis)
 				d.ThreadShare = new(r.ThreadShare)
 			}
 			d.ThreadCPUPerRunMillis = new(r.ThreadCPUPerRunMillis)
-			d.Reason = strings.Join(slices.DeleteFunc([]string{r.MemoryNotMeasured, r.CPUNotMeasured},
+			d.Reason = strings.Join(slices.DeleteFunc([]string{r.MemoryNotMeasured, r.WarmNotMeasured, r.CPUNotMeasured},
 				func(s string) bool { return s == "" }), "; ")
 		} else if i := slices.IndexFunc(t.NotMeasured, func(s DriverSkip) bool { return s.Driver == tg.Driver }); i >= 0 {
 			d.Reason = t.NotMeasured[i].Reason
