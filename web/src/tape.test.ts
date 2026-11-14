@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   HOUSE,
+  NEEDS,
   MAX_GIF_BYTES,
   MAX_SECONDS,
   PACE,
@@ -35,6 +36,37 @@ const bad = (body: string, head?: string) => {
   throw new Error("expected the tape to be refused");
 };
 const CMD = 'Type "omniglass component list"\nEnter\nWait\n';
+
+describe("a tape's demo-needs (#1313)", () => {
+  it("declares nothing by default", () => {
+    expect(ok(CMD).needs).toEqual([]);
+  });
+
+  it("reads each `# demo-needs: <need>` comment line, wherever it sits, once", () => {
+    expect(ok(`# demo-needs: database\n${CMD}`).needs).toEqual(["database"]);
+    expect(ok(`# demo-needs: docker-socket\n${CMD}`).needs).toEqual(["docker-socket"]);
+    expect(ok(`# demo-needs: database\n${CMD}# demo-needs: database\n`).needs).toEqual(["database"]);
+  });
+
+  it("is not part of the description, whether it opens the block or follows it", () => {
+    expect(ok(CMD, "# Title\n#\n# What it shows.\n# demo-needs: database\n\n").description).toBe("What it shows.");
+  });
+
+  it("refuses a need it does not know, naming the file and line", () => {
+    expect(bad(`# demo-needs: nitrogen\n${CMD}`)).toBe(
+      `${F}:5: unknown demo-needs "nitrogen" (a tape needs one of: ${NEEDS.join(", ")})`,
+    );
+    expect(bad(`# demo-needs:\n${CMD}`)).toContain('unknown demo-needs ""');
+  });
+
+  it("does not read a typed caption, which only looks like the header", () => {
+    expect(ok('Type "# demo-needs: nitrogen"\nEnter\nWait\n').needs).toEqual([]);
+  });
+
+  it("refuses the socket with the database, whose Postgres the host network cannot reach", () => {
+    expect(bad(`# demo-needs: docker-socket\n# demo-needs: database\n${CMD}`)).toContain("cannot need database");
+  });
+});
 
 describe("a tape's title and description", () => {
   it("are its leading comment block: the first line the title, the rest the description", () => {

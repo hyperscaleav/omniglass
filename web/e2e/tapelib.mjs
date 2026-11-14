@@ -37,6 +37,11 @@
 //   Type or the end, so every command finishes on screen, and a failing one is
 //   caught (the prelude lists each command line that exits non-zero, and any
 //   such fails the demo); nothing rides after a Hide, Show or Wait on its line;
+// - a `# demo-needs: <need>` comment line declares what the recorder must stage
+//   for the tape, and an unknown need is refused: docker-socket (the tape
+//   drives Docker itself) or database (a database of its own on the lab's
+//   Postgres, in OMNIGLASS_DSN, with psql to stage rows in it); the two do not
+//   combine (see NEEDS);
 // - no uuid in typed text: a demo addresses a resource by name or dotted
 //   address, and looks an id up by name inside the tape;
 // - Hide and Show alternate, ending shown, and something is typed on screen;
@@ -174,6 +179,19 @@ export const MAX_GIF_BYTES = 5_000_000;
 // almost nothing to encode.
 export const MAX_SECONDS = 180;
 
+// What a tape may declare it needs of the recorder (`# demo-needs: <need>`, one
+// per line, anywhere in the file). A tape that declares none gets the lab's
+// server and an owner token in the CLI's env and nothing else.
+//   docker-socket  the Docker socket, on the host's network (lab-first-run
+//                  types omniglass lab run, #1193), where the recorder opts in
+//   database       a throwaway database of its own on the lab's Postgres,
+//                  created before the tape and dropped after it, its DSN in
+//                  OMNIGLASS_DSN (#1313); never the lab's own database, since
+//                  a tape may stamp a schema no later tape could migrate. It
+//                  rides the lab's network, which the socket tape's host
+//                  network cannot reach, so the two do not combine.
+export const NEEDS = Object.freeze(['docker-socket', 'database']);
+
 const MAX_TITLE = 100;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const DURATION = /^\d+(?:\.\d+)?(?:ms|s|m)$/;
@@ -198,7 +216,7 @@ const HOOKS = new RegExp(
 );
 const KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'Escape']);
 
-/** @typedef {{ id: string, title: string, description: string, body: string[] }} Tape */
+/** @typedef {{ id: string, title: string, description: string, needs: string[], body: string[] }} Tape */
 /**
  * What tapes.sh writes as demo.json once a recording passes; `budget` is the
  * mark only a pass carries.
@@ -240,7 +258,19 @@ export function parseTape(id, text, file) {
   const title = block[0] ?? '';
   if (!title) throw new Error(`${file}: a tape opens with its title as a comment (# <title>)`);
   if (title.length > MAX_TITLE) throw new Error(`${file}: the title is over ${MAX_TITLE} characters`);
-  const description = block.slice(1).filter(Boolean).join(' ');
+  const needLine = /^#\s*demo-needs:\s*(.*?)\s*$/;
+  const description = block.slice(1).filter((l) => l && !l.startsWith('demo-needs:')).join(' ');
+  /** @type {string[]} */
+  const needs = [];
+  lines.forEach((l, i) => {
+    const m = needLine.exec(l);
+    if (!m) return;
+    if (!NEEDS.includes(m[1])) fail(i + 1, `unknown demo-needs "${m[1]}" (a tape needs one of: ${NEEDS.join(', ')})`);
+    if (!needs.includes(m[1])) needs.push(m[1]);
+  });
+  if (needs.includes('docker-socket') && needs.includes('database')) {
+    throw new Error(`${file}: a tape needing docker-socket cannot need database (the socket runs on the host's network, which cannot reach the lab's Postgres)`);
+  }
 
   let hidden = false;
   let hiddenAt = 0;
@@ -295,7 +325,7 @@ export function parseTape(id, text, file) {
   if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the tape ends');
   if (hidden) fail(hiddenAt, 'Hide is never followed by a Show, so the end of the tape would not be recorded');
   if (!typedOnScreen) throw new Error(`${file}: the tape types nothing on screen`);
-  return { id, title, description, body: lines.slice(head) };
+  return { id, title, description, needs, body: lines.slice(head) };
 }
 
 // The tape the recorder plays: the outputs, the house settings, the prelude
