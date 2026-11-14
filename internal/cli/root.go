@@ -50,7 +50,39 @@ func newRoot(version string) *cobra.Command {
 		g.AddCommand(newNodeRunCmd())
 	}
 
+	rejectUnknownVerbs(root)
+
 	return root
+}
+
+// groupAnnotation marks a command that is a pure group (children, no action of
+// its own) so the docs generator and the docs-invocation check can still tell it
+// from a runnable command after rejectUnknownVerbs gives it a RunE.
+const groupAnnotation = "omniglass/group"
+
+// IsGroup reports whether cmd is a pure command group: it only routes to its
+// subcommands and takes no arguments of its own.
+func IsGroup(cmd *cobra.Command) bool { return cmd.Annotations[groupAnnotation] == "true" }
+
+// rejectUnknownVerbs walks the assembled tree and makes every pure group (children,
+// no Run/RunE) reject an unrecognised positional. Cobra's own legacyArgs check
+// applies only to the root, and it validates Args only on a runnable command, so
+// a bare `Args: cobra.NoArgs` on a group is ignored and `component alarm raise x`
+// would print help and exit 0. The group therefore gets a RunE that prints help
+// when invoked bare and otherwise fails through cobra.NoArgs, whose message is
+// `unknown command "raise" for "omniglass component alarm"`.
+func rejectUnknownVerbs(parent *cobra.Command) {
+	for _, c := range parent.Commands() {
+		if c.HasSubCommands() && c.Run == nil && c.RunE == nil {
+			c.Args = cobra.NoArgs
+			c.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
+			if c.Annotations == nil {
+				c.Annotations = map[string]string{}
+			}
+			c.Annotations[groupAnnotation] = "true"
+		}
+		rejectUnknownVerbs(c)
+	}
 }
 
 // Root returns the fully assembled command tree without executing it. It is the

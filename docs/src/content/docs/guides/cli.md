@@ -161,6 +161,13 @@ A name is a lookup, so it lands on whatever the one row you can see by that name
 answers with the row it reached (a secret's `owner_kind` and `owner_name`), and a script that must
 never drift, a credential rotation above all, addresses `<owner>/<name>` or stores the uuid.
 
+### An unknown verb is a failure
+
+A group (`component`, `component alarm`, `sim`) only routes to its subcommands. Run bare it prints
+its help and exits 0; given a word it does not know, it exits non-zero with
+`unknown command "raise" for "omniglass component alarm"` on stderr, so a script that guesses a verb
+fails instead of passing green while nothing happened.
+
 ## Authentication
 
 There are two ways to authenticate, both accepted on every request. A **bearer token** in

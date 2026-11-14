@@ -1272,6 +1272,10 @@ new major version. Because the [OpenAPI 3.1 document is generated](/contributing
 structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
 the PR on an unregenerated route change.
 
+The CLI holds the same line at its edge: a command group takes no arguments of its own, so an unknown
+verb under any group is a non-zero exit with `unknown command "raise" for "omniglass component alarm"`
+on stderr, never help text and a green exit.
+
 ## Also an MCP surface
 
 The same OpenAPI document that generates the typed SPA client and the CLI also generates the **MCP
