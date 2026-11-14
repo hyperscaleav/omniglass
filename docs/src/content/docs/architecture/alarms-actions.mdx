@@ -372,8 +372,10 @@ health locks). Agreement is the common case and costs no write: the series, thei
 index probe per series on either lane), the open alarms and the streaks are read in one statement per
 lane and judged in memory, and a streak that agrees keeps its clock. The pass finds the samples past its
 mark by id alone before it joins a series, through each day's block range index on `id`, so a finished
-day costs a few index pages rather than its heap: the partition roll summarizes each finished day's
-ranges (#1929). A restarted server's first pass
+day costs a few index pages rather than its heap: the retention pass summarizes each finished day's
+ranges ([ADR-1929](/architecture/decisions/#adr-1929-a-finished-day-is-summarized-and-the-reconcile-keeps-its-id-marks)).
+The marks stay the newest committed id rather than a bound on time, so a sample still in flight or
+stamped late is judged by the pass that reads past it. A restarted server's first pass
 reads back a bounded number of recent samples, not the whole history, since the race it could have lost
 was in flight around its own start; a series whose correction fails is retried on its own for a few
 passes and then dropped with an error logged, while the pass moves on. The platform ships five official rules, rendered here from the seed itself:

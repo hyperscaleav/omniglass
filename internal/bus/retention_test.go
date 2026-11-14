@@ -3,6 +3,7 @@ package bus
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,10 @@ type backlogStore struct {
 	drops     []time.Time
 	ensureErr error
 	dropErr   error
+	// The summarize pass: the drops asked for before each call it took, so
+	// a test reads that it ran after the drop, and the error it answers with.
+	summarized   []int
+	summarizeErr error
 	// The trend compaction's answer.
 	trends   storage.TrendCompaction
 	trendErr error
@@ -67,6 +72,14 @@ func (b *backlogStore) DropMetricPartitions(_ context.Context, before time.Time)
 		return nil, b.dropErr
 	}
 	return []string{"metric_p20000101"}, nil
+}
+
+func (b *backlogStore) SummarizeMetricPartitions(context.Context) ([]string, error) {
+	b.summarized = append(b.summarized, len(b.drops))
+	if b.summarizeErr != nil {
+		return nil, b.summarizeErr
+	}
+	return []string{"metric_p20000102"}, nil
 }
 
 type pruneCall struct {
@@ -325,6 +338,46 @@ func TestRetentionPassRollsTheMetricDays(t *testing.T) {
 	}
 	if rep.Deleted["metric"] != 3 {
 		t.Errorf("a failed roll: metric lane deleted %d, want its 3 still pruned", rep.Deleted["metric"])
+	}
+}
+
+// After the roll, each pass summarizes the finished days' block range indexes
+// (#1929): after the drop, so no day about to go is summarized; even when the
+// roll failed; and a summarize that fails is counted among the pass's
+// failures while every lane is still pruned.
+func TestRetentionPassSummarizesTheFinishedDaysAfterTheDrop(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}}
+	rep, err := retentionPass(context.Background(), store, now, 10, 5, 0)
+	if err != nil {
+		t.Fatalf("pass: %v", err)
+	}
+	if len(store.summarized) != 1 || store.summarized[0] != 1 {
+		t.Errorf("summarize: drops before each call %v, want one call after the one drop", store.summarized)
+	}
+	if len(rep.Summarized) != 1 {
+		t.Errorf("report: summarized %v, want what the summarize said", rep.Summarized)
+	}
+
+	rolled := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}, dropErr: errors.New("lock timeout")}
+	if _, err := retentionPass(context.Background(), rolled, now, 10, 5, 0); err == nil {
+		t.Fatal("a failed drop: no error, want it reported")
+	}
+	if len(rolled.summarized) != 1 {
+		t.Errorf("a failed drop: summarize ran %d times, want it still run once", len(rolled.summarized))
+	}
+
+	failing := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 3},
+		summarizeErr: errors.New("summarize metric_p20261028: lock timeout")}
+	rep, err = retentionPass(context.Background(), failing, now, 10, 5, 0)
+	if err == nil || !strings.Contains(err.Error(), "summarize metric partitions") {
+		t.Fatalf("a failed summarize: error %v, want it reported", err)
+	}
+	if rep.Failures != 1 {
+		t.Errorf("a failed summarize: %d failures, want 1", rep.Failures)
+	}
+	if rep.Deleted["metric"] != 3 {
+		t.Errorf("a failed summarize: metric lane deleted %d, want its 3 still pruned", rep.Deleted["metric"])
 	}
 }
 

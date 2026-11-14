@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 // finishedDay fills a day four days back with enough metric samples to span
 // several block ranges, through the gateway's on-demand day and then in
 // bulk, and returns the day's partition and the series it filled. Autovacuum
-// is off on the day, so nothing but the code under test summarizes it.
+// is off on the day, so no vacuum summarizes it; autosummarize may still take
+// a filled range, but the day's last range never fills, so only the summarize
+// pass takes that one.
 func finishedDay(t *testing.T, f *healthFixture) (part string, at time.Time) {
 	t.Helper()
 	ctx := context.Background()
@@ -74,8 +77,10 @@ func pagesRead(t *testing.T, f *healthFixture, rel, sql string, args ...any) (pa
 // left a finished day's ranges unsummarized, so they read lossy, and the
 // candidates scan walked each watched series' whole day in its btree: every
 // pass read every finished day. Seqscan is off for the question because the
-// fixture's days are small; the block range index is what the planner takes
-// once a day holds a soak's samples.
+// fixture's days are small and the planner would rather read one whole; the
+// block range index is what it takes once a day holds a soak's samples. That
+// masks nothing: with the index unusable the plan still scans the day whole,
+// and the page count fails.
 func TestReconcileReadsSkipAFinishedDay(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
@@ -85,8 +90,12 @@ func TestReconcileReadsSkipAFinishedDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	part, _ := finishedDay(t, f)
-	if _, err := f.gw.EnsureMetricPartitions(ctx); err != nil {
+	done, err := f.gw.SummarizeMetricPartitions(ctx)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Contains(done, part) {
+		t.Fatalf("summarized %v, want the finished day %s among them", done, part)
 	}
 	mark := maxSampleID(t, f, "metric")
 	if err := insertMetrics(ctx, f.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
@@ -118,26 +127,58 @@ func TestReconcileReadsSkipAFinishedDay(t *testing.T) {
 	}
 }
 
-// Every block range index on metric summarizes a range once it fills, on
-// every day: those the migration found and those made since.
+// Every day's block range indexes summarize a range once it fills: those
+// the migration found and those made since. The option is on each day's own
+// index (a partitioned index takes none), made before the day is attached
+// and adopted by the parent's, so each day holds exactly one block range
+// index per column, the one attached.
 func TestMetricBlockRangeIndexesAutosummarize(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	finishedDay(t, f)
-	rows, err := f.conn.Query(ctx, `select c.relname::text from pg_class c
-		where (c.oid in ('public.metric_id_brin'::regclass, 'public.metric_ts_brin'::regclass)
-			or c.oid in (select inhrelid from pg_inherits where inhparent in ('public.metric_id_brin'::regclass, 'public.metric_ts_brin'::regclass)))
-		and not coalesce(c.reloptions @> array['autosummarize=on'], false)`)
+	rows, err := f.conn.Query(ctx, `select c.relname::text, coalesce(c.reloptions @> array['autosummarize=on'], false)
+		from pg_inherits i join pg_class c on c.oid = i.inhrelid
+		where i.inhparent in ('public.metric_id_brin'::regclass, 'public.metric_ts_brin'::regclass)`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	off, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	type leaf struct {
+		Name string
+		On   bool
+	}
+	leaves, err := pgx.CollectRows(rows, pgx.RowToStructByPos[leaf])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(off) > 0 {
-		t.Fatalf("block range indexes that never summarize a filled range on their own: %v", off)
+	if len(leaves) == 0 {
+		t.Fatal("no day's block range index is attached to metric's")
+	}
+	for _, l := range leaves {
+		if !l.On {
+			t.Errorf("%s never summarizes a filled range on its own", l.Name)
+		}
+	}
+	rows, err = f.conn.Query(ctx, `select t.relname::text || ' ' || a.attname::text, count(*) from pg_inherits p
+		join pg_class t on t.oid = p.inhrelid
+		join pg_index x on x.indrelid = t.oid
+		join pg_class c on c.oid = x.indexrelid join pg_am m on m.oid = c.relam and m.amname = 'brin'
+		join pg_attribute a on a.attrelid = t.oid and a.attnum = x.indkey[0]
+		where p.inhparent = 'public.metric'::regclass
+		group by 1 having count(*) <> 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type dup struct {
+		Column string
+		N      int64
+	}
+	dups, err := pgx.CollectRows(rows, pgx.RowToStructByPos[dup])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dups) > 0 {
+		t.Fatalf("days whose column holds other than one block range index, the attach making its own beside the day's: %v", dups)
 	}
 }
 
@@ -153,7 +194,7 @@ func TestReconcileFiresOnALateSampleOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, at := finishedDay(t, f)
-	if _, err := f.gw.EnsureMetricPartitions(ctx); err != nil {
+	if _, err := f.gw.SummarizeMetricPartitions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := insertMetrics(ctx, f.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",

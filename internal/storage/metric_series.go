@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 	"time"
 
@@ -144,8 +143,7 @@ func metricCoverageGap(parts []MetricPartition, from, to time.Time) (time.Time, 
 // refuses, naming the first instant uncovered, unless they cover every
 // instant from the start of yesterday through the end of the last day
 // ahead: the server calls it at boot and starts no ingest over a refusal,
-// and on every retention pass after (#420's roll). Last it summarizes each
-// finished day's block range indexes (summarizeMetricDays), best effort.
+// and on every retention pass after (#420's roll).
 func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	now, err := dbNow(ctx, p.pool)
 	if err != nil {
@@ -165,40 +163,59 @@ func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 		return created, fmt.Errorf("storage: metric partitions do not cover %s (want every instant from %s to %s)",
 			gap.Format(time.RFC3339), from.Format(time.RFC3339), through.Format(time.RFC3339))
 	}
-	if day, err := p.summarizeMetricDays(ctx, parts, metricDay(now)); err != nil {
-		slog.Warn("a finished day's block range indexes were not summarized; its unsummarized ranges read whole until the next roll",
-			"facility", "retention", "partition", day, "error", err.Error())
-	}
 	return created, nil
 }
 
-// summarizeMetricDays summarizes every range the block range indexes of each
-// day before today have not (#1929). An unsummarized range matches every
-// query, so the event rule reconcile's id window would read it whole on each
-// pass. autosummarize takes a range once the next one starts, but a day's
-// last range never fills, so the roll takes it once the day is done; a
-// summarized range stays exact as late samples land in it. Already
-// summarized ranges cost their range map alone. It names the day it stopped
-// at on an error.
-func (p *PG) summarizeMetricDays(ctx context.Context, parts []MetricPartition, today time.Time) (string, error) {
+// SummarizeMetricPartitions summarizes every range the block range indexes
+// of each day before today have not (#1929), and returns the days it did. An
+// unsummarized range matches every query, so the event rule reconcile's id
+// window would read it whole on each pass. autosummarize takes a range once
+// the next one starts, but a day's last range never fills, so the retention
+// pass takes it once the day is done; a summarized range stays exact as late
+// samples land in it, and a late sample's range past the last is taken on the
+// next pass. Already summarized ranges cost their range map alone. A day that
+// fails (a lock not granted in partitionLockTimeout, an index the server does
+// not own) is named in the error and the rest still summarized: the day reads
+// whole until a later pass takes it.
+func (p *PG) SummarizeMetricPartitions(ctx context.Context) ([]string, error) {
+	now, err := dbNow(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	parts, err := metricPartitions(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	var done []string
+	var errs []error
 	for _, part := range parts {
-		if part.To.After(today) {
+		if part.To.After(metricDay(now)) {
 			continue
 		}
-		err := pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
-			if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = '%dms'`, partitionLockTimeout.Milliseconds())); err != nil {
-				return err
+		if err := p.summarizeMetricDay(ctx, part.Name); err != nil {
+			if ctx.Err() != nil {
+				return done, errors.Join(append(errs, err)...)
 			}
-			_, err := tx.Exec(ctx, `select brin_summarize_new_values(i.indexrelid) from pg_index i
-				join pg_class c on c.oid = i.indexrelid join pg_am a on a.oid = c.relam
-				where i.indrelid = to_regclass($1) and a.amname = 'brin'`, pgx.Identifier{"public", part.Name}.Sanitize())
-			return err
-		})
-		if err != nil {
-			return part.Name, err
+			errs = append(errs, fmt.Errorf("summarize %s: %w", part.Name, err))
+			continue
 		}
+		done = append(done, part.Name)
 	}
-	return "", nil
+	return done, errors.Join(errs...)
+}
+
+// summarizeMetricDay summarizes one day's block range indexes under
+// partitionLockTimeout.
+func (p *PG) summarizeMetricDay(ctx context.Context, part string) error {
+	return pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = '%dms'`, partitionLockTimeout.Milliseconds())); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `select brin_summarize_new_values(i.indexrelid) from pg_index i
+			join pg_class c on c.oid = i.indexrelid join pg_am a on a.oid = c.relam
+			where i.indrelid = to_regclass($1) and a.amname = 'brin'`, pgx.Identifier{"public", part}.Sanitize())
+		return err
+	})
 }
 
 // ensureMetricDays creates the partition of each day that has none and
@@ -258,6 +275,15 @@ func (p *PG) createMetricPartition(ctx context.Context, day time.Time) (bool, er
 		}
 		if _, err := tx.Exec(ctx, `create table if not exists `+name+` (like public.metric including defaults)`); err != nil {
 			return err
+		}
+		// The day's block range indexes are made first with autosummarize
+		// (#1929), which a partitioned index cannot pass down; the attach
+		// takes them as the parent's, and makes only the rest.
+		for _, col := range []string{"id", "ts"} {
+			if _, err := tx.Exec(ctx, `create index if not exists `+pgx.Identifier{metricPartitionName(day) + "_" + col + "_idx"}.Sanitize()+
+				` on `+name+` using brin (`+col+`) with (autosummarize = on)`); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, fmt.Sprintf(`alter table public.metric attach partition %s for values from ('%s') to ('%s')`, name, from, to)); err != nil {
 			return err

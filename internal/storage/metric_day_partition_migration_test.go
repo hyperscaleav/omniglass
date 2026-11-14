@@ -22,10 +22,7 @@ import (
 // just below the swap, plant samples over several days and months, and
 // migrate forward over them.
 
-const (
-	metricDayVersion               = "20261106050925"
-	metricBrinAutosummarizeVersion = "20261114160454"
-)
+const metricDayVersion = "20261106050925"
 
 var (
 	monthPartition = regexp.MustCompile(`^metric_p[0-9]{6}$`)
@@ -296,11 +293,6 @@ func TestMetricDayPartitionsCarryTheColumnsAsTheyStand(t *testing.T) {
 
 	if err := migrate.Run(dsn); err != nil {
 		t.Fatalf("migrate forward: %v", err)
-	}
-	// #1929 remakes the block range indexes past the swap; the question is
-	// the swap's alone.
-	if err := migrate.RollbackBelow(dsn, metricBrinAutosummarizeVersion); err != nil {
-		t.Fatalf("roll back the block range indexes' autosummarize: %v", err)
 	}
 	if got := metricColumns(t, conn); !slices.Equal(got, want) {
 		t.Errorf("across the swap the columns differ:\n got  %v\n want %v", got, want)
