@@ -2,13 +2,37 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
+
+// ErrScopeWiring is a scope resolved for a resource that cannot be checked
+// against the table at hand (#754): an unregistered resource, or one registered
+// on another tier. It is neither a not-found nor a forbidden, because nothing
+// about the caller's grants decided it: the code passed the wrong set, and every
+// non-all caller would otherwise be denied by an empty or foreign set that reads
+// exactly like a legitimately empty grant. No entity mapper names it, so it
+// reaches the caller as a 500, and checkScopeWiring logs it.
+var ErrScopeWiring = errors.New("storage: scope resolved for a resource that cannot be checked against this table")
+
+// checkScopeWiring is the resolve paths' assertion that set may be checked
+// against tier: scope.Covers(set.Resource, tier), the relationship Resolve's own
+// applicableKinds encodes. An all set holds everywhere, and a hand-built set
+// (no Resource) carries no resolution to check.
+func checkScopeWiring(set scope.Set, tier string) error {
+	if set.All || set.Resource == "" || scope.Covers(set.Resource, tier) {
+		return nil
+	}
+	slog.Error("a scope was resolved for a resource that cannot be checked against this table; register the resource's tier in internal/scope or pass the set resolved for this one",
+		"facility", "scope", "resolved_for", set.Resource, "table", tier)
+	return fmt.Errorf("%w: resolved for %q, checked against %q", ErrScopeWiring, set.Resource, tier)
+}
 
 // uuidRoots keeps only the scope roots that are syntactically valid uuids. A
 // malformed root (for example a grant mis-scoped to an entity name rather than its

@@ -128,7 +128,7 @@ its window and none past it, so a series no longer measured shows no reading wit
 Every endpoint reports on its own collection once a **report window**. This is built-in data: every
 endpoint gets it, whatever its driver, with nothing to set up
 ([built-in and collected data](/guides/admin/drivers/#built-in-and-collected-data)):
-- how long its polls took, and how many failed;
+- how long its polls took, how much CPU they cost the node, and how many failed;
 - how many pushed messages its listeners claimed, and how many they did not;
 - for a webhook endpoint, how many posts the server accepted and refused.
 

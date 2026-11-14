@@ -97,8 +97,8 @@ does not claim as raw log lines ([below](#an-emit-lands-on-any-lane),
 [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
-[ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
-and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-endpoint).
+[ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
+and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
 :::
 
 :::design[Historical: the ComponentTemplate authoring model, superseded by the driver spec (ADR-0827)]
@@ -142,7 +142,7 @@ endpoints:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is the `transport`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver)).
+- **Type is the `transport`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
 - **A label is the one identity string an operator types on an endpoint.** The name is derived from the type, so every SSH endpoint in the fleet reads `ssh`: the row says which protocol it speaks and nothing about what it is for. The label ("Control processor") is where that goes, and it is settable at create rather than on a following edit, an endpoint labelled by a second call being unlabelled at the moment it is made ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)). It is optional; an endpoint with none reads its derived name **verbatim**. Note the corollary of a derived name: since the name IS the protocol and is unique within the component, a component holds at most **one endpoint per protocol**, and a second of the same type is a 409.
 - **`liveness`**: the per-endpoint reachability gate deciding whether its functions run ([nodes](/architecture/nodes/)).
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
@@ -317,6 +317,13 @@ carries as data, and offers **Trust this key**: a confirm that teaches why a key
 the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
 the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
+An endpoint with no verdict yet says why (#981): the reachability read carries `pending` beside the
+null `verdict`, derived at read time and never stored. `no-node` means the endpoint has no node
+assigned, so nothing will probe it until one is (a fresh install ships none); `awaiting-probe` means
+a node is assigned and its first probe has not landed. The field is absent once a verdict exists and
+on a push endpoint, which has no verdict to wait for. The CLI prints it in the read's JSON, and the
+Endpoints panel shows it beneath the row with a link to the Nodes page or the assigned node's blade.
+
 ### The connection fingerprint and the layered gate
 
 Built (#1056 ruling, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
@@ -435,6 +442,7 @@ of its own:
 | Key | Written by | What it counts, per report window | Lands |
 |---|---|---|---|
 | `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
+| `poll-cpu-time` | the node | the mean CPU time the kernel charged each of those runs on its own thread, in ms: a floor on a poll's cost, leaving out work on other goroutines (a held session's reader among them) and the GC's background workers ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)) | when a poll ran, on a platform with a thread clock |
 | `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
 | `poll-held-count` | the node | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running) or `disrupted` (a disruptive command such as a reboot is in flight): not loss, so never a failure, and no backoff booked | when nonzero |
 | `hold-expiry-count` | the node | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up verdict since its quiet period, a device that did not come back in time | when nonzero |
@@ -459,7 +467,7 @@ webhook counts in a transaction of their own, so a component deleted since its l
 its own. A duration and a message count land every window so a quiet endpoint shows
 as quiet, not missing; the failure, unclaimed and refusal counts land only when there is something to
 count. A webhook endpoint reports one zero after a window with posts, then nothing while quiet: its
-**last heard** says how long. The node's four keys are `node-probe`, refused on the push lane like
+**last heard** says how long. The node's keys are `node-probe`, refused on the push lane like
 every probe key above; the two webhook keys are `platform`, the server's own count, written by the
 process through the Storage Gateway, so neither a node nor a push may write them, and an event rule
 reads them as it reads any metric
@@ -533,7 +541,10 @@ excess is how far the gap since the task's own previous scheduled start strays f
 early or late, so a poll keeping its interval reads 0 and a skipped slot reads a whole interval. A
 task's first run, and a run off the schedule (a held or refused poll released), reads no gap.
 `tick-duration` is the longest dispatch pass of the window and `tick-overrun-count` the dues that met
-their own run still in flight. Every count is a loss count, 0
+their own run still in flight. `worker-busy-fraction` is a level, not a count: the lane pool's
+worker time spent running over the report window, divided by the window's length times the pool's
+workers, so 0 is idle and 1 is every worker busy all window. A run still in flight when the window
+ends counts the part it has run, and its remainder lands in the next window (#1686). Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and the
 dispatcher writes that hop too, runs due in and runs made out per kind at the instance
 `schedule/{kind}` (#1693). The node hop already reads as that ratio (#1659): per item kind as

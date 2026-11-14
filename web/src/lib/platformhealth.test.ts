@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   deviceReceived,
   figureText,
+  figureTinted,
   gapName,
   gapProtocolText,
   gapTone,
@@ -118,6 +119,27 @@ describe("figureText", () => {
   it("trims a fractional value to two places", () => {
     const n = { ...node, figures: { "checkin-age": { value: 2.3456, observed_at: readAt } } };
     expect(figureText(n, { key: "checkin-age", unit: "s" })).toBe("2.35 s");
+  });
+
+  it("renders a ratio column as the Loss column does, a percent", () => {
+    const n = { ...node, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "x-ratio": { value: 0.25, observed_at: readAt } } };
+    expect(figureText(n, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe("100%");
+    expect(figureText(n, { key: "x-ratio", unit: "ratio" })).toBe("25%");
+    expect(figureText(node, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe("not reported");
+  });
+});
+
+describe("figureTinted", () => {
+  const node = { name: "edge-a", label: "", enrolled: true, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "command-pending-count": { value: 4, observed_at: readAt } } };
+
+  it("tints a ratio column above 0, as the Loss column's one rule", () => {
+    expect(figureTinted(node, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(true);
+    expect(figureTinted({ ...node, figures: { "worklist-pull-loss-ratio": { value: 0, observed_at: readAt } } }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
+  });
+
+  it("tints no count and no unreported ratio", () => {
+    expect(figureTinted(node, { key: "command-pending-count", unit: "" })).toBe(false);
+    expect(figureTinted({ ...node, figures: undefined }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
   });
 });
 

@@ -25,11 +25,7 @@ type TermedBatch struct {
 // replaces it (insertReceipt). A batch id that already has a receipt keeps
 // it, so a Term never overwrites a landing, nor an earlier Term's cause.
 func (p *PG) RecordTermedBatch(ctx context.Context, b TermedBatch) error {
-	ledger, err := json.Marshal(b.Ledger.Kinds)
-	if err != nil {
-		return fmt.Errorf("storage: term batch %s: ledger: %w", b.BatchID, err)
-	}
-	outcome, err := json.Marshal(b.Outcome)
+	outcome, err := b.Outcome.Cells()
 	if err != nil {
 		return fmt.Errorf("storage: term batch %s: outcome: %w", b.BatchID, err)
 	}
@@ -47,10 +43,10 @@ func (p *PG) RecordTermedBatch(ctx context.Context, b TermedBatch) error {
 	}
 	if _, err := p.pool.Exec(ctx, `insert into telemetry_receipt
 		(batch_id, node, boot, seq, minted, resolved, ledger, outcome, node_loss, termed)
-		values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, true)
+		values ($1, $2, $3, $4, $5, $6, $7::bigint[], $8::int[], $9::jsonb, true)
 		on conflict (batch_id) do nothing`,
 		b.BatchID, node, b.Ledger.Boot, int64(b.Ledger.Seq), b.Ledger.Minted, int64(b.Ledger.Resolved),
-		string(ledger), string(outcome), nodeLoss); err != nil {
+		b.Ledger.Kinds.Cells(), outcome, nodeLoss); err != nil {
 		return fmt.Errorf("storage: term batch %s: %w", b.BatchID, err)
 	}
 	return nil

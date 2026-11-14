@@ -20,6 +20,7 @@ import { mapMarkers, parseStandardMap } from "../lib/system_map";
 import SystemMap from "../components/SystemMap";
 import BladeStack from "../components/BladeStack";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
@@ -38,6 +39,7 @@ import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
+import AcknowledgeButton from "../components/AcknowledgeButton";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
@@ -90,6 +92,8 @@ export default function SystemZoom() {
   const location = useLocation();
   const me = useMe();
   const id = () => params.id;
+  // Unsaved Configure drafts (the system's and its sole place's) the tab rail asks about.
+  const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
   // (or to the mount) would stop moving. The history and the charts read a
@@ -292,8 +296,8 @@ export default function SystemZoom() {
     const trail = view.data ? systemCrumbs(view.data, id()) : [];
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
-      ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(`/locations/${c.id}`) })),
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
+      ...trail.map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })),
     ];
   });
 
@@ -302,7 +306,8 @@ export default function SystemZoom() {
   const retry = () => { void view.refetch(); void health.refetch(); void declared.refetch(); };
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
-  const missing = () => !!view.data && !view.isFetching && !system() && !(view.data.systems ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!view.data && !view.isFetching && !system() && (view.data.systems ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!view.data && !view.isFetching && !system() && !ambiguous();
 
   // Components open in a blade that can expand to their own view (ADR-0129's
   // altitude rule): every member, alarm, and map marker pushes the component
@@ -318,6 +323,7 @@ export default function SystemZoom() {
       <DetailGate
         noun="system"
         missing={missing()}
+        ambiguous={ambiguous()}
         pending={pending()}
         error={failure() ? describeError(failure()) : null}
         retrying={view.isFetching || health.isFetching}
@@ -348,18 +354,18 @@ export default function SystemZoom() {
                 <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
               </Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} />
+            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
               {/* A sole system's place has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
                   system's), in its own section with its own Edit (#872). A
                   place shared by several systems keeps its own view and is
                   configured there. */}
-              <Show when={sole() && placeId()}>
+              <Show when={sole() && placeId()} keyed>
                 {(pid) => (
                   <section class="border-b border-base-300">
                     <div class="px-4 pt-4"><Eyebrow label="Place" hint="Where this system sits: the place's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid()} editValue="place" testid="configure-face-place" />
+                    <ConfigureFace kind="location" id={pid} editValue="place" testid="configure-face-place" guard={leave} />
                   </section>
                 )}
               </Show>
@@ -367,7 +373,9 @@ export default function SystemZoom() {
               <Show when={sole() && placeId()}>
                 <div class="px-4 pt-4"><Eyebrow label="System" /></div>
               </Show>
-              <ConfigureFace kind="system" id={id()} />
+              {/* Keyed on the id: another system is another face, so the edit
+                  slot and drafts never carry over (#854). */}
+              <Show when={id()} keyed>{(sid) => <ConfigureFace kind="system" id={sid} guard={leave} />}</Show>
             </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
@@ -573,6 +581,12 @@ export default function SystemZoom() {
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
                               <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <Show when={a.acknowledged}>
+                                <span class="text-xs text-base-content/50">
+                                  · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
+                                </span>
+                              </Show>
+                              <Show when={a.componentId}>{(cid) => <AcknowledgeButton component={cid()} alarm={a} />}</Show>
                               <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
                             </div>
                             <Show when={a.componentId && timelines.isOpen(a.id)}>

@@ -137,7 +137,8 @@ describe("bucketLayout", () => {
     const l = bucketLayout([bucket(6, 4, 6), bucket(5, null, null), bucket(4, 4, 6)], opts);
     expect(l.bandPath.split("M").filter(Boolean)).toHaveLength(2);
     expect(l.linePath.split("M")).toHaveLength(2);
-    expect(l.linePath.split("L")).toHaveLength(2);
+    // One unbroken line: the two avgs, then on to the end dot (#1789).
+    expect(l.linePath.split("L")).toHaveLength(3);
     expect(l.points).toHaveLength(2);
   });
 
@@ -145,6 +146,30 @@ describe("bucketLayout", () => {
     const l = bucketLayout([bucket(1, 1, 9, 5, 4, 9)], opts);
     expect(l.points[0].value).toBe(5);
     expect(l.endValue).toBe(9);
+  });
+
+  // The line's last vertex, and the right edge of every band rect.
+  const lineEnd = (path: string) => path.split(/[ML]/).filter(Boolean).at(-1)!.trim().split(",").map(Number);
+  const bandRights = (path: string) => [...path.matchAll(/H([\d.]+) V/g)].map((m) => Number(m[1]));
+
+  it("the line ends on the end dot when the newest bucket's last is not its average (#1789)", () => {
+    const l = bucketLayout([bucket(3, 1, 9, 5, 4, 5), bucket(1, 1, 9, 5, 4, 9)], opts);
+    expect(l.endDot.y).not.toBeCloseTo(l.points[1].y, 1);
+    const [ex, ey] = lineEnd(l.linePath);
+    expect(ex).toBeCloseTo(l.endDot.x, 1);
+    expect(ey).toBeCloseTo(l.endDot.y, 1);
+  });
+
+  it("no band runs past the end of the line (#1789)", () => {
+    const l = bucketLayout([bucket(3, 1, 9, 5, 4, 5), bucket(1, 1, 9, 5, 4, 9)], opts);
+    const [ex] = lineEnd(l.linePath);
+    for (const r of bandRights(l.bandPath)) expect(r).toBeLessThanOrEqual(ex + 0.01);
+  });
+
+  it("the newest bucket still in progress ends its line at now, the right edge (#1789)", () => {
+    const l = bucketLayout([bucket(2, 1, 9, 5, 4, 5), bucket(0.25, 1, 9, 5, 4, 8)], opts);
+    expect(l.endDot.x).toBeCloseTo(opts.width - opts.padRight, 1);
+    expect(lineEnd(l.linePath)[0]).toBeCloseTo(opts.width - opts.padRight, 1);
   });
 
   it("an all-empty window draws nothing", () => {

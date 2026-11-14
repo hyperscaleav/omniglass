@@ -188,6 +188,7 @@ type fakeMsg struct {
 	header  nats.Header
 	naked   bool
 	termed  bool
+	ackErr  error
 }
 
 func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) { return m.meta, m.metaErr }
@@ -196,7 +197,7 @@ func (m *fakeMsg) Headers() nats.Header                      { return m.header }
 func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.node-a" }
 func (m *fakeMsg) Reply() string                             { return "" }
 func (m *fakeMsg) Ack() error                                { return nil }
-func (m *fakeMsg) DoubleAck(context.Context) error           { return nil }
+func (m *fakeMsg) DoubleAck(context.Context) error           { return m.ackErr }
 func (m *fakeMsg) Nak() error                                { m.naked = true; return nil }
 func (m *fakeMsg) NakWithDelay(time.Duration) error          { m.naked = true; return nil }
 func (m *fakeMsg) InProgress() error                         { return nil }
@@ -251,5 +252,25 @@ func TestNakOrTerm(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The encoding the storage reads depend on (#1202): a node-lane property
+// value lands as its text form, a bool as true/false and a number as its
+// digits, which the gateway reads back typed by the property's data_type.
+func TestDerivePropertiesStoresTheTextForm(t *testing.T) {
+	reg := collection.NewRegistry(nil,
+		[]storage.PropertyType{
+			{Name: "panel-lit", DataType: "bool"},
+			{Name: "seat-count", DataType: "json"},
+		}, nil)
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
+	ev := &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
+		{Name: "panel-lit", ValueJson: `true`},
+		{Name: "seat-count", ValueJson: `3`},
+	}}
+	got := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	if len(got) != 2 || got[0].Value != "true" || got[1].Value != "3" {
+		t.Fatalf("derived %+v, want the text forms true and 3", got)
 	}
 }

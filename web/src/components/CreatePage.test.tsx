@@ -18,6 +18,7 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { TAGS_KEY } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { treeValue } from "../components/TreeSelect.testkit";
 
 // The fleet create page's two ways in (#1329): from scratch (the default, the
 // kind's own form) or from a template of the kind, inside the page rather than a
@@ -125,7 +126,7 @@ describe("CreatePage's From a template", () => {
     expect(screen.queryByTestId("entity-create-form")).toBeNull();
     fireEvent.change(picker, { target: { value: "mr55-system" } });
     const form = await screen.findByTestId("start-form-system");
-    expect(within(form).getByLabelText("Place")).toHaveValue("hq.west");
+    expect(treeValue(within(form).getByLabelText("Place"))).toBe("West");
     fireEvent.click(screen.getByRole("button", { name: "Start system" }));
     await waitFor(() => expect(landed).toBe(`/systems/${uuidFor("sys-1")}?from=mr55-system`));
     // The scratch form's name preview may have posted before the switch; the one write is the create.

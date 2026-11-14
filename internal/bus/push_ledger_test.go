@@ -1,7 +1,6 @@
 package bus_test
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -31,7 +30,7 @@ type pushReceipt struct {
 // pushReceipts is every ledgered push-lane receipt (no node), in seq order.
 func (f deliveryFixture) pushReceipts(t *testing.T) []pushReceipt {
 	t.Helper()
-	rows, err := f.conn.Query(f.ctx, `select boot, seq, resolved, minted, ledger::text, coalesce(outcome::text, '{}')
+	rows, err := f.conn.Query(f.ctx, `select boot, seq, resolved, minted, ledger, coalesce(outcome, '{}')
 		from telemetry_receipt where node is null and ledger is not null order by seq`)
 	if err != nil {
 		t.Fatalf("read push receipts: %v", err)
@@ -40,15 +39,16 @@ func (f deliveryFixture) pushReceipts(t *testing.T) []pushReceipt {
 	var out []pushReceipt
 	for rows.Next() {
 		var r pushReceipt
-		var ledger, outcome string
+		var ledger []*int64
+		var outcome []int32
 		if err := rows.Scan(&r.boot, &r.seq, &r.resolved, &r.minted, &ledger, &outcome); err != nil {
 			t.Fatalf("scan a push receipt: %v", err)
 		}
-		if err := json.Unmarshal([]byte(ledger), &r.ledger); err != nil {
-			t.Fatalf("read a push receipt's ledger %s: %v", ledger, err)
+		if r.ledger, err = delivery.DeclaredOf(ledger); err != nil {
+			t.Fatalf("read a push receipt's ledger: %v", err)
 		}
-		if err := json.Unmarshal([]byte(outcome), &r.outcome); err != nil {
-			t.Fatalf("read a push receipt's outcome %s: %v", outcome, err)
+		if r.outcome, err = delivery.TallyOf(outcome); err != nil {
+			t.Fatalf("read a push receipt's outcome %v: %v", outcome, err)
 		}
 		out = append(out, r)
 	}

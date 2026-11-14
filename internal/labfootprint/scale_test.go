@@ -996,10 +996,11 @@ func TestScaleDeliveryNotRead(t *testing.T) {
 }
 
 // The receipts read parses one JSON object a line, the shape the query
-// writes, into receipts the reconcile reads.
+// writes with the ledger and outcome packed (#1699), into receipts the
+// reconcile reads.
 func TestParseReceipts(t *testing.T) {
-	out := `{"node":"edge-hq","boot":"b1","seq":3,"minted":"2026-11-09T12:00:01.25+00:00","resolved":2,"deliveries":2,"ledger":{"metric":{"count":4,"before":8}},"outcome":{"metric":{"stored":4}},"node_loss":{"dropped":[{"cause":"spool-overflow","from":2,"to":2,"items":{"metric":4}}]}}
-{"node":null,"boot":"b2","seq":1,"minted":"2026-11-09T12:00:02+00:00","resolved":0,"deliveries":1,"ledger":{},"outcome":null}
+	out := `{"node":"edge-hq","boot":"b1","seq":3,"minted":"2026-11-09T12:00:01.25+00:00","resolved":2,"deliveries":2,"ledger":[4,8,null,null,null,null,null,null],"outcome":[1,4],"node_loss":{"dropped":[{"cause":"spool-overflow","from":2,"to":2,"items":{"metric":4}}]}}
+{"node":null,"boot":"b2","seq":1,"minted":"2026-11-09T12:00:02+00:00","resolved":0,"deliveries":1,"ledger":[null,null,null,null,null,null,null,null],"outcome":null}
 `
 	rs, err := ParseReceipts(out)
 	if err != nil {
@@ -1022,6 +1023,12 @@ func TestParseReceipts(t *testing.T) {
 	}
 	if _, err := ParseReceipts("not json\n"); err == nil {
 		t.Error("a line that is not a receipt parsed")
+	}
+	if _, err := ParseReceipts(`{"boot":"b1","seq":1,"ledger":[4,null],"outcome":[]}` + "\n"); err == nil {
+		t.Error("a ledger holding half a pair parsed")
+	}
+	if _, err := ParseReceipts(`{"boot":"b1","seq":1,"ledger":[],"outcome":[99,1]}` + "\n"); err == nil {
+		t.Error("an outcome naming no kind and outcome parsed")
 	}
 }
 

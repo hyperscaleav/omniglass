@@ -26,6 +26,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -54,7 +55,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	panelIP := "127.89.16.4"
+	panelIP := simtest.ClaimLoopback(t)
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)

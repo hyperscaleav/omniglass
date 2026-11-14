@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateNotificationTargetInputBody, NotificationTargetBody, TestNotificationTargetOutputBody, UpdateNotificationTargetInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { EMAIL_RE } from "./validate";
 
@@ -11,9 +11,9 @@ import { EMAIL_RE } from "./validate";
 // is admin-only (notification_target:*, all-scope): a target is an egress
 // destination holding a credential.
 
-export type NotificationTarget = components["schemas"]["NotificationTargetBody"];
+export type NotificationTarget = NotificationTargetBody;
 export type TargetKind = NotificationTarget["kind"];
-export type TargetTest = components["schemas"]["TestNotificationTargetOutputBody"];
+export type TargetTest = TestNotificationTargetOutputBody;
 
 export const NOTIFICATION_TARGETS_KEY = ["notification_targets"] as const;
 
@@ -141,8 +141,8 @@ export function targetDraftErrors(d: TargetDraft, editing = false): TargetDraftE
   return out;
 }
 
-export type CreateTarget = components["schemas"]["CreateNotificationTargetInputBody"];
-export type UpdateTarget = components["schemas"]["UpdateNotificationTargetInputBody"];
+export type CreateTarget = CreateNotificationTargetInputBody;
+export type UpdateTarget = UpdateNotificationTargetInputBody;
 
 // createTargetBody sends only the fields the kind reads, so a webhook URL typed
 // before switching to Group never travels.

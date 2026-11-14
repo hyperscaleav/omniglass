@@ -112,11 +112,13 @@ const (
 const (
 	CheckinAge            = "checkin-age"
 	WorklistTaskCount     = "worklist-task-count"
+	WorklistPullLossRatio = "worklist-pull-loss-ratio"
 	TickDuration          = "tick-duration"
 	TickOverrunCount      = "tick-overrun-count"
 	ScheduleLateness      = "schedule-lateness"
 	ScheduleGapExcess     = "schedule-gap-excess"
 	ScheduleSkipCount     = "schedule-skip-count"
+	WorkerBusyFraction    = "worker-busy-fraction"
 	SpoolBatchCount       = "spool-batch-count"
 	SessionHeldCount      = "session-held-count"
 	ProcessGoroutineCount = "process-goroutine-count"
@@ -211,6 +213,16 @@ const (
 	PushLaneTurnWaitMax  = "push-lane-turn-wait-max"
 )
 
+// The sweeps the server's settlement tick times, the instances of the sweep-*
+// keys.
+const (
+	SweepCommandSettlement = "command-settlement"
+	SweepEventRule         = "event-rule"
+)
+
+// Sweeps is every sweep the server times.
+var Sweeps = []string{SweepCommandSettlement, SweepEventRule}
+
 // serverPipelineWriter is what writes the server's pipeline keys.
 const serverPipelineWriter = "the server's pipeline recorder"
 
@@ -293,11 +305,13 @@ var platform = map[string]string{
 	WebhookRefusalCount:   "the webhook receiver",
 	CheckinAge:            "the server's check-in timer",
 	WorklistTaskCount:     nodeSelfWriter,
+	WorklistPullLossRatio: nodeSelfWriter,
 	TickDuration:          nodeSelfWriter,
 	TickOverrunCount:      nodeSelfWriter,
 	ScheduleLateness:      nodeSelfWriter,
 	ScheduleGapExcess:     nodeSelfWriter,
 	ScheduleSkipCount:     nodeSelfWriter,
+	WorkerBusyFraction:    nodeSelfWriter,
 	SpoolBatchCount:       nodeSelfWriter,
 	SessionHeldCount:      nodeSelfWriter,
 	ProcessGoroutineCount: processSelfWriter,

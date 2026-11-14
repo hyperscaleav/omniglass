@@ -56,13 +56,15 @@ type fleetLocationBody struct {
 
 type fleetViewOutput struct {
 	Body struct {
-		Locations []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read"`
-		Systems   []fleetSystemBody   `json:"systems" doc:"Every system the caller may read, each carrying its dots"`
+		Locations  []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read"`
+		Systems    []fleetSystemBody   `json:"systems" doc:"Every system the caller may read, each carrying its dots"`
+		OpenAlarms *int                `json:"open_alarms,omitempty" doc:"How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero"`
 	}
 }
 
 func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 	out := &fleetViewOutput{}
+	out.Body.OpenAlarms = v.OpenAlarms
 	out.Body.Locations = make([]fleetLocationBody, 0, len(v.Locations))
 	for i := range v.Locations {
 		l := &v.Locations[i]
@@ -375,7 +377,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/fleet",
 		Summary:     "Read the whole in-scope fleet in one call",
-		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
 	}, "location", "read"), func(ctx context.Context, _ *struct{}) (*fleetViewOutput, error) {
 		// Three scopes, three permissions. Resolving them separately is what
 		// makes the tiers independent: Explore is a location-rooted surface,

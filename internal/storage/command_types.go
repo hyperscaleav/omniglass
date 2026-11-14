@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
@@ -173,10 +174,37 @@ type CommandTypeSpec struct {
 	PowerOutletParam    string
 }
 
+// The command_type fields a PATCH can write, spelled as the wire body spells
+// them, because an update_mask names wire fields (ADR-0091).
+const (
+	CommandTypeFieldLabel               = "label"
+	CommandTypeFieldDescription         = "description"
+	CommandTypeFieldParamsSchema        = "params_schema"
+	CommandTypeFieldSettleWindowSeconds = "settle_window_seconds"
+	CommandTypeFieldTargetPropertyType  = "target_property_type"
+	CommandTypeFieldTargetMetricType    = "target_metric_type"
+	CommandTypeFieldDisruptive          = "disruptive"
+	CommandTypeFieldQuietSeconds        = "quiet_seconds"
+	CommandTypeFieldHoldSeconds         = "hold_seconds"
+	CommandTypeFieldPowerOutletParam    = "power_outlet_param"
+)
+
+// CommandTypePatchFields is every field a command_type PATCH lets a write set,
+// in the order a refusal lists them.
+var CommandTypePatchFields = []string{
+	CommandTypeFieldLabel, CommandTypeFieldDescription, CommandTypeFieldParamsSchema,
+	CommandTypeFieldSettleWindowSeconds, CommandTypeFieldTargetPropertyType, CommandTypeFieldTargetMetricType,
+	CommandTypeFieldDisruptive, CommandTypeFieldQuietSeconds, CommandTypeFieldHoldSeconds,
+	CommandTypeFieldPowerOutletParam,
+}
+
 // CommandTypePatch carries the mutable fields; a nil field is unchanged. The name is
 // fixed at create. The target is one fact with two forms: setting either arm
 // non-empty replaces it wholesale (the other arm clears), the empty string clears
 // the named arm, and naming both arms non-empty is the arc refusal.
+//
+// ParamsSchema is a nullable object with no empty value to overload, so it
+// clears by being named in Write with no bytes (#1189, ADR-0106's rule).
 type CommandTypePatch struct {
 	Label               *string
 	Description         *string
@@ -189,6 +217,56 @@ type CommandTypePatch struct {
 	HoldSeconds         *int
 	// PowerOutletParam: the empty string clears it.
 	PowerOutletParam *string
+	// Write is the resolved update_mask: the fields this write writes. NIL means
+	// the caller sent no mask, read as the implied mask of the fields the patch
+	// populated. A NON-NIL empty set names no fields and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the patch's implied mask: the fields it carries a value for.
+// Exported because the API resolves the wire mask against the same patch it is
+// about to write, so "populated" is defined once for both layers.
+func (p CommandTypePatch) Populated() updatemask.Fields {
+	f := updatemask.Fields{}
+	populatedIf(f, CommandTypeFieldLabel, p.Label != nil)
+	populatedIf(f, CommandTypeFieldDescription, p.Description != nil)
+	populatedIf(f, CommandTypeFieldParamsSchema, len(p.ParamsSchema) > 0)
+	populatedIf(f, CommandTypeFieldSettleWindowSeconds, p.SettleWindowSeconds != nil)
+	populatedIf(f, CommandTypeFieldTargetPropertyType, p.TargetPropertyType != nil)
+	populatedIf(f, CommandTypeFieldTargetMetricType, p.TargetMetricType != nil)
+	populatedIf(f, CommandTypeFieldDisruptive, p.Disruptive != nil)
+	populatedIf(f, CommandTypeFieldQuietSeconds, p.QuietSeconds != nil)
+	populatedIf(f, CommandTypeFieldHoldSeconds, p.HoldSeconds != nil)
+	populatedIf(f, CommandTypeFieldPowerOutletParam, p.PowerOutletParam != nil)
+	return f
+}
+
+func (p CommandTypePatch) writeFields() updatemask.Fields {
+	if p.Write != nil {
+		return p.Write
+	}
+	return updatemask.Implied(p.Populated())
+}
+
+// masked is the patch this write actually stores: a field outside the write set
+// is nil (unchanged), and a field named with no value is its zero value (the
+// clear, or the empty string a NOT NULL column reads as one). ParamsSchema is not
+// folded in here, because its clear is the write set itself, read by the SQL.
+func (p CommandTypePatch) masked() CommandTypePatch {
+	w := p.writeFields()
+	return CommandTypePatch{
+		Label:               maskedPtr(w, CommandTypeFieldLabel, p.Label),
+		Description:         maskedPtr(w, CommandTypeFieldDescription, p.Description),
+		ParamsSchema:        p.ParamsSchema,
+		SettleWindowSeconds: maskedPtr(w, CommandTypeFieldSettleWindowSeconds, p.SettleWindowSeconds),
+		TargetPropertyType:  maskedPtr(w, CommandTypeFieldTargetPropertyType, p.TargetPropertyType),
+		TargetMetricType:    maskedPtr(w, CommandTypeFieldTargetMetricType, p.TargetMetricType),
+		Disruptive:          maskedPtr(w, CommandTypeFieldDisruptive, p.Disruptive),
+		QuietSeconds:        maskedPtr(w, CommandTypeFieldQuietSeconds, p.QuietSeconds),
+		HoldSeconds:         maskedPtr(w, CommandTypeFieldHoldSeconds, p.HoldSeconds),
+		PowerOutletParam:    maskedPtr(w, CommandTypeFieldPowerOutletParam, p.PowerOutletParam),
+		Write:               w,
+	}
 }
 
 func guardCommandTypeMutable(ctx context.Context, q querier, name string) error {
@@ -378,6 +456,7 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 
 // UpdateCommandType patches a custom command type's mutable fields (nil unchanged).
 func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error) {
+	patch = patch.masked()
 	if err := checkSchemaFragment(patch.ParamsSchema, "params_schema"); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
@@ -457,7 +536,7 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		update command_type set
 			label          = case when $10::boolean then $2 else label end,
 			description           = coalesce($3, description),
-			params_schema         = coalesce($4, params_schema),
+			params_schema         = case when $15::boolean then $4::jsonb else params_schema end,
 			settle_window_seconds = coalesce($5, settle_window_seconds),
 			target_property_type_id = case
 				when $6::boolean then $7::uuid
@@ -474,7 +553,8 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		where id = (select id from command_type_in_effect() command_type where name = $1)`,
 		name, labelVal, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
 		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget, setLabel,
-		patch.Disruptive, patch.QuietSeconds, patch.HoldSeconds, patch.PowerOutletParam); err != nil {
+		patch.Disruptive, patch.QuietSeconds, patch.HoldSeconds, patch.PowerOutletParam,
+		patch.Write.Has(CommandTypeFieldParamsSchema)); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))

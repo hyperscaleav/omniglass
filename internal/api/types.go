@@ -21,14 +21,16 @@ import (
 // bare-name reference that used to be unique by construction can match more
 // than one row).
 //
-// Candidates is empty for a path that resolved with no caller scope to filter
-// by at all (the three *NameTaken advisories, storage.withoutCandidates): the
-// reference is still refused as ambiguous, the message just names no uuid,
-// since nothing on that path could tell which ones the caller may read. A path
-// that resolved WITHIN the caller's own read scope lists them (#697), because
-// every candidate is then a row that caller may read, and each is a spelling of
-// the same reference that resolves: this message is the only place an operator
-// is told which rows collided.
+// storage.ErrAmbiguousName (a tree entity's bare name that more than one row
+// answers to) is the same 404 an unresolved #1133 reference gets (#1134), so the
+// answer to a repeated name does not depend on the collection. Its candidates are
+// empty for a path that resolved with no caller scope to filter by at all (the
+// three *NameTaken advisories, storage.withoutCandidates): the reference is still
+// refused, the message just names no uuid, since nothing on that path could tell
+// which ones the caller may read. A path that resolved WITHIN the caller's own
+// read scope lists them (#697), each as its dotted address with the uuid beside
+// it, because every candidate is then a row that caller may read and a spelling
+// of the same reference that resolves.
 //
 // storage.ErrPathNotFound is a dotted address that failed to resolve
 // structurally (a missing segment, or a plane mismatch): mapped to the SAME
@@ -56,14 +58,7 @@ func mapRefErr(err error) (error, bool) {
 	}
 	var ambig *storage.ErrAmbiguousName
 	if errors.As(err, &ambig) {
-		if len(ambig.Candidates) == 0 {
-			return huma.Error409Conflict(fmt.Sprintf(
-				"%q is ambiguous for %s: matches more than one row. Address it by uuid instead of by name.",
-				ambig.Ref, ambig.Kind)), true
-		}
-		return huma.Error409Conflict(fmt.Sprintf(
-			"%q is ambiguous for %s: matches %s. Address it by uuid instead of by name.",
-			ambig.Ref, ambig.Kind, strings.Join(ambig.Candidates, ", "))), true
+		return huma.Error404NotFound(unresolvedRefMessage(ambiguousAsUnresolved(ambig))), true
 	}
 	var notFound *storage.ErrPathNotFound
 	if errors.As(err, &notFound) {
@@ -198,6 +193,27 @@ func mapTypeErr(err error, kind string) error {
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}
+}
+
+// ambiguousAsUnresolved restates a tree entity's ambiguous name as the one
+// refusal every collection answers (#1134): a candidate is spelled as its dotted
+// address with its uuid beside it, so it resolves on the same route and can be
+// told from its siblings without a second lookup. A redacted error (no
+// candidates, because the path had no caller scope to filter by) says only that
+// more than one row answers to the name.
+func ambiguousAsUnresolved(a *storage.ErrAmbiguousName) *storage.ErrUnresolvedRef {
+	e := &storage.ErrUnresolvedRef{Kind: a.Kind, Ref: a.Ref}
+	if len(a.Addresses) != len(a.Candidates) {
+		e.Candidates = a.Candidates
+	} else {
+		for i, id := range a.Candidates {
+			e.Candidates = append(e.Candidates, fmt.Sprintf("%s (%s)", a.Addresses[i], id))
+		}
+	}
+	if len(e.Candidates) == 0 {
+		e.Hint = "more than one row answers to it; address it by dotted address or uuid"
+	}
+	return e
 }
 
 // maxListedCandidates caps the spellings an unresolved name's 404 lists.

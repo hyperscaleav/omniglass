@@ -76,6 +76,10 @@ type FleetSystem struct {
 type FleetView struct {
 	Locations []FleetLocation
 	Systems   []FleetSystem
+	// OpenAlarms is the count of alarms open on the components the caller may
+	// read, wherever those components sit. Nil when the caller may read no
+	// component: the number is unknown to them, which is not the same as zero.
+	OpenAlarms *int
 }
 
 // latestVerdict is the current recorded health for an owner column, the same
@@ -114,6 +118,10 @@ func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead sco
 	}
 	view.Locations = locs
 
+	if view.OpenAlarms, err = p.fleetOpenAlarms(ctx, compRead); err != nil {
+		return nil, err
+	}
+
 	systems, err := p.fleetSystems(ctx, sysRead)
 	if err != nil {
 		return nil, err
@@ -138,6 +146,22 @@ func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead sco
 		}
 	}
 	return view, nil
+}
+
+// fleetOpenAlarms counts the open alarms on the components the read scope
+// admits, in one statement with the scope injected into it (the same
+// expansion the dots use), so an alarm on a component the caller cannot read
+// is never counted. An empty scope is nil rather than zero.
+func (p *PG) fleetOpenAlarms(ctx context.Context, read scope.Set) (*int, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	f := newReadFilter(componentTable, read, 1)
+	var n int
+	if err := p.pool.QueryRow(ctx, f.With+` select count(*) from alarm a where a.cleared_at is null and `+f.Pred("a.component_id"), f.Args...).Scan(&n); err != nil {
+		return nil, fmt.Errorf("storage: fleet open alarms: %w", err)
+	}
+	return &n, nil
 }
 
 // scopedTreeQuery runs a read over one scoped tree table through the same

@@ -80,6 +80,36 @@ const declaredProvenance = "declared"
 // and a JSON null is the unset tombstone, resolving to SQL NULL (no value).
 const declaredCurrentExpr = `nullif(value, 'null'::jsonb)`
 
+// observedValueExpr reads an observed row's stored value as the typed jsonb a
+// declared or intended row of the same property holds (#1202). An observed
+// value is stored as the JSON string of its text form (the ingest's
+// propertyText, over to_jsonb(text)), a declared one as typed jsonb, so a
+// bool observed true is "true" beside a declared true, and a json value is
+// its compact text. This is the one place the two encodings are reconciled:
+// every read that sets an observed value beside a declared or intended one
+// goes through it, and sameValue compares the results. value is the column
+// expression (the stored jsonb), dataType a SQL expression for the property
+// type's data_type. A string property is read as stored (its text is its
+// value); a json property whose text is not JSON is a JSON string and stays
+// one. The JSON null literal is no value, as declaredCurrentExpr has it.
+func observedValueExpr(value, dataType string) string {
+	return fmt.Sprintf(`case
+		when jsonb_typeof(%[1]s) <> 'string' then nullif(%[1]s, 'null'::jsonb)
+		when %[2]s = 'bool' and %[1]s #>> '{}' in ('true', 'false') then to_jsonb((%[1]s #>> '{}')::boolean)
+		when %[2]s = 'json' and %[1]s #>> '{}' <> 'null' and (%[1]s #>> '{}') is json value then (%[1]s #>> '{}')::jsonb
+		else %[1]s end`, value, dataType)
+}
+
+// keyDataTypeSQL is the data_type of the property type a read names by $3, the
+// argument observedValueExpr takes.
+const keyDataTypeSQL = `(select k.data_type from property_type_in_effect() k where k.name = $3)`
+
+// observedPropertySQL is latestObservedPerInstanceSQL over the property lane,
+// each instance's value read typed (observedValueExpr).
+func observedPropertySQL(col string) string {
+	return latestObservedPerInstanceSQL("property", observedValueExpr("value", keyDataTypeSQL), col)
+}
+
 // declaredSeriesCols is the read shape of one declared series row.
 const declaredSeriesCols = `id::text, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_type_name, property.property_type_id as property_type_id, instance, provenance, value, ts`
 
@@ -160,7 +190,8 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 		return nil, err
 	}
 
-	// cur is the series' current value (its latest row); the insert appends only
+	// cur is the series' current value (its latest row, by insertion: `id desc`,
+	// seriesOrderSQL's declared rule, #712); the insert appends only
 	// when the declared value actually changes. value is the exact jsonb
 	// (ADR-0038's structured value: bool and json round-trip without loss).
 	sql := fmt.Sprintf(`
@@ -170,7 +201,7 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
-			order by ts desc, id desc
+			order by id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
@@ -207,7 +238,7 @@ func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = '`+declaredProvenance+`'
-		order by ts desc, id desc
+		order by id desc
 		limit 1`, col)
 	pv, err := scanProperty(q.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance))
 	if err != nil {
@@ -251,7 +282,7 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
-			order by ts desc, id desc
+			order by id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
@@ -376,7 +407,9 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind, ownerID, arc string) ([]EffectiveProperty, error) {
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
-	// (JSON-null value) resolving to no value. Shared by every arm.
+	// (JSON-null value) resolving to no value. Shared by every arm. Latest is
+	// by `id desc`, insertion order: a declared row carries no caller-supplied
+	// ts, so a clock stepping backwards cannot reorder it (seriesOrderSQL, #712).
 	declared := fmt.Sprintf(`
 		declared as (
 			select distinct on (s.property_type_id)
@@ -385,7 +418,7 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 			from property s
 			join inst on s.%[1]s = inst.arc
 			where s.instance = '' and s.provenance = 'declared'
-			order by s.property_type_id, s.ts desc, s.id desc
+			order by s.property_type_id, s.id desc
 		)`, oc.arcCol)
 	// The calculated value per property (#999, #1018): the latest observed or
 	// calculated row of each (property, instance='') series, kept when a calc
@@ -398,15 +431,16 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 			select property_type_id, value, source_rule, source_rule_id from (
 				select distinct on (s.property_type_id)
 				       s.property_type_id,
-				       -- A sample's value is text; a bool property's reads as the
-				       -- bool a declared value is.
-				       case when pt.data_type = 'bool' and s.value #>> '{}' in ('true', 'false')
-				            then to_jsonb((s.value #>> '{}')::boolean) else s.value end as value,
+				       -- A sample's value is text; it reads as the typed value a
+				       -- declared one is (observedValueExpr).
+				       `+observedValueExpr("s.value", "pt.data_type")+` as value,
 				       s.provenance, s.source_rule, s.source_rule_id::text as source_rule_id
 				from property s
 				join inst on s.%[1]s = inst.arc
 				join property_type pt on pt.id = s.property_type_id
 				where s.instance = '' and s.provenance in ('observed', 'calculated')
+				-- ts leads here, not id: these are observed and calculated rows, whose ts
+				-- a caller may supply (seriesOrderSQL, #712).
 				order by s.property_type_id, s.ts desc, s.id desc) latest
 			where provenance = 'calculated' and source_rule_id is not null
 		)`, oc.arcCol)

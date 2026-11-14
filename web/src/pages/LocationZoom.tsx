@@ -15,6 +15,7 @@ import SystemSummary from "../components/SystemSummary";
 import BladeStack from "../components/BladeStack";
 import { resolveIcon } from "../components/icons";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
@@ -44,6 +45,7 @@ export default function LocationZoom() {
   // window's query lags the route being rendered (#932).
   const location = useLocation();
   const id = () => params.id;
+  const leave = createLeaveGuard();
   const me = useMe();
   const blades = createBladeController();
   const [search] = useSearchParams();
@@ -103,15 +105,16 @@ export default function LocationZoom() {
     const chain = ancestors(id(), locationIndex(view.data));
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
       // The trail ends at the parent: the place itself is the page title.
-      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
+      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
     ];
   });
 
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
-  const missing = () => !!view.data && !view.isFetching && !place() && !(view.data.locations ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!view.data && !view.isFetching && !place() && (view.data.locations ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!view.data && !view.isFetching && !place() && !ambiguous();
 
   return (
     <BladesContext.Provider value={blades}>
@@ -121,6 +124,7 @@ export default function LocationZoom() {
         <DetailGate
           noun="location"
           missing={missing()}
+          ambiguous={ambiguous()}
           pending={view.isPending}
           error={view.isError ? describeError(view.error) : null}
           retrying={view.isFetching}
@@ -135,9 +139,10 @@ export default function LocationZoom() {
               </span>
               <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} />
+            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
-              <ConfigureFace kind="location" id={id()} />
+              {/* Keyed on the id: another place is another face (#854). */}
+              <Show when={id()} keyed>{(lid) => <ConfigureFace kind="location" id={lid} guard={leave} />}</Show>
             </Show>
             <Show when={tab() === "overview"}>
               <div data-testid="place-overview" class="flex flex-col gap-4 p-4">

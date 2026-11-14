@@ -438,7 +438,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	}
 	registerViewRoutes(api, a, gw, viewLog)
 	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
-	registerNodeRoutes(api, a, gw, o.natsURL)
+	registerNodeRoutes(api, a, gw, o.natsURL, o.simHub)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
 	registerPropertyRoutes(api, a, gw)
