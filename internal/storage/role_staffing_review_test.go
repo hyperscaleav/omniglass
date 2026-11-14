@@ -83,29 +83,6 @@ func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
 	}
 }
 
-// TestSeedRepairLeavesAnOperatorDeclaredRoleAlone: a role an operator declared
-// on a shipped standard, never revised and accepting any type, carries the same
-// timestamps an interrupted seed leaves. A boot whose shipped YAML declares the
-// same name must not fill its empty set: only a role the seed itself wrote is
-// the seed's to repair.
-func TestSeedRepairLeavesAnOperatorDeclaredRoleAlone(t *testing.T) {
-	t.Parallel()
-	r := newSeedRig(t)
-	if _, err := r.gw.SetSystemRole(r.ctx, "", "standard", "seed-std", storage.SystemRoleSpec{Name: "op-role", Label: "Operator role", Quorum: 1}); err != nil {
-		t.Fatalf("the operator declares: %v", err)
-	}
-	var id string
-	if err := r.conn.QueryRow(r.ctx, `select id from system_role where name = 'op-role'`).Scan(&id); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.seedRole(storage.SystemRoleSpec{Name: "op-role", AcceptedTypes: []string{"display"}}); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if types, products := r.slot(id); len(types) != 0 || len(products) != 0 {
-		t.Fatalf("the operator's role accepts %v %v after a boot, want any type as they declared it", types, products)
-	}
-}
-
 // TestRoleWithdrawalWaitsForAStandardChange: a standard change locks the
 // stranded assignments in position order, and a role withdrawal's cascade
 // deletes the same rows in heap order; after a swap the two disagree. The

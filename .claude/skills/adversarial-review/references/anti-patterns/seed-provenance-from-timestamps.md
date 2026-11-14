@@ -7,5 +7,5 @@
   starts refusing components when a release ships a role of the same name).
 - **Fix:** decide provenance from a fact only the seed's write lacks: every operator write is
   audited in its transaction and the seed never is, so a row no audit row names is the seed's; or
-  carry an explicit provenance mark (`repairSeededSlot`, internal/storage/role_declarations.go,
-  ADR-0508).
+  carry an explicit provenance mark (the audit-row check `repairSeededSlot` made, ADR-0508, retired
+  with the role seed lane in #1332).

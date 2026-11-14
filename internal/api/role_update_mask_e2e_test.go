@@ -241,19 +241,19 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"name": "alt-room", "label": "Alternate Room",
-	}, http.StatusCreated)
-	// A choice has no write route of its own yet, so it arrives the way the
-	// shipped standards' choices do.
-	if _, err := gw.SeedRoleChoice(ctx, "standard", "alt-room", storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "component-system", Label: "Component System"},
-		},
+	// A choice has no write route of its own yet, so the standard arrives
+	// with it through the audited create from a template.
+	if _, err := gw.CreateStandardFromTemplate(ctx, "", storage.StandardFromTemplate{
+		Template: "test", Name: "alt-room", Label: "Alternate Room",
+		Choices: []storage.RoleChoiceSpec{{
+			Name: "conferencing", Label: "Conferencing",
+			Alternates: []storage.AlternateSpec{
+				{Name: "all-in-one", Label: "All-in-one"},
+				{Name: "component-system", Label: "Component System"},
+			},
+		}},
 	}); err != nil {
-		t.Fatalf("seed choice: %v", err)
+		t.Fatalf("create standard with choice: %v", err)
 	}
 
 	const path = "/standards/alt-room/roles/conf-bar"
