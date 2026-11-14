@@ -141,6 +141,7 @@
       "webhook-post-count",
       "webhook-refusal-count",
       "worker-busy-fraction",
+      "worklist-pull-loss-ratio",
       "worklist-task-count"
     ],
     "admits": [
