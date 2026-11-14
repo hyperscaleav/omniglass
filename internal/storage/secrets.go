@@ -75,6 +75,9 @@ type Secret struct {
 	AdminSensitive bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// version is the digest of the sealed value (secretVersion), set on the
+	// rows the audit writers read; unexported, so no projection can leak it.
+	version string
 }
 
 // SecretSpec is the create input. OwnerName is the owning entity's name
@@ -390,6 +393,20 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	if err != nil {
 		return nil, err
 	}
+	// Lock the row and take its sealed value again under the lock: the patch
+	// merges over that value, and the before-image (ADR-1442) is the row it
+	// replaces, so neither may come from a read a concurrent update can pass.
+	var locked []byte
+	if err := tx.QueryRow(ctx, `select coalesce(label, ''), value from secret where id = $1 for update`, row.id).Scan(&row.label, &locked); err != nil {
+		return nil, fmt.Errorf("storage: lock secret: %w", err)
+	}
+	if err := json.Unmarshal(locked, &row.value); err != nil {
+		return nil, fmt.Errorf("storage: decode secret value: %w", err)
+	}
+	before := &Secret{
+		ID: row.id, Name: row.name, Label: row.label, SecretType: row.secretType,
+		OwnerKind: row.ownerKind, OwnerID: row.ownerID, version: secretVersion(row.id, row.value),
+	}
 	if err := shape.ValidateInput(patch.Fields); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSecretFieldInvalid, err)
 	}
@@ -422,7 +439,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	if s.OwnerName, err = arcOwnerName(ctx, tx, s.OwnerKind, s.OwnerID); err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, nil, auditSecret(s)); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, auditSecret(before), auditSecret(s)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -732,12 +749,27 @@ func ownerNameOf(name *string) string {
 	return *name
 }
 
+// secretVersion is a secret's version: a digest of its id and its sealed value,
+// never of the plaintext. A node reports it to say which value it holds, and an
+// audit image carries it to say a value moved (ADR-1442) without ever carrying
+// the value. A reseal changes it, because the seal is nonced.
+func secretVersion(id string, value map[string]json.RawMessage) string {
+	b, _ := json.Marshal(struct {
+		ID    string                     `json:"id"`
+		Value map[string]json.RawMessage `json:"value"`
+	}{id, value})
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 // secretRow is the raw scanned secret plus its decoded value map, used by the
 // action-scoped read paths (delete, reveal) before masking or unsealing.
 type secretRow struct {
 	id             string
 	name           string
 	label          string
+	secretType     string
+	version        string
 	ownerKind      string
 	ownerID        *string
 	adminSensitive bool
@@ -752,9 +784,10 @@ func (p *PG) secretForAction(ctx context.Context, q querier, ref string, read, a
 		return nil, err
 	}
 	s := &Secret{
-		ID: row.id, Name: row.name, Label: row.label, OwnerKind: row.ownerKind, OwnerID: row.ownerID,
+		ID: row.id, Name: row.name, Label: row.label, SecretType: row.secretType, OwnerKind: row.ownerKind, OwnerID: row.ownerID,
 		AdminSensitive: row.adminSensitive,
 		Fields:         maskValueMap(shape, row.value),
+		version:        row.version,
 	}
 	return s, nil
 }
@@ -794,9 +827,11 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, ref string, read
 		return secretRow{}, secret.Shape{}, fmt.Errorf("storage: get secret: %w", err)
 	}
 	row.ownerID = firstNonNil(comp, sys, loc)
+	row.secretType = secType
 	if err := json.Unmarshal(value, &row.value); err != nil {
 		return secretRow{}, secret.Shape{}, fmt.Errorf("storage: decode secret value: %w", err)
 	}
+	row.version = secretVersion(row.id, row.value)
 	if ok, err := p.secretOwnerInScope(ctx, q, row.ownerKind, row.ownerID, read); err != nil {
 		return secretRow{}, secret.Shape{}, err
 	} else if !ok {
@@ -902,6 +937,11 @@ func scanSecretRow(row pgx.Row, shape secret.Shape) (*Secret, error) {
 	}
 	s.OwnerID = firstNonNil(comp, sys, loc)
 	s.Fields = maskValue(shape, value)
+	var sealed map[string]json.RawMessage
+	if err := json.Unmarshal(value, &sealed); err != nil {
+		return nil, fmt.Errorf("storage: decode secret value: %w", err)
+	}
+	s.version = secretVersion(s.ID, sealed)
 	return &s, nil
 }
 
@@ -926,9 +966,12 @@ func secretColsQualified(alias string) string {
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at, " + alias + ".admin_sensitive"
 }
 
-// auditSecret is the audit projection: metadata only, never the sealed value.
+// auditSecret is the audit projection: metadata and the value's version (a
+// digest of the sealed value, so a row shows that the value moved), never the
+// value, sealed or plain.
 func auditSecret(s *Secret) map[string]any {
 	return map[string]any{
+		"version":     s.version,
 		"name":        s.Name,
 		"label":       s.Label,
 		"secret_type": s.SecretType,
@@ -1072,12 +1115,7 @@ func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecre
 		if err != nil {
 			return nil, fmt.Errorf("storage: node secret %q: %w", row.name, err)
 		}
-		b, _ := json.Marshal(struct {
-			ID    string                     `json:"id"`
-			Value map[string]json.RawMessage `json:"value"`
-		}{row.id, row.value})
-		sum := sha256.Sum256(b)
-		out[i] = nodeSecret{fields: fields, version: hex.EncodeToString(sum[:]), row: &row, shape: shape}
+		out[i] = nodeSecret{fields: fields, version: secretVersion(row.id, row.value), row: &row, shape: shape}
 		opened[row.id] = out[i]
 	}
 	return out, nil

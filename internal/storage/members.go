@@ -85,6 +85,15 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err != nil {
 		return err
 	}
+	// The before-image is read under the component's membership lock, the same one
+	// addMemberTx takes (it is re-entrant), so it is the state this bind replaces.
+	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
+		return err
+	}
+	before, err := memberImage(ctx, tx, systemID, componentID, systemName, componentName)
+	if err != nil {
+		return err
+	}
 	if err := addMemberTx(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
@@ -96,8 +105,11 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
-		map[string]string{"system": systemName, "component": componentName}); err != nil {
+	after, err := memberImage(ctx, tx, systemID, componentID, systemName, componentName)
+	if err != nil {
+		return err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, before, after); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -178,6 +190,10 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
 		return err
 	}
+	before, err := memberImage(ctx, tx, systemID, componentID, systemName, componentName)
+	if err != nil {
+		return err
+	}
 	var staffing int
 	if err := tx.QueryRow(ctx, `
 		select count(*) from system_role_assignment
@@ -212,14 +228,34 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID,
-		map[string]string{"system": systemName, "component": componentName}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit remove member: %w", err)
 	}
 	return nil
+}
+
+// memberImage is one membership as its audit image (ADR-1442): both ends by
+// name (and the component by id, since the row's resource_id is the system's),
+// whether the component is a member at all, and whether this is its default. A
+// bind's before-image is the non-member (member and is_primary false), so the
+// row says what the write moved. Read in the caller's transaction, under the
+// component's membership lock.
+func memberImage(ctx context.Context, q querier, systemID, componentID, systemName, componentName string) (map[string]any, error) {
+	member, primary := true, false
+	err := q.QueryRow(ctx, `select is_primary from system_member where system_id = $1::uuid and component_id = $2::uuid`,
+		systemID, componentID).Scan(&primary)
+	if errors.Is(err, pgx.ErrNoRows) {
+		member = false
+	} else if err != nil {
+		return nil, fmt.Errorf("storage: read member: %w", err)
+	}
+	return map[string]any{
+		"system": systemName, "component": componentName, "component_id": componentID,
+		"member": member, "is_primary": primary,
+	}, nil
 }
 
 // lockMemberComponent serializes every write that can move a component's default.
@@ -339,6 +375,10 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
 		return err
 	}
+	before, err := memberImage(ctx, tx, systemID, componentID, systemName, componentName)
+	if err != nil {
+		return err
+	}
 	// Clear first: the index permits at most one primary per component, so the old
 	// one has to go before the new one lands.
 	if _, err := tx.Exec(ctx, `
@@ -366,8 +406,11 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
-		map[string]string{"system": systemName, "component": componentName, "primary": "true"}); err != nil {
+	after, err := memberImage(ctx, tx, systemID, componentID, systemName, componentName)
+	if err != nil {
+		return err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, before, after); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

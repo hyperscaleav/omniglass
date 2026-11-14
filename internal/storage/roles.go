@@ -676,6 +676,10 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 		sys.ID, roleID).Scan(&position); err != nil {
 		return fmt.Errorf("storage: next free position %s/%s: %w", systemName, roleID, err)
 	}
+	beforeAssign, err := assignmentImage(ctx, tx, sys.ID, roleID, component.ID, systemName, roleName, componentName)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		insert into system_role_assignment (system_id, role_id, component_id, position)
 		values ($1::uuid, $2, $3::uuid, $4)
@@ -683,8 +687,11 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 		sys.ID, roleID, component.ID, position); err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
-		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
+	afterAssign, err := assignmentImage(ctx, tx, sys.ID, roleID, component.ID, systemName, roleName, componentName)
+	if err != nil {
+		return err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, beforeAssign, afterAssign); err != nil {
 		return err
 	}
 	// The system's members moved: its calc rules recompute on the next tick.
@@ -778,6 +785,10 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
+	before, err := assignmentImage(ctx, tx, sys.ID, roleID, component.ID, sys.Name, roleName, component.Name)
+	if err != nil {
+		return err
+	}
 	var assignmentID string
 	if err := tx.QueryRow(ctx, `
 		delete from system_role_assignment
@@ -789,7 +800,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 		}
 		return fmt.Errorf("storage: unassign role: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", assignmentID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", assignmentID, before, nil); err != nil {
 		return err
 	}
 	// The system's members moved: its calc rules recompute on the next tick.
@@ -805,6 +816,57 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 		return fmt.Errorf("storage: commit unassign role: %w", err)
 	}
 	return nil
+}
+
+// assignmentImage is the audit image of one component's place in one role of a
+// system (ADR-1442): the names the operator spoke, whether the component holds
+// the role, and its position when it does. An unassigned component reads as
+// assigned=false with no position, so an assign's old image says what was moved.
+// Callers hold the role's position lock, so the read cannot race a writer.
+func assignmentImage(ctx context.Context, q txQuerier, systemID, roleID, componentID, systemName, roleName, componentName string) (map[string]any, error) {
+	img := map[string]any{"system": systemName, "role": roleName, "component": componentName, "assigned": false}
+	var position int
+	err := q.QueryRow(ctx, `
+		select position from system_role_assignment
+		 where system_id = $1::uuid and role_id = $2 and component_id = $3::uuid`,
+		systemID, roleID, componentID).Scan(&position)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return img, nil
+	case err != nil:
+		return nil, fmt.Errorf("storage: read assignment image %s/%s/%s: %w", systemName, roleName, componentName, err)
+	}
+	img["assigned"] = true
+	img["position"] = position
+	return img, nil
+}
+
+// roleOccupantsImage is the audit image of who holds positions a and b of a
+// role (ADR-1442), in position order: what a swap exchanges.
+func roleOccupantsImage(ctx context.Context, q txQuerier, systemID, roleID, systemName, roleName string, a, b int) (map[string]any, error) {
+	rows, err := q.Query(ctx, `
+		select ra.position, c.name
+		  from system_role_assignment ra
+		  join component c on c.id = ra.component_id
+		 where ra.system_id = $1::uuid and ra.role_id = $2 and ra.position in ($3, $4)
+		 order by ra.position`, systemID, roleID, a, b)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read role occupants %s/%s: %w", systemName, roleName, err)
+	}
+	defer rows.Close()
+	occupants := []map[string]any{}
+	for rows.Next() {
+		var position int
+		var component string
+		if err := rows.Scan(&position, &component); err != nil {
+			return nil, fmt.Errorf("storage: scan role occupant %s/%s: %w", systemName, roleName, err)
+		}
+		occupants = append(occupants, map[string]any{"position": position, "component": component})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: read role occupants %s/%s: %w", systemName, roleName, err)
+	}
+	return map[string]any{"system": systemName, "role": roleName, "occupants": occupants}, nil
 }
 
 // rolePositionLockKey is the advisory-lock key AssignRole, UnassignRole and
@@ -900,6 +962,10 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	if _, err := tx.Exec(ctx, `set constraints system_role_assignment_position_key deferred`); err != nil {
 		return fmt.Errorf("storage: defer position uniqueness: %w", err)
 	}
+	beforeSwap, err := roleOccupantsImage(ctx, tx, sys.ID, roleID, systemName, roleName, a, b)
+	if err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		update system_role_assignment
 		   set position = case position when $3 then $4 when $4 then $3 end
@@ -912,8 +978,11 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	if tag.RowsAffected() != 2 {
 		return ErrAssignmentMissing
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
-		map[string]any{"system": systemName, "role": roleName, "swap": [2]int{a, b}}); err != nil {
+	afterSwap, err := roleOccupantsImage(ctx, tx, sys.ID, roleID, systemName, roleName, a, b)
+	if err != nil {
+		return err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, beforeSwap, afterSwap); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

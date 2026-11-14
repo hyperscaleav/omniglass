@@ -174,6 +174,15 @@ func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace 
 	if locks == nil {
 		locks = []string{}
 	}
+	// The row's own lock, taken before the before-image is read so the image is
+	// the row this write replaces (merge-patch already holds the same key).
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
+		return nil, fmt.Errorf("storage: lock setting override: %w", err)
+	}
+	before, err := overrideImageTx(ctx, tx, scope, namespace)
+	if err != nil {
+		return nil, err
+	}
 	docJSON, err := json.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal override doc: %w", err)
@@ -192,7 +201,7 @@ func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace 
 		return nil, fmt.Errorf("storage: upsert setting override: %w", err)
 	}
 	o := SettingOverride{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, nil, o); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, before, auditSetting(o)); err != nil {
 		return nil, err
 	}
 	return &o, nil
@@ -207,12 +216,19 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
+		return fmt.Errorf("storage: lock setting override: %w", err)
+	}
+	before, err := overrideImageTx(ctx, tx, scope, namespace)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`delete from setting_override where scope = $1 and principal_id is null and namespace = $2`,
 		scope, namespace); err != nil {
 		return fmt.Errorf("storage: delete setting override: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", namespace, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", namespace, before, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -227,12 +243,66 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx,
-		`delete from setting_override where scope = $1 and principal_id is null`, scope); err != nil {
+	rows, err := tx.Query(ctx,
+		`delete from setting_override where scope = $1 and principal_id is null returning namespace, doc, locks`, scope)
+	if err != nil {
 		return fmt.Errorf("storage: reset setting overrides: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", "", nil, nil); err != nil {
+	deleted := []map[string]any{}
+	for rows.Next() {
+		o := SettingOverride{Scope: scope}
+		var docRaw, locksRaw []byte
+		if err := rows.Scan(&o.Namespace, &docRaw, &locksRaw); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: scan reset setting override: %w", err)
+		}
+		if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: unmarshal override doc: %w", err)
+		}
+		if err := json.Unmarshal(locksRaw, &o.Locks); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: unmarshal override locks: %w", err)
+		}
+		deleted = append(deleted, auditSetting(o))
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("storage: reset setting overrides: %w", err)
+	}
+	// One row for the whole reset, so its old image is every row it deleted.
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", "", map[string]any{"scope": scope, "overrides": deleted}, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// auditSetting is one platform override as its audit image: the row's identity
+// and both fields an upsert can move, so the row reads whole after a restore.
+func auditSetting(o SettingOverride) map[string]any {
+	return map[string]any{"scope": o.Scope, "namespace": o.Namespace, "doc": o.Doc, "locks": o.Locks}
+}
+
+// overrideImageTx reads the (scope, namespace) platform row as its audit image,
+// inside the caller's transaction and before its write. A namespace with no row
+// reads as the empty document with no locks: the state the write moves it from.
+func overrideImageTx(ctx context.Context, tx pgx.Tx, scope, namespace string) (map[string]any, error) {
+	o := SettingOverride{Scope: scope, Namespace: namespace, Doc: map[string]any{}, Locks: []string{}}
+	var docRaw, locksRaw []byte
+	err := tx.QueryRow(ctx,
+		`select doc, locks from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		scope, namespace).Scan(&docRaw, &locksRaw)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return auditSetting(o), nil
+	case err != nil:
+		return nil, fmt.Errorf("storage: read setting override: %w", err)
+	}
+	if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
+		return nil, fmt.Errorf("storage: unmarshal override doc: %w", err)
+	}
+	if err := json.Unmarshal(locksRaw, &o.Locks); err != nil {
+		return nil, fmt.Errorf("storage: unmarshal override locks: %w", err)
+	}
+	return auditSetting(o), nil
 }

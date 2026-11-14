@@ -224,6 +224,15 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, patch TagPatch
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The before-image is read under the row lock the update then takes (ADR-1442).
+	before, err := scanTagRow(tx.QueryRow(ctx, `select `+tagCols+` from tag where name = $1 for update`, name))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTagNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read tag before update: %w", err)
+	}
+
 	setLabel, labelVal := labelPatch(patch.Label)
 	t, err := scanTagRow(tx.QueryRow(ctx, `
 		update tag set
@@ -242,7 +251,7 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, patch TagPatch
 	if err != nil {
 		return nil, fmt.Errorf("storage: update tag: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "tag", t.ID, nil, auditTag(t)); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "tag", t.ID, auditTag(before), auditTag(t)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

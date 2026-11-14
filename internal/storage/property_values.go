@@ -190,6 +190,13 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 		return nil, err
 	}
 
+	// The series' current value is the audit's before-image (ADR-1442); the series
+	// lock keeps it the value this append replaces.
+	prior, err := p.lockedDeclaredValue(ctx, tx, col, ownerKind, arc, propertyName, instance)
+	if err != nil {
+		return nil, err
+	}
+
 	// cur is the series' current value (its latest row, by insertion: `id desc`,
 	// seriesOrderSQL's declared rule, #712); the insert appends only
 	// when the declared value actually changes. value is the exact jsonb
@@ -223,10 +230,53 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 		return nil, mapPropertyWriteErr(err)
 	}
 	pv.OwnerID = ownerID
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property", pv.ID, nil, pv); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property", pv.ID,
+		auditProperty(ownerKind, ownerID, propertyName, instance, prior),
+		auditProperty(ownerKind, ownerID, propertyName, instance, pv.Value)); err != nil {
 		return nil, err
 	}
 	return pv, nil
+}
+
+// auditProperty is a declared value as its audit image (ADR-1442): the series
+// it belongs to and the value it holds, nil (JSON null) for none. The id is the
+// audit row's resource_id, and the owner is named by the address the caller
+// used, so the row reads the same once the owner is gone.
+func auditProperty(ownerKind, ownerID, propertyName, instance string, value json.RawMessage) map[string]any {
+	return map[string]any{
+		"owner_kind": ownerKind,
+		"owner_id":   ownerID,
+		"property":   propertyName,
+		"instance":   instance,
+		"value":      value,
+	}
+}
+
+// lockedDeclaredValue takes the series' advisory lock (transaction-scoped) and
+// reads its current declared value: nil when the series has no row or its
+// latest is the unset tombstone. A declared series is append-only, so there is
+// no row to `for update`; the lock is what makes the value read here the value
+// the caller's append then replaces.
+func (p *PG) lockedDeclaredValue(ctx context.Context, tx pgx.Tx, col, ownerKind, arc, propertyName, instance string) (json.RawMessage, error) {
+	if err := lockAdvisory(ctx, tx, "declared-property|"+ownerKind+"|"+arc+"|"+propertyName+"|"+instance); err != nil {
+		return nil, err
+	}
+	var value []byte
+	err := tx.QueryRow(ctx, fmt.Sprintf(`
+		select `+declaredCurrentExpr+`
+		from property
+		where owner_kind = $1 and %s = $2
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
+		  and instance = $4 and provenance = '`+declaredProvenance+`'
+		order by id desc
+		limit 1`, col), ownerKind, arc, propertyName, instance).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read declared value %s: %w", propertyName, err)
+	}
+	return copyRaw(value), nil
 }
 
 // currentDeclared reads the current declared series row for one series, the
@@ -273,6 +323,12 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 		return err
 	}
 
+	// What the tombstone unsets is the audit's old image (ADR-1442).
+	prior, err := p.lockedDeclaredValue(ctx, tx, col, ownerKind, arc, propertyName, instance)
+	if err != nil {
+		return err
+	}
+
 	// The tombstone appends only when the series has a current value, so an
 	// unset-of-unset is a miss rather than a growing pile of tombstones.
 	sql := fmt.Sprintf(`
@@ -297,7 +353,8 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 		}
 		return fmt.Errorf("storage: clear property value %s/%s: %w", ownerID, propertyName, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", tombstoneID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", tombstoneID,
+		auditProperty(ownerKind, ownerID, propertyName, instance, prior), nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

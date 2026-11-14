@@ -541,7 +541,9 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 		return false, fmt.Errorf("storage: clear must-change: %w", err)
 	}
 	// Audit the credential change (never the secret) so a password change leaves a
-	// trail and an impersonated change records the real actor.
+	// trail and an impersonated change records the real actor. The row carries no
+	// field images, on purpose (ADR-1442): the only field that moved is the
+	// credential hash, and a hash is never imaged.
 	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
 		return false, err
 	}
@@ -606,6 +608,7 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, enc
 		principalID); err != nil {
 		return fmt.Errorf("storage: flag must-change on reset: %w", err)
 	}
+	// No field images, on purpose (ADR-1442): the only moved field is the credential hash.
 	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", principalID, nil, nil); err != nil {
 		return err
 	}
@@ -624,13 +627,21 @@ func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, principalID, b64 strin
 	if b64 != "" {
 		val, verb = b64, "set_avatar"
 	}
+	before, err := principalImage(ctx, tx, principalID)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`update human set avatar = $2, avatar_updated_at = case when $3 then now() else null end
 		 where principal_id = $1`,
 		principalID, val, b64 != ""); err != nil {
 		return fmt.Errorf("storage: write avatar: %w", err)
 	}
-	return writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, nil)
+	after, err := principalImage(ctx, tx, principalID)
+	if err != nil {
+		return err
+	}
+	return writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, before, after)
 }
 
 // SetOwnAvatar sets the caller's own profile picture (a normalized base64 JPEG),
@@ -750,6 +761,10 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 		return fmt.Errorf("storage: begin update human profile: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	before, err := principalImage(ctx, tx, principalID)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		update human set
 			label = case when $2 then $3 else label end,
@@ -759,15 +774,13 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 		return fmt.Errorf("storage: update human profile: %w", err)
 	}
 	// Audit the self-profile change so an impersonated (act-as) edit records the
-	// real actor, and every profile edit leaves a trail. Log the changed fields.
-	summary := map[string]any{}
-	if patch.Label != nil {
-		summary["label"] = *patch.Label
+	// real actor, and every profile edit leaves a trail, with the principal's
+	// image before and after (ADR-1442).
+	after, err := principalImage(ctx, tx, principalID)
+	if err != nil {
+		return err
 	}
-	if patch.Email != nil {
-		summary["email"] = *patch.Email
-	}
-	if err := writeAuditRes(ctx, tx, principalID, "update", "principal", principalID, nil, summary); err != nil {
+	if err := writeAuditRes(ctx, tx, principalID, "update", "principal", principalID, before, after); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1407,16 +1420,9 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from principal where id = $1`, principalID).Scan(new(int)); err != nil {
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			return ErrPrincipalNotFound
-		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-			return ErrPrincipalNotFound
-		default:
-			return fmt.Errorf("storage: archive lookup: %w", err)
-		}
+	before, err := principalImageOrNotFound(ctx, tx, principalID, "archive lookup")
+	if err != nil {
+		return err
 	}
 
 	if archive {
@@ -1438,13 +1444,68 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 	if archive {
 		verb = "archive"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, map[string]any{"archived": archive}); err != nil {
+	after, err := principalImage(ctx, tx, principalID)
+	if err != nil {
+		return err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, before, after); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit archive: %w", err)
 	}
 	return nil
+}
+
+// principalImage is the audit image of a principal (ADR-1442), read under the
+// principal's row lock: who it is (kind and its identifier), its profile fields,
+// and its lifecycle flags. A credential hash or an avatar's bytes are never in
+// it; the avatar is only whether one is set.
+func principalImage(ctx context.Context, tx pgx.Tx, principalID string) (map[string]any, error) {
+	var kind, name, email, label string
+	var active, archived, hasAvatar, mustChange bool
+	err := tx.QueryRow(ctx, `
+		select pr.kind, coalesce(h.username, s.name, n.name, ''), coalesce(h.email, ''), coalesce(h.label, ''),
+		       pr.active, pr.archived_at is not null, coalesce(h.avatar is not null, false),
+		       coalesce(h.must_change_password, false)
+		  from principal pr
+		  left join human h on h.principal_id = pr.id
+		  left join service s on s.principal_id = pr.id
+		  left join node n on n.principal_id = pr.id
+		 where pr.id = $1
+		   for update of pr`, principalID).
+		Scan(&kind, &name, &email, &label, &active, &archived, &hasAvatar, &mustChange)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read principal image %s: %w", principalID, err)
+	}
+	img := map[string]any{
+		"id": principalID, "kind": kind, "active": active, "archived": archived,
+		"username": "", "email": email, "label": label,
+		"has_avatar": hasAvatar, "must_change_password": mustChange,
+	}
+	if kind == "human" {
+		img["username"] = name
+	} else {
+		delete(img, "username")
+		img["name"] = name
+	}
+	return img, nil
+}
+
+// principalImageOrNotFound is principalImage for a write addressed by a caller's
+// id: no such row, or an id that is not a uuid, is ErrPrincipalNotFound.
+func principalImageOrNotFound(ctx context.Context, tx pgx.Tx, principalID, what string) (map[string]any, error) {
+	img, err := principalImage(ctx, tx, principalID)
+	var pgErr *pgconn.PgError
+	switch {
+	case err == nil:
+		return img, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, ErrPrincipalNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
+		return nil, ErrPrincipalNotFound
+	}
+	return nil, fmt.Errorf("%s: %w", what, err)
 }
 
 // PurgePrincipal hard-deletes a principal (issue #143), gated on prior archival
@@ -1464,19 +1525,12 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var archivedAt *time.Time
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select archived_at from principal where id = $1`, principalID).Scan(&archivedAt); err != nil {
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			return ErrPrincipalNotFound
-		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-			return ErrPrincipalNotFound
-		default:
-			return fmt.Errorf("storage: purge lookup: %w", err)
-		}
+	before, err := principalImageOrNotFound(ctx, tx, principalID, "purge lookup")
+	if err != nil {
+		return err
 	}
-	if archivedAt == nil {
+	if before["archived"] != true {
 		return ErrNotArchived
 	}
 	// A notification target that notifies this person holds them (#1341).
@@ -1485,7 +1539,7 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
-	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", principalID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", principalID, before, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, principalID); err != nil {

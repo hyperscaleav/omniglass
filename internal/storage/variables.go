@@ -196,6 +196,11 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, ref string, patch Vari
 			return nil, fmt.Errorf("%w: %v", ErrVariableValueInvalid, err)
 		}
 	}
+	// The before-image, read under the row lock the update then takes (ADR-1442).
+	before, err := scanVariableRow(tx.QueryRow(ctx, `select `+variableCols+` from variable where id = $1 for update`, row.id))
+	if err != nil {
+		return nil, mapVariableWriteErr(err)
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	v, err := scanVariableRow(tx.QueryRow(ctx, `
 		update variable set
@@ -210,7 +215,7 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, ref string, patch Vari
 	if v.OwnerName, err = arcOwnerName(ctx, tx, v.OwnerKind, v.OwnerID); err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "variable", v.ID, nil, auditVariable(v)); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "variable", v.ID, auditVariable(before), auditVariable(v)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -237,10 +242,12 @@ func (p *PG) DeleteVariable(ctx context.Context, actorID, ref string, read, acti
 	// Named so the delete and the audit row visibly key on the same thing, the
 	// variable's primary key, rather than on whatever the caller passed in.
 	variableID := row.id
-	if _, err := tx.Exec(ctx, `delete from variable where id = $1`, variableID); err != nil {
+	// `delete ... returning` is the whole subject (label included), read under the
+	// delete's own row lock, so the audit row reads the same once the variable is gone.
+	before, err := scanVariableRow(tx.QueryRow(ctx, `delete from variable where id = $1 returning `+variableCols, variableID))
+	if err != nil {
 		return fmt.Errorf("storage: delete variable: %w", err)
 	}
-	before := &Variable{ID: variableID, Name: row.name, ValueType: row.valueType, OwnerKind: row.ownerKind, OwnerID: row.ownerID, Value: row.value}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "variable", variableID, auditVariable(before), nil); err != nil {
 		return err
 	}
@@ -529,13 +536,16 @@ func variableColsQualified(alias string) string {
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at"
 }
 
-// auditVariable is the audit projection: metadata plus the (plaintext) value type.
-// The value itself is not projected, keeping the audit compact and value-agnostic.
+// auditVariable is the audit projection (ADR-1442): the whole variable, value
+// included, so an update row shows the value it moved and a delete row keeps
+// the value it removed. A variable is not a secret; those are their own resource
+// and never project a plaintext.
 func auditVariable(v *Variable) map[string]any {
 	return map[string]any{
 		"name":       v.Name,
 		"label":      v.Label,
 		"value_type": v.ValueType,
+		"value":      v.Value,
 		"owner_kind": v.OwnerKind,
 		"owner_id":   v.OwnerID,
 	}

@@ -38,10 +38,14 @@ drawer. See [implementation status](/architecture/status/).
 - **A row outlives its subject.** `resource_id` is stored as text and is never a foreign key, so
   deleting or aging out the thing a row is about never deletes or rewrites the row. What makes the row
   still worth reading is its images: an update carries the fields it moved in both `old` and `new`
-  (null on the side where a field was unset), and enough of the subject to name it. An alarm's rows
-  are held to it today: deleting a component already removes its alarms (the foreign key cascades) and
-  keeps their rows, and alarm retention (#1339) will remove cleared ones. Several other writers still
-  write an update with no before image or a delete with no image (#1444) ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
+  (null on the side where a field was unset), and enough of the subject to name it; a delete carries
+  the whole subject in `old`. Every writer is held to it: deleting a component already removes its
+  alarms (the foreign key cascades) and keeps their rows, alarm retention (#1339) will remove cleared
+  ones, and purging a principal keeps the rows that named it. Each image is read in the writing
+  transaction, under the row's lock, so it is the state the write replaced. A secret's image is its
+  metadata and a version digest of the sealed value, never the plaintext. The two password verbs
+  (`change_password`, `reset_password`) carry no field images on purpose: the only field that moves is
+  a credential hash, and a hash is never imaged ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
   service account's name, or a node's name, through the gateway's one resolution
