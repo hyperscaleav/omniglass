@@ -775,6 +775,14 @@ diverging from the CDC sender below). A failed attempt waits **10s, doubling**, 
 failure is final (about 21 minutes in all); a deleted or disabled target fails it at once. Every
 attempt carries the same `Idempotency-Key`, the row's uuid, so a receiver drops a redelivery.
 
+A transition never waits on this lane. The queue reads the rules, types and targets a transition matches
+`FOR KEY SHARE SKIP LOCKED`, the lock the insert's foreign keys would take anyway, so a rule someone is
+deleting is **skipped for that transition** (it writes no row, as it would not a moment later when it is
+gone) and a target being deleted is dropped from its rule, instead of the transition waiting. The wait it
+avoids: the tick holds a rule's row across a slow send, the rule's `DELETE` waits on it for its `SET NULL`,
+and a raise the rule matches would wait on the delete up to the send timeout (#1335). Every other rule
+still queues its rows.
+
 The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
 stands (a status row in the console: the target, a status pill shared with the recent-notifications
