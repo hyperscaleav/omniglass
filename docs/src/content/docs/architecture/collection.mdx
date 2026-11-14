@@ -1088,6 +1088,17 @@ so editing it moves the connection fingerprint. A datagram from any source but t
 component is counted, self-logged once per tick (`foreign datagrams dropped`, with the count and the
 last source), and dropped, never published.
 
+A target that is a DNS name **follows the name**, as the tcp-family transports resolve on every
+dial (#1104): the request rung re-resolves the target once per tick (not per datagram) and, when
+the address changed, moves the socket's peer in place and self-logs the move once (`udp target
+moved`, with the old and new address). The socket stays bound, since it is unconnected, so a moved
+name needs no rebind and the connection key is still the target string. A reply from the new address
+is the component's and one from the old address is foreign. A failed resolve keeps the last
+address (self-logged once per distinct error, never every tick); the name is resolved within the
+socket's address family, so a name that moves to the other family reads as a failed resolve until
+the endpoint rebinds. A literal IP target never resolves. DNS TTLs are not honoured: per tick is
+the cadence.
+
 An open udp port cannot be detected, so the **transport rung is the driver's named request
 answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
 silent component reads not responsive (`timeout`), and a port the host reports unreachable reads

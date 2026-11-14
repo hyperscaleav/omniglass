@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"syscall"
@@ -46,6 +47,9 @@ type DatagramConfig struct {
 	// Terminal classifies an answer, or the component's refusal, as a
 	// refusal retrying cannot fix (the driver's terminal rules).
 	Terminal Classifier
+	// Resolve turns the target into an address (nil: net.ResolveUDPAddr). A
+	// seam for tests; a literal IP target never calls it after the bind.
+	Resolve func(network, target string) (*net.UDPAddr, error)
 }
 
 // DatagramAnswer is an answered exchange: the reply, the time from the send
@@ -103,12 +107,14 @@ func (g *datagramGhost) absorbs(line string, now time.Time) bool {
 
 // DatagramConn is one endpoint's bound socket.
 type DatagramConn struct {
-	conn *net.UDPConn
-	peer *net.UDPAddr
-	cfg  DatagramConfig
-	xmu  sync.Mutex // one exchange at a time
+	conn    *net.UDPConn
+	network string // the socket's family, which a re-resolve keeps
+	literal bool   // the target is an ip: nothing to follow
+	cfg     DatagramConfig
+	xmu     sync.Mutex // one exchange at a time
 
 	mu          sync.Mutex
+	peer        *net.UDPAddr // the component's current address; Retarget moves it
 	armed       *datagramAsk
 	ghost       *datagramGhost
 	latency     time.Duration // learned from sends answered at once; zero until one is
@@ -122,7 +128,15 @@ type DatagramConn struct {
 
 // ListenDatagram binds an endpoint's socket and starts its reader.
 func ListenDatagram(cfg DatagramConfig) (*DatagramConn, error) {
-	peer, err := net.ResolveUDPAddr("udp", cfg.Target)
+	if cfg.Resolve == nil {
+		cfg.Resolve = func(network, target string) (*net.UDPAddr, error) { return net.ResolveUDPAddr(network, target) }
+	}
+	literal := literalTarget(cfg.Target)
+	resolve := cfg.Resolve
+	if literal {
+		resolve = func(network, target string) (*net.UDPAddr, error) { return net.ResolveUDPAddr(network, target) }
+	}
+	peer, err := resolve("udp", cfg.Target)
 	if err != nil {
 		return nil, fmt.Errorf("collection: udp target %s: %w", cfg.Target, err)
 	}
@@ -138,9 +152,57 @@ func ListenDatagram(cfg DatagramConfig) (*DatagramConn, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("collection: udp socket for %s: %w", cfg.Target, err)
 	}
-	c := &DatagramConn{conn: conn, peer: peer, cfg: cfg, done: make(chan struct{})}
+	c := &DatagramConn{conn: conn, network: network, literal: literal, peer: peer, cfg: cfg, done: make(chan struct{})}
 	goSupervised("udp reader "+cfg.Target, c.read, func(pe *PanicError) { c.fail(pe) })
 	return c, nil
+}
+
+// literalTarget reports a target whose host is an ip address, which no name
+// can move.
+func literalTarget(target string) bool {
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		return false
+	}
+	_, err = netip.ParseAddr(host)
+	return err == nil
+}
+
+// Retarget re-resolves a named target and moves the peer to the address it
+// now has, so the next send goes there and a reply from it is the
+// component's. The socket stays bound: it is unconnected, so a new peer
+// needs no rebind. It is called once per tick by the request rung, as the
+// tcp-family transports resolve on every dial. A literal ip target never
+// resolves. A failed resolve keeps the last address and returns the error
+// (a dns failure to classify); the name is resolved within the socket's own
+// family, so a name that moved to the other one reads as a failed resolve.
+func (c *DatagramConn) Retarget() (from, to string, moved bool, err error) {
+	if c.literal {
+		return "", "", false, nil
+	}
+	next, err := c.cfg.Resolve(c.network, c.cfg.Target)
+	if err != nil {
+		return "", "", false, fmt.Errorf("collection: udp target %s: %w", c.cfg.Target, err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if sameAddr(c.peer, next) {
+		return "", "", false, nil
+	}
+	from, to = c.peer.String(), next.String()
+	c.peer = next
+	return from, to, true, nil
+}
+
+func sameAddr(a, b *net.UDPAddr) bool {
+	return a.Port == b.Port && a.IP.Equal(b.IP) && a.Zone == b.Zone
+}
+
+// peerAddr is the component's current address.
+func (c *DatagramConn) peerAddr() *net.UDPAddr {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.peer
 }
 
 // LocalAddr is the address the socket bound.
@@ -195,7 +257,11 @@ func (c *DatagramConn) DrainForeign() (n int, last string) {
 // fromPeer reports a datagram from the component itself: its address and
 // its port.
 func (c *DatagramConn) fromPeer(from *net.UDPAddr) bool {
-	return from != nil && from.Port == c.peer.Port && from.IP.Equal(c.peer.IP)
+	if from == nil {
+		return false
+	}
+	peer := c.peerAddr()
+	return from.Port == peer.Port && from.IP.Equal(peer.IP)
 }
 
 // read is the reader goroutine: every datagram from the component is split
@@ -317,7 +383,7 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 	first := time.Now()
 	for attempt := 1; attempt <= retries+1; attempt++ {
 		sent := time.Now()
-		if _, err := c.conn.WriteToUDP(payload, c.peer); err != nil {
+		if _, err := c.conn.WriteToUDP(payload, c.peerAddr()); err != nil {
 			return DatagramAnswer{}, fmt.Errorf("collection: udp send %s: %w", c.cfg.Target, err)
 		}
 		t := time.NewTimer(share)
