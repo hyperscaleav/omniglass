@@ -199,6 +199,29 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
 Why it is shaped this way, and what it defers (paging, set-based reads, the materialized
 worklist): [ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).
 :::
+
+:::design[Target design: the worklist syncs endpoint by endpoint against a manifest, tracked in #1586]
+One reply still carries a node's whole worklist, so the bus's 1 MB `max_payload` caps how much
+one node can run: headquarters at 3,000 systems is 463 KB gzipped, and a larger site crosses it.
+The target takes the whole worklist out of any one message
+([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)):
+
+- **A manifest first.** The node pulls a version and, per endpoint, its id and a content digest
+  (over the endpoint's fields, its tasks and the dictionary entries they name; not the connection
+  fingerprint). A node holding that version is answered unchanged with no body, the steady state.
+- **Then only what changed.** The node asks by id for the endpoints whose digest moved or that it
+  lacks, and the server answers as many as fit a byte budget (half of `max_payload`), grouped by
+  endpoint with their own dictionaries; the node asks again for the rest.
+- **Swapped whole.** The node applies the new set only when every changed endpoint has arrived at
+  the manifest's digest, and drops the endpoints the manifest no longer lists. A mismatch mid-sync
+  starts over from a fresh manifest; until then the node runs its last worklist.
+- **One oversize endpoint fails alone**, refused by id, so the failure is one device, not the site.
+
+A manifest entry is about 40 B gzipped, so headquarters' 1,609 endpoints are about 64 KB, and the
+manifest itself reaches 1 MB at about 26,000 endpoints on one node. Any server answers any request,
+so a second server needs no handover; a key-value cache, if one comes, is keyed per endpoint and is
+what waits on secrets decrypted on use (#1250).
+:::
 ## The node-server protocol
 
 The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:
@@ -461,7 +484,8 @@ pins keep today's cascade.
 
 **The worklist wire is unchanged** but for one pull request header, the generation the node is
 running (the two-phase confirmation above). A move reaches both nodes on their next worklist pull
-(30 s, jittered), and the materialized worklist's nudge (#1586) shortens that later. The worklist
+(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later
+([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 
