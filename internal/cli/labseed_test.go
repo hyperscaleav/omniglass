@@ -502,7 +502,7 @@ func corporateScalePlan(t *testing.T, systems int) *labscenario.Plan {
 // knob, before it touches a database.
 func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 	ctx := context.Background()
-	root := newRoot("test")
+	root := newRoot("test", "")
 	var refusal strings.Builder
 	root.SetOut(&refusal)
 	root.SetErr(&refusal)
