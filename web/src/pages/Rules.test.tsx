@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -13,7 +13,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
-import { expressionText, typeExpression } from "../components/ExpressionField.testing";
+import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -95,9 +95,12 @@ const blade = () =>
     return el as HTMLElement;
   });
 
-// The expression editor loads CodeMirror lazily; until it mounts, "Fires when"
-// labels a host div, so under a loaded full run the default 1s wait is too short.
-const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
+// Until the editor mounts, "Fires when" labels a non-labellable host div; the
+// chunk is loaded once, before any test, so a test's wait covers only the
+// mount and not a cold load (see warmExpressionEditor).
+beforeAll(warmExpressionEditor);
+
+const firesWhen = () => screen.findByLabelText("Fires when");
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
