@@ -199,6 +199,15 @@ because the server's encryption key lives in the data volume too. Press Ctrl-C a
 leave without cleaning up; a lab stopped that hard, or killed outright (SIGKILL, a closed laptop
 lid), is cleaned up by the next run before it starts.
 
+The next run tells an abandoned lab from a live one by the process that started it. Every resource
+the lab creates is labelled with that process's id, the PID namespace it ran in (so a lab run from
+another container is never judged by this one's ids), and the time the process started. A lab is
+abandoned only when no process here has that id *and* that start time: an operating system reuses
+ids, so an unrelated process that now holds the id of a killed lab does not keep it looking alive,
+and a live lab is never taken for abandoned. The same check guards throwaway labs (the ones a
+script holds with `--while-pid`), so one session's cleanup never removes a lab another session is
+still using.
+
 `omniglass lab run --fresh` removes both volumes first and starts over from the seed. Use it after
 pulling a change whose seed or schema an old lab cannot carry forward: lab data is disposable.
 
@@ -1260,7 +1269,10 @@ then the CLI's current context, then the platform's default socket or named pipe
 - **The console's port is taken.** Stop whatever holds it, or move the lab with `--port`.
 - **The daemon is on another machine.** Unset `DOCKER_HOST` or `docker context use default`, or run
   the lab where the daemon runs.
-- **A lab is already running.** Use that one, or stop it with Ctrl-C in its terminal.
+- **A lab is already running.** Use that one, or stop it with Ctrl-C in its terminal. A lab that a
+  build from before start times were recorded left behind cannot be judged, so it is refused too,
+  naming its process: if you know it is abandoned, remove it with
+  `docker compose -p omniglass-lab down` and run the lab again.
 - **The image is not built, or was built from another tree.** Run `make`, which builds the binary
   and the image together, then run the lab again. A binary built without `make` carries no build id
   and cannot tell which image is its own, so it asks for `make` too.

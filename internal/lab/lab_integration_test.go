@@ -75,13 +75,20 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 			_ = eng.RemoveVolume(context.Background(), v.Name)
 		}
 	})
-	cfg := func(pid int) Config {
+	// owner is this process, or (for another pid or a start it never had) a
+	// previous one: the pid of a process that is gone, or a pid that a
+	// different process now holds.
+	owner := func(pid int, start string) Owner {
+		return Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS(), Start: start}
+	}
+	self := CurrentOwner(host).Start
+	cfg := func(pid int, start string) Config {
 		return Config{
 			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: DefaultScenario,
 				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
 				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
 					Token: "lab-it-push-token", TokenHash: tokenHash("lab-it-push-token"), TokenPrefix: "labitpsh"}},
-				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
+				Owner: owner(pid, start)},
 			Image:         labTestChoice(image, labels),
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
 		}
@@ -101,7 +108,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		return l, out.String()
 	}
 
-	lab, _ := up(cfg(os.Getpid()))
+	lab, _ := up(cfg(os.Getpid(), self))
 	client, err := runner(eng, io.Discard, host).signIn(ctx, lab.BaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +178,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	t.Run("every collection method runs healthy on both tiers", func(t *testing.T) {
 		deadline := time.Now().Add(4 * time.Minute)
 		for {
-			missing, err := methodsExercised(ctx, client, lab.BaseURL, cfg(os.Getpid()).PlantedFaults)
+			missing, err := methodsExercised(ctx, client, lab.BaseURL, cfg(os.Getpid(), self).PlantedFaults)
 			if err == nil && len(missing) == 0 {
 				return
 			}
@@ -240,7 +247,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	t.Run("every component and system carries its data, tier by tier", func(t *testing.T) {
 		deadline := time.Now().Add(4 * time.Minute)
 		for {
-			findings, err := labcheck.Check(ctx, client, lab.BaseURL, devseed.TierGaps, cfg(os.Getpid()).PlantedFaults)
+			findings, err := labcheck.Check(ctx, client, lab.BaseURL, devseed.TierGaps, cfg(os.Getpid(), self).PlantedFaults)
 			if err == nil && len(findings) == 0 {
 				return
 			}
@@ -309,8 +316,11 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	if err := gone.Run(); err != nil {
 		t.Fatal(err)
 	}
-	up(cfg(gone.Process.Pid))
-	lab, outText := up(cfg(os.Getpid()))
+	up(cfg(gone.Process.Pid, "1"))
+	// And one whose owner's pid is held by another process now (this one,
+	// at a different start): the pid alone would call it alive and refuse.
+	up(cfg(os.Getpid(), "1"))
+	lab, outText := up(cfg(os.Getpid(), self))
 	if !strings.Contains(outText, "cleanup") {
 		t.Fatalf("the second run did not reap the killed one:\n%s", outText)
 	}
@@ -324,7 +334,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	runner(eng, &out, host).TearDown(lab.Spec)
 
 	// --fresh starts from the seed: the added component is gone.
-	fresh := cfg(os.Getpid())
+	fresh := cfg(os.Getpid(), self)
 	fresh.Fresh = true
 	lab, _ = up(fresh)
 	client, err = runner(eng, io.Discard, host).signIn(ctx, lab.BaseURL)
@@ -452,7 +462,7 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	cfg := Config{
 		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: "empty",
 			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
-			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}, Ephemeral: true},
+			Owner: CurrentOwner(host), Ephemeral: true},
 		Image: labTestChoice(image, labels), Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
 	}
 	var out bytes.Buffer
