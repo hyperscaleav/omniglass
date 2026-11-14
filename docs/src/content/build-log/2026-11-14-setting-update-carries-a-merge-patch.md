@@ -12,4 +12,4 @@ gives any object body with no declared properties a `--body` JSON flag and a `--
 stdin), shows the schema's worked example in the command's help, and refuses a malformed or non-object
 document before any request. Generator and CLI tests cover the rendered leaf, the exact wire body,
 `null` restoring a key, the file and stdin spellings and each refusal. Per-key flags per namespace
-are filed as a follow-up.
+are filed as a follow-up (#1914).

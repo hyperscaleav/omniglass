@@ -282,7 +282,7 @@ omniglass setting update notification --body '{"egress_allow":null}'            
 omniglass setting list                                                                  # value, source, lock
 ```
 
-Per-key flags for each namespace are a follow-up: the keys come from the reflected settings struct,
+Per-key flags for each namespace are a follow-up ([#1914](https://github.com/hyperscaleav/omniglass/issues/1914)): the keys come from the reflected settings struct,
 not from the OpenAPI document the CLI generates from, so the generator cannot derive them today.
 
 `settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
