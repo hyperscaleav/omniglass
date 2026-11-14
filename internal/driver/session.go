@@ -36,6 +36,11 @@ type SessionSpec struct {
 	// the channel instead of a shell (#1032). Both are ssh's alone.
 	PTY  bool   `json:"pty,omitempty"`
 	Exec string `json:"exec,omitempty"`
+	// ConnectQuiet is how long after a held line connection opens its first
+	// ask waits for a banner, any line in it discarded rather than taken as
+	// the answer (#1418): a duration up to MaxConnectQuiet. Empty is
+	// DefaultConnectQuiet; 0s turns the wait off for a device that sends none.
+	ConnectQuiet string `json:"connect_quiet,omitempty"`
 	// Scheme is how an http session's credential rides every request
 	// (#902): basic, bearer or api-key, sending the secret input Credential
 	// names; APIKey places an api key in a header or a query parameter.
@@ -108,6 +113,35 @@ const (
 // TerminalClasses is every class a spec may declare, in render order.
 func TerminalClasses() []string {
 	return []string{ClassAuth, ClassHostKey, ClassCertificate, ClassProtocol}
+}
+
+// DefaultConnectQuiet is the banner wait a held line connection's first ask
+// makes when the driver declares none; MaxConnectQuiet bounds what a driver
+// may ask for, since every connection pays it once.
+const (
+	DefaultConnectQuiet = 250 * time.Millisecond
+	MaxConnectQuiet     = 10 * time.Second
+)
+
+// NoConnectQuiet is ConnectQuietWindow's answer for a declared 0s: no wait.
+// It is negative so a zero window stays "the default" wherever one is carried.
+const NoConnectQuiet time.Duration = -1
+
+// ConnectQuietWindow is the declared connect quiet window: the default when
+// absent (or no session block), NoConnectQuiet for 0s (a validated spec never
+// carries a malformed one).
+func (s *SessionSpec) ConnectQuietWindow() time.Duration {
+	if s == nil || s.ConnectQuiet == "" {
+		return DefaultConnectQuiet
+	}
+	d, err := time.ParseDuration(s.ConnectQuiet)
+	switch {
+	case err != nil || d < 0:
+		return DefaultConnectQuiet
+	case d == 0:
+		return NoConnectQuiet
+	}
+	return d
 }
 
 // MinReprobe is the floor on a declared re-probe: a rejected session's own
@@ -326,6 +360,15 @@ func (s *Spec) validateSession() error {
 		d, err := time.ParseDuration(ss.Reprobe)
 		if err != nil || d < MinReprobe {
 			return fmt.Errorf("driver: reprobe %q must be a duration of at least %s (a rejected session's own retry is slow by design)", ss.Reprobe, MinReprobe)
+		}
+	}
+	if ss.ConnectQuiet != "" {
+		d, err := time.ParseDuration(ss.ConnectQuiet)
+		if err != nil || d < 0 || d > MaxConnectQuiet {
+			return fmt.Errorf("driver: connect_quiet %q must be a duration from 0s to %s (the first ask's wait for a banner)", ss.ConnectQuiet, MaxConnectQuiet)
+		}
+		if !isLineTransport(s.Transport) {
+			return fmt.Errorf("driver: session connect_quiet is a held line connection's banner wait; %q has none", s.Transport)
 		}
 	}
 	if s.Transport == "ssh" && ss.Credential == "" {

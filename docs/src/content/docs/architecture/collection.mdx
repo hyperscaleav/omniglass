@@ -200,7 +200,11 @@ beside its name (endpoint names are unique only per component). The machine runs
 - **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
   instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
   whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
-  that ask. An ask whose answer does not come in time recycles the connection, since its late reply
+  that ask. A later ask waits 2ms for bytes in flight; the connection's **first** ask waits out a
+  **connect quiet window** instead (`session.connect_quiet`, default 250ms, `0s` for a device that
+  sends no banner, counted from when the connection opened and never more than half the ask's
+  timeout), and any line in it is a banner and is discarded, so a banner from a slow device or an
+  impaired path is never taken as the first answer. An ask whose answer does not come in time recycles the connection, since its late reply
   would answer the next ask. A pushed line a listener claims is never an answer, and a request that
   declares its reply shape takes only a line that shape matches ([routing, below](#listeners-over-a-held-session)).
   A poll issued while the

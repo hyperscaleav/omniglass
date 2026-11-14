@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,6 +25,13 @@ import (
 // greets with a banner, and counts accepts. Each accepted conn is handed to
 // conns so a test can drop it.
 func lineServer(t *testing.T, banner string) (addr string, accepts *atomic.Int32, conns chan net.Conn) {
+	t.Helper()
+	return lineServerDelayed(t, banner, 0)
+}
+
+// lineServerDelayed is lineServer whose banner goes out bannerDelay after the
+// accept (a slow device, an impaired path), not at once.
+func lineServerDelayed(t *testing.T, banner string, bannerDelay time.Duration) (addr string, accepts *atomic.Int32, conns chan net.Conn) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -45,6 +54,7 @@ func lineServer(t *testing.T, banner string) (addr string, accepts *atomic.Int32
 			go func(c net.Conn) {
 				defer func() { _ = c.Close() }()
 				if banner != "" {
+					time.Sleep(bannerDelay)
 					_, _ = c.Write([]byte(banner + "\r\n"))
 				}
 				r := bufio.NewReader(c)
@@ -71,6 +81,37 @@ func lineServer(t *testing.T, banner string) (addr string, accepts *atomic.Int32
 		}
 	}()
 	return ln.Addr().String(), accepts, conns
+}
+
+// firstExchangesAnswer dials n connections at once and asserts each one's
+// first exchange is the device's answer, not its banner. They run
+// concurrently since each first ask waits out the connect quiet window.
+func firstExchangesAnswer(t *testing.T, d collection.StagedDialer, addr string, n int) {
+	t.Helper()
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	errs := make(chan string, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
+			if err != nil {
+				errs <- fmt.Sprintf("dial %d: %v", i, err)
+				return
+			}
+			got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second)
+			_ = conn.Close()
+			if err != nil || got != "INPUT hdmi1" {
+				errs <- fmt.Sprintf("dial %d: first exchange = %q, %v; the banner was taken as the answer", i, got, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Error(e)
+	}
 }
 
 func TestLineSessionReal(t *testing.T) {
@@ -161,16 +202,35 @@ func TestLineSessionReal(t *testing.T) {
 	// socket before the first ask; it is never that ask's answer.
 	t.Run("a banner on connect is never an answer", func(t *testing.T) {
 		addr, _, _ := lineServer(t, "PANEL READY")
-		for i := 0; i < 50; i++ {
-			conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
-			if err != nil {
-				t.Fatalf("dial %d: %v", i, err)
-			}
-			got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second)
-			_ = conn.Close()
-			if err != nil || got != "INPUT hdmi1" {
-				t.Fatalf("dial %d: first exchange = %q, %v; the banner was taken as the answer", i, got, err)
-			}
+		firstExchangesAnswer(t, d, addr, 50)
+	})
+
+	// A banner that lands after the first ask is written (a slow device, an
+	// impaired path) is still never that ask's answer: the connection's first
+	// ask waits out the connect quiet window (#1418).
+	t.Run("a banner delayed past the drain window is never an answer", func(t *testing.T) {
+		addr, _, _ := lineServerDelayed(t, "PANEL READY", 20*time.Millisecond)
+		firstExchangesAnswer(t, d, addr, 50)
+	})
+
+	// The connect window is the first ask's alone: a second ask on the same
+	// session pays only the drain window.
+	t.Run("the connect quiet window is not paid by a later ask", func(t *testing.T) {
+		addr, _, _ := lineServer(t, "PANEL READY")
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer func() { _ = conn.Close() }()
+		if got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second); err != nil || got != "INPUT hdmi1" {
+			t.Fatalf("first exchange = %q, %v", got, err)
+		}
+		start := time.Now()
+		if got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second); err != nil || got != "INPUT hdmi1" {
+			t.Fatalf("second exchange = %q, %v", got, err)
+		}
+		if took := time.Since(start); took > 100*time.Millisecond {
+			t.Fatalf("second exchange took %s; the connect quiet window (default 250ms) must not apply to it", took)
 		}
 	})
 
