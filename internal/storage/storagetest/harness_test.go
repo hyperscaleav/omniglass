@@ -169,6 +169,9 @@ func TestReaperDisabledBeforeStart(t *testing.T) {
 	if config.Get("OMNIGLASS_TEST_ADMIN_DSN") != "" {
 		t.Skip("storagetest: the escape hatch runs before the container start this pins")
 	}
+	if err := ensureContainer(); err != nil {
+		t.Fatalf("ensureContainer: %v", err)
+	}
 
 	live, liveDSN := ctr, adminDSN
 	t.Cleanup(func() {
