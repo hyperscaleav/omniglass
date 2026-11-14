@@ -181,8 +181,13 @@ describe("ExpressionField", () => {
     expect(diag.textContent).toContain("unknown name humidity");
     const pre = diag.querySelector("pre")!;
     expect(pre.textContent).toBe("  humidity > 2\n  ^");
-    // The source echo and its caret are for the eye; the message says it.
-    expect(pre.getAttribute("aria-hidden")).toBe("true");
+    // The echo scrolls sideways when the line is long, so it is a focus stop a
+    // keyboard can scroll (axe scrollable-region-focusable, #1101) and is named;
+    // a focusable node is never aria-hidden.
+    expect(pre.getAttribute("tabindex")).toBe("0");
+    expect(pre.getAttribute("role")).toBe("region");
+    expect(pre.getAttribute("aria-label")).toBe("Line 2 of the expression, with the fault marked");
+    expect(pre.hasAttribute("aria-hidden")).toBe(false);
     expect((await editor()).getAttribute("aria-invalid")).toBe("true");
     // The fault is underlined in the source itself, on the word it names.
     const ed = await editor();

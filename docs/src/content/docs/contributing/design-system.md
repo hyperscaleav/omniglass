@@ -333,6 +333,19 @@ announces the field to a screen reader without claiming the browser will refuse 
 `validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
 `textarea`, so the next form cannot reintroduce one by habit.
 
+### A scrollable region needs a focus stop
+
+**A node that can scroll (`overflow-auto`, `overflow-x-auto`, `overflow-y-auto`) must be reachable by
+keyboard**, or a keyboard user cannot scroll what a mouse user can. axe's `scrollable-region-focusable`
+(serious) fires on a scroll container with no focusable descendant. A region that holds a control, a
+link or a button already has its focus stop (the Drawer body holds its form fields, the calc-rule
+preview's owner list holds an owner link per row). A region of plain text has none: give it
+`tabindex="0"`, `role="region"` and an `aria-label` that names what it holds, and never `aria-hidden`,
+since a focusable node hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
+`ExpressionField`'s source-and-caret echo is the worked example (#1101): it scrolls sideways because
+the caret under a column only stays aligned on one unwrapped line, so it takes the focus stop rather
+than wrapping.
+
 ### A select over a loaded collection binds through `bindSelectValue`, not `value=`
 
 **A `<select>` whose options come from a collection the server answers for does not carry a
