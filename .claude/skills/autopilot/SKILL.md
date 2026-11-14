@@ -78,6 +78,17 @@ List open PRs and split them by the marker line:
   from then on the autopilot drives it like its own: conflicts, CI, review responses, and
   the remaining sub-issues, while merge stays the architect's. No recorded direction, no
   adoption.
+- **A branch another session owns is never adopted** (#1112), directions or not: a session
+  that hit a rate limit sits idle with an unpushed branch, and copying it ships a second PR
+  for the same issue. Before resuming or adopting any existing branch or worktree (under
+  `.claude/worktrees/` or elsewhere), run `scripts/branch-owned.sh <branch>`. It prints
+  `owned <reason>` (exit 0) or `free` (exit 1). Owned means checked out in a locked
+  worktree (`locked`), a claim file beside the worktree (`claimed`; the harness writes none
+  yet), or a commit or file edit inside the last 24 hours (`active`; set
+  `AUTOPILOT_OWNED_WINDOW_HOURS` to change it). An owned candidate is skipped, the next
+  rung fires, and the report names it. A `free` branch the autopilot did not create is
+  adopted only after a comment on its issue saying so (a returning session sees it before
+  it opens a second PR), and the PR body says so too.
 
 If 2 or more autopilot PRs are still open after reconciling, today is a **maintenance
 day**: drive those PRs, triage the issue list (reproduce reports, type and label untyped
@@ -91,7 +102,10 @@ Take the first that applies, and note in the report which rung fired:
 1. **An in-progress loop.** A definition issue with open sub-issues and an existing
    integration branch resumes via `/run-feature-loop`; today advances its next sub-issue
    (and rolls up if the queue empties). An adopted epic's remaining arc counts here; its
-   recorded direction is the approval.
+   recorded direction is the approval. Before resuming, run `scripts/branch-owned.sh` on the
+   integration branch and on any sub-issue branch or worktree found (section 2): an `owned`
+   one is skipped, and the loop is passed over for the next rung, so a live session's work
+   is never copied.
 2. **An approved definition.** An Epic or Feature issue in the `/define-work` shape with
    the architect's approval comment and no branch yet starts its loop. These outrank
    everything the autopilot would choose for itself; they are how the architect steers.
@@ -181,7 +195,9 @@ Then:
   ship-review lines the architect reads first (Decisions I need from you; Risk), every
   issue filed today with one-line reasons, the standing-PR status, **the day's board
   moves** (each line `scripts/board.sh` printed, `#N: <from> -> <to>`, plus any move it
-  could not make and its reason), and what tomorrow's run will likely pick. Plain
+  could not make and its reason), **every branch skipped as owned with its reason**
+  (`<branch>: owned locked|claimed|active`, or `none`), and what tomorrow's run will likely
+  pick. Plain
   statements; if a gate was red, say which and what state the branch was left in.
 
 ## Stop rules
