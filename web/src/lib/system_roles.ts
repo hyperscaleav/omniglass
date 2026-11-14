@@ -71,6 +71,25 @@ export async function deleteStandardRole(id: string, role: string): Promise<void
   if (error) throw error;
 }
 
+// setSystemRole declares a role directly on the system (an ad hoc role, which is
+// how a one-off system gets roles at all), or revises it in place. The same
+// idempotent, partial PATCH as setStandardRole. A name the system's standard
+// already declares is refused with a 409: a role name means one role in a
+// system, so the caller shows the server's message.
+export async function setSystemRole(name: string, role: string, body: RoleSpec): Promise<DeclaredRole> {
+  const { data, error } = await api.PATCH("/systems/{name}/roles/{role}", { params: { path: { name, role } }, body });
+  if (error) throw error;
+  return data as DeclaredRole;
+}
+
+// deleteSystemRole withdraws a role declared on the system, and with it every
+// assignment to it. A role inherited from the standard is withdrawn on the
+// standard, not here (404).
+export async function deleteSystemRole(name: string, role: string): Promise<void> {
+  const { error } = await api.DELETE("/systems/{name}/roles/{role}", { params: { path: { name, role } } });
+  if (error) throw error;
+}
+
 // assignRole puts a component in the role for this system. Refused with a 422
 // naming both parties when the component's product is not a typed match; the
 // caller shows that message.
