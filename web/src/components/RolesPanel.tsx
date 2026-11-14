@@ -373,7 +373,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
                   // surface): assignRole resolves the component within the
                   // caller's component:read scope (ADR-0510,
                   // internal/storage/roles.go), which dual-accepts a uuid
-                  // unambiguously (ADR-0062) but 409s a name two readable
+                  // unambiguously (ADR-0062) but 404s a name two readable
                   // components share. A bare name here would contradict the
                   // duplicate-named-component promise Task 15 already made
                   // on every other write in this console.

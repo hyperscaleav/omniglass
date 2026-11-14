@@ -24,6 +24,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -200,7 +201,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newGateStack(t, "127.89.16.5", "edge-i")
+	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-i")
 	s.panel.SetTelnetSilentReject(true)
 	s.component("panel-1")
 	login, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
@@ -280,7 +281,7 @@ func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newGateStack(t, "127.89.16.6", "edge-p")
+	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-p")
 	s.component("panel-2")
 	if _, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
 		Name: "panel-login", SecretType: "basic-auth", OwnerKind: "platform",
@@ -316,7 +317,7 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newGateStack(t, "127.89.16.7", "edge-h")
+	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-h")
 	s.component("panel-3")
 	comp, nodeName := "panel-3", "edge-h"
 	params := func(pw string) json.RawMessage {
@@ -352,7 +353,7 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	ipA, ipB := "127.89.16.8", "127.89.16.9"
+	ipA, ipB := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	s := newGateStack(t, ipA, "edge-e", ipB)
 	a, b := s.panel, s.panels[ipB]
 	s.component("panel-e")

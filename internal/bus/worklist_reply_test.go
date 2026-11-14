@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -14,7 +15,8 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// worklistOf is a store whose worklist holds n tasks, or fails with err.
+// worklistOf is a store whose worklist holds n tasks, each on an endpoint of
+// its own, or fails with err.
 type worklistOf struct {
 	fakeStore
 	n   int
@@ -26,8 +28,9 @@ func (s worklistOf) NodeWorklist(context.Context, string) (storage.Worklist, err
 		return storage.Worklist{}, s.err
 	}
 	wl := storage.Worklist{}
-	for range s.n {
-		wl.Tasks = append(wl.Tasks, storage.WorklistTask{ID: "task", Mode: "poll", EndpointName: "tcp"})
+	for i := range s.n {
+		wl.Tasks = append(wl.Tasks, storage.WorklistTask{ID: fmt.Sprintf("task-%06d", i), Mode: "poll",
+			EndpointID: fmt.Sprintf("endpoint-%06d", i), EndpointName: "tcp"})
 	}
 	return wl, nil
 }

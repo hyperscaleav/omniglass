@@ -552,6 +552,13 @@ loads no stylesheet and preconnects to no host off its own origin, because a con
 third party to render is a console that renders wrong on the closed campus and AV networks this
 product is deployed into ([ADR-0121](/architecture/decisions/)).
 
+The data face renders **without ligatures**: the `.font-data` rule in `app.css` sets
+`font-variant-ligatures: none`, once, for every code and expression rendering. JetBrains Mono's
+ligatures would draw `!=` as ≠, `==` as one long bar and `>=` as ≥, and the console shows
+expressions so an operator can read them back and type them: a criterion that displays a glyph
+no keyboard has teaches the wrong syntax, and `==` drawn as one bar is easy to misread as `=`.
+A surface that renders code wears `font-data` and inherits this; it does not opt out site by site.
+
 The files are vendored under `web/public/fonts/`, which Vite copies verbatim into the build that
 `internal/webui/spa_embed.go` compiles into the binary, so the faces ship inside the one artifact and
 are served from it (`font/woff2` stated by the handler, since the runtime images carry no mime

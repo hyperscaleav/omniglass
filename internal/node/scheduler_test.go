@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // everyPoll is a driver poll of endpoint on a declared interval.
@@ -292,7 +293,7 @@ func TestTwoTasksOnOneEndpointNeverOverlap(t *testing.T) {
 // of the scheduled tasks queued on that endpoint.
 func TestAnOperatorRunWaitsForItsLaneAndGoesFirst(t *testing.T) {
 	t.Parallel()
-	p := newLanePool(4)
+	p := newLanePool(4, nil)
 	t.Cleanup(p.wait)
 	gate := make(chan struct{})
 	release := sync.OnceFunc(func() { close(gate) })
@@ -456,5 +457,30 @@ func TestTheScheduleHopCountsRunsDueAgainstRunsMadePerKind(t *testing.T) {
 		if r.Value != 0 {
 			t.Errorf("the next window kept the last one's dues: %s %s = %v", r.Key, r.Instance, r.Value)
 		}
+	}
+}
+
+// #1686: a pool whose every worker stays busy through a report window reads
+// fully busy for it, the runs still in flight counted to the window's end.
+func TestAPoolBusyThroughTheWindowReadsFullyBusy(t *testing.T) {
+	t.Parallel()
+	h := newSchedHarness(t, schedT0, 4, 30*time.Second)
+	release := h.block()
+	t.Cleanup(release)
+	var tasks []collection.TaskSpec
+	for i := 0; i < 4; i++ {
+		tasks = append(tasks, everyPoll(fmt.Sprintf("p-%d", i), fmt.Sprintf("ep-%d", i), "10s"))
+	}
+	h.d.sync(wl(tasks...), schedT0)
+	h.d.pass(t.Context(), schedT0)
+	h.awaitStarts(4)
+	r := newNodeReport(time.Minute, 0, schedT0)
+	for _, at := range []time.Time{schedT0.Add(30 * time.Second), schedT0.Add(time.Minute)} {
+		h.set(at)
+		r.dispatch(h.d.takeWindow(), at)
+	}
+	got := readings(r.take(schedT0.Add(time.Minute)))
+	if v := got[writerclass.WorkerBusyFraction+"/lane"]; v != 1 {
+		t.Fatalf("worker-busy-fraction %v with all 4 workers busy all window, want 1", v)
 	}
 }

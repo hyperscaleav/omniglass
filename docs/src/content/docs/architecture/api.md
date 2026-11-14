@@ -137,8 +137,11 @@ A name that no visible row answers to, or that more than one does, is a **404 na
 up**; when more than one answers, the 404 lists each in the spelling that does resolve
 (`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
 transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
-row then run on that resolved row exactly as they do for a uuid. The tree entities keep their own
-ambiguity refusal, a 409 listing candidates (#697; aligning the two is #1134). A write answers with
+row then run on that resolved row exactly as they do for a uuid. The tree entities answer the
+same way (#1134): a bare name that more than one visible component, system or location answers to is a
+404 naming the reference, each candidate spelled as its dotted address with its uuid beside it
+(`boi.17c.415a.$comp.display-1 (<uuid>)`), and either half resolves on the same route. A candidate the
+caller cannot read is neither listed nor counted. A write answers with
 the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a
 name is a lookup: automation that must never drift addresses `<owner>/<name>` or stores the uuid.
 
@@ -238,6 +241,15 @@ governs the **whole write**, so a caller changing other fields in the same reque
 alone, which would silently leave the rest unwritten. The console's location type blade does exactly
 that when an operator turns naming off while editing something else.
 
+The catalog routes follow the same rule
+([#1189](https://github.com/hyperscaleav/omniglass/issues/1189)). `PATCH /metric-types/{name}` clears
+`precision`, `PATCH /event-types/{name}` clears `payload_schema`, `PATCH /property-types/{name}` clears
+`validation` and `PATCH /command-types/{name}` clears `params_schema`, each by naming the field in
+`update_mask`; omitted, each is unchanged. On these routes the mask governs every patchable field, so a
+mask that names `precision` writes only `precision`, and a populated `description` the mask leaves out
+stays as it was. A nullable reference is a string, so `PATCH /standards/{id}` clears
+`parent_standard_id` with the `""` sentinel instead, and a name or uuid sets it.
+
 A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
 mint a create allocates from. It is served rather than derived by a surface for the reason the
 resolved icon and the drafted name are
@@ -269,7 +281,7 @@ status mapping:
 | 400 | malformed request (bad JSON, an undeclared param) |
 | 401 | unauthenticated |
 | 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
-| 404 | not found, **including out-of-read-scope** (below) |
+| 404 | not found, **including out-of-read-scope** (below), and a name no single visible row answers to, which lists the rows that do |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
 | 422 | semantic validation (a driver attach missing a required input) |
 | 429 | throttled |

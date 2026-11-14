@@ -9,7 +9,7 @@ export { ENTITY_NAME_RE, entityNameError } from "./names";
 // the generated ones (api/simfleet.go, api/impairment.go). A simulated component
 // is addressed by its component's uuid everywhere here, never its name: the seeded
 // fleet reuses names across places (thirty rooms each hold a `display-1`), so a
-// name is ambiguous and the API answers it with a 409.
+// name is ambiguous and the API answers it with a 404 listing the candidates.
 
 export type SimFleet = S.SimFleetOutputBody;
 export type SimNode = S.SimNodeBody;

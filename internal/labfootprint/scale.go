@@ -5,7 +5,9 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -415,6 +417,12 @@ type ScaleRun struct {
 	EndpointsGap string
 	// Delivery is the receipts the delivery table reconciles (#1641).
 	Delivery DeliveryRead
+	// Worklist is each node's worst worklist pull loss over the window
+	// (#1868), WorklistUnreported the nodes that reported none; when it was
+	// not read, WorklistGap says why.
+	Worklist           map[string]float64
+	WorklistUnreported []string
+	WorklistGap        string
 	// Host is the machine the lab ran on, nil when the daemon was not this
 	// one; PlanDigest is the device set the scenario at its size places
 	// (#1640). The perf gate reads both.
@@ -494,6 +502,14 @@ type ScaleReport struct {
 	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
 	DeliveryNote    string `json:"delivery_note,omitempty"`
 
+	// WorklistLoss is each node's worst worklist pull loss over the window
+	// (#1868), by node; WorklistNotRead is why it was not read, when it was
+	// not. WorklistUnreported is the nodes that reported no worklist pull
+	// loss in the window, each a failed reading, not a clean one.
+	WorklistLoss       map[string]float64 `json:"worklist_loss,omitempty"`
+	WorklistUnreported []string           `json:"worklist_unreported,omitempty"`
+	WorklistNotRead    string             `json:"worklist_loss_not_measured,omitempty"`
+
 	// Host is the machine the lab ran on, absent when the lab's daemon was
 	// not this machine's; PlanDigest is the device set the scenario at its
 	// size places. The perf gate (#1640) compares a host-dependent figure
@@ -530,6 +546,9 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		Absolutes:             r.Absolutes,
 		SystemPageFigures:     SummarizePage(r.Page),
 		EndpointsGap:          r.EndpointsGap,
+		WorklistLoss:          r.Worklist,
+		WorklistUnreported:    r.WorklistUnreported,
+		WorklistNotRead:       r.WorklistGap,
 		Host:                  r.Host,
 		PlanDigest:            r.PlanDigest,
 	}
@@ -641,6 +660,7 @@ func (r ScaleReport) Table() string {
 		line("system page p95", "not measured")
 	}
 	line("retention drain", r.Drain.describe())
+	line("worklist pull loss", r.worklistCell())
 	if r.Endpoints != nil {
 		endpointTable(*r.Endpoints, &b)
 	} else if r.EndpointsGap != "" {
@@ -654,7 +674,59 @@ func (r ScaleReport) Table() string {
 	if !r.ConsumerLane.Measured && r.ConsumerLane.Reason != "" {
 		b.WriteString("\nconsumer lane not measured: " + r.ConsumerLane.Reason + "\n")
 	}
+	if gap := r.worklistGap(); gap != "" {
+		b.WriteString("\nworklist pull loss not measured: " + gap + "\n")
+	}
 	return b.String()
+}
+
+// worklistGap says why the worklist pull loss was not measured, or is empty.
+// A read with no node in it is not a 0: it is a read of nothing.
+func (r ScaleReport) worklistGap() string {
+	switch {
+	case r.WorklistNotRead != "":
+		return r.WorklistNotRead
+	case len(r.WorklistLoss) == 0 && len(r.WorklistUnreported) == 0:
+		return "the lab holds no node to read"
+	}
+	return ""
+}
+
+// worklistCell is the worklist row's cell: the worst node's share, named
+// when above 0, and how many nodes the bus refused.
+func (r ScaleReport) worklistCell() string {
+	if r.worklistGap() != "" {
+		return "not measured"
+	}
+	worst, refused := "", 0
+	for _, n := range slices.Sorted(maps.Keys(r.WorklistLoss)) {
+		if v := r.WorklistLoss[n]; v > 0 {
+			refused++
+			if worst == "" || v > r.WorklistLoss[worst] {
+				worst = n
+			}
+		}
+	}
+	nodes := len(r.WorklistLoss) + len(r.WorklistUnreported)
+	unreported := ""
+	if len(r.WorklistUnreported) > 0 {
+		unreported = fmt.Sprintf(", %d unreported", len(r.WorklistUnreported))
+	}
+	switch {
+	case len(r.WorklistLoss) == 0:
+		return fmt.Sprintf("unreported   (%s)", nodeCount(nodes))
+	case worst == "":
+		return fmt.Sprintf("0 %%   (%s%s)", nodeCount(nodes), unreported)
+	}
+	return fmt.Sprintf("%.0f %% on %s   (%d of %s refused%s)", 100*r.WorklistLoss[worst], worst, refused, nodeCount(nodes), unreported)
+}
+
+// nodeCount is a count of nodes, singular for one.
+func nodeCount(n int) string {
+	if n == 1 {
+		return "1 node"
+	}
+	return fmt.Sprintf("%d nodes", n)
 }
 
 // describe is the drain's table cell.

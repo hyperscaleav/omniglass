@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,13 +61,13 @@ func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) 
 	// The evidence settles it as soon as it arrives (ADR-0141): an observation
 	// taken at or after the intent that matches it. The window bounds the wait,
 	// not the settling.
-	if observed != nil && !observed.TS.Before(intended.TS) && bytes.Equal(observed.Value, intended.Value) {
+	if observed != nil && !observed.TS.Before(intended.TS) && sameValue(observed.Value, intended.Value) {
 		return SettlementSettled
 	}
 	if windowSeconds > 0 && now.Sub(intended.TS) < time.Duration(windowSeconds)*time.Second {
 		return SettlementPending
 	}
-	if observed != nil && bytes.Equal(observed.Value, intended.Value) {
+	if observed != nil && sameValue(observed.Value, intended.Value) {
 		return SettlementSettled
 	}
 	return SettlementFailed

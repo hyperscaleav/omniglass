@@ -1,6 +1,9 @@
 package node
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // laneClass orders the work waiting on a lane (#1634): an operator's run
 // (a run now, a command) goes ahead of the scheduled tasks queued on the
@@ -43,21 +46,33 @@ type lanePool struct {
 	maxQueued int
 	offers    int
 	refusals  int
+	// clock stamps each job's start and end for tally, the pool's busy
+	// worker time over the window (#1686).
+	clock func() time.Time
+	tally poolTally
 }
 
 // laneWindow is the pool's share of a dispatch window: the busy and waiting
-// high-water marks, and the operator offers made against those refused.
+// high-water marks, the operator offers made against those refused, and the
+// worker time spent busy against the worker time it had.
 type laneWindow struct {
 	busy, queued    int
 	offers, refused int
+	pool            poolWindow
 }
 
-func newLanePool(workers int) *lanePool {
+// newLanePool is a pool of workers that stamps its jobs by clock, time.Now
+// when nil.
+func newLanePool(workers int, clock func() time.Time) *lanePool {
 	if workers <= 0 {
 		workers = 1
 	}
-	p := &lanePool{workers: workers, running: map[string]bool{}}
+	if clock == nil {
+		clock = time.Now
+	}
+	p := &lanePool{workers: workers, running: map[string]bool{}, clock: clock}
 	p.idle = sync.NewCond(&p.mu)
+	p.tally.open(clock(), workers)
 	return p
 }
 
@@ -113,7 +128,7 @@ func (p *lanePool) dispatchLocked() {
 		}
 		p.busy++
 		p.running[j.key] = true
-		go p.run(j)
+		go p.run(j, p.tally.start(p.clock()))
 	}
 	p.maxBusy = max(p.maxBusy, p.busy)
 	p.maxQueued = max(p.maxQueued, p.queuedLocked())
@@ -133,10 +148,11 @@ func (p *lanePool) takeLocked() (laneJob, bool) {
 	return laneJob{}, false
 }
 
-func (p *lanePool) run(j laneJob) {
+func (p *lanePool) run(j laneJob, started time.Time) {
 	j.fn()
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.tally.end(started, p.clock())
 	p.busy--
 	delete(p.running, j.key)
 	p.dispatchLocked()
@@ -165,7 +181,8 @@ func (p *lanePool) queued() int {
 func (p *lanePool) takeWindow() laneWindow {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	w := laneWindow{busy: p.maxBusy, queued: p.maxQueued, offers: p.offers, refused: p.refusals}
+	w := laneWindow{busy: p.maxBusy, queued: p.maxQueued, offers: p.offers, refused: p.refusals,
+		pool: p.tally.take(p.clock())}
 	p.maxBusy, p.maxQueued = p.busy, p.queuedLocked()
 	p.offers, p.refusals = 0, 0
 	return w

@@ -191,7 +191,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		names = append(names, r.Name)
 		rules[r.Name] = r
 	}
-	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "disk-nearly-full", "retention-behind"}
+	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "worklist-stale", "disk-nearly-full", "retention-behind"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("event_rules = %v, want the official rules %v in file order", names, want)
 	}
@@ -201,6 +201,9 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// A node three 30 s heartbeats quiet fires at once: the age already
 		// is the sustain (#1707).
 		{Name: "node-silent", SampleKey: "checkin-age", Fire: "value > 90", Clear: "value <= 90", Severity: "high"},
+		// Every worklist pull refused for a sustained stretch, so the node
+		// runs its last worklist (#1868).
+		{Name: "worklist-stale", SampleKey: "worklist-pull-loss-ratio", Fire: "value == 1", Clear: "value < 1", FireSustain: "2m", Severity: "warning"},
 		// The data directory's disk past 90 percent used, cleared below 85 so
 		// a disk hovering at the line does not flap (#1707).
 		{Name: "disk-nearly-full", SampleKey: "data-dir-disk-used-ratio", Fire: "value > 0.9", Clear: "value <= 0.85", FireSustain: "2m", Severity: "warning"},

@@ -107,7 +107,7 @@ type updateStandardInput struct {
 	ID   string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Body struct {
 		Label            *string         `json:"label,omitempty" doc:"A new operator-facing label"`
-		ParentStandardID *string         `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`
+		ParentStandardID *string         `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard"`
 		Map              json.RawMessage `json:"map,omitempty" doc:"The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"`
 	}
 }
@@ -546,11 +546,14 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/standards/{id}",
 		Summary:     "Update a standard",
-		Description: "Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.",
+		Description: "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *updateStandardInput) (*standardOutput, error) {
 		st, err := gw.UpdateStandard(ctx, actorID(ctx), in.ID, storage.StandardPatch{
-			Label:            in.Body.Label,
-			ParentStandardID: emptyPtrToNil(in.Body.ParentStandardID),
+			Label: in.Body.Label,
+			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
+			// "omitted", which would make clearing the parent impossible. The
+			// storage layer reads "" as clear (#1189).
+			ParentStandardID: in.Body.ParentStandardID,
 			// A raw message keeps absent (nil slice) apart from JSON null
 			// ("null" bytes): absent leaves the declaration, null clears it.
 			Map: rawPatch(in.Body.Map),

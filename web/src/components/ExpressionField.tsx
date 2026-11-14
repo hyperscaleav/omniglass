@@ -235,7 +235,7 @@ export default function ExpressionField(p: {
               <Button
                 intent="quiet"
                 size="xs"
-                class="font-data text-[12px] font-normal [font-variant-ligatures:none]"
+                class="font-data text-[12px] font-normal"
                 title={t.title}
                 disabled={!editor()}
                 onClick={() => editor()?.insert(t.text, t.cursor)}
@@ -264,7 +264,7 @@ export default function ExpressionField(p: {
                   {(a) => (
                     <pre
                       aria-hidden="true"
-                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]"
+                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80"
                     >
                       {`${a().text}\n${a().caret}`}
                     </pre>

@@ -100,7 +100,7 @@ func (p *PG) reconcileProperties(ctx context.Context, q querier, ownerKind, arc 
 // instances (worstCaseValue). arc is a resolved, scope-checked arc, so the
 // series reads bind it directly rather than re-resolving the owner per key.
 func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, key string, want json.RawMessage) (*PropertyReconciliation, error) {
-	observed, err := readPropertyValues(ctx, q, arc, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
+	observed, err := readPropertyValues(ctx, q, arc, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,12 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 	} else if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
+	// An observed value reads typed, as a declared one is (observedValueExpr).
+	valueExpr := declaredCurrentExpr
+	if provenance == "observed" {
+		valueExpr = observedValueExpr("value", keyDataTypeSQL)
+	}
+	sql := fmt.Sprintf(`select `+valueExpr+`, ts, provenance from property
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = $5

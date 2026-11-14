@@ -89,10 +89,11 @@ type setMetricTypeRetentionInput struct {
 type updateMetricTypeInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
 	Body struct {
-		Label       *string `json:"label,omitempty" doc:"A human label"`
-		Description *string `json:"description,omitempty" doc:"What the series measures"`
-		Unit        *string `json:"unit,omitempty" doc:"The display unit of the series"`
-		Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
+		UpdateMask  []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
+		Label       *string  `json:"label,omitempty" doc:"A human label"`
+		Description *string  `json:"description,omitempty" doc:"What the series measures"`
+		Unit        *string  `json:"unit,omitempty" doc:"The display unit of the series"`
+		Precision   *int     `json:"precision,omitempty" doc:"Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset"`
 	}
 }
 
@@ -162,14 +163,20 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/metric-types/{name}",
 		Summary:     "Update a metric type",
-		Description: "Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
+		Description: "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
 	}, "metric_type", "update"), func(ctx context.Context, in *updateMetricTypeInput) (*metricTypeOutput, error) {
-		mt, err := gw.UpdateMetricType(ctx, actorID(ctx), in.Name, storage.MetricTypePatch{
+		patch := storage.MetricTypePatch{
 			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Unit:        in.Body.Unit,
 			Precision:   in.Body.Precision,
-		})
+		}
+		write, err := resolveUpdateMask(in.Body.UpdateMask, storage.MetricTypePatchFields, patch.Populated())
+		if err != nil {
+			return nil, err
+		}
+		patch.Write = write
+		mt, err := gw.UpdateMetricType(ctx, actorID(ctx), in.Name, patch)
 		if err != nil {
 			return nil, mapMetricTypeErr(err)
 		}

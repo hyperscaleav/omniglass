@@ -417,8 +417,11 @@ func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	status, body := c.send(ownerTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 1,
 	})
-	if status != http.StatusConflict {
-		t.Fatalf("owner declare on ambiguous seat-1 status = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("owner declare on ambiguous seat-1 status = %d, want 404\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "seat-1") {
+		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 

@@ -98,11 +98,19 @@ export const NOT_REPORTED = "not reported";
 
 // figureText is one cell. A key the node never reported, or a row the caller
 // may not read figures for, is "not reported": a zero would claim a reading
-// that never happened.
+// that never happened. A ratio column (a node's worklist pull loss, #1868)
+// reads as the Loss column does, a percent.
 export function figureText(n: PlatformNode, col: Pick<PlatformColumn, "key" | "unit">): string {
   const f = n.figures?.[col.key];
   if (!f) return NOT_REPORTED;
+  if (col.unit === "ratio") return lossPercent(f.value);
   return valueText(f.value, col.unit);
+}
+
+// figureTinted is whether a cell draws the eye: a ratio column above 0, by the
+// Loss column's one tint rule. A count or a gauge is read, not tinted.
+export function figureTinted(n: PlatformNode, col: Pick<PlatformColumn, "key" | "unit">): boolean {
+  return col.unit === "ratio" && lossTinted(n.figures?.[col.key]?.value);
 }
 
 // valueText is a figure with its unit: an integer as is, anything else trimmed

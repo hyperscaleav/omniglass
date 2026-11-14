@@ -3,12 +3,15 @@ package bus
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -95,11 +98,54 @@ func measureWorklists(t *testing.T, systems int) {
 			t.Fatal(err)
 		}
 		if s.Archetype == hq {
-			t.Logf("HQ %s: %d tasks, %d bytes (%.0f%% of max payload %d)", nodeOf(s.Name), len(reply.Tasks), len(b), 100*float64(len(b))/DefaultMaxPayload, DefaultMaxPayload)
+			t.Logf("HQ %s: %d tasks, %d bytes, %d gzipped (%.0f%% of max payload %d)", nodeOf(s.Name), len(reply.Tasks), len(b), wireBytes(t, b), 100*float64(wireBytes(t, b))/DefaultMaxPayload, DefaultMaxPayload)
+			learnPins(&reply)
+			pinned, err := json.Marshal(reply)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("HQ %s with every https pin learned: %d bytes, %d gzipped", nodeOf(s.Name), len(pinned), wireBytes(t, pinned))
+			flat, err := json.Marshal(flatWorklist{Tasks: reply.Tasks, ConfigGeneration: reply.ConfigGeneration, ReportSeconds: reply.ReportSeconds})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("HQ %s pinned, as the flat wire before #1583: %d bytes, %d gzipped", nodeOf(s.Name), len(flat), wireBytes(t, flat))
 		}
 		if len(b) > worst {
 			worst, worstNode = len(b), nodeOf(s.Name)
 		}
 	}
 	t.Logf("%d systems, %d sites: largest worklist %s at %d bytes", systems, len(plan.Sites), worstNode, worst)
+}
+
+// wireBytes is a reply's size as the bus carries it, gzipped past the
+// threshold.
+func wireBytes(t *testing.T, raw []byte) int {
+	t.Helper()
+	body, _, err := collection.EncodeWorklistBody(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(body)
+}
+
+// learnPins gives every https endpoint the key pin a node learns on its first
+// handshake (#1872): a distinct SHA256 fingerprint per endpoint, on each of its
+// tasks, as the server sends it once the pin is stored.
+func learnPins(reply *collection.WorklistReply) {
+	for i, task := range reply.Tasks {
+		if task.Transport != "https" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(task.EndpointID))
+		reply.Tasks[i].CertificatePin = "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
+	}
+}
+
+// flatWorklist is the reply as it travelled before #1583, every task carrying
+// its endpoint's fields, kept to measure what the grouped wire saves.
+type flatWorklist struct {
+	Tasks            []collection.TaskSpec `json:"tasks"`
+	ConfigGeneration int64                 `json:"config_generation"`
+	ReportSeconds    int                   `json:"report_seconds,omitempty"`
 }

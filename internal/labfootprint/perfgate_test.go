@@ -47,7 +47,8 @@ func cleanRun() ScaleReport {
 			Nodes:     []closedloop.EndpointNode{{Node: "edge-hq"}},
 			GapTotals: gaps,
 		},
-		Delivery: []DeliveryRow{{Hop: "ingest", Kind: "metric", In: 10, Out: 10, Loss: &loss}},
+		Delivery:     []DeliveryRow{{Hop: "ingest", Kind: "metric", In: 10, Out: 10, Loss: &loss}},
+		WorklistLoss: map[string]float64{"edge-hq": 0},
 	}
 }
 
@@ -120,6 +121,8 @@ func TestComparePerfExactFigureFailsAtAnyNonzeroValue(t *testing.T) {
 		{"a delivery loss", "delivery_loss/ingest/metric", func(r *ScaleReport) { r.Delivery[0].Loss = &half }},
 		{"delivery read with no kind to account", "delivery_loss", func(r *ScaleReport) { r.Delivery = nil }},
 		{"delivery read with no kind carrying items", "delivery_loss", func(r *ScaleReport) { r.Delivery[0].Loss = nil }},
+		{"a stale worklist", "worklist_loss/edge-hq", func(r *ScaleReport) { r.WorklistLoss["edge-hq"] = 1 }},
+		{"the worklist unread", "worklist_loss", func(r *ScaleReport) { r.WorklistLoss, r.WorklistNotRead = nil, "no answer" }},
 		{"the closed loop unread", "closed_loop_loss/" + closedloop.GapConnectNotAccepted, func(r *ScaleReport) {
 			r.Endpoints, r.EndpointsGap = nil, "no node answered"
 		}},
