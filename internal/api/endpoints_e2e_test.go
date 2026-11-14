@@ -268,3 +268,57 @@ func listEndpoints(c *apiClient, tok string) []endpointResp {
 	}
 	return body.Endpoints
 }
+
+// TestDeletingAComponentThatOwnsEndpointsIs409 pins #138 over HTTP: the delete
+// is refused as occupied, the 409 names the endpoints and the next step, and
+// the endpoint is still attached to its component afterwards. Once the endpoint
+// is deleted, as the message asks, the component delete succeeds. Skipped under
+// -short.
+func TestDeletingAComponentThatOwnsEndpointsIs409(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "has-endpoint"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	ep := createEndpoint(c, ownerTok, map[string]any{"transport": "tcp", "component": "has-endpoint"})
+
+	status, body := c.send(ownerTok, http.MethodDelete, "/components/has-endpoint", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("delete component with an endpoint status = %d, want 409\nbody: %s", status, body)
+	}
+	for _, want := range []string{"1 endpoint", "delete or reassign"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("409 body = %s, want it to contain %q", body, want)
+		}
+	}
+	// The refusal must not have orphaned the endpoint.
+	if eps := listEndpoints(c, ownerTok); len(eps) != 1 || eps[0].Component == nil || *eps[0].Component != "has-endpoint" {
+		t.Errorf("endpoints after refused delete = %+v, want the one still on has-endpoint", eps)
+	}
+
+	c.do(ownerTok, http.MethodDelete, "/endpoints/"+ep.ID, nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/components/has-endpoint", nil, http.StatusNoContent)
+}

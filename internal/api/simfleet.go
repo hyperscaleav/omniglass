@@ -511,9 +511,15 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			})
 			// The component stands only with its endpoints: a plan or endpoint
 			// that fails takes the new component back out. Both address it by
-			// id, since a name may repeat in another place.
+			// id, since a name may repeat in another place. A component that
+			// owns endpoints is refused its delete (#138), so the endpoints
+			// made so far go first.
+			var made []string
 			undo := func() {
 				all := scope.Set{All: true}
+				for _, id := range made {
+					_ = gw.DeleteEndpoint(context.WithoutCancel(ctx), actorID(ctx), id, all, all)
+				}
 				_ = gw.DeleteComponent(context.WithoutCancel(ctx), actorID(ctx), c.ID, all, all)
 			}
 			if err != nil || len(plan) != 1 {
@@ -527,10 +533,12 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			node, id := in.Name, c.ID
 			for _, spec := range simEndpointSpecs(plan[0].Endpoints) {
 				spec.Component, spec.Node, spec.SecretRead, spec.CanAdmin = &id, &node, secretRead, canAdmin
-				if _, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create")); err != nil {
+				ep, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create"))
+				if err != nil {
 					undo()
 					return mapEndpointErr(err)
 				}
+				made = append(made, ep.ID)
 			}
 			return nil
 		})

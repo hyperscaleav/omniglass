@@ -375,7 +375,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
@@ -401,6 +401,21 @@ func componentMoverName(ctx context.Context, gw storage.Gateway, a *authenticato
 	return ref
 }
 
+// componentEndpointsMessage words the occupied-by-endpoints 409 (#138): how many
+// endpoints hold the component, and what to do about it. The count comes off the
+// typed error; a bare sentinel (no count) falls back to the unnumbered wording.
+func componentEndpointsMessage(err error) string {
+	var occ *storage.ComponentHasEndpointsError
+	if errors.As(err, &occ) {
+		noun := "endpoints"
+		if occ.Count == 1 {
+			noun = "endpoint"
+		}
+		return fmt.Sprintf("component still owns %d %s: delete or reassign its endpoints first", occ.Count, noun)
+	}
+	return "component still owns endpoints: delete or reassign its endpoints first"
+}
+
 func mapComponentErr(err error) error {
 	if platErr, ok := mapPlatformErr(err); ok {
 		return platErr
@@ -418,6 +433,8 @@ func mapComponentErr(err error) error {
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrComponentOccupied):
 		return huma.Error409Conflict("component has child components")
+	case errors.Is(err, storage.ErrComponentHasEndpoints):
+		return huma.Error409Conflict(componentEndpointsMessage(err))
 	case errors.Is(err, storage.ErrReferenced):
 		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
 	case errors.Is(err, storage.ErrComponentExists):

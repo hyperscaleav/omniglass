@@ -765,7 +765,9 @@ config / tag / credential / group bindings drop. The entity leaves its parent's 
 
 The cascade is **not** "delete everything below", because containers do not own their members:
 
-- a **component** (leaf) decommissions as above;
+- a **component** (leaf) decommissions as above, but is **refused (409) while it owns endpoints** or
+  child components: delete or reassign the endpoints first, so none is stranded with no owner
+  ([data collection](/architecture/collection/#endpoints-the-devices-apis-declared-once));
 - a **system** delete **unbinds its members** (the `system_member` rows) but keeps the components,
   standalone and re-homeable. The unbinding is the same act `RemoveMember` performs, and it carries
   the same two consequences: a component left holding exactly one membership has that one promoted
