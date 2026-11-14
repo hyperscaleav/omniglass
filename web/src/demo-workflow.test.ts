@@ -13,7 +13,7 @@ import { CLIP_END, CLIP_START, PENDING_SHA } from "../e2e/walkthroughpr.mjs";
 // holds no write token), the matrix fan-in, and the splice the publish job
 // runs to write the clip into the PR body, played here against fixtures
 // exactly as the job plays it.
-type Step = { name?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
+type Step = { name?: string; if?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { permissions?: Record<string, string>; steps: Step[]; needs?: string | string[]; if?: string; strategy?: { "fail-fast"?: boolean; matrix?: unknown } };
 type Workflow = { on: Record<string, unknown>; permissions: Record<string, string>; concurrency?: unknown; jobs: Record<string, Job> };
 
