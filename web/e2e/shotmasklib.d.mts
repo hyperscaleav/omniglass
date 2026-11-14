@@ -19,4 +19,6 @@ export function planMasks(page: Page, entries: MaskEntry[]): Promise<PlannedMask
 export function planStandingMasks(page: Page): Promise<PlannedMask[]>;
 export function paintedBoxes(plan: PlannedMask[]): MaskBox[];
 export function describeMask(mask: PlannedMask): string;
+export const CAPTURE_DROPPED: RegExp;
+export function withCaptureRetry<T>(page: Page, capture: () => Promise<T>, opts?: { log?: (line: string) => void }): Promise<T>;
 export function shootBaseline(page: Page, plan: PlannedMask[], opts?: { path?: string }): Promise<Buffer>;

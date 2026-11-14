@@ -281,6 +281,13 @@ a varying value adds its case there. Every capture logs what each mask resolved 
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
 
+The baseline's one `page.screenshot` call goes through `withCaptureRetry`, because Chromium can
+drop a capture under runner load (`Protocol error (Page.captureScreenshot): Unable to capture
+screenshot`, #1177). It retries once, and only on that protocol error, logging the failing call
+and the page's state (URL, `readyState`, viewport) so the next occurrence names its cause. Any
+other error and a second drop fail the capture. Playwright's own `retries` stays off, since it
+would also hide a real assertion flake.
+
 ## Every PR demos its feature
 
 The docs teach a feature; a **demo** shows it working, on the PR itself, as a recording the
