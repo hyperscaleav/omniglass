@@ -1348,7 +1348,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "acknowledge <name> <id>",
 						Short:   "Acknowledge an alarm",
-						Long:    "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.",
+						Long:    "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm acknowledge <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1368,7 +1368,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1399,7 +1399,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <id>",
 						Short:   "Clear an alarm",
-						Long:    "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm delete <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1418,7 +1418,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
-						Long:    "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1448,7 +1448,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "snooze <name> <id>",
 						Short:   "Snooze an alarm's condition",
-						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm snooze <name> <id> --duration duration",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1471,7 +1471,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "timeline <name> <id>",
 						Short:   "Read an alarm's timeline",
-						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm timeline <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1488,7 +1488,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "unsnooze <name> <id>",
 						Short:   "End an alarm's condition's snooze",
-						Long:    "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+						Long:    "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm unsnooze <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1546,7 +1546,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name> <id>",
 						Short:   "Read a command",
-						Long:    "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.",
+						Long:    "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component command get 'hq.west.level-2.boardroom-a.$comp.videobar-1' 42",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1569,7 +1569,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "issue <name>",
 						Short:   "Issue a command to a component",
-						Long:    "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+						Long:    "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component command issue <name> --command-type command_type",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1620,7 +1620,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's commands",
-						Long:    "The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.",
+						Long:    "The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component command list 'hq.west.level-2.boardroom-a.$comp.videobar-1'",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1761,7 +1761,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a component",
-					Long:    "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+					Long:    "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1786,7 +1786,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Record that a component depends on another",
-						Long:    "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).",
+						Long:    "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).\n\nArguments:\n  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component dependency create codec-1 --kind kind --upstream upstream",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1818,7 +1818,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <kind> <upstream>",
 						Short:   "Remove a component's dependency on another",
-						Long:    "Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.",
+						Long:    "Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.\n\nArguments:\n  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <upstream>  Name or uuid of the upstream component, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component dependency delete codec-1 power pdu-1",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1835,7 +1835,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List what a component depends on and what depends on it",
-						Long:    "This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.",
+						Long:    "This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component dependency list codec-1",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1859,7 +1859,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective secrets for a component",
-						Long:    "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.",
+						Long:    "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-secret list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1884,7 +1884,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective tags for a component",
-						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-tag list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1916,7 +1916,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective variables for a component",
-						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.",
+						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-variable list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1940,7 +1940,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent events",
-						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1959,7 +1959,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
 					Short:   "Get a component",
-					Long:    "Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.",
+					Long:    "Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1981,7 +1981,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <key> <value>",
 						Short:   "Unbind an identity a conduit reports",
-						Long:    "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.",
+						Long:    "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1998,7 +1998,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the identities a conduit component fans out",
-						Long:    "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.",
+						Long:    "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component identity-binding list ucc-service-1",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2017,7 +2017,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <key> <value>",
 						Short:   "Bind an identity a conduit reports to its owner",
-						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.",
+						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2052,7 +2052,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name>",
 						Short:   "Get what is broken on a simulated device",
-						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component impairment get <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2074,7 +2074,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "set <name>",
 						Short:   "Break or repair a simulated device",
-						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
+						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component impairment set <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2131,7 +2131,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a component",
-					Long:    "Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.",
+					Long:    "Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2155,7 +2155,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent log lines",
-						Long:    "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component log list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2191,7 +2191,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the systems a component is in",
-						Long:    "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component membership list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2215,7 +2215,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's effective metrics",
-						Long:    "Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component metric list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2284,7 +2284,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a component",
-					Long:    "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
+					Long:    "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component move <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2332,7 +2332,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <property>",
 						Short:   "Clear a property on a component",
-						Long:    "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property delete <name> <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2349,7 +2349,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's properties and where each stands",
-						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2415,7 +2415,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a component",
-						Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2445,7 +2445,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a component's per-endpoint reachability",
-						Long:    "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component reachability list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2482,7 +2482,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a component",
-					Long:    "Removes a key's value from a component. Gated by component:update.",
+					Long:    "Removes a key's value from a component. Gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2506,7 +2506,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a component",
-					Long:    "Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2573,7 +2573,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a component's name",
-					Long:    "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+					Long:    "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component resetName <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2592,7 +2592,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a component",
-					Long:    "Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.",
+					Long:    "Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2631,7 +2631,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "fire <name>",
 						Short:   "Fire an operation at a simulated component",
-						Long:    "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+						Long:    "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component simulation fire <name> --surface surface",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2674,7 +2674,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name>",
 						Short:   "Get a component's simulation",
-						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component simulation get <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2698,7 +2698,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the identities a conduit reported that no binding places",
-						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.",
+						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.\n\nArguments:\n  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component unbound-identity list 'hq.$comp.meetings-cloud'",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2719,7 +2719,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a component",
-					Long:    "Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3204,7 +3204,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <endpoint>",
 					Short:   "Delete an endpoint",
-					Long:    "Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint delete 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3221,7 +3221,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <endpoint>",
 					Short:   "Get an endpoint",
-					Long:    "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.",
+					Long:    "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint get 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3290,7 +3290,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "retry <endpoint>",
 					Short:   "Retry an endpoint's gated connections",
-					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3316,7 +3316,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rotateToken <endpoint>",
 					Short:   "Rotate a webhook endpoint's token",
-					Long:    "Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint rotateToken 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3339,7 +3339,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <endpoint>",
 					Short:   "Update an endpoint",
-					Long:    "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint update 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4156,7 +4156,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a location",
-					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4173,7 +4173,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
 					Short:   "Get a location",
-					Long:    "Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.",
+					Long:    "Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4195,7 +4195,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4231,7 +4231,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a location",
-					Long:    "Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.",
+					Long:    "Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4253,7 +4253,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a location's effective metrics",
-						Long:    "Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+						Long:    "Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location metric list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4273,7 +4273,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a location",
-					Long:    "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.",
+					Long:    "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location move <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4317,7 +4317,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <property>",
 						Short:   "Clear a property on a location",
-						Long:    "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property delete <name> <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4334,7 +4334,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a location's effective properties",
-						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4352,7 +4352,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a location",
-						Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4395,7 +4395,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a location",
-					Long:    "Removes a key's value from a location. Gated by location:update.",
+					Long:    "Removes a key's value from a location. Gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4419,7 +4419,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a location",
-					Long:    "Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4476,7 +4476,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a location's name",
-					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location resetName <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4495,7 +4495,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a location",
-					Long:    "Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.",
+					Long:    "Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4525,7 +4525,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a location",
-					Long:    "Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5183,7 +5183,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a node",
-					Long:    "Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.",
+					Long:    "Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass node listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5225,7 +5225,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a node",
-					Long:    "Removes a key's value from a node. Gated by node:update.",
+					Long:    "Removes a key's value from a node. Gated by node:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass node removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5250,7 +5250,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a node",
-					Long:    "Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.",
+					Long:    "Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass node setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7139,7 +7139,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "copy <secret>",
 					Short:   "Decrypt a secret for clipboard copy",
-					Long:    "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.",
+					Long:    "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.\n\nArguments:\n  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass secret copy demo-panel-login",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7213,7 +7213,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <secret>",
 					Short:   "Delete a secret",
-					Long:    "Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+					Long:    "Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.\n\nArguments:\n  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass secret delete demo-panel-login",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7247,7 +7247,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "reveal <secret>",
 					Short:   "Reveal a secret's plaintext",
-					Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.",
+					Long:    "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.\n\nArguments:\n  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass secret reveal demo-panel-login",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7266,7 +7266,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <secret>",
 					Short:   "Update a secret",
-					Long:    "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+					Long:    "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.\n\nArguments:\n  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass secret update demo-panel-login",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8193,7 +8193,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' alarms",
-						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8353,7 +8353,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a system",
-					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8375,7 +8375,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's recent events, members included",
-						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8394,7 +8394,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
 					Short:   "Get a system",
-					Long:    "Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.",
+					Long:    "Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8426,7 +8426,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8462,7 +8462,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a system",
-					Long:    "Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.",
+					Long:    "Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8486,7 +8486,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' recent log lines",
-						Long:    "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system log list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8522,7 +8522,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <component>",
 						Short:   "Take a component out of a system",
-						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
+						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member delete <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8539,7 +8539,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the components in a system",
-						Long:    "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8556,7 +8556,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "setPrimary <name> <component>",
 						Short:   "Make this the component's default system",
-						Long:    "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
+						Long:    "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member setPrimary <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8573,7 +8573,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <component>",
 						Short:   "Put a component in a system",
-						Long:    "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
+						Long:    "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member update <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8597,7 +8597,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's effective metrics",
-						Long:    "Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system metric list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8666,7 +8666,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a system",
-					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
+					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system move <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8714,7 +8714,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <property>",
 						Short:   "Clear a property on a system",
-						Long:    "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property delete <name> <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8731,7 +8731,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's properties and where each stands",
-						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8797,7 +8797,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a system",
-						Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8840,7 +8840,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a system",
-					Long:    "Removes a key's value from a system. Gated by system:update.",
+					Long:    "Removes a key's value from a system. Gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8864,7 +8864,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a system",
-					Long:    "Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8930,7 +8930,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a system's name",
-					Long:    "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+					Long:    "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system resetName <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8957,7 +8957,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "delete <name> <role> <component>",
 							Short:   "Unassign a component from a role",
-							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).",
+							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 							Example: "  omniglass system role assignment delete <name> <role> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -8974,7 +8974,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "update <name> <role> <component>",
 							Short:   "Assign a component to a role",
-							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
+							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 							Example: "  omniglass system role assignment update <name> <role> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -8993,7 +8993,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <role>",
 						Short:   "Withdraw a role from a system",
-						Long:    "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system role delete <name> <role>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -9010,7 +9010,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's effective roles",
-						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system role list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -9029,7 +9029,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "swapPositions <name> <role>",
 						Short:   "Exchange two occupants' positions within a role",
-						Long:    "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system role swapPositions <name> <role> --position <int> --with <int>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -9066,7 +9066,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <role>",
 						Short:   "Declare a role on a system",
-						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system role update <name> <role>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -9124,7 +9124,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a system",
-					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.",
+					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9155,7 +9155,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9764,7 +9764,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <variable>",
 					Short:   "Delete a variable",
-					Long:    "Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+					Long:    "Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.\n\nArguments:\n  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass variable delete poll-interval",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9800,7 +9800,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <variable>",
 					Short:   "Update a variable",
-					Long:    "Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
+					Long:    "Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.\n\nArguments:\n  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass variable update poll-interval",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
