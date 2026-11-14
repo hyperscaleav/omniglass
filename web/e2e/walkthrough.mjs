@@ -9,6 +9,13 @@
 //       (step-NN.png), poster.png and walkthrough.json. A step whose expected
 //       result never appears fails the run naming the step, keeping the stills
 //       taken so far (and the failing frame as step-NN-failed.png).
+//   node e2e/walkthrough.mjs preview-start <id> <painted-file> <lumas-file>
+//       choose where the animated preview opens (#1271): the first frame at or
+//       after the title card's paint time (<painted-file>, seconds, written by
+//       record) within the card's hold whose brightest luma reaches
+//       PREVIEW_MIN_YMAX, from ffmpeg's per-frame signalstats listing
+//       (<lumas-file>). Prints the start in seconds; a card that never painted
+//       fails naming the window scanned and the brightest luma found.
 //   node e2e/walkthrough.mjs budget <out-dir>/<id>.mp4 <seconds> <opening-ymax>
 //       the budget gate on the converted mp4 and the animated preview encoded
 //       beside it (preview.webp): within MAX_SECONDS, MAX_BYTES and
@@ -40,13 +47,17 @@ import { PREVIEW } from './walkthroughcore.mjs';
 import {
   budgetLimits,
   budgetProblems,
+  TITLE_HOLD_MS,
   describeTarget,
   idProblem,
   locate,
   parseWalkthrough,
+  paintSeconds,
+  parseLumas,
   previewOpeningProblem,
+  previewScanProblem,
+  previewStartFromLumas,
   runSetup,
-  previewStartSeconds,
   readyFailure,
   stepFailure,
   stillName,
@@ -55,7 +66,7 @@ import {
 const VIEWPORT = { width: 1320, height: 860 };
 // The pace, in milliseconds.
 const PACE = {
-  title: 2200, // the title card
+  title: TITLE_HOLD_MS, // the title card
   read: 700, // the caption shows before the cursor moves
   glide: 650, // the cursor's travel to a target
   settle: 250, // on the target, before acting
@@ -97,6 +108,20 @@ async function budget(mp4, seconds, openingYmax) {
     `walkthrough ${id}: ${seconds.toFixed(1)}s, ${mb(bytes)} MB, preview ${mb(previewBytes)} MB ` +
       `(budget: under ${limits.maxSeconds}s, under ${mb(limits.maxBytes)} MB, preview under ${mb(limits.maxPreviewBytes)} MB)`,
   );
+  return 0;
+}
+
+// The preview's start in seconds, printed, from the recorder's paint time and
+// ffmpeg's per-frame luma listing; a card that never painted fails, naming why.
+async function previewStart(id, paintedFile, lumasFile) {
+  const paint = Number((await readFile(paintedFile, 'utf8')).trim());
+  const frames = parseLumas(await readFile(lumasFile, 'utf8'));
+  const problem = previewScanProblem(id, paint, frames);
+  if (problem) {
+    console.error(problem);
+    return 1;
+  }
+  console.log(previewStartFromLumas(paint, frames));
   return 0;
 }
 
@@ -152,8 +177,9 @@ async function record(file, out) {
     });
     await ctx.addInitScript(OVERLAY);
     // The video starts with the page, before the title card is painted; the
-    // preview starts after it is (previewStartSeconds), so it never opens on
-    // the blank lead-in. Taken before the page opens, so the start errs late.
+    // preview opens on a frame of the painted card at or after this paint time
+    // (previewStartFromLumas), so it never opens on the blank lead-in. Taken
+    // before the page opens, so the paint time errs late.
     const videoStart = Date.now();
     const page = await ctx.newPage();
     const cursor = { x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 };
@@ -167,7 +193,7 @@ async function record(file, out) {
     if (faces.length) console.error(`walkthrough ${id}: the title card fell back from ${faces.join(', ')}`);
     // Two animation frames after the faces load, the card is on screen.
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    const previewStart = previewStartSeconds(videoStart, Date.now());
+    const painted = paintSeconds(videoStart, Date.now());
     await page.waitForTimeout(PACE.title);
 
     let failure = null;
@@ -212,8 +238,9 @@ async function record(file, out) {
         2,
       ) + '\n',
     );
-    // Where the preview encode (walkthroughs.sh) seeks to, in seconds.
-    await writeFile(join(out, 'preview-start.txt'), `${previewStart}\n`);
+    // The earliest the preview may open, in seconds into the video: the lower
+    // bound of the scan walkthroughs.sh makes for the frame to open on.
+    await writeFile(join(out, 'card-painted.txt'), `${painted}\n`);
     console.log(`walkthrough ${id}: recorded ${w.steps.length} steps`);
     return 0;
   } finally {
@@ -225,7 +252,7 @@ async function record(file, out) {
 // previous run's stills behind. Only the recorder's own outputs are touched.
 async function clearOutputs(out) {
   for (const f of await readdir(out)) {
-    if (/^step-\d+(-failed)?\.png$|^poster\.png$|^preview\.webp$|^preview-start\.txt$|^walkthrough\.json$|\.webm$|\.mp4$/.test(f)) await unlink(join(out, f));
+    if (/^step-\d+(-failed)?\.png$|^poster\.png$|^preview\.webp$|^card-painted\.txt$|^walkthrough\.json$|\.webm$|\.mp4$/.test(f)) await unlink(join(out, f));
   }
 }
 
@@ -468,7 +495,9 @@ if (mode === 'record' && args.length === 2) {
   process.exit(await record(args[0], args[1]));
 } else if (mode === 'budget' && args.length === 3) {
   process.exit(await budget(args[0], Number(args[1]), Number(args[2])));
+} else if (mode === 'preview-start' && args.length === 3) {
+  process.exit(await previewStart(args[0], args[1], args[2]));
 } else {
-  console.error('usage: node e2e/walkthrough.mjs record <file.yaml> <out-dir> | budget <file.mp4> <seconds> <opening-ymax>');
+  console.error('usage: node e2e/walkthrough.mjs record <file.yaml> <out-dir> | preview-start <id> <painted-file> <lumas-file> | budget <file.mp4> <seconds> <opening-ymax>');
   process.exit(2);
 }

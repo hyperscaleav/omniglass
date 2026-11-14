@@ -6,10 +6,13 @@ import {
   MAX_PREVIEW_BYTES,
   MAX_SECONDS,
   PREVIEW_MIN_YMAX,
-  PREVIEW_SETTLE_MS,
   budgetLimits,
   previewOpeningProblem,
-  previewStartSeconds,
+  paintSeconds,
+  parseLumas,
+  previewScanProblem,
+  previewStartFromLumas,
+  TITLE_HOLD_MS,
   readyFailure,
   budgetProblems,
   idProblem,
@@ -304,12 +307,50 @@ describe("walkthrough failure and budget messages", () => {
     }
   });
 
-  it("starts the preview once the title card is painted, a settle beat later, never on the blank lead-in", () => {
-    expect(PREVIEW_SETTLE_MS).toBe(500);
-    expect(previewStartSeconds(1_000, 1_000)).toBe(0.5);
-    expect(previewStartSeconds(10_000, 10_640)).toBe(1.14);
-    expect(() => previewStartSeconds(10_000, 9_000)).toThrow("painted before the video started");
-    expect(() => previewStartSeconds(NaN, 1)).toThrow("not measured");
+  it("measures when the title card was painted, in seconds into the video", () => {
+    expect(paintSeconds(1_000, 1_000)).toBe(0);
+    expect(paintSeconds(10_000, 10_640)).toBe(0.64);
+    expect(() => paintSeconds(10_000, 9_000)).toThrow("painted before the video started");
+    expect(() => paintSeconds(NaN, 1)).toThrow("not measured");
+  });
+
+  it("opens the preview on the first painted frame at or after the paint, however far the video lags", () => {
+    const dark = (t: number) => ({ t, ymax: 26 });
+    const lit = (t: number) => ({ t, ymax: 255 });
+    // A frame before the paint is the lead-in: skipped even when bright.
+    expect(previewStartFromLumas(1, [lit(0.5), dark(1), dark(1.2), lit(1.4), lit(1.6)])).toBe(1.4);
+    expect(previewStartFromLumas(1, [lit(0.5), lit(1), lit(1.2)])).toBe(1);
+    // A half-painted frame (the ground and the rule, no text) does not qualify.
+    expect(previewStartFromLumas(0.5, [{ t: 0.6, ymax: 154 }, { t: 0.8, ymax: PREVIEW_MIN_YMAX }])).toBe(0.8);
+    // A loaded runner: the card appears late in the video, still inside its hold.
+    expect(previewStartFromLumas(0.5, [dark(0.5), dark(1.5), dark(2.5), lit(2.7)])).toBe(2.7);
+    // None qualifies, or only one past the card's hold, or none at all.
+    expect(previewStartFromLumas(1, [dark(1), dark(1.5), lit(0.9)])).toBeNull();
+    expect(previewStartFromLumas(1, [dark(1), lit(1 + TITLE_HOLD_MS / 1000 + 0.04)])).toBeNull();
+    expect(previewStartFromLumas(1, [])).toBeNull();
+  });
+
+  it("reads the frames from ffmpeg's signalstats listing", () => {
+    const text = [
+      "frame:0    pts:0       pts_time:0",
+      "lavfi.signalstats.YMAX=16",
+      "frame:1    pts:40      pts_time:0.04",
+      "lavfi.signalstats.YMAX=235",
+      "",
+    ].join("\n");
+    expect(parseLumas(text)).toEqual([{ t: 0, ymax: 16 }, { t: 0.04, ymax: 235 }]);
+    expect(parseLumas("")).toEqual([]);
+  });
+
+  it("fails a card that never painted, naming the window scanned and the brightest luma", () => {
+    const frames = [{ t: 0.4, ymax: 255 }, { t: 0.6, ymax: 26 }, { t: 1.2, ymax: 154 }, { t: 3, ymax: 255 }];
+    expect(previewScanProblem("demo", 0.5, [...frames, { t: 1.5, ymax: 255 }])).toBeNull();
+    expect(previewScanProblem("demo", 0.5, frames)).toBe(
+      "walkthrough demo: the title card never painted between 0.50s and 2.70s (brightest luma 154 over 2 frames, the card's text reaches at least 200)",
+    );
+    expect(previewScanProblem("demo", 0.5, [])).toBe(
+      "walkthrough demo: no frame to open the preview on between 0.50s and 2.70s (the recording has none there)",
+    );
   });
 
   it("refuses a preview that would open on a blank frame, naming its brightest pixel", () => {

@@ -175,6 +175,15 @@ only one that passed carries the budget mark in its manifest (`demo.json`, `walk
 which is what the PR comment, and the docs copy of a walkthrough, refuse to go without. A demo that
 will not fit is two demos: split it.
 
+A walkthrough's animated preview also has to open on the painted title card, not the blank or
+half-painted lead-in the video starts with. The opening frame is chosen from the recording, not by a
+fixed beat after the paint: the recorder notes when the card was painted, and the preview opens on
+the first frame at or after that, within the card's hold, whose brightest luma
+(`signalstats` YMAX) reaches `PREVIEW_MIN_YMAX` (`previewStartFromLumas`). A loaded runner whose
+video lags the page only moves the start later. The gate fails only when no frame in that window
+qualifies, which means the card never painted, and it names the window scanned and the brightest
+luma it found.
+
 ## Record it locally
 
 With nothing but Docker:
