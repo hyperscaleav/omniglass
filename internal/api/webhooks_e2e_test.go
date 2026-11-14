@@ -95,7 +95,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	all := scope.Set{All: true}
-	for _, name := range []string{"ucc-1", "hook-2"} {
+	for _, name := range []string{"ucc-1", "hook-2", "room-1"} {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
 			t.Fatalf("create component: %v", err)
 		}
@@ -136,7 +136,13 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	}
 	hookURL := srv.URL + "/api/v1/webhooks/" + token
 
-	// The simulated UCC service, subscribed to the endpoint's URL.
+	// The account-wide UCC platform names each post's room by id, so the
+	// room the test starts its meetings in is bound to the component the
+	// calls land on (#1282); the raw lines stay on the conduit.
+	c.do(owner, http.MethodPut, "/components/ucc-1/identity-bindings/ucc-room-id/huddle",
+		map[string]string{"owner_kind": "component", "owner": "room-1"}, http.StatusOK)
+
+	// The simulated UCC platform, subscribed to the endpoint's URL.
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
@@ -146,7 +152,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""
 	for name, p := range store.Devices {
-		if p.Model == "UCC Platform" {
+		if p.Model == "UCC Platform (account)" {
 			uccProfile = name
 		}
 	}
@@ -171,14 +177,15 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 				Attributes map[string]string `json:"attributes"`
 			} `json:"events"`
 		}
-		mustJSON(t, c.do(owner, http.MethodGet, "/components/ucc-1/events", nil, http.StatusOK), &out)
+		mustJSON(t, c.do(owner, http.MethodGet, "/components/room-1/events", nil, http.StatusOK), &out)
 		for _, e := range out.Events {
-			if e.Attributes["meeting"] != meeting {
-				continue
-			}
+			// A room's end post names the room, not the meeting, so its
+			// call-ended carries no meeting and counts for any.
 			switch e.Key {
 			case "call-started":
-				started++
+				if e.Attributes["meeting"] == meeting {
+					started++
+				}
 			case "call-ended":
 				ended++
 			}
@@ -215,13 +222,13 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	// line, and last heard. Its landing claims the sender's inbox row.
 	subscribe("")
 	start := time.Now()
-	operate("/api/meetings/start", map[string]string{"id": "m-1", "room": "huddle"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-1", "room": "huddle"})
 	waitFor(t, "call-started for m-1", func() bool { s, _ := events("m-1"); return s == 1 })
 	if took := time.Since(start); took > 2*time.Second {
 		t.Fatalf("the signed post took %s to land, want about a second", took)
 	}
 	waitFor(t, "call-state active", func() bool {
-		s, err := gw.LatestProperty(ctx, "ucc-1", "call-state", "webhook")
+		s, err := gw.LatestProperty(ctx, "room-1", "call-state", "")
 		return err == nil && s != nil && strings.Contains(string(s.Value), "active")
 	})
 	waitFor(t, "the raw line", func() bool {
@@ -267,7 +274,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 		{"stale", "m-3", "timestamp outside the window"},
 	} {
 		subscribe(f.fault)
-		operate("/api/meetings/start", map[string]string{"id": f.meeting})
+		operate("/api/rooms/meetings/start", map[string]string{"id": f.meeting, "room": "huddle"})
 		waitFor(t, "the "+f.fault+" refusal counted", func() bool {
 			e := readEndpoint()
 			return e.Webhook.Refused != nil && e.Webhook.Refused.Reason == f.reason && e.Webhook.Refused.Source != ""
@@ -279,7 +286,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 
 	// A redelivery lands once.
 	subscribe("redeliver")
-	operate("/api/meetings/start", map[string]string{"id": "m-4"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-4", "room": "huddle"})
 	waitFor(t, "call-started for m-4", func() bool { s, _ := events("m-4"); return s == 1 })
 	time.Sleep(500 * time.Millisecond)
 	if s, _ := events("m-4"); s != 1 {
@@ -288,7 +295,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 
 	// The meeting ends: call-ended and call-state idle.
 	subscribe("")
-	operate("/api/meetings/end", map[string]string{})
+	operate("/api/rooms/meetings/end", map[string]string{"room": "huddle"})
 	waitFor(t, "call-ended for m-4", func() bool { _, e := events("m-4"); return e == 1 })
 
 	// Rotated: the old token answers exactly what an unknown one does, and
@@ -307,12 +314,12 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	}
 	hookURL = srv.URL + "/api/v1/webhooks/" + newToken
 	subscribe("")
-	operate("/api/meetings/start", map[string]string{"id": "m-5"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-5", "room": "huddle"})
 	waitFor(t, "call-started for m-5 at the new token", func() bool { s, _ := events("m-5"); return s == 1 })
 
 	// A credential that no longer resolves refuses every post.
 	c.do(owner, http.MethodDelete, "/secrets/ucc-1%2Fucc-signing", nil, http.StatusNoContent)
-	operate("/api/meetings/start", map[string]string{"id": "m-6"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-6", "room": "huddle"})
 	waitFor(t, "the missing credential counted", func() bool {
 		e := readEndpoint()
 		return e.Webhook.Refused != nil && e.Webhook.Refused.Reason == "the endpoint's credential is missing"

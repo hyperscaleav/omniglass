@@ -15809,7 +15809,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
       responses:
         "200":
@@ -15839,7 +15839,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
         - description: The match key, a registered property type
           in: path
@@ -15885,7 +15885,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
         - description: The match key, a registered property type
           in: path
@@ -16430,14 +16430,14 @@ paths:
       description: A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
       operationId: list-unbound-identities
       parameters:
-        - description: The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)
+        - description: The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)
           in: path
           name: name
           required: true
           schema:
-            description: The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)
+            description: The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)
             examples:
-              - hq.$comp.meetings-cloud
+              - hq.$comp.ucc-platform
             type: string
       responses:
         "200":

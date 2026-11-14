@@ -8,7 +8,7 @@ unsimulated: {}
 # collect from, so nothing simulates them, and each says how the fleet watches
 # it instead. A product with no network interface has no driver, and the
 # coverage test holds each to that; the converse does not hold, since a
-# service on the network can have no driver (generic-service, ucc-service).
+# service on the network can have no driver (generic-service).
 passive:
   lyra-gn-12: "an analog gooseneck microphone; the DSP input it is wired to reports its level and mute (#1367)"
   polaris-sky-c6: "a passive loudspeaker; the amplifier channel driving it reports its load (#1367)"

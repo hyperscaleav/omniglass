@@ -2149,29 +2149,21 @@ sim_secrets:
     label: Simulated Ferrite PDU login
     secret_type: basic-auth
     fields: { username: ferrite, password: ferrite }
-  # The key the simulated UCC service signs its webhooks with (#1024).
+  # The key the simulated UCC platform signs its webhooks with (#1024).
   - name: sim-ucc-signing
     label: Simulated UCC webhook signing key
     secret_type: hmac-key
     fields: { key: ucc-lab-signing-key }
 
 sim_endpoints:
-  # The meeting platform's webhooks (#1024): a server-hosted endpoint, so
-  # no node and no address. Its token is minted at creation; point the
-  # simulated service at it (its http api's POST /api/webhooks, with the
-  # endpoint's URL and this key) and each meeting it starts or ends lands as
-  # call-started or call-ended and the call-state property. In a lab the
-  # simulator subscribes the service itself (#1370, ADR-1370), so the posts
-  # flow from the start.
-  - component: ucc-service
-    driver: ucc-webhook
-    label: Meeting webhooks
-    inputs: { signing-key: sim-ucc-signing }
-  # The account-wide meeting platform's webhooks (#1282): the same driver,
-  # whose room-naming listeners declare the ucc-room-id identity, so each
-  # post lands on the system bound to its room (the bindings below). Point
-  # the simulated ucc-platform at this endpoint's URL (its POST /api/webhooks)
-  # and each meeting it starts or ends, and its batched report, fans out.
+  # The meeting platform's webhooks (#1024, #1282): a server-hosted endpoint,
+  # so no node and no address. Its token is minted at creation. The driver's
+  # room-naming listeners declare the ucc-room-id identity, so each post
+  # lands on the system bound to its room (the bindings below). Point the
+  # simulated ucc-platform at this endpoint's URL (its POST /api/webhooks,
+  # with this key) and each meeting it starts or ends, and its batched
+  # report, fans out. In a lab the simulator subscribes the platform itself
+  # (#1370, ADR-1370), so the posts flow from the start.
   - component: ucc-platform
     driver: ucc-webhook
     label: Room webhooks
@@ -2278,9 +2270,6 @@ sim_endpoints:
 # screenshots, seeded without it, carry none of them: the meeting platform's
 # cloud service, at headquarters, whose webhooks the server receives.
 sim_components:
-  - key: ucc-service
-    product: ucc-service
-    location: hq
   # The meeting platform's account-wide plane (#1282): one component that
   # speaks for every room, polled by ucc-rooms and posting room-naming
   # webhooks, the conduit the bindings below fan out from.
