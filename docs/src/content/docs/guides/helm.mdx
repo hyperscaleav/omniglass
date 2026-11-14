@@ -74,6 +74,9 @@ wait for it, then find nothing left to do.
 | `image.pullPolicy` | `IfNotPresent` | |
 | `server.replicas` | `1` | server pod count |
 | `server.resources` | small requests/limits | |
+| `server.secureCookies` | `true` | marks session cookies `Secure` (https-only); set `false` only for a plaintext-http deployment |
+| `server.extraEnv` | `[]` | additional environment variables as `EnvVar` entries |
+| `server.envFrom` | `[]` | additional environment sources (ConfigMap or Secret refs) as `EnvFromSource` entries |
 | `service.port` | `8080` | ClusterIP service port |
 | `ingress.enabled` | `false` | create an Ingress (on for per-PR previews) |
 | `ingress.className` | `traefik` | ingress controller class |
@@ -85,16 +88,45 @@ wait for it, then find nothing left to do.
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
 | `postgres.resources` | small requests/limits | bound the throwaway DB |
 | `externalDsn` | empty | required when `postgres.enabled` is false |
-| `server.secureCookies` | `true` | marks session cookies `Secure` (https-only); set `false` only for a plaintext-http deployment |
 | `nameOverride` | empty | override the chart name in resource names |
 | `fullnameOverride` | empty | override resource names outright; default release-named resources keep preview service DNS predictable (e.g. `og-pr-42`) |
 
 ## Server environment
 
-Anything the chart's values do not cover reaches the server as plain environment (via
-`extraEnv`-style values or a Secret). The full server surface renders from the declared
-environment registry (`make gen`); behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point
-`OMNIGLASS_ENCRYPTION_KEY_FILE` at a mounted key, the encryption key every secret is sealed under.
+Use `server.extraEnv` to set environment variables by value, and `server.envFrom` to mount
+them from a ConfigMap or Secret. Both are passed to the server container and the init containers
+(migrate and bootstrap), so all can reach the same configuration.
+
+Set `OMNIGLASS_SECURE_COOKIES=true` (the default behind edge TLS) and point `OMNIGLASS_ENCRYPTION_KEY_FILE`
+at a mounted key, the encryption key every secret is sealed under:
+
+```bash
+helm install omniglass deploy/chart -n omniglass --create-namespace \
+  --set postgres.enabled=false \
+  --set externalDsn='postgres://user:pass@db:5432/omniglass?sslmode=require' \
+  --set bootstrap.enabled=false \
+  --set image.tag=<release> \
+  --set 'server.extraEnv[0].name=OMNIGLASS_TRUSTED_PROXIES' \
+  --set 'server.extraEnv[0].value=10.0.0.0/8' \
+  --set 'server.envFrom[0].secretRef.name=omniglass-encryption-key'
+```
+
+Or mount the key in a Secret via a values file:
+
+```yaml
+server:
+  extraEnv: []
+  envFrom:
+    - secretRef:
+        name: omniglass-encryption-key
+```
+
+Then create the Secret with the key:
+
+```bash
+kubectl -n omniglass create secret generic omniglass-encryption-key \
+  --from-file=OMNIGLASS_ENCRYPTION_KEY_FILE=/path/to/key
+```
 
 Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
 `OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither

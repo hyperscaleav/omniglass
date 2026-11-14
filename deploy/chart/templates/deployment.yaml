@@ -42,6 +42,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "omniglass.fullname" . }}-dsn
                   key: dsn
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.server.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         {{- if .Values.bootstrap.enabled }}
         - name: bootstrap
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -63,6 +70,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "omniglass.fullname" . }}-dsn
                   key: dsn
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.server.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         {{- end }}
       containers:
         - name: server
@@ -80,6 +94,13 @@ spec:
                   key: dsn
             - name: OMNIGLASS_SECURE_COOKIES
               value: {{ .Values.server.secureCookies | quote }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.server.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /api/v1/healthz
