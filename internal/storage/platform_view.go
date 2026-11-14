@@ -51,6 +51,7 @@ var PlatformViewGroups = []PlatformViewGroup{
 		writerclass.CommandPendingCount, writerclass.CommandPendingAge,
 		writerclass.CommandStuckCount, writerclass.CommandExpiredCount,
 	}},
+	{Name: "worklist", Label: "Worklist", Keys: []string{writerclass.WorklistPullLossRatio}},
 }
 
 // platformViewKeys is every key in PlatformViewGroups, in order.
