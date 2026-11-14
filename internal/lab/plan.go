@@ -293,6 +293,10 @@ type Options struct {
 	// a property loss caused by refused-unregistered. Off by default; the
 	// seed does the work.
 	InduceUnregistered bool
+	// SharedBuffersMiB is a scale lab's Postgres shared_buffers (#1930),
+	// which the runner sizes from the host and the fleet once it has read
+	// the host. Zero is a host not read.
+	SharedBuffersMiB int64
 }
 
 // SiteNode is one site's node in a scale lab: its name, the enrollment
@@ -303,6 +307,61 @@ type SiteNode struct {
 	Token      string
 	TokenHash  string
 	Components int
+}
+
+// A scale lab's shared_buffers (#1930): at most a quarter of the host and
+// at most what the fleet leaves spare, no less than Postgres's own default
+// and no more than 8 GB, so the nodes beside it keep theirs; a host not read
+// gets a size an 8 GB laptop carries.
+const (
+	sharedBuffersFloorMiB   = 128
+	sharedBuffersCeilingMiB = 8 << 10
+	sharedBuffersUnreadMiB  = 1 << 10
+)
+
+// PostgresSharedBuffersMiB is the most shared_buffers a scale lab takes on
+// a host of memBytes, in MiB: a quarter of it, bounded.
+func PostgresSharedBuffersMiB(memBytes int64) int64 {
+	if memBytes <= 0 {
+		return sharedBuffersUnreadMiB
+	}
+	return min(max(memBytes/4>>20, sharedBuffersFloorMiB), sharedBuffersCeilingMiB)
+}
+
+// postgresSharedBuffers is a scale lab's shared_buffers setting in
+// Postgres's own units (MB is MiB to it): buffersMiB, or the size for a host
+// not read when it is zero.
+func postgresSharedBuffers(buffersMiB int64) string {
+	if buffersMiB <= 0 {
+		buffersMiB = PostgresSharedBuffersMiB(0)
+	}
+	return strconv.FormatInt(buffersMiB, 10) + "MB"
+}
+
+// postgresCmd is a scale lab's database command: Postgres sized for the
+// fleet it simulates (#1930). The stock 128 MB of shared buffers and 1 GB of
+// WAL had the 3,000 soak checkpointing on WAL volume four times as often as
+// on time, and a commit stalled behind each one. Larger buffers and WAL with
+// a 15 minute timeout space checkpoints out, lz4 shrinks the full-page images
+// each checkpoint forces, and I/O timing makes pg_stat_io say where a stall
+// went. synchronous_commit stays on: the bus acks a batch once its commit
+// returns, and assumes it durable.
+func postgresCmd(buffersMiB int64) []string {
+	cmd := []string{"postgres"}
+	for _, setting := range []string{
+		// `lab measure` reads each row's ingest lag from its commit time
+		// (#1556), which Postgres keeps only when asked at start.
+		"track_commit_timestamp=on",
+		"shared_buffers=" + postgresSharedBuffers(buffersMiB),
+		"max_wal_size=8GB",
+		"checkpoint_timeout=15min",
+		"wal_compression=lz4",
+		"track_io_timing=on",
+		"track_wal_io_timing=on",
+	} {
+		cmd = append(cmd, "-c", setting)
+	}
+	return cmd
 }
 
 // Scale reports whether the options make a scale lab.
@@ -552,9 +611,7 @@ func Plan(o Options) (Spec, error) {
 			"login on the first run, and enrolls the node afresh.",
 	}
 	if o.Scale() {
-		// The scale lab's measurement reads each row's ingest lag from its
-		// commit time (#1556), which Postgres keeps only when asked at start.
-		spec.DB.Cmd = []string{"postgres", "-c", "track_commit_timestamp=on"}
+		spec.DB.Cmd = postgresCmd(o.SharedBuffersMiB)
 	}
 	spec.Server = Service{
 		Name: "server", Container: o.Project + "-server-1", Image: o.Image,

@@ -403,27 +403,38 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
   thousandth of a core.
 
 So `corporate` at 1,000 systems (18 sites, 3,016 components) needs about 3.4 GiB and 3.2 cores, and at
-3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores. CPU, not memory, is what runs out
-first on most machines: the reference WSL setup of 12 GB on a 12-core host fits 3,000 systems only
-just. `--plan` ends with the decision for this machine:
+3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
+12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 3.4 GiB of memory and 3.2 cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components).
-This Docker host can spare 25.1 GiB and 9.6 cores (80% of its 31.3 GiB and 12 cores).
+Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, a node for each of 30 sites, 8950 simulated components).
+Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
 
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.4 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 447, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
 ```
 
-That one was forced with the hidden `--host-memory 2g`, which plans against a memory limit of your
-choosing, so you can see where a smaller machine's ceiling sits without one. The estimate is a
-model, not a promise: it was measured at small sizes, and [`omniglass lab measure`](#measuring-a-scale-lab)
-measures a running lab.
+Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
+choosing (`12g`, then `2g`), so you can see where a smaller machine's ceiling sits without one. The
+estimate is a model, not a promise: it was measured at small sizes, and
+[`omniglass lab measure`](#measuring-a-scale-lab) measures a running lab.
+
+**A scale lab's Postgres is sized for the host and the fleet**, the way a production one is
+([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
+host's memory (8 GB at most), and never more than the fleet's estimate leaves of what the host can
+spare, so the buffers grow into spare memory and never refuse a fleet that fits. They never drop
+below Postgres's stock 128 MB, the size the estimate was measured with. A forced `--host-memory`
+sizes them only when it is less than the host has. The preflight counts buffers above the stock size
+on top of the estimate, since they fill as the lab reads. Checkpoints spread to 15 minutes and 8 GB
+of WAL, compressed, so leave that much disk free for the lab's volume beside its data. A `dev` lab runs the image's stock Postgres, which is plenty for
+the fleet it simulates.
 
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
 the seed included. Past it the lab removes everything it started and names what was not up: each

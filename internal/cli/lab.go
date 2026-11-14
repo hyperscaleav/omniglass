@@ -235,8 +235,8 @@ func startScaleLab(ctx context.Context, out io.Writer, cfg lab.Config) error {
 }
 
 // writeScaleCapacity follows a plan with its preflight: the estimate from
-// the measured costs and, when the Docker host can be read, the decision
-// bring-up would make on it. It starts nothing, and a refusal is printed, not
+// the measured costs and, when the Docker host can be read, Postgres's
+// shared buffers sized to it and the decision bring-up would make on it. It starts nothing, and a refusal is printed, not
 // returned: the plan was asked for, not the lab.
 func writeScaleCapacity(ctx context.Context, out io.Writer, scale *lab.ScaleRun, plan *labscenario.Plan, readHost hostReader) error {
 	need := scale.Cost.Estimate(len(plan.Sites), plan.Totals.Components)
@@ -251,6 +251,8 @@ func writeScaleCapacity(ctx context.Context, out io.Writer, scale *lab.ScaleRun,
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(out, "Postgres's shared buffers, sized to this host and fleet, come to %s: about %s in all.\n",
+		lab.FormatMiB(float64(c.BuffersMiB)), lab.FormatMiB(c.Need.MemMiB))
 	use := host.Usable()
 	fmt.Fprintf(out, "This Docker host can spare %s and %.1f cores (%.0f%% of its %s and %d cores).\n",
 		lab.FormatMiB(use.MemMiB), use.CPU, (1-lab.Headroom)*100, lab.FormatMiB(float64(host.MemBytes)/(1<<20)), host.CPUs)
