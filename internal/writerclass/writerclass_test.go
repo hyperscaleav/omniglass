@@ -282,8 +282,8 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 // server's checkin-age, so a node cannot speak for another writer.
 func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 	keys := NodeSelfKeys()
-	if len(keys) != 19 {
-		t.Fatalf("node-self keys %v, want the 19 a node reports of itself", keys)
+	if len(keys) != 20 {
+		t.Fatalf("node-self keys %v, want the 20 a node reports of itself", keys)
 	}
 	for _, key := range append(keys, CheckinAge) {
 		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
