@@ -20,9 +20,11 @@ type Runner struct {
 	Daemon Daemon
 	Out    io.Writer
 	// Host is this machine's name, recorded as the owner of what the lab
-	// creates; Alive reports whether an owner pid on this host still runs.
+	// creates; Alive reports whether the owner process with that pid and
+	// start time still runs on this host (an empty start asks about the pid
+	// alone).
 	Host  string
-	Alive func(pid int) bool
+	Alive func(pid int, start string) bool
 	// PIDNS is this process's PID namespace (see Owner.PIDNS).
 	PIDNS string
 	// PortFree checks the console's address before anything is created.
@@ -530,7 +532,7 @@ func (r *Runner) hold(ctx context.Context, lab *Lab, whilePID int) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			if whilePID != 0 && !r.Alive(whilePID) {
+			if whilePID != 0 && !r.Alive(whilePID, "") {
 				return &heldForGone{pid: whilePID}
 			}
 			for _, s := range services {
@@ -636,9 +638,40 @@ func (r *Runner) removeProject(ctx context.Context, labels map[string]string) (i
 	return len(cs), nil
 }
 
+// ownerVerdict is what a resource's owner labels say about its owner process.
+type ownerVerdict int
+
+const (
+	// ownerGone: the process with the labelled pid and start time is not running.
+	ownerGone ownerVerdict = iota
+	// ownerAlive: it is running.
+	ownerAlive
+	// ownerUnknown: the labels cannot say, so it is treated as running: no
+	// readable pid, or no start label (a lab started by a binary from before
+	// the start time was recorded).
+	ownerUnknown
+)
+
+// ownerState judges a resource's owner on this host by its pid and start
+// time together, so a pid a different process now holds reads as gone. A
+// start label that is present but empty means the owner's platform could
+// not read a start time: the pid alone is judged.
+func (r *Runner) ownerState(labels map[string]string) ownerVerdict {
+	pid, err := strconv.Atoi(labels[LabelLabPID])
+	start, recorded := labels[LabelLabPIDStart]
+	if err != nil || !recorded {
+		return ownerUnknown
+	}
+	if r.Alive(pid, start) {
+		return ownerAlive
+	}
+	return ownerGone
+}
+
 // Reap removes what a lab of this project left behind when it was killed too
 // hard to tear down (its owner on this host is gone). A lab whose owner is
-// alive, or that another host owns, is refused, never touched.
+// alive or cannot be judged, or that another host owns, is refused, never
+// touched.
 func (r *Runner) Reap(ctx context.Context, project string) error {
 	if err := r.reapThrowaway(ctx); err != nil {
 		return err
@@ -668,9 +701,15 @@ func (r *Runner) Reap(ctx context.Context, project string) error {
 				Fix:   "stop it there, or remove it with `docker compose -p " + project + " down` if you know it is abandoned.",
 			}
 		}
-		if n, err := strconv.Atoi(pid); err == nil && r.Alive(n) {
+		switch r.ownerState(res.Labels) {
+		case ownerUnknown:
 			return &PreflightError{
-				Cause: fmt.Sprintf("A lab is already running here (process %d).", n),
+				Cause: fmt.Sprintf("A lab named %s is already here (process %s), started by an older omniglass that did not record when its process began, so the lab cannot tell whether it is still running.", project, pid),
+				Fix:   "use that one, or remove it with `docker compose -p " + project + " down` if you know it is abandoned.",
+			}
+		case ownerAlive:
+			return &PreflightError{
+				Cause: fmt.Sprintf("A lab is already running here (process %s).", pid),
 				Fix:   "use that one, or stop it with Ctrl-C in its terminal and run the lab again.",
 			}
 		}
@@ -683,9 +722,10 @@ func (r *Runner) Reap(ctx context.Context, project string) error {
 }
 
 // reapThrowaway removes every throwaway lab, of any project, whose owner on
-// this host (and in this PID namespace) is gone, its volumes with it: a
-// recorder and its lab both killed too hard to clean up. A throwaway lab
-// whose owner lives, or that another host or namespace owns, is not touched.
+// this host (and in this PID namespace) is gone, judged by its pid and start
+// time together, its volumes with it: a recorder and its lab both killed too
+// hard to clean up. A throwaway lab whose owner lives or cannot be judged, or
+// that another host or namespace owns, is not touched.
 func (r *Runner) reapThrowaway(ctx context.Context) error {
 	sel := map[string]string{LabelLabEphemeral: "true"}
 	var all []Resource
@@ -702,9 +742,8 @@ func (r *Runner) reapThrowaway(ctx context.Context) error {
 	alive := map[string]bool{}
 	for _, res := range all {
 		p := res.Labels[LabelComposeProject]
-		pid, err := strconv.Atoi(res.Labels[LabelLabPID])
 		mine := res.Labels[LabelLabHost] == r.Host && res.Labels[LabelLabPIDNS] == r.PIDNS
-		if p == "" || err != nil || !mine || r.Alive(pid) {
+		if p == "" || !mine || r.ownerState(res.Labels) != ownerGone {
 			alive[p] = true
 			continue
 		}

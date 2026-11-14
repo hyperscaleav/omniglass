@@ -13,7 +13,7 @@ import (
 
 func testOptions() Options {
 	return Options{Image: "omniglass:dev", Port: DefaultPort, NodeToken: "tok", NodeTokenHash: "abc",
-		Owner: Owner{Host: "box", PID: 42}}
+		Owner: Owner{Host: "box", PID: 42, Start: "t42"}}
 }
 
 func TestPlanDefaults(t *testing.T) {
@@ -122,6 +122,7 @@ func TestPlanLabelsEveryResource(t *testing.T) {
 		t.Helper()
 		for k, want := range map[string]string{
 			LabelComposeProject: "omniglass-lab", LabelLab: "omniglass-lab", LabelLabHost: "box", LabelLabPID: "42",
+			LabelLabPIDStart: "t42",
 		} {
 			if l[k] != want {
 				t.Errorf("%s: label %s = %q, want %q", what, k, l[k], want)
