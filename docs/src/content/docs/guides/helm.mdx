@@ -127,3 +127,16 @@ helm install og-pr-42 deploy/chart -n og-pr-42 --create-namespace \
   --set ingress.host=og-pr-42.preview.hyperscaleav.com \
   --set fullnameOverride=omniglass
 ```
+
+**Qualified names through Traefik:** an endpoint, secret or variable can be
+addressed by a qualified name whose slash (and `$`) is percent-encoded in the path,
+for example `/api/v1/endpoints/<addr>%2Fhttps` or
+`/api/v1/secrets/%24platform%2Fdemo-panel-login`. The chart's default Ingress
+needs no extra setting for this: a pinned Traefik container in front of a backend
+that echoes the raw request path returned the same status as direct access, with
+the path intact, on Traefik 3.0.4, 3.6.25 and 3.7.19 (no entry point options set).
+Reproduce it with `scripts/test-traefik-encoded-slashes.sh` (needs Docker; override
+the versions with `TRAEFIK_VERSIONS`). If you tighten the entry point's
+`http.encodedCharacters` options (for example `allowEncodedSlash: false`), Traefik
+answers `400` at the edge for these requests while direct access still works; the
+uuid form is unaffected.
