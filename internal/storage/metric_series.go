@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -143,7 +144,8 @@ func metricCoverageGap(parts []MetricPartition, from, to time.Time) (time.Time, 
 // refuses, naming the first instant uncovered, unless they cover every
 // instant from the start of yesterday through the end of the last day
 // ahead: the server calls it at boot and starts no ingest over a refusal,
-// and on every retention pass after (#420's roll).
+// and on every retention pass after (#420's roll). Last it summarizes each
+// finished day's block range indexes (summarizeMetricDays), best effort.
 func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	now, err := dbNow(ctx, p.pool)
 	if err != nil {
@@ -163,7 +165,40 @@ func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 		return created, fmt.Errorf("storage: metric partitions do not cover %s (want every instant from %s to %s)",
 			gap.Format(time.RFC3339), from.Format(time.RFC3339), through.Format(time.RFC3339))
 	}
+	if day, err := p.summarizeMetricDays(ctx, parts, metricDay(now)); err != nil {
+		slog.Warn("a finished day's block range indexes were not summarized; its unsummarized ranges read whole until the next roll",
+			"facility", "retention", "partition", day, "error", err.Error())
+	}
 	return created, nil
+}
+
+// summarizeMetricDays summarizes every range the block range indexes of each
+// day before today have not (#1929). An unsummarized range matches every
+// query, so the event rule reconcile's id window would read it whole on each
+// pass. autosummarize takes a range once the next one starts, but a day's
+// last range never fills, so the roll takes it once the day is done; a
+// summarized range stays exact as late samples land in it. Already
+// summarized ranges cost their range map alone. It names the day it stopped
+// at on an error.
+func (p *PG) summarizeMetricDays(ctx context.Context, parts []MetricPartition, today time.Time) (string, error) {
+	for _, part := range parts {
+		if part.To.After(today) {
+			continue
+		}
+		err := pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = '%dms'`, partitionLockTimeout.Milliseconds())); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `select brin_summarize_new_values(i.indexrelid) from pg_index i
+				join pg_class c on c.oid = i.indexrelid join pg_am a on a.oid = c.relam
+				where i.indrelid = to_regclass($1) and a.amname = 'brin'`, pgx.Identifier{"public", part.Name}.Sanitize())
+			return err
+		})
+		if err != nil {
+			return part.Name, err
+		}
+	}
+	return "", nil
 }
 
 // ensureMetricDays creates the partition of each day that has none and
