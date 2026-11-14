@@ -96,9 +96,6 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 	}
 }
 
-// A scale lab's Postgres is sized from the Docker host it runs on, read
-// before the plan: the host's own report, or the forced limit that stands in
-// for it.
 // A scale lab whose options do not plan is refused before the host is read,
 // so a bad flag reads as itself rather than as a Docker host it never needed.
 func TestScaleRunPlansBeforeReadingTheHost(t *testing.T) {
@@ -114,6 +111,8 @@ func TestScaleRunPlansBeforeReadingTheHost(t *testing.T) {
 	}
 }
 
+// A scale lab's Postgres is sized from the Docker host it runs on: the
+// host's own report, or the forced limit that stands in for it.
 func TestScaleRunSizesPostgresFromTheHost(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	for name, tc := range map[string]struct {
@@ -155,10 +154,10 @@ func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
 		mem  int64
 		want string
 	}{
-		// 600 MiB, of which 480 usable, at least 128 of it Postgres's
-		// shared buffers: 100 + 10*(1+n/10) + 3n MiB is 350 at 60
-		// systems (7 sites) and 353 at 61.
-		"some size fits": {600 << 20, "--systems 60, the largest that fits"},
+		// 600 MiB, of which 480 usable: 100 + 10*(1+n/10) + 3n MiB is 479
+		// at 93 systems (10 sites) and 483 at 94. The buffers take only what
+		// the fleet leaves, so they move the largest size not at all.
+		"some size fits": {600 << 20, "--systems 93, the largest that fits"},
 		"none fits":      {64 << 20, "Not even the smallest size fits"},
 	} {
 		t.Run(name, func(t *testing.T) {

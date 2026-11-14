@@ -428,11 +428,12 @@ estimate is a model, not a promise: it was measured at small sizes, and
 
 **A scale lab's Postgres is sized for the host and the fleet**, the way a production one is
 ([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
-host's memory (128 MB at least, 8 GB at most), and never more than the fleet's estimate leaves of
-what the host can spare, so a fleet that fits without the buffers still fits with the 128 MB floor.
-A forced `--host-memory` sizes them only when it is less than the host has. Checkpoints spread to
-15 minutes and 8 GB of WAL, compressed. The preflight counts the buffers on top of the estimate,
-since they fill as the lab reads. A `dev` lab runs the image's stock Postgres, which is plenty for
+host's memory (8 GB at most), and never more than the fleet's estimate leaves of what the host can
+spare, so the buffers grow into spare memory and never refuse a fleet that fits. They never drop
+below Postgres's stock 128 MB, the size the estimate was measured with. A forced `--host-memory`
+sizes them only when it is less than the host has. The preflight counts buffers above the stock size
+on top of the estimate, since they fill as the lab reads. Checkpoints spread to 15 minutes and 8 GB
+of WAL, compressed, so leave that much disk free for the lab's volume beside its data. A `dev` lab runs the image's stock Postgres, which is plenty for
 the fleet it simulates.
 
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),

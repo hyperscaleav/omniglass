@@ -251,7 +251,7 @@ func writeScaleCapacity(ctx context.Context, out io.Writer, scale *lab.ScaleRun,
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Postgres's shared buffers, sized to this host and fleet, add %s: about %s in all.\n",
+	fmt.Fprintf(out, "Postgres's shared buffers, sized to this host and fleet, come to %s: about %s in all.\n",
 		lab.FormatMiB(float64(c.BuffersMiB)), lab.FormatMiB(c.Need.MemMiB))
 	use := host.Usable()
 	fmt.Fprintf(out, "This Docker host can spare %s and %.1f cores (%.0f%% of its %s and %d cores).\n",

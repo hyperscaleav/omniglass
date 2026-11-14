@@ -202,7 +202,7 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		"fits": {1000, "", host, []string{
 			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components)",
 				lab.FormatMiB(need.MemMiB), need.CPU),
-			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, add 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
+			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, come to 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
 			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
 		// The corporate 3,000 runs on a 12 GB laptop: the buffers take what
 		// the fleet leaves spare rather than a quarter of the host.

@@ -10,9 +10,10 @@ now starts with `shared_buffers` at a quarter of the Docker host's memory (128 M
 the host is not read), never more than the fleet's estimate leaves of what the host can spare, with
 `max_wal_size=8GB`, `checkpoint_timeout=15min`, `wal_compression=lz4` and I/O timing on, beside the
 `track_commit_timestamp` that `lab measure` already needed. `synchronous_commit` stays on. The
-preflight counts the buffers on top of the estimate; the spare cap keeps 3,000 systems fitting on a
-12 GB host, and a forced `--host-memory` sizes the buffers only when it is less than the host has.
+preflight counts buffers above the stock 128 MB on top of the estimate (the stock size is what the
+estimate was measured with), so the buffers never refuse a fleet the estimate fits; the spare cap
+keeps 3,000 systems fitting on a 12 GB host, and a forced `--host-memory` sizes the buffers only when it is less than the host has.
 The runner plans, reads the host, then plans again with the buffers, so the plan stays pure and a
 bad flag is refused before the host is read. A `dev` lab still runs stock Postgres. The deployment
 guide gains a sizing section naming each setting and why, and says when a container's `/dev/shm`
-needs raising; unit tests pin the command, the bounded quarter, the spare cap and the host read.
+needs raising; unit tests pin the command, the bounded quarter, the spare cap, the floor and the host read.

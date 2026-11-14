@@ -333,7 +333,7 @@ func PostgresSharedBuffersMiB(memBytes int64) int64 {
 // not read when it is zero.
 func postgresSharedBuffers(buffersMiB int64) string {
 	if buffersMiB <= 0 {
-		buffersMiB = sharedBuffersUnreadMiB
+		buffersMiB = PostgresSharedBuffersMiB(0)
 	}
 	return strconv.FormatInt(buffersMiB, 10) + "MB"
 }

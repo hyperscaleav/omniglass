@@ -33,13 +33,14 @@ managing accounts and access moves to the [admin guide](/guides/admin/).
 
 Postgres ships with settings sized for a small machine it shares with other work, and a fleet's
 telemetry is a steady stream of writes. Set these in `postgresql.conf` (or as `-c` flags on the
-`postgres` command); the scale lab runs with the same set, so a figure it measures is one a sized
-production database would see:
+`postgres` command). The scale lab runs the same settings, its `shared_buffers` also held to what
+its simulated fleet leaves of the host, so a figure it measures is one a sized production database
+would see:
 
 | setting | value | why |
 |---|---|---|
 | `shared_buffers` | a quarter of the host's memory, up to 8 GB | the stock 128 MB holds a fraction of the recent telemetry, so reads that should hit memory go to disk |
-| `max_wal_size` | `8GB` | the stock 1 GB had a 3,000-system soak checkpointing on WAL volume four times as often as on its timer, with commits stalling behind each checkpoint |
+| `max_wal_size` | `8GB` | the stock 1 GB had a 3,000-system soak checkpointing on WAL volume four times as often as on its timer, with commits stalling behind each checkpoint; leave 8 GB of disk free for it beside the data |
 | `checkpoint_timeout` | `15min` | with the larger WAL, spaces checkpoints out to one each 15 minutes |
 | `wal_compression` | `lz4` | compresses the full-page images each checkpoint forces into the WAL, for a little CPU |
 | `track_io_timing`, `track_wal_io_timing` | `on` | records time spent in reads and WAL writes, so `pg_stat_io` says when the disk is the bottleneck |
