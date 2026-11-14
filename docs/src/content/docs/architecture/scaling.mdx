@@ -269,6 +269,9 @@ process, and rendered from the sweep's committed result by `make gen`:
   and add across its drivers, to read what its worklist costs beyond the idle node. **Warm memory** is
   paid once rather than per task: the jump a node's working set takes when its first tasks of the
   driver land, before the slope.
+- **Step** is how many tasks the sweep added at a time for that driver. A cheap driver's memory rise
+  hides inside the heap's own swing at a small step, so the sweep grows the step for such a driver
+  until its memory shows or the step reaches its cap.
 - **CPU per run** is the same CPU spread over how often each task runs, so drivers with different
   polls compare per poll.
 - **Thread CPU per run** is the node's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is

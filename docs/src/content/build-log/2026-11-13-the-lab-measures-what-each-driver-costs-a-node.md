@@ -11,7 +11,9 @@ and 3N of the driver's components. CPU per task is the slope across every step; 
 the slope across the loaded steps, with the jump from the idle node to that line kept apart as a
 one-off warm cost (an SNMP driver's working set went 15.8, 25.9, 27.4 MiB at 0, 400, 800 tasks: a
 jump, then a slope, which one line through all three refused). A figure whose steps are not near a
-line is listed as not measured with why, and the driver's other figure still stands.
+line is listed as not measured with why, and the driver's other figure still stands. A driver whose
+memory does not fit is swept again at four times the step, up to `--max-step-tasks`: at 400 tasks a
+step, 13 of 20 drivers' memory sat inside the heap's own swing.
 Beside the cgroup's CPU per run sits the node's own `poll-cpu-time` (#1870) and the share of the run
 it sees. The sweep writes `internal/labfootprint/drivercost/shipped.json`; `make gen` joins it with the
 drivers the plan knows and renders the table on the scaling page, where a driver the committed sweep

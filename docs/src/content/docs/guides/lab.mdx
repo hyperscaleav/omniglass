@@ -987,7 +987,14 @@ in turn on a node that runs only the node:
   step sits apart, and the loaded line's value at zero tasks over the idle node is the **warm cost**,
   paid once. A step off its line by more than a tenth of the rise in memory, or a quarter in CPU,
   refuses that figure, which is listed as not measured with why, never written down as a cost; the
-  other figure still stands, and only a driver with neither is left out.
+  other figure still stands, and only a driver with neither is left out. A loaded line that starts
+  below the idle node has no warm cost to show (the first tasks filled heap the idle node already
+  held), so the warm figure is left empty with that reason rather than written as zero.
+- **A bigger step when memory hides.** A cheap driver costs a node a few KiB a task, and at a small
+  step that rise is inside the heap's own swing, so its memory does not fit. Such a driver is swept
+  again on a fresh node at four times the step, up to `--max-step-tasks`, and the attempt that
+  measured the most figures is kept (the bigger step on a tie). A figure that still does not fit is
+  listed with why. Each row records the step it was measured at.
 - **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
   node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
   polling thread's kernel clock, averaged over the reports wholly inside each step's window and read

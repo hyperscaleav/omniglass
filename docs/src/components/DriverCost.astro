@@ -24,6 +24,7 @@ const share = (r: Row) => {
 };
 const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.join(', ') : '');
 const host = (facts as { host?: { cores?: number; memory_gib?: number } }).host;
+const maxStep = (facts as { max_step_tasks?: number }).max_step_tasks;
 const measured = facts.drivers.filter((r) => r.measured).length;
 ---
 
@@ -33,7 +34,7 @@ const measured = facts.drivers.filter((r) => r.measured).length;
       <>
         Measured {facts.date} on build <code>{facts.build}</code>
         {host && host.cores ? `, a host of ${host.cores} cores and ${host.memory_gib} GiB` : ''}, stepping about {facts.step_tasks} tasks at a
-        time. {measured} of {facts.drivers.length} drivers measured.
+        time{maxStep && maxStep > facts.step_tasks ? `, and up to ${maxStep} for a driver whose memory did not show` : ''}. {measured} of {facts.drivers.length} drivers measured.
       </>
     ) : (
       <>No sweep is committed yet: every driver reads as not yet measured.</>
@@ -46,6 +47,7 @@ const measured = facts.drivers.filter((r) => r.measured).length;
       <th>Driver</th>
       <th>Product</th>
       <th>Polls</th>
+      <th>Step (tasks)</th>
       <th>Memory per task (KiB)</th>
       <th>Warm memory (MiB)</th>
       <th>Millicores per task</th>
@@ -64,6 +66,7 @@ const measured = facts.drivers.filter((r) => r.measured).length;
           </td>
           <td>{'product' in r && r.product ? <code>{r.product}</code> : ''}</td>
           <td>{polls(r)}</td>
+          <td>{num(r, 'step_tasks', 0)}</td>
           <td>{num(r, 'memory_per_task_kib', 1)}</td>
           <td>{num(r, 'memory_warm_mib', 1)}</td>
           <td>{num(r, 'millicores_per_task', 3)}</td>
