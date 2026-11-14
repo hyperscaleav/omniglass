@@ -1,7 +1,7 @@
 # A node sizes its lane pool from its CPU and memory
 #
-# --lane-workers defaults to auto: the node reads the CPU and memory its cgroup allows (the host's
-# where the cgroup sets none) and sizes its endpoint lane pool to the tighter of the two, weighing
+# --lane-workers defaults to auto: the node reads the CPU and memory its cgroup allows (each held
+# to the host's) and sizes its endpoint lane pool to the tighter of the two, weighing
 # how long a run waits on its device against the CPU it costs, clamped to 4 to 256. A number still
 # sets the pool. The node reports the count it took as lane-worker-count beside its busy share (#1869).
 
