@@ -383,6 +383,21 @@ func TestRunScenarioDegradedIsIdempotent(t *testing.T) {
 	if got := countFleet(t, ctx, conn).alarms; got != len(doc.Alarms)+1 {
 		t.Errorf("alarms = %d, want %d", got, len(doc.Alarms)+1)
 	}
+	// As stored, every degraded lamp-hours alarm sits on a component whose
+	// product is classified a projector or a display (#1208).
+	var lamp, misplaced int
+	if err := conn.QueryRow(ctx, `
+		select count(*), count(*) filter (where ct.name is null or ct.name not in ('projector', 'display'))
+		from alarm a
+		join component c on c.id = a.component_id
+		left join product p on p.id = c.product_id
+		left join component_type ct on ct.id = p.component_type_id
+		where a.dedup_key = 'degraded-lamp-hours'`).Scan(&lamp, &misplaced); err != nil {
+		t.Fatal(err)
+	}
+	if lamp == 0 || misplaced != 0 {
+		t.Errorf("degraded-lamp-hours alarms = %d, %d of them off a projector or display", lamp, misplaced)
+	}
 }
 
 func TestRunScenarioEmptySeedsNothing(t *testing.T) {
