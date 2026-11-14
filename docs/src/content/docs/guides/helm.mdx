@@ -1,6 +1,10 @@
 ---
 title: "Deploying with Helm"
-description: "The Omniglass Helm chart: install, values, and the bundled-Postgres preview mode versus BYO-Postgres production."
+description: "The Omniglass Helm chart: install, values, durable state, and the bundled-Postgres preview mode versus BYO-Postgres production."
+sidebar:
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import ConfigVars from '../../../components/ConfigVars.astro';
@@ -65,6 +69,80 @@ Both `migrate` and `bootstrap` are safe to re-run on every rollout. At
 Postgres advisory lock: the first applies the pending migrations and the others
 wait for it, then find nothing left to do.
 
+## Durable state
+
+A chart deployment keeps two things across a pod restart, a `helm upgrade` and a `helm uninstall`
+followed by a `helm install` of the same release into the same namespace: its encryption key and its
+data volume. Nothing a user can observe changes across any of them.
+
+### The encryption key
+
+Every secret Omniglass stores in Postgres is sealed under one encryption key. The server reads it
+from `OMNIGLASS_ENCRYPTION_KEY`, which the chart fills from a Kubernetes Secret (key
+`encryption-key`), so the key never lives in the pod:
+
+- **Supplied.** Set `encryptionKey.existingSecret` to the name of a Secret you manage that holds
+  `encryption-key` (base64 of 32 random bytes, e.g. `head -c 32 /dev/urandom | base64`). A supplied
+  Secret always wins; the chart generates nothing.
+- **Generated** (the default, `encryptionKey.generate=true`). The chart creates
+  `<release>-encryption-key` on the first install and reads its live value back on every upgrade, so
+  the key never changes. The Secret carries `helm.sh/resource-policy: keep`, so `helm uninstall`
+  leaves it behind and a reinstall of the same release adopts it.
+
+With no `existingSecret` and `generate=false` the chart refuses to render, rather than boot a server
+with no key.
+
+:::caution[Back up the key]
+Lose the key and every stored secret is unreadable, by anyone: there is no recovery. Read it out
+after the first install and keep it outside the cluster:
+
+```bash
+kubectl -n omniglass get secret omniglass-encryption-key \
+  -o jsonpath='{.data.encryption-key}' | base64 -d
+```
+
+The output is the value of `OMNIGLASS_ENCRYPTION_KEY`. To restore, create a Secret holding it under
+`encryption-key` and install with `encryptionKey.existingSecret` naming it. The chart's `NOTES.txt`
+prints this command after every install and upgrade.
+:::
+
+The generated key relies on Helm reading the live Secret at render time (`lookup`). A renderer that
+runs `helm template` without a cluster, as a GitOps controller such as Argo CD does, cannot, and
+renders a fresh key each time; there, supply the key with `encryptionKey.existingSecret`.
+
+### The data volume
+
+The server's data directory is `/var/lib/omniglass` (`OMNIGLASS_DATA_DIR`), and the embedded
+JetStream store sits under it at `/var/lib/omniglass/nats` (`OMNIGLASS_NATS_STORE_DIR`), the same
+layout as the [lab](/guides/lab/). With `persistence.enabled` (the default) the chart mounts a
+`ReadWriteOnce` PersistentVolumeClaim there, `<release>-data`, also marked
+`helm.sh/resource-policy: keep`. The Deployment uses the `Recreate` strategy: one server owns one
+bus and one volume, so the old pod stops before the new one starts.
+
+The guarantee this buys: **a batch the stream acknowledged before a restart lands after it.** A node
+drops a batch from its spool once the `OG_TELEMETRY` stream acknowledges it
+([messaging](/architecture/messaging/#delivery-a-batch-lands-once)); the stream's store is on the
+volume, so a batch acknowledged and not yet written to Postgres by `og-telemetry-worker` is still
+there when the server comes back, and lands then.
+
+`persistence.enabled=false` swaps the claim for an `emptyDir`, which a pod restart loses, along with
+any telemetry the bus held. That suits a disposable preview and nothing else.
+
+### What an uninstall keeps
+
+`helm uninstall` removes the release and keeps exactly two resources, which it names in its output:
+the generated key Secret and the data claim. Reinstalling the same release name into the same
+namespace adopts both. To remove an instance for good, delete them by hand, after backing up the key
+if the database is staying:
+
+```bash
+kubectl -n omniglass delete secret omniglass-encryption-key
+kubectl -n omniglass delete pvc omniglass-data
+```
+
+The database is separate: with `postgres.enabled=false` it is yours and the chart never touches it;
+the bundled preview Postgres is an `emptyDir` and goes with the release.
+
 ## Values
 
 | Key | Default | Purpose |
@@ -85,6 +163,11 @@ wait for it, then find nothing left to do.
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
 | `postgres.resources` | small requests/limits | bound the throwaway DB |
 | `externalDsn` | empty | required when `postgres.enabled` is false |
+| `encryptionKey.existingSecret` | empty | name of a Secret holding the key under `encryption-key`; always wins |
+| `encryptionKey.generate` | `true` | generate and keep `<release>-encryption-key` when no `existingSecret` is set |
+| `persistence.enabled` | `true` | put the data directory on a kept PersistentVolumeClaim; `false` uses an `emptyDir` |
+| `persistence.size` | `1Gi` | the claim's requested size |
+| `persistence.storageClass` | empty | the claim's storage class; empty uses the cluster default |
 | `server.secureCookies` | `true` | marks session cookies `Secure` (https-only); set `false` only for a plaintext-http deployment |
 | `nameOverride` | empty | override the chart name in resource names |
 | `fullnameOverride` | empty | override resource names outright; default release-named resources keep preview service DNS predictable (e.g. `og-pr-42`) |
@@ -93,8 +176,9 @@ wait for it, then find nothing left to do.
 
 Anything the chart's values do not cover reaches the server as plain environment (via
 `extraEnv`-style values or a Secret). The full server surface renders from the declared
-environment registry (`make gen`); behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point
-`OMNIGLASS_ENCRYPTION_KEY_FILE` at a mounted key, the encryption key every secret is sealed under.
+environment registry (`make gen`). The chart already sets `OMNIGLASS_SECURE_COOKIES` from
+`server.secureCookies`, `OMNIGLASS_ENCRYPTION_KEY` from the key Secret, and `OMNIGLASS_DATA_DIR` and
+`OMNIGLASS_NATS_STORE_DIR` into the data volume ([durable state](#durable-state)).
 
 Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
 `OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither

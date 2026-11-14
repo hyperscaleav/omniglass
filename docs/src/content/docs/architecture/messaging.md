@@ -136,6 +136,11 @@ The canonical triple is built on `OG_TELEMETRY`
   lane's text or jsonb becomes U+FFFD), so one stray byte cannot lose the rows that rode with it
   after a `202`.
 
+A publisher lets go of a batch at the stream's ack, so the ack is only as durable as the stream's
+store. The embedded server keeps it under `OMNIGLASS_NATS_STORE_DIR`, a temporary directory removed at
+shutdown unless one is set; the lab and the Helm chart set it onto a persistent volume, so a batch the
+stream acknowledged before a restart lands after it ([Helm: durable state](/guides/helm/#durable-state), #1286).
+
 The property lane's transition guard is the insert's own condition, held per series by a lock, so two
 batches landing at once never write one value twice. The guard is right only if a series lands in
 order, so the lane keeps order end to end: a node's window stays in publish order

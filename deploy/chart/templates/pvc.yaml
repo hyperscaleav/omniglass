@@ -1,0 +1,23 @@
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "omniglass.fullname" . }}-data
+  labels:
+    {{- include "omniglass.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+  annotations:
+    # The JetStream store holds telemetry the bus acknowledged and the worker
+    # has not landed yet: an uninstall leaves it, and a reinstall of the same
+    # release adopts it.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size | quote }}
+{{- end }}
