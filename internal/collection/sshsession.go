@@ -217,7 +217,7 @@ func (p *pendingSSH) Open(in Inbound, ch ChannelOptions) (HeldConn, error) {
 		_ = sess.Close()
 		_ = client.Close()
 	}}
-	return openLineConn(conn, p.target, in), nil
+	return openLineConn(conn, p.target, in, ch.ConnectQuiet), nil
 }
 
 func (p *pendingSSH) Close() error {
