@@ -285,7 +285,9 @@ The lane is three tables:
 - **`metric`**, the hot tier: `(id, series_id, ts, value)`, plus a calculated sample's rule
   lineage in nullable columns that cost nothing when empty. Observed and calculated samples only.
   Range partitioned by UTC day on `ts`, with one btree, `(series_id, ts desc, id desc)`,
-  and block range indexes on `id` and `ts`. It has no primary key and no foreign key to the
+  and block range indexes on `id` and `ts`, each day's own index made to summarize a range once it
+  fills (`autosummarize`).
+  It has no primary key and no foreign key to the
   series: a deleted owner's samples are invisible to every reader (each joins the series) and
   leave with their day or the next retention pass.
 - **`metric_declared`**, the declared tier: a command's intended rows, with their command and
@@ -310,6 +312,17 @@ over a refusal. A partition is created detached and then attached, so the parent
 late roll, a batch across midnight, a node clock far out) is not a refused write: the batch's days
 are made and it lands, and a batch that misses again is redelivered, never dropped (#420). A day is
 UTC.
+
+**Finished days are summarized.** A block range no summary covers matches every query, so a day
+nobody summarized costs a read its whole heap. A partitioned index takes no storage option, so the
+roll makes each day's `id` and `ts` block range indexes itself, with `autosummarize`, before it
+attaches the day, and the attach adopts them. `autosummarize` takes a range once it fills, and a
+day's last range never does, so each retention pass, after it drops the days past the window and on a
+deadline of its own, summarizes the ranges of every finished day
+([ADR-1929](/architecture/decisions/#adr-1929-a-finished-day-is-summarized-and-the-reconcile-keeps-its-id-marks)).
+A summarized range stays exact as late samples land in it, so the event rule reconcile's id window
+reads a finished day's index alone. A day that fails under the five-second lock timeout is named in
+the pass's error and the rest are still summarized; the next pass tries it again.
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
 

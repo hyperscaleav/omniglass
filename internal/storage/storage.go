@@ -902,6 +902,10 @@ type Gateway interface {
 	// the trend compacted mark, and holding no sample a type's own longer
 	// window still reaches, returning what it dropped (#420, #1527).
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// SummarizeMetricPartitions summarizes the block range indexes of each
+	// finished day of metric, returning the days it did, past any day that
+	// fails (#1929).
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	// CompactMetricTrends closes up to maxHours hours of observed metric
 	// samples into hourly trends and recomputes the closed hours a late
 	// sample dirtied (#1276); laneDays is the metric lane's window.

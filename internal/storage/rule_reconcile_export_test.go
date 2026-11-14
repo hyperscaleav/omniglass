@@ -52,3 +52,11 @@ func ExportSeriesKeysSQL(col string) string { return seriesKeysSQL(col) }
 
 // ExportToldSQLFor is ExportToldSQL on any arc column.
 func ExportToldSQLFor(col string) string { return latestIntendedSQL(col) }
+
+// ExportRuleMarksSQL is the reconcile's marks read ($1 the metric lane's
+// lower mark), so a test can EXPLAIN it.
+const ExportRuleMarksSQL = ruleMarksSQL
+
+// ExportRuleCandidatesSQL is the reconcile's candidates scan on a lane ($1
+// the lane, $2 and $3 the id window), so a test can EXPLAIN it.
+func ExportRuleCandidatesSQL(lane string) string { return ruleCandidatesSQL(rules.Lane(lane)) }

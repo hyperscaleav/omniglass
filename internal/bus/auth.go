@@ -93,9 +93,12 @@ type Store interface {
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// EnsureMetricPartitions and DropMetricPartitions are the metric table's
 	// daily roll (#420, #1527): three days ahead at boot and on every
-	// retention pass, and each day past every window dropped whole.
+	// retention pass, and each day past every window dropped whole;
+	// SummarizeMetricPartitions summarizes each finished day's block range
+	// indexes after (#1929).
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	// RetentionStatus is the storage read after each pass (#1629): the
 	// metric partitions held and the stored tables' and database's bytes.
 	RetentionStatus(ctx context.Context) (storage.RetentionStatus, error)
