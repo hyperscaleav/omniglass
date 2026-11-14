@@ -14,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -79,7 +80,7 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newGateStackWith(t, "127.89.16.8", "edge-tls", tenDayCertificates)
+	s := newGateStackWith(t, simtest.ClaimLoopback(t), "edge-tls", tenDayCertificates)
 	s.component("panel-1")
 	port := s.port("tls")
 	ep := s.attachTLS("panel-1", "edge-tls", port, nil)
@@ -205,7 +206,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newGateStack(t, "127.89.16.9", "edge-tlsm")
+	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-tlsm")
 	s.component("panel-1")
 	ep := s.attachTLS("panel-1", "edge-tlsm", s.port("tls"), map[string]string{"tls-mode": "verify"})
 	s.runNode("edge-tlsm")

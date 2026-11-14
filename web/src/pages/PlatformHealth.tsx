@@ -20,6 +20,7 @@ import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
   figureText,
+  figureTinted,
   lossTinted,
   nodeLossHint,
   nodeLossText,
@@ -257,7 +258,7 @@ function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
         {(c) => {
           const text = () => figureText(props.node, c());
           return (
-            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED }}>{text()}</td>
+            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.node, c()) }}>{text()}</td>
           );
         }}
       </KeyedFor>

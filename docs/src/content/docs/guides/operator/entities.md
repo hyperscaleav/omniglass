@@ -136,7 +136,7 @@ identity pages.
   change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
   remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
   outside your `system:update` scope, or a role the component still fills there), the reason shows in
-  the form and it stays in edit. Without `system:update` the field reads but does not edit. The
+  the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
   system's member list updates without a reload.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,

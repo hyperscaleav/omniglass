@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EventBody } from "../api/api.gen";
 
 // The events data layer: a thin typed wrapper over the generated client for a
 // component's recent events. Where reachability samples a value on a cadence (a
@@ -10,7 +10,7 @@ import type { components } from "../api/schema.gen";
 // the OpenAPI (see api/events.go); the row type is the generated EventBody, never
 // hand-typed.
 
-export type ComponentEvent = components["schemas"]["EventBody"];
+export type ComponentEvent = EventBody;
 export type ComponentEvents = { component: string; events: ComponentEvent[] };
 
 export const EVENTS_KEY = (name: string) => ["events", name] as const;

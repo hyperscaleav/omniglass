@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { FleetViewOutputBody } from "../api/api.gen";
 
 // The fleet view: the scoped projection every fleet surface reads (places,
 // their systems, each system's components with its recorded verdict), and the
@@ -11,7 +11,7 @@ import type { components } from "../api/schema.gen";
 // retired with the band canvas (#861) and the location page that kept them
 // (#872).
 
-export type FleetView = components["schemas"]["FleetViewOutputBody"];
+export type FleetView = FleetViewOutputBody;
 export type FleetLocation = NonNullable<FleetView["locations"]>[number];
 export type FleetSystem = NonNullable<FleetView["systems"]>[number];
 

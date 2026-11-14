@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
+import { A } from "@solidjs/router";
 import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
 import StateStrip from "./StateStrip";
@@ -27,6 +28,7 @@ import {
   requestRung,
   requestLayer,
   requestHeld,
+  pendingNotice,
   type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
@@ -288,6 +290,16 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
             fixLabel="Open endpoint"
           />
         </div>
+      </Show>
+      {/* No verdict yet (#981): the reason, without expanding the row, and
+          the way to fix it. */}
+      <Show when={pendingNotice(p.iface)}>
+        {(n) => (
+          <div data-testid="endpoint-pending-notice" class="px-3 pb-2.5 text-[12px] text-base-content/60">
+            {n().text}{" "}
+            <A href={n().href} class="link link-primary whitespace-nowrap font-medium">{n().linkLabel}</A>
+          </div>
+        )}
       </Show>
       <Show when={open()}>
         <GateBreakdown iface={p.iface} />

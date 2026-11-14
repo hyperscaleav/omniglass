@@ -338,7 +338,9 @@ func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
 // StandardPatch carries the mutable fields of a standard update; a nil field is
 // left unchanged.
 type StandardPatch struct {
-	Label            *string
+	Label *string
+	// ParentStandardID is the three-state string (#1189): nil leaves the parent,
+	// a handle or uuid sets it, and "" clears it back to a standalone standard.
 	ParentStandardID *string
 	LabelRule        *string
 	// Map: nil leaves the declaration untouched; a JSON null clears it; any
@@ -413,11 +415,27 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 		}
 		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
 	}
+	// A named parent must exist. The CASE below reads an unresolved name as null,
+	// which would CLEAR the parent, so an unknown one is refused here instead of
+	// being left to resolve to nothing.
+	if patch.ParentStandardID != nil && *patch.ParentStandardID != "" {
+		var known bool
+		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *patch.ParentStandardID)+` standard where `+registryRefCol(*patch.ParentStandardID)+` = $1`, *patch.ParentStandardID).Scan(&known); err != nil {
+			return nil, ErrParentStandardNotFound
+		}
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
 			label       = case when $5::boolean then $2 else label end,
-			parent_standard_id = coalesce((select id from standard where id::text = $3 or id = (select e.id from standard_in_effect() e where e.name = $3)), parent_standard_id),
+			-- Three states, like label_rule below: omitted leaves the parent, an
+			-- explicit empty string clears it, a name or uuid resolves and sets
+			-- it. The name-or-uuid resolve stays inside the non-null branch.
+			parent_standard_id = case
+				when $3::text is null then parent_standard_id
+				when $3 = '' then null
+				else (select id from standard where id::text = $3 or id = (select e.id from standard_in_effect() e where e.name = $3))
+			end,
 			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
 			-- own label_rule CASE for why this is not a coalesce.
 			label_rule         = case

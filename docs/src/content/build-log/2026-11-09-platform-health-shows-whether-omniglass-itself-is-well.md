@@ -20,5 +20,5 @@ when quiet, so none ages out. A boot now writes `server-version` and `server-sta
 component, keys only the boot may write. A caller whose component read is short of fleet-wide sees
 the rows with their pills and a line saying the figures need a fleet-wide read; the figures are left
 out, never zeroed. The page is a page, not a dashboard
-([ADR-1644](/architecture/decisions/#adr-1644-platform-health-is-a-page-behind-node-read-not-a-dashboard)):
+([ADR-1644](/architecture/decisions/#adr-1644-platform-health-is-a-page-behind-noderead-not-a-dashboard)):
 the Loss group is #1646 and the dashboard conversion is #523.

@@ -285,7 +285,10 @@
   --og-font-data: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 html { font-family: var(--og-font-ui); }
-.font-data, .mono, .tnum { font-family: var(--og-font-data); }
+/* No ligatures in the data face (#1013): JetBrains Mono would draw != as a
+   not-equals sign and == as one bar, so an expression would show glyphs the
+   operator cannot type. Off here once, for every code rendering. */
+.font-data, .mono, .tnum { font-family: var(--og-font-data); font-variant-ligatures: none; }
 .tnum { font-variant-numeric: tabular-nums; }
 html[data-type="mono"] { --og-font-ui: var(--og-font-data); }
 /* the brand wordmark reads better uppercase in the all-mono face. */
@@ -293,6 +296,13 @@ html[data-type="mono"] .og-wordmark { text-transform: uppercase; }
 
 /* eyebrow: the small-caps section label the design uses above cards. */
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
+
+/* tree-select: the depth and placement cues of a tree picker (TreeSelect.tsx) are
+   drawn here, never typed into the text, so a closed value reads as its bare label
+   and a copied or announced label carries no indent. The "/ ''" alt text keeps the
+   glyph out of the accessible name. */
+.tree-glyph::before { content: "\2514" / ""; margin-right: .375rem; color: color-mix(in oklch, var(--color-base-content) 40%, transparent); }
+.tree-path::after { content: attr(data-path); margin-left: .5rem; font-size: .75rem; color: color-mix(in oklch, var(--color-base-content) 50%, transparent); }
 
 /* density: row height + card padding on dense surfaces. */
 :root { --og-row-h: 2.75rem; --og-pad-card: 1.25rem; --og-gap: 1.5rem; }

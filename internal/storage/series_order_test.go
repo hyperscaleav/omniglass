@@ -144,3 +144,190 @@ func TestTheSeriesTiebreakIsInsertionOrderNotARandomIdentifier(t *testing.T) {
 		t.Errorf("latest by ts = %q, latest by id = %q, want both 2.0.0: the value's own time and its insertion order must agree on a series the gateway wrote", byTS, byID)
 	}
 }
+
+// What leads the order of a declared series, and what leads an observed one
+// (#712, reopened).
+//
+// The tie test above covers a same-instant tie. The other hazard is a database
+// clock stepping BACKWARDS between two writes to one series, which makes the
+// later write carry the earlier `ts`. A declared row never carries a caller's
+// timestamp (SetProperty and ClearProperty insert with `ts` defaulted), so for
+// the declared lane the identity id is the authoritative insertion order and
+// `ts` is an annotation: the declared series resolves by `id desc`. The
+// observed lane keeps `ts` leading, because a caller supplies it.
+//
+// The rows go in by hand because a stepped clock cannot be produced through the
+// gateway; the test stands in for it with an explicit earlier `ts` on the
+// second insert. Against `order by ts desc, id desc` the declared half fails
+// (the first row wins, as the flakes of TestDeclaredValuesAppendToSeries and
+// TestLocationPropertiesAPI did).
+func TestADeclaredSeriesResolvesByInsertionOrderAcrossABackwardsClockStep(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "step-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	later := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	earlier := later.Add(-time.Hour)
+	for _, w := range []struct {
+		value string
+		ts    time.Time
+	}{{`"before-step"`, later}, {`"after-step"`, earlier}} {
+		if _, err := conn.Exec(ctx, `insert into property (owner_kind, component_id, property_type_id, instance, provenance, value, ts)
+			values ('component', (select id from component where name = 'step-1'),
+			        (select id from property_type where name = 'firmware-version'), '', 'declared', $1::jsonb, $2)`, w.value, w.ts); err != nil {
+			t.Fatalf("insert %s: %v", w.value, err)
+		}
+	}
+
+	cv, err := gw.LatestValue(ctx, "component", "step-1", "firmware-version", "", "declared", all)
+	if err != nil || cv == nil {
+		t.Fatalf("latest value: %+v (err %v)", cv, err)
+	}
+	if string(cv.Value) != `"after-step"` {
+		t.Errorf("LatestValue resolved the declared series to %s, want the later insert \"after-step\" although its ts is earlier: a declared series orders by insertion, not by the wall clock", cv.Value)
+	}
+	eff := byName(mustResolve(t, gw, "step-1", all))["firmware-version"]
+	if string(eff.Value) != `"after-step"` {
+		t.Errorf("the effective read resolved the declared series to %s, want \"after-step\"", eff.Value)
+	}
+
+	// A write through the gateway sees the same current row: setting the value
+	// the series already resolves to appends nothing, and setting another one
+	// does, so the append-only-on-change guard compares against the right row.
+	if _, err := gw.SetProperty(ctx, "", "component", "step-1", "firmware-version", "", json.RawMessage(`"after-step"`), all, all); err != nil {
+		t.Fatalf("set the current value: %v", err)
+	}
+	var rows int
+	if err := conn.QueryRow(ctx, `select count(*) from property where component_id = (select id from component where name = 'step-1') and provenance = 'declared'`).Scan(&rows); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if rows != 2 {
+		t.Errorf("setting the value the series already resolves to left %d declared rows, want 2 (nothing appended)", rows)
+	}
+	if err := gw.ClearProperty(ctx, "", "component", "step-1", "firmware-version", "", all, all); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if cv, err := gw.LatestValue(ctx, "component", "step-1", "firmware-version", "", "declared", all); err != nil || cv != nil {
+		t.Errorf("after the tombstone the series resolved to %+v (err %v), want no current value", cv, err)
+	}
+}
+
+// The observed lane is the other half of the split: its rows carry a
+// caller-supplied `ts`, so `ts` LEADS and a late-arriving older sample written
+// last must not become current.
+func TestAnObservedSeriesStillResolvesByTheCallersTimestamp(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "obs-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	newer := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	older := newer.Add(-time.Hour)
+	// The newer reading lands first, the backfilled older one after it.
+	for _, w := range []struct {
+		value string
+		ts    time.Time
+	}{{`"live"`, newer}, {`"backfill"`, older}} {
+		if _, err := conn.Exec(ctx, `insert into property (owner_kind, component_id, property_type_id, instance, provenance, value, ts)
+			values ('component', (select id from component where name = 'obs-1'),
+			        (select id from property_type where name = 'firmware-version'), '', 'observed', $1::jsonb, $2)`, w.value, w.ts); err != nil {
+			t.Fatalf("insert %s: %v", w.value, err)
+		}
+	}
+	cv, err := gw.LatestValue(ctx, "component", "obs-1", "firmware-version", "", "observed", all)
+	if err != nil || cv == nil {
+		t.Fatalf("latest value: %+v (err %v)", cv, err)
+	}
+	if string(cv.Value) != `"live"` {
+		t.Errorf("the observed series resolved to %s, want \"live\": a backfilled older sample written last must not become current", cv.Value)
+	}
+}
+
+// The intended lane resolves by insertion too (#712, review). An intended row is
+// stamped by the database at the command's open and never carries a caller's
+// `ts` (IssueCommand inserts with `ts` defaulted), so it is a declared-style
+// lane: a clock stepping backwards between two commands must not make the
+// earlier command's intent the current one. The step is stood in for by pushing
+// the first command's row `ts` an hour ahead of the second's.
+func TestAnIntendedSeriesResolvesByInsertionOrderAcrossABackwardsClockStep(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "intent-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+	for _, c := range []struct{ instance, value string }{{"", `"dp1"`}, {"", `"hdmi2"`}, {"ip-control", `"hdmi3"`}} {
+		if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", c.instance, json.RawMessage(c.value), nil); err != nil {
+			t.Fatalf("issue %s: %v", c.value, err)
+		}
+	}
+	// The backwards step: the first command's row now carries the latest ts of
+	// all three, though it was written first.
+	if _, err := conn.Exec(ctx, `update property set ts = now() + interval '1 hour'
+		where component_id = $1::uuid and provenance = 'intended' and value = '"dp1"'::jsonb`, comp.ID); err != nil {
+		t.Fatalf("step the clock: %v", err)
+	}
+
+	cv, err := gw.LatestValue(ctx, "component", "intent-1", "video-input", "", "intended", all)
+	if err != nil || cv == nil {
+		t.Fatalf("latest value: %+v (err %v)", cv, err)
+	}
+	if string(cv.Value) != `"hdmi2"` {
+		t.Errorf("LatestValue resolved the intended series to %s, want the later insert \"hdmi2\" although its ts is earlier: an intended series orders by insertion", cv.Value)
+	}
+	if r := reconOf(t, gw, "component", "intent-1", "video-input"); string(r.Told) != `"hdmi3"` {
+		t.Errorf("told = %s, want \"hdmi3\", the last intent written on any instance", r.Told)
+	}
+}

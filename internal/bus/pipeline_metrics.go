@@ -296,10 +296,7 @@ func worklistSampler(read func() WorklistCounts) func(pipelineMetrics) {
 // laneBusy is the fraction of wall the ingest lane spent busy between two
 // tallies. Pure.
 func laneBusy(prev, cur LaneTally, wall time.Duration) float64 {
-	if wall <= 0 {
-		return 0
-	}
-	return max(cur.Busy-prev.Busy, 0).Seconds() / wall.Seconds()
+	return platformmetric.BusyFraction(cur.Busy-prev.Busy, wall)
 }
 
 // Sampler is the bus's window-close reading for a platformmetric.Reporter:
