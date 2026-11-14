@@ -80,7 +80,7 @@ func FitSlope(points []SweepPoint, maxResidual float64) (SlopeFit, error) {
 // reachability probe in its place would measure the probe, not the driver.
 const (
 	SkipNoPolls     = "no polls: the driver only listens, so it runs no task to cost"
-	SkipNoProduct   = "no shipped product is on this driver"
+	SkipNoProduct   = "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
 	SkipNoSimulator = "no simulator profile serves a product on this driver"
 	SkipNoAttach    = "the simulated fleet has no attach for this driver, so its devices would be probed instead"
 )
