@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
@@ -146,5 +147,37 @@ func TestSystemVocabularyFindsRolesAndTypes(t *testing.T) {
 	}
 	if len(got) != 2 || !got["video-bar"] || !got["Boardroom"] {
 		t.Errorf("systemVocabulary = %v, want video-bar and Boardroom", got)
+	}
+}
+
+// The lab shows one UCC fan-out shape (#1390): the account-wide
+// conduit. The per-room ucc-service profile, and the coverage.yaml mention of
+// it, are retired with the instances that used it.
+func TestPerRoomUCCServiceProfileIsRetired(t *testing.T) {
+	store, err := profile.LoadStoreFS(FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.Devices["ucc-service"]; ok {
+		t.Error("the ucc-service device profile still loads: the lab's one UCC shape is the account-wide conduit (#1390)")
+	}
+	if _, _, ok := store.ForProduct("ucc-service"); ok {
+		t.Error("a simulator profile still serves the ucc-service product (#1390)")
+	}
+	ucc := 0
+	for name := range store.Devices {
+		if strings.HasPrefix(name, "ucc-") {
+			ucc++
+		}
+	}
+	if ucc != 1 {
+		t.Errorf("%d ucc device profiles load, want the one account-wide conduit", ucc)
+	}
+	raw, err := fs.ReadFile(FS, "coverage.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("ucc-service")) {
+		t.Error("coverage.yaml still names ucc-service (#1390)")
 	}
 }

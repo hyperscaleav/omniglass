@@ -52,10 +52,10 @@ Type `ucc='hq.$comp.meetings-cloud'`
 Enter
 Wait
 Hide
-Type `demo_hush 'omniglass simulation add-component edge-hq --name meetings-cloud --location hq --product ucc-service'`
+Type `demo_hush 'omniglass simulation add-component edge-hq --name meetings-cloud --location hq --product ucc-platform'`
 Enter
 Wait
-Type `demo_until 90 'omniglass component simulation fire "$ucc" --surface http-api --path /api/status >/dev/null 2>&1'`
+Type `demo_until 90 'omniglass component simulation fire "$ucc" --surface http-api --path /api/rooms >/dev/null 2>&1'`
 Enter
 Wait@100s
 Type `demo_hush 'omniglass secret create --name meetings-cloud-signing --owner-kind component --owner "$ucc" --secret-type hmac-key --fields "{\"key\":\"demo-1369-signing-key\"}"'`
@@ -77,13 +77,13 @@ Wait
 Type `omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/webhooks --body "{\"url\":\"$url\",\"scheme\":\"hmac\",\"secret\":\"demo-1369-signing-key\"}" | jq -c .status`
 Enter
 Wait
-Type `for m in m-1 m-2; do omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/meetings/start --body "{\"id\":\"$m\"}" | jq -c .status; done`
+Type `for m in m-1 m-2; do omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/rooms/meetings/start --body "{\"room\":\"zr-demo\",\"id\":\"$m\"}" | jq -c .status; done`
 Enter
 Wait
 Type `omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/webhooks --body "{\"url\":\"$url\",\"scheme\":\"hmac\",\"secret\":\"demo-1369-signing-key\",\"fault\":\"bad-signature\"}" | jq -c .status`
 Enter
 Wait
-Type `omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/meetings/start --body '{"id":"m-3"}' | jq -c .status`
+Type `omniglass component simulation fire "$ucc" --surface http-api --method POST --path /api/rooms/meetings/start --body '{"room":"zr-demo","id":"m-3"}' | jq -c .status`
 Enter
 Wait
 Hide

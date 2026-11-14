@@ -172,7 +172,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-service-1\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "put-identity-binding",
@@ -184,7 +184,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "key", "value"},
 		BodyParams:  []string{"owner", "owner_kind"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-service-1\"],\"type\":\"string\"},\"owner\":{\"description\":\"Name or uuid of the owner the identity's values land on, or a dotted address\",\"examples\":[\"hq.west.level-2.boardroom-a.$sys.av\"],\"minLength\":1,\"type\":\"string\"},\"owner_kind\":{\"description\":\"What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here\",\"enum\":[\"component\",\"system\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"owner\",\"owner_kind\",\"value\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"},\"owner\":{\"description\":\"Name or uuid of the owner the identity's values land on, or a dotted address\",\"examples\":[\"hq.west.level-2.boardroom-a.$sys.av\"],\"minLength\":1,\"type\":\"string\"},\"owner_kind\":{\"description\":\"What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here\",\"enum\":[\"component\",\"system\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"owner\",\"owner_kind\",\"value\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "delete-identity-binding",
@@ -195,7 +195,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:update",
 		PathParams:  []string{"name", "key", "value"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-service-1\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"value\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"value\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "list-component-logs",
@@ -275,7 +275,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)\",\"examples\":[\"hq.$comp.meetings-cloud\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)\",\"examples\":[\"hq.$comp.ucc-platform\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "create-component-from-template",

@@ -3894,13 +3894,6 @@
    "kind": "device"
   },
   {
-   "id": "ucc-service",
-   "label": "Shinra UCC Platform",
-   "vendor_id": "shinra-cloud",
-   "component_type": "generic-service",
-   "kind": "service"
-  },
-  {
    "id": "ucc-platform",
    "label": "Shinra UCC Platform (account)",
    "vendor_id": "shinra-cloud",

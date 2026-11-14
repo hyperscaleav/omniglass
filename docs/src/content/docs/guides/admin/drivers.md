@@ -528,16 +528,16 @@ collection](/architecture/collection/#shared-api-collection-one-component-many-o
 identity where its values arrive, on the conduit component:
 
 ```bash
-omniglass component identity-binding update hq.\$comp.meetings-cloud ucc-room-id zr-huddle-north \
+omniglass component identity-binding update hq.\$comp.ucc-platform ucc-room-id zr-huddle-north \
   --owner-kind system --owner huddle-north
 ```
 
 Until it is bound, its values land on no owner and wait in the component's unbound inbox
-(`omniglass component unbound-identity list hq.\$comp.meetings-cloud`), where each row shows the
+(`omniglass component unbound-identity list hq.\$comp.ucc-platform`), where each row shows the
 match key, the value, how often it was heard and the keys it carried; binding it makes the next value
 land on its owner. A binding costs update on both ends: on the conduit component and on the owner.
 Only collected keys fan out, and a fanned value lands at the owner's own (empty) instance, its
-source naming the conduit and its endpoint (`meetings-cloud/http`).
+source naming the conduit and its endpoint (`ucc-platform/http`).
 
 ## Check, preview, and run a poll now
 
