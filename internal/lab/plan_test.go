@@ -643,7 +643,7 @@ func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
 // A dev lab's does none of it: it pays for nothing it does not read.
 func TestPlanScaleLabSizesPostgres(t *testing.T) {
 	o := scaleOptions()
-	o.HostMemBytes = 16 << 30
+	o.SharedBuffersMiB = 4096
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
@@ -684,25 +684,33 @@ func TestPlanScaleLabSizesPostgres(t *testing.T) {
 	}
 }
 
-// Shared buffers are a quarter of the Docker host's memory, never below
-// Postgres's own 128 MB nor above 8 GB; a host not read (a plan rendered for
-// the docs) gets 1 GB, which an 8 GB laptop carries.
+// Shared buffers are at most a quarter of the Docker host's memory, never
+// below Postgres's own 128 MB nor above 8 GB; a host not read (a plan
+// rendered for the docs) gets 1 GB, which an 8 GB laptop carries.
 func TestPostgresSharedBuffersIsAQuarterOfTheHostBounded(t *testing.T) {
 	for _, tc := range []struct {
 		mem  int64
-		want string
+		want int64
 	}{
-		{0, "1024MB"},
-		{256 << 20, "128MB"},
-		{2 << 30, "512MB"},
-		{8 << 30, "2048MB"},
-		{(8 << 30) + (3 << 20), "2048MB"},
-		{32 << 30, "8192MB"},
-		{128 << 30, "8192MB"},
+		{0, 1024},
+		{256 << 20, 128},
+		{2 << 30, 512},
+		{8 << 30, 2048},
+		{(8 << 30) + (3 << 20), 2048},
+		{32 << 30, 8192},
+		{128 << 30, 8192},
 	} {
-		if got := PostgresSharedBuffers(tc.mem); got != tc.want {
-			t.Errorf("a host of %d bytes: shared_buffers %q, want %q", tc.mem, got, tc.want)
+		if got := PostgresSharedBuffersMiB(tc.mem); got != tc.want {
+			t.Errorf("a host of %d bytes: shared_buffers %d MiB, want %d", tc.mem, got, tc.want)
 		}
+	}
+	o := scaleOptions()
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(s.DB.Cmd, " "); !strings.Contains(got, "shared_buffers=1024MB") {
+		t.Fatalf("a scale lab planned for a host not read runs %q, want shared_buffers=1024MB", got)
 	}
 }
 

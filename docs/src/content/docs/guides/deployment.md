@@ -50,6 +50,8 @@ loss the platform exists to measure. `track_commit_timestamp=on` is needed only 
 [`omniglass lab measure`](/guides/lab/#measuring-a-scale-lab), which reads ingest lag from commit
 times.
 
-In a container, `shared_buffers` is not held in `/dev/shm`: Postgres maps it as anonymous memory, and
-`/dev/shm` holds only the small segments parallel queries share, so Docker's default 64 MB is enough.
-Count the buffers against the container's memory limit instead.
+In a container, `shared_buffers` is not held in `/dev/shm`: Postgres maps it as anonymous memory, so
+count the buffers against the container's memory limit. `/dev/shm` holds the segments parallel
+queries share, and Docker's default 64 MB can be too small for a large parallel hash join, which then
+fails with `could not resize shared memory segment`; raise it with `docker run --shm-size` or
+Compose's `shm_size`.

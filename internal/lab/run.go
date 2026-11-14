@@ -103,19 +103,23 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	if cfg.Scale() != (cfg.ScaleRun != nil) {
 		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
 	}
-	var host HostResources
-	if cfg.ScaleRun != nil {
-		// A scale lab's Postgres is sized from the host (#1930), so the
-		// host is read before the plan.
-		var err error
-		if host, err = ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory); err != nil {
-			return nil, err
-		}
-		cfg.HostMemBytes = host.MemBytes
-	}
 	spec, err := Plan(cfg.Options)
 	if err != nil {
 		return nil, err
+	}
+	var host HostResources
+	if cfg.ScaleRun != nil {
+		// A scale lab's Postgres is sized from the host and the fleet
+		// (#1930): once the options are known good, the host is read and the
+		// lab planned for it.
+		if host, err = ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory); err != nil {
+			return nil, err
+		}
+		sites, comps := scaleTotals(cfg.Options)
+		cfg.SharedBuffersMiB = cfg.ScaleRun.Cost.BuffersMiB(host, sites, comps)
+		if spec, err = Plan(cfg.Options); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.Image, err = r.preflight(ctx, spec, cfg, host); err != nil {
 		return nil, err

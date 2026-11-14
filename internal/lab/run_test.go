@@ -29,6 +29,8 @@ type fakeEngine struct {
 	published  string
 	nextID     int
 	host       HostResources
+	// hostReads counts each read of the host's resources.
+	hostReads int
 	// cmds is each service's command as it was run.
 	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
@@ -62,6 +64,7 @@ func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
 	return EngineInfo{APIVersion: "1.56"}, nil
 }
 func (f *fakeEngine) Resources(context.Context) (HostResources, error) {
+	f.hostReads++
 	return f.host, nil
 }
 func (f *fakeEngine) ImageLabels(_ context.Context, ref string) (map[string]string, bool, error) {

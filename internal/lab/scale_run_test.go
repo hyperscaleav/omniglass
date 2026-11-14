@@ -99,20 +99,44 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 // A scale lab's Postgres is sized from the Docker host it runs on, read
 // before the plan: the host's own report, or the forced limit that stands in
 // for it.
+// A scale lab whose options do not plan is refused before the host is read,
+// so a bad flag reads as itself rather than as a Docker host it never needed.
+func TestScaleRunPlansBeforeReadingTheHost(t *testing.T) {
+	eng := newFakeEngine("127.0.0.1:1")
+	cfg := scaleConfig()
+	cfg.Listen = "not-an-ip"
+	_, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "is not an IP address") {
+		t.Fatalf("err = %v, want the --listen refusal", err)
+	}
+	if eng.hostReads != 0 {
+		t.Fatalf("the host was read %d times before the plan was refused", eng.hostReads)
+	}
+}
+
 func TestScaleRunSizesPostgresFromTheHost(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	for name, tc := range map[string]struct {
 		host, forced int64
+		baseMiB      float64
 		want         string
 	}{
-		"the host's own": {32 << 30, 0, "shared_buffers=8192MB"},
-		"a forced limit": {32 << 30, 8 << 30, "shared_buffers=2048MB"},
+		"the host's own": {32 << 30, 0, 0, "shared_buffers=8192MB"},
+		"a forced limit": {32 << 30, 8 << 30, 0, "shared_buffers=2048MB"},
+		// A forced limit past the host's memory sizes nothing the host lacks.
+		"a forced limit above the host": {8 << 30, 32 << 30, 0, "shared_buffers=2048MB"},
+		// A fleet that leaves less than a quarter of the host spare gets
+		// what it leaves: 720 usable MiB less a 524 MiB estimate.
+		"the fleet's spare": {900 << 20, 0, 500, "shared_buffers=196MB"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 			eng.host.MemBytes = tc.host
 			cfg := scaleConfig()
 			cfg.ScaleRun.HostMemory = tc.forced
+			if tc.baseMiB > 0 {
+				cfg.ScaleRun.Cost.Base.MemMiB = tc.baseMiB
+			}
 			if _, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg); err != nil {
 				t.Fatal(err)
 			}
@@ -131,9 +155,10 @@ func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
 		mem  int64
 		want string
 	}{
-		// 600 MiB, of which 480 usable: 100 + 10*(1+n/10) + 3n MiB is 479
-		// at 93 systems (10 sites) and 483 at 94.
-		"some size fits": {600 << 20, "--systems 93, the largest that fits"},
+		// 600 MiB, of which 480 usable, at least 128 of it Postgres's
+		// shared buffers: 100 + 10*(1+n/10) + 3n MiB is 350 at 60
+		// systems (7 sites) and 353 at 61.
+		"some size fits": {600 << 20, "--systems 60, the largest that fits"},
 		"none fits":      {64 << 20, "Not even the smallest size fits"},
 	} {
 		t.Run(name, func(t *testing.T) {

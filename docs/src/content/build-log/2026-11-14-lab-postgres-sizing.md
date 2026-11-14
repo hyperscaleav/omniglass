@@ -7,10 +7,12 @@ refs: [1930, 1633]
 The scale lab ran Postgres on its stock settings, and the 3,000-system soak checkpointed on WAL volume
 four times as often as on its timer, a commit stalling behind each checkpoint. A scale lab's database
 now starts with `shared_buffers` at a quarter of the Docker host's memory (128 MB to 8 GB, 1 GB when
-the host is not read, and the forced `--host-memory` when one is given), `max_wal_size=8GB`,
-`checkpoint_timeout=15min`, `wal_compression=lz4` and I/O timing on, beside the
-`track_commit_timestamp` that `lab measure` already needed. `synchronous_commit` stays on. The runner
-reads the host before it plans, so the plan stays pure. A `dev` lab still runs stock Postgres. Checked
-inside `postgres:18`: the buffers are anonymous memory, not `/dev/shm`, so the container needs no
-`shm_size`. The deployment guide gains a sizing section naming each setting and why; unit tests pin
-the command, the bounded quarter and the host read.
+the host is not read), never more than the fleet's estimate leaves of what the host can spare, with
+`max_wal_size=8GB`, `checkpoint_timeout=15min`, `wal_compression=lz4` and I/O timing on, beside the
+`track_commit_timestamp` that `lab measure` already needed. `synchronous_commit` stays on. The
+preflight counts the buffers on top of the estimate; the spare cap keeps 3,000 systems fitting on a
+12 GB host, and a forced `--host-memory` sizes the buffers only when it is less than the host has.
+The runner plans, reads the host, then plans again with the buffers, so the plan stays pure and a
+bad flag is refused before the host is read. A `dev` lab still runs stock Postgres. The deployment
+guide gains a sizing section naming each setting and why, and says when a container's `/dev/shm`
+needs raising; unit tests pin the command, the bounded quarter, the spare cap and the host read.

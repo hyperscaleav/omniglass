@@ -51,7 +51,7 @@ func TestLargestFitIsTheLargestSizeTheHostCanTake(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("got %d %v %v", got, ok, err)
 	}
-	need := func(n int) Footprint { s, c, _ := linearShape(n); return testCost.Estimate(s, c) }
+	need := func(n int) Footprint { s, c, _ := linearShape(n); return testCost.Need(h, s, c) }
 	if !h.Fits(need(got)) || h.Fits(need(got+1)) {
 		t.Fatalf("largest fit %d: it fits %v, the next fits %v", got, h.Fits(need(got)), h.Fits(need(got+1)))
 	}
@@ -67,6 +67,35 @@ func TestLargestFitIsTheLargestSizeTheHostCanTake(t *testing.T) {
 	}
 }
 
+// A scale lab's Postgres takes its shared buffers of the host on top of the
+// fleet's estimate (#1930): a quarter of the memory it is sized to, which is
+// never more than the host reported, however high a forced limit, and never
+// more than the estimate leaves of what the host can spare, so a fleet that
+// fits without the quarter still fits; never below Postgres's own 128 MB.
+func TestNeedCountsPostgresSharedBuffers(t *testing.T) {
+	for name, tc := range map[string]struct {
+		host    HostResources
+		buffers int64
+	}{
+		"the host's own":         {HostResources{MemBytes: 1000 << 20}, 250},
+		"a forced limit below":   {HostResources{MemBytes: 1000 << 20, ReportedMemBytes: 4000 << 20}, 250},
+		"a forced limit above":   {HostResources{MemBytes: 4000 << 20, ReportedMemBytes: 1000 << 20}, 250},
+		"a large host's ceiling": {HostResources{MemBytes: 64 << 30}, 8 << 10},
+		// 560 usable MiB less the 430 MiB estimate.
+		"what the fleet leaves spare": {HostResources{MemBytes: 700 << 20}, 130},
+		// 480 usable MiB leave 50: the floor, and a lab that does not fit.
+		"the floor": {HostResources{MemBytes: 600 << 20}, 128},
+	} {
+		got := testCost.Need(tc.host, 3, 300)
+		if got.MemMiB != 430+float64(tc.buffers) || got.CPU != testCost.Estimate(3, 300).CPU {
+			t.Errorf("%s: need %+v, want the 430 MiB estimate and %d MiB of buffers", name, got, tc.buffers)
+		}
+		if got := testCost.BuffersMiB(tc.host, 3, 300); got != tc.buffers {
+			t.Errorf("%s: buffers %d MiB, want %d", name, got, tc.buffers)
+		}
+	}
+}
+
 // The assessment --plan prints and bring-up acts on: the estimate against
 // what the host can spare, and a refusal naming the largest size that fits.
 func TestAssessCapacityDecides(t *testing.T) {
@@ -76,15 +105,15 @@ func TestAssessCapacityDecides(t *testing.T) {
 	if err != nil || !fits.Fits || fits.Err() != nil {
 		t.Fatalf("50 systems on 480 usable MiB: %+v %v", fits, err)
 	}
-	if want := "50 systems: 6 sites, 150 components; about 310 MiB and 3.1 cores of the 480 MiB and 80.0 cores this host can spare"; fits.Summary() != want {
+	if want := "50 systems: 6 sites, 150 components; about 460 MiB (150 MiB of it Postgres's shared buffers) and 3.1 cores of the 480 MiB and 80.0 cores this host can spare"; fits.Summary() != want {
 		t.Fatalf("summary %q, want %q", fits.Summary(), want)
 	}
 	big, err := AssessCapacity(sc, host, 1000, 101, 3000)
-	if err != nil || big.Fits || big.Largest != 93 {
-		t.Fatalf("1000 systems: %+v %v, want refused with 93 the largest", big, err)
+	if err != nil || big.Fits || big.Largest != 60 {
+		t.Fatalf("1000 systems: %+v %v, want refused with 60 the largest", big, err)
 	}
 	var pe *PreflightError
-	if !errors.As(big.Err(), &pe) || !strings.Contains(pe.Fix, "--systems 93, the largest that fits") {
+	if !errors.As(big.Err(), &pe) || !strings.Contains(pe.Fix, "--systems 60, the largest that fits") {
 		t.Fatalf("refusal %v", big.Err())
 	}
 }
