@@ -15028,7 +15028,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
