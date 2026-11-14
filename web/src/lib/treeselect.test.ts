@@ -30,6 +30,16 @@ describe("flattenTree", () => {
     expect(flattenTree(orphan).every((o) => o.depth === 0)).toBe(true);
   });
 
+  it("carries each node's ancestor labels, root first, so a closed picker can show where it sits", () => {
+    expect(flattenTree(nodes).map((o) => [o.value, o.ancestors])).toEqual([
+      ["campus-a", []],
+      ["bldg-1", ["Campus A"]],
+      ["floor-2", ["Campus A", "Bldg 1"]],
+      ["bldg-2", ["Campus A"]],
+      ["campus-b", []],
+    ]);
+  });
+
   it("excludes a node and its whole subtree when excludeSubtreeOf is set (reparent self-guard)", () => {
     expect(flattenTree(nodes, "ca").map((o) => o.value)).toEqual(["campus-b"]);
   });

@@ -131,6 +131,14 @@ identity pages.
   (its default system, its label, what it inherits), so that act takes `component:update` over the
   component as well as `system:update` over the system; a **Deploy** grant over both covers it.
 
+  The same slot is on the component's edit face as **Memberships**, so a system you chose at create is
+  not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
+  change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
+  remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
+  outside your `system:update` scope, or a role the component still fills there), the reason shows in
+  the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
+  system's member list updates without a reload.
+
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
   placement, changeable later, see Edit), the **label** is the friendly string a human reads

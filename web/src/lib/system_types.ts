@@ -1,6 +1,5 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
-import { byLabel } from "./entities";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -98,29 +97,13 @@ export async function deleteSystemType(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// systemTypeByName indexes the flat registry by name, the join key every
-// reference (system.system_type, a node's own parent) resolves through.
-export function systemTypeByName(types: SystemType[]): Map<string, SystemType> {
-  return new Map(types.map((t) => [t.name, t] as const));
-}
-
-// resolveSystemTypeIcon reads the icon the SERVER resolved for a named type
-// (#695), falling back to "map-pin", which is what components/icons.tsx already
-// resolves an unknown key to, for a name the registry does not contain or a
-// chain that sets no icon anywhere.
-//
-// A mid-chain override still beats the root's; that rule now lives in exactly
-// one place, the gateway, rather than once here and once there.
-export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<string, SystemType>): string {
-  const t = typeName ? byName.get(typeName) : undefined;
-  return t?.resolved_icon || "map-pin";
-}
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };
 
-// systemTypeTree groups the flat registry into a forest by parent_id, each
-// level sorted by label, for the admin page's rows and the
-// classification picker's indented option list.
+// systemTypeTree groups the flat registry into a forest by parent_id, for the admin
+// page's rows and the classification picker's indented option list. It does
+// not sort: the registry is served in label order (#757), and grouping keeps
+// the order each level was received in.
 export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
   const byId = new Map<string, SystemTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));
   const roots: SystemTypeNode[] = [];
@@ -130,14 +113,13 @@ export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  const sortLevel = (nodes: SystemTypeNode[], depth: number) => {
-    nodes.sort(byLabel);
+  const setDepth = (nodes: SystemTypeNode[], depth: number) => {
     for (const n of nodes) {
       n.depth = depth;
-      sortLevel(n.children, depth + 1);
+      setDepth(n.children, depth + 1);
     }
   };
-  sortLevel(roots, 0);
+  setDepth(roots, 0);
   return roots;
 }
 

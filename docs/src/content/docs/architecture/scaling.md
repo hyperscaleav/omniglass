@@ -146,7 +146,10 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   consumer, so adding replicas adds throughput (NATS is the coordinator,
   [workers](/architecture/workers/)).
 - **edge nodes**: one or many per site, connecting back; adding sites adds nodes
-  ([nodes](/architecture/nodes/)).
+  ([nodes](/architecture/nodes/)). Within a site, adding a node adds capacity: the server spreads the
+  site's unpinned components across its nodes by expected cost, guarded by each node's measured
+  headroom, and moves a lost node's components to its peers
+  ([load distribution across a site's nodes](/architecture/nodes/#load-distribution-across-a-sites-nodes), #1638).
 - **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
   active, failover by re-election. No separate election service.
 - **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
@@ -184,7 +187,7 @@ in the tick resolve in one read, however many conduits its groups name. A refuse
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
 | Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
-| Receipts a day | grows with the sample count | under 0.5 GiB |
+| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)) |
 | Ingest lag p99 | | under 5 s |
 
 The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
@@ -209,14 +212,18 @@ batch carries on its receipt
 delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
 above 0 instead of a win, and the [perf gate](/guides/lab/#checking-against-the-baseline) fails such a
 run, naming the kind, the hop and the cause, with no tolerance (#1640, #1695). The accounting rides on the receipt
-rather than on new rows, and its cost shows in the receipts' own figure: on a three-system corporate
-lab the receipt grew from about 290 to about 675 bytes a batch (receipts a day 56 to 129 MiB at about
-2.3 batches a second, WAL a sample 400 to 474 B), part of it the dead tuple the outcome update leaves
-until vacuum. At the 18 batches a second the table above expects of corporate at 1,000 systems, that is about
-1 GiB a day where the narrow receipt read about 0.4: past the 0.5 GiB target, which predates the
-ledger. Receipts are pruned at a day, so this is the table's standing size, not unbounded growth;
-narrowing the receipt or revising the target is
-[#1699](https://github.com/hyperscaleav/omniglass/issues/1699).
+rather than on new rows, and its cost shows in the receipts' own figure. The receipt stores its ledger
+as a (count, before) pair per kind slot and its outcome as (code, n) pairs, integer arrays under slots
+and codes that never move, because a jsonb object repeated every kind and outcome name on every batch
+(#1699). On a three-system corporate lab that took receipts a day from 219 to 151 MiB, about 942 to
+669 bytes a batch at about 2.8 batches a second, and WAL a sample from 510 to 486 B, with loss 0 on
+every kind and hop; part of what remains is the dead tuple the outcome update leaves until vacuum. At
+the 18 batches a second the table above expects of corporate at 1,000 systems, that is about 1 GiB a
+day. Receipts are pruned at a day, so this is the table's standing size, not unbounded growth, and it
+is about 1% of the metric table the same fleet writes in a day. The earlier 0.5 GiB target was set for
+the narrow receipt before every batch carried its accounting, and even a compacted receipt with the
+ledger is past it, so the target is 1.2 GiB
+([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)).
 
 ### Scale up or scale out: what the figures say
 

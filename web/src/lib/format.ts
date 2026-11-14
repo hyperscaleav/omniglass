@@ -1,5 +1,3 @@
-import { createSignal, onCleanup } from "solid-js";
-
 // Relative time ("3m ago", "in 2h"), ported from the design's primitives.
 export function rel(iso: string, now: number = Date.now()): string {
   const diff = (now - new Date(iso).getTime()) / 1000;
@@ -10,7 +8,7 @@ export function rel(iso: string, now: number = Date.now()): string {
   return fut ? `in ${f}` : `${f} ago`;
 }
 
-// describeError pulls a human message out of a thrown API error: openapi-fetch
+// describeError pulls a human message out of a thrown API error: the client
 // surfaces the parsed Huma problem body ({ title, detail, status }), so String()
 // on it would yield "[object Object]". Falls back to a generic line.
 //
@@ -39,13 +37,3 @@ export function fmtTime(iso: string): string {
   return isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-// useIsMobile tracks the tablet/phone breakpoint, for the sidebar drawer.
-export function useIsMobile(bp = 820) {
-  const [m, setM] = createSignal(typeof window !== "undefined" ? window.innerWidth < bp : false);
-  const on = () => setM(window.innerWidth < bp);
-  if (typeof window !== "undefined") {
-    window.addEventListener("resize", on);
-    onCleanup(() => window.removeEventListener("resize", on));
-  }
-  return m;
-}

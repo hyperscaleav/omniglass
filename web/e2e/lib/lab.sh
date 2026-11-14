@@ -38,7 +38,7 @@
 # LAB_IMAGE, LAB_DSN, LAB_SERVER, LAB_NODE;
 # and LAB_LABEL_ARGS, the --label flags a helper container carries.
 
-LAB_PWIMG=mcr.microsoft.com/playwright:v1.64.1-jammy
+LAB_PWIMG=mcr.microsoft.com/playwright:v1.65.0-jammy
 LAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LAB_BIN="$LAB_ROOT/bin/omniglass"
 

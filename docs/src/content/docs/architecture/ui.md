@@ -68,7 +68,7 @@ unit Omniglass monitors; places are folders and metadata; components are pieces 
 A system's view is its place card (type, tags, the place's own panel) above the system card
 (verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
 URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
-occupant state on each marker, ADR-0128, the data), Activity (the history, the events, the
+occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
 logs), and Configure (the one form). A place holding exactly one system lands on it; a place
 holding none or several keeps its own view, a brief card per system and the outline rooted
 there; a component's view carries its place card, marked as its own or its system's. The
@@ -80,6 +80,18 @@ components open in blades), editing through the one `EntityForm` (ADR-0137). The
 panel is the glance (verdict, why, context, identity and tags) and the configuration
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
+
+## Name-shaped addresses (#759, #853)
+
+A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
+
+```
+/components/mic-1
+/systems/boardroom
+/locations/hq
+```
+
+**A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
 
 ## One renderer library, two composition modes
 
@@ -193,6 +205,12 @@ Two layers, deliberately decoupled:
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
+**A breadcrumb crumb is a link.** The `Breadcrumb` primitive renders each crumb that has a destination as a
+real `<a href>` (the router's `A`) inside `<nav aria-label="Breadcrumb">`: a click navigates in-app, a
+middle-click opens a tab, the address can be copied, a screen reader announces a link in a navigation
+landmark, and the target is in the DOM. A caller hands the crumb an `href`, the address it already knows;
+the last crumb, the current page, has none and renders as plain text marked `aria-current="page"`.
+
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
@@ -207,6 +225,28 @@ resolution. Every URL-reachable state is also a state the
 [docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
 what retired the one-shot handoffs.
 
+**A blade or workspace edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
+blade stack and by the Configure face) is the one place that knows an editor is open, so three rules
+hang off it (#854):
+
+1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
+   components list, the fleet view, the system roles and health reads (prefix keys, so every system's
+   copy), and the verdict read. A component that staffs a role is refused by the server (409,
+   referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
+2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
+   (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
+   Configure footer), where the operator's eyes are, not at the top of a long form. A save that
+   rejects is never swallowed silently.
+3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
+   asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
+   discards the drafts; cancelling stays on Configure with them intact. The guard covers the form's
+   own drafts, a component's staged memberships (a picked primary, a removed chip) included; a
+   router-wide guard (a link out of the page, closing the tab) is not built.
+
+A changed route id resets the edit too: each host keys its Configure face on the id
+(`<Show when={id()} keyed>`), so another place, system or component is a new face with a fresh slot and
+drafts, never the previous entity's half-typed edit under the new page.
+
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
 grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
 navigate to the registries' own canonical flat routes (`/products`, `/metrics`, ...), each real
@@ -216,7 +256,7 @@ is all this". Subrail and cards derive from one group table judged through the s
 filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
 are all gated away disappears with its header; secret types holds no subrail entry at all
 (`/secret-types` stays routed and gated, rendering in the pane). The naming rule
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-fleet-noun-each-registry-serves))
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
 carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
 registry's own word, and where the registry's only word is "type" the entry is Types with the
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
@@ -246,6 +286,14 @@ here behind the same `node:read` gate as Nodes, whose rows it reads), plus the l
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
 alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
 longer title.
+
+**Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
+placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
+`open_alarms` counts the alarms open on the components the caller may read), Collectors (the node
+list, shown to a caller who can read nodes) and Platform (the platform system's verdict and the
+nodes not up, same gate). Locations, Systems and Collectors open their lists; Open alarms is a plain
+figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
+permission it needs), never a dash.
 
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:

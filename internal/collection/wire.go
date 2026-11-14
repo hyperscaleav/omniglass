@@ -139,13 +139,15 @@ type PathUpstream struct {
 
 // WorklistReply is the server's response to a worklist request: the node's
 // enabled tasks plus the config generation (advances at operator-config pace).
+// Its JSON is the grouped wire (worklist_group.go, #1583): tasks under their
+// endpoint, which carries its fields once, so these fields take no tags.
 type WorklistReply struct {
-	Tasks            []TaskSpec `json:"tasks"`
-	ConfigGeneration int64      `json:"config_generation"`
+	Tasks            []TaskSpec
+	ConfigGeneration int64
 	// ReportSeconds is the platform's collection report window (#1369,
 	// collection.report_seconds): how long each endpoint's collection
-	// telemetry covers. Zero (an older server) leaves the node's own.
-	ReportSeconds int `json:"report_seconds,omitempty"`
+	// telemetry covers. Zero leaves the node's own.
+	ReportSeconds int
 }
 
 // ReportEvery is the worklist's collection report window; zero when it

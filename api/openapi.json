@@ -2835,7 +2835,14 @@
           },
           "inputs": {
             "additionalProperties": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "description": "The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest",
             "type": "object"
@@ -6198,6 +6205,11 @@
               "null"
             ]
           },
+          "open_alarms": {
+            "description": "How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero",
+            "format": "int64",
+            "type": "integer"
+          },
           "systems": {
             "description": "Every system the caller may read, each carrying its dots",
             "items": {
@@ -6331,6 +6343,19 @@
       "HealthAlarmBody": {
         "additionalProperties": false,
         "properties": {
+          "acknowledged": {
+            "description": "Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised",
+            "type": "boolean"
+          },
+          "acknowledged_at": {
+            "description": "When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at",
+            "format": "date-time",
+            "type": "string"
+          },
+          "acknowledged_by": {
+            "description": "Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)",
+            "type": "string"
+          },
           "component": {
             "description": "The component the alarm is on, by name",
             "type": "string"
@@ -6359,7 +6384,8 @@
           "component_id",
           "severity",
           "message",
-          "raised_at"
+          "raised_at",
+          "acknowledged"
         ],
         "type": "object"
       },
@@ -12246,6 +12272,14 @@
             "description": "The node that probes this endpoint",
             "type": "string"
           },
+          "pending": {
+            "description": "Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored",
+            "enum": [
+              "no-node",
+              "awaiting-probe"
+            ],
+            "type": "string"
+          },
           "rejection": {
             "$ref": "#/components/schemas/ReachRejectionBody",
             "description": "The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"
@@ -12268,7 +12302,7 @@
           },
           "verdict": {
             "$ref": "#/components/schemas/ReachVerdictBody",
-            "description": "The latest reachability verdict, or null if none yet"
+            "description": "The latest reachability verdict, or null if none yet (pending says why)"
           },
           "webhook": {
             "$ref": "#/components/schemas/EndpointWebhookBody",
@@ -17202,7 +17236,7 @@
             "type": "string"
           },
           "params_schema": {
-            "description": "A JSON Schema fragment (replaces wholesale)"
+            "description": "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it"
           },
           "power_outlet_param": {
             "description": "The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row",
@@ -17228,6 +17262,16 @@
           "target_property_type": {
             "description": "The property this command sets (empty clears it; a non-empty arm clears the other)",
             "type": "string"
+          },
+          "update_mask": {
+            "description": "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -17339,7 +17383,14 @@
           },
           "inputs": {
             "additionalProperties": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "description": "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential",
             "type": "object"
@@ -17459,7 +17510,17 @@
             "type": "string"
           },
           "payload_schema": {
-            "description": "A JSON Schema fragment (replaces wholesale)"
+            "description": "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it"
+          },
+          "update_mask": {
+            "description": "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -17601,13 +17662,23 @@
             "type": "string"
           },
           "precision": {
-            "description": "Decimal places a rendered value keeps",
+            "description": "Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset",
             "format": "int64",
             "type": "integer"
           },
           "unit": {
             "description": "The display unit of the series",
             "type": "string"
+          },
+          "update_mask": {
+            "description": "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -17868,8 +17939,18 @@
             "description": "A human label",
             "type": "string"
           },
+          "update_mask": {
+            "description": "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "validation": {
-            "description": "A JSON Schema fragment (replaces wholesale)"
+            "description": "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it"
           }
         },
         "type": "object"
@@ -17953,7 +18034,7 @@
             "description": "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"
           },
           "parent_standard_id": {
-            "description": "A new variant parent, by handle or uuid",
+            "description": "A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard",
             "type": "string"
           }
         },
@@ -20212,7 +20293,7 @@
         "x-omniglass-permission": "command_type:read"
       },
       "patch": {
-        "description": "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+        "description": "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
         "operationId": "update-command-type",
         "parameters": [
           {
@@ -24279,7 +24360,7 @@
         "x-omniglass-permission": "event_type:read"
       },
       "patch": {
-        "description": "Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
+        "description": "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
         "operationId": "update-event-type",
         "parameters": [
           {
@@ -26196,7 +26277,7 @@
         "x-omniglass-permission": "metric_type:read"
       },
       "patch": {
-        "description": "Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
+        "description": "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
         "operationId": "update-metric-type",
         "parameters": [
           {
@@ -29897,7 +29978,7 @@
         "x-omniglass-permission": "property_type:read"
       },
       "patch": {
-        "description": "Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
+        "description": "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
         "operationId": "update-property-type",
         "parameters": [
           {
@@ -30931,7 +31012,7 @@
         "x-omniglass-permission": "standard:read"
       },
       "patch": {
-        "description": "Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.",
+        "description": "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.",
         "operationId": "update-standard",
         "parameters": [
           {
@@ -34451,7 +34532,7 @@
     },
     "/views/fleet": {
       "get": {
-        "description": "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+        "description": "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
         "operationId": "get-fleet-view",
         "responses": {
           "200": {

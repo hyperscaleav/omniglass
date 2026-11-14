@@ -18,10 +18,15 @@ import (
 // the order loadByRef's ORDER BY resolved them. Through scopedByNameInScope
 // (the path a plain GET takes) Candidates never names a row the caller could
 // not otherwise read: the id list is built AFTER the scope filter, not before.
+//
+// Addresses is each candidate's dotted address, index for index with Candidates,
+// the spelling that resolves on the same route (#1134). It is set only where the
+// resolver could render them (resolveRef); a redacted error carries neither.
 type ErrAmbiguousName struct {
 	Kind       string
 	Ref        string
 	Candidates []string
+	Addresses  []string
 }
 
 func (e *ErrAmbiguousName) Error() string {
@@ -539,6 +544,9 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 	if !set.All && !scope.Covers(resource, cfg.resource) {
 		panic(fmt.Sprintf("storage: resolveRef: a scope resolved for %q cannot be checked against %q (resolving %q)", resource, cfg.resource, ref))
 	}
+	if err := checkScopeWiring(set, cfg.resource); err != nil {
+		return nil, err
+	}
 	matches, err := loadByRef(ctx, q, cfg, ref)
 	if err != nil {
 		return nil, err
@@ -559,7 +567,19 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 	if policy == refPolicyForbid && len(inScope) == 0 {
 		return nil, cfg.forbidden
 	}
-	return resolveMatches(cfg, ref, inScope)
+	got, err := resolveMatches(cfg, ref, inScope)
+	var ambig *ErrAmbiguousName
+	if errors.As(err, &ambig) && len(ambig.Candidates) > 0 {
+		addrs, aerr := addressesOf(ctx, q, cfg.table, ambig.Candidates)
+		if aerr != nil {
+			return nil, aerr
+		}
+		ambig.Addresses = make([]string, len(ambig.Candidates))
+		for i, id := range ambig.Candidates {
+			ambig.Addresses[i] = addrs[id]
+		}
+	}
+	return got, err
 }
 
 // scopedByName resolves an entity by REFERENCE, which is either its uuid or
@@ -693,7 +713,8 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 // "system"), and a location's scope tree is its own unrelated ancestor chain, so
 // checking it against the location table can never match and would deny every
 // non-all caller outright (the tier-mismatch defect a review caught, which is
-// why these binds were scope-blind in the first place). What resolves correctly
+// why these binds were scope-blind in the first place; resolveRef now answers
+// such a set with ErrScopeWiring, #754). What resolves correctly
 // is a scope resolved FOR the referenced tier, and the action it is resolved for
 // is read: the caller is not writing the location, it is naming one, and since
 // ADR-0100 put placement into the label data map the answer CONTAINS that row's
@@ -794,8 +815,15 @@ func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name stri
 // resolveScoped loads an entity by name and enforces the read-then-action scope
 // split: out of read scope (or ambiguous only outside it) is notFound
 // (non-disclosing), readable but out of action scope is forbidden. Same
-// same-tier guarantee as scopedGet.
+// same-tier guarantee as scopedGet. Either set resolved for a resource cfg's
+// tier cannot contain (the action set is often resolved for another resource,
+// alarm:acknowledge or command:issue on the component table) is ErrScopeWiring
+// before any query, never a refusal: an empty set from a missing registration
+// would otherwise deny every scoped caller as if their grants were empty (#754).
 func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], name string, read, action scope.Set) (*T, error) {
+	if err := checkScopeWiring(action, cfg.resource); err != nil {
+		return nil, err
+	}
 	v, err := scopedByNameInScope(ctx, q, cfg, name, cfg.resource, read)
 	if err != nil {
 		return nil, err

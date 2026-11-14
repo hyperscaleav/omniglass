@@ -53,7 +53,9 @@ unproven proves nothing about the capability.
   concurrent run can be handed before the dial. A UDP refusal aims at a privileged port, which
   `bind(:0)` never hands out. A guard test (`TestNoTestUsesAReleasedPort`) fails any test that
   uses a raw listener's or an httptest server's address after closing it; a port released through a
-  wrapper (a simulated face stopped and restarted) is outside what it reads.
+  wrapper (a simulated face stopped and restarted) is the sibling guard
+  `TestNoTestRestartsAFaceAtALiteralAddress`'s: such a test takes its address from
+  `simtest.ClaimLoopback`, never a literal.
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
   SPA). Assert the user-observable outcome, not internals. The real binary follows the same
@@ -211,7 +213,7 @@ thing. Knowing which answers a given question is most of the value:
 | Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Exact for the loss figures; the rest a median of N runs against a spread | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
 | Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **Opt in.** Fails the change it runs on; never a required check | **No.** A diagnostic | **No.** Inert without `-bench` |
 | Fleet it reads | The test's own fixture | The test's own fixture | The dev scenario's fleet, one standard workload | The corporate scenario at a named rung (`300` or `1000` systems), stated in the baseline it compares with | The corporate scenario at 20 systems by default, read from the lab's labels | The benchmark's own fixture |
-| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make perf-check SIZE=300`, or the `run:perf` label on a PR | `make lab-footprint` | `make bench`, deliberately, before and after |
+| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make perf-check SIZE=300`, by hand on a test VM | `make lab-footprint` | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
 as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
@@ -396,11 +398,12 @@ the one instrument that gates on time at all
 `make perf-check SIZE=300|1000` measures three throwaway labs of a rung of the ladder and compares them with
 that size's committed baseline:
 
-- **A CI job, but opt in.** The `run:perf` label runs it on a PR and posts the verdict; it is never a
-  required check.
+- **Run by hand, never in CI.** It runs on a test VM, the host class every rung's baseline was
+  generated on, and is never a required check
+  ([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)).
 - **A stored baseline, but generated and fingerprinted.** `make perf-baseline` writes it on the host
-  class it gates (the `300` file from the `perf` workflow's dispatch artifact on a hosted runner, the
-  `1000` file on the Proxmox worker), with that host's CPU, cores and memory. Times and usage gate only on a matching
+  class it gates (every rung's file on a test VM of 8 cores and 16 GiB), with that host's CPU, cores and
+  memory. Times and usage gate only on a matching
   host and read `reported` elsewhere; the counts gate everywhere. A PR that changes a baseline says why.
 - **Medians against a spread, never one run.** A figure fails only past its tolerance and past the
   baseline's spread plus the runs' spread; runs that spread past the tolerance read `noisy`, which does

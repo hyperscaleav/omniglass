@@ -614,47 +614,77 @@ func (p *PG) DeleteComponentType(ctx context.Context, actorID, ref string) error
 // componentTypeWalkRow is the minimal per-row projection ResolveTypeFacts and
 // TypeIsWithin need for one step of the parent walk.
 type componentTypeWalkRow struct {
+	id                 uuid.UUID
 	parentID           *uuid.UUID
 	stem, icon, abbrev *string
 	labelRule          *string
 	tags               []string
 }
 
-// loadComponentTypeWalk reads one node of the walk with its operator shadow
-// applied to the FACTS and never to the STRUCTURE (#655, ADR-0095 decision 3).
-// parent_id comes from the official row on purpose: a shadow restates what a
+// loadComponentTypeChain reads id and every ancestor up to the root, nearest
+// first, in ONE statement however deep the tree is (#803): a recursive CTE
+// over parent_id, bounded at maxComponentTypeDepth nodes, so a cycle the FKs
+// should make impossible still ends. Each node carries its operator shadow
+// applied to the FACTS and never to the STRUCTURE (#655, ADR-0095 decision 3):
+// parent_id comes from the official row on purpose, a shadow restates what a
 // node says, it does not move the node, so the chain a walk follows is the
 // same chain whether nodes along it are forked or not.
-func loadComponentTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*componentTypeWalkRow, error) {
-	var row componentTypeWalkRow
-	var image []byte
-	err := q.QueryRow(ctx, `
-		select ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image
-		from component_type ct
-		left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
-		where ct.id = $1`, id).
-		Scan(&row.parentID, &row.stem, &row.icon, &row.abbrev, &row.labelRule, &row.tags, &image)
-	if errors.Is(err, pgx.ErrNoRows) {
+//
+// The fork rule is applied per node in Go, by the same applyComponentTypeImage
+// the single-row read uses, so the SQL joins the shadow and never interprets
+// it. An id that names no row is ErrTypeNotFound.
+func loadComponentTypeChain(ctx context.Context, q querier, id uuid.UUID) ([]componentTypeWalkRow, error) {
+	rows, err := q.Query(ctx, `
+		with recursive chain as (
+			select ct.id, ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image, 1 as depth
+			from component_type ct
+			left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+			where ct.id = $1
+			union all
+			select ct.id, ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image, chain.depth + 1
+			from chain
+			join component_type ct on ct.id = chain.parent_id
+			left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+			where chain.depth < $2
+		)
+		select id, parent_id, stem, icon, abbrev, label_rule, default_tags, image
+		from chain
+		order by depth`, id, maxComponentTypeDepth)
+	if err != nil {
+		return nil, fmt.Errorf("storage: load component_type chain %q: %w", id, err)
+	}
+	defer rows.Close()
+	var chain []componentTypeWalkRow
+	for rows.Next() {
+		var row componentTypeWalkRow
+		var image []byte
+		if err := rows.Scan(&row.id, &row.parentID, &row.stem, &row.icon, &row.abbrev, &row.labelRule, &row.tags, &image); err != nil {
+			return nil, fmt.Errorf("storage: scan component_type chain %q: %w", id, err)
+		}
+		resolved, err := applyComponentTypeImage(ComponentType{
+			Stem: row.stem, Icon: row.icon, Abbrev: row.abbrev, LabelRule: row.labelRule, DefaultTags: row.tags,
+		}, image)
+		if err != nil {
+			return nil, err
+		}
+		row.stem, row.icon, row.abbrev, row.tags = resolved.Stem, resolved.Icon, resolved.Abbrev, resolved.DefaultTags
+		row.labelRule = resolved.LabelRule
+		chain = append(chain, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: load component_type chain %q: %w", id, err)
+	}
+	if len(chain) == 0 {
 		return nil, ErrTypeNotFound
 	}
-	if err != nil {
-		return nil, fmt.Errorf("storage: load component_type %q: %w", id, err)
-	}
-	resolved, err := applyComponentTypeImage(ComponentType{
-		Stem: row.stem, Icon: row.icon, Abbrev: row.abbrev, LabelRule: row.labelRule, DefaultTags: row.tags,
-	}, image)
-	if err != nil {
-		return nil, err
-	}
-	row.stem, row.icon, row.abbrev, row.tags = resolved.Stem, resolved.Icon, resolved.Abbrev, resolved.DefaultTags
-	row.labelRule = resolved.LabelRule
-	return &row, nil
+	return chain, nil
 }
 
 // ResolveTypeFacts walks parent_id from id toward the root, resolving stem,
 // icon, and abbrev to the first non-null value found (the type itself, then
-// its ancestors), and default_tags to the first non-empty set. No DB logic:
-// the walk is one row-fetch at a time here in Go, not a recursive query.
+// its ancestors), and default_tags to the first non-empty set. The chain is
+// one recursive query (loadComponentTypeChain, #803); the first-non-null fold
+// over it is here in Go.
 //
 // The walk crosses the fork boundary PER NODE (#655, ADR-0095 decision 3):
 // each node contributes its effective facts, the operator's when that node is
@@ -680,7 +710,7 @@ func (p *PG) ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, ab
 }
 
 // resolveTypeFacts is ResolveTypeFacts's walk, taking a querier so it can run
-// inside a caller's transaction (loadComponentTypeWalk already does).
+// inside a caller's transaction (loadComponentTypeChain already does).
 // labelRule (#682) inherits by the identical first-non-null rule, and that is
 // the answer to judgement call 2: "a type's rule is forked and its parent's is
 // not, which applies?" The same one ADR-0095 already gives for stem, icon and
@@ -691,13 +721,12 @@ func (p *PG) ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, ab
 // forking a leaf's does not cut it off from the ancestors it still inherits
 // everything else from.
 func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev, labelRule string, tags []string, err error) {
-	cur := id
+	chain, cerr := loadComponentTypeChain(ctx, q, id)
+	if cerr != nil {
+		return "", "", "", "", nil, cerr
+	}
 	var gotStem, gotIcon, gotAbbrev, gotRule, gotTags bool
-	for range maxComponentTypeDepth {
-		row, rerr := loadComponentTypeWalk(ctx, q, cur)
-		if rerr != nil {
-			return "", "", "", "", nil, rerr
-		}
+	for _, row := range chain {
 		if !gotStem && row.stem != nil {
 			stem, gotStem = *row.stem, true
 		}
@@ -713,31 +742,28 @@ func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon,
 		if !gotTags && len(row.tags) > 0 {
 			tags, gotTags = row.tags, true
 		}
-		if row.parentID == nil || (gotStem && gotIcon && gotAbbrev && gotRule && gotTags) {
+		if gotStem && gotIcon && gotAbbrev && gotRule && gotTags {
 			break
 		}
-		cur = *row.parentID
 	}
 	return stem, icon, abbrev, labelRule, normalizeComponentTypeTags(tags), nil
 }
 
 // TypeIsWithin reports whether id is ancestor itself or a descendant of it,
-// walking parent_id toward the root: self-inclusive, matching the fleet
+// walking parent_id toward the root in one statement: self-inclusive, matching the fleet
 // tree's other descendant checks (e.g. locationIsDescendant).
 func (p *PG) TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error) {
-	cur := id
-	for range maxComponentTypeDepth {
-		if cur == ancestor {
+	if id == ancestor {
+		return true, nil
+	}
+	chain, err := loadComponentTypeChain(ctx, p.pool, id)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range chain {
+		if row.id == ancestor {
 			return true, nil
 		}
-		row, err := loadComponentTypeWalk(ctx, p.pool, cur)
-		if err != nil {
-			return false, err
-		}
-		if row.parentID == nil {
-			return false, nil
-		}
-		cur = *row.parentID
 	}
 	return false, nil
 }

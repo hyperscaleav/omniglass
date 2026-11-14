@@ -285,8 +285,11 @@ test.describe("operator console", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
     await expect(page.getByTestId("place-card")).toBeVisible();
     // The Explore crumb goes back up to where you were: the outline opened
-    // down to this row and selected.
-    await page.getByTestId("breadcrumb").getByRole("button", { name: "Explore" }).click();
+    // down to this row and selected. The crumb is a link (#875), its
+    // address in the DOM.
+    const exploreCrumb = page.getByTestId("breadcrumb").getByRole("link", { name: "Explore" });
+    await expect(exploreCrumb).toHaveAttribute("href", `/web/explore?node=${systemId}`);
+    await exploreCrumb.click();
     await page.waitForURL(new RegExp(`/web/explore\\?node=${systemId}$`));
     await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 

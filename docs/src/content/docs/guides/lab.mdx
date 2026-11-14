@@ -150,7 +150,7 @@ holds the lab to that, tier by tier, and a gap fails naming the owner and the ti
 
 | Tier | Holds for | What must be there |
 | --- | --- | --- |
-| **built-in** | every component, endpoint by endpoint | the data the node and the platform write about an endpoint whatever its device: reachability and its rung, a response time once the device answers, a poll duration, a held session's state and the push count of its listeners (`node-probe`), and a webhook's post count (`platform`) |
+| **built-in** | every component, endpoint by endpoint | the data the node and the platform write about an endpoint whatever its device: reachability and its rung, a response time once the device answers, a poll duration and its CPU time, a held session's state and the push count of its listeners (`node-probe`), and a webhook's post count (`platform`) |
 | **collected** | every component | at least one value from the device's own API that is a class signal (a power state, a mute, a scene), beyond its identity (model, serial, firmware) and `uptime` |
 | **system** | every system | at least one value of its own, collected or calculated |
 
@@ -294,7 +294,7 @@ own through them (a project of its own whose data goes when it stops, held for t
 whose fleet has no node collecting from it, so the pages the docs photograph hold still). One is
 for captures only: `--platform-history` seeds an hour of made-up figures on the lab's server, a sample
 a minute for each server key platform health draws except the stream positions and the ingest,
-push and slow query windows (a capture's lab writes none of those live, so they are left to the
+push, bus request, telemetry ack and slow query windows (a capture's lab writes none of those live, so they are left to the
 server), so a screenshot of the page shows full sparklines rather than the few minutes a fresh lab
 has measured. Sizes end the hour on what the
 database measures, so the live line carries on from the seeded one. It needs `--ephemeral`, and a scale lab
@@ -575,6 +575,14 @@ How to read each row:
   next. It measures the property lane, whose retention deletes in chunks; the metric lane's retention
   mostly drops whole daily partitions, which has no rate to read. The probe removes its rows when it
   is done, and `--backlog 0` skips it, leaving the server running as it was.
+- **worklist pull loss**: each node's worst share of worklist pulls the bus refused or the node could
+  not read, over the window, read from the `worklist-pull-loss-ratio` every node reports on its own
+  platform component each report window. The row prints the worst node by name and how many nodes
+  were refused, `0 %` when every pull was served, and counts any node that reported nothing as
+  unreported. A node refused here keeps running its last worklist,
+  so the delivery table can read 0 while it misses every change made since. A read that failed, or
+  found no node reporting, prints `not measured` with the reason under the table: every node reports
+  the ratio every window, so finding none is no reading, not a clean one.
 
 #### Every request reached its endpoint and was answered
 
@@ -899,8 +907,8 @@ How to read the verdict table it prints, one row a figure:
   baseline so the gain is held.
 - **reported**: a host-dependent figure measured on a host other than the baseline's (another CPU, core
   count or memory size). The figure is printed for the reader and gates nothing; the counted figures
-  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a hosted
-  runner for `300`, the Proxmox worker for `1000`) to gate them.
+  still gate in full. The table's host line names both hosts. Run on the baseline's host class (a test
+  VM of 8 cores and 16 GiB, for every rung) to gate them.
 
 The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one a kind a hop, named
 `delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
@@ -923,6 +931,12 @@ stream's backlog note when the stream was the cause. A run whose delivery read w
 read no kind carrying items, fails as `delivery_loss` with the reason: a fleet that delivered nothing in
 the window is not a fleet that lost nothing.
 
+`worklist_loss/<node>` is each node's worst worklist pull loss over the window, and any node above 0
+fails with a note giving the share of its pulls that failed: a node refused on every pull reads 1. The
+read starts from every node the lab holds, so a node that reported nothing in the window fails as
+missing rather than dropping out. A run whose worklist read failed, or found no node, fails as
+`worklist_loss` with the reason.
+
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
@@ -932,17 +946,17 @@ impaired, so an impaired gap can only mean a fault left on.
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
 spread and values, the inputs and the host fingerprint, and refuses, naming each figure, when an exact
 figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance
-(a check could never gate it). Generate it on the host class it gates: the `300` baseline from the `perf`
-workflow's dispatch with `update` set, which uploads the file as an artifact, and the `1000` baseline on
-a Proxmox test VM ([#1737](https://github.com/hyperscaleav/omniglass/issues/1737)), 8 cores and 16 GiB. A
-check of `1000` anywhere else gates only the host-independent and exact figures. A PR that
+(a check could never gate it). Generate it on the host class it gates: every rung's baseline comes from
+a test VM of 8 cores and 16 GiB. A check anywhere else gates only the host-independent and exact
+figures. A PR that
 changes a baseline file says why in its body. `--append FILE` keeps each
 run's report as a line, so runs a baseline refused can be read again with `--samples FILE` instead of
 measured again; `--samples` also reads the last `--runs` (or `--last`) lines of a sampling run's series.
 
-In CI the gate is opt in and never a required check: the `run:perf` label on a PR runs
-`make perf-check SIZE=300` on its branch and posts the verdict table as one comment, updated on every
-run. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
+The gate never runs in CI and is never a required check: a run takes a scale lab for the better part of
+an hour, and its times and usage gate only on the baseline's host class, which a GitHub runner is not
+([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
+on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
 
 ### Sampling a scale lab over time
 

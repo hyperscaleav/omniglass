@@ -267,6 +267,37 @@ describe("PlatformHealth page", () => {
     expect(lanes.map((r) => r.getAttribute("data-instance"))).toEqual(["event", "metric"]);
   });
 
+  // A failure count reads against its attempts (#1769), path by path: a
+  // healthy path's 0 landed beside its requests reads "0 / n", not "not
+  // reported", and the attempts key is the pair's second figure, not a row
+  // of its own.
+  it("reads each path's failures against its own requests, a healthy path as 0 of n", () => {
+    emptySeries();
+    const at = ago(1000);
+    const groups: PlatformServer["groups"] = [
+      {
+        name: "requests", label: "Requests",
+        keys: [
+          { name: "bus-request-failure-count", label: "Bus Request Failures", description: "Requests the server failed.", of: "bus-request-count" },
+          { name: "bus-request-count", label: "Bus Requests", description: "Requests the server handled." },
+        ],
+        figures: [
+          { key: "bus-request-count", instance: "heartbeat", value: 240, observed_at: at },
+          { key: "bus-request-count", instance: "command-pull", value: 120, observed_at: at },
+          { key: "bus-request-failure-count", instance: "heartbeat", value: 0, observed_at: at },
+          { key: "bus-request-failure-count", instance: "command-pull", value: 2, observed_at: at },
+        ],
+      },
+    ];
+    mount({ ...full, servers: [{ component: uuidFor("server"), name: "lab-server", started_at: at, verdict: "healthy", groups, alarms: [] }] });
+    const requests = screen.getByTestId("server-panel-requests");
+    const rows = within(requests).getAllByTestId("panel-row-bus-request-failure-count");
+    const byPath = Object.fromEntries(rows.map((r) => [r.getAttribute("data-instance"), r.textContent ?? ""]));
+    expect(byPath.heartbeat).toContain("0 / 240");
+    expect(byPath["command-pull"]).toContain("2 / 120");
+    expect(within(requests).queryByTestId("panel-row-bus-request-count")).toBeNull();
+  });
+
   it("marks each panel set's heading as a disclosure, its chevron turned while the set is open", () => {
     emptySeries();
     mount(twoServers());
@@ -315,10 +346,11 @@ describe("PlatformHealth page", () => {
     const fetchSpy = emptySeries();
     mount(twoServers());
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const urls = fetchSpy.mock.calls.map(([req]) => decodeURIComponent(new URL(req.url).pathname + new URL(req.url).search));
-    expect(urls.some((u) => u.includes(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.includes(`instance=${FAST}`) && u.includes("hours=1"))).toBe(true);
+    // Read the query as the server does: the client form-encodes it (a space is "+").
+    const reads = fetchSpy.mock.calls.map(([req]) => new URL(req.url));
+    expect(reads.some((u) => u.pathname.endsWith(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.searchParams.get("instance") === FAST && u.searchParams.get("hours") === "1")).toBe(true);
     // Only the open set reads its series: the second server's are closed.
-    expect(urls.some((u) => u.includes(uuidFor("server-b")))).toBe(false);
+    expect(reads.some((u) => u.pathname.includes(uuidFor("server-b")))).toBe(false);
   });
 
   // The view polls, and every poll is a new body: an operator's place on the

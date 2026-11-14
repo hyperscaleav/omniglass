@@ -11,6 +11,7 @@ import LogsPanel from "../components/LogsPanel";
 import CommandsPanel from "../components/CommandsPanel";
 import IdentitiesPanel from "../components/IdentitiesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
@@ -76,6 +77,7 @@ export default function ComponentLeaf() {
   // window's query lags the route being rendered (#932).
   const location = useLocation();
   const id = () => params.id;
+  const leave = createLeaveGuard();
   const me = useMe();
   const blades = createBladeController();
   const [leafSearch] = useSearchParams();
@@ -106,9 +108,13 @@ export default function ComponentLeaf() {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
-  const component = createMemo<FleetComponent | undefined>(() =>
-    (components.data ?? []).find((c) => c.id === id() || c.name === id()),
-  );
+  const component = createMemo<FleetComponent | undefined>(() => {
+    const all = components.data ?? [];
+    const byId = all.find((c) => c.id === id());
+    if (byId) return byId;
+    const byName = all.filter((c) => c.name === id());
+    return byName.length === 1 ? byName[0] : undefined;
+  });
 
   // The leaf is addressed by uuid; a name-shaped address resolves through the
   // component list when unique, keeping the param (#759's rule).
@@ -222,12 +228,13 @@ export default function ComponentLeaf() {
     const trail = componentCrumbs(view.data, placeId(), primary()?.systemId);
     return [
       // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(component()?.id ?? id())}`) },
-      ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(c.kind === "system" ? `/systems/${c.id}` : `/locations/${c.id}`) })),
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` },
+      ...trail.map((c) => ({ key: c.id, label: c.label, href: c.kind === "system" ? `/systems/${c.id}` : `/locations/${c.id}` })),
     ];
   });
 
-  const missing = () => !!(view.data && components.data) && !component() && !(components.data ?? []).some((x) => x.name === id());
+  const ambiguous = () => !!(view.data && components.data) && !component() && (components.data ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!(view.data && components.data) && !component() && !ambiguous();
   const failure = () => view.error ?? components.error;
 
   return (
@@ -238,6 +245,7 @@ export default function ComponentLeaf() {
       <DetailGate
         noun="component"
         missing={missing()}
+        ambiguous={ambiguous()}
         pending={view.isPending || components.isPending}
         error={failure() ? describeError(failure()) : null}
         retrying={view.isFetching || components.isFetching}
@@ -262,9 +270,10 @@ export default function ComponentLeaf() {
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
-            <TabRail tabs={leafTabs()} activeKey={leafTab} />
+            <TabRail tabs={leafTabs()} activeKey={leafTab} guard={leave} />
             <Show when={leafTab() === "configure"}>
-              <ConfigureFace kind="component" id={id()} />
+              {/* Keyed on the id: another component is another face (#854). */}
+              <Show when={id()} keyed>{(cid) => <ConfigureFace kind="component" id={cid} guard={leave} />}</Show>
             </Show>
             <Show when={leafTab() === "activity"}>
               <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">

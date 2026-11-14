@@ -19,3 +19,5 @@ summary: "A simulated system is built to a standard: each role staffed with a si
   counterpart, display and DSP mixes no standard declares), so a mapping table would have kept two
   vocabularies for one idea. The architect ruled the standard is the archetype and names follow the
   platform's own minting.
+- **Amended (#914):** the archetypes did not remain as the fleet compiler's input: they and the
+  compiler are retired ([ADR-0914](#adr-0914-the-simulator-catalog-carries-no-fleet-or-room-archetype-vocabulary)).

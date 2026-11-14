@@ -30,7 +30,7 @@ with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck 
 share a name under different parents or at different locations, and two rooms may hold their own
 same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
 stay fleet-wide unique. A bare-name reference that now matches more than one row is refused
-(`409`, naming the candidates) rather than silently resolving to whichever row sorted first. **A uuid
+(`404`, naming the candidates, the same answer every collection gives, ADR-1134) rather than silently resolving to whichever row sorted first. **A uuid
 is the address; a dotted path is a positional lookup**
 ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)),
 resolved beside the bare name on the same `{ref}` parameter every route already took; a `GET`/`LIST`
@@ -447,6 +447,12 @@ label, the system band of its cascade), so every route that binds, unbinds, re-d
 component needs `component:update` over it as well as `system:update` over the system, and a
 principal scoped to one system binds nothing it cannot write
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
+
+The console edits membership from the component, over the routes above and no others: a component's
+edit face carries a **Memberships** field, the primary system as a picker and the other memberships as
+removable chips. Changing the primary is an add (if the component is not yet in that system) then
+`:setPrimary`; clearing it, or removing a chip, is a remove. Membership is its own verb, so it is
+deliberately not a field on the component's update or move.
 
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
@@ -867,8 +873,13 @@ stale, and only because the operator chose to.
 
 Every reference form the API accepts resolves through one `{ref}` path parameter (`GET
 /components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
-tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
-the candidates rather than silently resolving to whichever sorted first, since **#627 scopes a name's
+tried in that order. A bare name matching more than one row in the caller's scope is a `404` naming
+the candidates rather than silently resolving to whichever sorted first. Each candidate is listed as
+its dotted address with its uuid beside it (`campus.room-a.$comp.display-1 (<uuid>)`), a spelling that
+resolves on the same route, and a candidate the caller cannot read is neither listed nor counted
+([ADR-1134](/architecture/decisions/#adr-1134-an-ambiguous-name-is-a-404-naming-the-reference-on-every-collection)).
+The refusal is a `404` because the reference as typed resolves to no one row, the status a name
+unresolved on every other collection already had (ADR-1133), and since **#627 scopes a name's
 uniqueness to its placement, not the whole fleet**: a component and a system both scope to their
 parent when they have one, else their location, else the fleet, a three-bucket split each carries its
 own partial unique index for; a location, which has no `location_id` column of its own, scopes to its
@@ -1067,7 +1078,7 @@ no vendor because it is not an instance of a catalog row, and no placement fact 
 read its parent would stale every descendant on a campus rename.
 
 **A rule reads placement, and that is what the recompute verb is for**
-([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
 `{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does
