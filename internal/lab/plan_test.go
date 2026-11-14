@@ -765,3 +765,87 @@ func TestFleetOf(t *testing.T) {
 		})
 	}
 }
+
+// #1892: every lab node runs inside the limits an edge box would give it: one
+// CPU, so its automatic lane count is one figure on any host, and memory
+// sized from the cost model for its site's components, with the Go runtime
+// told where the wall is so it collects before the kernel kills. The
+// database, the seed and the server run unbounded.
+func TestPlanBoundsEveryNodeAndOnlyTheNodes(t *testing.T) {
+	for _, o := range []Options{testOptions(), scaleOptions()} {
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		components := map[string]int{NodeName: 0}
+		if o.Scale() {
+			components = map[string]int{}
+			for _, n := range o.SiteNodes {
+				components[n.Name] = n.Components
+			}
+		}
+		nodes := 0
+		for _, svc := range s.Services() {
+			if svc.Name == "node" {
+				svc.Name = NodeName
+			}
+			c, isNode := components[svc.Name]
+			if !isNode {
+				if svc.CPUs != 0 || svc.MemoryBytes != 0 {
+					t.Errorf("%s capped at %g CPUs and %d bytes, want no cap", svc.Name, svc.CPUs, svc.MemoryBytes)
+				}
+				continue
+			}
+			nodes++
+			if svc.CPUs != NodeCPUs || svc.MemoryBytes != NodeMemoryLimit(c) {
+				t.Errorf("node %s capped at %g CPUs and %d bytes, want %g and %d for %d components",
+					svc.Name, svc.CPUs, svc.MemoryBytes, NodeCPUs, NodeMemoryLimit(c), c)
+			}
+			if want := GoMemLimitEnv(svc.MemoryBytes); !slices.Contains(svc.Env, want) {
+				t.Errorf("node %s env %v, want %s", svc.Name, svc.Env, want)
+			}
+		}
+		if nodes != len(components) {
+			t.Errorf("%d bounded nodes, want %d", nodes, len(components))
+		}
+	}
+}
+
+// A node's memory cap is twice the cost model's figure for its components,
+// never under a floor that holds a small site's collector peaks.
+func TestNodeMemoryLimit(t *testing.T) {
+	for _, tc := range []struct {
+		components int
+		wantMiB    int64
+	}{
+		{0, 512},     // the dev lab's node, sized by the floor
+		{143, 512},   // a 3,000-system lab's branch: 2 x (36 + 128.7) = 329.4, under the floor
+		{467, 913},   // a regional: 2 x (36 + 420.3) = 912.6, rounded up
+		{1609, 2969}, // the hq: 2 x (36 + 1448.1) = 2968.2, rounded up
+	} {
+		if got := NodeMemoryLimit(tc.components); got != tc.wantMiB<<20 {
+			t.Errorf("NodeMemoryLimit(%d) = %d MiB, want %d", tc.components, got>>20, tc.wantMiB)
+		}
+	}
+}
+
+// The Go runtime's soft limit sits a tenth under the container's, so the
+// collector tightens before the kernel's limit is reached.
+func TestGoMemLimitEnv(t *testing.T) {
+	if got := GoMemLimitEnv(512 << 20); got != "GOMEMLIMIT=460MiB" {
+		t.Errorf("GoMemLimitEnv(512 MiB) = %q, want GOMEMLIMIT=460MiB", got)
+	}
+}
+
+// A changed cap is a changed container: compose's config hash carries it, and
+// a service with no cap hashes as it did before caps existed.
+func TestConfigHashCarriesTheLimits(t *testing.T) {
+	s := Service{Image: "omniglass", Cmd: []string{"node", "run"}}
+	bare := configHash(s)
+	s.CPUs, s.MemoryBytes = 1, 512<<20
+	capped := configHash(s)
+	s.MemoryBytes = 1 << 30
+	if capped == bare || capped == configHash(s) {
+		t.Errorf("config hash ignores the caps: bare %s, 512 MiB %s, 1 GiB %s", bare, capped, configHash(s))
+	}
+}

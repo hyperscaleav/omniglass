@@ -202,8 +202,9 @@ func (d *dockerEngine) RunContainer(ctx context.Context, svc Service, net string
 		}
 	}
 	host := &container.HostConfig{
-		CapAdd:  svc.CapAdd,
-		Sysctls: svc.Sysctls,
+		CapAdd:    svc.CapAdd,
+		Sysctls:   svc.Sysctls,
+		Resources: resources(svc),
 	}
 	if svc.Restart != "" {
 		host.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(svc.Restart)}
@@ -336,4 +337,14 @@ func (d *dockerEngine) Containers(ctx context.Context, labels map[string]string)
 		out = append(out, Resource{ID: c.ID, Name: name, Labels: c.Labels})
 	}
 	return out, nil
+}
+
+// resources is a service's caps as Docker's: swap is held to the memory cap,
+// so the cap is all the memory the container gets.
+func resources(svc Service) container.Resources {
+	return container.Resources{
+		NanoCPUs:   int64(svc.CPUs * 1e9),
+		Memory:     svc.MemoryBytes,
+		MemorySwap: svc.MemoryBytes,
+	}
 }

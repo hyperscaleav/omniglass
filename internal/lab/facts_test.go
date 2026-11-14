@@ -57,3 +57,22 @@ func TestSetupCommandIsTheCLICreate(t *testing.T) {
 		}
 	}
 }
+
+// The topology table names a container's caps as a learner reads them, and
+// an uncapped container as none (#1892).
+func TestFormatLimits(t *testing.T) {
+	for _, tc := range []struct {
+		cpus   float64
+		memory int64
+		want   string
+	}{
+		{1, 512 << 20, "1 CPU, 512 MiB"},
+		{2, 2969 << 20, "2 CPUs, 2969 MiB"},
+		{0.5, 0, "0.5 CPUs"},
+		{0, 0, ""},
+	} {
+		if got := FormatLimits(tc.cpus, tc.memory); got != tc.want {
+			t.Errorf("FormatLimits(%g, %d) = %q, want %q", tc.cpus, tc.memory, got, tc.want)
+		}
+	}
+}
