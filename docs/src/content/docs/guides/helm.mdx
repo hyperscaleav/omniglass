@@ -65,6 +65,54 @@ Both `migrate` and `bootstrap` are safe to re-run on every rollout. At
 Postgres advisory lock: the first applies the pending migrations and the others
 wait for it, then find nothing left to do.
 
+## Production
+
+The chart's default mode is a disposable per-PR preview with bundled Postgres and auto-created ownership. Production flips two values to use an external database and disables auto-bootstrap, documented here. See [scaling and deployment](/architecture/scaling/) for the single-server stance and the deferred HA fork.
+
+### Profile
+
+Deployments vary by operational intent: a lab, a single-site fleet, a multi-region hub, or a proof of concept. Each drives different choices in sizing, persistence, and hardening. See #1291 for profile definitions.
+
+### Demo-only Postgres
+
+The bundled Postgres container ships as an `emptyDir` volume for disposable preview environments. It does not persist across pod restarts and must never be used in production. To deploy a durable system, set `postgres.enabled=false` and provide `externalDsn` pointing to a managed, production-grade PostgreSQL cluster with automated backups, replication, and monitoring.
+
+### External Postgres via externalDsn
+
+Production deployments require a managed PostgreSQL database configured outside the Helm chart. Set `postgres.enabled=false` and provide the full connection string as `externalDsn`:
+
+```yaml
+postgres:
+  enabled: false
+externalDsn: "postgres://user:pass@managed-db.example.com:5432/omniglass?sslmode=require"
+```
+
+The `externalDsn` value is a secret; store it in a Secret and reference it, or use your platform's secret-management tool. The server, migrate, and bootstrap init containers all read `OMNIGLASS_DSN` from the secret the chart creates.
+
+### Durable state
+
+Persistent state lives in the external Postgres database and the durable command queue in JetStream. Backup and restore practices, retention policies, and recovery procedures are covered in #1286.
+
+### Upgrades
+
+The chart's init containers gate every rollout on the schema: `migrate` applies pending migrations under an advisory lock, and `bootstrap` (when enabled) is idempotent. Schema upgrades are safe on every rollout; a `helm rollback` to an older image stops at `migrate` if the schema is newer than the image knows, requiring a database restore or a forward roll. Full upgrade guidance, rollback strategies, and backward-compatibility notes are in #1288, #1289, and #1290.
+
+### Sizing
+
+Resource requests, limits, and horizontal scaling depend on fleet size, telemetry frequency, and retention windows. Guidance for choosing memory, CPU, replicas, and database capacity is in #1293.
+
+### Hardening
+
+Security configuration, RBAC, network policies, pod security, and supply-chain controls are in #1294.
+
+### Origin TLS
+
+Server certificates, certificate rotation, and mutual TLS setup are in #1295.
+
+### Trusted proxies
+
+When the server runs behind a reverse proxy, configure trusted proxy addresses so that `X-Forwarded-For` and similar headers are honored. See #1231.
+
 ## Values
 
 | Key | Default | Purpose |
@@ -91,10 +139,13 @@ wait for it, then find nothing left to do.
 
 ## Server environment
 
-Anything the chart's values do not cover reaches the server as plain environment (via
-`extraEnv`-style values or a Secret). The full server surface renders from the declared
-environment registry (`make gen`); behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point
-`OMNIGLASS_ENCRYPTION_KEY_FILE` at a mounted key, the encryption key every secret is sealed under.
+The chart sets `OMNIGLASS_DSN` from the Postgres connection (external or bundled) and
+`OMNIGLASS_SECURE_COOKIES` from `values.server.secureCookies`. The full server surface renders
+from the declared environment registry (`make gen`); for platforms with additional environment
+customization, see #1230.
+
+Behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point `OMNIGLASS_ENCRYPTION_KEY_FILE` at
+a mounted key, the encryption key every secret is sealed under.
 
 Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
 `OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither
