@@ -1,6 +1,7 @@
 package node
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,6 +53,9 @@ type nodeReport struct {
 	// Atomic because the command cycle runs off the heartbeat goroutine
 	// (#1634) while the heartbeat takes the window.
 	pullFailures atomic.Int64
+	// pulls is the worklist pulls in the window (#1868), tallied from the
+	// pull loop's own goroutine (#1577).
+	pulls worklistPulls
 
 	// rt is the runtime sampler the server shares, so the node's CPU time
 	// reads as the time between two of its ticks.
@@ -148,6 +152,50 @@ func (r *nodeReport) commandPullFailed() {
 	}
 }
 
+// worklistPulled tallies one worklist pull toward the window, refused when
+// the bus gave no worklist the node could read, so it kept its last one.
+func (r *nodeReport) worklistPulled(refused bool) {
+	if r != nil {
+		r.pulls.add(refused)
+	}
+}
+
+// worklistPulls tallies the worklist pulls of a window. A mutex rather than
+// atomics, so a window's attempts and refusals are taken together.
+type worklistPulls struct {
+	mu          sync.Mutex
+	attempts    int
+	refused     int
+	lastRefused bool
+}
+
+func (p *worklistPulls) add(refused bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.attempts++
+	if refused {
+		p.refused++
+	}
+	p.lastRefused = refused
+}
+
+// lossRatio returns the window's share of refused pulls and starts the next
+// window. A window with no pull carries the last pull's outcome, so a node
+// backed off between refused pulls still reads 1.
+func (p *worklistPulls) lossRatio() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	attempts, refused := p.attempts, p.refused
+	p.attempts, p.refused = 0, 0
+	if attempts == 0 {
+		if p.lastRefused {
+			return 1
+		}
+		return 0
+	}
+	return float64(refused) / float64(attempts)
+}
+
 // worklist records the size of a worklist the node just installed.
 func (r *nodeReport) worklist(tasks int, at time.Time) {
 	if r == nil {
@@ -174,6 +222,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 		} {
 			r.sample(c.key, float64(c.n), now, "")
 		}
+		r.sample(writerclass.WorklistPullLossRatio, r.pulls.lossRatio(), now, "")
 		// One pool serves every kind of work today, so the fraction is
 		// the lane pool's (#1686); per-kind pools get an instance each.
 		r.sample(writerclass.WorkerBusyFraction, platformmetric.BusyFraction(r.pool.busy, r.pool.capacity), now, "lane")

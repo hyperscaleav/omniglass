@@ -51,6 +51,21 @@ rules:
     severity: high
     fire_event_type: condition-started
     clear_event_type: condition-ended
+  # A node running a stale worklist (#1868): every worklist pull in its report
+  # window refused (the bus gave no worklist it could read), so it ran the
+  # whole window on its last one, unaware of any edit since. Sustained, so a
+  # server restart's brief refusals do not page. Raised on the node's platform
+  # component; it clears on the first window with a pull served.
+  - name: worklist-stale
+    label: Worklist stale
+    description: Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.
+    sample_key: worklist-pull-loss-ratio
+    fire: 'value == 1'
+    fire_sustain: 2m
+    clear: 'value < 1'
+    severity: warning
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
   # The server's data directory nearly out of room (#1094, #1707): the
   # filesystem holding it past 90 percent used for a sustained stretch, so a
   # brief spike (a large temporary file) does not page. It clears only once the

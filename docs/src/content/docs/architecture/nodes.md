@@ -144,6 +144,15 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
   not up rather than as up with nothing to do. After it, a failed pull keeps the last good
   worklist, every task and every session of it.
+- **A failed pull is counted, so a stale worklist reads as loss (#1868).** Keeping the last
+  worklist hides the failure: the node's tasks still match the database until the first change for
+  it, so every delivery hop reads 0 while the node misses every change. The node reports
+  `worklist-pull-loss-ratio` on its node-self lane every report window, the pulls refused or
+  unreadable over the pulls made; a window with no pull carries the last outcome, so a node refused
+  on every pull reads 1. The seeded `worklist-stale` rule opens a warning after two minutes at 1,
+  [Platform health](/guides/operator/platform-health/#the-node-table) shows it as the node's
+  Worklist column, and `omniglass lab measure` fails its `worklist_loss` gate on any node above 0
+  ([the lab guide](/guides/lab/#measuring-a-scale-lab)).
 - **The server fails a pull whole, and says why.** A worklist the server cannot read in full (a
   transient storage error), or that is still over the bus's `max_payload` compressed, is answered
   with an `Omniglass-Error` header naming the reason and no body. The node treats it as a failed
@@ -930,7 +939,8 @@ waits) and `command-stuck-count`, and, over the window since its last read (zero
 command wire writes `command-dispatch-latency` at a command's first take and
 `command-execution-latency` at its report, one sample per command. The node itself counts
 `command-pull-failure-count`, the pulls of its queue that got no answer or one it could not read,
-once per report window, 0 when quiet, on its node-self lane. How each is read, and why expiry keys on the execution
+once per report window, 0 when quiet, on its node-self lane. Its worklist pulls report the same way
+as a ratio, `worklist-pull-loss-ratio` ([above](#pulling-the-worklist)). How each is read, and why expiry keys on the execution
 stamp rather than the status, is on [commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured).
 
 What one poll costs the node is read from the kernel, not from the clock on the wall (#1870).

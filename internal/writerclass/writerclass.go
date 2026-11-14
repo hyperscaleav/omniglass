@@ -112,6 +112,7 @@ const (
 const (
 	CheckinAge            = "checkin-age"
 	WorklistTaskCount     = "worklist-task-count"
+	WorklistPullLossRatio = "worklist-pull-loss-ratio"
 	TickDuration          = "tick-duration"
 	TickOverrunCount      = "tick-overrun-count"
 	ScheduleLateness      = "schedule-lateness"
@@ -304,6 +305,7 @@ var platform = map[string]string{
 	WebhookRefusalCount:   "the webhook receiver",
 	CheckinAge:            "the server's check-in timer",
 	WorklistTaskCount:     nodeSelfWriter,
+	WorklistPullLossRatio: nodeSelfWriter,
 	TickDuration:          nodeSelfWriter,
 	TickOverrunCount:      nodeSelfWriter,
 	ScheduleLateness:      nodeSelfWriter,
