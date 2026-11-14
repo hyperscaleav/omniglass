@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/jackc/pgx/v5"
 )
@@ -168,7 +169,7 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 	t.Parallel()
 	base := fixturesDoc(t)
-	doc := devseed.Degrade(base, devseed.DegradedEvery)
+	doc := degradeShipped(t)
 	known := map[string]bool{}
 	for _, a := range base.Alarms {
 		known[a.Severity+"|"+a.Message] = true
@@ -188,6 +189,91 @@ func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 		if per[a.Component] != 1 {
 			t.Errorf("component %q carries %d alarms", a.Component, per[a.Component])
 		}
+	}
+}
+
+// degradeShipped runs the degraded expansion exactly as the scenario does, over
+// the shipped product catalog.
+func degradeShipped(t *testing.T) devseed.Doc {
+	t.Helper()
+	s, err := devseed.LookupScenario("degraded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.Doc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+// Over the shipped fleet and catalog, the degraded scenario's lamp-hours alarm
+// sits only on projectors and displays.
+func TestDegradedScenarioLampHoursOnlyOnLightSources(t *testing.T) {
+	t.Parallel()
+	doc := degradeShipped(t)
+	productOf := map[string]string{}
+	for _, c := range doc.Components {
+		productOf[c.Key] = c.Product
+	}
+	typeOf := map[string]string{}
+	for _, p := range seed.ShippedProducts() {
+		typeOf[p.Name] = p.ComponentType
+	}
+	parents := seed.ShippedComponentTypeParents()
+	lamp := 0
+	for _, a := range doc.Alarms {
+		if !strings.HasSuffix(a.DedupKey, "lamp-hours") {
+			continue
+		}
+		lamp++
+		ok := false
+		for ty := typeOf[productOf[a.Component]]; ty != ""; ty = parents[ty] {
+			ok = ok || ty == "projector" || ty == "display"
+		}
+		if !ok {
+			t.Errorf("lamp-hours alarm on %q (product %q, type %q)", a.Component, productOf[a.Component], typeOf[productOf[a.Component]])
+		}
+	}
+	if lamp == 0 {
+		t.Error("the degraded fleet raised no lamp-hours alarm at all")
+	}
+}
+
+// An alarm template that declares what it applies to is raised only on a device
+// of that class (or a descendant type): the lamp warning never lands on a
+// microphone, while projectors and displays still receive it, and a component no
+// template fits takes the unrestricted one so the density holds.
+func TestDegradeFitsAlarmsToTheDeviceClass(t *testing.T) {
+	t.Parallel()
+	products := map[string]string{"beam": "projector", "panel": "interactive-display", "mic": "microphone", "dsp": "dsp"}
+	parents := map[string]string{"projector": "display-device", "interactive-display": "display", "display": "display-device"}
+	base := devseed.Doc{Alarms: []devseed.Alarm{
+		{Component: "seeded", Severity: "warning", Message: "Lamp hours approaching end of life", DedupKey: "lamp-hours", AppliesTo: []string{"projector", "display"}},
+		{Component: "seeded", Severity: "high", Message: "No route to host", DedupKey: "unreachable"},
+	}}
+	// Component 0 is alarmed already; every one of the rest is picked (n=1).
+	base.Components = []devseed.Component{{Key: "seeded", Product: "dsp"}}
+	for i, p := range []string{"mic", "beam", "mic", "panel", "dsp", "mic", "beam", "panel", "unknown-product"} {
+		base.Components = append(base.Components, devseed.Component{Key: string(rune('a'+i)) + "-" + p, Product: p})
+	}
+	doc := devseed.Degrade(base, 1, products, parents)
+	added := doc.Alarms[len(base.Alarms):]
+	if len(added) != len(base.Components)-1 {
+		t.Fatalf("raised %d alarms over %d unalarmed components: density changed", len(added), len(base.Components)-1)
+	}
+	lamp := 0
+	for _, a := range added {
+		if a.DedupKey != "degraded-lamp-hours" {
+			continue
+		}
+		lamp++
+		if ty := products[strings.SplitN(a.Component, "-", 2)[1]]; ty != "projector" && ty != "interactive-display" {
+			t.Errorf("lamp-hours alarm landed on %q (type %q)", a.Component, ty)
+		}
+	}
+	if lamp == 0 {
+		t.Error("no projector or display received the lamp-hours alarm")
 	}
 }
 

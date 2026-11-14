@@ -117,7 +117,9 @@ day, or the example fleet at enterprise size. The list, with what each one holds
 [CLI reference](/reference/cli/#omniglass-seed-dev).
 Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
 scenario never drifts from the fleet it grows from, and like the example fleet every one is
-idempotent. Pick one with `--scenario` for the lab (on its first run, or with `--fresh`), or
+idempotent. The degraded fleet's alarms fit the device class: an alarm template names the component
+types it applies to (the lamp-hours warning is for projectors and displays), so a microphone or a
+scheduler never reads "Lamp hours approaching end of life". Pick one with `--scenario` for the lab (on its first run, or with `--fresh`), or
 `STACK_SCENARIO` for the probe's lab (on a fresh install either is the server and its owner alone,
 and no node runs, since the node's simulated components come from the example fleet):
 

@@ -2088,6 +2088,9 @@ alarms:
     severity: warning
     message: Lamp hours approaching end of life
     dedup_key: lamp-hours
+    # Only a light-source device can raise this; the degraded scenario reuses
+    # the alarm as a template and must not put it on a microphone.
+    applies_to: [projector, display]
 
 # A held session worth showing (#1059), wired only with the simulated fleet (so
 # the docs screenshots, seeded without it, carry none of this). The huddle's
