@@ -17,9 +17,11 @@
 //
 // The container is reclaimed by [Main], which every consuming package must run
 // from its TestMain so cleanup happens in-process on normal exit. The
-// testcontainers reaper (ryuk) is only a backstop for hard kills; it cannot be
-// relied on alone (it is disabled or torn down early in some environments, for
-// example Docker Desktop on WSL2), which is why teardown lives in the harness.
+// testcontainers reaper (ryuk) is disabled (TESTCONTAINERS_RYUK_DISABLED=true);
+// it is only a hard-kill backstop on boxes where the network overhead of
+// starting it reliably (or at all) is too high, notably shared CI runners.
+// The in-process teardown in Main and make clean-testcontainers are the
+// primary and secondary leak backstops; ryuk is not relied on.
 // That requirement is enforced rather than documented: [NewDSN] refuses to hand
 // out a database to a test binary that is not running under Main.
 //
@@ -114,11 +116,12 @@ var (
 // running under [Main].
 //
 // Main is the only thing that terminates the shared container on normal exit,
-// and the testcontainers reaper cannot be trusted to finish the job here, so a
-// consuming package that forgets its TestMain leaks a Postgres for the life of
-// the machine. The package comment has said so since the harness was written,
-// and three packages had drifted off it by the time anyone counted the strays:
-// a doc comment is not a mechanism.
+// and the testcontainers reaper is disabled (TESTCONTAINERS_RYUK_DISABLED=true)
+// to avoid transient startup failures on boxes where network overhead is high.
+// A consuming package that forgets its TestMain leaks a Postgres for the life
+// of the machine. The package comment has said so since the harness was
+// written, and three packages had drifted off it by the time anyone counted the
+// strays: a doc comment is not a mechanism.
 //
 // The check sits exactly on the defect. The call that would otherwise start an
 // unreclaimed container is the call that fails, inside the offending package,

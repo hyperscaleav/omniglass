@@ -233,13 +233,13 @@ GO_PKGS_REST = $(filter-out $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED),$(shell go lis
 GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL)
 
 test-go-storage: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
 
 test-go-devseed: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
 
 test-go-rest: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_REST)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_REST)
 
 # Fails if any package go list reports is in no shard or in two. The rest is
 # derived, so this guards the day someone hand-lists it or names a shard that
@@ -270,7 +270,7 @@ test-web:
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.
 test-short:
-	go test -short ./...
+	TESTCONTAINERS_RYUK_DISABLED=true go test -short ./...
 
 # Wall-clock benchmarks over the real Storage Gateway, at two estate sizes.
 # DIAGNOSTIC, never a gate: nothing here runs in `make test` (a Go benchmark is

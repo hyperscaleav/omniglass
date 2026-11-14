@@ -3,6 +3,7 @@ package storagetest
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/config"
@@ -152,5 +153,47 @@ func TestContainerStartFailureIsNotCached(t *testing.T) {
 	}
 	if adminDSN != liveDSN {
 		t.Fatalf("admin DSN after recovery = %q, want %q", adminDSN, liveDSN)
+	}
+}
+
+// TestReaperDisabledBeforeStart verifies that TESTCONTAINERS_RYUK_DISABLED=true
+// is set before runPostgres is called, preventing the reaper from starting
+// altogether. The harness terminates the container explicitly in Main, and the
+// Makefile is the leak backstop; the reaper is disabled to avoid transient
+// startup failures that cost the entire test binary on a shared box where
+// network overhead is high.
+func TestReaperDisabledBeforeStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storagetest: skipped under -short (Postgres testcontainer)")
+	}
+	if config.Get("OMNIGLASS_TEST_ADMIN_DSN") != "" {
+		t.Skip("storagetest: the escape hatch runs before the container start this pins")
+	}
+
+	live, liveDSN := ctr, adminDSN
+	t.Cleanup(func() {
+		runPostgres = runPostgresContainer
+		ctr, adminDSN, containerReady = live, liveDSN, true
+	})
+
+	containerReady = false
+	ctr, adminDSN = nil, ""
+
+	runPostgresCalled := false
+	runPostgres = func(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
+		runPostgresCalled = true
+		if os.Getenv("TESTCONTAINERS_RYUK_DISABLED") != "true" {
+			t.Errorf("TESTCONTAINERS_RYUK_DISABLED should be true before container creation, got %q",
+				os.Getenv("TESTCONTAINERS_RYUK_DISABLED"))
+		}
+		return live, nil
+	}
+
+	if err := ensureContainer(); err != nil {
+		t.Fatalf("ensureContainer: %v", err)
+	}
+
+	if !runPostgresCalled {
+		t.Fatal("runPostgres was not called")
 	}
 }
