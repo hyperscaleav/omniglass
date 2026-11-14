@@ -40,9 +40,8 @@ func labTestImage() string {
 // labTestChoice runs image as a dev image held to its own build id, so an
 // override is checked the way omniglass:dev is.
 func labTestChoice(image string, labels map[string]string) ImageChoice {
-	c := SelectImage(labels[VersionLabel], "")
-	c.Ref = image
-	return c
+	v := labels[VersionLabel]
+	return ImageChoice{Ref: image, WantVersion: v, Why: "built by make beside this binary", BinaryVersion: v}
 }
 
 func TestIntegrationLabOnARealDaemon(t *testing.T) {

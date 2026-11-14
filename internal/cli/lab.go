@@ -35,16 +35,16 @@ import (
 // command, to learn on (#1193). `lab run` is the run mode (ADR-0058: a run
 // mode is a verb under its noun); `lab seed` is its one-off, run inside the
 // lab's own image, and hidden.
-func newLabCmd(version string) *cobra.Command {
+func newLabCmd(version, imageDigest string) *cobra.Command {
 	group := &cobra.Command{
 		Use:   "lab",
 		Short: "A working omniglass on Docker, to learn on",
 	}
-	group.AddCommand(newLabRunCmd(version), newLabMeasureCmd(), newLabPerfCmd(), newLabSeedCmd())
+	group.AddCommand(newLabRunCmd(version, imageDigest), newLabMeasureCmd(), newLabPerfCmd(), newLabSeedCmd())
 	return group
 }
 
-func newLabRunCmd(version string) *cobra.Command {
+func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	var (
 		port     int
 		listen   string
@@ -89,7 +89,7 @@ func newLabRunCmd(version string) *cobra.Command {
 			// reaps what is left.
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
-				port: port, listen: listen, fresh: fresh, keep: keep, scenario: scenario, image: image, project: project,
+				imageDigest: imageDigest, port: port, listen: listen, fresh: fresh, keep: keep, scenario: scenario, image: image, project: project,
 				systems: systems, plan: plan, script: script, scale: scale,
 			})
 		},
@@ -199,6 +199,10 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if cadence == "" {
 		cadence = lab.CadenceLab
 	}
+	choice, err := lab.SelectImage(f.version, f.imageDigest, labImage(f))
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (a node each), %d simulated components.\n",
 		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Simulated())
 	fmt.Fprintln(out)
@@ -206,7 +210,6 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if start == nil {
 		start = startScaleLab
 	}
-	choice := lab.SelectImage(f.version, labImage(f))
 	host, _ := os.Hostname()
 	wd, _ := os.Getwd()
 	return start(ctx, out, lab.Config{
@@ -333,6 +336,8 @@ type labFlags struct {
 	script                           labScript
 	scale                            labScale
 	version                          string
+	// imageDigest is the release image's digest stamped into this binary.
+	imageDigest string
 	// readHost, when set, stands in for this machine's Docker host in a
 	// plan's preflight.
 	readHost hostReader
@@ -365,6 +370,10 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
+	choice, err := lab.SelectImage(version, f.imageDigest, labImage(f))
+	if err != nil {
+		return err
+	}
 	fmt.Fprintln(out, "Starting your omniglass lab. The first run takes a few minutes; later ones, under one.")
 	fmt.Fprintln(out)
 
@@ -372,7 +381,6 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
-	choice := lab.SelectImage(version, labImage(f))
 	token, hash, _, err := auth.NewBearerToken()
 	if err != nil {
 		return err

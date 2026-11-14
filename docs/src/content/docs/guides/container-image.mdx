@@ -34,12 +34,15 @@ Tags:
 | `latest` | push to `main` | yes |
 | `sha-<full sha>` | every build | no, pins an exact commit |
 | `pr-<n>` | head of open PR #n | yes, moves on each push |
-| `v<version>` | a release tag (`v0.1.0`) | no, the release's image |
+| `v<version>` | a release (`v0.1.0`) | should not move; a release binary pins the digest, so a moved tag changes nothing it runs |
 
 The sha tag carries the full 40-character commit sha (`type=sha,format=long`).
 The preview pipeline pins a deploy to `sha-<full sha>` so a rollout follows the
-exact build. A release binary's `omniglass lab run` pulls `v<version>`, the image
-of its own release ([the lab](/guides/lab/)).
+exact build. A release binary's `omniglass lab run` does not pull `v<version>` by
+its tag: the release workflow builds and pushes the image before it builds the
+binaries, and stamps the image's digest into each one, so the lab pulls
+`ghcr.io/hyperscaleav/omniglass@sha256:...`, exactly the image its release was
+built with, whatever the tag points at later ([the lab](/guides/lab/#flags)).
 
 Every image carries the build it came from in the OCI label
 `org.opencontainers.image.version`: the release version, or the build id `make`
