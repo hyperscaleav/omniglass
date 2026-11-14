@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
@@ -62,14 +63,56 @@ type MetricTypeSpec struct {
 	Description string
 }
 
+// The metric_type fields a PATCH can write, spelled as the wire body spells
+// them, because an update_mask names wire fields (ADR-0091).
+const (
+	MetricTypeFieldLabel       = "label"
+	MetricTypeFieldDescription = "description"
+	MetricTypeFieldUnit        = "unit"
+	MetricTypeFieldPrecision   = "precision"
+)
+
+// MetricTypePatchFields is every field a metric_type PATCH lets a write set, in
+// the order a refusal lists them.
+var MetricTypePatchFields = []string{
+	MetricTypeFieldLabel, MetricTypeFieldDescription, MetricTypeFieldUnit, MetricTypeFieldPrecision,
+}
+
 // MetricTypePatch carries the mutable fields of a metric-type update; a nil field
 // is unchanged. DataType is fixed at create (a series' type must not shift under
 // its consumers).
+//
+// Precision is a nullable integer, which has no empty value to overload, so it
+// clears by being named in Write with a nil pointer (#1189, ADR-0091). The
+// NOT NULL text columns (description, unit) clear to "" as they always did.
 type MetricTypePatch struct {
 	Label       *string
 	Description *string
 	Unit        *string
 	Precision   *int
+	// Write is the resolved update_mask: the fields this write writes. NIL means
+	// the caller sent no mask, read as the implied mask of the fields the patch
+	// populated. A NON-NIL empty set names no fields and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the patch's implied mask: the fields it carries a value for.
+// Exported because the API resolves the wire mask against the same patch it is
+// about to write, so "populated" is defined once for both layers.
+func (p MetricTypePatch) Populated() updatemask.Fields {
+	f := updatemask.Fields{}
+	populatedIf(f, MetricTypeFieldLabel, p.Label != nil)
+	populatedIf(f, MetricTypeFieldDescription, p.Description != nil)
+	populatedIf(f, MetricTypeFieldUnit, p.Unit != nil)
+	populatedIf(f, MetricTypeFieldPrecision, p.Precision != nil)
+	return f
+}
+
+func (p MetricTypePatch) writeFields() updatemask.Fields {
+	if p.Write != nil {
+		return p.Write
+	}
+	return updatemask.Implied(p.Populated())
 }
 
 var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, retention_days, ` +
@@ -232,15 +275,19 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 		}
 		return nil, fmt.Errorf("storage: audit image metric_type %q: %w", name, err)
 	}
-	setLabel, labelVal := labelPatch(patch.Label)
+	w := patch.writeFields()
+	setLabel, labelVal := labelPatch(maskedPtr(w, MetricTypeFieldLabel, patch.Label))
+	// precision is a case on the write set, not a coalesce: a coalesce reads a
+	// nil value as "unchanged", which is what made a set precision permanent.
 	if _, err := tx.Exec(ctx, `
 		update metric_type set
 			label = case when $6::boolean then $2 else label end,
 			description  = coalesce($3, description),
 			unit         = coalesce($4, unit),
-			"precision"  = coalesce($5, "precision")
+			"precision"  = case when $7::boolean then $5 else "precision" end
 		where id = (select id from metric_type_in_effect() metric_type where name = $1)`,
-		name, labelVal, patch.Description, patch.Unit, patch.Precision, setLabel); err != nil {
+		name, labelVal, maskedPtr(w, MetricTypeFieldDescription, patch.Description), maskedPtr(w, MetricTypeFieldUnit, patch.Unit),
+		patch.Precision, setLabel, w.Has(MetricTypeFieldPrecision)); err != nil {
 		return nil, fmt.Errorf("storage: update metric type %q: %w", name, err)
 	}
 	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type_in_effect() metric_type where name = $1`, name))

@@ -382,3 +382,58 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 		t.Fatalf("instance a read = instance %q bucket %+v, want a's 3 samples with max 480, not b's 900", one.Instance, b)
 	}
 }
+
+// A standard's parent is a three-state string on the wire (#1189, the same
+// convention PATCH /products and PATCH /systems follow): omitted leaves the
+// parent, a name or uuid sets it, and an explicit "" clears it. Before this the
+// handler collapsed "" to "omitted" and the column was written with coalesce, so
+// a parent once set could not be removed.
+func TestStandardParentClearsWithEmptyString(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{"name": "base-kiosk", "label": "Base"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{"name": "other-kiosk", "label": "Other"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/standards",
+		map[string]any{"name": "variant-kiosk", "label": "Variant", "parent_standard_id": "base-kiosk"}, http.StatusCreated)
+
+	patch := func(body map[string]any) standardWire {
+		t.Helper()
+		var st standardWire
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/standards/variant-kiosk", body, http.StatusOK), &st); err != nil {
+			t.Fatalf("decode patch: %v", err)
+		}
+		return st
+	}
+
+	// Omitting the field leaves the parent.
+	if st := patch(map[string]any{"label": "Variant 2"}); st.ParentStandard != "base-kiosk" {
+		t.Fatalf("omitted: parent = %q, want base-kiosk", st.ParentStandard)
+	}
+	// A name sets it to another.
+	if st := patch(map[string]any{"parent_standard_id": "other-kiosk"}); st.ParentStandard != "other-kiosk" {
+		t.Fatalf("name: parent = %q, want other-kiosk", st.ParentStandard)
+	}
+	// An explicit "" clears it, on the PATCH response and on a fresh GET.
+	if st := patch(map[string]any{"parent_standard_id": ""}); st.ParentStandard != "" || st.ParentStandardID != "" {
+		t.Fatalf("cleared: parent = %q / %q, want none", st.ParentStandard, st.ParentStandardID)
+	}
+	var got standardWire
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/variant-kiosk", nil, http.StatusOK), &got)
+	if got.ParentStandard != "" || got.ParentStandardID != "" {
+		t.Fatalf("reread: parent = %q / %q, want none", got.ParentStandard, got.ParentStandardID)
+	}
+	// An unknown parent is still refused rather than read as a clear.
+	c.do(ownerTok, http.MethodPatch, "/standards/variant-kiosk",
+		map[string]any{"parent_standard_id": "no-such-standard"}, http.StatusUnprocessableEntity)
+}
