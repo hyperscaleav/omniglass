@@ -156,3 +156,55 @@ func hasMetric(reg collection.Registry, name string) bool {
 	_, ok := reg.Metric(name)
 	return ok
 }
+
+// TestRegistryReadsAtOnceForANameItLacks is the #1928 review's staleness
+// finding: a batch carrying a name the kept registry lacks reads the
+// fingerprint at once, inside the interval, so a type created moments before
+// its first sample is honored rather than refused until the interval runs
+// out. A name the read confirms no catalog holds forces no further read
+// until the interval passes, so a node sending an unknown name pays one extra
+// read an interval, not one a batch.
+func TestRegistryReadsAtOnceForANameItLacks(t *testing.T) {
+	now := time.Date(2026, 11, 14, 4, 0, 0, 0, time.UTC)
+	cache := &registryCache{now: func() time.Time { return now }}
+	store := &catalogStore{fp: "a", metrics: []storage.MetricType{{Name: "volume"}}}
+	batch := func(after time.Duration, names ...string) collection.Registry {
+		t.Helper()
+		now = now.Add(after)
+		ev := &ogv1.TelemetryBatch{}
+		for _, n := range names {
+			ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: n})
+		}
+		reg, _, err := cache.get(context.Background(), store, ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return reg
+	}
+
+	batch(0, "volume")
+	batch(fingerprintEvery/10, "volume")
+	if store.fingerprintReads != 1 {
+		t.Fatalf("a batch of known names inside the interval: %d fingerprint reads, want 1", store.fingerprintReads)
+	}
+
+	store.fp, store.metrics = "b", append(store.metrics, storage.MetricType{Name: "power"})
+	if reg := batch(fingerprintEvery/10, "volume", "power"); !hasMetric(reg, "power") {
+		t.Fatal("a type created inside the interval was refused to the first batch carrying it")
+	}
+	if store.fingerprintReads != 2 {
+		t.Fatalf("the batch naming the new type: %d fingerprint reads, want 2", store.fingerprintReads)
+	}
+
+	for i := 0; i < 5; i++ {
+		batch(fingerprintEvery/20, "ghost")
+	}
+	if store.fingerprintReads != 3 {
+		t.Fatalf("five batches naming a type no catalog holds: %d fingerprint reads, want 3 (one for the name)", store.fingerprintReads)
+	}
+	batch(fingerprintEvery, "ghost")
+	batch(fingerprintEvery/20, "ghost")
+	if store.fingerprintReads != 4 {
+		t.Fatalf("the interval passed: %d fingerprint reads, want 4 (the interval's read confirms the name again)", store.fingerprintReads)
+	}
+}

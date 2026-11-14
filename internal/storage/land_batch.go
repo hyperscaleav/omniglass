@@ -456,6 +456,9 @@ func (p *PG) landGroups(ctx context.Context, tx pgx.Tx, groups []landGroup) (coa
 // of a rule edit's order (the row FOR UPDATE, then health), and the two would
 // deadlock.
 func (p *PG) lockGroups(ctx context.Context, tx *batchTx, live []landGroup) error {
+	if tx.sp {
+		return errors.New("storage: land batch: the batch's locks are taken in its own transaction, not a savepoint")
+	}
 	keys := map[string]bool{}
 	marks := map[string]*calcMarks{}
 	var props []PropertySampleWrite

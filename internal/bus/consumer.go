@@ -336,7 +336,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	}
 	resolved := make([]resolvedGroup, 0, len(views))
 	wants := map[string][]storage.IdentityKey{}
-	sampled := false
+	var sampled []*ogv1.TelemetryBatch
 	for _, v := range views {
 		owner, ok := owners[v.GetTaskId()]
 		if !ok {
@@ -349,16 +349,16 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		bind := nodeBinding(node, owner)
 		if sampleCount(v) > 0 {
-			sampled = true
+			sampled = append(sampled, v)
 			identityWants(wants, v, bind.Conduit)
 		}
 		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
 	}
 	var reg collection.Registry
 	var identities map[string]*storage.IdentityResolution
-	if sampled {
+	if len(sampled) > 0 {
 		var err error
-		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store); err != nil {
+		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store, sampled...); err != nil {
 			return err
 		}
 		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
@@ -614,8 +614,9 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
 		// The registry is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
-		// The command-targeted property names ride with it (#1299).
-		reg, targeted, err := s.registry.get(ctx, s.store)
+		// The command-targeted property names ride with it (#1299). A name
+		// the kept registry lacks reads the catalogs at once (#1928).
+		reg, targeted, err := s.registry.get(ctx, s.store, ev)
 		if err != nil {
 			return err
 		}

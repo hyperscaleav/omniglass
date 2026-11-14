@@ -648,8 +648,9 @@ type Gateway interface {
 	// and the poll targets the sim should see hit.
 	CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error)
 	ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error)
-	// StampEndpointsSeen records that an ingest batch delivered by each
-	// endpoint landed, by the server's clock, coalesced (#933).
+	// StampEndpointsSeen records that something each endpoint delivered
+	// outside a telemetry batch landed, by the server's clock, coalesced
+	// (#933); a batch stamps its endpoints inside LandBatch.
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
 	// ResolveWebhook finds the endpoint a webhook token's digest names
 	// (#1024): its component, its scheme and credential, its listeners;

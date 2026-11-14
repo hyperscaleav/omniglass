@@ -38,7 +38,9 @@ type batchTx struct {
 	// SHARE, rules those rules by key, marked each writer rule's calc marks
 	// (by the rule a write excepts), and series each property series lock.
 	// Only the batch's own transaction records them, never a savepoint, so a
-	// rolled-back savepoint never leaves a lock recorded that it released.
+	// rolled-back savepoint never leaves a lock recorded that it released:
+	// lockGroups refuses a batchTx whose sp is set.
+	sp       bool
 	ruleKeys map[string]bool
 	rules    map[string][]EventRule
 	marked   map[string]*calcMarks
@@ -55,7 +57,7 @@ func newBatchTx(tx pgx.Tx) *batchTx {
 // for the batch (a read a rolled-back savepoint made is still the
 // transaction's answer).
 func (b *batchTx) savepoint(sp pgx.Tx) *batchTx {
-	return &batchTx{Tx: sp, arcs: b.arcs, now: b.now, targeted: b.targeted, writers: b.writers, bindings: b.bindings,
+	return &batchTx{Tx: sp, sp: true, arcs: b.arcs, now: b.now, targeted: b.targeted, writers: b.writers, bindings: b.bindings,
 		ruleKeys: b.ruleKeys, rules: b.rules, marked: b.marked, series: b.series}
 }
 
