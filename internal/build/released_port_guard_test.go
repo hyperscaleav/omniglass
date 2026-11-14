@@ -25,7 +25,7 @@ import (
 // files of a test-helper package (a directory named *test), where a helper
 // returning a released address would otherwise hide. A port released through
 // a wrapper (a simulated face's StopTCPSession, then a restart on the port)
-// is outside what this reads; #1116 tracks the one class of it on the tree.
+// is outside what this reads; TestNoTestRestartsAFaceAtALiteralAddress reads it.
 func TestNoTestUsesAReleasedPort(t *testing.T) {
 	// The uses that cannot be avoided, each with why. A stale entry fails,
 	// so the list never outlives the code it excuses.

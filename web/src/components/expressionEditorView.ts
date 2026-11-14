@@ -173,11 +173,11 @@ const editorTheme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "inherit", fontSize: "inherit" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { fontFamily: "var(--og-font-data)", lineHeight: "inherit", maxHeight: "11rem", overflow: "auto" },
-  // No ligatures: the field teaches what to type, and JetBrains Mono would
-  // draw != and == as single glyphs.
+  // Ligatures stay off by inheritance: the host frame wears font-data, whose
+  // rule in app.css turns them off for every code rendering (#1013).
   // Three lines tall, the whole frame is the content: a click anywhere in
   // it lands in the editor, and below the text it lands past the end.
-  ".cm-content": { padding: "0", minHeight: "4.125em", caretColor: "var(--color-base-content)", fontVariantLigatures: "none" },
+  ".cm-content": { padding: "0", minHeight: "4.125em", caretColor: "var(--color-base-content)" },
   ".cm-line": { padding: "0" },
   ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 62%, transparent)" },
   // Each severity its own mark: an error a wavy red line, a warning a wavy
