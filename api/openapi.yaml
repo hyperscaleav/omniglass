@@ -12793,7 +12793,7 @@ components:
           description: A human label
           type: string
         params_schema:
-          description: A JSON Schema fragment (replaces wholesale)
+          description: A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it
         power_outlet_param:
           description: The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row
           maxLength: 64
@@ -12814,6 +12814,13 @@ components:
         target_property_type:
           description: The property this command sets (empty clears it; a non-empty arm clears the other)
           type: string
+        update_mask:
+          description: Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     UpdateComponentInputBody:
       additionalProperties: false
@@ -12987,7 +12994,14 @@ components:
           description: A human label
           type: string
         payload_schema:
-          description: A JSON Schema fragment (replaces wholesale)
+          description: A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it
+        update_mask:
+          description: Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     UpdateGroupInputBody:
       additionalProperties: false
@@ -13092,12 +13106,19 @@ components:
           description: A human label
           type: string
         precision:
-          description: Decimal places a rendered value keeps
+          description: Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset
           format: int64
           type: integer
         unit:
           description: The display unit of the series
           type: string
+        update_mask:
+          description: Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     UpdateNodeInputBody:
       additionalProperties: false
@@ -13291,8 +13312,15 @@ components:
         label:
           description: A human label
           type: string
+        update_mask:
+          description: Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         validation:
-          description: A JSON Schema fragment (replaces wholesale)
+          description: A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it
       type: object
     UpdateSecretInputBody:
       additionalProperties: false
@@ -13354,7 +13382,7 @@ components:
         map:
           description: "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"
         parent_standard_id:
-          description: A new variant parent, by handle or uuid
+          description: A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard
           type: string
       type: object
     UpdateSystemInputBody:
@@ -14845,7 +14873,7 @@ paths:
       summary: Get a command type
       x-omniglass-permission: command_type:read
     patch:
-      description: Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+      description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update."
       operationId: update-command-type
       parameters:
         - description: The command type's name
@@ -17505,7 +17533,7 @@ paths:
       summary: Get an event type
       x-omniglass-permission: event_type:read
     patch:
-      description: Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+      description: "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update."
       operationId: update-event-type
       parameters:
         - description: The event type's name
@@ -18738,7 +18766,7 @@ paths:
       summary: Get a metric type
       x-omniglass-permission: metric_type:read
     patch:
-      description: Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+      description: "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update."
       operationId: update-metric-type
       parameters:
         - description: The metric type's name
@@ -21124,7 +21152,7 @@ paths:
       summary: Get a property
       x-omniglass-permission: property_type:read
     patch:
-      description: Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
+      description: "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update."
       operationId: update-property-type
       parameters:
         - description: The property's name
@@ -21791,7 +21819,7 @@ paths:
       summary: Get a standard
       x-omniglass-permission: standard:read
     patch:
-      description: Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
+      description: "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update."
       operationId: update-standard
       parameters:
         - description: The standard, by name or uuid

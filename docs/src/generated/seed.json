@@ -550,6 +550,14 @@
    "description": "Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran."
   },
   {
+   "name": "poll-cpu-time",
+   "data_type": "float",
+   "unit": "ms",
+   "precision": 3,
+   "label": "Poll CPU Time",
+   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock."
+  },
+  {
    "name": "poll-failure-count",
    "data_type": "int",
    "label": "Poll Failures",
@@ -617,6 +625,14 @@
    "description": "Tasks in the worklist the node installed, sampled on each install."
   },
   {
+   "name": "worklist-pull-loss-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worklist Pull Loss",
+   "description": "The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist."
+  },
+  {
    "name": "tick-duration",
    "data_type": "float",
    "unit": "ms",
@@ -648,6 +664,14 @@
    "data_type": "int",
    "label": "Schedule Skips",
    "description": "Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet."
+  },
+  {
+   "name": "worker-busy-fraction",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worker Busy",
+   "description": "Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
   },
   {
    "name": "spool-batch-count",
@@ -4010,6 +4034,18 @@
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
    "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "worklist-stale",
+   "label": "Worklist stale",
+   "description": "Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.",
+   "sample_key": "worklist-pull-loss-ratio",
+   "fire": "value == 1",
+   "clear": "value \u003c 1",
+   "fire_sustain": "2m",
+   "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
   },

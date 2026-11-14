@@ -807,6 +807,7 @@ var platformKeysOffPage = map[string]string{
 	writerclass.CommandExecutionLatency: offNodeDetail,
 	writerclass.CommandRedeliveryCount:  offNodeDetail,
 	writerclass.CommandPullFailureCount: offNodeDetail,
+	writerclass.WorkerBusyFraction:      offNodeDetail,
 
 	writerclass.ProcessGoroutineCount: offProcess,
 	writerclass.ProcessHeapSize:       offProcess,
@@ -869,5 +870,44 @@ func TestPlatformPageListsEveryPlatformKey(t *testing.T) {
 		if !platform[k] {
 			t.Errorf("the page reads %s, which is not a platform key", k)
 		}
+	}
+}
+
+// TestPlatformViewShowsANodeRunningAStaleWorklist (#1868): a node whose every
+// worklist pull in its newest window was refused reads 1 in the worklist
+// column, beside a node whose pulls were served, so a node running a stale
+// worklist is a cell on the page and not only an alarm.
+func TestPlatformViewShowsANodeRunningAStaleWorklist(t *testing.T) {
+	t.Parallel()
+	f := newPlatformViewFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := f.gw.RecordPlatformMetrics(f.ctx, []storage.PlatformMetric{
+		{ComponentID: f.alpha.ID, Key: writerclass.WorklistPullLossRatio, Value: 1, TS: now},
+		{ComponentID: f.bravo.ID, Key: writerclass.WorklistPullLossRatio, Value: 0, TS: now},
+	}); err != nil {
+		t.Fatalf("record platform metrics: %v", err)
+	}
+	v, err := f.gw.PlatformView(f.ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	var group bool
+	for _, g := range v.Groups {
+		if g.Name == "worklist" && len(g.Keys) == 1 && g.Keys[0] == writerclass.WorklistPullLossRatio {
+			group = true
+		}
+	}
+	if !group {
+		t.Errorf("groups = %+v, want a worklist group of %s", v.Groups, writerclass.WorklistPullLossRatio)
+	}
+	rows := map[string]storage.PlatformNode{}
+	for _, n := range v.Nodes {
+		rows[n.Name] = n
+	}
+	if got := rows["edge-alpha"].Figures[writerclass.WorklistPullLossRatio]; got.Value != 1 || !got.ObservedAt.Equal(now) {
+		t.Errorf("edge-alpha worklist pull loss = %+v, want 1 at %s", got, now)
+	}
+	if got, ok := rows["edge-bravo"].Figures[writerclass.WorklistPullLossRatio]; !ok || got.Value != 0 {
+		t.Errorf("edge-bravo worklist pull loss = %+v (present %v), want 0", got, ok)
 	}
 }

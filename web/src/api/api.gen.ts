@@ -7558,7 +7558,7 @@ export type UpdateCommandTypeInputBody = {
   hold_seconds?: number;
   /** A human label */
   label?: string;
-  /** A JSON Schema fragment (replaces wholesale) */
+  /** A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it */
   params_schema?: unknown;
   /**
      * The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row
@@ -7579,6 +7579,11 @@ export type UpdateCommandTypeInputBody = {
   target_metric_type?: string;
   /** The property this command sets (empty clears it; a non-empty arm clears the other) */
   target_property_type?: string;
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
 };
 
 export type UpdateComponentInputBody = {
@@ -7687,8 +7692,13 @@ export type UpdateEventTypeInputBody = {
   description?: string;
   /** A human label */
   label?: string;
-  /** A JSON Schema fragment (replaces wholesale) */
+  /** A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it */
   payload_schema?: unknown;
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
 };
 
 export type UpdateGroupInputBody = {
@@ -7752,10 +7762,15 @@ export type UpdateMetricTypeInputBody = {
   description?: string;
   /** A human label */
   label?: string;
-  /** Decimal places a rendered value keeps */
+  /** Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset */
   precision?: number;
   /** The display unit of the series */
   unit?: string;
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
 };
 
 export type UpdateNodeInputBody = {
@@ -7880,7 +7895,12 @@ export type UpdatePropertyInputBody = {
   description?: string;
   /** A human label */
   label?: string;
-  /** A JSON Schema fragment (replaces wholesale) */
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
+  /** A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it */
   validation?: unknown;
 };
 
@@ -7921,7 +7941,7 @@ export type UpdateStandardInputBody = {
   label?: string;
   /** The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair */
   map?: unknown;
-  /** A new variant parent, by handle or uuid */
+  /** A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard */
   parent_standard_id?: string;
 };
 
@@ -10673,7 +10693,7 @@ export const getUpdateCommandTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+ * Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.
  * @summary Update a command type
  */
 export const updateCommandType = async (name: string,
@@ -14958,7 +14978,7 @@ export const getUpdateEventTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+ * Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
  * @summary Update an event type
  */
 export const updateEventType = async (name: string,
@@ -17227,7 +17247,7 @@ export const getUpdateMetricTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+ * Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
  * @summary Update a metric type
  */
 export const updateMetricType = async (name: string,
@@ -21378,7 +21398,7 @@ export const getUpdatePropertyTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
+ * Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
  * @summary Update a property
  */
 export const updatePropertyType = async (name: string,
@@ -22683,7 +22703,7 @@ export const getUpdateStandardUrl = (id: string,) => {
 }
 
 /**
- * Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
+ * Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.
  * @summary Update a standard
  */
 export const updateStandard = async (id: string,

@@ -136,6 +136,8 @@ var bornUnderTheRuling = map[string]bool{
 	// Each endpoint's hold backstop expiries (#1651), declared after the
 	// backfill.
 	"hold-expiry-count": true,
+	// Each endpoint's poll CPU time (#1870), declared after the backfill.
+	"poll-cpu-time": true,
 }
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to
