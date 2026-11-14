@@ -48,7 +48,7 @@ type Member struct {
 
 var memberCols = `m.id, s.name, c.name, s.id, c.id, m.is_primary,
 	(select count(*) from system_member peer where peer.component_id = m.component_id), ` +
-	latestVerdict("component_id", "c")
+	latestComponentVerdict("c")
 
 // memberFrom joins both ends back to their names, because a membership is
 // displayed as "this component, in this system" and the arc now stores ids.

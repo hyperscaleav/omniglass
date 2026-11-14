@@ -3733,7 +3733,7 @@ export type ListAlarmsOutputBody = {
   /** @nullable */
   alarms: AlarmBody[] | null;
   component: string;
-  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
+  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   verdict: string;
 };
 

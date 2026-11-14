@@ -83,6 +83,26 @@ alarm on a component
 A component's own verdict is the only thing that travels from the box that breaks to the slot that
 cares: hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain), amended #626).
 
+### A component nothing has observed
+
+"No active alarms" is two different facts, and a component's verdict keeps them apart (#1454). A
+component that something has **observed** and found clean is `healthy`. A component that **nothing has
+ever observed** reads **`unknown`**, because `healthy` there would be a false green: a device created a
+moment ago, with an endpoint no node has probed, has had no chance to be wrong.
+
+A component counts as observed once either has happened: an alarm was ever raised on it (a cleared one
+counts, since what was wrong outlives the fix), or one of its endpoints has delivered a batch of anything
+(the `last_seen` stamp, #933). Until then the component's own read, `GET /components/{name}/alarms`,
+and the fleet view's dots and a system's members read all say `unknown`, so the component's page and the
+Explore outline never disagree about the same device. A recorded verdict always wins: once the rollup has
+written one, the component has been observed by definition.
+
+`unknown` here is a reading of those reads alone. It never enters the rollup (the built verdict domain
+stays `healthy`, `incomplete`, `degraded`, `outage`), so an unobserved member neither raises nor hides a
+system's verdict, and the console words it with the same grey chip as a verdict it was never sent. The
+[design below](#unknown-and-honest-coverage) is the larger step: an unmeasured role changing what a
+system reads.
+
 ## Impact lives on the role
 
 **`impact`** is a column on `system_role`: `outage`, `degraded`, or `none`, defaulting to `degraded`.

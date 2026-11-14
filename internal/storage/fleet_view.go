@@ -89,11 +89,33 @@ type FleetView struct {
 // concurrent writes can land with the two inverted (#356). An owner with
 // nothing recorded reads healthy: nothing has been claimed about it.
 func latestVerdict(ownerCol, table string) string {
+	return recordedVerdict(ownerCol, table, `'healthy'`)
+}
+
+// latestComponentVerdict is latestVerdict for a component, whose silence is
+// two different facts (#1454): a component something has observed and found
+// clean reads healthy, and one nothing has ever observed reads unknown, since
+// healthy there would be a false green. See componentObservedSQL.
+func latestComponentVerdict(table string) string {
+	return recordedVerdict("component_id", table, `case when `+componentObservedSQL(table+`.id`)+` then 'healthy' else 'unknown' end`)
+}
+
+func recordedVerdict(ownerCol, table, fallback string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
 		  and v.property_type_id = (select id from property_type where namespace = 'og' and name = 'health')
 		  and v.instance = '' and v.provenance = 'calculated'
-		order by v.id desc limit 1), 'healthy')`
+		order by v.id desc limit 1), ` + fallback + `)`
+}
+
+// componentObservedSQL is the boolean expression for "something has observed
+// this component" (#1454), given an expression for its uuid: an alarm was ever
+// raised on it (cleared ones count, the history outlives the fix), or one of
+// its endpoints has delivered a batch (endpoint_live, #933). Until then there
+// is nothing to call it healthy on.
+func componentObservedSQL(idExpr string) string {
+	return `(exists (select 1 from alarm oa where oa.component_id = ` + idExpr + `)
+		or exists (select 1 from endpoint oe join endpoint_live ol on ol.endpoint_id = oe.id where oe.component = ` + idExpr + `))`
 }
 
 // Every derived column is aliased, the type subquery above all: scopedListSQL
@@ -237,7 +259,7 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 	if read.Empty() {
 		return out, nil
 	}
-	cols := `m.system_id, c.id, c.name, ` + latestVerdict("component_id", "c") + `,
+	cols := `m.system_id, c.id, c.name, ` + latestComponentVerdict("c") + `,
 		m.is_primary,
 		(select count(*) from system_member peer where peer.component_id = m.component_id) > 1`
 	from := ` from system_member m join component c on c.id = m.component_id

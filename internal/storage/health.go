@@ -608,11 +608,24 @@ func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID stri
 
 // ComponentVerdict is one component's own current verdict, by its id, the
 // one its active alarms make: the same live computation the recompute
-// records, so a reader of one component need not read the fleet for it.
+// records, so a reader of one component need not read the fleet for it. A
+// component nothing has ever observed reads "unknown" rather than healthy
+// (#1454): the same answer the fleet view's dots give, so the component's own
+// page and the outline never disagree about a device nothing has collected
+// from. "unknown" is a reading of this read alone; it never enters the rollup.
 func (p *PG) ComponentVerdict(ctx context.Context, componentID string) (string, error) {
 	v, err := p.componentVerdict(ctx, p.pool, componentID)
 	if err != nil {
 		return "", err
+	}
+	if v == health.Healthy {
+		var observed bool
+		if err := p.pool.QueryRow(ctx, `select `+componentObservedSQL(`$1::uuid`), componentID).Scan(&observed); err != nil {
+			return "", fmt.Errorf("storage: component observed %q: %w", componentID, err)
+		}
+		if !observed {
+			return "unknown", nil
+		}
 	}
 	return v.String(), nil
 }

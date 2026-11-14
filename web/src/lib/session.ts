@@ -136,6 +136,14 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   });
 }
 
+// ladderObserved reports whether any rung of the endpoint's ladder has been
+// observed (or is held by a refusal). An endpoint nothing has ever measured has
+// a ladder of unknown rungs only, and the surface shows none rather than a
+// chip named for a rung with nothing behind it (#1454).
+export function ladderObserved(iface: ReachEndpoint): boolean {
+  return ladder(iface).some((r) => r.status !== "unknown");
+}
+
 // CREDENTIALED_POLLS are the transports whose every stateless poll carries
 // the credential: an snmp get its community (#821), an http or https request
 // its driver's scheme (#902). An auth gate on one of these holds the polls.
