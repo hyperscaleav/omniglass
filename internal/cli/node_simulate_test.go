@@ -45,7 +45,7 @@ func TestNodeRunRefusesSimulateWithOnce(t *testing.T) {
 // A probe runs on an interval of its own and a node runs its tasks on a pool
 // of workers (#1634): an interval or a pool of none would run nothing, so
 // node run refuses either before it claims anything, as it does a worker
-// count from the environment that is not a number.
+// count from the environment that is neither a number nor auto.
 func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
@@ -54,8 +54,9 @@ func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
 	}{
 		{[]string{"--probe-every", "0s"}, "", "--probe-every"},
 		{[]string{"--lane-workers", "0"}, "", "--lane-workers"},
+		{[]string{"--lane-workers", "lots"}, "", "--lane-workers"},
 		{nil, "many", "OMNIGLASS_LANE_WORKERS"},
-		{nil, "0", "--lane-workers"},
+		{nil, "0", "OMNIGLASS_LANE_WORKERS"},
 	} {
 		t.Setenv("OMNIGLASS_LANE_WORKERS", tc.env)
 		root := Root("test")
@@ -66,6 +67,32 @@ func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
 		err := root.Execute()
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("node run %v (OMNIGLASS_LANE_WORKERS=%q): %v, want a refusal naming %s", tc.args, tc.env, err, tc.want)
+		}
+	}
+}
+
+// #1869: the lane pool is sized from the node's limits unless the operator
+// names a count, on the flag or in the environment, the flag first.
+func TestLaneWorkersFromTakesAnOperatorsCountOverAuto(t *testing.T) {
+	for _, tc := range []struct {
+		flag    string
+		changed bool
+		env     string
+		want    int
+	}{
+		{"auto", false, "", 0},
+		{"auto", false, "auto", 0},
+		{"8", true, "", 8},
+		{"auto", false, "12", 12},
+		{"8", true, "12", 8},
+		{"auto", true, "12", 0},
+		{"AUTO", true, "", 0},
+		{"auto", false, " 12\n", 12},
+		{" auto ", true, "", 0},
+	} {
+		got, err := laneWorkersFrom(tc.flag, tc.changed, tc.env)
+		if err != nil || got != tc.want {
+			t.Errorf("laneWorkersFrom(%q, %v, %q) = %d, %v; want %d (0 is auto)", tc.flag, tc.changed, tc.env, got, err, tc.want)
 		}
 	}
 }

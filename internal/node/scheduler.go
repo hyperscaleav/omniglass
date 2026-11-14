@@ -16,8 +16,10 @@ import (
 // heartbeat.
 const DefaultProbeEvery = 30 * time.Second
 
-// DefaultLaneWorkers is how many endpoint lanes a node runs at once when it
-// is given no worker count (#1634, #1249).
+// DefaultLaneWorkers is the lane count of a dispatcher built with none, as
+// its tests build it (#1634, #1249). It is not a node's default: Run always
+// hands the dispatcher the count it resolved, the operator's or auto's
+// (#1869, AutoLaneWorkers).
 const DefaultLaneWorkers = 16
 
 // The dispatcher (#1634) runs each poll and probe on its own interval, from

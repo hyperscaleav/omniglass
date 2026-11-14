@@ -10,7 +10,8 @@
       "sysctls": [],
       "publish": "",
       "runs_once": false,
-      "role": "Postgres, the lab's own database. On the lab network only, never published."
+      "role": "Postgres, the lab's own database. On the lab network only, never published.",
+      "limits": ""
     },
     {
       "name": "seed",
@@ -21,7 +22,8 @@
       "sysctls": [],
       "publish": "",
       "runs_once": true,
-      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the node afresh."
+      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the node afresh.",
+      "limits": ""
     },
     {
       "name": "server",
@@ -32,7 +34,8 @@
       "sysctls": [],
       "publish": "127.0.0.1:8080 -\u003e 8080",
       "runs_once": false,
-      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the node."
+      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the node.",
+      "limits": ""
     },
     {
       "name": "node",
@@ -47,7 +50,8 @@
       ],
       "publish": "",
       "runs_once": false,
-      "role": "The edge node edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network."
+      "role": "The edge node edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network.",
+      "limits": "1 CPU, 512 MiB"
     }
   ],
   "volumes": [

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,8 +32,9 @@ func newNodeRunCmd() *cobra.Command {
 		token      string
 		heartbeat  time.Duration
 		probeEvery time.Duration
-		// laneWorkers is how many endpoint lanes run at once (#1634, #1249).
-		laneWorkers int
+		// laneWorkers is how many endpoint lanes run at once (#1634, #1249):
+		// a count, or auto to size them from the node's limits (#1869).
+		laneWorkers string
 		// worklistEvery is the pull interval (#1577), apart from the heartbeat.
 		worklistEvery time.Duration
 		// sessionDials bounds the held sessions dialing at once (#1636).
@@ -80,17 +82,9 @@ func newNodeRunCmd() *cobra.Command {
 			if probeEvery <= 0 {
 				return fmt.Errorf("node: --probe-every %s: a probe runs on an interval of its own, so it must be positive", probeEvery)
 			}
-			if !cmd.Flags().Changed("lane-workers") {
-				if v := config.Get("OMNIGLASS_LANE_WORKERS"); v != "" {
-					n, err := strconv.Atoi(v)
-					if err != nil {
-						return fmt.Errorf("node: OMNIGLASS_LANE_WORKERS %q is not a whole number", v)
-					}
-					laneWorkers = n
-				}
-			}
-			if laneWorkers <= 0 {
-				return fmt.Errorf("node: --lane-workers %d: a node needs at least one lane worker to run its tasks", laneWorkers)
+			lanes, err := laneWorkersFrom(laneWorkers, cmd.Flags().Changed("lane-workers"), config.Get("OMNIGLASS_LANE_WORKERS"))
+			if err != nil {
+				return err
 			}
 			dials, err := sessionDialsFrom(sessionDials, cmd.Flags().Changed("session-dials"), config.Get("OMNIGLASS_NODE_SESSION_DIALS"))
 			if err != nil {
@@ -98,7 +92,7 @@ func newNodeRunCmd() *cobra.Command {
 			}
 			nodeCfg := node.Config{
 				ServerURL: serverURL, Name: name, Token: token,
-				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, LaneWorkers: laneWorkers, WorklistEvery: worklistEvery,
+				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, LaneWorkers: lanes, WorklistEvery: worklistEvery,
 				SessionDials: dials, Once: once,
 			}
 			if simulate {
@@ -129,7 +123,7 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&token, "token", "", "enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN)")
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", node.DefaultProbeEvery, "how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
-	cmd.Flags().IntVar(&laneWorkers, "lane-workers", node.DefaultLaneWorkers, "how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS)")
+	cmd.Flags().StringVar(&laneWorkers, "lane-workers", laneWorkersAuto, "how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled; auto sizes them from the CPU and memory the node may use (env OMNIGLASS_LANE_WORKERS)")
 	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull")
 	cmd.Flags().IntVar(&sessionDials, "session-dials", node.DefaultSessionDials, "how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS)")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
@@ -138,6 +132,31 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().IntVar(&portOffset, "port-offset", 0, "with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	cmd.Flags().DurationVar(&poll, "poll", simnode.DefaultPoll, "with --simulate: how often the simulator re-pulls its component list")
 	return cmd
+}
+
+// laneWorkersAuto sizes the lane pool from the node's limits (#1869).
+const laneWorkersAuto = "auto"
+
+// laneWorkersFrom is the node's lane count: the flag when given, else
+// OMNIGLASS_LANE_WORKERS when set, else auto. Zero is auto, which the node
+// resolves from its limits as it starts.
+func laneWorkersFrom(flag string, changed bool, env string) (int, error) {
+	v, from := flag, "--lane-workers"
+	if !changed && env != "" {
+		v, from = env, "OMNIGLASS_LANE_WORKERS"
+	}
+	v = strings.TrimSpace(v)
+	if strings.EqualFold(v, laneWorkersAuto) {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("node: %s %q is neither a count of lanes nor auto", from, v)
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("node: %s is %d: a node needs at least one lane worker to run its tasks (or auto to size them)", from, n)
+	}
+	return n, nil
 }
 
 // sessionDialsFrom is the node's session-dials bound: the flag when given,
