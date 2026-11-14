@@ -87,6 +87,8 @@ func TestLaneWorkersFromTakesAnOperatorsCountOverAuto(t *testing.T) {
 		{"8", true, "12", 8},
 		{"auto", true, "12", 0},
 		{"AUTO", true, "", 0},
+		{"auto", false, " 12\n", 12},
+		{" auto ", true, "", 0},
 	} {
 		got, err := laneWorkersFrom(tc.flag, tc.changed, tc.env)
 		if err != nil || got != tc.want {

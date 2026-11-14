@@ -158,6 +158,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	defer slog.SetDefault(prior)
 	slog.SetDefault(logger)
 
+	// The lane pool is sized first, from the node's own limits, so the boot
+	// log states it even when the server is not there to claim from.
+	lanes, lanesFrom := resolveLaneWorkers(cfg.LaneWorkers, AutoLaneWorkers)
+	logger.Info("lane workers", "facility", "collection", "workers", lanes, "source", lanesFrom)
+
 	creds, err := Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
 	if err != nil {
 		return collection.WorklistReply{}, err
@@ -408,8 +413,6 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	lanes, lanesFrom := resolveLaneWorkers(cfg.LaneWorkers, AutoLaneWorkers)
-	logger.Info("lane workers", "facility", "collection", "workers", lanes, "source", lanesFrom)
 	self.lanes(lanes)
 	d = newDispatcher(dispatchConfig{workers: lanes, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})

@@ -145,6 +145,7 @@ func laneWorkersFrom(flag string, changed bool, env string) (int, error) {
 	if !changed && env != "" {
 		v, from = env, "OMNIGLASS_LANE_WORKERS"
 	}
+	v = strings.TrimSpace(v)
 	if strings.EqualFold(v, laneWorkersAuto) {
 		return 0, nil
 	}

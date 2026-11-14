@@ -718,8 +718,9 @@ not from a fixed count. The CPU count alone is the wrong measure, because a lane
 run waiting on its device: a poll that costs a few milliseconds of CPU waits a couple of hundred on
 the answer, so one CPU keeps dozens of runs in flight. The node reads its limits from its cgroup
 (`cpu.max` and `memory.max`, the tightest of its own and every parent's, so a container's quota
-binds) and falls back to the host's CPUs and memory for any limit the cgroup leaves open, then takes
-the tighter of two bounds:
+binds) and its host (the CPUs the Go runtime schedules on, `GOMAXPROCS`, which also carries a cgroup
+v1 CPU limit, and `MemTotal`), taking the tighter of the two for each, so a limit the cgroup leaves
+open or sets above the host is the host's. It then takes the tighter of two bounds:
 
 - **CPU:** half the CPUs (the rest is the node's reports, worklist and sends) times a run's whole
   time over its CPU time. At a run of 4.4 ms of CPU waiting 200 ms, about 23 lanes a CPU.
@@ -727,10 +728,11 @@ the tighter of two bounds:
 
 The result is clamped to 4 to 256: a node on a sliver of a CPU still runs a few endpoints at once,
 and one on a large host does not open more connections than a fleet's devices welcome. A number
-sets the pool outright. The node logs the count it took and why at boot (`lane workers`, with the
-limits it read and where it read each), and reports it as `lane-worker-count` under the instance
+sets the pool outright. The node logs the count it took and why at boot, before it claims (`lane
+workers`, with the limits it read and where it read each), and reports it as `lane-worker-count` under the instance
 `lane`, once per report window beside `worker-busy-fraction`, so the pool's size and how busy it is
-read side by side.
+read side by side. A cgroup v1 memory limit is not read: on v1 the node sizes from the host's
+`MemTotal` (ADR-1869).
 
 ## Implicit reachability
 

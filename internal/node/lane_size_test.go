@@ -118,9 +118,11 @@ func TestMemTotalReadsMeminfo(t *testing.T) {
 	}
 }
 
-// A limit the cgroup sets wins; one it leaves open falls back to the host's
-// figure, and the source says which each came from.
-func TestLimitsFallBackToTheHostWhereTheCgroupSetsNone(t *testing.T) {
+// Each limit is the tighter of the cgroup's and the host's, so a quota set
+// above the host's CPUs or memory does not size the pool for capacity the
+// node cannot have; one the cgroup leaves open is the host's. The source says
+// which each came from.
+func TestLimitsTakeTheTighterOfTheCgroupsAndTheHosts(t *testing.T) {
 	t.Parallel()
 	host := Limits{CPUs: 32, MemoryBytes: 64 << 30, CPUFrom: "host", MemoryFrom: "host"}
 	open := withHost(Limits{}, host)
@@ -135,6 +137,33 @@ func TestLimitsFallBackToTheHostWhereTheCgroupSetsNone(t *testing.T) {
 		if !strings.Contains(got.String(), want) {
 			t.Errorf("source %q does not name %q", got.String(), want)
 		}
+	}
+	over := withHost(Limits{CPUs: 64, MemoryBytes: 1 << 40, CPUFrom: "cpu.max", MemoryFrom: "memory.max"}, host)
+	if over != host {
+		t.Errorf("cgroup limits above the host = %+v, want the host's %+v", over, host)
+	}
+}
+
+// The host's CPUs are the ones the runtime schedules on: GOMAXPROCS, which
+// honors a cgroup's CPU limit the v2 reader does not see (cgroup v1) and an
+// operator's GOMAXPROCS, where it is lower than the machine's count.
+func TestHostCPUsAreTheRuntimesSchedulableCount(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		numCPU, maxProcs int
+		want             float64
+		from             string
+	}{
+		{12, 12, 12, "host"},
+		{12, 2, 2, "gomaxprocs"},
+		{4, 8, 4, "host"},
+	} {
+		if got, from := hostCPUs(tc.numCPU, tc.maxProcs); got != tc.want || from != tc.from {
+			t.Errorf("hostCPUs(%d, %d) = %v from %q, want %v from %q", tc.numCPU, tc.maxProcs, got, from, tc.want, tc.from)
+		}
+	}
+	if s := (Limits{CPUs: 2, CPUFrom: "gomaxprocs"}).String(); !strings.Contains(s, "gomaxprocs=2") {
+		t.Errorf("source %q does not name gomaxprocs=2", s)
 	}
 }
 

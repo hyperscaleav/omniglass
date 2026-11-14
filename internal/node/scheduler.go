@@ -16,8 +16,10 @@ import (
 // heartbeat.
 const DefaultProbeEvery = 30 * time.Second
 
-// DefaultLaneWorkers is the dispatcher's lane count when it is given none
-// (#1634, #1249). A running node sizes its own (#1869, AutoLaneWorkers).
+// DefaultLaneWorkers is the lane count of a dispatcher built with none, as
+// its tests build it (#1634, #1249). It is not a node's default: Run always
+// hands the dispatcher the count it resolved, the operator's or auto's
+// (#1869, AutoLaneWorkers).
 const DefaultLaneWorkers = 16
 
 // The dispatcher (#1634) runs each poll and probe on its own interval, from

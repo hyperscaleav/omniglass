@@ -178,20 +178,33 @@ func memTotal(meminfo string) int64 {
 	return 0
 }
 
-// withHost fills each limit the cgroup left open from the host's.
+// withHost takes each limit as the tighter of the cgroup's and the host's: a
+// quota above the host's capacity buys nothing, and a limit the cgroup leaves
+// open is the host's. Each keeps the source of the figure that binds.
 func withHost(cg, host Limits) Limits {
-	if cg.CPUs == 0 {
+	if cg.CPUs == 0 || (host.CPUs > 0 && host.CPUs < cg.CPUs) {
 		cg.CPUs, cg.CPUFrom = host.CPUs, host.CPUFrom
 	}
-	if cg.MemoryBytes == 0 {
+	if cg.MemoryBytes == 0 || (host.MemoryBytes > 0 && host.MemoryBytes < cg.MemoryBytes) {
 		cg.MemoryBytes, cg.MemoryFrom = host.MemoryBytes, host.MemoryFrom
 	}
 	return cg
 }
 
+// hostCPUs is the CPUs the runtime schedules on: the machine's count, or
+// GOMAXPROCS where lower, which carries a cgroup v1 CPU limit the v2 reader
+// does not see and an operator's own GOMAXPROCS.
+func hostCPUs(numCPU, maxProcs int) (float64, string) {
+	if maxProcs > 0 && maxProcs < numCPU {
+		return float64(maxProcs), "gomaxprocs"
+	}
+	return float64(numCPU), "host"
+}
+
 // hostLimits are the CPUs the process may schedule on and the host's memory.
 func hostLimits() Limits {
-	l := Limits{CPUs: float64(runtime.NumCPU()), CPUFrom: "host"}
+	var l Limits
+	l.CPUs, l.CPUFrom = hostCPUs(runtime.NumCPU(), runtime.GOMAXPROCS(0))
 	if b, err := os.ReadFile("/proc/meminfo"); err == nil {
 		if m := memTotal(string(b)); m > 0 {
 			l.MemoryBytes, l.MemoryFrom = m, "host"
