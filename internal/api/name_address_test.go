@@ -65,6 +65,8 @@ var referenceFields = map[string]string{
 	"rule_id": "rule",
 	// An identity binding's conduit component (#1385), by name beside its uuid.
 	"conduit_id": "conduit",
+	// An inherited grant's source group (#1135), by name beside its uuid.
+	"group_id": "group",
 }
 
 // registryNameRefs is the reverse direction: a response that names a renameable
@@ -95,7 +97,6 @@ var idOnlyIsCorrect = map[string]string{
 	"endpoint_id":      "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
 	"principal_id":     "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
 	"scope_id":         "a scope root is a uuid handle on a subtree",
-	"group_id":         "an inherited grant names its source group for display (group_name, its label today: #1135); the group itself is addressed by name or uuid (#1133)",
 	"target_id":        "an impersonation target is a principal, as above",
 	"node_id":          "a node is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id":  "an event is addressed by its bigint id; an occurrence has no name handle",

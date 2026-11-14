@@ -575,11 +575,11 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
               {(g) => (
                 <span
                   class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
-                  title={`Inherited from the group "${g.group_name}". Edit the group to change it.`}
+                  title={`Inherited from the group "${g.group_label ?? g.group}". Edit the group to change it.`}
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <button class="text-primary hover:underline" title="Open this group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_name}</button>
+                  <button class="text-primary hover:underline" title="Open this group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
                 </span>
               )}
             </For>
