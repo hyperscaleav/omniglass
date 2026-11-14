@@ -33,7 +33,7 @@ nothing else. `make lab` is the short form of the last two commands (`make`, the
 `./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
 
 With a [release binary](/guides/install/#download-a-binary) there is nothing to build: run
-`omniglass lab run`, and it pulls its own release's image.
+`omniglass lab run`, and it pulls its own release's image, by the digest stamped into it at release.
 
 ## What you see
 
@@ -304,9 +304,13 @@ refuses it, so a lab you learn from or measure only ever shows what its own serv
 **Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:
 the image carries its build id in the OCI label `org.opencontainers.image.version`, and the lab
 refuses an image whose label is not its own build id, saying to run `make`. The lab never builds
-anything itself, so it always runs the code you built. A release binary runs
-`ghcr.io/hyperscaleav/omniglass:v<version>`, pulled if absent
-([container image](/guides/container-image/#where-it-ships)).
+anything itself, so it always runs the code you built. A release binary runs the image its release
+was built with, `ghcr.io/hyperscaleav/omniglass@sha256:...`, pulled if absent: the release builds and
+pushes the image first and stamps its digest into the binary, so the binary never asks the registry
+what the `v<version>` tag points at, and a tag pushed again later cannot change what it runs
+([container image](/guides/container-image/#where-it-ships)). A release-versioned binary that carries
+no digest (one built outside the release workflow) refuses to start a lab and says
+to name an image with `--image`, which runs it with the usual warning.
 
 ## Scale lab scenarios
 
@@ -1264,6 +1268,10 @@ then the CLI's current context, then the platform's default socket or named pipe
 - **The image is not built, or was built from another tree.** Run `make`, which builds the binary
   and the image together, then run the lab again. A binary built without `make` carries no build id
   and cannot tell which image is its own, so it asks for `make` too.
+- **A release binary carries no image digest.** It was built outside the release workflow (from a
+  tagged tree, or by a tag pushed from a workstation), so it cannot name the image its release was
+  built with, and it will not trust the tag. Run an image you choose with `--image`, such as
+  `--image ghcr.io/hyperscaleav/omniglass:v<version>`, with the usual warning.
 
 ## The console fast loop
 
