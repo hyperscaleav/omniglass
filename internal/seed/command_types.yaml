@@ -81,7 +81,7 @@ command_types:
   - name: set-volume
     label: Set Volume
     description: >-
-      Tell a component its output volume, as a percentage. A settleable command: it
+      Tell a component its output volume, as a fraction of its range (0 to 1). A settleable command: it
       opens an intended volume and settles when the component reports it, or when its
       reply confirms the change.
     target_metric_type: volume

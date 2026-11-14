@@ -75,7 +75,7 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	// A command rides the socket: the bar pushes the change, then answers
 	// the set by its id, and the answer settles the command.
 	owner := s.owner()
-	if _, err := s.gw.IssueCommand(s.ctx, owner, "component", "bar-ws", "set-volume", "", json.RawMessage(`42`), nil); err != nil {
+	if _, err := s.gw.IssueCommand(s.ctx, owner, "component", "bar-ws", "set-volume", "", json.RawMessage(`0.42`), nil); err != nil {
 		t.Fatalf("issue set-volume: %v", err)
 	}
 	s.waitVolume("bar-ws", ep.Name, 42)

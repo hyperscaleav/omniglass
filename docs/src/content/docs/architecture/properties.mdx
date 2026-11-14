@@ -231,7 +231,7 @@ Issuing a command records the invocation, a caused **event**, and the **intended
      observed = off -> failed (the command did not land)
 ```
 
-No separate "mapping" primitive exists: which value a command intends lives on the command definition, and a command may target either lane (set an input is a property, set a volume is a metric). **Only commands set intended values**; an external event implying a value ("meeting started, so the room is occupied") is observed reality, landing as **observed** through the edge parse.
+No separate "mapping" primitive exists: which value a command intends lives on the command definition, and a command may target either lane (set an input is a property, set a volume is a metric). A command intends its value in the canon, so `set-volume` intends a ratio (`0.41`), and the driver's command `transform` scales it to the device's own 0 to 100 on the way out, as the emit's scales it back on the way in. **Only commands set intended values**; an external event implying a value ("meeting started, so the room is occupied") is observed reality, landing as **observed** through the edge parse.
 
 | The source says | Means | Path |
 |---|---|---|

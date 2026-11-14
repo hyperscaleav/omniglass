@@ -233,7 +233,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		if binding == nil {
 			continue // the jsonb predicate already ensured this, defensively kept
 		}
-		req, err := driver.RenderRequestTyped(binding.Request, intendedString(r.intendedProp, r.intendedMetric), intendedJSON(r.intendedProp, r.intendedMetric), paramsMap(r.params))
+		req, err := driver.RenderCommand(*binding, intendedString(r.intendedProp, r.intendedMetric), intendedJSON(r.intendedProp, r.intendedMetric), paramsMap(r.params))
 		if err != nil {
 			// An unrenderable binding is terminal, not retryable, and there is
 			// exactly one delivery endpoint per command, so recording the fault

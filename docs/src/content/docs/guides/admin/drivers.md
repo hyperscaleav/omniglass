@@ -231,7 +231,12 @@ page, a `regex` on any. A selector must find exactly one value: none, or more th
 fault naming the emit, and the rest still land. A command's request renders `${value}` and
 `${arg.<key>}` where you place them, escaped for where they land (a path segment, a query value, a
 JSON or xml body), and a JSON body leaf that is exactly `${value}` keeps the value's type, so an
-intended volume is sent as a number. A request never names a secret and never sets `Authorization`
+intended volume is sent as a number. A device's own units are shaped at the edge, so the platform
+holds the canon either side: an emit's `transform: { scale: 0.01 }` reads a device's percentage as the
+ratio (41 lands as 0.41), and a command binding's `transform: { scale: 100 }`, the inverse, scales the
+intended value before `${value}` is substituted (an intended 0.41 goes out as 41). A response settle
+reads the reply back through the same scale, so it compares to the intended value in the canon's
+units. A command's transform declares a scale alone, and refuses a value that is not a number. A request never names a secret and never sets `Authorization`
 or `Cookie`: the credential is the session block's.
 
 ```yaml
@@ -249,7 +254,8 @@ polls:
     schedule: { every: 30s }
     request: { path: /api/audio }
     emits:
-      - { name: volume, extract: { jsonpath: volume } }
+      # The bar reports 0 to 100; volume stores the ratio (0 to 1).
+      - { name: volume, extract: { jsonpath: volume }, transform: { scale: 0.01 } }
   - name: firmware
     schedule: { every: 1h }
     request: { path: /api/status.xml, format: xml, namespaces: { d: "urn:polaris:dsp:1", sys: "urn:polaris:system:1" } }
@@ -257,6 +263,7 @@ polls:
       - { name: firmware-version, extract: { xpath: "/d:status/sys:device/sys:firmware" } }
 commands:
   - command_type: set-volume
+    transform: { scale: 100 }   # the intended ratio, in the bar's 0 to 100
     request: { method: POST, path: /api/audio/volume, body: { volume: "${value}" } }
     settle: { from: response, success: { regex: '"ok":\s*true' } }
 ```
@@ -336,7 +343,7 @@ listeners:
   - name: volume-change
     match: { event: change, field: { path: path, equals: status.audio.volume } }
     emits:
-      - { name: volume, extract: { jsonpath: value } }
+      - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
 ```
 
 The node holds the stream as the endpoint's session: it reads `up`, `recovering` after a drop (it
@@ -367,9 +374,10 @@ listeners:
     arm: ['{"type":"subscribe","paths":["status.audio.volume"]}']
     match: { field: { path: path, equals: status.audio.volume } }
     emits:
-      - { name: volume, extract: { jsonpath: value } }
+      - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
 commands:
   - command_type: set-volume
+    transform: { scale: 100 }
     request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
     settle: { from: response, extract: { jsonpath: value } }
 ```
