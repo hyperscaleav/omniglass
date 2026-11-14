@@ -98,3 +98,62 @@ func TestMetricTypeAPI(t *testing.T) {
 	noneTok := principalWithGrants(t, ctx, dsn, "nometrics", nil)
 	c.do(noneTok, http.MethodPost, "/metric-types", map[string]any{"name": "nope-metric", "data_type": "int"}, http.StatusForbidden)
 }
+
+// A metric type's precision is a nullable integer, so it has no empty value to
+// overload: it clears by being named in update_mask with no value (#1189,
+// ADR-0091). Omitting it leaves it, a value sets it, and a mask naming other
+// fields leaves it alone.
+func TestMetricTypePrecisionClearsUnderUpdateMask(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{
+		"name": "blower-rpm", "data_type": "int", "unit": "rpm", "precision": 2,
+	}, http.StatusCreated)
+
+	precision := func(body map[string]any) *int {
+		t.Helper()
+		var mt struct {
+			Precision *int `json:"precision"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/metric-types/blower-rpm", body, http.StatusOK), &mt); err != nil {
+			t.Fatalf("decode patch: %v", err)
+		}
+		return mt.Precision
+	}
+	want := func(step string, got *int, want int) {
+		t.Helper()
+		if got == nil || *got != want {
+			t.Fatalf("%s: precision = %v, want %d", step, got, want)
+		}
+	}
+
+	want("omitted", precision(map[string]any{"label": "Fan speed"}), 2)
+	want("set", precision(map[string]any{"precision": 3}), 3)
+	// A mask naming another field leaves precision, even though it is not in the body.
+	want("mask names another field", precision(map[string]any{"unit": "rpm", "update_mask": []string{"unit"}}), 3)
+	// Naming precision with no value clears it, on the response and on a re-read.
+	if got := precision(map[string]any{"update_mask": []string{"precision"}}); got != nil {
+		t.Fatalf("cleared: precision = %d, want none", *got)
+	}
+	var reread struct {
+		Precision *int `json:"precision"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/blower-rpm", nil, http.StatusOK), &reread)
+	if reread.Precision != nil {
+		t.Fatalf("reread: precision = %d, want none", *reread.Precision)
+	}
+	// A mask naming a field the route does not patch is a 422, never a no-op.
+	c.do(ownerTok, http.MethodPatch, "/metric-types/blower-rpm",
+		map[string]any{"update_mask": []string{"data_type"}}, http.StatusUnprocessableEntity)
+}
