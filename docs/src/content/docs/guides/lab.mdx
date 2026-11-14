@@ -995,6 +995,13 @@ in turn on a node that runs only the node:
   again on a fresh node at four times the step, up to `--max-step-tasks`, and the attempt that
   measured the most figures is kept (the bigger step on a tie). A figure that still does not fit is
   listed with why. Each row records the step it was measured at.
+- **A step the node actually runs.** Before a step is measured, the sweep waits until the node's
+  installed worklist (its `worklist-task-count`) holds every task the server holds for it. The server
+  sends a node's worklist as one bus reply, and a reply still over the bus's maximum payload once
+  compressed is refused, so the node keeps its last worklist (#1586); at the default 1 MiB payload that
+  ceiling is about 18,000 tasks a node. A step past it would measure a node running the previous
+  step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
+  and caps any later growth there.
 - **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
   node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
   polling thread's kernel clock, averaged over the reports wholly inside each step's window and read

@@ -286,6 +286,11 @@ are smaller and quicker than many real ones; read them as the relative cost of d
 of a node's footprint, not a promise for a given site. A shipped driver the sweep has not measured
 reads as such, with why, and so does a figure the sweep could not fit when the driver's other one stands.
 
+One limit on a node's size is not its cost: the server sends a node its worklist as one bus reply, and
+a reply over the bus's maximum payload after compression is refused, leaving the node on its last
+worklist. At the default 1 MiB that is about 18,000 tasks on one node; the materialized worklist
+(#1586) removes the ceiling. Split a site's devices across nodes well before it.
+
 ## Platform configuration
 
 Configuration is **two tiers**, and platform settings are deliberately **centralized**:
