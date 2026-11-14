@@ -213,6 +213,7 @@ func ensureContainer() error {
 		containerReady = true
 		return nil
 	}
+	os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
 	c, dsn, err := startContainer(context.Background())
 	if err != nil {
 		// Nothing is recorded on this path, which is what makes the retry safe:
