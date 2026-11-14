@@ -364,6 +364,10 @@ type listenerRouter struct {
 	// owner-bound to the endpoint's component like any of its samples.
 	logTask   string
 	faultseen map[string]string // last fault per listen task: one event per change
+	// faults is each listen task's current faults, the ones its last claimed
+	// line met (none once a line extracts), kept so a resync can say them
+	// again (#1213).
+	faults    map[string][]error
 	unclaimed int
 	last      string
 	// clamped counts the claimed messages whose payload time was past the
@@ -376,7 +380,7 @@ type listenerRouter struct {
 }
 
 func newListenerRouter(hooks sessionHooks) *listenerRouter {
-	return &listenerRouter{hooks: hooks, faultseen: map[string]string{}, policy: driver.UnmatchedDiscard}
+	return &listenerRouter{hooks: hooks, faultseen: map[string]string{}, faults: map[string][]error{}, policy: driver.UnmatchedDiscard}
 }
 
 // set swaps the listeners and the policy in place (a listener re-hash keeps
@@ -427,6 +431,11 @@ func (r *listenerRouter) Claim(msg driver.Message) bool {
 	r.mu.Lock()
 	changed := current != r.faultseen[claimer.taskID]
 	r.faultseen[claimer.taskID] = current
+	if len(faults) > 0 {
+		r.faults[claimer.taskID] = faults
+	} else {
+		delete(r.faults, claimer.taskID)
+	}
 	r.mu.Unlock()
 	if changed && r.hooks.fault != nil {
 		for _, f := range faults {
@@ -434,6 +443,27 @@ func (r *listenerRouter) Claim(msg driver.Message) bool {
 		}
 	}
 	return true
+}
+
+// resendFaults says each listen task's current faults again (#1213), the
+// answer to a spool overflow that may have dropped the batch that carried
+// them: Claim says a fault once per change, so without this the server would
+// not hear it until the fault changed.
+func (r *listenerRouter) resendFaults() {
+	if r.hooks.fault == nil {
+		return
+	}
+	r.mu.Lock()
+	current := make(map[string][]error, len(r.faults))
+	for task, faults := range r.faults {
+		current[task] = faults
+	}
+	r.mu.Unlock()
+	for task, faults := range current {
+		for _, f := range faults {
+			r.hooks.fault(task, f)
+		}
+	}
 }
 
 // Unclaimed counts a message no listener claimed and no exchange was owed:
@@ -528,6 +558,49 @@ type heldSession struct {
 	mu       sync.Mutex
 	taskID   string
 	endpoint string
+
+	// repMu orders the session's publishes: a transition or an auth verdict
+	// is recorded and published under it, and a resync (#1213) republishes
+	// what was recorded under it, so the older state never follows the newer.
+	repMu      sync.Mutex
+	transition *collection.SessionTransition // the last transition published
+	verdict    *collection.AuthVerdict       // the last auth verdict published
+}
+
+// report records tr as the session's current state and publishes it.
+func (h *heldSession) report(hooks sessionHooks, tr collection.SessionTransition) {
+	h.repMu.Lock()
+	defer h.repMu.Unlock()
+	h.transition = &tr
+	if hooks.transition != nil {
+		taskID, endpoint := h.publishTo()
+		hooks.transition(taskID, endpoint, tr)
+	}
+}
+
+// reportAuth records v as the session's current auth verdict and publishes it.
+func (h *heldSession) reportAuth(hooks sessionHooks, v collection.AuthVerdict) {
+	h.repMu.Lock()
+	defer h.repMu.Unlock()
+	h.verdict = &v
+	if hooks.auth != nil {
+		taskID, endpoint := h.publishTo()
+		hooks.auth(taskID, endpoint, v)
+	}
+}
+
+// resend publishes the state and the auth verdict the session last reported,
+// nothing it has not reported yet.
+func (h *heldSession) resend(hooks sessionHooks) {
+	h.repMu.Lock()
+	defer h.repMu.Unlock()
+	taskID, endpoint := h.publishTo()
+	if h.transition != nil && hooks.transition != nil {
+		hooks.transition(taskID, endpoint, *h.transition)
+	}
+	if h.verdict != nil && hooks.auth != nil {
+		hooks.auth(taskID, endpoint, *h.verdict)
+	}
 }
 
 func (h *heldSession) publishTo() (string, string) {
@@ -1253,10 +1326,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		Channel:  w.channel,
 		TLS:      trust,
 		OnAuth: func(v collection.AuthVerdict) {
-			if hooks.auth != nil {
-				taskID, endpoint := h.publishTo()
-				hooks.auth(taskID, endpoint, v)
-			}
+			h.reportAuth(hooks, v)
 		},
 		OnArm: func(line, reply string, err error) {
 			if hooks.arm != nil {
@@ -1265,10 +1335,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			}
 		},
 		OnTransition: func(tr collection.SessionTransition) {
-			if hooks.transition != nil {
-				taskID, endpoint := h.publishTo()
-				hooks.transition(taskID, endpoint, tr)
-			}
+			h.report(hooks, tr)
 			switch {
 			case tr.State == collection.SessionRejected && tr.Refusal != nil && tr.Refusal != rejected:
 				// Not the replay of the refusal the session was started
@@ -1286,6 +1353,26 @@ func (m *sessionManager) start(id string, w sessionWant) {
 	m.mapsMu.Lock()
 	m.held[id] = h
 	m.mapsMu.Unlock()
+}
+
+// resync publishes again what each held session last said (#1213): its
+// state, its auth verdict, and its listeners' current faults. These go out
+// only on a change, so a batch the spool dropped at its cap would leave the
+// server showing a session up that went down meanwhile; the run loop calls
+// this after an overflow and nowhere else. The batches ride the spool, which
+// raises the overflow again if it drops them, so the resend repeats until one
+// lands.
+func (m *sessionManager) resync() {
+	m.mapsMu.RLock()
+	held := make([]*heldSession, 0, len(m.held))
+	for _, h := range m.held {
+		held = append(held, h)
+	}
+	m.mapsMu.RUnlock()
+	for _, h := range held {
+		h.resend(m.hooks)
+		h.router.resendFaults()
+	}
 }
 
 func (m *sessionManager) teardown(id string, h *heldSession, why string) {
