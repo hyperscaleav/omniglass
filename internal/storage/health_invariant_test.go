@@ -165,19 +165,13 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	ctx := context.Background()
 
 	std := "choice-huddle"
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Choice Huddle"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, f.gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "all-in-one", Label: "All-in-one"},
 			{Name: "component-system", Label: "Component System"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 
 	// All-in-one: one role, a video bar.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
@@ -247,19 +241,13 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	ctx := context.Background()
 
 	std := "tie-break-huddle"
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Tie Break"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, f.gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "b-alt", Label: "B Alt"}, // position 1: must win the tie
 			{Name: "a-alt", Label: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
 		},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 		Name: "b-role", Label: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
 	}); err != nil {

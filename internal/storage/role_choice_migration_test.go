@@ -15,9 +15,9 @@ import (
 // had not yet applied that version but leaves any database that already had
 // stuck on the old, non-deferrable shape forever (dbmate keys on the
 // version, and 20260807150000's own `create table if not exists` makes a
-// forced re-run a no-op). SeedRoleChoice unconditionally defers that named
-// constraint every boot, and Postgres errors deferring a named constraint
-// that is not itself deferrable, so such a database cannot boot at all.
+// forced re-run a no-op). A write that defers that named constraint
+// (the choice seed did, every boot) errors on Postgres when the constraint is
+// not itself deferrable, so such a database could not boot at all.
 //
 // This stands a database at the schema immediately before
 // 20260807160000_choice_alternate_position_deferrable_repair.sql (which, on
@@ -42,8 +42,8 @@ func TestChoiceAlternatePositionDeferrableRepairsOldSchema(t *testing.T) {
 	mustExec(t, conn, `alter table choice_alternate drop constraint choice_alternate_position_key`)
 	mustExec(t, conn, `alter table choice_alternate add constraint choice_alternate_position_key unique (choice_id, position)`)
 
-	// Confirm the simulated state is genuinely the failure SeedRoleChoice
-	// hits: deferring a non-deferrable named constraint errors, inside a
+	// Confirm the simulated state is genuinely the failure the choice seed
+	// hit: deferring a non-deferrable named constraint errors, inside a
 	// transaction so the failed attempt does not need its own cleanup.
 	tx, err := conn.Begin(ctx)
 	if err != nil {
