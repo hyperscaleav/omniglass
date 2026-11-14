@@ -1,7 +1,7 @@
 ---
 title: A node sizes its lane pool from its CPU and memory (#1869)
 date: 2026-11-13
-refs: [1869, 1249, 1623]
+refs: [1869, 1892, 1249, 1623]
 ---
 
 `--lane-workers` now defaults to `auto` instead of 16. A node reads the CPU and memory it may use
@@ -24,3 +24,14 @@ report emitting the count once per window.
 A lab integration test runs the node image under `docker run --cpus 0.5 --memory 64m` and
 `--cpus 4 --memory 32m`, so the kernel writes the limits the node reads, and asserts the boot log's
 11 and 8 lanes and their sources.
+
+The lab now caps every node it starts (#1892): one CPU, so auto gives each the same 23 lanes on any
+host and a scale run's parallelism is one figure, and memory at twice the cost model's figure for its
+site's components, at least 512 MiB, with `GOMEMLIMIT` a tenth under it. The 72-hour corporate 3,000
+soak set the figures: each node's resident memory sat on the model's line (about 0.8 to 1.0 MiB a
+component over 25 MiB), and the busiest node used 0.43 of a CPU. The server, Postgres and the seed
+stay uncapped, and the lab guide's topology table gains a Limits column from the plan. Proven by
+unit tests that the plan caps every node and only the nodes, the memory figure at the floor and at
+a regional and the hq, the `GOMEMLIMIT` figure, the caps reaching Docker with swap held to the memory
+cap, and the compose config hash carrying the caps; and by the lab integration test, whose node logs
+23 lanes from `cpu.max=1` and `memory.max=512MiB`.

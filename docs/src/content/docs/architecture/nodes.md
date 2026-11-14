@@ -734,6 +734,13 @@ workers`, with the limits it read and where it read each), and reports it as `la
 read side by side. A cgroup v1 memory limit is not read: on v1 the node sizes from the host's
 `MemTotal` (ADR-1869).
 
+The [lab](/guides/lab/) runs every node it starts as a container capped at one CPU (#1892), an
+edge box's share, so auto sizes each node's pool to the same 23 lanes on a laptop and on a large
+host, and a scale run's parallelism is one known figure rather than the host's. Its memory cap is
+twice what the [cost model](/guides/lab/#how-big-a-lab-your-machine-can-run) says a node of its site's size holds,
+never under 512 MiB, with the Go runtime's soft limit (`GOMEMLIMIT`) a tenth under it, since the
+runtime does not read the cgroup and would otherwise let the heap grow until the kernel kills it.
+
 ## Implicit reachability
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
