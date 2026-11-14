@@ -1,0 +1,48 @@
+---
+// The dev fleet's collection-method table, rendered from the generated facts
+// (docs/src/generated/methods.json, written by make gen via cmd/labgen from
+// the fixture's simulated endpoints and the coverage test's gap list). The
+// pages used to say which component carries which driver and which methods
+// are gaps in prose; this renders the fixture the coverage test holds, so a
+// moved endpoint or a closed gap changes the page.
+//
+// Usage: <CollectionMethods /> for every attached method and every gap, or
+// <CollectionMethods place="boardroom-a" /> for one place's methods alone
+// (a gap belongs to no place, so a place-scoped table has none).
+import facts from '../generated/methods.json';
+
+interface Props {
+  place?: string;
+}
+
+const { place } = Astro.props;
+const rows = place ? facts.methods.filter((m) => m.place === place) : facts.methods;
+if (place && rows.length === 0) {
+  throw new Error(`CollectionMethods: no method is attached in place "${place}" (see docs/src/generated/methods.json)`);
+}
+const gaps = place ? [] : facts.gaps;
+---
+
+<table class="collection-methods">
+  <thead><tr><th>Method</th><th>Kind</th><th>Rides</th><th>Component</th><th>Place</th><th>Endpoint</th><th>Health</th></tr></thead>
+  <tbody>
+    {rows.map((m) => (
+      <tr>
+        <td><code>{m.method}</code></td>
+        <td>{m.kind}</td>
+        <td>{m.transport ? <code>{m.transport}</code> : ''}</td>
+        <td><code>{m.component}</code></td>
+        <td>{m.place}</td>
+        <td>{m.label}</td>
+        <td>{m.planted ? 'planted fault' : 'healthy'}</td>
+      </tr>
+    ))}
+    {gaps.map((g) => (
+      <tr>
+        <td><code>{g.method}</code></td>
+        <td colspan="5">{g.why}{g.unbuilt ? ' (not in the binary)' : ''}</td>
+        <td>gap, {g.issue}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>

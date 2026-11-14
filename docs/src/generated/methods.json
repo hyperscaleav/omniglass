@@ -1,0 +1,148 @@
+{
+  "methods": [
+    {
+      "method": "ucc-webhook",
+      "kind": "driver",
+      "transport": "webhook",
+      "component": "ucc-service",
+      "place": "Headquarters",
+      "label": "Meeting webhooks"
+    },
+    {
+      "method": "ucc-webhook",
+      "kind": "driver",
+      "transport": "webhook",
+      "component": "ucc-platform",
+      "place": "Headquarters",
+      "label": "Room webhooks"
+    },
+    {
+      "method": "newtron-nvp-telnet",
+      "kind": "driver",
+      "transport": "telnet",
+      "component": "huddle-touch",
+      "place": "Huddle Room",
+      "label": "Panel console",
+      "planted": true
+    },
+    {
+      "method": "newtron-nvp-tls",
+      "kind": "driver",
+      "transport": "tls",
+      "component": "huddle-touch",
+      "place": "Huddle Room",
+      "label": "Panel over TLS"
+    },
+    {
+      "method": "newtron-nvp-udp",
+      "kind": "driver",
+      "transport": "udp",
+      "component": "huddle-touch",
+      "place": "Huddle Room",
+      "label": "Panel over UDP"
+    },
+    {
+      "method": "newtron-nvp-ssh",
+      "kind": "driver",
+      "transport": "ssh",
+      "component": "briefing-touch",
+      "place": "Briefing Room",
+      "label": "Panel SSH",
+      "planted": true
+    },
+    {
+      "method": "snmp-generic",
+      "kind": "driver",
+      "transport": "snmp",
+      "component": "auditorium-touch",
+      "place": "auditorium",
+      "label": "Panel SNMP",
+      "planted": true
+    },
+    {
+      "method": "kestrel-ws",
+      "kind": "driver",
+      "transport": "wss",
+      "component": "bar-a",
+      "place": "boardroom-a",
+      "label": "Bar control socket"
+    },
+    {
+      "method": "boreal-edge-web",
+      "kind": "driver",
+      "transport": "http",
+      "component": "panel-a",
+      "place": "boardroom-a",
+      "label": "Display web admin"
+    },
+    {
+      "method": "newtron-panel-web",
+      "kind": "driver",
+      "transport": "https",
+      "component": "touch-a",
+      "place": "boardroom-a",
+      "label": "Panel web"
+    },
+    {
+      "method": "newtron-nvp-ssh",
+      "kind": "driver",
+      "transport": "ssh",
+      "component": "touch-a",
+      "place": "boardroom-a",
+      "label": "Panel shell"
+    },
+    {
+      "method": "newtron-nvp-telnet",
+      "kind": "driver",
+      "transport": "telnet",
+      "component": "touch-a",
+      "place": "boardroom-a",
+      "label": "Panel Telnet"
+    },
+    {
+      "method": "ferrite-pdu-api",
+      "kind": "driver",
+      "transport": "http",
+      "component": "power",
+      "place": "boardroom-a",
+      "label": "PDU control"
+    },
+    {
+      "method": "icmp",
+      "kind": "transport",
+      "component": "touch-a",
+      "place": "boardroom-a",
+      "label": "Panel ping"
+    }
+  ],
+  "gaps": [
+    {
+      "method": "kestrel-relay-api",
+      "issue": "#1446",
+      "why": "no Relay C1 is placed in the dev fleet yet"
+    },
+    {
+      "method": "push-listener",
+      "issue": "#1148",
+      "unbuilt": true,
+      "why": "the shared push listener is not built"
+    },
+    {
+      "method": "snmp-trap",
+      "issue": "#1150",
+      "unbuilt": true,
+      "why": "the SNMP trap transport is not built"
+    },
+    {
+      "method": "syslog",
+      "issue": "#1149",
+      "unbuilt": true,
+      "why": "the syslog transport is not built"
+    },
+    {
+      "method": "websocket",
+      "issue": "#1414",
+      "why": "no simulated device speaks a plain ws face, and no driver rides it"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ sidebar:
     variant: success
 ---
 
+import CollectionMethods from '../../../components/CollectionMethods.astro';
 import LabTopology from '../../../components/LabTopology.astro';
 import LabWalkthroughs from '../../../components/LabWalkthroughs.astro';
 import PerfGateFigures from '../../../components/PerfGateFigures.astro';
@@ -88,10 +89,12 @@ from all of them.
 
 Every way omniglass collects runs here, healthy on at least one component, so you can watch each
 one work (and a regression in any of them shows in a lab, not only in a unit test). The HQ boardroom
-holds the ones the rest of the fleet does not use: the video bar's control socket over a secure
-websocket, the display's web admin behind an http digest login, the touch panel's https API behind
-its sign-in form, the same panel's console over ssh and over telnet (the healthy twins of two of the
-faults below), and a plain ping. Beside them:
+holds the ones the rest of the fleet does not use, beside the healthy twins of two of the faults
+below and a plain ping:
+
+<CollectionMethods place="boardroom-a" />
+
+Beside them:
 
 - **Webhooks arrive from the start.** The simulated meeting service is subscribed to its webhook
   endpoint when the lab comes up, as its admin would subscribe it, and posts a meeting every minute,
@@ -105,7 +108,7 @@ faults below), and a plain ping. Beside them:
   boardroom's system page to see them; a push carries no endpoint, so there is no reachability to
   read, only the values.
 
-[Simulation](/architecture/simulation/#the-dev-fleet) lists every method and where it runs.
+[Simulation](/architecture/simulation/#every-collection-method-in-the-dev-fleet) lists every method, where it runs and the gaps.
 
 ## Walk through it
 

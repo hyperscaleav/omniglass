@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import CollectionMethods from '../../../components/CollectionMethods.astro';
+
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
 and IT devices, each on its own loopback address, speaking the protocols real gear speaks (HTTP
 and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP, WebSocket) from one live state per device. A
@@ -415,13 +417,12 @@ Beside those, the fixture's simulated endpoints wire the rest:
   seeded 5% of them each way).
 - **The webhooks**: the UCC service's and the UCC platform's webhook endpoints (`ucc-webhook`),
   which the simulator subscribes each service to ([below](#a-simulated-service-posts-from-the-start)).
-- **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
-  the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
-  9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
-  behind its sign-in form (`newtron-panel-web`); the healthy twins of the ssh and telnet faults (the
-  right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
-  https key, is derived from its id, so a key the node pinned on first use survives a simulator
-  restart.
+- **Every collection method healthy on one place** (#1370): the HQ boardroom runs the drivers the
+  rest of the fleet never attaches, the healthy twins of the ssh and telnet faults (the right login
+  and no stale pin), and a bare `icmp` probe. A simulated device's ssh host key, like its https key,
+  is derived from its id, so a key the node pinned on first use survives a simulator restart. The
+  [table below](#every-collection-method-in-the-dev-fleet) lists every method, the component and
+  place it runs on, and the gaps.
 - **A first-party pusher**: the fleet declares one pusher (`sim_pushers`), the booking service, an
   emulator device of the `booking-service` profile run by the simulator beside the node. Its
   [push face](#a-pusher-pushes-on-its-own-cadence) pushes the HQ boardroom system's `booking-count`
@@ -431,11 +432,14 @@ Beside those, the fixture's simulated endpoints wire the rest:
   (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its token on every
   run, as it does the node's, and hands it to the simulator.
 
+### Every collection method in the dev fleet
+
+<CollectionMethods />
+
 `TestEveryCollectionMethodRunsOnAHealthyLabComponent` holds the fleet to it: every seeded driver and
 every registry transport is attached, by an endpoint that is no planted fault, on a component a
-profile serves, or is listed as a gap with its issue (a plain `websocket`, #1414; the unbuilt shared
-push listener, syslog and SNMP traps, #1148, #1149 and #1150), and a listed method the fleet gains
-fails as stale. A method counts on both tiers: a driver only when it reads collected values (a poll
+profile serves, or is listed as a gap with its issue, and a listed method the fleet gains fails as
+stale. A method counts on both tiers: a driver only when it reads collected values (a poll
 or a listener that emits), a driverless transport (`icmp`) on its connection tier, since a ping has
 no device API to read, and the push lane on its collected tier alone, since a push has no endpoint.
 The lab proves it live: `make test-lab` waits out the warm-up and requires each method up with a
