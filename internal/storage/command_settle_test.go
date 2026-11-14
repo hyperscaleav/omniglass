@@ -513,6 +513,48 @@ func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
 	}
 }
 
+// An endpoint that still exists but whose driver's current spec no longer
+// emits the target is a retired observer too (#1217): its last reading is as
+// frozen as a deleted endpoint's, so an owner-level judgment leaves it out.
+func TestADriverThatStoppedEmittingDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, "")
+	r.ownerLevelDisplay(t)
+	all := scope.Set{All: true}
+	observer := func(key string) []byte {
+		return []byte(fmt.Sprintf(`{"version": 1, "transport": "tcp",
+			"inputs": [{"name": "host", "kind": "string", "required": true}],
+			"polls": [{"name": "status", "schedule": {"every": "30s"}, "request": {"line": "GET INPUT"},
+				"emits": [{"name": %q, "extract": {"regex": "^INPUT (\\S+)$"}}]}]}`, key))
+	}
+	drv, err := r.gw.CreateDriver(r.ctx, "", storage.Driver{Name: "observer-proto", Label: "Observer Proto", Version: "1.0.0", Spec: observer("video-input")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, comp, node := "observer-proto", "display", "edge"
+	if _, err := r.gw.CreateEndpoint(r.ctx, "", storage.EndpointSpec{Driver: &name, Component: &comp, Node: &node,
+		Inputs: map[string]string{"host": "10.20.4.61"}}, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.NodeWriter("display", "tcp"), []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "display", Key: "video-input", Instance: "tcp", Value: "hdmi3", Source: "tcp",
+	}}); err != nil {
+		t.Fatalf("observe on tcp: %v", err)
+	}
+	if _, err := r.gw.UpdateDriver(r.ctx, "", drv.ID, storage.DriverPatch{Spec: observer("power-state")}); err != nil {
+		t.Fatalf("drop the emit: %v", err)
+	}
+	r.pushOn(t, "rx-1", "hdmi1")
+	id := r.issueOwnerLevel(t, "hdmi3")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status, by, observed := r.outcome(t, id); status != "failed" || by != "observation" || observed != `"hdmi1"` {
+		t.Fatalf("a driver that dropped the key agreed: status %q by %q observed %s, want failed on the live instance's hdmi1", status, by, observed)
+	}
+}
+
 // A command dispatched over an endpoint is judged on that endpoint's series
 // alone (#900, kept by ADR-0456): another instance agreeing does not settle
 // it, and with nothing on its own endpoint it times out.
