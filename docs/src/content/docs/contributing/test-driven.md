@@ -257,9 +257,10 @@ Three rules, and an assertion that breaks one of them is worse than none:
 `TestIngestFootprint` (`internal/bus/footprint_test.go`) holds what one node batch costs the
 database ([ADR-1272](/architecture/decisions/#adr-1272-the-ingest-footprint-is-counted-and-a-stored-rows-heap-bytes-are-a-count)).
 It seeds the dev scenario's fleet for real and delivers a **standard workload** through the
-telemetry handler exactly as JetStream would: the owner binding, the catalog fingerprint read,
-`LandBatch` with its receipt, locks, transition guard and rule evaluation, and the endpoint's
-seen stamp. Only the transport is a double. The workload (`internal/footprint`) is one batch
+telemetry handler exactly as JetStream would: the owner binding, `LandBatch` with its receipt,
+locks, transition guard, rule evaluation and the endpoint's seen stamp. The catalog fingerprint is
+read on the warm-up and the registry's clock is frozen, so the window's batches reuse it as a
+fleet's do between reads. Only the transport is a double. The workload (`internal/footprint`) is one batch
 per node per tick, a group per task, built deterministically from the tasks and the tick, so two runs land the
 same rows and a number that moves is the code moving.
 

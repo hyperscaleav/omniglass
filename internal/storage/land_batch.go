@@ -74,6 +74,10 @@ type IngestBatch struct {
 	// found missing. The gateway adds what it stored, coalesced and refused,
 	// and records the sum as the receipt's outcome.
 	Tally delivery.Tally
+	// SeenEndpoint is the endpoint that delivered the batch's top-level
+	// rows, stamped seen in the batch's transaction (#933, #1928), as each
+	// group's IngestGroup.SeenEndpoint is. Empty on the push lane.
+	SeenEndpoint string
 }
 
 // ErrFanoutStale marks a batch whose fanned rows name an owner the
@@ -210,7 +214,9 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 				return err
 			}
 			if !first {
-				return nil // landed before: a redelivery or a retry
+				// Landed before: a redelivery or a retry, which writes nothing
+				// but was still delivered.
+				return stampEndpointsSeen(ctx, bt, b.seenEndpoints(nil))
 			}
 		}
 		groups := b.groups()
@@ -281,6 +287,9 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 				return err
 			}
 		}
+		if err := stampEndpointsSeen(ctx, bt, b.seenEndpoints(res.Refused)); err != nil {
+			return err
+		}
 		res.Landed = true
 		return nil
 	})
@@ -289,6 +298,42 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 	}
 	slices.SortFunc(res.Refused, func(a, b GroupRefusal) int { return a.Index - b.Index })
 	return res, nil
+}
+
+// seenEndpoints is the endpoints the batch stamps seen: its own and each
+// group's, once, in batch order, but a refused group's.
+func (b IngestBatch) seenEndpoints(refused []GroupRefusal) []string {
+	skip := make(map[int]bool, len(refused))
+	for _, r := range refused {
+		skip[r.Index] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	add(b.SeenEndpoint)
+	for i, g := range b.Groups {
+		if !skip[i] {
+			add(g.SeenEndpoint)
+		}
+	}
+	return out
+}
+
+// stampEndpointsSeen stamps ids seen as the batch's last statement before
+// its commit (#1928), so a tick costs one transaction, not a second one for
+// the stamp. The stamp skips a row another batch is stamping rather than
+// wait on it (liveStamp), and is taken after every lock the batch's lanes
+// take, so it adds no wait to them.
+func stampEndpointsSeen(ctx context.Context, tx pgx.Tx, ids []string) error {
+	if err := endpointLive.stamp(ctx, tx, ids, liveStampEvery); err != nil {
+		return fmt.Errorf("storage: land batch: stamp endpoints seen: %w", err)
+	}
+	return nil
 }
 
 // landIsolated lands each group in a savepoint of its own: a refusal rolls
@@ -401,13 +446,16 @@ func (p *PG) landGroups(ctx context.Context, tx pgx.Tx, groups []landGroup) (coa
 // lane's marks (markCalcPending), the order rule_eval.go and calc_eval.go
 // state for a sample write, then every property series' transition lock in
 // one sorted order, own rows and fanned ones together, so two batches whose
-// series cross never take them in opposite orders. Each lane takes them again
-// as it writes, already held, and its series and health locks after them.
+// series cross never take them in opposite orders. The batch records what it
+// took, and each lane, finding them held, skips its own take of them
+// (newRuleEvaluator, markCalcPending, lockPropertySeries) and judges by the
+// rule rows read here, taking only its series and health locks after them
+// (#1928).
 // Taken lane by lane instead, the property lane's judging would hold an
 // owner's health lock while the metric lane waited on a rule row, the reverse
 // of a rule edit's order (the row FOR UPDATE, then health), and the two would
 // deadlock.
-func (p *PG) lockGroups(ctx context.Context, tx pgx.Tx, live []landGroup) error {
+func (p *PG) lockGroups(ctx context.Context, tx *batchTx, live []landGroup) error {
 	keys := map[string]bool{}
 	marks := map[string]*calcMarks{}
 	var props []PropertySampleWrite
@@ -455,18 +503,30 @@ func (p *PG) lockGroups(ctx context.Context, tx pgx.Tx, live []landGroup) error 
 		return nil
 	}
 	sorted := slices.Sorted(maps.Keys(keys))
-	if _, err := tx.Exec(ctx, `select id from event_rule where enabled and sample_key = any($1) order by id for share`, sorted); err != nil {
+	byKey, err := loadEventRules(ctx, tx, sorted)
+	if err != nil {
 		return fmt.Errorf("storage: land batch: lock event rules: %w", err)
+	}
+	for _, k := range sorted {
+		tx.ruleKeys[k] = true
+		tx.rules[k] = byKey[k]
 	}
 	for _, rule := range slices.Sorted(maps.Keys(marks)) {
 		if err := p.markCalcPending(ctx, tx, marks[rule], rule); err != nil {
 			return err
 		}
+		tx.marked[rule] = marks[rule]
 	}
 	if len(props) == 0 {
 		return nil
 	}
-	return lockPropertySeries(ctx, tx, props, propArcs)
+	if err := lockPropertySeries(ctx, tx, props, propArcs); err != nil {
+		return err
+	}
+	for _, k := range propertySeriesLockKeys(props, propArcs) {
+		tx.series[k] = true
+	}
+	return nil
 }
 
 // IsRefusedWrite reports whether a write failed for a reason no retry

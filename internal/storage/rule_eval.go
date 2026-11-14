@@ -69,24 +69,20 @@ type ruleOwner struct {
 // it never waits on a rule while holding a series or health lock. A severity
 // level write (UpdateSeverityLevel) enters the same order at its top: the
 // rules naming the level FOR UPDATE, then the level's row, then health.
+//
+// In a landing batch the rules were read and locked once, for every lane,
+// before any lane wrote (lockGroups), so a lane judges by those rows rather
+// than reading them again (#1928).
 func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*ruleEvaluator, error) {
-	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
-		order by id for share`, keys)
-	if err != nil {
-		return nil, fmt.Errorf("storage: load event rules: %w", err)
+	byKey, held := map[string][]EventRule(nil), false
+	if b, ok := tx.(*batchTx); ok {
+		byKey, held = b.heldRules(keys)
 	}
-	byKey := map[string][]EventRule{}
-	for rows.Next() {
-		r, err := scanEventRule(rows)
-		if err != nil {
-			rows.Close()
+	if !held {
+		var err error
+		if byKey, err = loadEventRules(ctx, tx, keys); err != nil {
 			return nil, err
 		}
-		byKey[r.SampleKey] = append(byKey[r.SampleKey], r)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if len(byKey) == 0 {
 		return nil, nil
@@ -98,6 +94,26 @@ func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*r
 	e := newRuleMatcher(p, byKey)
 	e.now = now
 	return e, nil
+}
+
+// loadEventRules reads the enabled event rules reading keys FOR SHARE, in id
+// order (newRuleEvaluator says why the lock), by sample key.
+func loadEventRules(ctx context.Context, tx pgx.Tx, keys []string) (map[string][]EventRule, error) {
+	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
+		order by id for share`, keys)
+	if err != nil {
+		return nil, fmt.Errorf("storage: load event rules: %w", err)
+	}
+	defer rows.Close()
+	byKey := map[string][]EventRule{}
+	for rows.Next() {
+		r, err := scanEventRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		byKey[r.SampleKey] = append(byKey[r.SampleKey], r)
+	}
+	return byKey, rows.Err()
 }
 
 // newRuleMatcher is an evaluator's selector machinery, usable on its own to

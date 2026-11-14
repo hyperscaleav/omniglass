@@ -3,7 +3,9 @@ package bus
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -15,7 +17,8 @@ import (
 // TestRegistryFollowsTheCatalogBetweenBatches is #1279's acceptance: the
 // ingest consumer keeps its sample registry between batches instead of
 // re-reading the catalogs every time, and still honors a catalog change on the
-// very next batch. A metric type created between two batches is accepted by
+// next batch past the fingerprint's interval (#1928; each batch here lands one
+// interval after the last). A metric type created between two batches is accepted by
 // the second; a calc rule that starts writing that metric moves the key's
 // writer class (ADR-0161), so the next node sample of it is dropped by the
 // consumer's lane check rather than landed.
@@ -59,7 +62,10 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
 	s := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
+	now := time.Now()
+	s.registry.now = func() time.Time { return now }
 	land := func() error {
+		now = now.Add(fingerprintEvery)
 		return s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-ssh", NodeId: "node-a",
 			Metrics: []*ogv1.MetricSample{{Name: "cache-probe", Value: 1}}},
 			ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)})
@@ -105,4 +111,48 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	if n := rows(); n != 1 {
 		t.Fatalf("a node sample of a calc rule's output landed: %d rows, want 1 (its writer class drops it)", n)
 	}
+}
+
+// TestRegistryReadsTheFingerprintAtMostEveryInterval is #1928: a batch reuses
+// the kept registry without reading the catalogs' fingerprint while the last
+// read is younger than fingerprintEvery, so a fast batch rate pays one small
+// read every few seconds, not one a batch. A catalog change is honored by the
+// first batch after the interval.
+func TestRegistryReadsTheFingerprintAtMostEveryInterval(t *testing.T) {
+	now := time.Date(2026, 11, 14, 4, 0, 0, 0, time.UTC)
+	cache := &registryCache{now: func() time.Time { return now }}
+	store := &catalogStore{fp: "a", metrics: []storage.MetricType{{Name: "volume"}}}
+	batch := func(after time.Duration) {
+		t.Helper()
+		now = now.Add(after)
+		if _, _, err := cache.get(context.Background(), store); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	batch(0)
+	for i := 0; i < 100; i++ {
+		batch(fingerprintEvery / 200)
+	}
+	if store.fingerprintReads != 1 {
+		t.Fatalf("101 batches inside one interval read the fingerprint %d times, want once", store.fingerprintReads)
+	}
+
+	store.fp, store.metrics = "b", append(store.metrics, storage.MetricType{Name: "power"})
+	batch(fingerprintEvery / 4)
+	if reg, _, _ := cache.get(context.Background(), store); hasMetric(reg, "power") {
+		t.Fatal("a catalog change was read inside the interval")
+	}
+	batch(fingerprintEvery)
+	if store.fingerprintReads != 2 {
+		t.Fatalf("the batch after the interval: %d fingerprint reads, want 2", store.fingerprintReads)
+	}
+	if reg, _, _ := cache.get(context.Background(), store); !hasMetric(reg, "power") {
+		t.Fatal("the first batch after the interval did not honor the catalog change")
+	}
+}
+
+func hasMetric(reg collection.Registry, name string) bool {
+	_, ok := reg.Metric(name)
+	return ok
 }

@@ -60,10 +60,14 @@ A node's batch is one tick of **task groups**, each with its own writer
 and the transaction's statement count does not grow with the groups. The gateway preloads every
 owner's arcs in one query, admits each group's writes against its writer in Go (a group it refuses
 is dropped before any write), takes the event-rule and calc-mark locks once over the union, then
-takes every property series' advisory lock in one sorted statement. Each lane (property, metric,
-event, log, node log) is then written as set inserts, one per distinct writer in the batch (a node's
-own rows share one, plus one per conduit that fans rows). So the cost of a batch is a fixed
-count, about twenty statements, plus a term for each repeated series row, each judged sample that
+takes every property series' advisory lock in one sorted statement. The transaction carries what
+it took (the event rules it read, the owners it marked for a calc rule, the series it locked), so
+no lane reads a rule, probes a calc mark or takes a series lock a second time
+([ADR-1928](/architecture/decisions/#adr-1928-a-telemetry-batch-reads-and-locks-once-and-stamps-seen-inside-its-transaction)).
+Each lane (property, metric, event, log, node log) is then written as set inserts, one per
+distinct writer in the batch (a node's own rows share one, plus one per conduit that fans rows),
+and the endpoints the batch carried are stamped seen in the same transaction. So the cost of a
+batch is a fixed count, about a dozen statements, plus a term for each repeated series row, each judged sample that
 fires a rule, each settled targeted property and each conduit group that carries identified
 samples; a batch of one group and a batch of fifty cost the same when those terms are zero. A
 series a batch carries twice keeps the transition guard: its second and later rows run in order

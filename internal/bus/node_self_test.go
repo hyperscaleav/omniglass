@@ -2,6 +2,7 @@ package bus
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -115,7 +116,7 @@ func TestNodeSelfReportRefusedIsWarnedAndTheTickLands(t *testing.T) {
 	if g := logs(refusedGroupLog); len(g) != 0 {
 		t.Errorf("task group refusal warnings = %v, want none: no task group was refused", g)
 	}
-	if len(f.store.stamps) != 1 || len(f.store.stamps[0]) != 1 || f.store.stamps[0][0] != f.endpoints["disp-1-tcp"] {
-		t.Errorf("seen stamps = %v, want disp-1-tcp alone", f.store.stamps)
+	if got, want := f.seen(t), f.stamped("disp-1-tcp"); !slices.Equal(got, want) {
+		t.Errorf("seen stamps = %v, want disp-1-tcp alone %v", got, want)
 	}
 }

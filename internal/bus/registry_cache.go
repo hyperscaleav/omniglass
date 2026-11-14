@@ -14,8 +14,11 @@ import (
 // which every batch hands LandBatch so the property lane need not read them.
 // Building it reads all three catalogs; a batch instead reads the catalogs'
 // fingerprint (storage.CatalogFingerprint, one short value) and reuses the
-// registry while the fingerprint holds, so a catalog change is honored by the
-// next batch and an unchanged catalog costs one small read.
+// registry while the fingerprint holds. The fingerprint is read at most once
+// every fingerprintEvery (#1928), so a catalog change is honored within that
+// interval and an unchanged catalog costs one small read every few seconds,
+// however fast batches land. A failed read is not remembered: the next batch
+// reads again.
 //
 // The fingerprint is read before the catalogs, so the registry stored under a
 // fingerprint is never older than it: a catalog change landing between the
@@ -36,22 +39,43 @@ type registryCache struct {
 	// warnedAt is when the registry's collisions were last logged; zero
 	// until a registry with one is built.
 	warnedAt time.Time
+	// checkedAt is when the fingerprint was last read and matched or built
+	// the registry; a batch inside fingerprintEvery of it reads nothing.
+	checkedAt time.Time
 	// now and log default to time.Now and slog.Default; a test sets them.
 	now func() time.Time
 	log *slog.Logger
 }
 
+// clock is c.now, or time.Now when the test set none.
+func (c *registryCache) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
 // collisionReminder is how often a collision that persists is logged again.
 const collisionReminder = time.Hour
 
+// fingerprintEvery is how long a fingerprint read is trusted: a batch inside
+// it reuses the kept registry without reading the fingerprint (#1928).
+const fingerprintEvery = 5 * time.Second
+
 func (c *registryCache) get(ctx context.Context, store Store) (collection.Registry, map[string]bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	at := c.clock()
+	if c.fingerprint != "" && at.Sub(c.checkedAt) < fingerprintEvery {
+		c.warnCollisions()
+		return c.reg, c.targeted, nil
+	}
 	fp, err := store.CatalogFingerprint(ctx)
 	if err != nil {
 		return collection.Registry{}, nil, err
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if fp != "" && fp == c.fingerprint {
+		c.checkedAt = at
 		c.warnCollisions()
 		return c.reg, c.targeted, nil
 	}
@@ -74,6 +98,7 @@ func (c *registryCache) get(ctx context.Context, store Store) (collection.Regist
 	c.reg = collection.NewRegistry(metricTypes, properties, eventTypes)
 	c.targeted = targeted
 	c.fingerprint = fp
+	c.checkedAt = at
 	c.warnedAt = time.Time{}
 	c.warnCollisions()
 	return c.reg, c.targeted, nil
@@ -89,11 +114,7 @@ func (c *registryCache) warnCollisions() {
 	if len(clashes) == 0 && len(shadowed) == 0 {
 		return
 	}
-	now := time.Now
-	if c.now != nil {
-		now = c.now
-	}
-	at := now()
+	at := c.clock()
 	if !c.warnedAt.IsZero() && at.Sub(c.warnedAt) < collisionReminder {
 		return
 	}
