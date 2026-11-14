@@ -12,12 +12,19 @@ const (
 	// ReleaseRepo is where a release binary's image is published, tagged
 	// v<version>.
 	ReleaseRepo = "ghcr.io/hyperscaleav/omniglass"
-	// DevImage is the image `make` builds beside the host binary.
+	// DevImage is the image `make` builds beside the host binary: the tag
+	// every checkout on a Docker host shares, so the newest build anywhere
+	// wins it. A binary with a build id runs DevImageFor(build) instead.
 	DevImage = "omniglass:dev"
 	// VersionLabel is the OCI label the image carries its build id in; a dev
 	// binary runs only an image whose label matches its own build id.
 	VersionLabel = "org.opencontainers.image.version"
 )
+
+// DevImageFor is the tag `make` gives a build besides DevImage, keyed to the
+// build id both the binary and the image carry, so another checkout's build
+// never re-points it (#1422).
+func DevImageFor(build string) string { return DevImage + "-" + build }
 
 // ImageChoice is the image a lab runs and how to get it.
 type ImageChoice struct {
@@ -28,6 +35,10 @@ type ImageChoice struct {
 	// WantVersion, when set, is the build id the image's version label must
 	// carry; a missing or mismatched image is refused, saying run make.
 	WantVersion string
+	// ID is the image ID the reference resolved to at preflight, which the
+	// run's containers are created from. Set by the runner, not by
+	// SelectImage.
+	ID string
 	// Warning is printed before the lab starts.
 	Warning string
 	// Why says where the choice came from, for the status line.
@@ -48,8 +59,10 @@ var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 //   - --image overrides, with a warning.
 //   - A release binary (a semantic version) runs ghcr.io/hyperscaleav/omniglass:v<version>,
 //     pulled if absent.
-//   - Any other build runs the local omniglass:dev, whose version label must
-//     match the binary's build id; the lab never builds implicitly.
+//   - Any other build runs the local omniglass:dev-<build id> that make tagged
+//     beside the binary, or omniglass:dev for a binary with no build id (not
+//     built by make). The image's version label must match the binary's build
+//     id; the lab never builds implicitly.
 func SelectImage(version, override string) ImageChoice {
 	if override != "" {
 		return ImageChoice{Ref: override, Pull: true, Why: "--image", BinaryVersion: version,
@@ -60,7 +73,11 @@ func SelectImage(version, override string) ImageChoice {
 		return ImageChoice{Ref: ReleaseRepo + ":v" + strings.TrimPrefix(version, "v"), Pull: true,
 			Why: "the release image for this binary", BinaryVersion: version}
 	}
-	return ImageChoice{Ref: DevImage, WantVersion: version, Why: "built by make beside this binary", BinaryVersion: version}
+	ref := DevImage
+	if version != "" && version != "dev" {
+		ref = DevImageFor(version)
+	}
+	return ImageChoice{Ref: ref, WantVersion: version, Why: "built by make beside this binary", BinaryVersion: version}
 }
 
 // CheckDevImage holds a dev image to the binary that runs it: the image must

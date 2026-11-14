@@ -6,12 +6,15 @@
 .PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
-# it builds the image omniglass:dev and exports this machine's own binary to
+# it builds the image and exports this machine's own binary to
 # bin/omniglass (the hostbin stage, cross-compiled for this OS and
 # architecture), both stamped with one build id: the commit, plus a dirty
-# marker and the build time for an uncommitted tree. `omniglass lab run` runs
-# only the image whose version label is its own build id, so a lab always
-# reflects the code it was built from; the lab never builds implicitly.
+# marker and the build time for an uncommitted tree. The image is tagged
+# omniglass:dev-<build id>, which `omniglass lab run` runs, and also
+# omniglass:dev, a tag every checkout on a Docker host shares (the newest
+# build anywhere wins it, #1422). `omniglass lab run` runs only the image
+# whose version label is its own build id, so a lab always reflects the code
+# it was built from; the lab never builds implicitly.
 # BuildKit cache mounts keep a Go-only change to seconds. The image is built
 # for this machine's architecture only; CI keeps the multi-arch build.
 .DEFAULT_GOAL := all
@@ -20,10 +23,10 @@ BUILD_ID := $(shell c=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 all:
-	docker build -t omniglass:dev --build-arg VERSION=$(BUILD_ID) .
+	docker build -t omniglass:dev -t omniglass:dev-$(BUILD_ID) --build-arg VERSION=$(BUILD_ID) .
 	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) \
 		--build-arg HOSTOS=$(HOST_OS) --build-arg HOSTARCH=$(HOST_ARCH) --output type=local,dest=bin .
-	@echo "built omniglass:dev and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
+	@echo "built omniglass:dev-$(BUILD_ID) (also tagged omniglass:dev) and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
 
 # The lab (#1193), the short form: build, then `./bin/omniglass lab run` in
 # the foreground until Ctrl-C. LAB_ARGS passes flags (LAB_ARGS="--fresh").
@@ -38,14 +41,15 @@ lab: all
 # (every product seeded; #1719): the footprint and a scale measure.
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
-	$(MAKE) test-lab-image
+	$(MAKE) test-lab-image LAB_BUILD=$(BUILD_ID)
 
-# The same tests against an image already built, building nothing: LAB_IMAGE
-# names it (a private tag where omniglass:dev is shared; empty runs
-# omniglass:dev), and LAB_RUN narrows the tests.
+# The same tests against an image already built, building nothing: LAB_BUILD
+# is the build id whose omniglass:dev-<build id> image they run (test-lab
+# passes the one it just built), LAB_IMAGE names another image outright, and
+# with neither they run omniglass:dev. LAB_RUN narrows the tests.
 LAB_RUN ?= Integration
 test-lab-image:
-	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
+	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_TEST_BUILD=$(LAB_BUILD) OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
 
 # The scale lab (#1554): a scale lab scenario at a size, one node per site,
 # checked by scripts/scale-lab.sh (a node container per site, every simulated
