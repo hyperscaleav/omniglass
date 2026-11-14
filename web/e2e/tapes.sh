@@ -18,7 +18,10 @@
 #                            naming the tape and the cause; an over-budget
 #                            recording fails naming its limit; a passing one renders
 #                            its GIF and MP4, carries the budget mark, and holds
-#                            each command and caption it showed for its read time
+#                            each command and caption it showed for its read time;
+#                            a tape declaring `# demo-needs: database` records
+#                            against a database of its own, which is gone after,
+#                            and one that does not is handed no DSN
 #
 # Per tape: tape.mjs, in the Playwright container (node, no install), holds the
 # tape to the house rules and wraps it in the house settings (tapelib.mjs);
@@ -27,7 +30,9 @@
 # lab comes up), plays it on the lab network as
 # this user, with the lab's server and an owner token in the CLI's env and
 # the lab's container logs readable under /stack/logs/ (server.log, and
-# node.log, the node and its in-process simulator); ffprobe reads the
+# node.log, the node and its in-process simulator); a tape that declares
+# `# demo-needs: database` also gets a database of its own on the lab's
+# Postgres (OMNIGLASS_DSN, and psql), created before it and dropped after (#1313); ffprobe reads the
 # MP4's length; and tape.mjs judges the recording. A demo is a test: a command
 # the tape typed that exited non-zero (the prelude lists each), VHS failing (a
 # Wait that ran out, a tape it cannot play), a missing GIF or MP4, or a
@@ -186,10 +191,32 @@ mp4_seconds() {
     -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "/out/$id.mp4" || true
 }
 
+# psql, the recorder image's, against the lab's Postgres as the lab's own
+# role (LAB_DSN, on the lab network): how a tape's database is made and dropped.
+lab_psql() {
+  lab_run --entrypoint psql "$DEMO_IMG" "$LAB_DSN" -v ON_ERROR_STOP=1 -qAt "$@"
+}
+
+# A tape's database (#1313): its own name on the lab's Postgres, never the
+# lab's database, since a tape may stamp a schema no later tape could migrate
+# (a version past the binary's head). tape_<id> with the id's hyphens made
+# underscores (a hyphen would need quoting everywhere the name is typed).
+tape_database() { echo "tape_${1//-/_}"; }
+
+# The lab's DSN with its database name swapped for $1.
+dsn_for_database() { sed -E "s#/[^/?]*(\\?|\$)#/$1\\1#" <<<"$LAB_DSN"; }
+
+# Drops it, whatever the tape did: WITH (FORCE) ends a connection a stuck
+# tape's server left open. The lab's teardown removes the whole Postgres
+# volume, so a run killed too hard to get here leaves nothing behind either.
+drop_tape_database() {
+  lab_psql -c "drop database if exists \"$1\" with (force)" >/dev/null
+}
+
 # Record $1 (a tape) into $2 (its out dir, repo-relative): wrap it, play it,
 # judge it.
 tape_one() {
-  local file=$1 out=$2 id f rc=0 seconds
+  local file=$1 out=$2 id f rc=0 seconds needs db_args=() database=""
   id=$(basename "$file" .tape)
   valid_id "$id" || return 1
   mkdir -p "$out"
@@ -198,7 +225,8 @@ tape_one() {
   done
   echo "tape $id: recording" >&2
   tape_node wrap "../$file" >"$out/$id.tape" || return 1
-  if grep -qx '# demo-needs: docker-socket' "$file"; then
+  needs=$(tape_node needs "../$file") || return 1
+  if grep -qx docker-socket <<<"$needs"; then
     # A tape that drives Docker itself (lab-first-run types omniglass lab
     # run, #1193). Opt-in twice: the tape declares it, and the runner sets
     # DEMO_DOCKER_SOCKET=1 (demo.yml does, on a throwaway CI runner): the
@@ -219,11 +247,20 @@ tape_one() {
     wait "$LAB_FG_PID" || rc=$?
     LAB_FG_PID=""
   else
-    lab_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    if grep -qx database <<<"$needs"; then
+      # Made fresh (dropped first, should an earlier run have left one), so a
+      # tape starts from an empty database however many times it records.
+      database=$(tape_database "$id")
+      drop_tape_database "$database" || return 1
+      lab_psql -c "create database \"$database\"" >/dev/null || return 1
+      db_args=(-e OMNIGLASS_DSN="$(dsn_for_database "$database")")
+    fi
+    lab_run --user "$(id -u):$(id -g)" -e HOME=/tmp "${db_args[@]}" \
       -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$LAB_TOKEN" \
       -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log -e DEMO_PACE_LOG=/out/pace.txt \
       -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
       "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 || rc=$?
+    if [ -n "$database" ]; then drop_tape_database "$database" || return 1; fi
   fi
   if [ "$rc" -ne 0 ]; then
     sed 's/^/  | /' "$out/vhs.log" | tail -n 20 >&2
@@ -358,5 +395,19 @@ grep -qF "tape passes: over budget: the GIF is" <<<"$log" || fail "the GIF overr
 grep -qF "tape passes: over budget: it runs" <<<"$log" || fail "the length overrun was not named"
 [ ! -e "$ST/passes/demo.json" ] || fail "an over-budget recording kept its manifest"
 echo "ok: an over-budget recording fails naming which limit, and loses its mark"
+
+# 7. A tape that declares `# demo-needs: database` records against a database
+#    of its own on the lab's Postgres (#1313): not the lab's, migrated by the
+#    CLI that reads OMNIGLASS_DSN, and gone once the tape is. A tape that does
+#    not declare it is handed no DSN.
+log=$(tape_one "$FIX/needs-database.tape" "$ST/needs-database" 2>&1) || { echo "$log" | sed 's/^/  | /'; fail "the tape that needs a database failed"; }
+echo "$log" | sed 's/^/  | /'
+db=$(tape_database needs-database)
+grep -qxF "$db" "$ST/needs-database/shell.log" || fail "the tape was not given its own database ($db): $(cat "$ST/needs-database/shell.log")"
+grep -qx t "$ST/needs-database/shell.log" || fail "omniglass migrate did not migrate the tape's database"
+[ "$(lab_psql -c "select count(*) from pg_database where datname = '$db'")" = 0 ] || fail "the tape's database $db outlived the tape"
+log=$(tape_one "$FIX/no-database.tape" "$ST/no-database" 2>&1) || { echo "$log" | sed 's/^/  | /'; fail "the tape that needs no database failed"; }
+grep -qxF 'dsn=[unset]' "$ST/no-database/shell.log" || fail "a tape that declares no database was handed a DSN: $(cat "$ST/no-database/shell.log")"
+echo "ok: a tape declaring demo-needs: database gets a database of its own, dropped after; one that does not gets no DSN"
 lab_assert_intact
 echo "tapes selftest: passed"
