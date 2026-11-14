@@ -91,13 +91,22 @@ func calcProbeArgs(keys []string) (lanes, names []string) {
 // reads one of the keys a write's samples carried on an owner its selector
 // picks, except the rule that produced the write. One indexed probe finds
 // the rules; when none reads the keys the write pays nothing more. A mark
-// already present keeps its marked_at (coalescing) but is updated, not
-// skipped: the update locks the row until this write commits, so a drain
-// (SKIP LOCKED) cannot serve it from the values before this write and drop
-// the change. The marks are inserted in (rule, owner) order.
+// already present keeps its marked_at (coalescing) but goes through the
+// conflict's update, not do nothing: the update locks the row until this
+// write commits, so a drain (SKIP LOCKED) cannot serve it from the values
+// before this write and drop the change. Its guard is false (the update
+// would change nothing), and Postgres locks a conflicting row before it
+// judges the guard, so the lock holds and no tuple is written (#1928). The
+// marks are inserted in (rule, owner) order. A landing batch
+// that already marked these samples for every lane (lockGroups) holds the
+// marks' rows for the rest of its transaction, so a lane's mark is skipped
+// rather than probed and upserted again (#1928).
 func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, exceptRule string) error {
 	keys := marks.allKeys()
 	if len(keys) == 0 {
+		return nil
+	}
+	if b, ok := tx.(*batchTx); ok && b.heldMarks(marks, exceptRule) {
 		return nil
 	}
 	lanes, names := calcProbeArgs(keys)
@@ -185,7 +194,7 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	}
 	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
 		select r, 'component', c from unnest($1::uuid[], $2::uuid[]) as m(r, c) order by r, c
-		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, compIDs); err != nil {
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at where false`, ruleIDs, compIDs); err != nil {
 		return fmt.Errorf("storage: mark calc rules pending: %w", err)
 	}
 	return nil

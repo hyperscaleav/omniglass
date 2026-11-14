@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -16,7 +17,7 @@ import (
 // TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext is #1299's acceptance:
 // the consumer carries the command-targeted property names on the registry it
 // keeps between batches, and a command type created between two batches is
-// honored by the second. A batch lands lamp-mode while nothing commands it;
+// honored by the second (one past the fingerprint's interval, #1928). A batch lands lamp-mode while nothing commands it;
 // then a command type targeting lamp-mode is created and a command issued, and
 // the next batch's lamp-mode observation settles it. A registry kept past the
 // command type's creation would not know lamp-mode is commanded, and the
@@ -71,8 +72,11 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
 	s := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
+	now := time.Now()
+	s.registry.now = func() time.Time { return now }
 	land := func(id, mode string) {
 		t.Helper()
+		now = now.Add(fingerprintEvery)
 		if err := s.land(ctx, id, &ogv1.TelemetryBatch{TaskId: "t-pj", NodeId: "node-a",
 			Properties: []*ogv1.PropertySample{{Name: "lamp-mode", ValueJson: `"` + mode + `"`}}},
 			ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner),

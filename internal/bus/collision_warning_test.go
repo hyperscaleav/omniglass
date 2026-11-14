@@ -19,9 +19,14 @@ type catalogStore struct {
 	fp         string
 	metrics    []storage.MetricType
 	properties []storage.PropertyType
+	// fingerprintReads counts the CatalogFingerprint calls.
+	fingerprintReads int
 }
 
-func (c *catalogStore) CatalogFingerprint(context.Context) (string, error) { return c.fp, nil }
+func (c *catalogStore) CatalogFingerprint(context.Context) (string, error) {
+	c.fingerprintReads++
+	return c.fp, nil
+}
 func (c *catalogStore) ListMetricTypes(context.Context) ([]storage.MetricType, error) {
 	return c.metrics, nil
 }
@@ -76,10 +81,11 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 	}
 
 	// Any rebuild with the collision standing logs it at once, inside the
-	// reminder's hour: a catalog change elsewhere (a new metric type) is when
+	// reminder's hour (the first batch past fingerprintEvery reads the
+	// change, #1928): a catalog change elsewhere (a new metric type) is when
 	// an operator is editing the catalogs, so they hear it is still there.
 	store.fp, store.metrics = "a2", append(store.metrics, storage.MetricType{Name: "volume"})
-	batch(2 * time.Second)
+	batch(fingerprintEvery)
 	if warnings() != 3 {
 		t.Fatalf("a rebuild with the collision standing: %d warnings, want it logged at once (3)", warnings())
 	}
@@ -87,7 +93,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 	// Deleting one side clears it: the registry rebuilds without a collision
 	// and nothing more is logged, however long it runs.
 	store.fp, store.properties = "b", []storage.PropertyType{{Name: "power"}}
-	batch(2 * time.Second)
+	batch(fingerprintEvery)
 	batch(3 * time.Hour)
 	if warnings() != 3 {
 		t.Fatalf("after the collision was cleared: %d warnings, want still 3", warnings())
@@ -164,7 +170,7 @@ func TestAShadowedOfficialNameIsToldOnRebuildAndHourlyNotPerBatch(t *testing.T) 
 		t.Fatalf("an hour on: %d notices, want the reminder (2)", told())
 	}
 	store.fp, store.properties = "b", []storage.PropertyType{{Name: "power"}}
-	batch(2 * time.Second)
+	batch(fingerprintEvery)
 	batch(3 * time.Hour)
 	if told() != 2 {
 		t.Fatalf("after the operator's row was renamed away: %d notices, want still 2", told())

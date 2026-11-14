@@ -321,8 +321,27 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 // series. It is what makes the guard's compare-then-insert atomic per series
 // (lockAdvisory): a second batch writing the series waits here, and its
 // conditional insert then reads the first one's committed row rather than a
-// snapshot that predates it. Only the ingest's guarded write takes it.
+// snapshot that predates it. Only the ingest's guarded write takes it, and a
+// landing batch that already holds every one of the locks (lockGroups) takes
+// none again (#1928).
 func lockPropertySeries(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrite, arcs []string) error {
+	keys := propertySeriesLockKeys(evs, arcs)
+	if len(keys) == 0 {
+		return nil
+	}
+	if b, ok := tx.(*batchTx); ok && b.heldSeries(keys) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended(t.k, 0))
+		from unnest($1::text[]) with ordinality as t(k, ord) order by t.ord`, keys); err != nil {
+		return fmt.Errorf("storage: lock property series: %w", err)
+	}
+	return nil
+}
+
+// propertySeriesLockKeys is the distinct series lock keys of evs, whose owner
+// primary keys are arcs, sorted.
+func propertySeriesLockKeys(evs []PropertySampleWrite, arcs []string) []string {
 	keys := make([]string, 0, len(evs))
 	seen := make(map[string]bool, len(evs))
 	for i, ev := range evs {
@@ -332,15 +351,8 @@ func lockPropertySeries(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrit
 			keys = append(keys, k)
 		}
 	}
-	if len(keys) == 0 {
-		return nil
-	}
 	slices.Sort(keys)
-	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended(t.k, 0))
-		from unnest($1::text[]) with ordinality as t(k, ord) order by t.ord`, keys); err != nil {
-		return fmt.Errorf("storage: lock property series: %w", err)
-	}
-	return nil
+	return keys
 }
 
 // propertySeriesLockKey is the string one property series' transition lock

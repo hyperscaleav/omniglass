@@ -19,7 +19,10 @@ import (
 // wantStatementsPerReportBatch is every statement one endpoint's collection
 // report batch costs (#1369): the window's poll duration, poll CPU time
 // (#1870) and pushed message count, metric lane only. Exact, as the standard batch's is.
-const wantStatementsPerReportBatch = 13
+// 13 until #1928 read the event rules and probed the calc rules once a batch
+// and read the catalogs' fingerprint once every few seconds (10); its seen
+// stamp moved into the batch's transaction at the same one statement.
+const wantStatementsPerReportBatch = 10
 
 // reportBatch is one endpoint's collection report for a window, as the node
 // publishes it, its one task group (#1582): an endpoint that polls and holds a listening session, at

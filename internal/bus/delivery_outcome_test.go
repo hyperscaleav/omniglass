@@ -241,7 +241,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 				Events:     []*ogv1.EventSample{{Name: "call-started", Message: "m"}},
 				TaskLogs:   []*ogv1.LogLine{{Message: "a"}, {Message: "b"}, {Message: "c"}}},
 		}}
-		if _, err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		got := store.landed.Tally
@@ -260,7 +260,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 		s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
 		ev := &ogv1.TelemetryBatch{NodeSelf: &ogv1.NodeSelf{Metrics: []*ogv1.MetricSample{
 			{Name: "node-cpu-ratio", Value: 0.1}, {Name: "node-mem-ratio", Value: 0.2, Identity: room("zr-a")}}}}
-		if _, err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if !only(store.landed.Tally, delivery.Metric, delivery.RefusedInvalid, 2) {
@@ -277,7 +277,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 			{TaskId: "t-own", Metrics: []*ogv1.MetricSample{{Name: "participant-count", Value: 1}},
 				TaskLogs: []*ogv1.LogLine{{Message: "a"}, {Message: "b"}}},
 		}}
-		if _, err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if !only(store.landed.Tally, delivery.Metric, delivery.Missing, 2) {
@@ -294,7 +294,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 		store := &outcomeStore{owners: map[string]storage.TaskOwner{"t-own": owner}}
 		s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
 		ev := &ogv1.TelemetryBatch{Groups: []*ogv1.TaskGroup{{TaskId: "t-own", Metrics: []*ogv1.MetricSample{{Name: "participant-count", Value: 1}}}}}
-		if _, err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if store.landed.Ledger != nil || !store.landed.Tally.Empty() {

@@ -69,8 +69,12 @@ const (
 	// 19 statements carry what 215 batches of 18 did. #1592 moved the probe
 	// states (icmp-reachable, tcp-open) from the metric lane to the property
 	// lane, which the tick batch locks and lands set-based too, so the three
-	// properties a task now emits move nothing here.
-	wantStatementsPerBatch = 19
+	// properties a task now emits move nothing here. #1928 takes each rule
+	// read, calc probe and series lock once in the batch's transaction, stamps
+	// the endpoints seen inside it rather than in a second commit, and reads
+	// the catalogs' fingerprint once every few seconds rather than per batch
+	// (13).
+	wantStatementsPerBatch = 13
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 60 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves
@@ -157,8 +161,14 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 		tb.Fatalf("connect: %v", err)
 	}
 	tb.Cleanup(func() { _ = conn.Close(context.Background()) })
+	srv := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
+	// The registry's clock stands still, so the warm-up reads the catalogs'
+	// fingerprint and the window's batches fall inside its interval, as a
+	// fleet's do once more than a few nodes tick (#1928).
+	frozen := time.Now()
+	srv.registry.now = func() time.Time { return frozen }
 	return &footprintFixture{
-		srv:     &Server{store: gw, orphans: newOrphanTally(orphanWindow)},
+		srv:     srv,
 		counter: counter,
 		conn:    conn,
 		tasks:   tasks,
