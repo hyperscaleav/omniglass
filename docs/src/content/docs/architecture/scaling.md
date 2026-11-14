@@ -159,7 +159,9 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   parallel without a second subscriber
   ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
   The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
-  second server exists; a second server is also a trigger for the materialized worklist (#1586).
+  second server exists. The worklist's target design leaves nothing to hand over: a node syncs it endpoint by
+  endpoint against a manifest any server can answer (#1586,
+  [ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)).
 
 :::
 
