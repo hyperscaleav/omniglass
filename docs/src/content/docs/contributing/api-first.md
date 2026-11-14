@@ -134,6 +134,10 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   ([ADR-0076](/architecture/decisions/)).
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.
+- **A derived CLI name must be unique.** The CLI command path is derived from the route
+  ([ADR-0059](/architecture/decisions/)), and when two operations derive one path (an item
+  `:test` and a collection `:test` on one resource both give `<resource> test`) `make gen`
+  fails naming both operations and the path; give one a distinct custom verb.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
   `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one

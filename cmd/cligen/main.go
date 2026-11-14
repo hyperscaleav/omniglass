@@ -38,7 +38,10 @@ func main() {
 	}
 
 	cmds := buildCommands(doc, base)
-	roots := tree(cmds)
+	roots, err := tree(cmds)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 
 	out, err := render(roots)
 	if err != nil {
@@ -154,10 +157,11 @@ var httpMethods = []string{"get", "post", "put", "patch", "delete"}
 // --- command model ----------------------------------------------------------
 
 type command struct {
-	Words   []string // command path, e.g. ["location", "get"] or ["healthz"]
-	Method  string   // GET, POST, ...
-	APIPath string   // Go format template, e.g. /api/v1/locations/%s
-	Args    []string // positional arg names, in path order
+	Words       []string // command path, e.g. ["location", "get"] or ["healthz"]
+	Method      string   // GET, POST, ...
+	APIPath     string   // Go format template, e.g. /api/v1/locations/%s
+	OperationID string   // OpenAPI operationId, named in a path-collision error
+	Args        []string // positional arg names, in path order
 	// ArgExamples parallels Args: the OpenAPI example for that path parameter,
 	// or "" where it has none.
 	ArgExamples []string
@@ -273,6 +277,11 @@ var nameOverride = map[string]([]string){
 	"list-auth-me-sessions":       {"session", "list"},
 	"revoke-auth-me-session":      {"session", "revoke"},
 	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
+	// The webhook receiver's URL is one item route carrying three methods; the
+	// verb the route derives for a POST on an item is `get`, so name the two the
+	// CLI emits (HEAD is not generated).
+	"verify-webhook":  {"webhook", "verify"},
+	"receive-webhook": {"webhook", "receive"},
 	// A node has one simulator: a singular read, not a list.
 	"get-node-simulation": {"node", "simulation"},
 	// A component has one impairment: read and set, not list and update.
@@ -334,6 +343,7 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		Words:       words,
 		Method:      strings.ToUpper(method),
 		APIPath:     apiPath,
+		OperationID: op.OperationID,
 		Args:        args,
 		ArgExamples: argExamples,
 		Short:       op.Summary,
@@ -604,7 +614,15 @@ func (n *node) Use() string {
 // the LAST word as the leaf name, so a three-word path like
 // `component property list` rendered as `component list` and silently collided
 // with the real one. Any depth the route implies is a real level here.
-func tree(cmds []command) []*node {
+//
+// Two operations that derive one command path cannot both be emitted, and
+// keeping one would silently drop the other from the CLI and its reference. tree
+// refuses it with an error naming both operations and the path, so `make gen`
+// fails at the cause. (Repro: register POST /x/{name}:test and POST /x:test;
+// both derive `x test` and the reference lists one.) A path that is both a
+// command and a group (`component property` beside `component property list`)
+// is not a collision: cobra runs the command and lists the children.
+func tree(cmds []command) ([]*node, error) {
 	var roots []*node
 	find := func(kids *[]*node, name string) *node {
 		for _, k := range *kids {
@@ -622,6 +640,9 @@ func tree(cmds []command) []*node {
 		for _, w := range c.Words[1:] {
 			cur = find(&cur.Kids, w)
 		}
+		if cur.Cmd != nil {
+			return nil, collision(&c, cur.Cmd, c.Words)
+		}
 		cur.Cmd = &c
 	}
 	var sortRec func(ns []*node)
@@ -632,7 +653,17 @@ func tree(cmds []command) []*node {
 		}
 	}
 	sortRec(roots)
-	return roots
+	return roots, nil
+}
+
+// collision is the error for two operations that derive one command path: each
+// is named by operationId, method and path, then the command path they share.
+func collision(a, b *command, path []string) error {
+	return fmt.Errorf("cligen: %s and %s both derive %q", b.describe(), a.describe(), strings.Join(path, " "))
+}
+
+func (c *command) describe() string {
+	return fmt.Sprintf("%s %s (%s)", c.Method, c.APIPath, c.OperationID)
 }
 
 // --- path helpers -----------------------------------------------------------

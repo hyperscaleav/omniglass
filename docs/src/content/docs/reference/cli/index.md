@@ -7851,12 +7851,12 @@ omniglass view platform simulation list
 
 Commands for the webhook resource
 
-### `omniglass webhook get`
+### `omniglass webhook receive`
 
 Receive a webhook post for an endpoint
 
 ```
-omniglass webhook get <token>
+omniglass webhook receive <token>
 ```
 
 The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
@@ -7864,6 +7864,22 @@ The webhook transport's listener (#1024): a component or a cloud service posts h
 Example:
 
 ```sh
-omniglass webhook get <token>
+omniglass webhook receive <token>
+```
+
+### `omniglass webhook verify`
+
+Answer a webhook sender's verification of its URL
+
+```
+omniglass webhook verify <token>
+```
+
+A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.
+
+Example:
+
+```sh
+omniglass webhook verify <token>
 ```
 
