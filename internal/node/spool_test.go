@@ -1209,3 +1209,41 @@ func TestSelfLogsTheBufferDroppedAreTheNodesLoss(t *testing.T) {
 		}
 	}
 }
+
+// slowWarnHandler records every record, but holds the spool's overflow notice
+// for hold before it lands, standing in for a slow log sink: whatever the
+// spool does after logging is not what makes the notice visible.
+type slowWarnHandler struct {
+	recordingHandler
+	hold time.Duration
+}
+
+func (h *slowWarnHandler) Handle(ctx context.Context, r slog.Record) error {
+	if strings.HasPrefix(r.Message, "telemetry spool overflow") {
+		time.Sleep(h.hold)
+	}
+	return h.recordingHandler.Handle(ctx, r)
+}
+
+// TestSpoolTellsItsDropsBeforeDrainReturns: a stopping node drains the spool
+// and exits, so the overflow notice has to be logged before drain returns, not
+// after the shipper wakes it.
+func TestSpoolTellsItsDropsBeforeDrainReturns(t *testing.T) {
+	// Serial: it swaps the slog default.
+	publish := func(string, []byte, string) (ackWait, error) { return nil, nats.ErrMaxPayload }
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
+	h := &slowWarnHandler{hold: 200 * time.Millisecond}
+	prior := slog.Default()
+	slog.SetDefault(slog.New(h))
+	defer slog.SetDefault(prior)
+	queueTagged(t, s, "b1")
+	if err := s.drain(context.Background()); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	for _, r := range h.all() {
+		if v, ok := attr(r, "dropped"); ok && v.Int64() == 1 {
+			return
+		}
+	}
+	t.Fatal("drain returned before the spool told the batch it dropped")
+}

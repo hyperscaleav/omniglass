@@ -488,12 +488,17 @@ func (s *telemetrySpool) ship() {
 			}
 		}
 		if len(inflight) == 0 {
-			s.stopLocked()
-			dropped := s.takeNoticeLocked()
-			s.mu.Unlock()
-			if dropped > 0 {
+			// Tell the drops before the shipper stops: stopping wakes drain, and
+			// a node that drains then exits must not lose the notice. The lock
+			// is released to log, so a batch queued meanwhile is shipped by the
+			// next pass, which tells nothing and stops.
+			if dropped := s.takeNoticeLocked(); dropped > 0 {
+				s.mu.Unlock()
 				slog.Warn("telemetry spool overflow, oldest batches dropped", "facility", "delivery", "dropped", dropped)
+				continue
 			}
+			s.stopLocked()
+			s.mu.Unlock()
 			return
 		}
 		s.mu.Unlock()
