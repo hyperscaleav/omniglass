@@ -26,8 +26,8 @@ type settingsMeOutput struct {
 }
 
 type settingsPatchInput struct {
-	Namespace string         `path:"namespace" doc:"the settings namespace, e.g. ui"`
-	Body      map[string]any `doc:"an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it"`
+	Namespace string         `path:"namespace" doc:"the settings namespace, e.g. ui" example:"notification"`
+	Body      map[string]any `doc:"an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it" example:"{\"egress_allow\":[\"smtp.example.com\"]}"`
 }
 
 type settingsNamespaceInput struct {
@@ -77,7 +77,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodPatch,
 		Path:        "/settings/{namespace}",
 		Summary:     "Update a settings namespace",
-		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
+		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.",
 	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err

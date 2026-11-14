@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
@@ -36,6 +38,52 @@ func jsonOrString(s string) any {
 		return v
 	}
 	return s
+}
+
+// freeFormBody resolves the request body of a command whose schema is a free-form
+// object with no declared properties (a merge patch, #1333): the document given
+// inline as --body, or read from --body-file (a path, or - for stdin). It returns
+// the document as written, compacted, so the wire carries exactly the keys the
+// operator typed, null included (null on a key is how a merge patch restores it).
+//
+// Every refusal happens here, before runAPICommand, so a bad document never
+// leaves the shell: both spellings at once, neither when the body is required,
+// an unreadable file, malformed JSON, and a document that is not an object.
+func freeFormBody(cmd *cobra.Command, inline, file string, required bool) (any, error) {
+	hasInline, hasFile := cmd.Flags().Changed("body"), cmd.Flags().Changed("body-file")
+	var raw []byte
+	switch {
+	case hasInline && hasFile:
+		return nil, fmt.Errorf("give the body as --body or --body-file, not both")
+	case hasInline:
+		raw = []byte(inline)
+	case hasFile:
+		var err error
+		if file == "-" {
+			raw, err = io.ReadAll(cmd.InOrStdin())
+		} else {
+			raw, err = os.ReadFile(file)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("--body-file: %w", err)
+		}
+	case required:
+		return nil, fmt.Errorf("a request body is required: pass a JSON object as --body, or --body-file (- for stdin)")
+	default:
+		return nil, nil
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil || doc == nil {
+		if err == nil {
+			err = fmt.Errorf("null is not an object")
+		}
+		return nil, fmt.Errorf("the request body is not a JSON object: %w", err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil {
+		return nil, fmt.Errorf("the request body is not valid JSON: %w", err)
+	}
+	return json.RawMessage(compact.Bytes()), nil
 }
 
 // runAPICommand issues one API call for a generated command, prints the JSON

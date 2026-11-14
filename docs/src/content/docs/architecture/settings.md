@@ -270,6 +270,21 @@ Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the type
 CLI command, and the JSONSchema all generate from it (`make gen`); only the override **storage** is
 raw JSONB partials.
 
+From the CLI the merge patch is the whole body: `setting update <namespace>` takes it as `--body`
+(a JSON object) or `--body-file` (a path, or `-` for stdin), because a namespace's keys are its own
+and the OpenAPI body declares no properties for the generator to turn into flags. The generator
+treats any object body with no declared properties this way (#1333), so the next free-form body gets
+the same pair of flags. A malformed or non-object document is refused before any request is made.
+
+```bash
+omniglass setting update notification --body '{"egress_allow":["smtp.example.com"]}'   # override a key
+omniglass setting update notification --body '{"egress_allow":null}'                   # restore it
+omniglass setting list                                                                  # value, source, lock
+```
+
+Per-key flags for each namespace are a follow-up ([#1914](https://github.com/hyperscaleav/omniglass/issues/1914)): the keys come from the reflected settings struct,
+not from the OpenAPI document the CLI generates from, so the generator cannot derive them today.
+
 `settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
 store is a singleton, so there is no create or delete-of-resource permission.
 

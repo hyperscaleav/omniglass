@@ -30491,7 +30491,7 @@
         "x-omniglass-platform-permission": "platform:update"
       },
       "patch": {
-        "description": "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
+        "description": "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.",
         "operationId": "patch-settings-namespace",
         "parameters": [
           {
@@ -30501,6 +30501,9 @@
             "required": true,
             "schema": {
               "description": "the settings namespace, e.g. ui",
+              "examples": [
+                "notification"
+              ],
               "type": "string"
             }
           }
@@ -30511,6 +30514,13 @@
               "schema": {
                 "additionalProperties": {},
                 "description": "an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it",
+                "examples": [
+                  {
+                    "egress_allow": [
+                      "smtp.example.com"
+                    ]
+                  }
+                ],
                 "type": "object"
               }
             }
