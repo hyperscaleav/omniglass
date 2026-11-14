@@ -12,4 +12,7 @@ each one (`main.imageDigest`, through goreleaser's ldflags); the lab pulls
 refuses before it touches Docker, naming `--image`. The `SelectImage` table test covers a release with
 a digest, without one, with a malformed one, `--image` over each, and dev builds unchanged; a CLI test
 proves the stamped digest reaches the run config; goreleaser builds with and without `IMAGE_DIGEST`
-were checked to stamp it and to refuse. The decision is ADR-1257.
+were checked to stamp it and to refuse. The release workflow is now the only release path (`make
+release-apply` is retired, and a pushed `v*` tag no longer triggers `goreleaser.yml` or `image.yml`),
+and it publishes nothing until the repository variable `RELEASES_ENABLED` is `true`; #1940 tracks
+turning it on. The decision is ADR-1257.
