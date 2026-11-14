@@ -772,7 +772,13 @@ func TestFleetOf(t *testing.T) {
 // told where the wall is so it collects before the kernel kills. The
 // database, the seed and the server run unbounded.
 func TestPlanBoundsEveryNodeAndOnlyTheNodes(t *testing.T) {
-	for _, o := range []Options{testOptions(), scaleOptions()} {
+	// Each site above the floor and none alike, so a node sized from the
+	// wrong site, or from none, shows.
+	sized := scaleOptions()
+	for i := range sized.SiteNodes {
+		sized.SiteNodes[i].Components = 600 + 400*i
+	}
+	for _, o := range []Options{testOptions(), scaleOptions(), sized} {
 		s, err := Plan(o)
 		if err != nil {
 			t.Fatal(err)
@@ -838,14 +844,25 @@ func TestGoMemLimitEnv(t *testing.T) {
 }
 
 // A changed cap is a changed container: compose's config hash carries it, and
-// a service with no cap hashes as it did before caps existed.
+// a service with no cap hashes as it did before caps existed, so an uncapped
+// server or database is not recreated by the change.
 func TestConfigHashCarriesTheLimits(t *testing.T) {
 	s := Service{Image: "omniglass", Cmd: []string{"node", "run"}}
-	bare := configHash(s)
-	s.CPUs, s.MemoryBytes = 1, 512<<20
-	capped := configHash(s)
-	s.MemoryBytes = 1 << 30
-	if capped == bare || capped == configHash(s) {
-		t.Errorf("config hash ignores the caps: bare %s, 512 MiB %s, 1 GiB %s", bare, capped, configHash(s))
+	// The hash this service had before #1892.
+	if got, want := configHash(s), "9c772cfd57bf0d9a19dbe779fdea521c6d688624050feee41de0fa2e374313e8"; got != want {
+		t.Errorf("uncapped config hash = %s, want %s as before caps", got, want)
+	}
+	seen := map[string]string{}
+	for _, c := range []struct {
+		name   string
+		cpus   float64
+		memory int64
+	}{{"bare", 0, 0}, {"1 CPU, 512 MiB", 1, 512 << 20}, {"1 CPU, 1 GiB", 1, 1 << 30}, {"2 CPUs, 1 GiB", 2, 1 << 30}} {
+		s.CPUs, s.MemoryBytes = c.cpus, c.memory
+		h := configHash(s)
+		if prev, dup := seen[h]; dup {
+			t.Errorf("config hash for %s equals %s's", c.name, prev)
+		}
+		seen[h] = c.name
 	}
 }

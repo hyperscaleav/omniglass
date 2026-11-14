@@ -426,10 +426,10 @@ model, not a promise: it was measured at small sizes, and [`omniglass lab measur
 measures a running lab.
 
 **Each node runs capped** (#1892), like the dev lab's single node in the [topology table](#what-runs-with-which-privilege):
-one CPU, an edge box's share, so every node sizes its [lane pool](/architecture/nodes/#sizing-the-pool)
-to the same 23 lanes whatever the host, and a run on a large machine measures the same parallelism as
-one on a laptop. Its memory cap is twice the model's figure for its site, never under 512 MiB: a
-branch of 143 components gets the 512 MiB floor, and the 3,000-system hq of 1,609 gets 2,969 MiB. A
+one CPU, an edge box's share, so on a cgroup v2 host (Docker's default) every node sizes its
+[lane pool](/architecture/nodes/#sizing-the-pool) to the same 23 lanes, and a run on a large machine
+measures the same parallelism as one on a laptop. Its memory cap is twice the model's figure for its
+site, never under 512 MiB, so a branch sits at the floor and a large hq gets a few GiB. A
 node that outgrows twice the model is killed and restarted by its `on-failure` policy rather than
 crowding its neighbors, and the polls it missed while down read as loss. The server and Postgres run uncapped.
 

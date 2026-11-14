@@ -157,15 +157,12 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	// #1892: Docker enforces the node's caps, and the node reads them from
 	// its cgroup to size its lane pool to the one figure a capped node gets.
 	t.Run("the node runs capped and sizes its lanes to the cap", func(t *testing.T) {
-		if _, err := exec.LookPath("docker"); err != nil {
-			t.Skip("no docker CLI to read the node's log")
-		}
-		logs, err := exec.Command("docker", "logs", lab.ID("node")).CombinedOutput()
+		logs, err := eng.Logs(ctx, lab.ID("node"), 0)
 		if err != nil {
-			t.Fatalf("docker logs node: %v\n%s", err, logs)
+			t.Fatalf("node logs: %v\n%s", err, logs)
 		}
 		var line string
-		for l := range strings.Lines(string(logs)) {
+		for l := range strings.Lines(logs) {
 			if strings.Contains(l, `msg="lane workers"`) {
 				line = l
 				break

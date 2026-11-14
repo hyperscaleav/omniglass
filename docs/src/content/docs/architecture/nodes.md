@@ -735,11 +735,13 @@ read side by side. A cgroup v1 memory limit is not read: on v1 the node sizes fr
 `MemTotal` (ADR-1869).
 
 The [lab](/guides/lab/) runs every node it starts as a container capped at one CPU (#1892), an
-edge box's share, so auto sizes each node's pool to the same 23 lanes on a laptop and on a large
-host, and a scale run's parallelism is one known figure rather than the host's. Its memory cap is
-twice what the [cost model](/guides/lab/#how-big-a-lab-your-machine-can-run) says a node of its site's size holds,
-never under 512 MiB, with the Go runtime's soft limit (`GOMEMLIMIT`) a tenth under it, since the
-runtime does not read the cgroup and would otherwise let the heap grow until the kernel kills it.
+edge box's share, so on a cgroup v2 host (Docker's default) auto sizes each node's pool to the same
+23 lanes on a laptop and on a large host, and a scale run's parallelism is one known figure rather
+than the host's. (On cgroup v1 the node falls back to `GOMAXPROCS`, which Go holds to at least 2, so
+it takes 46.) Its memory cap is twice what the [cost model](/guides/lab/#how-big-a-lab-your-machine-can-run)
+says a node of its site's size holds, never under 512 MiB, with the Go runtime's soft limit
+(`GOMEMLIMIT`) a tenth under it, since the runtime reads the cgroup's CPU limit but not its memory
+limit and would otherwise let the heap grow until the kernel kills it.
 
 ## Implicit reachability
 

@@ -32,7 +32,8 @@ func NodeMemoryLimit(components int) int64 {
 }
 
 // GoMemLimitEnv is the node's Go soft memory limit, a tenth under its
-// container's cap: the runtime does not read the cgroup, so without it the
+// container's cap: the runtime reads the cgroup's CPU limit but not its
+// memory limit, so without it the
 // collector paces to the heap's growth and the kernel kills the node before
 // the collector tightens.
 func GoMemLimitEnv(limitBytes int64) string {
