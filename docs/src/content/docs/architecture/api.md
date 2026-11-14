@@ -241,6 +241,15 @@ governs the **whole write**, so a caller changing other fields in the same reque
 alone, which would silently leave the rest unwritten. The console's location type blade does exactly
 that when an operator turns naming off while editing something else.
 
+The catalog routes follow the same rule
+([#1189](https://github.com/hyperscaleav/omniglass/issues/1189)). `PATCH /metric-types/{name}` clears
+`precision`, `PATCH /event-types/{name}` clears `payload_schema`, `PATCH /property-types/{name}` clears
+`validation` and `PATCH /command-types/{name}` clears `params_schema`, each by naming the field in
+`update_mask`; omitted, each is unchanged. On these routes the mask governs every patchable field, so a
+mask that names `precision` writes only `precision`, and a populated `description` the mask leaves out
+stays as it was. A nullable reference is a string, so `PATCH /standards/{id}` clears
+`parent_standard_id` with the `""` sentinel instead, and a name or uuid sets it.
+
 A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
 mint a create allocates from. It is served rather than derived by a surface for the reason the
 resolved icon and the drafted name are
