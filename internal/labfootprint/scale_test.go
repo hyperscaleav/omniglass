@@ -272,7 +272,7 @@ func TestScaleReportTableAndJSON(t *testing.T) {
 	// 600 receipts carried 27,480 rows over 600 s: 45.8 samples a batch, 1 batch a second.
 	// The lane: 60 batches took 15 s of a 60 s span, 25 % busy at 250 ms a batch.
 	for _, key := range []string{`"batches_landed":600`, `"samples_landed":27480`, `"samples_per_batch":45.8`, `"batches_per_second":1`,
-		`"wal_bytes_per_sample":1144.73`, `"p99":500`, `"consumer_lane":{"measured":true,"batches":60,"busy_fraction":0.25,"service_ms":250,"span_seconds":60}`} {
+		`"wal_bytes_per_sample":1144.73`, `"p99":500`, `"consumer_lane":{"measured":true,"lanes":1,"batches":60,"busy_fraction":0.25,"service_ms":250,"span_seconds":60}`} {
 		if !strings.Contains(string(b), key) {
 			t.Errorf("the JSON has no %s:\n%s", key, b)
 		}
@@ -428,6 +428,7 @@ func TestParseLaneLog(t *testing.T) {
 time=2026-11-08T12:00:30.500Z level=INFO msg="ingest lane" facility=ingest batches=100 busy_ms=10000
 time=2026-11-08T12:01:00.500Z level=INFO msg="telemetry ack not confirmed, the batch will be redelivered and held by its receipt" id=x
 time=2026-11-08T12:01:00.750-07:00 level=INFO msg="ingest lane" facility=ingest batches=160 busy_ms=25000
+time=2026-11-08T12:01:30Z level=INFO msg="ingest lane" facility=ingest partition=2 batches=7 busy_ms=900
 `
 	got, err := ParseLaneLog(strings.NewReader(log))
 	if err != nil {
@@ -436,12 +437,13 @@ time=2026-11-08T12:01:00.750-07:00 level=INFO msg="ingest lane" facility=ingest 
 	want := []LaneSample{
 		{At: time.Date(2026, 11, 8, 12, 0, 30, 500_000_000, time.UTC), Batches: 100, Busy: 10 * time.Second},
 		{At: time.Date(2026, 11, 8, 19, 1, 0, 750_000_000, time.UTC), Batches: 160, Busy: 25 * time.Second},
+		{At: time.Date(2026, 11, 8, 12, 1, 30, 0, time.UTC), Partition: "2", Batches: 7, Busy: 900 * time.Millisecond},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("parsed %d samples, want %d: %+v", len(got), len(want), got)
 	}
 	for i := range want {
-		if !got[i].At.Equal(want[i].At) || got[i].Batches != want[i].Batches || got[i].Busy != want[i].Busy {
+		if !got[i].At.Equal(want[i].At) || got[i].Partition != want[i].Partition || got[i].Batches != want[i].Batches || got[i].Busy != want[i].Busy {
 			t.Errorf("sample %d: %+v, want %+v", i, got[i], want[i])
 		}
 	}
@@ -496,6 +498,50 @@ func TestLaneOf(t *testing.T) {
 	}
 	if got := SummarizeScale(ScaleRun{Lane: LaneOf(nil, at(0), at(600))}).Table(); !regexp.MustCompile(`consumer lane busy +not measured\n`).MatchString(got) || !strings.Contains(got, "consumer lane not measured: the server logged 0 lane tallies") {
 		t.Errorf("an unmeasured lane does not say so in the table:\n%s", got)
+	}
+}
+
+// Partitioned lanes run side by side (#1896), so the lane that says whether
+// ingest keeps up is the busiest one, not the sum of them: four lanes each a
+// fifth busy are a consumer with room, not one 80 % busy. Each lane's
+// running total is its own, the batches are every lane's, the mean service
+// time is over every batch, and the durables outside the partitions (the
+// push lane's, one left draining) share a tally that is not a lane of its own.
+func TestLaneOfPartitions(t *testing.T) {
+	samples := []LaneSample{
+		{At: at(30), Partition: "0", Batches: 100, Busy: 10 * time.Second},
+		{At: at(30), Partition: "1", Batches: 100, Busy: 10 * time.Second},
+		{At: at(30), Partition: "other", Batches: 5, Busy: time.Second},
+		{At: at(90), Partition: "0", Batches: 160, Busy: 22 * time.Second},
+		{At: at(90), Partition: "1", Batches: 130, Busy: 40 * time.Second},
+		{At: at(90), Partition: "other", Batches: 900, Busy: 600 * time.Second},
+		// Partition 2 logged once in the window: it moved in one interval
+		// only, so it has no span of its own and measures nothing.
+		{At: at(60), Partition: "2", Batches: 4, Busy: time.Second},
+	}
+	l := LaneOf(samples, at(0), at(600))
+	if !l.Measured || l.Lanes != 2 || l.Busiest != "1" || !near(l.BusyFraction, 0.5) {
+		t.Fatalf("lanes %+v, want 2 measured with partition 1 the busiest at 50 %%", l)
+	}
+	if l.Batches != 90 || !near(l.ServiceMs, 42000.0/90) || !near(l.SpanSeconds, 60) {
+		t.Errorf("lanes %+v, want 90 batches at %.1f ms a batch over 60 s", l, 42000.0/90)
+	}
+	if got := l.describe(); !strings.Contains(got, "busiest of 2 lanes") {
+		t.Errorf("a partitioned lane's cell does not say it is the busiest: %q", got)
+	}
+	// A restart shows in any one lane.
+	restarted := append([]LaneSample{}, samples...)
+	restarted = append(restarted, LaneSample{At: at(120), Partition: "0", Batches: 3, Busy: time.Second})
+	if l := LaneOf(restarted, at(0), at(600)); l.Measured || !strings.Contains(l.Reason, "restart") {
+		t.Errorf("one lane's tallies went backwards and the lanes measured: %+v", l)
+	}
+	// Only the tally outside the partitions is no lane to measure.
+	if l := LaneOf(samples[2:3:3], at(0), at(600)); l.Measured {
+		t.Errorf("the other durables' tally measured a lane: %+v", l)
+	}
+	other := []LaneSample{samples[2], samples[5]}
+	if l := LaneOf(other, at(0), at(600)); l.Measured || l.Reason == "" {
+		t.Errorf("the other durables' tally measured a lane: %+v", l)
 	}
 }
 

@@ -20,9 +20,9 @@ import (
 // endpointReads bounds how many nodes' observations are read at once.
 const endpointReads = 8
 
-// drainPoll is how often the marks ask whether the ingest lane has drained,
-// and drainBound how long they wait for it: a lane further behind than the
-// bound leaves the closed loop unmeasured rather than read short.
+// drainPoll is how often the marks ask whether the ingest lanes have drained,
+// and drainBound how long they wait for it: lanes further behind than the
+// bound leave the closed loop unmeasured rather than read short.
 const (
 	drainPoll  = time.Second
 	drainBound = 3 * time.Minute
@@ -31,7 +31,7 @@ const (
 // endpointMark is one end of the closed loop's window: the database's clock
 // and every node's bracketed observation, read after it at the start and
 // before it at the end, so the receipts the clock bounds fall inside the
-// reads; and Drained, the database's clock once the ingest lane has landed
+// reads; and Drained, the database's clock once the ingest lanes have landed
 // every batch the bus acknowledged before the mark's reads.
 type endpointMark struct {
 	At      time.Time
@@ -40,7 +40,7 @@ type endpointMark struct {
 }
 
 // markStart reads the database's clock, then every node's observation, then
-// waits for the lane to drain past the reads: what it landed until then can
+// waits for the lanes to drain past the reads: what they landed until then can
 // be batches from before the window.
 func (h *harness) markStart(ctx context.Context, l scaleLab) (endpointMark, error) {
 	at, err := h.dbClock(ctx)
@@ -60,7 +60,7 @@ func (h *harness) markStart(ctx context.Context, l scaleLab) (endpointMark, erro
 }
 
 // markEnd reads every node's observation, then the database's clock, then
-// waits for the lane to drain past it, so every batch acknowledged inside
+// waits for the lanes to drain past it, so every batch acknowledged inside
 // the window has landed before its receipts are counted.
 func (h *harness) markEnd(ctx context.Context, l scaleLab) (endpointMark, error) {
 	obs, err := h.readEndpoints(ctx, l)
@@ -75,14 +75,14 @@ func (h *harness) markEnd(ctx context.Context, l scaleLab) (endpointMark, error)
 	return endpointMark{At: at, Drained: drained, Obs: obs}, err
 }
 
-// drainedPast waits for the ingest lane to drain past at (drainedQuery) and
+// drainedPast waits for the ingest lanes to drain past at (drainedQuery) and
 // returns the database's clock when it had.
 func (h *harness) drainedPast(ctx context.Context, at time.Time) (time.Time, error) {
 	deadline := time.Now().Add(drainBound)
 	for {
 		out, err := h.psql(ctx, drainedQuery(at))
 		if err != nil {
-			return time.Time{}, fmt.Errorf("read the ingest lane's drain: %w", err)
+			return time.Time{}, fmt.Errorf("read the ingest lanes' drain: %w", err)
 		}
 		drained, clock, err := parseDrained(out)
 		if err != nil {
@@ -92,7 +92,7 @@ func (h *harness) drainedPast(ctx context.Context, at time.Time) (time.Time, err
 			return clock, nil
 		}
 		if time.Now().After(deadline) {
-			return time.Time{}, fmt.Errorf("the ingest lane landed no sample a node probed after %s within %s", at.Format(time.RFC3339), drainBound)
+			return time.Time{}, fmt.Errorf("the ingest lanes did not land a sample from every live node probed after %s within %s", at.Format(time.RFC3339), drainBound)
 		}
 		if err := sleep(ctx, drainPoll); err != nil {
 			return time.Time{}, err

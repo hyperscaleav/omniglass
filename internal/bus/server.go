@@ -44,10 +44,14 @@ type Config struct {
 	MaxPayload int32
 	// WorklistWorkers is how many worklist pulls the server builds at once
 	// (#1577); zero means DefaultWorklistWorkers. It is held under DBPoolSize
-	// less one, the connection kept for ingest.
+	// less one, so a pull never takes the whole pool.
 	WorklistWorkers int
-	// DBPoolSize is the database pool's size, the cap on WorklistWorkers;
-	// zero means no cap.
+	// IngestPartitions is how many ingest lanes land telemetry side by side
+	// (#1896); zero means DefaultIngestPartitions. It is held under
+	// DBPoolSize less one, like WorklistWorkers.
+	IngestPartitions int
+	// DBPoolSize is the database pool's size, the cap on WorklistWorkers and
+	// IngestPartitions; zero means no cap.
 	DBPoolSize int
 	// Metrics is the process's platform metric recorder (#1627), which the
 	// pipeline records into (#1628); nil means a recorder of the Server's own,
@@ -64,7 +68,6 @@ type Server struct {
 	nc                *nats.Conn
 	store             Store
 	subs              []*nats.Subscription
-	consumeCtx        jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
 	push              *delivery.Publisher      // the push lane's ledger, one boot per server process (#1696)
 	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
@@ -81,7 +84,10 @@ type Server struct {
 	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
 	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
-	lane              laneTally          // the consumer lane's batches and busy time (#1517)
+	partitions        int                // how many ingest lanes the stream files node batches under (#1896)
+	lanesMu           sync.Mutex         // guards lanes
+	lanes             []*ingestLane      // the telemetry durables being consumed
+	tallies           []*laneTally       // each partition's batches and busy time, then the other lanes' (#1517)
 	stopLaneLog       context.CancelFunc // ends the lane tally's log line
 	sweepStop         sync.Once
 	sweepDone         sync.WaitGroup
@@ -95,7 +101,6 @@ type Server struct {
 	ownStoreDir       string             // non-empty when the Server created (and must clean) it
 	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
 	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
-	cons              jetstream.Consumer // the telemetry durable, read for its backlog
 	telemetry         jetstream.Stream   // OG_TELEMETRY, read for its last sequence
 	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
 	// platformComponentID is the server's own platform component, where the
@@ -118,6 +123,10 @@ func New(cfg Config, store Store) (*Server, error) {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
 	s.push.Observe(s.metrics.pushTurn)
+	var reason string
+	s.partitions, reason = ingestPartitions(cfg.IngestPartitions, cfg.DBPoolSize)
+	s.tallies = newTallies(s.partitions)
+	slog.Info("ingest partitions", "facility", "ingest", "partitions", s.partitions, "reason", reason)
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -346,12 +355,9 @@ func (s *Server) Shutdown() {
 		s.stopWorklist()
 		s.worklistDone.Wait()
 	}
-	// Stop the telemetry consumer's pull loop before closing the client it runs on.
-	if s.consumeCtx != nil {
-		s.consumeCtx.Stop()
-		s.consumeCtx = nil
-	}
-	// The consumer has stopped, so no orphan is counted after this: write the
+	// Stop the telemetry lanes' pull loops before closing the client they run on.
+	s.stopLanes()
+	// The lanes have stopped, so no orphan is counted after this: write the
 	// last of the counts rather than lose them with the process.
 	if s.orphans != nil && s.stopOrphanFlush != nil {
 		final, done := context.WithTimeout(context.Background(), orphanFlushTimeout)

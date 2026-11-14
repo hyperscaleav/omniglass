@@ -276,9 +276,13 @@ func startBus(c config.Config, gw *storage.PG, componentID string, rec *platform
 	if err != nil {
 		return nil, err
 	}
-	// The worklist pool is held under the database pool, keeping one
-	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID, Metrics: rec}, gw)
+	partitions, err := bus.ParseIngestPartitions(c.IngestPartitions)
+	if err != nil {
+		return nil, fmt.Errorf("OMNIGLASS_INGEST_PARTITIONS: %w", err)
+	}
+	// The worklist pool and the ingest lanes are held under the database
+	// pool, keeping one connection spare (#1577, #1896).
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, IngestPartitions: partitions, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID, Metrics: rec}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

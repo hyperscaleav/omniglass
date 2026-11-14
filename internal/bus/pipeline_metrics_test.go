@@ -129,11 +129,33 @@ func TestWorklistDeltasNeverNegative(t *testing.T) {
 // TestLaneBusyIsTheWindowFraction proves the lane busy figure is the busy
 // time the window added over the window's wall time.
 func TestLaneBusyIsTheWindowFraction(t *testing.T) {
-	if got := laneBusy(LaneTally{Busy: 2 * time.Second}, LaneTally{Busy: 5 * time.Second}, 10*time.Second); got != 0.3 {
+	if got := laneBusy([]LaneTally{{Busy: 2 * time.Second}}, []LaneTally{{Busy: 5 * time.Second}}, 10*time.Second); got != 0.3 {
 		t.Fatalf("lane busy = %v, want 0.3", got)
 	}
-	if got := laneBusy(LaneTally{}, LaneTally{Busy: time.Second}, 0); got != 0 {
+	if got := laneBusy([]LaneTally{{}}, []LaneTally{{Busy: time.Second}}, 0); got != 0 {
 		t.Fatalf("lane busy over no wall time = %v, want 0", got)
+	}
+}
+
+// TestLaneBusyIsTheBusiestPartition proves that with lanes side by side the
+// figure is the busiest one's window, not their sum or mean: ingest keeps up
+// only while every lane does (#1896).
+func TestLaneBusyIsTheBusiestPartition(t *testing.T) {
+	prev := []LaneTally{{Busy: time.Second}, {Busy: 4 * time.Second}, {}}
+	cur := []LaneTally{{Busy: 3 * time.Second}, {Busy: 11 * time.Second}, {Busy: time.Second}}
+	if got := laneBusy(prev, cur, 10*time.Second); got != 0.7 {
+		t.Fatalf("lane busy = %v, want 0.7 (the second lane's)", got)
+	}
+}
+
+// TestTheAckFloorIsBelowTheFirstHeldBatch proves the work queue's floor
+// reads from the stream: below its first held batch, at its head once empty,
+// and 0 before anything was stored.
+func TestTheAckFloorIsBelowTheFirstHeldBatch(t *testing.T) {
+	for _, c := range []struct{ first, want uint64 }{{0, 0}, {1, 0}, {42, 41}} {
+		if got := ackFloor(c.first); got != c.want {
+			t.Errorf("ackFloor(%d) = %d, want %d", c.first, got, c.want)
+		}
 	}
 }
 

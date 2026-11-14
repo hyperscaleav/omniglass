@@ -82,6 +82,10 @@ var Registry = []Var{
 		Doc: "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"},
 	{Key: "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY", Default: "every check-in", Scope: "server",
 		Doc: "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"},
+	// The ingest lanes (#1896, ADR-1896): the telemetry stream files each
+	// node's batches under a partition of its name, one lane a partition.
+	{Key: "OMNIGLASS_INGEST_PARTITIONS", Default: "4", Scope: "server",
+		Doc: "how many ingest lanes land node telemetry side by side, each node's batches always on one lane and in the order it sent them; 1 to 64, held under the database pool less one, and a value outside that range fails the boot; change it with the telemetry backlog drained, or a node's batches held across the change may land out of order"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",

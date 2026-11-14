@@ -10,10 +10,11 @@ sidebar:
 :::note[Implementation status]
 Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
 isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects
-(`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), the single durable
-`og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
-request-reply lanes. The two-lane split below is target design; today there is **one stream and one
-serial consumer doing admission (owner confinement) and persistence inline**. Calc rules run off the
+(`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), the ingest lanes writing
+straight to Postgres (a durable per partition of the node's name, each with one batch in flight,
+[ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)), and the worklist and heartbeat request-reply lanes. The two-lane split below is
+target design; today there is **one stream, whose lanes do admission (owner confinement) and
+persistence inline**. Calc rules run off the
 stream too: the sample write marks them pending and a server tick computes them
 ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
 So do notifications: there is no CDC publisher yet, so an alarm transition writes its
@@ -87,7 +88,7 @@ The transports meet at one `land()` write path, so neither can drift from the ot
 
 ## Streams and consumers
 
-As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the single durable `og-telemetry-worker`; `og.v1.telemetry.<node>` is the sample firehose itself, carrying each node's samples and its raw self-logs. The set below is the target topology:
+As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the ingest lanes; `og.v1.telemetry.<node>` is the sample firehose itself, carrying each node's samples and its raw self-logs. The stream files a node's batch under a partition of its name, `og.v1.telemetry.<p>.<node>` (its own `partition` subject transform, FNV-1a modulo the lane count), and each partition has a durable, `og-telemetry-worker-<p>`, with one batch in flight; `og-telemetry-worker` keeps the push subject. The lane count is `OMNIGLASS_INGEST_PARTITIONS` ([configuration](/guides/container-image/#configuration)), 4 by default and held under the database pool less one; change it with the backlog drained, since a change moves nodes between lanes ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)). The set below is the target topology:
 
 :::design[Target design, tracked in #430]
 - **samples** (data lane): raw ingress, the **admission consumer** (owner-confines per publisher
@@ -108,7 +109,8 @@ pages refer to; the samples stream carries it today (below).
 
 The edge stamps `ts`, so the system is ts-authoritative: a metric or an event lands by its own `ts`
 in any order. A property series is the exception, since its transition guard compares a value with
-the series' latest, so the telemetry lane keeps each publisher's batches in order end to end (below).
+the series' latest, so the ingest lanes keep each publisher's batches in order end to end (below): a
+node's batches all share one lane, and two nodes' batches land in no fixed order with one another.
 
 ### Delivery: a batch lands once
 
@@ -385,17 +387,19 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
   work, not rows; as a share of `ingest-batch-count`, healthy is 0.
 - **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the
-  `og-telemetry-worker` durable at the window's close: batches stored and not yet delivered, delivered
-  and not yet acked (at most one, the batch in flight), and redelivered. Healthy is a pending count
+  ingest lanes' durables at the window's close, summed: batches stored and not yet delivered, delivered
+  and not yet acked (at most one a lane, the batch in flight), and redelivered. Healthy is a pending count
   near 0 that does not grow window over window; a growing one is a backlog the lane is not clearing.
 - **`bus-stream-last-seq`, `bus-consumer-ack-floor`**: the `OG_TELEMETRY` stream's last sequence and
-  the durable's ack floor at the window's close: the newest batch the stream took, and the sequence at
+  its ack floor (the sequence below its first held batch, since the lanes ack out of order with one
+  another) at the window's close: the newest batch the stream took, and the sequence at
   and below which every batch was answered (landed, or Termed at the delivery bound). The head is read
   before the floor, so a floor at the head means every batch published before the read was answered,
   even while later ones are in flight. The lab's delivery read settles on it (#1758), and Platform health's Queues panel reads the floor against the head (#1763); the gap between
   the two is the backlog in sequences, healthy small and not growing.
-- **`ingest-lane-busy`**: the share of the window the consumer spent handling batches. One batch is
-  in flight, so this is the lane's utilisation. Near 1 with a growing backlog, the lane is the
+- **`ingest-lane-busy`**: the share of the window the busiest ingest lane spent handling batches.
+  Each lane holds one batch in flight, so this is that lane's utilisation, and ingest keeps up only
+  while every lane does. Near 1 with a growing backlog, the lane is the
   ceiling; low with a high lag, the lag is upstream of it.
 - **`bus-worklist-pull-count`**, per outcome (`served`, `read-failed`, `oversize`, `respond-failed`,
   `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: the window's worklist
