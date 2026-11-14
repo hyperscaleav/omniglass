@@ -1,7 +1,14 @@
 {
-  "date": "",
-  "build": "",
-  "step_tasks": 0,
+  "host": {
+    "cpu": "QEMU Virtual CPU version 2.5+",
+    "cores": 8,
+    "memory_gib": 8,
+    "go": "go1.26.11"
+  },
+  "date": "2026-11-14",
+  "build": "3284c96e8",
+  "step_tasks": 1600,
+  "max_step_tasks": 6400,
   "drivers": [
     {
       "driver": "boreal-beam-snmp",
@@ -10,8 +17,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 3200,
+      "memory_per_task_kib": 5.850625,
+      "memory_warm_mib": 7.921875,
+      "millicores_per_task": 0.04298505050282776,
+      "cpu_per_run_ms": 2.3446391183360595,
+      "thread_cpu_per_run_ms": 0.37259723056857486,
+      "thread_share": 0.1589145330105211
     },
     {
       "driver": "boreal-cast-api",
@@ -20,8 +33,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.96875,
+      "memory_warm_mib": 8.6953125,
+      "millicores_per_task": 0.05721873704258571,
+      "cpu_per_run_ms": 3.1210220205046753,
+      "thread_cpu_per_run_ms": 0.3369400539496531,
+      "thread_share": 0.10795824308063333
     },
     {
       "driver": "boreal-edge-snmp",
@@ -30,18 +49,24 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 4.865,
+      "memory_warm_mib": 6.29296875,
+      "millicores_per_task": 0.04251187896629939,
+      "cpu_per_run_ms": 2.3188297617981486,
+      "thread_cpu_per_run_ms": 0.3447886945659723,
+      "thread_share": 0.14869081820763078
     },
     {
       "driver": "boreal-edge-web",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "ferrite-pdu-api",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "ferrite-pdu-snmp",
@@ -50,8 +75,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 4.95375,
+      "memory_warm_mib": 9.528645833333336,
+      "millicores_per_task": 0.05163674341233344,
+      "cpu_per_run_ms": 2.816549640672733,
+      "thread_cpu_per_run_ms": 0.45310638649305457,
+      "thread_share": 0.16087285661502848
     },
     {
       "driver": "http-json",
@@ -60,8 +91,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.99875,
+      "memory_warm_mib": 9.119791666666664,
+      "millicores_per_task": 0.0744592368472029,
+      "cpu_per_run_ms": 4.06141291893834,
+      "thread_cpu_per_run_ms": 0.4069566457638892,
+      "thread_share": 0.10020075621128134
     },
     {
       "driver": "kestrel-api",
@@ -71,8 +108,14 @@
         "30s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 41.278401997503124,
+      "memory_warm_mib": 5.350260416666657,
+      "millicores_per_task": 0.13422926546105685,
+      "cpu_per_run_ms": 5.752682805473865,
+      "thread_cpu_per_run_ms": 0.5075498524266534,
+      "thread_share": 0.08822837441057992
     },
     {
       "driver": "kestrel-gaze-api",
@@ -81,8 +124,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.5875,
+      "memory_warm_mib": 15.876302083333336,
+      "millicores_per_task": 0.1279843500804416,
+      "cpu_per_run_ms": 6.980964549842269,
+      "thread_cpu_per_run_ms": 0.6084199894965298,
+      "thread_share": 0.08715414398004309
     },
     {
       "driver": "kestrel-relay-api",
@@ -93,13 +142,19 @@
         "30s",
         "5m0s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 3.47375,
+      "memory_warm_mib": 11.231770833333336,
+      "millicores_per_task": 0.09302952518215583,
+      "cpu_per_run_ms": 5.0743377372085,
+      "thread_cpu_per_run_ms": 0.4847921661857645,
+      "thread_share": 0.09553801723344864
     },
     {
       "driver": "kestrel-ws",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "lyra-arc-snmp",
@@ -108,8 +163,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.75875,
+      "memory_warm_mib": 6.821614583333336,
+      "millicores_per_task": 0.05166387206848197,
+      "cpu_per_run_ms": 2.818029385553562,
+      "thread_cpu_per_run_ms": 0.3997052385416658,
+      "thread_share": 0.1418385630010559
     },
     {
       "driver": "lyra-hx-snmp",
@@ -118,8 +179,13 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 6400,
+      "millicores_per_task": 0.02842376350193632,
+      "cpu_per_run_ms": 1.5503871001056175,
+      "thread_cpu_per_run_ms": 0.39338812220426594,
+      "thread_share": 0.2537354201266684,
+      "reason": "lyra-hx-snmp memory: the sweep is not a line: a step sits 33% of its rise off the fit (residual 0.333, bound 0.100)"
     },
     {
       "driver": "meridian-mx-snmp",
@@ -128,8 +194,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.58625,
+      "memory_warm_mib": 1.0546875,
+      "millicores_per_task": 0.05013722335396845,
+      "cpu_per_run_ms": 2.734757637489188,
+      "thread_cpu_per_run_ms": 0.38196722842881914,
+      "thread_share": 0.13967132706483912
     },
     {
       "driver": "meridian-xl-snmp",
@@ -138,8 +210,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.39375,
+      "memory_warm_mib": 3.4322916666666643,
+      "millicores_per_task": 0.06105237532455252,
+      "cpu_per_run_ms": 3.3301295631574104,
+      "thread_cpu_per_run_ms": 0.4846469984548611,
+      "thread_share": 0.1455339767607572
     },
     {
       "driver": "newtron-core-nvp",
@@ -149,8 +227,14 @@
         "30s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 59.45692883895131,
+      "millicores_per_task": 0.06034754377861569,
+      "cpu_per_run_ms": 1.8104263133584706,
+      "thread_cpu_per_run_ms": 0.14369666406575113,
+      "thread_share": 0.07937172753481665,
+      "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "newtron-nvp",
@@ -159,33 +243,39 @@
         "30s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 91.33375,
+      "millicores_per_task": 0.05539313508431951,
+      "cpu_per_run_ms": 1.6617940525295853,
+      "thread_cpu_per_run_ms": 0.12078262858333327,
+      "thread_share": 0.07268206815367872,
+      "reason": "newtron-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "newtron-nvp-ssh",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "newtron-nvp-telnet",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "newtron-nvp-tls",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "newtron-nvp-udp",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "newtron-panel-web",
       "measured": false,
-      "reason": "no shipped product is on this driver"
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
     },
     {
       "driver": "newtron-slate-nvp",
@@ -193,8 +283,14 @@
       "polls": [
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 167.82875,
+      "millicores_per_task": 0.06686577590728313,
+      "cpu_per_run_ms": 2.005973277218494,
+      "thread_cpu_per_run_ms": 0.11126806335069432,
+      "thread_share": 0.05546836770676224,
+      "reason": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "polaris-amp-snmp",
@@ -203,8 +299,13 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 6400,
+      "millicores_per_task": 0.028314380199144742,
+      "cpu_per_run_ms": 1.5444207381351678,
+      "thread_cpu_per_run_ms": 0.3959368054740885,
+      "thread_share": 0.25636589544385935,
+      "reason": "polaris-amp-snmp memory: the sweep is not a line: a step sits 32% of its rise off the fit (residual 0.315, bound 0.100)"
     },
     {
       "driver": "polaris-dsp-snmp",
@@ -213,8 +314,14 @@
         "5m0s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.76125,
+      "memory_warm_mib": 6.213541666666664,
+      "millicores_per_task": 0.048052733084631254,
+      "cpu_per_run_ms": 2.6210581682526137,
+      "thread_cpu_per_run_ms": 0.4068201409027783,
+      "thread_share": 0.15521217568933005
     },
     {
       "driver": "recording-service-api",
@@ -223,8 +330,14 @@
         "30s",
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 48.41875,
+      "millicores_per_task": 0.182803268295925,
+      "cpu_per_run_ms": 5.48409804887775,
+      "thread_cpu_per_run_ms": 0.4779903481249993,
+      "thread_share": 0.08715933666116962,
+      "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "snmp-generic",
@@ -232,8 +345,14 @@
       "polls": [
         "1m0s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 10.2925,
+      "millicores_per_task": 0.06643351110891497,
+      "cpu_per_run_ms": 3.9860106665348987,
+      "thread_cpu_per_run_ms": 0.3583686765946816,
+      "thread_share": 0.08990660250947524,
+      "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "ucc-rooms",
@@ -241,8 +360,14 @@
       "polls": [
         "30s"
       ],
-      "measured": false,
-      "reason": "not yet measured"
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 13.66875,
+      "millicores_per_task": 0.240660884566832,
+      "cpu_per_run_ms": 7.21982653700496,
+      "thread_cpu_per_run_ms": 0.6972145544097208,
+      "thread_share": 0.09656943291312788,
+      "reason": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "ucc-webhook",
