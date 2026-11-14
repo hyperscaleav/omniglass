@@ -266,6 +266,9 @@ func (s *Server) subscribe() error {
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
+		// The lanes started before the failure stop with it, so a boot
+		// refused here leaves no pull loop landing batches.
+		s.stopLanes()
 		return fmt.Errorf("bus: start telemetry consumer: %w", err)
 	}
 	s.startReceiptPrune()

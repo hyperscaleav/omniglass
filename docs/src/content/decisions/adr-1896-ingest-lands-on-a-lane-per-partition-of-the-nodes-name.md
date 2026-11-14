@@ -23,21 +23,29 @@ refs: [1896, 311, 1585, 1623]
   3. **K is configured, with a default.** `OMNIGLASS_INGEST_PARTITIONS` (4) is read at boot, refused
      outside 1 to 64, and held under the database pool less one connection, since each lane holds a
      connection while it lands and more lanes would only queue on the pool. The server logs the count
-     it runs and why. A durable past a smaller K is drained and then deleted. Changing K moves nodes
-     between lanes, so it is changed with the backlog drained.
+     it runs and why. Every partition past a smaller K, one the prior K filed under or one a durable
+     was left on, is drained by a durable of its own and that durable deleted once empty, so a
+     smaller K strands no batch. Changing K moves nodes between lanes, so a node's batches filed
+     before the change can land after ones filed since: it is changed with the backlog drained, and
+     a start that changes it over a held backlog logs a warning naming both counts and the batches
+     held.
   4. **The lanes report as one and each alone.** Each lane keeps its own busy tally; `ingest-lane-busy`
-     is the busiest lane's share of the window, since ingest keeps up only while every lane does. The
+     is the busiest partition lane's share of the window, since ingest keeps up only while every lane
+     does; the push durable and any partition left draining share a tally of their own outside it. The
      backlog gauges sum over the durables, and the ack floor is the sequence below the stream's first
      held batch, because the lanes ack out of order with one another.
   5. **The lab's drain is per live node.** The harness waited for the newest sample anywhere to pass a
      mark, which proved every batch behind it landed only while one lane held them all. It now waits
-     until every node that checked in after the mark and collects at least one series has landed a
-     sample it probed after the mark.
+     until every live node that collects at least one series has landed a sample it probed after the
+     mark. Live is a heartbeat within three default heartbeats (90 s) before the mark, so a node whose
+     next heartbeat is not yet due is still waited for; a live node that lands nothing holds the drain
+     to its bound and fails the measure rather than reading it short.
 - **Consequences:** Ingest throughput scales with K up to the database's write capacity rather than
   being one landing's latency for the whole fleet. Per-node order survives a later horizontal split:
   servers that share the durables share the partitions, and a work queue gives each batch to one of
   them. A node whose batches land slowly (a large batch, a failing write) slows only the nodes that
-  share its lane.
+  share its lane. Nothing yet refuses a K change over a held backlog; it warns, and a cutover that
+  holds the new lanes until the old partitions drain is #1934.
 - **Context:** On the corporate 3,000 lab one serial durable landed 37 to 41 batches a second against
   about 50 arriving, so the backlog grew without bound and every lag and loss figure behind it read
   the queue, not the platform (#1896). ADR-0311 named the way out: "a concurrency pool would need

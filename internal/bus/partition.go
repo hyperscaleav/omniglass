@@ -3,6 +3,7 @@ package bus
 import (
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -97,6 +98,54 @@ func partitionTransform(k int) jetstream.SubjectTransformConfig {
 		Source:      collection.TelemetryWildcard,
 		Destination: fmt.Sprintf("%s{{partition(%d,1)}}.{{wildcard(1)}}", telemetryPrefix, k),
 	}
+}
+
+// transformPartitions is the partition count a stream's transform files node
+// batches by, as partitionTransform wrote it; 0 for a stream with no such
+// transform, which files each batch under the node's own subject.
+func transformPartitions(t *jetstream.SubjectTransformConfig) int {
+	if t == nil {
+		return 0
+	}
+	_, rest, ok := strings.Cut(t.Destination, "{{partition(")
+	if !ok {
+		return 0
+	}
+	n, _, ok := strings.Cut(rest, ",")
+	if !ok {
+		return 0
+	}
+	k, err := strconv.Atoi(n)
+	if err != nil || k < 1 {
+		return 0
+	}
+	return k
+}
+
+// pastPartitions is every partition at or past k a start drains, in order:
+// each a prior count of prior filed batches under, whether or not its durable
+// is left, and each partition durable among durables at or past k.
+func pastPartitions(k, prior int, durables []string) []int {
+	var out []int
+	for i := k; i < prior; i++ {
+		out = append(out, i)
+	}
+	for _, name := range durables {
+		if i, ok := partitionIndex(name); ok && i >= k {
+			out = append(out, i)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// reorderRisk is whether a start that files by k partitions may land a node's
+// batches out of order: the stream filed the batches it holds by prior (0 for
+// none, -1 for no stream before this start), and a node's batches held under
+// prior's partition land beside the ones the stream files under k's, on
+// another lane, in no fixed order.
+func reorderRisk(prior, k int, held uint64) bool {
+	return prior >= 0 && prior != k && held > 0
 }
 
 // canonicalSubject is the subject a node published a batch on, whichever

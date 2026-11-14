@@ -3,8 +3,11 @@ package bus
 import (
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // A configured lane count is a whole number from 1 to 64, read with its
@@ -110,6 +113,74 @@ func TestABatchKeyNamesTheNodesOwnSubject(t *testing.T) {
 	} {
 		if got := canonicalSubject(c.subject); got != c.want {
 			t.Errorf("canonicalSubject(%q) = %q, want %q", c.subject, got, c.want)
+		}
+	}
+}
+
+// The partition count a stream files by is read back off its transform: the
+// count partitionTransform wrote, or none for a stream that files no batch by
+// partition.
+func TestAStreamsPartitionCountIsReadOffItsTransform(t *testing.T) {
+	for _, k := range []int{1, 4, 64} {
+		tr := partitionTransform(k)
+		if got := transformPartitions(&tr); got != k {
+			t.Errorf("transformPartitions(partitionTransform(%d)) = %d", k, got)
+		}
+	}
+	for _, tr := range []*jetstream.SubjectTransformConfig{
+		nil,
+		{},
+		{Source: "og.v1.telemetry.*", Destination: "og.v1.telemetry.{{wildcard(1)}}"},
+		{Source: "og.v1.telemetry.*", Destination: "og.v1.telemetry.{{partition(x,1)}}.{{wildcard(1)}}"},
+	} {
+		if got := transformPartitions(tr); got != 0 {
+			t.Errorf("transformPartitions(%+v) = %d, want 0", tr, got)
+		}
+	}
+}
+
+// The partitions a start drains past its count are every one a larger prior
+// count filed batches under, durable or not, and every durable past the
+// count, each once and in order; none when the count did not shrink.
+func TestThePartitionsPastTheCountAreThePriorsAndTheDurables(t *testing.T) {
+	for _, c := range []struct {
+		k, prior int
+		durables []string
+		want     []int
+	}{
+		{4, 4, []string{"og-telemetry-worker", "og-telemetry-worker-0", "og-telemetry-worker-3"}, nil},
+		{4, 0, nil, nil},
+		{4, 8, nil, []int{4, 5, 6, 7}},
+		{4, 8, []string{"og-telemetry-worker-5", "og-telemetry-worker-9", "og-telemetry-worker-1"}, []int{4, 5, 6, 7, 9}},
+		{2, 2, []string{"og-telemetry-worker-07", "og-telemetry-worker-x", "og-telemetry-worker-3", "other-5"}, []int{3}},
+		{8, 4, []string{"og-telemetry-worker-2"}, nil},
+	} {
+		got := pastPartitions(c.k, c.prior, c.durables)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("pastPartitions(%d, %d, %v) = %v, want %v", c.k, c.prior, c.durables, got, c.want)
+		}
+	}
+}
+
+// A start that files by a different count than the stream did while it still
+// holds batches may land a node's earlier batches after its later ones: its
+// earlier batches sit under the old partition, its later ones under the new.
+// The same count, an empty stream or a new stream risks nothing.
+func TestAChangedCountOverAHeldBacklogRisksANodesOrder(t *testing.T) {
+	for _, c := range []struct {
+		prior, k int
+		held     uint64
+		want     bool
+	}{
+		{4, 4, 100, false},
+		{4, 8, 0, false},
+		{4, 8, 1, true},
+		{8, 4, 3, true},
+		{0, 4, 2, true},
+		{-1, 4, 0, false},
+	} {
+		if got := reorderRisk(c.prior, c.k, c.held); got != c.want {
+			t.Errorf("reorderRisk(%d, %d, %d) = %v, want %v", c.prior, c.k, c.held, got, c.want)
 		}
 	}
 }

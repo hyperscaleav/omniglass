@@ -129,10 +129,10 @@ func TestWorklistDeltasNeverNegative(t *testing.T) {
 // TestLaneBusyIsTheWindowFraction proves the lane busy figure is the busy
 // time the window added over the window's wall time.
 func TestLaneBusyIsTheWindowFraction(t *testing.T) {
-	if got := laneBusy([]LaneTally{{Busy: 2 * time.Second}}, []LaneTally{{Busy: 5 * time.Second}}, 10*time.Second); got != 0.3 {
+	if got := laneBusy([]LaneTally{{Busy: 2 * time.Second}}, []LaneTally{{Busy: 5 * time.Second}}, 1, 10*time.Second); got != 0.3 {
 		t.Fatalf("lane busy = %v, want 0.3", got)
 	}
-	if got := laneBusy([]LaneTally{{}}, []LaneTally{{Busy: time.Second}}, 0); got != 0 {
+	if got := laneBusy([]LaneTally{{}}, []LaneTally{{Busy: time.Second}}, 1, 0); got != 0 {
 		t.Fatalf("lane busy over no wall time = %v, want 0", got)
 	}
 }
@@ -143,8 +143,20 @@ func TestLaneBusyIsTheWindowFraction(t *testing.T) {
 func TestLaneBusyIsTheBusiestPartition(t *testing.T) {
 	prev := []LaneTally{{Busy: time.Second}, {Busy: 4 * time.Second}, {}}
 	cur := []LaneTally{{Busy: 3 * time.Second}, {Busy: 11 * time.Second}, {Busy: time.Second}}
-	if got := laneBusy(prev, cur, 10*time.Second); got != 0.7 {
+	if got := laneBusy(prev, cur, 3, 10*time.Second); got != 0.7 {
 		t.Fatalf("lane busy = %v, want 0.7 (the second lane's)", got)
+	}
+}
+
+// TestLaneBusyLeavesOutTheOtherTally proves the figure reads the partitions
+// alone: the tally past them sums the push durable and every partition a
+// larger count left draining, several consumers at once, so its busy time is
+// no one lane's and can pass the window's wall time.
+func TestLaneBusyLeavesOutTheOtherTally(t *testing.T) {
+	prev := []LaneTally{{}, {}, {}}
+	cur := []LaneTally{{Busy: 2 * time.Second}, {Busy: time.Second}, {Busy: 25 * time.Second}}
+	if got := laneBusy(prev, cur, 2, 10*time.Second); got != 0.2 {
+		t.Fatalf("lane busy = %v, want 0.2 (the first partition's, not the other tally's)", got)
 	}
 }
 

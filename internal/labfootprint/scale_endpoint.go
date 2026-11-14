@@ -80,7 +80,7 @@ func (h *harness) markEnd(ctx context.Context, l scaleLab) (endpointMark, error)
 func (h *harness) drainedPast(ctx context.Context, at time.Time) (time.Time, error) {
 	deadline := time.Now().Add(drainBound)
 	for {
-		out, err := h.psql(ctx, drainedQuery(at))
+		out, err := h.psql(ctx, drainedQuery(at, liveWindow))
 		if err != nil {
 			return time.Time{}, fmt.Errorf("read the ingest lanes' drain: %w", err)
 		}

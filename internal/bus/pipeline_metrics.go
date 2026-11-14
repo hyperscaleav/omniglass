@@ -293,13 +293,15 @@ func worklistSampler(read func() WorklistCounts) func(pipelineMetrics) {
 	}
 }
 
-// laneBusy is the fraction of wall the busiest ingest lane spent busy
-// between two readings of every lane's tally, matched by index (#1896): the
-// partitions land side by side, so ingest keeps up only while each one does,
-// and the busiest is the one that falls behind first. Pure.
-func laneBusy(prev, cur []LaneTally, wall time.Duration) float64 {
+// laneBusy is the fraction of wall the busiest of the k partition lanes spent
+// busy between two readings of every lane's tally, matched by index (#1896):
+// the partitions land side by side, so ingest keeps up only while each one
+// does, and the busiest is the one that falls behind first. The tally past
+// the partitions is left out: it sums the push durable and any partition a
+// larger count left draining, several consumers at once, no one lane. Pure.
+func laneBusy(prev, cur []LaneTally, k int, wall time.Duration) float64 {
 	var busiest time.Duration
-	for i, c := range cur {
+	for i, c := range cur[:min(k, len(cur))] {
 		d := c.Busy
 		if i < len(prev) {
 			d -= prev[i].Busy
@@ -310,7 +312,7 @@ func laneBusy(prev, cur []LaneTally, wall time.Duration) float64 {
 }
 
 // Sampler is the bus's window-close reading for a platformmetric.Reporter:
-// the telemetry consumer's backlog, the ingest lane's busy fraction, the
+// the telemetry consumer's backlog, the busiest ingest lane's busy fraction, the
 // window's worklist pulls by outcome and its largest worklist reply.
 func (s *Server) Sampler() platformmetric.Sampler {
 	worklist := worklistSampler(s.WorklistCounts)
@@ -319,7 +321,7 @@ func (s *Server) Sampler() platformmetric.Sampler {
 		m := pipelineMetrics{r}
 		worklist(m)
 		now, lane := time.Now(), s.PartitionTallies()
-		m.gauge(writerclass.IngestLaneBusy, "", laneBusy(prevLane, lane, now.Sub(prevAt)))
+		m.gauge(writerclass.IngestLaneBusy, "", laneBusy(prevLane, lane, s.partitions, now.Sub(prevAt)))
 		prevLane, prevAt = lane, now
 		for _, b := range s.WorklistReplyBytes() {
 			m.max(writerclass.BusWorklistReplyBytesMax, "", float64(b))
@@ -340,7 +342,8 @@ func (s *Server) Sampler() platformmetric.Sampler {
 // of order with one another, and no one durable's floor bounds them all. Both
 // come from one read of the stream, so a floor that reaches the head proves
 // every batch the stream held at that read settled. A read that fails says
-// nothing this window rather than a zero that did not happen.
+// nothing this window rather than a zero that did not happen: the stream's
+// read gates every gauge, and one lane's read only the sums over the lanes.
 func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
 	s.lanesMu.Lock()
 	lanes := append([]*ingestLane(nil), s.lanes...)
@@ -355,6 +358,8 @@ func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
 		slog.Debug("telemetry stream info unread", "facility", "ingest", "error", err.Error())
 		return
 	}
+	m.gauge(writerclass.BusStreamLastSeq, "", float64(sinfo.State.LastSeq))
+	m.gauge(writerclass.BusConsumerAckFloor, "", float64(ackFloor(sinfo.State.FirstSeq)))
 	var pending, ackPending, redelivered float64
 	for _, l := range lanes {
 		info, err := l.cons.Info(ictx)
@@ -366,10 +371,8 @@ func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
 		ackPending += float64(info.NumAckPending)
 		redelivered += float64(info.NumRedelivered)
 	}
-	m.gauge(writerclass.BusStreamLastSeq, "", float64(sinfo.State.LastSeq))
 	m.gauge(writerclass.BusConsumerPending, "", pending)
 	m.gauge(writerclass.BusConsumerAckPending, "", ackPending)
-	m.gauge(writerclass.BusConsumerAckFloor, "", float64(ackFloor(sinfo.State.FirstSeq)))
 	m.gauge(writerclass.BusConsumerRedelivered, "", redelivered)
 }
 

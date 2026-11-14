@@ -290,6 +290,36 @@ func TestFewerPartitionsDrainWhatMoreLeftBehind(t *testing.T) {
 	l.f.waitDrained(t, second)
 }
 
+// TestABatchUnderAPastPartitionWithNoDurableLands: a batch a larger count
+// filed under a partition past the new count lands though its durable is
+// gone, since the start drains every partition the prior count filed under,
+// not only those whose durable is left.
+func TestABatchUnderAPastPartitionWithNoDurableLands(t *testing.T) {
+	l := newLaneNodes(t)
+	storeDir := t.TempDir()
+	first, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1, StoreDir: storeDir, IngestPartitions: 4}, l.f.gw)
+	if err != nil {
+		t.Fatalf("start the first bus: %v", err)
+	}
+	first.StopTelemetryLanes()
+	for _, node := range []string{l.a, l.b} {
+		publishAs(t, l.connect(t, first, node), node, selfLog(node, "orphan-"+node), "orphan-"+node)
+	}
+	if err := first.DeletePartitionDurables(l.f.ctx); err != nil {
+		t.Fatalf("delete the partition durables: %v", err)
+	}
+	first.Shutdown()
+
+	second, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1, StoreDir: storeDir, IngestPartitions: 1}, l.f.gw)
+	if err != nil {
+		t.Fatalf("restart the bus with one partition: %v", err)
+	}
+	defer second.Shutdown()
+	l.waitLog(t, "orphan-"+l.a)
+	l.waitLog(t, "orphan-"+l.b)
+	l.f.waitDrained(t, second)
+}
+
 // TestABatchStoredBeforeThePartitionsLands: a batch the stream stored under
 // the node's own subject, before it filed batches under partitions, lands
 // through the durable that keeps that subject, so the first start of a

@@ -57,6 +57,17 @@ func (s *Server) DeleteTelemetryStream(ctx context.Context) error {
 // its durables as they are, as a server that stops does.
 func (s *Server) StopTelemetryLanes() { s.stopLanes() }
 
+// DeletePartitionDurables deletes every partition's durable and leaves the
+// batches filed under them, as a durable lost while its batches stay.
+func (s *Server) DeletePartitionDurables(ctx context.Context) error {
+	for i := range s.partitions {
+		if err := s.telemetry.DeleteConsumer(ctx, partitionDurable(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UnpartitionTelemetryStream stores node batches under the node's own subject
 // again, as the stream did before it filed them by partition.
 func (s *Server) UnpartitionTelemetryStream(ctx context.Context) error {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -70,8 +71,11 @@ var telemetryNakDelay = 500 * time.Millisecond
 // s.partitions (#1896, partitionTransform), and each partition has a durable
 // of its own; the durable named telemetryConsumer keeps the push lane's
 // subject and any batch stored under a node's own subject before the stream
-// filed by partition. A partition durable past the count, left by a server
-// that ran more lanes, is deleted once empty and drained until then.
+// filed by partition. A partition past the count, filed under by a server
+// that ran more lanes or left with a durable, is drained until empty and its
+// durable then deleted. A count changed over a held backlog is logged: a
+// node's batches filed before and after the change are on different lanes
+// and may land out of order (reorderRisk).
 //
 // The stream keeps a duplicate window over each batch's Nats-Msg-Id (#453),
 // and the stream's creation time is recorded as the epoch a batch with no id
@@ -85,6 +89,14 @@ func (s *Server) startTelemetryConsumer() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	transform := partitionTransform(s.partitions)
+	prior, held, err := priorPartitions(ctx, js)
+	if err != nil {
+		return err
+	}
+	if reorderRisk(prior, s.partitions, held) {
+		slog.Warn("ingest partitions changed over a held backlog: a node's batches filed before and after may land out of order",
+			"facility", "ingest", "prior", prior, "partitions", s.partitions, "held", held)
+	}
 	// The stream also names the partitioned form among its subjects, so the
 	// durable that keeps the unpartitioned subjects is filtered to a strict
 	// subset of them. A durable whose filters equal the stream's subjects
@@ -116,13 +128,37 @@ func (s *Server) startTelemetryConsumer() error {
 			return err
 		}
 	}
-	return s.drainPastPartitions(ctx, stream, other)
+	return s.drainPastPartitions(ctx, stream, prior, other)
+}
+
+// priorPartitions is the partition count the telemetry stream filed by
+// before this start, 0 for none, and how many batches it holds; -1 when
+// there is no stream yet.
+func priorPartitions(ctx context.Context, js jetstream.JetStream) (int, uint64, error) {
+	stream, err := js.Stream(ctx, telemetryStream)
+	if errors.Is(err, jetstream.ErrStreamNotFound) {
+		return -1, 0, nil
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("read the telemetry stream: %w", err)
+	}
+	info := stream.CachedInfo()
+	return transformPartitions(info.Config.SubjectTransform), info.State.Msgs, nil
 }
 
 // consumeLane creates (or updates) the durable name over filters and
 // consumes it, each batch's time in the handler kept in tally.
 func (s *Server) consumeLane(ctx context.Context, stream jetstream.Stream, name string, filters []string, tally *laneTally) error {
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+	cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, filters))
+	if err != nil {
+		return fmt.Errorf("durable %s: %w", name, err)
+	}
+	return s.consume(name, cons, tally)
+}
+
+// laneConfig is a lane's durable name over filters.
+func laneConfig(name string, filters []string) jetstream.ConsumerConfig {
+	return jetstream.ConsumerConfig{
 		Durable:        name,
 		FilterSubjects: filters,
 		AckPolicy:      jetstream.AckExplicitPolicy,
@@ -135,11 +171,7 @@ func (s *Server) consumeLane(ctx context.Context, stream jetstream.Stream, name 
 		// transition guard (a value equal to its series' latest is not
 		// written) is right only in that order (ADR-0311, ADR-1896).
 		MaxAckPending: 1,
-	})
-	if err != nil {
-		return fmt.Errorf("durable %s: %w", name, err)
 	}
-	return s.consume(name, cons, tally)
 }
 
 // consume runs cons's pull loop into the handler, as one of the server's
@@ -159,23 +191,24 @@ func (s *Server) consume(name string, cons jetstream.Consumer, tally *laneTally)
 	return nil
 }
 
-// drainPastPartitions deletes each partition durable at or past the count
-// that holds nothing, and consumes one that still does, so a server started
-// with fewer lanes lands what one with more left behind. The stream files no
-// new batch under it, so it empties and a later start deletes it.
-func (s *Server) drainPastPartitions(ctx context.Context, stream jetstream.Stream, tally *laneTally) error {
+// drainPastPartitions drains each partition past the count (pastPartitions:
+// every one the prior count filed under, and every durable left past it):
+// its durable, created again if it is gone, is deleted when it holds nothing
+// and consumed while it still does, so a server started with fewer lanes
+// lands what one with more left behind. The stream files no new batch under
+// it, so it empties and a later start deletes it.
+func (s *Server) drainPastPartitions(ctx context.Context, stream jetstream.Stream, prior int, tally *laneTally) error {
 	names := stream.ConsumerNames(ctx)
-	var past []string
+	var durables []string
 	for name := range names.Name() {
-		if i, ok := partitionIndex(name); ok && i >= s.partitions {
-			past = append(past, name)
-		}
+		durables = append(durables, name)
 	}
 	if err := names.Err(); err != nil {
 		return fmt.Errorf("list telemetry durables: %w", err)
 	}
-	for _, name := range past {
-		cons, err := stream.Consumer(ctx, name)
+	for _, i := range pastPartitions(s.partitions, prior, durables) {
+		name := partitionDurable(i)
+		cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, []string{partitionFilter(i)}))
 		if err != nil {
 			return fmt.Errorf("durable %s: %w", name, err)
 		}

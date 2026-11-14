@@ -26,8 +26,11 @@ const worklistQueueDepth = 256
 const defaultWorklistBudget = 5 * time.Second
 
 // worklistWorkers is the pool's size: want, or DefaultWorklistWorkers when
-// want is not positive, held under the database pool less the one connection
-// kept for ingest (no cap when dbPool is not positive), and never under one.
+// want is not positive, held under the database pool less one connection
+// (no cap when dbPool is not positive), and never under one. The ingest
+// lanes are held under the same pool on their own and share it with the
+// workers, so a pool smaller than both makes one wait for the other's
+// connection; it does not refuse either.
 func worklistWorkers(want, dbPool int) int {
 	if want <= 0 {
 		want = DefaultWorklistWorkers
