@@ -77,7 +77,7 @@ func writeGlobalFlags(b *bytes.Buffer, root *cobra.Command) {
 // clients of it) gets its own detail block before its children.
 func render(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.HasAvailableSubCommands() {
-		if cmd.Runnable() {
+		if cmd.Runnable() && !cli.IsGroup(cmd) {
 			writeLeaf(b, cmd, depth)
 		} else {
 			heading(b, depth, "`"+cmd.CommandPath()+"`")
