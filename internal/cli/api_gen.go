@@ -1275,10 +1275,11 @@ func generatedCommands() []*cobra.Command {
 				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
+				var fUpdateMask string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a command type",
-					Long:    "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+					Long:    "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 					Example: "  omniglass command-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1314,6 +1315,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("target-property-type") {
 							body["target_property_type"] = fTargetPropertyType
 						}
+						if cmd.Flags().Changed("update-mask") {
+							body["update_mask"] = jsonOrString(fUpdateMask)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
@@ -1321,12 +1325,13 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row")
 				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
-				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it")
 				cmd.Flags().StringVar(&fPowerOutletParam, "power-outlet-param", "", "The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row")
 				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds")
 				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
+				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
 			}()
 			return cmd
@@ -3814,10 +3819,11 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fPayloadSchema string
+				var fUpdateMask string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update an event type",
-					Long:    "Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
+					Long:    "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
 					Example: "  omniglass event-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3832,12 +3838,16 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("payload-schema") {
 							body["payload_schema"] = jsonOrString(fPayloadSchema)
 						}
+						if cmd.Flags().Changed("update-mask") {
+							body["update_mask"] = jsonOrString(fUpdateMask)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the occurrence means")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
-				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it")
+				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
 			}()
 			return cmd
@@ -5002,10 +5012,11 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fPrecision int
 				var fUnit string
+				var fUpdateMask string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a metric type",
-					Long:    "Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
+					Long:    "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
 					Example: "  omniglass metric-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5023,13 +5034,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("unit") {
 							body["unit"] = fUnit
 						}
+						if cmd.Flags().Changed("update-mask") {
+							body["update_mask"] = jsonOrString(fUpdateMask)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the series measures")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
-				cmd.Flags().IntVar(&fPrecision, "precision", 0, "Decimal places a rendered value keeps")
+				cmd.Flags().IntVar(&fPrecision, "precision", 0, "Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset")
 				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series")
+				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
 			}()
 			return cmd
@@ -7074,11 +7089,12 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
 				var fLabel string
+				var fUpdateMask string
 				var fValidation string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a property",
-					Long:    "Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
+					Long:    "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
 					Example: "  omniglass property-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7090,6 +7106,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("update-mask") {
+							body["update_mask"] = jsonOrString(fUpdateMask)
+						}
 						if cmd.Flags().Changed("validation") {
 							body["validation"] = jsonOrString(fValidation)
 						}
@@ -7098,7 +7117,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the property means")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
-				cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
+				cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it")
 				return cmd
 			}()
 			return cmd
@@ -8151,7 +8171,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a standard",
-					Long:    "Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.",
+					Long:    "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.",
 					Example: "  omniglass standard update meeting-room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8171,7 +8191,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair")
-				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid")
+				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard")
 				return cmd
 			}()
 			return cmd
