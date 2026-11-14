@@ -68,9 +68,9 @@ type Server struct {
 	nc                *nats.Conn
 	store             Store
 	subs              []*nats.Subscription
-	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
-	push              *delivery.Publisher      // the push lane's ledger, one boot per server process (#1696)
-	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
+	js                jetstream.JetStream // the internal client's JetStream, the push lane's publisher
+	push              *delivery.Publisher // the push lane's ledger, one boot per server process (#1696)
+	streamEpoch       string              // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
 	internalToken     string
 	sims              *simhub.Registry   // the simulators beside this server's nodes
 	stopSweep         chan struct{}      // ends the settlement sweep
