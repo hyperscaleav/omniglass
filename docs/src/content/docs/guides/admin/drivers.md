@@ -82,7 +82,7 @@ to the whole line, and a severity or attribute that does not is left out, each a
 and a `layout`: `rfc3339`, `rfc3164` with an optional `zone`, `unix`, `unix-ms`, or `go:` a Go
 reference layout); a time more than five minutes ahead lands at arrival. On a plain poll an event or
 a log line lands when its content changes, not every run. `unmatched: log` lands each line no
-listener claims as a log line, whole. The shipped `newtron-nvp` lands an input push as the
+listener claims as a log line, whole. The shipped `newtron-panel-nvp` lands an input push as the
 `video-input` property and an `input-changed` event, the panel's diagnostics lines as log lines
 with their severity, and anything else it pushes as raw log lines:
 
@@ -536,16 +536,16 @@ collection](/architecture/collection/#shared-api-collection-one-component-many-o
 identity where its values arrive, on the conduit component:
 
 ```bash
-omniglass component identity-binding update hq.\$comp.meetings-cloud ucc-room-id zr-huddle-north \
+omniglass component identity-binding update hq.\$comp.ucc-platform ucc-room-id zr-huddle-north \
   --owner-kind system --owner huddle-north
 ```
 
 Until it is bound, its values land on no owner and wait in the component's unbound inbox
-(`omniglass component unbound-identity list hq.\$comp.meetings-cloud`), where each row shows the
+(`omniglass component unbound-identity list hq.\$comp.ucc-platform`), where each row shows the
 match key, the value, how often it was heard and the keys it carried; binding it makes the next value
 land on its owner. A binding costs update on both ends: on the conduit component and on the owner.
 Only collected keys fan out, and a fanned value lands at the owner's own (empty) instance, its
-source naming the conduit and its endpoint (`meetings-cloud/http`).
+source naming the conduit and its endpoint (`ucc-platform/http`).
 
 ## Check, preview, and run a poll now
 

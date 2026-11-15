@@ -5501,6 +5501,12 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "pk": true
+     },
+     {
+      "name": "raw_only",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ]
    },
@@ -6185,6 +6191,16 @@
      {
       "name": "property_type_namespace_name_key",
       "definition": "CREATE UNIQUE INDEX property_type_namespace_name_key ON public.property_type USING btree (namespace, name)"
+     }
+    ]
+   },
+   "reserved_key": {
+    "columns": [
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "pk": true
      }
     ]
    },

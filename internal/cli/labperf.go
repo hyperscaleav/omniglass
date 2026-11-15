@@ -142,9 +142,9 @@ func (o labPerfOpts) scaleConfig(in labfootprint.PerfInputs, binary, dockerHost 
 func newLabPerfCmd() *cobra.Command {
 	group := &cobra.Command{
 		Use:   "perf",
-		Short: "Check a fresh scale lab against the committed performance baseline, or regenerate it",
+		Short: "Check a fresh scale lab against the committed performance baseline, regenerate it, or measure each driver's cost",
 	}
-	group.AddCommand(newLabPerfCheckCmd(), newLabPerfBaselineCmd())
+	group.AddCommand(newLabPerfCheckCmd(), newLabPerfBaselineCmd(), newLabPerfDriversCmd())
 	return group
 }
 
@@ -176,7 +176,7 @@ func newLabPerfCheckCmd() *cobra.Command {
 			"past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: " +
 			"refresh the baseline.\n\n" +
 			"Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than " +
-			"the baseline's, or a node restarted or carried an impairment during the window.",
+			"the baseline's, or a node restarted, changed fleet or carried an impairment during the window.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o := labPerfOptsFrom(cmd)

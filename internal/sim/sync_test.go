@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -482,5 +483,65 @@ func TestStopHTTPReleasesThePortBeforeItReturns(t *testing.T) {
 			t.Fatalf("round %d: the stopped listener still holds the port: %v", i, err)
 		}
 		lis.Close()
+	}
+}
+
+// The fleet generation tells a reader of the observation whether the served
+// fleet held still between two reads (#1895): zero before the first Sync,
+// advanced by a Sync that changed what is served and by no other, and
+// changing while a Sync is starting or stopping devices.
+func TestEngineFleetGenerationAdvancesOnlyWhenTheServedFleetChanges(t *testing.T) {
+	e := newCatalogEngine(t)
+	fleet := func() (int64, bool) {
+		o := e.Observation()
+		return o.FleetGeneration, o.FleetChanging
+	}
+	if g, c := fleet(); g != 0 || c {
+		t.Fatalf("before any sync: generation %d, changing %v; want 0, false", g, c)
+	}
+	if err := e.Sync(nil); err != nil {
+		t.Fatal(err)
+	}
+	if g, c := fleet(); g != 1 || c {
+		t.Fatalf("after an empty first sync: generation %d, changing %v; want 1, false", g, c)
+	}
+
+	a, b := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
+	var midSync []bool
+	e.SetPortMap(func(int) int {
+		_, c := fleet()
+		midSync = append(midSync, c)
+		return 0
+	})
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(midSync) == 0 || slices.Contains(midSync, false) {
+		t.Fatalf("a device bound while the fleet read steady: changing per bind %v", midSync)
+	}
+	if g, c := fleet(); g != 2 || c {
+		t.Fatalf("after an arrival: generation %d, changing %v; want 2, false", g, c)
+	}
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a)}); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := fleet(); g != 2 {
+		t.Fatalf("a sync that changed nothing moved the generation to %d", g)
+	}
+
+	squat := squatHTTP(t, e, b)
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a), dspSnapshot("dsp-b", b)}); err == nil {
+		t.Fatal("sync with a squatted port reported no error")
+	}
+	if g, c := fleet(); g != 2 || c {
+		t.Fatalf("a device that failed to start moved the fleet: generation %d, changing %v; want 2, false", g, c)
+	}
+	squat.Close()
+
+	if err := e.Sync(nil); err != nil {
+		t.Fatal(err)
+	}
+	if g, c := fleet(); g != 3 || c {
+		t.Fatalf("after a departure: generation %d, changing %v; want 3, false", g, c)
 	}
 }

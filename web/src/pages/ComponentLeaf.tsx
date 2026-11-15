@@ -26,6 +26,7 @@ import { useSeverity } from "../lib/severity";
 import SimulationSection from "../components/SimulationSection";
 import ReachLadder from "../components/ReachLadder";
 import SessionPill from "../components/SessionPill";
+import { ladderObserved } from "../lib/session";
 import SessionNotice from "../components/SessionNotice";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
@@ -38,7 +39,7 @@ import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
 import { getNode, nodeKey } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows } from "../lib/component_leaf";
+import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { createToggles } from "../lib/toggles";
@@ -396,7 +397,13 @@ export default function ComponentLeaf() {
                           <>
                             <dt class="text-base-content/50">{row().label}</dt>
                             <dd data-testid={`vital-${key}`} class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-xs">
-                              <span>{String(row().value)}</span>
+                              <span title={vitalValueText(row().value) !== String(row().value) ? String(row().value) : undefined}>
+                                {vitalValueText(row().value)}
+                                <Show when={row().unit}>
+                                  {" "}
+                                  <span data-testid="vital-unit" class="text-base-content/50">{row().unit}</span>
+                                </Show>
+                              </span>
                               <Show when={row().sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
                                 {/* Centered on the value's digits, not on its line box,
                                     which rests the dot on the baseline (#1379). */}
@@ -440,7 +447,10 @@ export default function ComponentLeaf() {
                                       {(it) => (
                                         <li class="flex items-baseline gap-2">
                                           <span class="min-w-14 text-base-content/60" classList={{ "font-medium text-base-content/85": it.instance === sp().shown }}>{instanceName(it.instance)}</span>
-                                          <span class="font-data">{String(it.value)}</span>
+                                          <span class="font-data" title={vitalValueText(it.value) !== String(it.value) ? String(it.value) : undefined}>
+                                            {vitalValueText(it.value)}
+                                            <Show when={row().unit}>{" "}<span class="text-base-content/50">{row().unit}</span></Show>
+                                          </span>
                                           <span class="text-[11px] text-base-content/45">{ageWords(it.ts, pageNow())}</span>
                                         </li>
                                       )}
@@ -482,7 +492,9 @@ export default function ComponentLeaf() {
                                   when={iface().webhook}
                                   fallback={
                                     <>
-                                      <ReachLadder iface={iface()} />
+                                      <Show when={ladderObserved(iface())}>
+                                        <ReachLadder iface={iface()} />
+                                      </Show>
                                       <SessionPill iface={iface()} now={pageNow()} />
                                     </>
                                   }
@@ -501,6 +513,7 @@ export default function ComponentLeaf() {
                                       collecting: "collecting",
                                       "component-or-path": "stale sample; the node is healthy, so check the component or the path",
                                       "node-offline": "node offline",
+                                      "no-node": "no node collecting it",
                                       down: "component reports down",
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { STALENESS_WINDOW_MS, type ReachEndpoint } from "./reachability";
 import {
   ladder,
+  ladderObserved,
   rungHint,
   sessionWord,
   endpointNotice,
@@ -132,6 +133,23 @@ describe("endpointNotice", () => {
 
 // The ladder (ADR-0158), bottom up: reachable is a ping and only informational,
 // responsive is the transport and the gate, authenticated is the login.
+// A ladder of nothing but unknown rungs claims nothing (#1454): an endpoint no
+// probe has ever answered for has no rung to show, and a chip named for a rung
+// beside no observation reads as a verdict it does not have.
+describe("ladderObserved", () => {
+  it("is false for an endpoint nothing has measured, whatever its transport", () => {
+    expect(ladderObserved(ep({}))).toBe(false);
+    expect(ladderObserved(ep({ transport: "icmp" }))).toBe(false);
+  });
+  it("is true once any rung has an observation", () => {
+    expect(ladderObserved(ep({ layers: [ping(false)] }))).toBe(true);
+    expect(ladderObserved(ep({ layers: [port(true)] }))).toBe(true);
+  });
+  it("is true for a gated endpoint, whose rungs a refusal holds", () => {
+    expect(ladderObserved(ep({ rejection: { rung: "responsive", class: "protocol", ts: ago(1_000) } }))).toBe(true);
+  });
+});
+
 describe("ladder", () => {
   it("reads a ping that failed beside a transport that answered: informational, not the gate", () => {
     const rungs = ladder(ep({ layers: [ping(false), port(true)], responsive: { value: "up", ts: ago(5_000) } }));

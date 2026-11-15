@@ -538,7 +538,7 @@ type Behavior struct {
 	// tick (after its mutations apply). This is the device's only
 	// egress-HTTP capability: a behavior with an emit block can notify an
 	// external webhook receiver that an event
-	// happened, e.g. a "meeting started" webhook from a ucc-service
+	// happened, e.g. a "meeting started" webhook from a ucc-platform
 	// instance. Delivery is best-effort: it only fires when the rendered
 	// URL is non-empty, runs with a short timeout off the tick goroutine,
 	// and logs-and-continues on failure so a dead collector never blocks

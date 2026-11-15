@@ -126,7 +126,7 @@ func TestCollectDriverPollLine(t *testing.T) {
 		Transport: "tcp",
 		Target:    "10.20.4.50:51325",
 		Fn: &driver.BakedFunction{
-			Driver: "newtron-nvp", Function: "status",
+			Driver: "newtron-panel-nvp", Function: "status",
 			Request: &driver.Request{Line: "GET INPUT"},
 			Emits: []driver.BakedEmit{
 				{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
@@ -160,7 +160,7 @@ func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Reply,
 // rather than falling back to a dial of its own.
 func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
 	fn := &driver.BakedFunction{
-		Driver: "newtron-nvp", Function: "status",
+		Driver: "newtron-panel-nvp", Function: "status",
 		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Reply{Prefix: "INPUT "}},
 		Emits: []driver.BakedEmit{
 			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},

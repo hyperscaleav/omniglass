@@ -77,11 +77,11 @@ const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[] }, components?: Component[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[]; view?: FleetView; alarmsVerdict?: string }, components?: Component[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
-  qc.setQueryData([...FLEET_VIEW_KEY], view);
+  qc.setQueryData([...FLEET_VIEW_KEY], seed?.view ?? view);
   qc.setQueryData([...COMPONENTS_KEY], components ?? [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
   for (const n of seed?.nodes ?? nodes) qc.setQueryData([...nodeKey(n.name)], n);
@@ -96,7 +96,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
-  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { alarms: alarms ?? [
+  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { ...(seed?.alarmsVerdict ? { verdict: seed.alarmsVerdict } : {}), alarms: alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
   ] });
@@ -245,6 +245,48 @@ describe("the component leaf", () => {
   });
 });
 
+// A device nothing has ever collected from reads the same on every surface
+// (#1454): an unknown verdict, no node offline when no node exists, and no
+// ladder chip standing in for a probe that never ran. The outline reads the
+// same device as a verdict-less row, which the badge words as unknown.
+describe("a device nothing has collected from (#1454)", () => {
+  const looseView = { ...view, systems: [] } as unknown as FleetView;
+  const neverProbed = {
+    component: "videobar-1",
+    endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: null, layers: [], history: [] }],
+  } as unknown as Reachability;
+  const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, nodes: [], view: looseView, alarmsVerdict: "unknown" });
+
+  it("wears an unknown badge, not healthy, as the outline does", () => {
+    mountNever();
+    const header = screen.getByTestId("leaf-header");
+    expect(within(header).getByText("unknown")).toBeTruthy();
+    expect(within(header).queryByText("healthy")).toBeNull();
+  });
+
+  it("says no node collects it, never that a node is offline", () => {
+    mountNever();
+    const chip = screen.getByTestId("collection-icmp");
+    expect(chip.textContent).toBe("no node collecting it");
+    expect(screen.queryByText("node offline")).toBeNull();
+  });
+
+  it("shows no reachability rung without a stored verdict", () => {
+    mountNever();
+    const card = screen.getByTestId("leaf-collection");
+    expect(within(card).queryByText("reachable")).toBeNull();
+    expect(within(card).queryAllByTestId("ladder-rung")).toHaveLength(0);
+  });
+
+  it("shows the rung once a probe has answered", () => {
+    mount(undefined, [], bar, me, [], {
+      reach: { ...neverProbed, endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: { value: "up", ts: iso(5) }, last_seen: iso(5), layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(5) }], history: [] }] } as unknown as Reachability,
+      nodes: [], view: looseView, alarmsVerdict: "healthy",
+    });
+    expect(within(screen.getByTestId("leaf-collection")).getByText("reachable")).toBeTruthy();
+  });
+});
+
 describe("the leaf's dispatch facts (#786)", () => {
   it("the header wears the component's verdict and since-when from the worst active alarm", () => {
     mount();
@@ -293,6 +335,26 @@ describe("the leaf's dispatch facts (#786)", () => {
     const card = screen.getByTestId("leaf-vitals");
     expect(within(card).getByText("RTT avg")).toBeTruthy();
     expect(within(card).getByText("6.1")).toBeTruthy();
+  });
+
+  // #1550: a metric's unit rides after its value in the muted style, and a
+  // float is rounded to a sane precision with the raw value in the title.
+  it("a vitals value carries its unit, rounded, with the raw value in the title", () => {
+    mount(undefined, undefined, undefined, undefined, undefined, {
+      metrics: [
+        { metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false },
+        { metric_type_name: "poll-duration", label: "Poll Duration", data_type: "float", unit: "ms", value: 0.1527895, is_sampled: true, from_contract: false, required: false },
+        { metric_type_name: "icmp-rtt-avg", label: "RTT avg", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
+      ],
+    });
+    expect(screen.getByTestId("vital-uptime").textContent).toContain("306 s");
+    const poll = screen.getByTestId("vital-poll-duration");
+    expect(poll.textContent).toContain("0.15 ms");
+    expect(poll.textContent).not.toContain("0.1527895");
+    expect(poll.querySelector('[title="0.1527895"]')).toBeTruthy();
+    // A type with no unit reads as a bare number, as before.
+    expect(screen.getByTestId("vital-icmp-rtt-avg").textContent).toContain("6.1");
+    expect(screen.getByTestId("vital-icmp-rtt-avg").querySelector('[data-testid="vital-unit"]')).toBeNull();
   });
 
   // #1379: a vitals row reads as one line. The label is the card's text and

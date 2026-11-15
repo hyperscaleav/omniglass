@@ -21,7 +21,7 @@ import (
 )
 
 // TestAPollRunsOnItsOwnIntervalBesideADeadDevice drives #1634 over the real
-// wire: a node that checks in every 30s, the shipped http-json driver
+// wire: a node that checks in every 30s, the shipped tessellate-census-http driver
 // re-authored so each poll runs every 10s, against the simulated sensor, and
 // a second component whose device accepts a connection and never answers.
 // The live sensor's samples land 10s apart, within a second, though the
@@ -36,10 +36,10 @@ func TestAPollRunsOnItsOwnIntervalBesideADeadDevice(t *testing.T) {
 	const every = 10 * time.Second
 	var sensorProfile string
 	s := newHTTPStack(t, "edge-interval", nil, func(store *profile.Store) []string {
-		sensorProfile = driverProfile(t, store, "http-json")
+		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile}
 	})
-	s.everyDriver("http-json", "sensor-10s", every.String())
+	s.everyDriver("tessellate-census-http", "sensor-10s", every.String())
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	s.component("sensor-live")
 	s.component("sensor-dead")

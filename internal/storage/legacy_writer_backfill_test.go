@@ -60,6 +60,10 @@ const metricBlockFile = "20261107004352_metric_block.sql"
 // metric_block.
 const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
 
+// metricTrendDirtyRawOnlyFile alters the trend's dirty marks (#1560), which
+// the trend migration creates and the wide lane does not have.
+const metricTrendDirtyRawOnlyFile = "20261115064629_metric_trend_dirty_raw_only.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -75,7 +79,8 @@ const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
 // its sample table; the blocks, #1528, reference metric_series, and their
 // lineage, #1534, alters them) cannot stand beside the wide table and is left
 // to that forward migrate: metricTrendFile, metricMillisFile,
-// metricDayMigration, metricBlockFile and metricBlockLineageFile.
+// metricDayMigration, metricBlockFile, metricBlockLineageFile and
+// metricTrendDirtyRawOnlyFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -101,7 +106,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
 		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile ||
-			e.Name() == metricBlockLineageFile {
+			e.Name() == metricBlockLineageFile || e.Name() == metricTrendDirtyRawOnlyFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {

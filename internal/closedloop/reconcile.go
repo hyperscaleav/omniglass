@@ -55,8 +55,9 @@ const (
 	// ReadingImpaired: the node's sim carried an applied impairment, which
 	// loses traffic on purpose below the sim's view.
 	ReadingImpaired = "impaired"
-	// ReadingRestarted: a counter reset between the reads, so no figure for
-	// the node is meaningful.
+	// ReadingRestarted: a counter reset between the reads, or the sim's
+	// served fleet did not hold still over them, so no figure for the node is
+	// meaningful.
 	ReadingRestarted = "restarted"
 	// ReadingNotObserved: the kernel answers it (icmp), so the sim never sees it.
 	ReadingNotObserved = "not observed by the sim"
@@ -102,8 +103,9 @@ type NodeBracket struct {
 	Targets    []PollTarget
 	Window     time.Duration
 	// Between is the sim reads taken between the window's ends (the ring's
-	// brackets inside it), read only for an impairment applied and lifted
-	// inside the window. The lab harness takes none.
+	// brackets inside it), read for an impairment applied and lifted, or a
+	// change to the sim's served fleet, inside the window. The lab harness
+	// takes none.
 	Between []collection.SimObservation
 }
 
@@ -122,8 +124,9 @@ type ClosedLoopGap struct {
 	Reading      string `json:"reading"`
 }
 
-// Reconcile reads one node's gaps. A node whose node or sim restarted, or any
-// of whose counters went backwards, gets a single restarted entry. On a node
+// Reconcile reads one node's gaps. A node whose node or sim restarted, any of
+// whose counters went backwards, or whose sim's served fleet changed, gets a
+// single restarted entry. On a node
 // whose sim carries an applied impairment, every gap reads impaired.
 func Reconcile(b NodeBracket) []ClosedLoopGap {
 	if restarted(b) {
@@ -297,7 +300,7 @@ func tallyRow(s collection.RequestTallySnapshot, transport string) collection.Ta
 // impairs, and count the changes, so an unimpaired protocol on an impaired
 // node still reads loss.
 func impaired(b NodeBracket) bool {
-	for _, o := range append([]collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}, b.Between...) {
+	for _, o := range simReads(b) {
 		if o.Impaired > 0 {
 			return true
 		}
@@ -305,9 +308,19 @@ func impaired(b NodeBracket) bool {
 	return false
 }
 
+// simReads is every sim read a bracket holds: its four ends, then the reads
+// between them.
+func simReads(b NodeBracket) []collection.SimObservation {
+	return append([]collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}, b.Between...)
+}
+
 // restarted is whether the node or its sim started again between the reads,
-// or any counter the reads compare went backwards.
+// any counter the reads compare went backwards, or the fleet the sim serves
+// did not hold still (#1895).
 func restarted(b NodeBracket) bool {
+	if !fleetSteady(b) {
+		return true
+	}
 	sims := []collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}
 	for i := 1; i < len(sims); i++ {
 		if !sims[i].Started.Equal(sims[0].Started) {
@@ -331,4 +344,19 @@ func restarted(b NodeBracket) bool {
 		}
 	}
 	return false
+}
+
+// fleetSteady is whether every sim read, those between the ends included, saw
+// one served fleet: synced at least once, no sync starting or stopping devices,
+// and one generation throughout. A request the node sent to a device the sim
+// had not bound yet, or had just stopped, is sent and never received, and is
+// no loss of the path (#1895).
+func fleetSteady(b NodeBracket) bool {
+	sims := simReads(b)
+	for _, o := range sims {
+		if o.FleetGeneration == 0 || o.FleetChanging || o.FleetGeneration != sims[0].FleetGeneration {
+			return false
+		}
+	}
+	return true
 }

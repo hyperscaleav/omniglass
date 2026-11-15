@@ -1164,7 +1164,7 @@ Create a component
 omniglass component create [flags]
 ```
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1215,7 +1215,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1429,7 +1429,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a
+omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a
 ```
 
 #### `omniglass component identity-binding list`
@@ -1448,7 +1448,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding list ucc-service-1
+omniglass component identity-binding list ucc-platform
 ```
 
 #### `omniglass component identity-binding update`
@@ -1472,7 +1472,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
+omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
 ```
 
 ### `omniglass component impairment`
@@ -1669,7 +1669,7 @@ Move a component
 omniglass component move <name> [flags]
 ```
 
-Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1755,12 +1755,12 @@ Read one property series' change history
 omniglass component property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
@@ -2011,12 +2011,12 @@ omniglass component unbound-identity list <name>
 A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
 
 Arguments:
-  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
 ```sh
-omniglass component unbound-identity list 'hq.$comp.meetings-cloud'
+omniglass component unbound-identity list 'hq.$comp.ucc-platform'
 ```
 
 ### `omniglass component update`
@@ -2953,7 +2953,7 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 
 ### `omniglass lab perf`
 
-Check a fresh scale lab against the committed performance baseline, or regenerate it
+Check a fresh scale lab against the committed performance baseline, regenerate it, or measure each driver's cost
 
 #### `omniglass lab perf baseline`
 
@@ -2994,7 +2994,7 @@ Brings up --runs throwaway scale labs one after another, each measured with the 
 
 The exact figures (every closed-loop gap, an ingest lag not measured, redeliveries, each kind's delivery loss) fail at any value but 0. The host-independent figures (rows a minute, growth and WAL per system, samples a batch) gate on any host. The host-dependent figures (latency, CPU, memory, fleet view time) gate only on the host the baseline was generated on; on another they read reported. A gated figure is the median of the runs, and fails only past its tolerance and past the runs' combined spread. Runs that spread past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: refresh the baseline.
 
-Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted or carried an impairment during the window.
+Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted, changed fleet or carried an impairment during the window.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3007,6 +3007,28 @@ Runs are invalid, and no figure is compared, when they measured another fleet, w
 | `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
 | `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
+
+#### `omniglass lab perf drivers`
+
+Measure what each shipped driver's polls cost a node, and write the table the docs render
+
+```
+omniglass lab perf drivers [flags]
+```
+
+Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
+
+The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit both files in a reviewed change.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--image` | string | (none) | the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build |
+| `--max-step-tasks` | int | `6400` | the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once |
+| `--only` | stringSlice | `[]` | sweep only these drivers; empty sweeps every shipped one |
+| `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, relative to the working directory: run it from the repository's root |
+| `--step-tasks` | int | `400` | about how many poll tasks each step adds |
+| `--warmup` | duration | `2m0s` | how long each step runs before it is measured |
+| `--window` | duration | `2m0s` | each step's measured window; a driver's slowest poll lengthens it |
 
 ### `omniglass lab run`
 
@@ -3030,6 +3052,31 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario (corporate) sized by --systems |
 | `--systems` | int | `0` | how many systems a scale lab scenario resolves to |
+
+### `omniglass lab soak`
+
+Judge a 3,000-system soak from the platform's own alarm history
+
+#### `omniglass lab soak verdict`
+
+Print pass or fail for a soak: no platform alarm left open or open too long, every loss ratio at 0
+
+```
+omniglass lab soak verdict [flags]
+```
+
+Judges a soak from what the platform says about itself, and nothing else: it reads, through the API (--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history and the Platform health page, and prints pass or fail with every reason. The token needs read over nodes, systems and components, all of them, since a verdict from part of the page would pass what it could not see.
+
+Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and node, the newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds among the servers.
+
+With --record-dir it also writes the release record, one file named for the build, which the release commits: docs/src/content/soak-records from the repository's root. The exit status is 1 on a fail.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--record-dir` | string | (none) | also write the release record into this directory, one file named for the build (docs/src/content/soak-records is where releases keep them) |
+| `--since` | string | (none) | when the soak started, an RFC 3339 timestamp; required |
+| `--tolerance` | duration | `30m0s` | the longest a platform alarm may stay open and still pass |
+| `--until` | string | (none) | when the soak ended, an RFC 3339 timestamp; empty is now |
 
 ## `omniglass location`
 
@@ -4085,7 +4132,7 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 | `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull |
+| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change to the node's worklist nudges it to pull at once, and only a lost nudge waits for this pull |
 
 ### `omniglass node setTag`
 
@@ -6436,7 +6483,7 @@ Create a system
 omniglass system create [flags]
 ```
 
-Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
+Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6780,7 +6827,7 @@ Move a system
 omniglass system move <name> [flags]
 ```
 
-Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -6866,12 +6913,12 @@ Read one property series' change history
 omniglass system property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
@@ -7846,7 +7893,7 @@ Read what each simulator saw against what the platform collected
 omniglass view platform simulation list
 ```
 
-Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
 
 Example:
 
@@ -7858,12 +7905,12 @@ omniglass view platform simulation list
 
 Commands for the webhook resource
 
-### `omniglass webhook get`
+### `omniglass webhook receive`
 
 Receive a webhook post for an endpoint
 
 ```
-omniglass webhook get <token>
+omniglass webhook receive <token>
 ```
 
 The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
@@ -7871,6 +7918,22 @@ The webhook transport's listener (#1024): a component or a cloud service posts h
 Example:
 
 ```sh
-omniglass webhook get <token>
+omniglass webhook receive <token>
+```
+
+### `omniglass webhook verify`
+
+Answer a webhook sender's verification of its URL
+
+```
+omniglass webhook verify <token>
+```
+
+A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.
+
+Example:
+
+```sh
+omniglass webhook verify <token>
 ```
 

@@ -396,8 +396,10 @@ server that restarts starts it over, and nothing of it is stored.
   while any device on it is (#1662 narrows it to the protocol). Once the window slides past the repair,
   it clears.
 - **restarted**: a counter went backwards inside the window, because the node or its simulator started
-  again. No figure from that window means anything, so the card says so and shows none until the
-  window slides past the restart.
+  again, or the fleet the simulator serves changed (a device added or removed, or the simulator's
+  first sync of its fleet). A request sent to a device the simulator had not bound yet is never
+  received, and is no loss of the path. No figure from that window means anything, so the card says
+  so and shows none until the window slides past the restart or the change.
 - **not observed by the sim**: the kernel answers it (a ping), so the simulator never sees it.
 
 An impairment that drops packets shows where the protocol rides on them. Snmp is datagrams: a dropped

@@ -48,7 +48,7 @@ const (
 
 	// ShapeFixedKey: nobody names it AND there is no uuid either, because the
 	// primary key is one of a closed vocabulary the PLATFORM declares and a
-	// CHECK enforces. An operator neither types a new key nor addresses a row
+	// CHECK (or the boot seed's reconcile) enforces. An operator neither types a new key nor addresses a row
 	// by a surrogate: the key set is the schema.
 	//
 	// It is not ShapeIDOnly, which promises a uuid this table does not have,
@@ -226,9 +226,11 @@ var IdentityShapes = map[string]TableIdentity{
 	// at all, since every read resolves it over the official row.
 	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
 	// label_rule holds the global tier of the label rules (#682, ADR-0098), one
-	// row per labelled entity kind, and it is the only table in the schema with
-	// a text primary key and no uuid at all.
+	// row per labelled entity kind: a text primary key and no uuid at all.
 	"label_rule": {Shape: ShapeFixedKey, Reason: "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"},
+	// reserved_key mirrors the keys writerclass reserves (#1447): the code
+	// declares the set, and the boot seed holds the table to it.
+	"reserved_key": {Shape: ShapeFixedKey, Reason: "keyed by a name writerclass reserves, a closed set the code declares and the boot seed reconciles the table to"},
 }
 
 // KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,

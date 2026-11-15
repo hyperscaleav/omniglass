@@ -192,6 +192,11 @@ func (p *PG) CreateComponentDependency(ctx context.Context, actorID, component s
 	if err != nil {
 		return nil, fmt.Errorf("storage: read component dependency: %w", err)
 	}
+	if spec.Kind == DependencyPath {
+		if err := announceNodesOf(ctx, tx, pathEdgeNodesSQL, dep.ID, up.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component_dependency", after.ID, nil, after.audit()); err != nil {
 		return nil, err
 	}
@@ -272,6 +277,11 @@ func (p *PG) DeleteComponentDependency(ctx context.Context, actorID, component, 
 	}
 	if err != nil {
 		return fmt.Errorf("storage: read component dependency: %w", err)
+	}
+	if kind == DependencyPath {
+		if err := announceNodesOf(ctx, tx, pathEdgeNodesSQL, dep.ID, up.ID); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx, `delete from component_dependency where id = $1`, before.ID); err != nil {
 		return fmt.Errorf("storage: delete component dependency: %w", err)

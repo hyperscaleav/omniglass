@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -61,6 +62,13 @@ type factsTransport struct {
 	Description string `json:"description,omitempty"`
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
+	// Rung, Params and ProbeKeys are the probe's facts (#1087): the ladder
+	// rung it proves, the endpoint params it reads and every key it can
+	// land, which the collection page renders as its probe table. A push
+	// transport has no probe and carries none.
+	Rung      string   `json:"rung,omitempty"`
+	Params    []string `json:"params,omitempty"`
+	ProbeKeys []string `json:"probe_keys,omitempty"`
 }
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
@@ -212,6 +220,7 @@ type seedFactsDoc struct {
 	LabelRules        []factsLabelRule        `json:"label_rules"`
 	SeverityLevels    []factsSeverityLevel    `json:"severity_levels"`
 	EventRules        []factsEventRule        `json:"event_rules"`
+	PlatformFigures   []factsPlatformFigure   `json:"platform_figures"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -312,7 +321,8 @@ func FactsJSON() ([]byte, error) {
 	}
 
 	for _, tr := range transport.All() {
-		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built})
+		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built,
+			Rung: tr.Rung, Params: tr.Params, ProbeKeys: tr.ProbeKeys})
 	}
 
 	var lts locationTypesDoc
@@ -433,6 +443,12 @@ func FactsJSON() ([]byte, error) {
 			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		doc.EventRules = append(doc.EventRules, fr)
 	}
+
+	ruleKeys := map[string][]string{}
+	for _, r := range ers.Rules {
+		ruleKeys[r.SampleKey] = append(ruleKeys[r.SampleKey], r.Name)
+	}
+	doc.PlatformFigures, _ = platformCoverage(storage.PlatformHealthKeys(), ruleKeys, storage.PlatformRuleExemptions)
 
 	out, err := json.MarshalIndent(doc, "", " ")
 	if err != nil {

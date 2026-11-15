@@ -89,11 +89,33 @@ type FleetView struct {
 // concurrent writes can land with the two inverted (#356). An owner with
 // nothing recorded reads healthy: nothing has been claimed about it.
 func latestVerdict(ownerCol, table string) string {
+	return recordedVerdict(ownerCol, table, `'healthy'`)
+}
+
+// latestComponentVerdict is latestVerdict for a component, whose silence is
+// two different facts (#1454): a component something has observed and found
+// clean reads healthy, and one nothing has ever observed reads unknown, since
+// healthy there would be a false green. See componentObservedSQL.
+func latestComponentVerdict(table string) string {
+	return recordedVerdict("component_id", table, `case when `+componentObservedSQL(table+`.id`)+` then 'healthy' else 'unknown' end`)
+}
+
+func recordedVerdict(ownerCol, table, fallback string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
 		  and v.property_type_id = (select id from property_type where namespace = 'og' and name = 'health')
 		  and v.instance = '' and v.provenance = 'calculated'
-		order by v.id desc limit 1), 'healthy')`
+		order by v.id desc limit 1), ` + fallback + `)`
+}
+
+// componentObservedSQL is the boolean expression for "something has observed
+// this component" (#1454), given an expression for its uuid: an alarm was ever
+// raised on it (cleared ones count, the history outlives the fix), or one of
+// its endpoints has delivered a batch (endpoint_live, #933). Until then there
+// is nothing to call it healthy on.
+func componentObservedSQL(idExpr string) string {
+	return `(exists (select 1 from alarm oa where oa.component_id = ` + idExpr + `)
+		or exists (select 1 from endpoint oe join endpoint_live ol on ol.endpoint_id = oe.id where oe.component = ` + idExpr + `))`
 }
 
 // Every derived column is aliased, the type subquery above all: scopedListSQL
@@ -173,16 +195,11 @@ func (p *PG) scopedTreeQuery(ctx context.Context, tbl scopeTable, cols string, r
 	if read.Empty() {
 		return nil, nil
 	}
-	sql := scopedListSQL(tbl, cols, read.All)
-	if read.All {
-		return p.pool.Query(ctx, sql)
-	}
-	roots := uuidRoots(read.IDs)
-	selfIDs := uuidRoots(read.SelfIDs)
-	if len(roots) == 0 && len(selfIDs) == 0 {
+	args, ok := scopedListArgs(tbl, read)
+	if !ok {
 		return nil, nil
 	}
-	return p.pool.Query(ctx, sql, roots, selfIDs)
+	return p.pool.Query(ctx, scopedListSQL(tbl, cols, read), args...)
 }
 
 func (p *PG) fleetLocations(ctx context.Context, read scope.Set) ([]FleetLocation, error) {
@@ -228,8 +245,8 @@ func (p *PG) fleetSystems(ctx context.Context, read scope.Set) ([]FleetSystem, e
 // fleetDots reads every membership of the given systems whose component the
 // caller may read, as dots keyed by system id.
 //
-// The component scope is injected as a subquery over the SAME recursive tree
-// expansion scopedListSQL builds, rather than filtered out in Go afterwards: a
+// The component scope is injected as a subquery over the SAME read filter
+// every derived component read uses (newReadFilter), rather than filtered out in Go afterwards: a
 // component the caller cannot read must never be fetched, let alone counted
 // into a cluster (the unscoped-gateway-list class, #458).
 func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) (map[string][]FleetDot, error) {
@@ -237,7 +254,7 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 	if read.Empty() {
 		return out, nil
 	}
-	cols := `m.system_id, c.id, c.name, ` + latestVerdict("component_id", "c") + `,
+	cols := `m.system_id, c.id, c.name, ` + latestComponentVerdict("c") + `,
 		m.is_primary,
 		(select count(*) from system_member peer where peer.component_id = m.component_id) > 1`
 	from := ` from system_member m join component c on c.id = m.component_id
@@ -252,19 +269,12 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 		sql = `select ` + cols + from + order
 		args = []any{systemIDs}
 	} else {
-		roots := uuidRoots(read.IDs)
-		selfIDs := uuidRoots(read.SelfIDs)
-		if len(roots) == 0 && len(selfIDs) == 0 {
+		f := newReadFilter(componentTable, read, 2)
+		if f.With == "" {
 			return out, nil // every scope root is malformed: nothing is in scope
 		}
-		sql = `with recursive sub(id) as (
-				select id from component where id = any($2::uuid[])
-				union all
-				select t.id from component t join sub on t.parent_id = sub.id
-			) cycle id set is_cycle using path
-			select ` + cols + from + `
-			  and (c.id in (select id from sub) or c.id = any($3::uuid[]))` + order
-		args = []any{systemIDs, roots, selfIDs}
+		sql = f.With + ` select ` + cols + from + ` and ` + f.Pred("c.id") + order
+		args = append([]any{systemIDs}, f.Args...)
 	}
 
 	rows, err := p.pool.Query(ctx, sql, args...)

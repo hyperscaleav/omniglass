@@ -35,7 +35,7 @@ import (
 )
 
 // TestNodeHoldsASessionThroughADeviceOutage drives #816 end to end over the
-// real wire: the shipped newtron-nvp driver attached to a component, the
+// real wire: the shipped newtron-panel-nvp driver attached to a component, the
 // simulator's panel serving its line protocol, and the real node holding the
 // session its standing listen task asks for. The session-state transitions
 // land on the server as the component's property series (instance: the
@@ -89,14 +89,14 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-1", "newtron-nvp", "edge-s"
+	comp, drv, nodeName := "panel-1", "newtron-panel-nvp", "edge-s"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
-		t.Fatalf("attach newtron-nvp: %v", err)
+		t.Fatalf("attach newtron-panel-nvp: %v", err)
 	}
 
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
@@ -208,7 +208,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 }
 
 // TestNodeLandsPushedSamplesThroughARecover drives #817 end to end: the
-// shipped newtron-nvp driver's EVT listener comes alive over the held
+// shipped newtron-panel-nvp driver's EVT listener comes alive over the held
 // session. The node's tick is an hour, so after its first poll nothing polls
 // again: a value that lands later can only have been pushed. A change made on
 // the panel lands as the component's video-input within a second; the
@@ -265,14 +265,14 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-2", "newtron-nvp", "edge-l"
+	comp, drv, nodeName := "panel-2", "newtron-panel-nvp", "edge-l"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
-		t.Fatalf("attach newtron-nvp: %v", err)
+		t.Fatalf("attach newtron-panel-nvp: %v", err)
 	}
 
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
@@ -349,7 +349,7 @@ func panelPort(t *testing.T, panel *sim.Device, protocol string) int {
 }
 
 // nvpProfile picks the simulator profile serving a product the shipped
-// newtron-nvp driver reads, derived from both catalogs rather than named, so
+// newtron-panel-nvp driver reads, derived from both catalogs rather than named, so
 // a catalog rename touches the YAML and nothing here (#804).
 func nvpProfile(t *testing.T, store *profile.Store) string {
 	t.Helper()
@@ -368,7 +368,7 @@ func nvpProfile(t *testing.T, store *profile.Store) string {
 	}
 	var names []string
 	for _, p := range facts.Products {
-		if p.DriverID != "newtron-nvp" {
+		if p.DriverID != "newtron-panel-nvp" {
 			continue
 		}
 		if name, _, ok := store.ForProduct(p.ID); ok {
@@ -376,7 +376,7 @@ func nvpProfile(t *testing.T, store *profile.Store) string {
 		}
 	}
 	if len(names) == 0 {
-		t.Fatal("no simulator profile serves a newtron-nvp product")
+		t.Fatal("no simulator profile serves a newtron-panel-nvp product")
 	}
 	sort.Strings(names)
 	return names[0]
@@ -477,7 +477,7 @@ func (w trippedInbound) Claim(msg driver.Message) bool {
 
 // TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic drives #1636 over the
 // real wire: fifty simulated panels, each a component with the shipped
-// newtron-nvp driver attached, held by one node. A restarted node brings all
+// newtron-panel-nvp driver attached, held by one node. A restarted node brings all
 // fifty back through its session-dials slots (never more connects in flight
 // than the bound), and a panic in one session's reader, injected on its first
 // pushed line, recovers that one session through its ordinary failure path
@@ -533,7 +533,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		t.Fatalf("mint token: %v", err)
 	}
 	var fleetHeld []fleetSession
-	drv, nodeName := "newtron-nvp", "edge-f"
+	drv, nodeName := "newtron-panel-nvp", "edge-f"
 	for i := range fleet {
 		host := fmt.Sprintf("panel-%02d", i)
 		panel := panels[host]
@@ -551,7 +551,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 			SecretRead: all, CanAdmin: true,
 		}, all)
 		if err != nil {
-			t.Fatalf("attach newtron-nvp to %s: %v", comp, err)
+			t.Fatalf("attach newtron-panel-nvp to %s: %v", comp, err)
 		}
 		fleetHeld = append(fleetHeld, fleetSession{comp, ep.Name, net.JoinHostPort(ip, fmt.Sprint(port)), panel})
 	}

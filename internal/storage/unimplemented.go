@@ -20,7 +20,8 @@ import (
 // not break as the interface grows.
 type UnimplementedGateway struct{}
 
-func (UnimplementedGateway) Ping(context.Context) error { return nil }
+func (UnimplementedGateway) Ping(context.Context) error                            { return nil }
+func (UnimplementedGateway) ReconcileReservedKeys(context.Context, []string) error { return nil }
 func (UnimplementedGateway) UpsertLabelRuleDefault(context.Context, string, string) error {
 	return nil
 }
@@ -547,6 +548,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
 	return nil, nil
 }
@@ -1034,6 +1038,10 @@ func (UnimplementedGateway) ListMetricBuckets(context.Context, string, string, s
 
 func (UnimplementedGateway) ListPropertyBuckets(context.Context, string, string, string, *string, time.Duration, time.Duration) (PropertyBuckets, error) {
 	return PropertyBuckets{}, nil
+}
+
+func (UnimplementedGateway) PropertyCarriedIn(context.Context, string, string, string, *string, time.Duration) (*string, error) {
+	return nil, nil
 }
 
 func (UnimplementedGateway) UpsertSeverityLevel(context.Context, SeverityLevel) error { return nil }

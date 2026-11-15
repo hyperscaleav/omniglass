@@ -181,9 +181,10 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		// A change in the console reaches the node at its next pull, so the
-		// lab pulls every 5s: within seconds, without a 1,000-system lab
-		// rebuilding every site's worklist every 2s (#1577).
+		// A console change nudges its node to pull at once (#1945, #1997);
+		// the lab still pulls every 5s, so a lost nudge costs seconds,
+		// without a 1,000-system lab rebuilding every site's worklist
+		// every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes every 2s, so
@@ -397,6 +398,9 @@ type Service struct {
 	Sysctls map[string]string
 	Mounts  []Mount
 	Publish *Publish
+	// NetworkOf is the container whose network namespace this one shares,
+	// loopback included; empty joins the lab network under Name.
+	NetworkOf string
 	// Health is a container healthcheck command (exec form), if any.
 	Health []string
 	// Restart is the restart policy: the node restarts if it crashes.
@@ -445,6 +449,23 @@ func (s Spec) Services() []Service {
 		out = append(out, s.Node)
 	}
 	return append(out, s.Nodes...)
+}
+
+// WithImage is the spec with the omniglass image's services (the seed, the
+// server and every node) running image, which a run pins to the image ID its
+// preflight checked. Pure: the receiver is unchanged.
+func (s Spec) WithImage(image string) Spec {
+	s.Seed.Image, s.Server.Image = image, image
+	if s.Node.Name != "" {
+		s.Node.Image = image
+	}
+	nodes := make([]Service, len(s.Nodes))
+	for i, n := range s.Nodes {
+		n.Image = image
+		nodes[i] = n
+	}
+	s.Nodes = nodes
+	return s
 }
 
 // ProjectLabels are the labels that select everything a project created.

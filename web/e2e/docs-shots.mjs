@@ -15,7 +15,7 @@ import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
-import { describeMask, planMasks, planStandingMasks, shootBaseline } from './shotmasklib.mjs';
+import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -155,11 +155,13 @@ for (const spec of specs) {
   // measures only what is deterministic. The blind spot is explicit: a real UI
   // change entirely inside a masked region is invisible to the gate, exactly as
   // it was when the masked render was the only render.
-  await page.screenshot({
-    path: join(OUT, `${spec.id}.png`),
-    animations: 'disabled',
-    caret: 'hide',
-  });
+  await withCaptureRetry(page, () =>
+    page.screenshot({
+      path: join(OUT, `${spec.id}.png`),
+      animations: 'disabled',
+      caret: 'hide',
+    }),
+  );
   try {
     await shootBaseline(page, plan, { path: join(BASELINE, `${spec.id}.png`) });
   } catch (e) {

@@ -81,7 +81,7 @@
   {
    "id": "deploy",
    "label": "Deploy",
-   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. A grant of it reaches ONE tier, the tier it is scoped at. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own; it reaches no system and no component there, not even to read one. Building those out inside a building takes a system-scoped and a component-scoped grant of this role beside the location one, until a grant's scope can span tiers. Inherits Viewer, whose read floor is scoped the same way.",
+   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own. The same grant reads the systems and components placed in that location and creates new ones there, but does not edit, rename, or move them: that takes a system-scoped or component-scoped grant of this role, until a location grant's scope spans the modify actions too. Inherits Viewer, whose read floor is scoped the same way.",
    "inherits": [
     "viewer"
    ],
@@ -1552,67 +1552,207 @@
    "name": "icmp",
    "description": "ICMP echo / ping reachability and RTT.",
    "held": false,
-   "built": true
+   "built": true,
+   "params": [
+    "target",
+    "count",
+    "timeout"
+   ],
+   "probe_keys": [
+    "icmp-reachable",
+    "icmp-rtt-avg",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "tcp",
    "description": "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "tls",
    "description": "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "udp",
    "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.",
    "held": false,
-   "built": true
+   "built": true,
+   "rung": "request",
+   "params": [
+    "target",
+    "timeout",
+    "listen-port"
+   ],
+   "probe_keys": [
+    "endpoint-responsive",
+    "udp-response-time",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "telnet",
    "description": "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "telnet-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "ssh",
    "description": "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "username",
+    "password"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "ssh-handshake-time",
+    "endpoint-responsive",
+    "endpoint-authenticated",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "http",
    "description": "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the node keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "https",
    "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "websocket",
    "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "wss",
    "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "snmp",
    "description": "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.",
    "held": false,
-   "built": true
+   "built": true,
+   "rung": "request",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "endpoint-responsive",
+    "snmp-response-time",
+    "endpoint-authenticated",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "webhook",
@@ -3526,8 +3666,8 @@
    "commands": 2
   },
   {
-   "id": "newtron-nvp",
-   "label": "Newtron NVP",
+   "id": "newtron-panel-nvp",
+   "label": "Newtron Panel NVP",
    "version": "1.0.0",
    "transport": "tcp",
    "polls": 2,
@@ -3588,8 +3728,8 @@
    "commands": 1
   },
   {
-   "id": "http-json",
-   "label": "HTTP JSON",
+   "id": "tessellate-census-http",
+   "label": "Tessellate Census HTTP",
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
@@ -3835,7 +3975,7 @@
    "id": "newtron-panel-7",
    "label": "Newtron Panel 7",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-panel-nvp",
    "component_type": "touch-panel",
    "kind": "device"
   },
@@ -3890,16 +4030,9 @@
    "id": "tessellate-census-c1",
    "label": "Tessellate Census C1",
    "vendor_id": "tessellate",
-   "driver_id": "http-json",
+   "driver_id": "tessellate-census-http",
    "component_type": "occupancy-sensor",
    "kind": "device"
-  },
-  {
-   "id": "ucc-service",
-   "label": "Shinra UCC Platform",
-   "vendor_id": "shinra-cloud",
-   "component_type": "generic-service",
-   "kind": "service"
   },
   {
    "id": "ucc-platform",
@@ -4073,6 +4206,206 @@
    "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
+  }
+ ],
+ "platform_figures": [
+  {
+   "key": "checkin-age",
+   "group": "Checkin",
+   "rules": [
+    "node-silent"
+   ]
+  },
+  {
+   "key": "schedule-lateness",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "tick-overrun-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "schedule-skip-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-age",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-stuck-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-expired-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "worklist-pull-loss-ratio",
+   "group": "Worklist",
+   "rules": [
+    "worklist-stale"
+   ]
+  },
+  {
+   "key": "http-request-duration-max",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "http-request-count",
+   "group": "Requests",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "db-slow-query-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-request-failure-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "db-pool-acquired",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-pool-wait-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "ingest-lag",
+   "group": "Ingest",
+   "exemption": "read beside ingest-lag-max, which the ingest-lag-high rule watches"
+  },
+  {
+   "key": "ingest-lag-max",
+   "group": "Ingest",
+   "rules": [
+    "ingest-lag-high"
+   ]
+  },
+  {
+   "key": "ingest-batch-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "ingest-sample-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "push-lane-refusal-count",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-p99",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-max",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "bus-consumer-ack-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-ack-floor",
+   "group": "Queues",
+   "exemption": "a stream position, read against the stream's head by the lab's measure, not a health figure"
+  },
+  {
+   "key": "bus-telemetry-ack-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "calc-pending-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-queued-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-due-age",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "ingest-lane-busy",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "sweep-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "retention-behind",
+   "group": "Retention",
+   "rules": [
+    "retention-behind"
+   ]
+  },
+  {
+   "key": "retention-deleted-count",
+   "group": "Retention",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "retention-pass-failure-count",
+   "group": "Retention",
+   "exemption": "read beside retention-behind, which flags a failing pass too"
+  },
+  {
+   "key": "metric-oldest-day-age",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "database-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "table-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "delivery-loss-ratio",
+   "group": "Pipeline",
+   "exemption": "no rule yet, #1977"
   }
  ]
 }
