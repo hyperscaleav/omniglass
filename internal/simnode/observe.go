@@ -15,7 +15,8 @@ import (
 // nothing on it counted with a capped sample of their ids, and a capped list
 // of the faces that saw an overlap. Pure.
 func observationWire(node string, snap sim.ObservationSnapshot, impaired int) collection.SimObservation {
-	w := collection.SimObservation{Node: node, At: snap.At, Started: snap.Started, Devices: len(snap.Devices), Impaired: impaired}
+	w := collection.SimObservation{Node: node, At: snap.At, Started: snap.Started,
+		FleetGeneration: snap.FleetGeneration, FleetChanging: snap.FleetChanging, Devices: len(snap.Devices), Impaired: impaired}
 	index := map[string]int{}
 	for _, p := range snap.Protocols {
 		index[p.Protocol] = len(w.Protocols)

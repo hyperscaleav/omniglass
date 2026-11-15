@@ -652,7 +652,8 @@ A loss is named per node under the totals, with the protocol and, for an unhit e
 component. An icmp target reads `not observed by the sim`, since the kernel answers a ping. A node
 whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
 impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
-simulator that restarted inside the window reads `restarted`, since none of its figures compare.
+simulator that restarted inside the window, or a simulator whose served fleet changed in it (a device
+added or removed), reads `restarted`, since none of its figures compare.
 The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
 the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
 than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
@@ -711,8 +712,8 @@ push lane's follow, its publish row ahead of its ingest rows:
   `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
   reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
   node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
-  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
-  the window`, so a row never reads as every node's when it is not.
+  (or whose simulator's served fleet changed in it) has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted or
+  changed fleet in the window`, so a row never reads as every node's when it is not.
   Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
   of a `kind`, with these four outcomes.
 - The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
@@ -967,7 +968,7 @@ missing rather than dropping out. A run whose worklist read failed, or found no 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
-baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted or its simulator's served fleet changed inside the window, or a device carried an impairment. A gated lab is never
 impaired, so an impaired gap can only mean a fault left on.
 
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,

@@ -16,6 +16,8 @@ type fakeSource struct {
 	tick       int
 	impairedAt map[int]bool // ticks whose sim reads carry an applied impairment
 	restartAt  int          // the tick the node's sim and node start again; 0 for never
+	syncedAt   int          // the first tick the sim has synced its fleet; reads before it are generation 0
+	changeAt   int          // the tick a sync is changing the fleet, the next generation after it; 0 for never
 	fail       bool
 	receipts   []receiptCall
 }
@@ -39,6 +41,14 @@ func (f *fakeSource) Observe(_ context.Context, node string) (collection.Endpoin
 	sim.Started = started
 	if f.impairedAt[f.tick] {
 		sim.Impaired = 1
+	}
+	switch {
+	case f.tick < f.syncedAt:
+		sim.FleetGeneration = 0
+	case f.changeAt > 0 && f.tick == f.changeAt:
+		sim.FleetChanging = true
+	case f.changeAt > 0 && f.tick > f.changeAt:
+		sim.FleetGeneration = 2
 	}
 	obs := collection.EndpointObservation{
 		SimBefore: sim,
@@ -196,6 +206,32 @@ func TestRingRestartReadsForThatWindowOnly(t *testing.T) {
 		t.Fatalf("tick 6, window past the restart: %+v, want measured", w)
 	}
 	healthy(t, w)
+}
+
+// A window holding a read from before the sim's first sync, or across a sync
+// that changed its fleet, reads restarted until it slides past (#1895); the
+// windows on either side, over one fleet, measure healthy.
+func TestRingFleetChangeReadsForThoseWindowsOnly(t *testing.T) {
+	src := &fakeSource{syncedAt: 2, changeAt: 6}
+	r := ringAt(src, 2)
+	want := map[int]string{
+		2: WindowRestarted, 3: WindowRestarted, 4: WindowRestarted, // a read before the first sync
+		5: WindowMeasured, 6: WindowMeasured,
+		7: WindowRestarted, 8: WindowRestarted, 9: WindowRestarted, // the change at 6, then generation 2
+		10: WindowMeasured,
+	}
+	for tick := range 11 {
+		w := take(t, r, src, tick)
+		if tick < 2 {
+			continue
+		}
+		if w.State != want[tick] {
+			t.Fatalf("tick %d: %+v, want %s", tick, w, want[tick])
+		}
+		if want[tick] == WindowMeasured {
+			healthy(t, w)
+		}
+	}
 }
 
 // A node whose read fails keeps its brackets and says why; a node no longer

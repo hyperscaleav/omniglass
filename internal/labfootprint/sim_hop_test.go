@@ -90,7 +90,7 @@ func bracketRead(dev *sim.Device, tally *collection.RequestTally) collection.End
 // simRead is the device's snmp counters in the wire form the server reads.
 func simRead(dev *sim.Device) collection.SimObservation {
 	c := dev.Observed("snmp")
-	return collection.SimObservation{Node: "edge", At: time.Now(), Devices: 1, Protocols: []collection.SimProtocolObservation{{
+	return collection.SimObservation{Node: "edge", At: time.Now(), FleetGeneration: 1, Devices: 1, Protocols: []collection.SimProtocolObservation{{
 		Protocol: "snmp", Accepted: c.Accepted, Received: c.Received, InFlight: c.InFlight, Answered: c.Answered,
 		Refused: c.Refused, Error: c.Error, Dropped: c.Dropped, Withheld: c.Withheld, Served: 1,
 	}}}

@@ -91,9 +91,9 @@ func TestNodeSimulationObservationAPI(t *testing.T) {
 	at := time.Now().UTC().Truncate(time.Millisecond)
 	hub := &fakeHub{Registry: simhub.New()}
 	hub.observation = map[string]collection.EndpointObservation{"site-a": {
-		SimBefore: collection.SimObservation{Node: "site-a", At: at, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 4, Answered: 4}}},
+		SimBefore: collection.SimObservation{Node: "site-a", At: at, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 4, Answered: 4}}},
 		Node:      collection.RequestTallySnapshot{Node: "site-a", At: at.Add(time.Millisecond), Transports: []collection.TallyCounters{{Transport: "http", Sent: 5, Answered: 4, InFlight: 1}}},
-		SimAfter:  collection.SimObservation{Node: "site-a", At: at.Add(2 * time.Millisecond), Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 5, Answered: 5}}},
+		SimAfter:  collection.SimObservation{Node: "site-a", At: at.Add(2 * time.Millisecond), FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 5, Answered: 5}}},
 	}}
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub)))
 	defer srv.Close()

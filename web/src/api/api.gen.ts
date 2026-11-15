@@ -2962,6 +2962,8 @@ export type SimObservation = {
   /** @nullable */
   faces?: SimFaceOverlap[] | null;
   faces_overlapped?: number;
+  fleet_changing?: boolean;
+  fleet_generation: number;
   impaired: number;
   node: string;
   /** @nullable */
@@ -5801,7 +5803,7 @@ export type PlatformSimulationDevice = {
 };
 
 /**
- * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.
+ * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful.
  */
 export type PlatformSimulationGapReading = typeof PlatformSimulationGapReading[keyof typeof PlatformSimulationGapReading];
 
@@ -5833,12 +5835,12 @@ export type PlatformSimulationGap = {
      * @nullable
      */
   ratio: number | null;
-  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful. */
+  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful. */
   reading: PlatformSimulationGapReading;
 };
 
 /**
- * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+ * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves.
  */
 export type PlatformSimulationNodeState = typeof PlatformSimulationNodeState[keyof typeof PlatformSimulationNodeState];
 
@@ -5921,7 +5923,7 @@ export type PlatformSimulationNode = {
      * @nullable
      */
   start: string | null;
-  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart. */
+  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves. */
   state: PlatformSimulationNodeState;
 };
 
@@ -26678,7 +26680,7 @@ export const getGetPlatformSimulationViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+ * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
  * @summary Read what each simulator saw against what the platform collected
  */
 export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {
