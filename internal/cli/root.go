@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newRoot(version string) *cobra.Command {
+func newRoot(version, imageDigest string) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "omniglass",
 		Short:         "Omniglass control plane (walking skeleton)",
@@ -32,7 +32,7 @@ func newRoot(version string) *cobra.Command {
 		newSetPasswordCmd(),
 		newSeedDevCmd(),
 		newSimCmd(),
-		newLabCmd(version),
+		newLabCmd(version, imageDigest),
 		newMCPCmd(version),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.
@@ -56,12 +56,14 @@ func newRoot(version string) *cobra.Command {
 // Root returns the fully assembled command tree without executing it. It is the
 // seam the docs generator (cmd/docsgen) walks to render the CLI reference, so the
 // reference is always the real command surface, never a hand-maintained copy.
-func Root(version string) *cobra.Command { return newRoot(version) }
+func Root(version string) *cobra.Command { return newRoot(version, "") }
 
 // Execute runs the root command. version is the build-time-injected release
-// tag (or "dev" for local builds), surfaced via `omniglass --version`.
-func Execute(version string) {
-	if err := newRoot(version).Execute(); err != nil {
+// tag (or "dev" for local builds), surfaced via `omniglass --version`;
+// imageDigest is the release image's digest, injected beside it (empty for
+// any other build), which `lab run` pulls by.
+func Execute(version, imageDigest string) {
+	if err := newRoot(version, imageDigest).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
