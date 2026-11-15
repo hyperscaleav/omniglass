@@ -81,6 +81,11 @@ panel is the glance (verdict, why, context, identity and tags) and the configura
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
+While a blade is open the shell (sidebar, top bar, banners and the routed page, the
+`data-app-shell` root) is `inert`, so keyboard focus, the accessibility tree and pointer clicks
+reach only the top blade; blades, toasts and the command palette portal outside that root and stay
+live.
+
 ## Name-shaped addresses (#759, #853)
 
 A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
