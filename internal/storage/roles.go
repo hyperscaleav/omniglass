@@ -114,7 +114,7 @@ type SystemRoleSpec struct {
 	// conditional to mandatory on any edit that did not resend it, the exact
 	// failure amendment 7.1 blocked on the DELETE path re-entering through
 	// the UPDATE path. Set from a choice_alternate.id the caller already
-	// resolved (SeedRoleChoice returns the ids its choice created, the API
+	// resolved (a template create returns the ids its choices created, the API
 	// layer resolves a "choice/alternate" wire reference through
 	// PG.ResolveAlternate before building this spec), never from a raw name
 	// the write itself would have to look up: the composite FK
