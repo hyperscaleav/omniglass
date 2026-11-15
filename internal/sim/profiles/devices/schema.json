@@ -15,7 +15,7 @@
   "properties": {
     "name": {
       "type": "string",
-      "description": "Stable identifier for this profile. Used as the cross-reference key from system profiles and as the lookup key in the in-memory profile store. Lowercase, hyphenated.",
+      "description": "Stable identifier for this profile. Used as the lookup key in the in-memory profile store. Lowercase, hyphenated.",
       "pattern": "^[a-z0-9][a-z0-9-]*$",
       "examples": [
         "kestrel-vroom",

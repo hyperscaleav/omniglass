@@ -1,4 +1,4 @@
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -68,9 +68,8 @@ export default function Secrets() {
   const me = useMe();
   const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets }));
 
-  // Ordered by the label an operator reads, unlabelled last, exactly as
-  // ListSecrets orders both arms of its query (#613).
-  const rows = createMemo(() => [...(secrets.data ?? [])].sort(byLabel));
+  // Rendered in the order ListSecrets serves, on both arms of its query (#613, #757).
+  const rows = createMemo(() => secrets.data ?? []);
 
   return (
     <FlatList<Secret>

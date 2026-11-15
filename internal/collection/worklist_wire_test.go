@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func worklistOfSize(t *testing.T, n int) (WorklistReply, []byte) {
 		if len(raw) >= n {
 			return reply, raw
 		}
-		reply.Tasks = append(reply.Tasks, TaskSpec{ID: "task-" + strings.Repeat("x", i%7), Mode: "poll", EndpointName: "tcp", Transport: "tcp"})
+		reply.Tasks = append(reply.Tasks, TaskSpec{ID: fmt.Sprintf("task-%06d", i), Mode: "poll", EndpointName: "tcp", Transport: "tcp"})
 	}
 }
 

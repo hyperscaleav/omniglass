@@ -12,6 +12,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { openTree, pickTree } from "../components/TreeSelect.testkit";
 
 // The Systems route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -31,8 +32,9 @@ const systemTypes: SystemType[] = [
   { id: uuidFor("st-class"), name: "class", label: "Classroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "classroom", abbrev: "cls" },
 ];
 const standards: Standard[] = [
-  { id: uuidFor("meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
+  // In the order ListStandards serves: by label (#757).
   { id: uuidFor("huddle-space"), name: "huddle-space", label: "Huddle space", official: false },
+  { id: uuidFor("meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
 ];
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.
@@ -93,16 +95,16 @@ describe("Systems create-as-route", () => {
 
   it("offers the system_type tree on the create form, indented, with an unclassified option", async () => {
     mount("/systems/create");
-    const picker = (await waitFor(() => screen.getByLabelText("Type"))) as HTMLSelectElement;
+    const picker = await waitFor(() => screen.getByLabelText("Type"));
     // Unclassified heads the list (the column is nullable), then the tree in
-    // depth-first order, each level indented by a non-breaking-space run. The
-    // indent is the assertion that this is the TREE picker and not a flat
-    // <select> over the same rows.
-    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "av", "room", "class"]);
-    const labels = Array.from(picker.options).map((o) => o.textContent);
-    expect(labels[1]).toBe("AV");
-    expect(labels[2]).toBe("\u00A0\u00A0\u00A0Room");
-    expect(labels[3]).toBe("\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0Classroom");
+    // depth-first order, each level indented by inline padding rather than text.
+    // The padding is the assertion that this is the TREE picker and not a flat
+    // list over the same rows.
+    const options = await openTree(picker);
+    expect(options.map((o) => o.textContent)).toEqual(["Unclassified", "AV", "Room", "Classroom"]);
+    const pads = options.map((o) => parseFloat(o.style.paddingLeft));
+    expect(pads[1]).toBeLessThan(pads[2]);
+    expect(pads[2]).toBeLessThan(pads[3]);
   });
 
 });
@@ -173,7 +175,7 @@ describe("Systems create identity", () => {
     return {
       display: screen.getByPlaceholderText("Executive Boardroom") as HTMLInputElement,
       key: screen.getByPlaceholderText("exec-boardroom") as HTMLInputElement,
-      type: screen.getByLabelText("Type") as HTMLSelectElement,
+      type: screen.getByLabelText("Type"),
       submit: screen.getByText("Create system").closest("button") as HTMLButtonElement,
     };
   };
@@ -197,7 +199,7 @@ describe("Systems create identity", () => {
     // Unclassified is the default and generates nothing, so there is no lock to
     // show until a type is chosen.
     expect(key.readOnly).toBe(false);
-    fireEvent.change(type, { target: { value: "class" } });
+    await pickTree(type, "Classroom");
     await waitFor(() => expect(key.value).toBe("classroom"));
     expect(key.readOnly).toBe(true);
     expect(key.disabled).toBe(false);
@@ -211,9 +213,9 @@ describe("Systems create identity", () => {
     // re-asked and the field follows the answer.
     stubFetch();
     const { type, key } = await fields();
-    fireEvent.change(type, { target: { value: "room" } });
+    await pickTree(type, "Room");
     await waitFor(() => expect(key.value).toBe("room"));
-    fireEvent.change(type, { target: { value: "class" } });
+    await pickTree(type, "Classroom");
     await waitFor(() => expect(key.value).toBe("classroom"));
   });
 
@@ -230,7 +232,7 @@ describe("Systems create identity", () => {
     await waitFor(() => expect(submit.disabled).toBe(false));
 
     fireEvent.input(key, { target: { value: "" } });
-    fireEvent.change(type, { target: { value: "class" } });
+    await pickTree(type, "Classroom");
     await waitFor(() => expect(submit.disabled).toBe(false));
   });
 
@@ -244,7 +246,7 @@ describe("Systems create identity", () => {
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
     const { type, display, key } = await fields();
-    fireEvent.change(type, { target: { value: "class" } });
+    await pickTree(type, "Classroom");
     await waitFor(() => expect(key.value).toBe("classroom"));
     unlockLabel();
     fireEvent.input(display, { target: { value: "Lecture Hall" } });

@@ -23,11 +23,14 @@ func (f groupFixture) platformComponentOf(t *testing.T, node string) string {
 }
 
 // selfInstances is the instances a node reports key under: a session state
-// for session-held-count, every kind for a delivery key (#1659), else none.
+// for session-held-count, the pool for worker-busy-fraction (#1686), every
+// kind for a delivery key (#1659), else none.
 func selfInstances(key string) []string {
 	switch key {
 	case writerclass.SessionHeldCount:
 		return []string{"open"}
+	case writerclass.WorkerBusyFraction:
+		return []string{"lane"}
 	case writerclass.DeliveryInCount, writerclass.DeliveryOutCount, writerclass.DeliveryLossRatio:
 		out := make([]string, 0, len(delivery.Kinds))
 		for _, k := range delivery.Kinds {
@@ -150,30 +153,32 @@ func TestNodeSelfReportRefusesAKeyNotItsOwn(t *testing.T) {
 
 // TestPlatformKeyInATaskGroupIsRefused is #1094's anti-spoof guard for the
 // node-self keys: a task's rows are the node writer's, which the platform
-// class does not admit, so a task that reports a node-self key (even on the
+// class does not admit, so a task that reports any node-self key (even on the
 // node's own platform component) is refused, alone.
 func TestPlatformKeyInATaskGroupIsRefused(t *testing.T) {
 	t.Parallel()
 	f := newGroupFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
-	spoof := taskGroup("task-b", f.disp2, f.node, "on", ts)
-	spoof.Metrics = append(spoof.Metrics, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: f.disp2,
-		Key: writerclass.TickDuration, Value: 5, Source: "poll", TS: ts})
-	res, err := f.gw.LandBatch(ctx, storage.IngestBatch{
-		BatchID: "tick-spoof",
-		Writer:  storage.NodeWriter("", ""),
-		Groups:  []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts), spoof},
-	})
-	if err != nil {
-		t.Fatalf("land the tick: %v", err)
-	}
-	if len(res.Refused) != 1 || res.Refused[0].Index != 1 || !errors.Is(res.Refused[0].Err, storage.ErrKeyWriterRefused) {
-		t.Fatalf("refused = %+v, want task-b alone, ErrKeyWriterRefused", res.Refused)
-	}
-	var kwe *storage.KeyWriterError
-	if !errors.As(res.Refused[0].Err, &kwe) || kwe.Key != writerclass.TickDuration || kwe.Class != writerclass.Platform {
-		t.Errorf("refusal = %v, want tick-duration refused as a platform key", res.Refused[0].Err)
+	for _, k := range writerclass.NodeSelfKeys() {
+		spoof := taskGroup("task-b", f.disp2, f.node, "on", ts)
+		spoof.Metrics = append(spoof.Metrics, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: f.disp2,
+			Key: k, Value: 5, Source: "poll", TS: ts})
+		res, err := f.gw.LandBatch(ctx, storage.IngestBatch{
+			BatchID: "spoof-" + k,
+			Writer:  storage.NodeWriter("", ""),
+			Groups:  []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts), spoof},
+		})
+		if err != nil {
+			t.Fatalf("land the %s spoof: %v", k, err)
+		}
+		if len(res.Refused) != 1 || res.Refused[0].Index != 1 || !errors.Is(res.Refused[0].Err, storage.ErrKeyWriterRefused) {
+			t.Fatalf("%s: refused = %+v, want task-b alone, ErrKeyWriterRefused", k, res.Refused)
+		}
+		var kwe *storage.KeyWriterError
+		if !errors.As(res.Refused[0].Err, &kwe) || kwe.Key != k || kwe.Class != writerclass.Platform {
+			t.Errorf("refusal = %v, want %s refused as a platform key", res.Refused[0].Err, k)
+		}
 	}
 }
 

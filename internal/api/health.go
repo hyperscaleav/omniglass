@@ -37,6 +37,12 @@ type healthAlarmBody struct {
 	Severity    string    `json:"severity"`
 	Message     string    `json:"message"`
 	RaisedAt    time.Time `json:"raised_at"`
+	// The acknowledgement, with the same names and rules as the component alarm
+	// list (alarmBody), so a system page can show and offer it without opening
+	// each component (#990). Orthogonal to cleared (ADR-0109).
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
+	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)"`
+	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
 }
 
 type healthRoleBody struct {
@@ -139,6 +145,10 @@ func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 			Severity:    a.Severity,
 			Message:     a.Message,
 			RaisedAt:    a.RaisedAt,
+
+			AcknowledgedAt: a.AcknowledgedAt,
+			AcknowledgedBy: a.AcknowledgedBy,
+			Acknowledged:   a.Acknowledged(),
 		})
 	}
 	return body

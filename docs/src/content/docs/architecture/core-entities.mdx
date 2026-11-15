@@ -30,7 +30,7 @@ with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck 
 share a name under different parents or at different locations, and two rooms may hold their own
 same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
 stay fleet-wide unique. A bare-name reference that now matches more than one row is refused
-(`409`, naming the candidates) rather than silently resolving to whichever row sorted first. **A uuid
+(`404`, naming the candidates, the same answer every collection gives, ADR-1134) rather than silently resolving to whichever row sorted first. **A uuid
 is the address; a dotted path is a positional lookup**
 ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)),
 resolved beside the bare name on the same `{ref}` parameter every route already took; a `GET`/`LIST`
@@ -335,6 +335,12 @@ first-class and carries no contract. The standard is a separate axis from `syste
 system can carry either, both, or neither. Conformance is **not** a copy: the standard's contract defaults
 resolve **live** for every conforming system until it overrides one. See the
 [Standards guide](/guides/admin/standards/).
+
+A system also declares **roles** directly on itself (an ad hoc role), which is how a one-off system
+gets any: it inherits none. The console declares them from the system's Roles panel in edit mode,
+where the add row sits under the Ad hoc group (and in the empty state, so a one-off system's first
+role is one click from the copy). An ad hoc role edits and withdraws in place; a name the system's
+standard already declares is refused (409) rather than shadowed, and shows on the add row.
 
 ### Declared properties: the classifier contracts and the declared rows
 
@@ -765,7 +771,9 @@ config / tag / credential / group bindings drop. The entity leaves its parent's 
 
 The cascade is **not** "delete everything below", because containers do not own their members:
 
-- a **component** (leaf) decommissions as above;
+- a **component** (leaf) decommissions as above, but is **refused (409) while it owns endpoints** or
+  child components: delete or reassign the endpoints first, so none is stranded with no owner
+  ([data collection](/architecture/collection/#endpoints-the-devices-apis-declared-once));
 - a **system** delete **unbinds its members** (the `system_member` rows) but keeps the components,
   standalone and re-homeable. The unbinding is the same act `RemoveMember` performs, and it carries
   the same two consequences: a component left holding exactly one membership has that one promoted
@@ -867,8 +875,13 @@ stale, and only because the operator chose to.
 
 Every reference form the API accepts resolves through one `{ref}` path parameter (`GET
 /components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
-tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
-the candidates rather than silently resolving to whichever sorted first, since **#627 scopes a name's
+tried in that order. A bare name matching more than one row in the caller's scope is a `404` naming
+the candidates rather than silently resolving to whichever sorted first. Each candidate is listed as
+its dotted address with its uuid beside it (`campus.room-a.$comp.display-1 (<uuid>)`), a spelling that
+resolves on the same route, and a candidate the caller cannot read is neither listed nor counted
+([ADR-1134](/architecture/decisions/#adr-1134-an-ambiguous-name-is-a-404-naming-the-reference-on-every-collection)).
+The refusal is a `404` because the reference as typed resolves to no one row, the status a name
+unresolved on every other collection already had (ADR-1133), and since **#627 scopes a name's
 uniqueness to its placement, not the whole fleet**: a component and a system both scope to their
 parent when they have one, else their location, else the fleet, a three-bucket split each carries its
 own partial unique index for; a location, which has no `location_id` column of its own, scopes to its
@@ -1067,7 +1080,7 @@ no vendor because it is not an instance of a catalog row, and no placement fact 
 read its parent would stale every descendant on a campus rename.
 
 **A rule reads placement, and that is what the recompute verb is for**
-([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
 `{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does

@@ -18,9 +18,8 @@ monitoring loop work against a fleet they can break on purpose.
 
 :::note[Partial]
 Built: the engine in `internal/sim` (ported from the retired omniglass-lab project, #886): the
-embedded catalog of device and system profiles, response templates and fleet manifests; the
-fleet compiler, which expands a manifest into devices with stable hostnames, serials and
-addresses; and the engine, which serves every protocol surface a device declares, with behaviors and
+embedded catalog of device profiles, surfaces and response templates; the identity helpers
+(`internal/sim/fleet`) that give a device its serial, MAC and address and name a system; and the engine, which serves every protocol surface a device declares, with behaviors and
 computed fields over shared state, follows a changing fleet in place, and reports every
 connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
@@ -51,15 +50,14 @@ Still `Design`: the Helm sidecar (#892).
 ## The catalog
 
 Everything a simulated device is comes from the embedded catalog (`internal/sim/profiles`), so
-the binary needs nothing on disk:
+the binary needs nothing on disk. The catalog holds devices and nothing above them: no room archetype
+and no fleet layout, because a simulated system is a system built to a standard
+([below](#adding-a-simulated-system), [fleets](#fleets)).
 
 - a **device profile** declares a model's identity, its protocol surfaces (protocol, port, auth, the
   routes, commands, OIDs and subscription subjects each one answers), its behaviors (values that
   drift on an interval), its computed fields (values derived on read, such as uptime from a boot
   epoch) and its default state;
-- a **system profile** declares a room archetype: which device profiles fill which roles;
-- an **fleet manifest** declares sites, buildings and rooms and which system profile fills each,
-  with an address block per site;
 - **templates** render responses from live state, so a device's HTTP status route and its CLI
   `show channels` read the same values.
 
@@ -122,10 +120,22 @@ rule the boot seed follows, and a test holds it to that.
 
 ## Fleets
 
-The compiler expands a manifest against the catalog into a flat device list. Every device gets a
-location-based hostname, a stable slug, a serial and MAC derived from the slug, and the next
-address in its site's block. A recompile of the same manifest yields the same fleet, so a
-simulated device keeps its identity across restarts.
+The catalog defines no fleet, only the devices a fleet is made of. A fleet is one of two things, and
+both are built from the platform's standards:
+
+- a **dev fleet**: the dev seed's own systems, each component a profile serves given an address and
+  endpoints on the dev node ([the dev fleet](#the-dev-fleet));
+- a **scale lab scenario**: a manifest (`internal/lab/scenario/manifests`) that names standards from the
+  template catalog, the system type each is classified under, the shipped catalog product filling each
+  of a standard's roles, and how many sites of which shape hold how many systems of each. It resolves
+  at a size to a plan, and the [lab](/guides/lab/#scale-lab-scenarios) seeds the plan. A product the
+  simulator does not serve is refused, so a scenario cannot invent a device.
+
+Neither has a vocabulary of its own: a role is a standard's role, a system type a registered one, a
+product a catalog product the catalog's device profiles serve. A device's identity is the one
+function of its id wherever it is listed: `fleet.Enrich` fills the blank hostname, serial, MAC and
+address a profile leaves, and the same id yields the same serial across restarts and reseeds.
+`fleet.NameGenerator` mints a system's friendly name, spread across its space and stable for a seed.
 
 ## One device, every protocol, one state
 
@@ -303,6 +313,17 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
+The registry is per server process, and it forgets. Deleting a node (`DELETE /nodes/{name}`) drops
+its entry at once, so neither `GET /simulation` nor `GET /nodes/{name}/simulation` can name a node
+that no longer exists. A simulator that has neither pulled nor reported for a hundred seconds (ten
+of its pulls) is dropped on the next read, so one torn down without its node being deleted ages out
+instead of reading `offline` until the server restarts; if it is still running, its next pull
+brings it back as new. Because the hits live in one process, a server run as more than one replica
+shows a simulator's status only on the replica its node's bus session landed on, and a read that
+reaches another replica sees no simulator. That is accepted while the architecture runs one
+stateless server ([scaling](/architecture/scaling/)); a shared store such as NATS KV is the path if
+it ever matters, and it is not built here.
+
 ### What an endpoint observed
 
 A hit says a device was touched; it does not say whether every request a node sent arrived, or how
@@ -392,8 +413,8 @@ Beside those, the fixture's simulated endpoints wire the rest:
 - **The huddle panel's other carriers**: its line protocol over TLS (`newtron-nvp-tls` on 51326,
   pinning the panel's key on first use) and as datagrams (`newtron-nvp-udp` on 51327, dropping a
   seeded 5% of them each way).
-- **The webhooks**: the UCC service's and the UCC platform's webhook endpoints (`ucc-webhook`),
-  which the simulator subscribes each service to ([below](#a-simulated-service-posts-from-the-start)).
+- **The webhooks**: the UCC platform's webhook endpoint (`ucc-webhook`),
+  which the simulator subscribes the platform to ([below](#a-simulated-service-posts-from-the-start)).
 - **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
   the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
   9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
@@ -505,14 +526,14 @@ A route, or a behavior, may also **post a webhook** once its changes apply (#102
 real sender signs one: its `emit` names the URL, the body and headers, and a `sign` block (the
 scheme, `hmac`, `token`, `basic` or `none`; the secret; the header the signature or token rides
 and its prefix; the header carrying the signed unix timestamp; the header carrying each post's
-delivery id), each value a template over the device's state. The UCC service is the face the
+delivery id), each value a template over the device's state. The UCC platform is the face the
 webhook transport is proven against: its admin API takes a **webhook subscription**
 (its webhooks route takes the receiver's `url`, the `scheme`, the `secret` and an optional
 `fault`), and its meeting routes (a start naming the meeting's `id` and `room`, and an end) post
-`meeting.started` and `meeting.ended` to it, hmac sha256 over the
+`room.meeting.started` and `room.meeting.ended` to it, hmac sha256 over the
 timestamp, a dot and the body. A fault posts as a sender gone wrong: `bad-signature` signs with the
 wrong key, `stale` signs a timestamp ten minutes old, and `redeliver` sends one delivery twice. The
-shipped `ucc-webhook` driver maps them; the dev fleet carries the service at headquarters with its
+shipped `ucc-webhook` driver maps them; the dev fleet carries the platform at headquarters with its
 webhook endpoint, signed with the fleet's key (`sim-ucc-signing`) ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 
 ### A simulated service posts from the start
@@ -529,15 +550,15 @@ defaults. The fence is two facts the server holds and a node cannot assert: the 
 the lab mark, and the component sits in the simulated block (`127.60.0.0/16`), which only the seed
 allocates. A database with no lab mark hands out nothing (outside a lab, `make dev` included, a
 service is subscribed by hand through its subscribe route), a real device's webhook is never handed
-out, and a node's worklist never carries one. The UCC service's meeting behavior then posts `meeting.started` every minute, so a lab's
-webhook endpoint is heard within its first two minutes.
+out, and a node's worklist never carries one. The UCC platform's `rooms_report` behavior then posts the batched room state every 30 seconds, so a lab's
+webhook endpoint is heard within its first minute.
 
 The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the
 [fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven
 against (#1282): one service that speaks for every room on the account. Its room list answers
 every room's meeting state and participant count in one read, its meeting routes name the room by
 id (`room.meeting.started` and `room.meeting.ended`), and a report route posts one batched
-`rooms.state` naming every room at once, each signed as the UCC service signs. A room id the
+`rooms.state` naming every room at once, each signed as above. A room id the
 account has not seen joins it, the way a room added on the platform would, and a request's room id
 reaches state only as one path key (a template's `segment` function refuses any other). The
 shipped `ucc-rooms` driver polls the room list as records and the `ucc-webhook` driver's
@@ -556,7 +577,7 @@ not added yet through the provision route, so a room bound later is added on the
 restarted device has every room added again. That is how a scale scenario's meeting platform comes
 to speak for every system of its site ([the lab guide](/guides/lab/#scale-lab-scenarios)); it keeps
 the profile's five demo rooms beside them, which land in its unbound inbox until #1756 retires them.
-The lab's per-room UCC services stay beside it until #1390 retires them.
+It is the lab's one UCC shape: the per-room `ucc-service` it replaced is retired (#1390).
 
 ### A pusher pushes on its own cadence
 
@@ -625,9 +646,11 @@ components from its next pull. The plan and the write are the **planned-system p
 [system template](/architecture/templates/) also builds on: the pure planner
 (`internal/systemplan`) takes each role's candidate products as an input (here the products the
 simulator serves), and the planned create (`storage.CreatePlan`) lands places, systems, their
-components, endpoints, declared values and role assignments in one transaction. The lab's room archetypes in the catalog (`profiles/systems`) remain
-only as the input of the simulator's internal fleet compiler (#914); they are not how an operator
-adds a system ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names)).
+components, endpoints, declared values and role assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
+fleet manifests are retired (#914), and a scale lab scenario is the same standards-plus-counts
+([fleets](#fleets)). The standard is the archetype
+([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names),
+[ADR-0914](/architecture/decisions/#adr-0914-the-simulator-catalog-carries-no-fleet-or-room-archetype-vocabulary)).
 
 ## In the console
 

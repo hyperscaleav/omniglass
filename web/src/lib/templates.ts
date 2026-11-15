@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplatePlaceBody, TemplateRoleBody } from "../api/api.gen";
 import type { Chip } from "./predicate";
 import { entityLabel } from "./entities";
 
@@ -12,18 +12,18 @@ import { entityLabel } from "./entities";
 // rules (which kinds a URL asks for, what a form posts, where a success lands)
 // are unit-tested without a server.
 
-export type Template = components["schemas"]["TemplateBody"];
+export type Template = TemplateBody;
 export type TemplateKind = Template["kind"];
-export type TemplatePlace = components["schemas"]["TemplatePlaceBody"];
-export type TemplateRole = components["schemas"]["TemplateRoleBody"];
+export type TemplatePlace = TemplatePlaceBody;
+export type TemplateRole = TemplateRoleBody;
 
-export type StandardFromTemplateBody = components["schemas"]["CreateStandardFromTemplateInputBody"];
-export type ComponentFromTemplateBody = components["schemas"]["CreateComponentFromTemplateInputBody"];
-export type ComponentFromTemplateResult = components["schemas"]["CreateComponentFromTemplateOutputBody"];
-export type SystemFromTemplateBody = components["schemas"]["CreateSystemFromTemplateInputBody"];
-export type SystemFromTemplateResult = components["schemas"]["CreateSystemFromTemplateOutputBody"];
-export type LocationsFromTemplateBody = components["schemas"]["CreateLocationsFromTemplateInputBody"];
-export type LocationsFromTemplateResult = components["schemas"]["CreateLocationsFromTemplateOutputBody"];
+export type StandardFromTemplateBody = CreateStandardFromTemplateInputBody;
+export type ComponentFromTemplateBody = CreateComponentFromTemplateInputBody;
+export type ComponentFromTemplateResult = CreateComponentFromTemplateOutputBody;
+export type SystemFromTemplateBody = CreateSystemFromTemplateInputBody;
+export type SystemFromTemplateResult = CreateSystemFromTemplateOutputBody;
+export type LocationsFromTemplateBody = CreateLocationsFromTemplateInputBody;
+export type LocationsFromTemplateResult = CreateLocationsFromTemplateOutputBody;
 
 // What a template is, in the words every surface that offers one teaches it
 // with (the Templates rail, the create dialogs' choice).

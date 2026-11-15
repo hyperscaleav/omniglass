@@ -11,6 +11,7 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // The Components route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
@@ -329,15 +330,13 @@ describe("Components create identity", () => {
     await waitFor(() => expect(key.value).toBe("mic-1"));
     expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
 
-    const location = screen.getByLabelText("Location") as HTMLSelectElement;
-    fireEvent.change(location, { target: { value: room.id } });
+    await pickTree(screen.getByLabelText("Location"), "Boardroom");
     await waitFor(() => expect(screen.getByText(/Unique at Boardroom/)).toBeTruthy());
 
     // A parent wins over a location, the server's own bucket precedence. Both
     // are set here on purpose: with only one, a page handing the two to the
     // rule in the wrong order reads exactly the same.
-    const parent = screen.getByLabelText("Parent component") as HTMLSelectElement;
-    fireEvent.change(parent, { target: { value: comp.id } });
+    await pickTree(screen.getByLabelText("Parent component"), "Ceiling Mic 2");
     await waitFor(() => expect(screen.getByText(/Unique under Ceiling Mic 2/)).toBeTruthy());
     expect(screen.queryByText(/Unique at Boardroom/)).toBeNull();
   });
@@ -359,8 +358,7 @@ describe("Components create identity", () => {
     });
     const { product, display } = await fields();
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    const location = screen.getByLabelText("Location") as HTMLSelectElement;
-    fireEvent.change(location, { target: { value: room.id } });
+    await pickTree(screen.getByLabelText("Location"), "Boardroom");
 
     await waitFor(() => expect(display.value).toBe("Ceiling Microphone n"));
     expect(display.readOnly).toBe(true);
@@ -454,10 +452,9 @@ describe("Components create offers a system only to a principal who may bind one
     stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
-    const picker = screen.getByLabelText("System") as HTMLSelectElement;
-    const values = [...picker.options].map((o) => o.value);
-    expect(values).toContain(uuidFor("s-board"));
-    expect(values).not.toContain(uuidFor("s-annex"));
+    const offered = await treeOptions(screen.getByLabelText("System"));
+    expect(offered).toContain("Boardroom AV");
+    expect(offered).not.toContain("Annex AV");
   });
 
   // The scope half of the gate, which the permission half cannot see.

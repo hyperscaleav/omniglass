@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components as schemas } from "../api/schema.gen";
+import type { IdentityBindingBody, ListIdentityBindingsOutputBody, UnboundIdentitiesOutputBody, UnboundIdentityBody } from "../api/api.gen";
 import { can, type Me } from "./auth";
 import { entityLabel } from "./entities";
 import type { Component } from "./components";
@@ -17,10 +17,10 @@ import type { System } from "./systems";
 // writes onto both of its ends, so it costs update on both: the conduit and
 // the owner.
 
-export type IdentityBinding = schemas["schemas"]["IdentityBindingBody"];
-export type IdentityBindings = schemas["schemas"]["ListIdentityBindingsOutputBody"];
-export type UnboundIdentity = schemas["schemas"]["UnboundIdentityBody"];
-export type UnboundIdentities = schemas["schemas"]["UnboundIdentitiesOutputBody"];
+export type IdentityBinding = IdentityBindingBody;
+export type IdentityBindings = ListIdentityBindingsOutputBody;
+export type UnboundIdentity = UnboundIdentityBody;
+export type UnboundIdentities = UnboundIdentitiesOutputBody;
 export type OwnerKind = IdentityBinding["owner_kind"];
 
 export const identityBindingsKey = (component: string) => ["identity-bindings", component] as const;

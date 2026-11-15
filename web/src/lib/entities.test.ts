@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import fixture from "./label_order.fixture.json";
 import { byLabel, createIdentity, deriveName, entityLabel, hasLabel, labelIsName } from "./entities";
 import { createPen } from "./namegen";
 import { seedLabelPen } from "../components/LabelPenField";
@@ -262,5 +263,15 @@ describe("byLabel", () => {
     const got = [...ws].sort(byLabel).map((r) => r.name);
     expect(got[0]).toBe("labelled");
     expect(got.slice(1).sort()).toEqual(["absent", "spaces"]);
+  });
+});
+
+// The agreement test (#757). internal/storage/label_order_test.go runs the same
+// fixture through the real SQL query and asserts the same `order`, so this is
+// the twin that keeps the two halves of the rule from drifting.
+describe("byLabel against the committed SQL sequence", () => {
+  it("orders the shared fixture exactly as the SQL rule does", () => {
+    const got = [...fixture.rows].sort(byLabel).map((r) => r.name);
+    expect(got).toEqual(fixture.order);
   });
 });

@@ -149,3 +149,46 @@ func TestDotSegmentArgumentsAreRefused(t *testing.T) {
 		t.Errorf("a dot-segment positional reached the server")
 	}
 }
+
+// TestCLIComponentDeleteNamesItsEndpoints is #138's CLI acceptance: `component
+// delete` on a component that still owns an endpoint exits non-zero and prints
+// the server's 409 detail, which names the endpoints, so the operator knows to
+// delete or reassign them first. Skipped under -short.
+func TestCLIComponentDeleteNamesItsEndpoints(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("gw: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	tok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("token: %v", err)
+	}
+	future := time.Now().Add(time.Hour)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix, ExpiresAt: &future}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "keeper"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	keeper := "keeper"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &keeper}, all); err != nil {
+		t.Fatalf("endpoint: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	out, err := runCLI(t, "component", "delete", "keeper", "--server", srv.URL, "--token", tok)
+	if err == nil {
+		t.Fatalf("component delete with an endpoint exited zero, want non-zero\noutput: %s", out)
+	}
+	if !strings.Contains(out, "1 endpoint") || !strings.Contains(out, "delete or reassign") {
+		t.Errorf("component delete output = %q, want the 409 detail naming the endpoints", out)
+	}
+}

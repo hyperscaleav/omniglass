@@ -7,7 +7,7 @@ import { Plus, RotateCcw } from "./icons";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { byLabel, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { COMPONENTS_KEY } from "../lib/components";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -64,8 +64,8 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
   };
   // Nothing to create until the plan has answered with at least one component.
   const planReady = () => !!draft().standard && !!plan.data && plan.data.standard === draft().standard && plan.data.components > 0;
-  const sortedStandards = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
-  const sortedTypes = createMemo(() => [...(types.data ?? [])].sort(byLabel));
+  const standardOptions = createMemo(() => standards.data ?? []);
+  const typeOptions = createMemo(() => types.data ?? []);
 
   useFormActions().bind({
     submitLabel: "Add system",
@@ -119,7 +119,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().standard} onChange={(e) => set("standard", e.currentTarget.value)} disabled={busy() || standards.isPending}>
           <option value="" disabled>{standards.isPending ? "Loading standards..." : "Choose a standard..."}</option>
-          <For each={sortedStandards()}>{(s) => <option value={s.name}>{entityLabel(s)}</option>}</For>
+          <For each={standardOptions()}>{(s) => <option value={s.name}>{entityLabel(s)}</option>}</For>
         </select>
       </FieldRow>
       <Show when={draft().standard}>
@@ -139,7 +139,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().system_type} onChange={(e) => set("system_type", e.currentTarget.value)} disabled={busy() || types.isPending}>
           <option value="" disabled>{types.isPending ? "Loading types..." : "Choose a type..."}</option>
-          <For each={sortedTypes()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
+          <For each={typeOptions()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
         </select>
       </FieldRow>
       <Show when={canPlace()}>

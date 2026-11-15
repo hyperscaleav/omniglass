@@ -228,7 +228,8 @@ describe("Standards page", () => {
     expect(await screen.findByTestId("template-create-preview")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create standard" }));
     await waitFor(() => expect(url).toMatch(/\/standards:createFromTemplate$/));
-    expect(sent).toEqual({ template: "huddle" });
+    // The stub records the body after it reads it, a beat after the url.
+    await waitFor(() => expect(sent).toEqual({ template: "huddle" }));
     await waitFor(() => expect(window.location.search).toBe("?open=huddle-space&from=huddle"));
   });
 

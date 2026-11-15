@@ -19,6 +19,12 @@ import (
 // fleet's rate and only stops a misbehaving credential.
 const MaxHitsPerBatch = 10_000
 
+// SilenceTTL is how long a node's simulator may go without pulling or
+// reporting before the registry drops it: ten of the simulator's default
+// ten-second pulls. A simulator torn down without its node being deleted
+// ages out instead of reading offline until the server restarts.
+const SilenceTTL = 100 * time.Second
+
 // maxToldProtocols bounds the notices the hub gives of protocols it does not
 // count, and the memory of which it has given: a credential reporting made-up
 // protocols can neither flood the log nor grow the registry.
@@ -53,12 +59,15 @@ type Status struct {
 
 type nodeState struct {
 	lastSeen time.Time
-	impairs  collection.SimImpairmentStatus
-	caps     collection.SimCapabilities
-	listed   map[string]bool
-	since    map[string]time.Time
-	serving  map[string]bool
-	devices  map[string]*DeviceHits
+	// heardAt is the latest pull or report: what the TTL measures, where
+	// lastSeen (the pull alone) is what the console reads as connected.
+	heardAt time.Time
+	impairs collection.SimImpairmentStatus
+	caps    collection.SimCapabilities
+	listed  map[string]bool
+	since   map[string]time.Time
+	serving map[string]bool
+	devices map[string]*DeviceHits
 }
 
 // Registry holds every node's simulator status. Safe for concurrent use.
@@ -101,12 +110,14 @@ func (r *Registry) tell(node, protocol string) {
 func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componentIDs []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.expire()
 	st := r.nodes[node]
 	if st == nil {
 		st = &nodeState{serving: map[string]bool{}, devices: map[string]*DeviceHits{}}
 		r.nodes[node] = st
 	}
 	st.lastSeen = r.now()
+	st.heardAt = st.lastSeen
 	st.caps = caps
 	st.listed = make(map[string]bool, len(componentIDs))
 	since := make(map[string]time.Time, len(componentIDs))
@@ -140,10 +151,12 @@ func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componen
 func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, rejected int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.expire()
 	st := r.nodes[node]
 	if st == nil {
 		return 0, len(b.Hits)
 	}
+	st.heardAt = r.now()
 	if b.Impairments != nil {
 		st.impairs = *b.Impairments
 		st.impairs.Impaired = filterListed(st.listed, b.Impairments.Impaired)
@@ -177,10 +190,30 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	return accepted, rejected
 }
 
-// Nodes lists the nodes whose simulator has pulled, sorted.
+// Forget drops a node's entry, for a node that was deleted. A simulator that
+// still runs for it is taken as new on its next pull.
+func (r *Registry) Forget(node string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.nodes, node)
+}
+
+// expire drops every node unheard for SilenceTTL. The caller holds mu.
+func (r *Registry) expire() {
+	now := r.now()
+	for n, st := range r.nodes {
+		if now.Sub(st.heardAt) > SilenceTTL {
+			delete(r.nodes, n)
+		}
+	}
+}
+
+// Nodes lists the nodes whose simulator has pulled and been heard from within
+// SilenceTTL, sorted.
 func (r *Registry) Nodes() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.expire()
 	out := make([]string, 0, len(r.nodes))
 	for n := range r.nodes {
 		out = append(out, n)
@@ -190,10 +223,12 @@ func (r *Registry) Nodes() []string {
 }
 
 // Status returns a copy of a node's simulator status, or false when no
-// simulator has pulled for that node since the server started.
+// simulator has pulled for that node since the server started, or it has been
+// forgotten or silent for SilenceTTL.
 func (r *Registry) Status(node string) (Status, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.expire()
 	st := r.nodes[node]
 	if st == nil {
 		return Status{}, false

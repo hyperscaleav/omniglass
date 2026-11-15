@@ -114,7 +114,7 @@ type SystemRoleSpec struct {
 	// conditional to mandatory on any edit that did not resend it, the exact
 	// failure amendment 7.1 blocked on the DELETE path re-entering through
 	// the UPDATE path. Set from a choice_alternate.id the caller already
-	// resolved (SeedRoleChoice returns the ids its choice created, the API
+	// resolved (a template create returns the ids its choices created, the API
 	// layer resolves a "choice/alternate" wire reference through
 	// PG.ResolveAlternate before building this spec), never from a raw name
 	// the write itself would have to look up: the composite FK
@@ -513,7 +513,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return fmt.Errorf("storage: begin assign role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction); err != nil {
+	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -523,8 +523,9 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 }
 
 // assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
-// a simulated system) can create it alongside the rest and commit once.
-func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
+// a simulated system) can create it alongside the rest and commit once. A composite passes a
+// non-nil deferred to recompute health once at its own end (#915); nil recomputes here.
+func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set, deferred *healthDeferral) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -630,14 +631,19 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	// Staffing a role IS membership, so the binding is created here rather than
 	// asked of the operator as a separate step. A component filling a job in a
 	// system that the system does not count as a member is the contradiction
-	// system_member exists to make impossible.
+	// system_member exists to make impossible. The label lock goes first (see
+	// AddMember): the insert's foreign key shares the system's row, which a label
+	// cascade holding the lock waits for (#1214).
+	if err := lockMemberWrite(ctx, tx, component.ID); err != nil {
+		return err
+	}
 	if err := addMemberTx(ctx, tx, sys.ID, component.ID); err != nil {
 		return err
 	}
 	// That implicit bind is a label write path exactly as an explicit AddMember
 	// is: if this is the component's first system it is now its primary, and a
 	// label can read the primary system's type (#685). Before the health
-	// recompute below, which is the fixed lock order (membership, then label,
+	// recompute below, which is the fixed lock order (label, then membership,
 	// then health).
 	if err := p.cascadeComponentLabel(ctx, tx, component.ID); err != nil {
 		return err
@@ -693,7 +699,7 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	// Staffing changes health: the role may have just reached quorum. The system is
 	// named explicitly rather than left to the component's assignments, so assign
 	// and unassign take the same path.
-	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
+	if err := p.recomputeOrDefer(ctx, tx, deferred, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}); err != nil {
 		return err
 	}
 	return nil

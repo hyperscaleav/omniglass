@@ -1,8 +1,6 @@
 import {
-  clearOwnerProperty,
   ownerProperties,
   ownerPropertiesKey,
-  setOwnerProperty,
   type EffectiveProperty,
 } from "./owner_properties";
 
@@ -19,8 +17,3 @@ export const effectivePropertiesKey = (component: string) => ownerPropertiesKey(
 export const effectiveProperties = (component: string): Promise<EffectiveProperty[]> =>
   ownerProperties("component", component);
 
-export const setComponentProperty = (component: string, property: string, value: unknown): Promise<void> =>
-  setOwnerProperty("component", component, property, value);
-
-export const clearComponentProperty = (component: string, property: string): Promise<void> =>
-  clearOwnerProperty("component", component, property);

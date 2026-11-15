@@ -702,10 +702,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		if cid, ok := componentOf[idx]; ok {
 			t.Rejection = rejections[refAt[endpointRef{cid, t.EndpointName}]]
 		}
-		// One fingerprint per endpoint, every task of it the same: the
-		// endpoint's secret versions and its driver's session block, whether
-		// or not this task carries them (a probe task carries neither).
-		t.Fingerprint = fingerprint.Of(fingerprint.Inputs{
+	}
+	// One fingerprint per endpoint, every task of it the same: the endpoint's
+	// secret versions and its driver's session block, whether or not this
+	// task carries them (a probe task carries neither).
+	fingerprintEndpoints(wl.Tasks, func(idx int) fingerprint.Inputs {
+		t := wl.Tasks[idx]
+		return fingerprint.Inputs{
 			Transport:      t.Transport,
 			Params:         t.EndpointParams,
 			DriverInputs:   epInputsOf[idx],
@@ -715,8 +718,8 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			HostKeyPin:     declaredPin[idx],
 			CertificatePin: declaredCert[idx],
 			Retry:          t.SessionRetry,
-		})
-	}
+		}
+	}, fingerprint.Of)
 	upstreams, err := pathUpstreams(ctx, p.pool, name)
 	if err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
@@ -871,4 +874,20 @@ func rungSecretRefs(refs map[string]string) map[string]string {
 		out[driver.SNMPCommunityInput] = ref
 	}
 	return out
+}
+
+// fingerprintEndpoints sets each task's connection fingerprint, computed once
+// per endpoint from its first task's inputs (#1583): every input is the
+// endpoint's, so its tasks share one, and a headquarters node runs several
+// tasks on each of its endpoints.
+func fingerprintEndpoints(tasks []WorklistTask, inputsOf func(idx int) fingerprint.Inputs, of func(fingerprint.Inputs) string) {
+	byEndpoint := map[string]string{}
+	for idx := range tasks {
+		fp, seen := byEndpoint[tasks[idx].EndpointID]
+		if !seen {
+			fp = of(inputsOf(idx))
+			byEndpoint[tasks[idx].EndpointID] = fp
+		}
+		tasks[idx].Fingerprint = fp
+	}
 }

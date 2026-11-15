@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
 // Sentinels for property CRUD. Official (seed-owned) properties are read-only.
@@ -27,13 +28,49 @@ type PropertyTypeSpec struct {
 	Description string
 }
 
+// The property_type fields a PATCH can write, spelled as the wire body spells
+// them, because an update_mask names wire fields (ADR-0091).
+const (
+	PropertyTypeFieldLabel       = "label"
+	PropertyTypeFieldDescription = "description"
+	PropertyTypeFieldValidation  = "validation"
+)
+
+// PropertyTypePatchFields is every field a property_type PATCH lets a write set,
+// in the order a refusal lists them.
+var PropertyTypePatchFields = []string{PropertyTypeFieldLabel, PropertyTypeFieldDescription, PropertyTypeFieldValidation}
+
 // PropertyTypePatch carries the mutable fields of a property update; a nil field is
 // unchanged. DataType is fixed at create (a property's type must not shift under its
-// consumers). Validation replaces wholesale when non-nil.
+// consumers). Validation replaces wholesale when non-nil, and, being a nullable
+// object with no empty value to overload, clears by being named in Write with no
+// bytes (#1189, ADR-0106's rule).
 type PropertyTypePatch struct {
 	Label       *string
 	Description *string
 	Validation  []byte
+	// Write is the resolved update_mask: the fields this write writes. NIL means
+	// the caller sent no mask, read as the implied mask of the fields the patch
+	// populated. A NON-NIL empty set names no fields and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the patch's implied mask: the fields it carries a value for.
+// Exported because the API resolves the wire mask against the same patch it is
+// about to write, so "populated" is defined once for both layers.
+func (p PropertyTypePatch) Populated() updatemask.Fields {
+	f := updatemask.Fields{}
+	populatedIf(f, PropertyTypeFieldLabel, p.Label != nil)
+	populatedIf(f, PropertyTypeFieldDescription, p.Description != nil)
+	populatedIf(f, PropertyTypeFieldValidation, len(p.Validation) > 0)
+	return f
+}
+
+func (p PropertyTypePatch) writeFields() updatemask.Fields {
+	if p.Write != nil {
+		return p.Write
+	}
+	return updatemask.Implied(p.Populated())
 }
 
 var propertyCols = `id, name, coalesce(label, ''), data_type, validation, fusion_policy, description, official, retention_days, ` +
@@ -163,14 +200,16 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 		}
 		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
-	setLabel, labelVal := labelPatch(patch.Label)
+	w := patch.writeFields()
+	setLabel, labelVal := labelPatch(maskedPtr(w, PropertyTypeFieldLabel, patch.Label))
 	if _, err := tx.Exec(ctx, `
 		update property_type set
 			label = case when $5::boolean then $2 else label end,
 			description  = coalesce($3, description),
-			validation   = coalesce($4, validation)
+			validation   = case when $6::boolean then $4::jsonb else validation end
 		where id = (select id from property_type_in_effect() property_type where name = $1)`,
-		name, labelVal, patch.Description, patch.Validation, setLabel); err != nil {
+		name, labelVal, maskedPtr(w, PropertyTypeFieldDescription, patch.Description), schemaArg(patch.Validation), setLabel,
+		w.Has(PropertyTypeFieldValidation)); err != nil {
 		return nil, fmt.Errorf("storage: update property %q: %w", name, err)
 	}
 	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type_in_effect() property_type where name = $1`, name))

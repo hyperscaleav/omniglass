@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Home from "./Home";
 import { PLATFORM_VIEW_KEY, type PlatformView } from "../lib/platformhealth";
 import { LOCATIONS_KEY } from "../lib/locations";
-import { NODE_DOWN_AFTER_MS } from "../lib/nodes";
+import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
+import { NODE_DOWN_AFTER_MS, NODES_KEY, type Node } from "../lib/nodes";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -31,12 +32,21 @@ const view: PlatformView = {
 };
 const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, human: { username: "ada" }, permissions, grants: [] });
 
+const fleet = (openAlarms?: number): FleetView => ({
+  locations: [],
+  systems: ["hq-huddle", "depot-huddle", "lab-rack"].map((name) => ({ id: uuidFor(name), name, label: "", verdict: "healthy", dots: [] })),
+  ...(openAlarms === undefined ? {} : { open_alarms: openAlarms }),
+});
+const nodeRows: Node[] = ["edge-a", "edge-b"].map((name) => ({ name, enrolled: true, tags: {} }));
+
 // A refused platform view (null) mounts on the production retry default, so
 // only the tile's own retry policy can surface the refusal promptly.
-function mount(me: Me, platform: PlatformView | null = view) {
+function mount(me: Me, platform: PlatformView | null = view, fleetData: FleetView | null = fleet(4)) {
   const qc = new QueryClient({ defaultOptions: { queries: platform ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], []);
+  qc.setQueryData([...NODES_KEY], nodeRows);
+  if (fleetData) qc.setQueryData([...FLEET_VIEW_KEY], fleetData);
   if (platform) qc.setQueryData([...PLATFORM_VIEW_KEY], platform);
   let path = () => "";
   const Probe = () => {
@@ -91,5 +101,49 @@ describe("Home Platform tile", () => {
     const tile = screen.getByTestId("home-platform");
     await waitFor(() => expect(tile).toHaveTextContent("needs a fleet-wide node read"));
     expect(tile).not.toHaveTextContent("reading the platform");
+  });
+});
+
+// The count tiles (#983): Open alarms, Systems and Collectors read the scoped
+// counts the console already has, and a tile that cannot say so reads an honest
+// state, never a dash under "collection pending".
+describe("Home count tiles", () => {
+  it("show the seeded counts and none reads as collection pending", async () => {
+    mount(meWith(["location:read", "node:read", "system:read"]));
+    await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
+    expect(screen.getByTestId("home-systems")).toHaveTextContent("3");
+    expect(screen.getByTestId("home-collectors")).toHaveTextContent("2");
+    expect(screen.queryByText(/collection pending/)).toBeNull();
+  });
+
+  it("opens the Systems and Collectors lists on click", async () => {
+    const { path } = mount(meWith(["location:read", "node:read"]));
+    fireEvent.click(await screen.findByRole("button", { name: /Systems/ }));
+    await waitFor(() => expect(path()).toBe("/systems"));
+    fireEvent.click(await screen.findByRole("button", { name: /Collectors/ }));
+    await waitFor(() => expect(path()).toBe("/nodes"));
+  });
+
+  // /alarms is a stub page until the alarm list lands, so the tile is not a link.
+  it("leaves Open alarms a plain figure, not a button", async () => {
+    mount(meWith(["location:read"]));
+    await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
+    expect(screen.getByTestId("home-open-alarms").tagName).toBe("DIV");
+  });
+
+  it("says why the alarm count is missing when the view carries none", async () => {
+    mount(meWith(["location:read"]), view, fleet());
+    await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("needs a component read"));
+    expect(screen.getByTestId("home-open-alarms")).not.toHaveTextContent("0");
+  });
+
+  it("reads an error, not a dash, when the fleet view cannot be read", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ title: "Boom", status: 500 }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    }))));
+    mount(meWith(["location:read"]), view, null);
+    await waitFor(() => expect(screen.getByTestId("home-systems")).toHaveTextContent("could not be read"));
+    expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("could not be read");
   });
 });

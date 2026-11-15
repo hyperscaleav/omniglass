@@ -69,24 +69,20 @@ type ruleOwner struct {
 // it never waits on a rule while holding a series or health lock. A severity
 // level write (UpdateSeverityLevel) enters the same order at its top: the
 // rules naming the level FOR UPDATE, then the level's row, then health.
+//
+// In a landing batch the rules were read and locked once, for every lane,
+// before any lane wrote (lockGroups), so a lane judges by those rows rather
+// than reading them again (#1928).
 func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*ruleEvaluator, error) {
-	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
-		order by id for share`, keys)
-	if err != nil {
-		return nil, fmt.Errorf("storage: load event rules: %w", err)
+	byKey, held := map[string][]EventRule(nil), false
+	if b, ok := tx.(*batchTx); ok {
+		byKey, held = b.heldRules(keys)
 	}
-	byKey := map[string][]EventRule{}
-	for rows.Next() {
-		r, err := scanEventRule(rows)
-		if err != nil {
-			rows.Close()
+	if !held {
+		var err error
+		if byKey, err = loadEventRules(ctx, tx, keys); err != nil {
 			return nil, err
 		}
-		byKey[r.SampleKey] = append(byKey[r.SampleKey], r)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if len(byKey) == 0 {
 		return nil, nil
@@ -98,6 +94,26 @@ func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*r
 	e := newRuleMatcher(p, byKey)
 	e.now = now
 	return e, nil
+}
+
+// loadEventRules reads the enabled event rules reading keys FOR SHARE, in id
+// order (newRuleEvaluator says why the lock), by sample key.
+func loadEventRules(ctx context.Context, tx pgx.Tx, keys []string) (map[string][]EventRule, error) {
+	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
+		order by id for share`, keys)
+	if err != nil {
+		return nil, fmt.Errorf("storage: load event rules: %w", err)
+	}
+	defer rows.Close()
+	byKey := map[string][]EventRule{}
+	for rows.Next() {
+		r, err := scanEventRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		byKey[r.SampleKey] = append(byKey[r.SampleKey], r)
+	}
+	return byKey, rows.Err()
 }
 
 // newRuleMatcher is an evaluator's selector machinery, usable on its own to
@@ -1299,9 +1315,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 		since = st.marks[1].Metric
 	}
 	var to RuleMark
-	if err := p.pool.QueryRow(ctx, `select coalesce((select max(id) from property), 0),
-			coalesce((select max(id) from metric where id > $1), $1)`, since).
-		Scan(&to.Property, &to.Metric); err != nil {
+	if err := p.pool.QueryRow(ctx, ruleMarksSQL, since).Scan(&to.Property, &to.Metric); err != nil {
 		return fmt.Errorf("storage: rule reconcile marks: %w", err)
 	}
 	if !st.started {
@@ -1357,11 +1371,37 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 	return nil
 }
 
+// ruleMarksSQL reads a pass's upper marks ($1 the metric lane's lower one):
+// the newest committed sample id on each lane.
+const ruleMarksSQL = `select coalesce((select max(id) from property), 0),
+			coalesce((select max(id) from metric where id > $1), $1)`
+
 // ruleCandidates reads, in one statement, every enabled rule's series on a
 // lane that took a sample with an id in (from, to]: the newest sample of the
 // series, whether the rule holds its condition in force there, and its
 // streak.
 func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64) ([]ruleCandidate, error) {
+	rows, err := q.Query(ctx, ruleCandidatesSQL(lane), string(lane), from, to)
+	if err != nil {
+		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
+	}
+	defer rows.Close()
+	var out []ruleCandidate
+	for rows.Next() {
+		var c ruleCandidate
+		r, err := scanEventRuleTrailing(rows, &c.component, &c.instance, &c.value, &c.inForce, &c.pending, &c.componentName, &c.componentType)
+		if err != nil {
+			return nil, err
+		}
+		c.rule = r
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ruleCandidatesSQL is ruleCandidates' statement on a lane ($1 the lane, $2
+// and $3 the id window).
+func ruleCandidatesSQL(lane rules.Lane) string {
 	table, typeTable, _ := laneTables(lane)
 	touched := fmt.Sprintf(`select distinct s.component_id, s.%[2]s_id as type_id, s.instance
 			from %[1]s s
@@ -1369,15 +1409,19 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 			and s.%[2]s_id in (select t.id from %[2]s t join event_rule r on r.sample_key = t.name
 				where r.enabled and r.sample_lane = $1)`, table, typeTable)
 	if lane == rules.LaneMetric {
-		// The samples past the mark, found through the id block range index
-		// in each day, and the component series they belong to.
+		// The series of the samples past the mark, read first and on their
+		// own, so each day is reached through its id block range index,
+		// which a finished day answers from its summaries alone (#1929),
+		// and never through a series' whole day; then the component series
+		// among them.
 		touched = `select distinct s.owner_id as component_id, s.metric_type_id as type_id, s.instance
-			from metric m join metric_series s on s.id = m.series_id
-			where m.id > $2 and m.id <= $3 and s.owner_kind = 'component'
+			from (select distinct series_id from metric where id > $2 and id <= $3) m
+			join metric_series s on s.id = m.series_id
+			where s.owner_kind = 'component'
 			and s.metric_type_id in (select t.id from metric_type t join event_rule r on r.sample_key = t.name
 				where r.enabled and r.sample_lane = $1)`
 	}
-	rows, err := q.Query(ctx, fmt.Sprintf(`with touched as (
+	return fmt.Sprintf(`with touched as (
 			%[6]s
 		)
 		select %[3]s, tc.component_id::text, tc.instance, n.value,
@@ -1395,22 +1439,7 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 		cross join lateral (%[4]s) n
 		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
 		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance"),
-		ruleAlarmOn("r.id", "tc.instance"), touched), string(lane), from, to)
-	if err != nil {
-		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
-	}
-	defer rows.Close()
-	var out []ruleCandidate
-	for rows.Next() {
-		var c ruleCandidate
-		r, err := scanEventRuleTrailing(rows, &c.component, &c.instance, &c.value, &c.inForce, &c.pending, &c.componentName, &c.componentType)
-		if err != nil {
-			return nil, err
-		}
-		c.rule = r
-		out = append(out, c)
-	}
-	return out, rows.Err()
+		ruleAlarmOn("r.id", "tc.instance"), touched)
 }
 
 // watched keeps the candidates whose rule selects their component, judged

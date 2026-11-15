@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CommandBody } from "../api/api.gen";
 import type { Endpoint } from "./endpoints";
 import type { Driver } from "./drivers";
 import { LEAF_POLL_MS } from "./component_leaf";
@@ -13,7 +13,7 @@ import { LEAF_POLL_MS } from "./component_leaf";
 // field read here is the API's (status, phase, the evidence and the reason);
 // the words and the steps are derived from them, never invented.
 
-export type Command = components["schemas"]["CommandBody"];
+export type Command = CommandBody;
 
 export const COMPONENT_COMMANDS_PREFIX = ["component-commands"] as const;
 export const componentCommandsKey = (name: string) => [...COMPONENT_COMMANDS_PREFIX, name] as const;

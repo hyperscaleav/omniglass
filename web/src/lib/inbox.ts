@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { NotificationBody } from "../api/api.gen";
 import { can, useMe } from "./auth";
 
 // The console inbox data layer (#1355, epic #1341): the caller's own
@@ -9,7 +9,7 @@ import { can, useMe } from "./auth";
 // component read scope as it stands at read time, so an entry about a component
 // they can no longer read is simply gone. Gated by notification:read.
 
-export type InboxEntry = components["schemas"]["NotificationBody"];
+export type InboxEntry = NotificationBody;
 export type Inbox = { notifications: InboxEntry[]; unread: number };
 
 // Every inbox read shares one prefix, so a mark (one entry or all) refreshes

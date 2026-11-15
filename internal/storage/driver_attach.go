@@ -34,7 +34,10 @@ type catalogMaps struct {
 	// attributes are held to at write (#1145).
 	schemas  map[string][]byte
 	commands map[string]bool
-	secrets  map[string]bool
+	// commandTargets holds which commands have a target (target_property_type
+	// or target_metric_type), false for fire-and-forget commands.
+	commandTargets map[string]bool
+	secrets        map[string]bool
 	// calcOwned are the metric and property names a calc rule outputs: keys
 	// of the calc writer class, which a driver may not emit (ADR-0161).
 	calcOwned map[string]bool
@@ -46,6 +49,7 @@ func (c catalogMaps) LaneOf(name string) (string, bool) {
 }
 func (c catalogMaps) EventPayloadSchema(name string) []byte { return c.schemas[name] }
 func (c catalogMaps) CommandTypeExists(name string) bool    { return c.commands[name] }
+func (c catalogMaps) CommandHasTarget(name string) bool     { return c.commandTargets[name] }
 func (c catalogMaps) SecretTypeExists(name string) bool     { return c.secrets[name] }
 func (c catalogMaps) WriterClass(name string) writerclass.Class {
 	return writerclass.Of(name, c.calcOwned[name])
@@ -63,11 +67,12 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 // along the search path when namespace is empty (#1432).
 func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (catalogMaps, error) {
 	cat := catalogMaps{
-		lanes:     map[string]string{},
-		schemas:   map[string][]byte{},
-		commands:  map[string]bool{},
-		secrets:   map[string]bool{},
-		calcOwned: map[string]bool{},
+		lanes:          map[string]string{},
+		schemas:        map[string][]byte{},
+		commands:       map[string]bool{},
+		commandTargets: map[string]bool{},
+		secrets:        map[string]bool{},
+		calcOwned:      map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
 		select name, 'metric', namespace, null::jsonb from metric_type
@@ -136,6 +141,24 @@ func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (cata
 		if err := rows.Err(); err != nil {
 			return cat, fmt.Errorf("storage: read driver catalog (%s): %w", sql, err)
 		}
+	}
+	targetRows, err := q.Query(ctx, `
+		select name from `+catalogRows("command_type", namespace)+` t
+		where target_property_type_id is not null or target_metric_type_id is not null`)
+	if err != nil {
+		return cat, fmt.Errorf("storage: load command targets: %w", err)
+	}
+	for targetRows.Next() {
+		var name string
+		if err := targetRows.Scan(&name); err != nil {
+			targetRows.Close()
+			return cat, fmt.Errorf("storage: scan command target: %w", err)
+		}
+		cat.commandTargets[name] = true
+	}
+	targetRows.Close()
+	if err := targetRows.Err(); err != nil {
+		return cat, fmt.Errorf("storage: read command targets: %w", err)
 	}
 	return cat, nil
 }

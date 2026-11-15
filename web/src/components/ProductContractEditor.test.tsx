@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import ProductContractEditor from "./ProductContractEditor";
-import { productPropertiesKey, type ProductProperty } from "../lib/product_properties";
+import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
@@ -13,7 +13,7 @@ import { BladeEditContext, createEditSlot } from "../lib/blades";
 // editor inside a blade edit slot, as the product blade does: the controls are
 // edit-state affordances (#621), so the default mount enters edit mode;
 // `editing: false` witnesses the read state.
-const contract: ProductProperty[] = [
+const contract: ClassifierProperty[] = [
   { property_type_name: "serial-number", property_type_id: "serial-number-id", required: true },
   { property_type_name: "firmware-version", property_type_id: "firmware-version-id", default_value: "1.4.2", required: false },
 ];
@@ -31,9 +31,9 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { me?: Me; official?: boolean; lines?: ProductProperty[]; editing?: boolean } = {}) {
+function mount(opts: { me?: Me; official?: boolean; lines?: ClassifierProperty[]; editing?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...productPropertiesKey("tsw-1070")], opts.lines ?? contract);
+  qc.setQueryData([...classifierPropertiesKey("product", "tsw-1070")], opts.lines ?? contract);
   qc.setQueryData([...PROPERTIES_KEY], catalog);
   qc.setQueryData([...ME_KEY], opts.me ?? owner);
   const edit = createEditSlot();

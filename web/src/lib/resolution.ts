@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { ResolvedSecretBody, ResolvedTagBody, ResolvedVariableBody } from "../api/api.gen";
 
 // The effective-values data layer: a component's tags as the cascade resolves
 // them, with the provenance the flat pill list throws away.
@@ -13,7 +13,7 @@ import type { components } from "../api/schema.gen";
 // omit it to resolve against the component's primary membership, which is what a
 // caller with no system in hand gets.
 
-export type ResolvedTag = components["schemas"]["ResolvedTagBody"];
+export type ResolvedTag = ResolvedTagBody;
 
 export const effectiveTagsKey = (name: string, forSystem: string) =>
   ["effective-tags", name, forSystem] as const;
@@ -59,8 +59,8 @@ export function byKey(rows: ResolvedTag[]): { key: string; winner?: ResolvedTag;
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export type ResolvedVariable = components["schemas"]["ResolvedVariableBody"];
-export type ResolvedSecret = components["schemas"]["ResolvedSecretBody"];
+export type ResolvedVariable = ResolvedVariableBody;
+export type ResolvedSecret = ResolvedSecretBody;
 
 // The three cascades are one engine, so the panel reads them as one shape. Kind
 // is carried explicitly rather than inferred, because the bands genuinely differ

@@ -15,7 +15,8 @@ runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kube
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
 `set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
 JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
-Helm chart. Today one stream and one serial consumer do confinement and persistence inline; the
+Helm chart. Today one stream and its ingest lanes, one serial lane a partition of the nodes ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
+do confinement and persistence inline; the
 design fences below mark the parts of this page that are target design, each naming its tracker. See
 [implementation status](/architecture/status/).
 :::
@@ -146,7 +147,10 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   consumer, so adding replicas adds throughput (NATS is the coordinator,
   [workers](/architecture/workers/)).
 - **edge nodes**: one or many per site, connecting back; adding sites adds nodes
-  ([nodes](/architecture/nodes/)).
+  ([nodes](/architecture/nodes/)). Within a site, adding a node adds capacity: the server spreads the
+  site's unpinned components across its nodes by expected cost, guarded by each node's measured
+  headroom, and moves a lost node's components to its peers
+  ([load distribution across a site's nodes](/architecture/nodes/#load-distribution-across-a-sites-nodes), #1638).
 - **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
   active, failover by re-election. No separate election service.
 - **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
@@ -156,7 +160,9 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   parallel without a second subscriber
   ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
   The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
-  second server exists; a second server is also a trigger for the materialized worklist (#1586).
+  second server exists. The worklist's target design leaves nothing to hand over: a node syncs it endpoint by
+  endpoint against a manifest any server can answer (#1586,
+  [ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)).
 
 :::
 
@@ -172,7 +178,7 @@ the metric table.
 
 Now a node publishes one batch per tick, a group per task
 ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and it lands in one transaction
-([storage](/architecture/storage/)) whose cost is a fixed `C1` (about twenty statements) plus `R`
+([storage](/architecture/storage/)) whose cost is a fixed `C1` (about a dozen statements since #1928, the seen stamp among them) plus `R`
 (series the batch carries twice), `J` (judged samples that fire a rule), `T` (settled targeted
 properties) and three per conduit group that carries identified samples. With none of those it is
 the same for one group and for fifty. Before the transaction, the identity bindings of every conduit
@@ -184,7 +190,7 @@ in the tick resolve in one read, however many conduits its groups name. A refuse
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
 | Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
-| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-1-2-gib-a-day)) |
+| Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)) |
 | Ingest lag p99 | | under 5 s |
 
 The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
@@ -220,7 +226,7 @@ day. Receipts are pruned at a day, so this is the table's standing size, not unb
 is about 1% of the metric table the same fleet writes in a day. The earlier 0.5 GiB target was set for
 the narrow receipt before every batch carried its accounting, and even a compacted receipt with the
 ledger is past it, so the target is 1.2 GiB
-([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-1-2-gib-a-day)).
+([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)).
 
 ### Scale up or scale out: what the figures say
 

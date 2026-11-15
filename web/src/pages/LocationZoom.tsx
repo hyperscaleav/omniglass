@@ -15,6 +15,7 @@ import SystemSummary from "../components/SystemSummary";
 import BladeStack from "../components/BladeStack";
 import { resolveIcon } from "../components/icons";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
@@ -44,6 +45,7 @@ export default function LocationZoom() {
   // window's query lags the route being rendered (#932).
   const location = useLocation();
   const id = () => params.id;
+  const leave = createLeaveGuard();
   const me = useMe();
   const blades = createBladeController();
   const [search] = useSearchParams();
@@ -137,9 +139,10 @@ export default function LocationZoom() {
               </span>
               <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} />
+            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
-              <ConfigureFace kind="location" id={id()} />
+              {/* Keyed on the id: another place is another face (#854). */}
+              <Show when={id()} keyed>{(lid) => <ConfigureFace kind="location" id={lid} guard={leave} />}</Show>
             </Show>
             <Show when={tab() === "overview"}>
               <div data-testid="place-overview" class="flex flex-col gap-4 p-4">

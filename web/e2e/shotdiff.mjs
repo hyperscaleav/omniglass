@@ -1,5 +1,4 @@
 import { PNG } from 'pngjs';
-import pixelmatch from 'pixelmatch';
 
 // The freshness comparison, extracted so the gate's contract is unit-testable
 // (#398, #623): compare two PNG buffers and report ok / changed / size. The
@@ -12,17 +11,15 @@ import pixelmatch from 'pixelmatch';
 // fails on a single unmasked pixel. DOCS_SHOTS_MAX_RATIO stays as an escape
 // hatch for unpinned local browsers, never for CI.
 //
-// The zero is a zero COUNT of pixels pixelmatch judges different, and pixelmatch
-// runs at threshold 0.1 below: against this console's dark surfaces that absorbs
-// a whole surface swap, so a dark-on-dark change still scores 0.000%. Measured
-// and tracked in #774; when byte stability is the claim, compare the bytes
-// (web/e2e/shotmask.spec.ts does).
-//
-// `exact` is that comparison for whole captures: every pixel equal in every
-// channel, any difference a failure whatever maxRatio says. It is how a mask is
-// proven to hold (DOCS_SHOTS_EXACT=1 with the clock moved, #1081): a mask edge
-// moving one pixel over a dark surface scores zero at threshold 0.1, so the
-// default comparison cannot tell a mask that holds from one that does not.
+// The zero is a zero COUNT of pixels that differ in any channel (#774): a byte-
+// equal pair is ok without decoding, and a byte mismatch is decoded and counted
+// exactly, every pixel, every channel (alpha included). The gate used to count
+// the pixels pixelmatch judged different at threshold 0.1, which cannot see a
+// change confined to the console's dark surface tones (#0d1117 against #0c1320
+// scores 0): a mask box resizing moved 8,400 pixels and scored 0.000% (#773), a
+// mask edge moving a column scored zero too (#1081). pixelmatch stays in
+// web/e2e/shot-jitter.mjs, the dev locator tool, where a perceptual diff is the
+// point. DOCS_SHOTS_MAX_RATIO applies to the exact count.
 export const DEFAULT_MAX_RATIO = 0;
 
 function countExact(a, b) {
@@ -33,17 +30,14 @@ function countExact(a, b) {
   return n;
 }
 
-export function compareShot(committedBuf, freshBuf, { maxRatio = DEFAULT_MAX_RATIO, exact = false } = {}) {
+export function compareShot(committedBuf, freshBuf, { maxRatio = DEFAULT_MAX_RATIO } = {}) {
+  if (Buffer.compare(committedBuf, freshBuf) === 0) return { status: 'ok', ratio: 0, diffPixels: 0 };
   const a = PNG.sync.read(committedBuf);
   const b = PNG.sync.read(freshBuf);
   if (a.width !== b.width || a.height !== b.height) {
     return { status: 'size', a: { width: a.width, height: a.height }, b: { width: b.width, height: b.height } };
   }
-  if (exact) {
-    const n = countExact(a.data, b.data);
-    return { status: n > 0 ? 'changed' : 'ok', ratio: n / (a.width * a.height), diffPixels: n };
-  }
-  const diff = pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: 0.1 });
+  const diff = countExact(a.data, b.data);
   const ratio = diff / (a.width * a.height);
   return { status: ratio > maxRatio ? 'changed' : 'ok', ratio, diffPixels: diff };
 }

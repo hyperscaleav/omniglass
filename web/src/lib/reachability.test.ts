@@ -8,6 +8,7 @@ import {
   reason,
   layerWord,
   requestRung,
+  pendingNotice,
   STALENESS_WINDOW_MS,
   type ReachEndpoint,
 } from "./reachability";
@@ -205,5 +206,25 @@ describe("requestRung", () => {
     expect(requestRung({ ...base, transport: "tls", layers: [ping, port], responsive: { value: "up", ts: ago(0) } })).toBeUndefined();
     expect(requestRung(base)).toBeUndefined();
     expect(requestRung({ ...base, transport: "icmp", responsive: { value: "up", ts: ago(0) } })).toBeUndefined();
+  });
+});
+
+describe("pendingNotice", () => {
+  const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
+    ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+
+  it("sends an endpoint no node probes to the node list", () => {
+    const n = pendingNotice(ep({ pending: "no-node" }));
+    expect(n?.text).toMatch(/no node is assigned/i);
+    expect(n?.href).toBe("/nodes");
+  });
+  it("sends an endpoint awaiting its first probe to its node's blade", () => {
+    const n = pendingNotice(ep({ pending: "awaiting-probe", node: "edge 1" }));
+    expect(n?.text).toContain("edge 1");
+    expect(n?.href).toBe("/nodes?n=edge%201");
+  });
+  it("says nothing of a row with a verdict or no reason", () => {
+    expect(pendingNotice(ep({}))).toBeNull();
+    expect(pendingNotice(ep({ verdict: { value: "up", ts: ago(1000) } }))).toBeNull();
   });
 });

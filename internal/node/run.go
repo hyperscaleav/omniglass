@@ -464,7 +464,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	worklists := make(chan collection.WorklistReply, 1)
 	pctx, stopPulls := context.WithCancel(ctx)
 	var pulls sync.WaitGroup
-	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, worklists) })
+	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, self, worklists) })
 	defer func() { stopPulls(); pulls.Wait() }()
 
 	// Commands are pulled each heartbeat on a goroutine of their own, one
@@ -523,15 +523,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// Ship what the spool held since the last tick, so batches land
 			// in the order they were collected (#454).
 			spool.retry()
-			// A batch the spool dropped at its cap may have carried a
-			// transition the node remembers as sent: forget what was sent, so
-			// each task's next run sends current state again (the property
-			// lane's transition guard keeps an unchanged value from landing
-			// twice).
-			if spool.takeOverflow() {
-				coll.forgetTransitions()
-				sched.forgetOccurrences()
-			}
+			resendAfterOverflow(spool, coll, sched, sessions)
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
 				self.setEvery(wl.ReportEvery())
@@ -721,8 +713,9 @@ func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, l
 // pullWorklists pulls the node's worklist every interval, jittered, until ctx
 // ends, handing each one to out in place of any the loop has not taken. A
 // failed pull is logged with the running count and retried on backoff; the
-// node runs the worklist it has meanwhile (#1577).
-func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, out chan collection.WorklistReply) {
+// node runs the worklist it has meanwhile (#1577). Each pull, served or
+// refused, is tallied on self toward the window's worklist pull loss (#1868).
+func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, self *nodeReport, out chan collection.WorklistReply) {
 	attempt, failures := 0, 0
 	for wait := jitterInterval(every, rand.Float64()); sleepCtx(ctx, wait); {
 		next, err := pullWorklist(ctx, nc, name)
@@ -730,6 +723,7 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 			if ctx.Err() != nil {
 				return
 			}
+			self.worklistPulled(true)
 			attempt++
 			failures++
 			wait = pullBackoff(attempt, rand.Float64())
@@ -737,6 +731,7 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 				"attempt", attempt, "retry_in", wait.String(), "failures", failures, "error", err.Error())
 			continue
 		}
+		self.worklistPulled(false)
 		attempt = 0
 		wait = jitterInterval(every, rand.Float64())
 		// Only this goroutine sends, so once a stale worklist is taken back
@@ -747,6 +742,22 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 		}
 		out <- next
 	}
+}
+
+// resendAfterOverflow answers a spool overflow: a batch dropped at its cap may
+// have carried a transition the node remembers as sent, so it sends current
+// state again (ADR-0453, point 4). The polls forget what they landed, and their
+// next run says it (the property lane's transition guard keeps an unchanged
+// value from landing twice); the held sessions, which say a change only when
+// it happens, republish their state, auth verdict and listener faults now
+// (#1213). Without an overflow nothing is resent.
+func resendAfterOverflow(spool *telemetrySpool, coll *collector, sched *pollSchedule, sessions *sessionManager) {
+	if !spool.takeOverflow() {
+		return
+	}
+	coll.forgetTransitions()
+	sched.forgetOccurrences()
+	sessions.resync()
 }
 
 // sleepCtx waits d, or until ctx ends, and reports whether d elapsed.

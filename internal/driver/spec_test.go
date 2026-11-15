@@ -12,11 +12,12 @@ import (
 // way the storage gateway does against the live catalogs: lanes for emitted
 // names, existence for command types and secret types.
 type fakeCatalog struct {
-	lanes     map[string]string // emitted name -> lane ("metric" | "property")
-	commands  map[string]bool
-	secrets   map[string]bool
-	calcOwned map[string]bool   // names a calc rule outputs
-	schemas   map[string][]byte // event type -> payload_schema
+	lanes          map[string]string // emitted name -> lane ("metric" | "property")
+	commands       map[string]bool
+	commandTargets map[string]bool // which commands have a target
+	secrets        map[string]bool
+	calcOwned      map[string]bool   // names a calc rule outputs
+	schemas        map[string][]byte // event type -> payload_schema
 }
 
 func (f fakeCatalog) LaneOf(name string) (string, bool) {
@@ -24,6 +25,7 @@ func (f fakeCatalog) LaneOf(name string) (string, bool) {
 	return lane, ok
 }
 func (f fakeCatalog) CommandTypeExists(name string) bool    { return f.commands[name] }
+func (f fakeCatalog) CommandHasTarget(name string) bool     { return f.commandTargets[name] }
 func (f fakeCatalog) SecretTypeExists(name string) bool     { return f.secrets[name] }
 func (f fakeCatalog) EventPayloadSchema(name string) []byte { return f.schemas[name] }
 func (f fakeCatalog) WriterClass(name string) writerclass.Class {
@@ -37,8 +39,9 @@ func catalog() fakeCatalog {
 			"model-number": "property",
 			"video-input":  "property",
 		},
-		commands: map[string]bool{"set-input": true, "reboot": true},
-		secrets:  map[string]bool{"snmp-community": true, "basic-auth": true},
+		commands:       map[string]bool{"set-input": true, "reboot": true},
+		commandTargets: map[string]bool{"set-input": true},
+		secrets:        map[string]bool{"snmp-community": true, "basic-auth": true},
 	}
 }
 
@@ -127,6 +130,18 @@ func TestValidateRefusals(t *testing.T) {
 		{"duplicate command bindings", func(s *driver.Spec) {
 			s.Commands = append(s.Commands, driver.CommandBinding{CommandType: "set-input", Request: driver.Request{Line: "x"}})
 		}, "set-input"},
+		{"command transform on nothing", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{}
+		}, "transform"},
+		{"command transform with an unknown cast", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Cast: "quaternion"}
+		}, "cast"},
+		{"command transform with a map", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Map: map[string]string{"a": "b"}}
+		}, "scale"},
+		{"command transform with a cast", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Cast: "int"}
+		}, "scale"},
 		{"command binding with an unknown template field", func(s *driver.Spec) {
 			s.Commands[0].Request.Line = "SET ${warp.factor}"
 		}, "warp.factor"},

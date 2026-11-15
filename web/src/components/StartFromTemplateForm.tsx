@@ -153,6 +153,8 @@ function extras(made: { standards_created?: string[] | null; to_attach?: string[
 function NodeSelect(props: { value: string; onChange: (v: string) => void; needed: boolean }): JSX.Element {
   const me = useMe();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, enabled: can(me.data, "node", "read") }));
+  // byLabel stays here (#757): ListNodes serves `order by name`, so the label
+  // order the picker reads is composed client-side.
   const sorted = createMemo(() => [...(nodes.data ?? [])].sort(byLabel));
   return (
     <FieldRow
@@ -194,7 +196,7 @@ function StandardForm(props: StartFormProps): JSX.Element {
   const parentOf = () => props.template.standard?.parent ?? "";
   const [d, setD] = createSignal<StandardDraft>({ name: "", label: "", parent: "" });
   const set = (k: keyof StandardDraft, v: string) => setD({ ...d(), [k]: v });
-  const options = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
+  const options = createMemo(() => standards.data ?? []);
   const { busy, err, submit } = useSubmit(async () => {
     const made = await createStandardFromTemplate(standardBody(props.template.name, d()));
     await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
@@ -324,7 +326,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
     list[i] = v;
     set("addresses", { ...d().addresses, [role]: list });
   };
-  const options = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
+  const options = createMemo(() => standards.data ?? []);
   const noNode = () => needsNode(d());
   const { busy, err, submit } = useSubmit(async () => {
     const made = await createSystemFromTemplate(systemBody(props.template.name, { ...d(), place: place.value() }));

@@ -13,20 +13,22 @@ import { uuidFor } from "../lib/testids";
 // #613, so the shared cell stacks the label over the key on a labelled row and
 // collapses to the key alone on one without: two copies of the same string in
 // one row reads as a bug, and so does a second "Label" column beside the first.
+// In the order ListTags serves them: by label, the unlabelled keys last, the
+// name breaking ties (`order by label nulls last, name`, #613).
 const seed: Tag[] = [
   { id: uuidFor("tag-environment"), name: "environment", label: "Environment", applies_to: [], propagates: true, allowed_values: ["prod", "dev"] },
-  { id: uuidFor("tag-icmp-rtt-avg"), name: "icmp-rtt-avg", applies_to: ["component"], propagates: false, allowed_values: [] },
-  // Named so that a NAME sort would put it first: it must come last anyway,
-  // because it carries no label.
+  // Named so that a NAME sort would put it first: it comes after the labelled
+  // key anyway, because it carries no label.
   { id: uuidFor("tag-aaa-region"), name: "aaa-region", applies_to: [], propagates: true, allowed_values: [] },
+  { id: uuidFor("tag-icmp-rtt-avg"), name: "icmp-rtt-avg", applies_to: ["component"], propagates: false, allowed_values: [] },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
-function mount(me: Me = admin) {
+function mount(me: Me = admin, rows: Tag[] = seed) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...TAGS_KEY], seed);
+  qc.setQueryData([...TAGS_KEY], rows);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -70,10 +72,24 @@ describe("Tags page", () => {
     expect(within(row).queryByText(/Icmp/)).toBeNull();
   });
 
-  // The list is ordered the way it is read, and an unlabelled key sorts LAST
-  // rather than floating to the top, which is what byLabel and the SQL
-  // `order by label nulls last, name` agree on (#613, ADR-0118).
-  it("sorts an unlabelled key below a labelled one", () => {
+  // The server's order is the order (#757). ListTags already orders by label,
+  // unlabelled last, so the page renders the rows as received: a page that sorted
+  // again would put "Alpha" ahead of "Zulu" here, and a second comparator is a
+  // second place for the rule to drift.
+  it("renders the rows in the order the server sent them, without re-sorting", () => {
+    const sent: Tag[] = [
+      { id: uuidFor("tag-zulu"), name: "zulu", label: "Zulu", applies_to: [], propagates: true, allowed_values: [] },
+      { id: uuidFor("tag-alpha"), name: "alpha", label: "Alpha", applies_to: [], propagates: true, allowed_values: [] },
+    ];
+    mount(admin, sent);
+    const cells = screen.getAllByRole("row").slice(1).map((tr) => tr.textContent ?? "");
+    expect(cells[0]).toContain("Zulu");
+    expect(cells[1]).toContain("Alpha");
+  });
+
+  // The server's order puts an unlabelled key below a labelled one; the page
+  // keeps it there.
+  it("keeps an unlabelled key below a labelled one", () => {
     mount();
     const cells = screen.getAllByRole("row").slice(1).map((tr) => tr.textContent ?? "");
     const labelled = cells.findIndex((c) => c.includes("Environment"));

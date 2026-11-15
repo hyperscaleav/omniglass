@@ -20,31 +20,72 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/fleet"
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
-// startFleet compiles an embedded fleet and serves every device in it, each
-// face on an ephemeral port (unprivileged, and never colliding with another
-// run serving the same fleet), read back from the device.
-func startFleet(t *testing.T, name string) (*Engine, *profile.Store) {
+// standardsFleet is one system of every standard the corporate scenario
+// places (#914), resolved by the scale lab's own resolver: the components each
+// takes, every one a shipped catalog product the simulator serves, on its own
+// loopback address.
+func standardsFleet(t *testing.T, store *profile.Store) []DeviceSnapshot {
+	t.Helper()
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := scenario.Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatalf("resolving the corporate scenario: %v", err)
+	}
+	var snaps []DeviceSnapshot
+	placed := map[string]bool{}
+	for _, site := range plan.Sites {
+		for _, sys := range site.Systems {
+			if placed[sys.Standard] {
+				continue
+			}
+			placed[sys.Standard] = true
+			for _, c := range sys.Components {
+				prof, _, ok := store.ForProduct(c.Name)
+				if !ok {
+					t.Fatalf("system %s: no profile simulates the product %s", sys.Name, c.Name)
+				}
+				for i := 0; i < c.Count; i++ {
+					id := fmt.Sprintf("%s-%s-%d", sys.Name, c.Name, i+1)
+					snap := DeviceSnapshot{
+						DeviceID: id, Hostname: id, LoopbackIP: simtest.ClaimLoopback(t),
+						ProfileName: prof, Version: 1,
+					}
+					if prof != c.Name {
+						snap.Product = c.Name
+					}
+					snaps = append(snaps, snap)
+				}
+			}
+		}
+	}
+	return snaps
+}
+
+// startFleet serves a fleet built from the platform's standards, each face on
+// an ephemeral port (unprivileged, and never colliding with another run
+// serving the same fleet), read back from the device.
+func startFleet(t *testing.T) (*Engine, *profile.Store) {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("loading catalog: %v", err)
 	}
-	m, err := fleet.ParseManifestFS(profiles.Fleets(), name)
-	if err != nil {
-		t.Fatalf("parsing fleet: %v", err)
-	}
-	fl, err := fleet.Compile(m, store)
-	if err != nil {
-		t.Fatalf("compiling fleet: %v", err)
-	}
 	e := NewEngine(store, profiles.Templates())
 	e.SetPortMap(EphemeralPorts)
-	if err := e.LoadDevices(Snapshots(fl)); err != nil {
+	if err := e.LoadDevices(standardsFleet(t, store)); err != nil {
 		t.Fatalf("loading devices: %v", err)
 	}
 	if err := e.StartAll(); err != nil {
@@ -67,11 +108,11 @@ func deviceByProfile(t *testing.T, e *Engine, name string) *Device {
 }
 
 // TestFleetServesSharedStateAcrossProtocols is the slice's acceptance
-// behavior: one compiled fleet served in-process, and a simulated device
+// behavior: one fleet built from standards served in-process, and a simulated device
 // answering HTTP, SNMP, SSH and a line-protocol subscription from one live
 // state, so a write over HTTP shows in the other protocols.
 func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
-	e, _ := startFleet(t, "training-default.yaml")
+	e, _ := startFleet(t)
 	if n := len(e.Devices()); n < 2 {
 		t.Fatalf("fleet served %d devices, want the whole fleet", n)
 	}

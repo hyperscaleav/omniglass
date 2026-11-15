@@ -1,7 +1,7 @@
 import { createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateSeverityLevelInputBody, SeverityLevelBody, UpdateSeverityLevelInputBody } from "../api/api.gen";
 import { entityLabel } from "./entities";
 import { entityNameError } from "./names";
 
@@ -17,7 +17,7 @@ import { entityNameError } from "./names";
 // list as an argument, so the alarm sorters stay unit-testable; the hook is the
 // one place that reads it off the wire.
 
-export type SeverityLevel = components["schemas"]["SeverityLevelBody"];
+export type SeverityLevel = SeverityLevelBody;
 export type SeverityColor = SeverityLevel["color"];
 
 export const severityLevelsKey = ["severity-levels"] as const;
@@ -119,8 +119,8 @@ export function useSeverity(): () => SeverityScale {
 // rule names cannot be deleted); the draft below is checked here first, so the
 // form can say why before it sends.
 
-export type CreateSeverityLevel = components["schemas"]["CreateSeverityLevelInputBody"];
-export type UpdateSeverityLevel = components["schemas"]["UpdateSeverityLevelInputBody"];
+export type CreateSeverityLevel = CreateSeverityLevelInputBody;
+export type UpdateSeverityLevel = UpdateSeverityLevelInputBody;
 
 // The palette, mildest hue first: the order the color picker offers.
 export const SEVERITY_COLORS: SeverityColor[] = ["gray", "blue", "green", "yellow", "orange", "red", "darkred"];

@@ -1,6 +1,5 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
-import { byLabel } from "./entities";
 
 // The component_type registry data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
@@ -146,9 +145,10 @@ export function resolveComponentTypeIcon(typeName: string | undefined, byName: M
 
 export type ComponentTypeNode = ComponentType & { children: ComponentTypeNode[]; depth: number };
 
-// componentTypeTree groups the flat registry into a forest by parent_id, each
-// level sorted by label, for the admin page's rows and the
-// classification picker's indented option list.
+// componentTypeTree groups the flat registry into a forest by parent_id, for the admin
+// page's rows and the classification picker's indented option list. It does
+// not sort: the registry is served in label order (#757), and grouping keeps
+// the order each level was received in.
 export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
   const byId = new Map<string, ComponentTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));
   const roots: ComponentTypeNode[] = [];
@@ -158,14 +158,13 @@ export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  const sortLevel = (nodes: ComponentTypeNode[], depth: number) => {
-    nodes.sort(byLabel);
+  const setDepth = (nodes: ComponentTypeNode[], depth: number) => {
     for (const n of nodes) {
       n.depth = depth;
-      sortLevel(n.children, depth + 1);
+      setDepth(n.children, depth + 1);
     }
   };
-  sortLevel(roots, 0);
+  setDepth(roots, 0);
   return roots;
 }
 

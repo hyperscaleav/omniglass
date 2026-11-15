@@ -405,11 +405,11 @@ Bind, list and unbind under the conduit; a binding costs update on the conduit a
 What it reported that no binding places waits in its unbound inbox:
 
 ```sh
-omniglass component identity-binding list 'hq.$comp.meetings-cloud'                       # needs component:read
-omniglass component identity-binding update 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b \
+omniglass component identity-binding list 'hq.$comp.ucc-platform'                       # needs component:read
+omniglass component identity-binding update 'hq.$comp.ucc-platform' ucc-room-id zr-boardroom-b \
   --owner-kind system --owner 'hq.west.level-2.boardroom-b.$sys.boardroom'               # needs component:update and system:update
-omniglass component identity-binding delete 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b
-omniglass component unbound-identity list 'hq.$comp.meetings-cloud'                        # needs component:read
+omniglass component identity-binding delete 'hq.$comp.ucc-platform' ucc-room-id zr-boardroom-b
+omniglass component unbound-identity list 'hq.$comp.ucc-platform'                        # needs component:read
 ```
 
 ## Secrets
@@ -721,7 +721,7 @@ anything is issued. Every command reads back by its id under its component, with
 
 ```sh
 bar='depot.bay-1.$comp.videobar-1'
-omniglass component command issue "$bar" --command-type set-volume --value 42 --wait \
+omniglass component command issue "$bar" --command-type set-volume --value 0.42 --wait \
   | jq -c '{status, settled_by, reason, reply}'
 # {"status":"settled","settled_by":"reply","reason":"the reply confirmed it","reply":"{\"ok\": true}\n"}
 omniglass component command list "$bar" --status timed-out --since 2026-10-25T09:00:00Z

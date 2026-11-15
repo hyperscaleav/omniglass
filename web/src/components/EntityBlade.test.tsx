@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -6,8 +6,8 @@ import BladeStack from "./BladeStack";
 import { BladesContext, createBladeController, type BladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { systemHealthKey, type FleetHealth } from "../lib/health";
-import { systemRolesKey } from "../lib/system_roles";
+import { systemHealthKey, SYSTEM_HEALTH_PREFIX, type FleetHealth } from "../lib/health";
+import { systemRolesKey, SYSTEM_ROLES_PREFIX } from "../lib/system_roles";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
@@ -125,7 +125,10 @@ function mountBlade(ref: { kind: string; id: string }) {
   return { ...result, controller: () => controller, qc };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("the system blade", () => {
   it("leads with verdict and since, and says why with the severity and the component", async () => {
@@ -280,5 +283,77 @@ describe("the location blade", () => {
     expect(within(form).getByText("Parent")).toBeTruthy();
     expect(within(form).getByText("Root")).toBeTruthy();
     expect(within(form).queryByText("Properties")).toBeNull();
+  });
+});
+
+// Deleting a component from a blade opened on a system workspace (the blade
+// stack is page-level, so the workspace behind it reads the system's roles and
+// health, not just the lists). Left stale, the role card for the deleted
+// component stays on the page and opens a blade stuck loading.
+describe("the component blade's delete", () => {
+  const deletable = (r: ReturnType<typeof mountBlade>) =>
+    r.qc.setQueryData([...COMPONENTS_KEY], [
+      { id: uuidFor("eb-c-mic"), name: "mic-1", label: "", component_type: "ceiling-mic", location_id: uuidFor("eb-room"), actions: ["update", "delete"] },
+    ]);
+
+  it("refreshes the system's roles and health reads as well as the lists", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
+    const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    deletable(r);
+    const spy = vi.spyOn(r.qc, "invalidateQueries");
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(r.controller().stack()).toEqual([]));
+    const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: readonly unknown[] }).queryKey);
+    expect(keys).toContainEqual([...COMPONENTS_KEY]);
+    expect(keys).toContainEqual([...FLEET_VIEW_KEY]);
+    expect(keys).toContainEqual([...SYSTEM_ROLES_PREFIX]);
+    expect(keys).toContainEqual([...SYSTEM_HEALTH_PREFIX]);
+  });
+
+  // The server refuses a component that staffs a role (409, a restrict FK on
+  // system_role_assignment): the blade stays open and says so.
+  it("keeps the blade open and shows the server's refusal for a component that staffs a role", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const detail = "component is still referenced by another record, for example a system role it staffs";
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify({ title: "Conflict", status: 409, detail }), { status: 409, headers: { "Content-Type": "application/problem+json" } }),
+    );
+    const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    deletable(r);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("system role it staffs");
+    expect(r.controller().stack().length).toBe(1);
+  });
+});
+
+// A failed save in a blade: the form may be long and scrolled to Tags, so the
+// reason rides the footer beside Save (and not only the form's top).
+describe("a failed save in the component blade", () => {
+  it("shows the server's reason in the footer beside Save, and keeps editing", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      if (req.method === "PATCH") {
+        return new Response(JSON.stringify({ title: "Conflict", status: 409, detail: "component name already exists in this room" }), {
+          status: 409,
+          headers: { "Content-Type": "application/problem+json" },
+        });
+      }
+      // The form refetches its lists and the fleet view after a failed save;
+      // serve the rows back, or the blade's entity vanishes underneath it.
+      const body = req.url.endsWith("/views/fleet") ? view : req.url.endsWith("/components") ? { components: [{ id: uuidFor("eb-c-mic"), name: "mic-1", label: "", component_type: "ceiling-mic", location_id: uuidFor("eb-room"), actions: ["update"] }] } : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("button", { name: "Edit" }));
+    const name = await within(blade).findByDisplayValue("mic-1");
+    fireEvent.input(name, { target: { value: "mic-2" } });
+    fireEvent.click(within(blade).getByRole("button", { name: "Save" }));
+    const footer = blade.querySelector("footer")!;
+    await waitFor(() => expect(within(footer).getByRole("alert").textContent).toContain("already exists in this room"));
+    expect(within(footer).getByRole("button", { name: "Save" })).toBeTruthy();
+    // One alert, not the footer's and the form's both.
+    expect(within(blade).getAllByRole("alert").length).toBe(1);
   });
 });

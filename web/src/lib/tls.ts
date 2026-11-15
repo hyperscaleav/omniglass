@@ -1,11 +1,11 @@
-import type { components } from "../api/schema.gen";
+import type { ReachTLSBody } from "../api/api.gen";
 
 // A tls endpoint's handshake and certificate as the console reads them
 // (#1035): the reachability read carries the mode, the pinned key, the latest
 // handshake time, the expiry and the days left; this file only says what each
 // means to an operator. Pure.
 
-export type ReachTLS = components["schemas"]["ReachTLSBody"];
+export type ReachTLS = ReachTLSBody;
 
 export type Tone = "ok" | "warn" | "bad" | "unknown";
 

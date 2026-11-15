@@ -550,6 +550,14 @@
    "description": "Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran."
   },
   {
+   "name": "poll-cpu-time",
+   "data_type": "float",
+   "unit": "ms",
+   "precision": 3,
+   "label": "Poll CPU Time",
+   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock."
+  },
+  {
    "name": "poll-failure-count",
    "data_type": "int",
    "label": "Poll Failures",
@@ -617,6 +625,14 @@
    "description": "Tasks in the worklist the node installed, sampled on each install."
   },
   {
+   "name": "worklist-pull-loss-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worklist Pull Loss",
+   "description": "The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist."
+  },
+  {
    "name": "tick-duration",
    "data_type": "float",
    "unit": "ms",
@@ -648,6 +664,14 @@
    "data_type": "int",
    "label": "Schedule Skips",
    "description": "Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet."
+  },
+  {
+   "name": "worker-busy-fraction",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Worker Busy",
+   "description": "Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
   },
   {
    "name": "spool-batch-count",
@@ -1121,9 +1145,10 @@
   {
    "name": "volume",
    "data_type": "float",
-   "unit": "%",
+   "unit": "ratio",
+   "precision": 3,
    "label": "Volume",
-   "description": "The output volume a component reports, as a percentage of its range. A settable quantity: the set-volume command opens an intended volume and settles when the component reports it."
+   "description": "The output volume a component reports, as a fraction of its range (0 to 1). A settable quantity: the set-volume command opens an intended volume and settles when the component reports it."
   },
   {
    "name": "participant-count",
@@ -1369,7 +1394,7 @@
   {
    "name": "set-volume",
    "label": "Set Volume",
-   "description": "Tell a component its output volume, as a percentage. A settleable command: it opens an intended volume and settles when the component reports it, or when its reply confirms the change."
+   "description": "Tell a component its output volume, as a fraction of its range (0 to 1). A settleable command: it opens an intended volume and settles when the component reports it, or when its reply confirms the change."
   },
   {
    "name": "set-mute",
@@ -1527,67 +1552,207 @@
    "name": "icmp",
    "description": "ICMP echo / ping reachability and RTT.",
    "held": false,
-   "built": true
+   "built": true,
+   "params": [
+    "target",
+    "count",
+    "timeout"
+   ],
+   "probe_keys": [
+    "icmp-reachable",
+    "icmp-rtt-avg",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "tcp",
    "description": "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "tls",
    "description": "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "udp",
    "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.",
    "held": false,
-   "built": true
+   "built": true,
+   "rung": "request",
+   "params": [
+    "target",
+    "timeout",
+    "listen-port"
+   ],
+   "probe_keys": [
+    "endpoint-responsive",
+    "udp-response-time",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "telnet",
    "description": "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "telnet-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "ssh",
    "description": "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "username",
+    "password"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "ssh-handshake-time",
+    "endpoint-responsive",
+    "endpoint-authenticated",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "http",
    "description": "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the node keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "https",
    "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "websocket",
    "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "connect",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "wss",
    "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
-   "built": true
+   "built": true,
+   "rung": "handshake",
+   "params": [
+    "target",
+    "timeout",
+    "tls-mode"
+   ],
+   "probe_keys": [
+    "tcp-open",
+    "tcp-connect-time",
+    "tls-handshake-time",
+    "http-response-time",
+    "endpoint-responsive",
+    "tls-certificate-expiry",
+    "tls-certificate-days-left",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "snmp",
    "description": "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.",
    "held": false,
-   "built": true
+   "built": true,
+   "rung": "request",
+   "params": [
+    "target",
+    "timeout"
+   ],
+   "probe_keys": [
+    "endpoint-responsive",
+    "snmp-response-time",
+    "endpoint-authenticated",
+    "endpoint-reachable"
+   ]
   },
   {
    "name": "webhook",
@@ -3870,13 +4035,6 @@
    "kind": "device"
   },
   {
-   "id": "ucc-service",
-   "label": "Shinra UCC Platform",
-   "vendor_id": "shinra-cloud",
-   "component_type": "generic-service",
-   "kind": "service"
-  },
-  {
    "id": "ucc-platform",
    "label": "Shinra UCC Platform (account)",
    "vendor_id": "shinra-cloud",
@@ -4010,6 +4168,18 @@
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
    "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "worklist-stale",
+   "label": "Worklist stale",
+   "description": "Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.",
+   "sample_key": "worklist-pull-loss-ratio",
+   "fire": "value == 1",
+   "clear": "value \u003c 1",
+   "fire_sustain": "2m",
+   "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
   },

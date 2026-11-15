@@ -346,10 +346,11 @@ describe("PlatformHealth page", () => {
     const fetchSpy = emptySeries();
     mount(twoServers());
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const urls = fetchSpy.mock.calls.map(([req]) => decodeURIComponent(new URL(req.url).pathname + new URL(req.url).search));
-    expect(urls.some((u) => u.includes(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.includes(`instance=${FAST}`) && u.includes("hours=1"))).toBe(true);
+    // Read the query as the server does: the client form-encodes it (a space is "+").
+    const reads = fetchSpy.mock.calls.map(([req]) => new URL(req.url));
+    expect(reads.some((u) => u.pathname.endsWith(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.searchParams.get("instance") === FAST && u.searchParams.get("hours") === "1")).toBe(true);
     // Only the open set reads its series: the second server's are closed.
-    expect(urls.some((u) => u.includes(uuidFor("server-b")))).toBe(false);
+    expect(reads.some((u) => u.pathname.includes(uuidFor("server-b")))).toBe(false);
   });
 
   // The view polls, and every poll is a new body: an operator's place on the

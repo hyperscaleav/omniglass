@@ -55,6 +55,8 @@ export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: Create
 
 export default function TemplateCreate(props: { kind: TemplateKind; place?: string; onDone: (href: string) => void }): JSX.Element {
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
+  // byLabel stays here (#757): the template catalog is served by kind then name
+  // from the binary, not by the SQL label rule, so the order is composed here.
   const options = createMemo(() => [...ofKinds(templates.data ?? [], [props.kind])].sort(byLabel));
   const [chosen, setChosen] = createSignal("");
   const picked = () => options().find((t) => t.name === chosen());

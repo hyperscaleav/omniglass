@@ -3,6 +3,8 @@ package storage
 import (
 	"encoding/json"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -99,5 +101,48 @@ func TestLabelDataFactsMatchesCommitted(t *testing.T) {
 	}
 	if string(committed) != string(fresh) {
 		t.Error("docs/src/generated/labeldata.json drifted from the declared data map: run make gen and commit the result")
+	}
+}
+
+// TestNoLabelKeyReadsAScanSubqueryColumn is the half of #731's argument a
+// contention test cannot hold on its own. The recompute's scan locks its rows
+// with `for update` in the same statement whose correlated subqueries fill these
+// fields, so at READ COMMITTED their values come from a snapshot that predates
+// any wait on a row lock (#709's mechanism). A label is safe from that only
+// because no key reads them: every name a rule sees is resolved by a later
+// statement (the placement batch, the classification chain) with a snapshot of
+// its own.
+//
+// Every subquery-filled field is set to a sentinel and every other input is
+// left empty; a key that reads one prints it. A new subquery column in
+// componentCols, systemCols or locationCols belongs in this list, and a key
+// that needs one of these facts reads it from a post-scan statement instead.
+func TestNoLabelKeyReadsAScanSubqueryColumn(t *testing.T) {
+	t.Parallel()
+	sentinel := func(field string) *string { s := "SCAN-" + field; return &s }
+	const count = 731731
+
+	c := &Component{
+		PrimarySystem: sentinel("primary_system"), PrimarySystemID: sentinel("primary_system_id"),
+		SystemCount: count, ParentName: sentinel("parent_name"),
+		LocationName: sentinel("location_name"), ProductHandle: sentinel("product_handle"),
+	}
+	s := &System{
+		StandardName: sentinel("standard_handle"), SystemTypeName: sentinel("system_type_handle"),
+		MemberCount: count, ParentName: sentinel("parent_name"), LocationName: sentinel("location_name"),
+	}
+	l := &Location{LocationType: *sentinel("location_type"), ParentName: sentinel("parent_name")}
+
+	for kind, d := range map[string]map[string]string{
+		"component": labelData(componentLabelKeys, componentFacts{c: c}),
+		"system":    labelData(systemLabelKeys, systemFacts{s: s}),
+		"location":  labelData(locationLabelKeys, locationFacts{l: l}),
+	} {
+		for key, v := range d {
+			if strings.Contains(v, "SCAN-") || strings.Contains(v, strconv.Itoa(count)) {
+				t.Errorf("%s key %s reads %q, a column the recompute's locking scan fills from a pre-wait snapshot (#731): resolve it in a post-scan statement",
+					kind, key, v)
+			}
+		}
 	}
 }

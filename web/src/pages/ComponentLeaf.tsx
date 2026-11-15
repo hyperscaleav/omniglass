@@ -11,6 +11,7 @@ import LogsPanel from "../components/LogsPanel";
 import CommandsPanel from "../components/CommandsPanel";
 import IdentitiesPanel from "../components/IdentitiesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
@@ -76,6 +77,7 @@ export default function ComponentLeaf() {
   // window's query lags the route being rendered (#932).
   const location = useLocation();
   const id = () => params.id;
+  const leave = createLeaveGuard();
   const me = useMe();
   const blades = createBladeController();
   const [leafSearch] = useSearchParams();
@@ -268,9 +270,10 @@ export default function ComponentLeaf() {
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
-            <TabRail tabs={leafTabs()} activeKey={leafTab} />
+            <TabRail tabs={leafTabs()} activeKey={leafTab} guard={leave} />
             <Show when={leafTab() === "configure"}>
-              <ConfigureFace kind="component" id={id()} />
+              {/* Keyed on the id: another component is another face (#854). */}
+              <Show when={id()} keyed>{(cid) => <ConfigureFace kind="component" id={cid} guard={leave} />}</Show>
             </Show>
             <Show when={leafTab() === "activity"}>
               <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">

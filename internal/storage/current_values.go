@@ -100,7 +100,7 @@ func (p *PG) reconcileProperties(ctx context.Context, q querier, ownerKind, arc 
 // instances (worstCaseValue). arc is a resolved, scope-checked arc, so the
 // series reads bind it directly rather than re-resolving the owner per key.
 func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, key string, want json.RawMessage) (*PropertyReconciliation, error) {
-	observed, err := readPropertyValues(ctx, q, arc, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
+	observed, err := readPropertyValues(ctx, q, arc, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
 	if err != nil {
 		return nil, err
 	}
@@ -189,20 +189,27 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 
 // latestValue is the unguarded series lookup, so a caller that has already
 // scope-checked the owner (command settlement) can
-// read many provenances without re-checking each time. ts desc, id desc: the
-// value's own time orders the series and the row id breaks same-instant ties,
-// the same rule LatestProperty applies.
+// read many provenances without re-checking each time. The series order is
+// seriesOrderSQL's: a declared or intended series orders by insertion (id
+// desc), every other by the value's own time with the row id breaking
+// same-instant ties.
 //
-// The tiebreak is INSERTION ORDER, and deliberately: `property.id` is a bigint
-// identity column, so `id desc` is the sequence descending, not an arbitrary
-// identifier (#712 read this as a random uuid and filed a nondeterminism that
-// does not exist; series_order_test.go asserts the column's shape out of the
-// live catalog so a change to it fails loudly rather than quietly making that
-// reading true). `ts` LEADS because the observed lane accepts a caller-supplied
-// timestamp, so a late-arriving older sample must not become current merely by
-// being written last; the cost of that ordering is that a database clock
-// stepping backwards between two writes to one series resolves to the
-// earlier-written row, which no tiebreak can reach, because there is no tie.
+// The two orders are split by who supplies `ts` (#712). The observed lane
+// accepts a caller-supplied timestamp (a node backfilling, a device reporting
+// a reading it took a minute ago), so `ts` LEADS there and a late-arriving
+// older sample must not become current merely by being written last. The cost
+// of that ordering is that a database clock stepping backwards between two
+// writes to one series resolves to the earlier-written row, which no tiebreak
+// can reach, because there is no tie. A declared row never carries a caller's
+// timestamp (SetProperty and ClearProperty insert with `ts` defaulted), nor does
+// an intended one (IssueCommand does the same), so their `ts` is only an annotation and the identity id is the authoritative order:
+// the backwards step cannot reach it. `property.id` is a bigint identity
+// column, so `id desc` is the sequence descending, not an arbitrary identifier
+// (the first reading of #712 took it for a random uuid and filed a
+// nondeterminism that does not exist; series_order_test.go asserts the
+// column's shape out of the live catalog so a change to it fails loudly rather
+// than quietly making that reading true).
+//
 // ownerID is resolved once here, via ownerArcValueInScope (uuid-or-name,
 // ADR-0062; ambiguity judged within s, ruling 2, #627): LatestValue
 // already scope-checked the owner via ownerInScope before reaching it (and
@@ -226,11 +233,16 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 	} else if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
+	// An observed value reads typed, as a declared one is (observedValueExpr).
+	valueExpr := declaredCurrentExpr
+	if provenance == "observed" {
+		valueExpr = observedValueExpr("value", keyDataTypeSQL)
+	}
+	sql := fmt.Sprintf(`select `+valueExpr+`, ts, provenance from property
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = $5
-		order by ts desc, id desc
+		order by `+seriesOrderSQL(provenance)+`
 		limit 1`, col)
 	var (
 		cv    CurrentValue
@@ -250,4 +262,28 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 	cv.Value = copyRaw(value)
 	cv.Instance = instance
 	return &cv, nil
+}
+
+// seriesOrderSQL is the `order by` list that puts a property series' current
+// row first, by the lane that wrote it (#712). The declared and intended lanes
+// order by insertion, `id desc`: their rows never carry a caller's timestamp
+// (a declared row is an operator's write, an intended row a command's, both
+// stamped by the database), so the identity id is the authoritative sequence
+// and a wall clock stepping backwards between two writes cannot make the
+// earlier row win. Every other provenance keeps `ts desc, id desc`, because the
+// observed and calculated lanes accept a caller-supplied `ts` and a
+// late-arriving older sample must not become current merely by being written
+// last. A query whose provenance is a fixed declared or intended literal
+// writes `id desc` itself and names this rule beside it.
+func seriesOrderSQL(provenance string) string {
+	if insertionOrdered(provenance) {
+		return "id desc"
+	}
+	return "ts desc, id desc"
+}
+
+// insertionOrdered reports whether a provenance's series is ordered by
+// insertion rather than by `ts`: the lanes whose `ts` the database stamps.
+func insertionOrdered(provenance string) bool {
+	return provenance == declaredProvenance || provenance == "intended"
 }

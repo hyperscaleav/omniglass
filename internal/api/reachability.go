@@ -29,6 +29,12 @@ import (
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
 
+// The reasons a verdict is still null (reachEndpointBody.Pending, #981).
+const (
+	pendingNoNode        = "no-node"
+	pendingAwaitingProbe = "awaiting-probe"
+)
+
 // verdictKey is the property sample that carries the per-endpoint reach
 // verdict; responsiveKey and authKey are the layer-7 rungs beside it (#812).
 // sessionStateKey and sessionReasonKey are a held session's state and why
@@ -128,7 +134,8 @@ type reachEndpointBody struct {
 	Address       string                `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
 	Node          string                `json:"node,omitempty" doc:"The node that probes this endpoint"`
 	LastSeen      *time.Time            `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
-	Verdict       *reachVerdictBody     `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
+	Verdict       *reachVerdictBody     `json:"verdict" doc:"The latest reachability verdict, or null if none yet (pending says why)"`
+	Pending       string                `json:"pending,omitempty" enum:"no-node,awaiting-probe" doc:"Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
 	Responsive    *reachVerdictBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachVerdictBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody     `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
@@ -263,6 +270,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if verdict != nil {
 		row.Verdict = &reachVerdictBody{Value: verdict.Value, TS: verdict.TS}
 	}
+	row.Pending = pendingReason(row.Node, row.Verdict)
 	responsive, err := gw.LatestProperty(ctx, comp, responsiveKey, it.Name)
 	if err != nil {
 		return row, err
@@ -361,6 +369,20 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.History = append(row.History, reachHistoryBody{TS: tr.TS, Value: tr.Value})
 	}
 	return row, nil
+}
+
+// pendingReason says why an endpoint has no verdict yet: no node assigned
+// means nothing will ever probe it, an assigned node just has not landed its
+// first probe. A row with a verdict is waiting on nothing (#981).
+func pendingReason(node string, verdict *reachVerdictBody) string {
+	switch {
+	case verdict != nil:
+		return ""
+	case node == "":
+		return pendingNoNode
+	default:
+		return pendingAwaitingProbe
+	}
 }
 
 // udpResponseKey and snmpResponseKey time an answered request rung (#1037,

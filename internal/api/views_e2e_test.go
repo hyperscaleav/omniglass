@@ -25,7 +25,8 @@ import (
 )
 
 type fleetViewWire struct {
-	Locations []struct {
+	OpenAlarms *int `json:"open_alarms"`
+	Locations  []struct {
 		ID           string `json:"id"`
 		Name         string `json:"name"`
 		LocationType string `json:"location_type"`
@@ -189,6 +190,9 @@ func TestFleetViewAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	v = view(ownerTok)
+	if v.OpenAlarms == nil || *v.OpenAlarms != 1 {
+		t.Errorf("open_alarms after one raise = %v, want 1", v.OpenAlarms)
+	}
 	if got := v.Systems[0].Dots[0].Verdict; got != "outage" {
 		t.Errorf("dot verdict after a high alarm = %q, want outage", got)
 	}

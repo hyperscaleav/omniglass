@@ -1,8 +1,8 @@
-import { Index, Show } from "solid-js";
+import { createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { Tooltip } from "@kobalte/core/tooltip";
-import { markerAnchor, type MapMarker, type StandardMapDecl } from "../lib/system_map";
+import { layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
 import { verdictHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
 import { CircleDashed, resolveIcon } from "./icons";
@@ -26,12 +26,23 @@ import Eyebrow from "./Eyebrow";
 // label wraps to two lines before it truncates, so "Wireless Microphone 3"
 // and "4" stay distinct; anything longer ellipsizes, its full text in the
 // tooltip.
+//
+// Which anchor, and whether a label shows at all, is decided in pixels
+// (#1072): the map's rendered width feeds lib/system_map's layoutMarkers, a
+// pure pass over the whole marker list that keeps each label inside the box
+// and off every other label and icon, moving it to its other side or, when
+// nothing is clear, collapsing it to the icon alone (its text stays in the
+// tooltip and the accessible name). The geometry lives in that pass,
+// so jsdom and a browser lay out identically.
 const ANCHOR_X = {
   start: "-translate-x-[13px] items-start text-left",
   center: "-translate-x-1/2 items-center text-center",
   end: "translate-x-[calc(-100%+13px)] items-end text-right",
 } as const;
 const ANCHOR_Y = { below: "flex-col -translate-y-[11px]", above: "flex-col-reverse translate-y-[calc(-100%+11px)]" } as const;
+// Before the box is measured (first paint, jsdom): the width its max-w-2xl cap gives it.
+const DEFAULT_WIDTH = 672;
+const box = (r: Rect) => [r.x, r.y, r.w, r.h].map((n) => Math.round(n * 10) / 10).join(" ");
 const MARKER = "rounded px-1 py-0.5 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]";
 
 export default function SystemMap(props: {
@@ -41,6 +52,33 @@ export default function SystemMap(props: {
   onOpen?: (componentId: string) => void;
 }) {
   const navigate = useNavigate();
+  const [width, setWidth] = createSignal(DEFAULT_WIDTH);
+  let mapEl!: HTMLDivElement;
+  onMount(() => {
+    if (mapEl.clientWidth > 0) setWidth(mapEl.clientWidth);
+    // jsdom has no ResizeObserver; there the default width stands.
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(mapEl);
+    onCleanup(() => ro.disconnect());
+  });
+  // The position number renders only when the role declares more than one
+  // position: "Room Microphone 2", but never "Display 1".
+  const roleOf = (m: MapMarker) => {
+    const many = props.markers.filter((o) => o.role === m.role).length > 1;
+    return `${m.roleLabel}${many ? ` ${m.position}` : ""}`;
+  };
+  const labelOf = (m: MapMarker) =>
+    m.occupant ? (props.member?.label(m.occupant.componentId, m.occupant.name) ?? m.occupant.name) : roleOf(m);
+  const placements = createMemo(() =>
+    layoutMarkers(
+      props.markers.map((m) => ({ x: m.x, y: m.y, text: labelOf(m) })),
+      { w: width(), h: width() / props.decl.aspect },
+    ),
+  );
   return (
     <div class="flex flex-col gap-2 p-4">
       <Eyebrow
@@ -48,6 +86,7 @@ export default function SystemMap(props: {
         hint="The standard declares where each role position sits in the room; every system built to it renders the same map. Each marker is the component holding that position, its icon in its own health colour; a dashed ring is a position nobody staffed. Hover or focus a marker for its role and health; click it to open the component."
       />
       <div
+        ref={mapEl}
         data-testid="system-map"
         class="relative w-full max-w-2xl rounded-box border border-base-300 bg-base-200"
         style={{ "aspect-ratio": String(props.decl.aspect) }}
@@ -57,15 +96,11 @@ export default function SystemMap(props: {
             marker in place instead of remounting it (which would drop focus
             and close an open tooltip every few seconds). */}
         <Index each={props.markers}>
-          {(m) => {
-            // The position number renders only when the role declares more
-            // than one position: "Room Microphone 2", but never "Display 1".
-            const role = () => {
-              const many = props.markers.filter((o) => o.role === m().role).length > 1;
-              return `${m().roleLabel}${many ? ` ${m().position}` : ""}`;
-            };
+          {(m, i) => {
+            const role = () => roleOf(m());
+            const placed = () => placements()[i];
             const place = () => {
-              const a = markerAnchor(m().x, m().y);
+              const a = placed().anchor;
               return `absolute flex gap-0.5 ${MARKER} ${ANCHOR_X[a.x]} ${ANCHOR_Y[a.y]}`;
             };
             const at = () => ({ left: `${m().x * 100}%`, top: `${m().y * 100}%` });
@@ -75,11 +110,15 @@ export default function SystemMap(props: {
                 when={m().occupant}
                 fallback={
                   <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty class={`${place()} cursor-default`} style={at()}>
+                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={role()} class={`${place()} cursor-default`} style={at()}>
                       <span data-glyph class={`inline-flex ${verdictHue(null)}`}>
                         <CircleDashed size={18} />
                       </span>
-                      <span data-maplabel class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{role()}</span>
+                      <Show when={placed().label}>
+                        {(b) => (
+                          <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{role()}</span>
+                        )}
+                      </Show>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg">
@@ -109,7 +148,11 @@ export default function SystemMap(props: {
                         <span data-glyph class={`inline-flex ${verdictHue(verdict(), occ().down)}`}>
                           <Dynamic component={resolveIcon(props.member?.icon(id()))} size={18} />
                         </span>
-                        <span data-maplabel class="line-clamp-2 w-max max-w-28 text-balance font-data text-[11px] leading-tight">{label()}</span>
+                        <Show when={placed().label}>
+                          {(b) => (
+                            <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance font-data text-[11px] leading-tight">{label()}</span>
+                          )}
+                        </Show>
                       </Tooltip.Trigger>
                       <Tooltip.Portal>
                         <Tooltip.Content

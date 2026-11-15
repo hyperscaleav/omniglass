@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CalcInputBody, CalcInputReadBody, CalcOwnerStateBody, CalcPreviewInputBody, CalcPreviewOutputBody, CalcPreviewOwnerBody, CalcReduceBody, CalcRuleBody, CalcSelectorBody, CreateCalcRuleInputBody, UpdateCalcRuleInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 
@@ -19,18 +19,18 @@ import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 // The Go server sends an empty list as null; the layer reads every list as a
 // list, so the page never guards one.
 type Lists<T, K extends keyof T> = Omit<T, K> & { [P in K]-?: NonNullable<T[P]> };
-export type CalcInput = components["schemas"]["CalcInputBody"];
-export type CalcInputRead = components["schemas"]["CalcInputReadBody"];
-export type CalcRule = Lists<components["schemas"]["CalcRuleBody"], "inputs">;
-export type CalcReduce = components["schemas"]["CalcReduceBody"];
-export type CalcSelector = components["schemas"]["CalcSelectorBody"];
-export type CalcOwnerState = Lists<components["schemas"]["CalcOwnerStateBody"], "missing" | "skipped" | "stale">;
+export type CalcInput = CalcInputBody;
+export type CalcInputRead = CalcInputReadBody;
+export type CalcRule = Lists<CalcRuleBody, "inputs">;
+export type CalcReduce = CalcReduceBody;
+export type CalcSelector = CalcSelectorBody;
+export type CalcOwnerState = Lists<CalcOwnerStateBody, "missing" | "skipped" | "stale">;
 export type CalcRuleState = { owners: CalcOwnerState[]; total: number; pending_depth: number };
-export type CalcPreviewInput = components["schemas"]["CalcPreviewInputBody"];
-export type CalcPreviewOwner = Lists<components["schemas"]["CalcPreviewOwnerBody"], "missing" | "skipped" | "stale">;
-export type CalcPreview = Omit<components["schemas"]["CalcPreviewOutputBody"], "owners"> & { owners: CalcPreviewOwner[] };
-export type CreateCalcRule = components["schemas"]["CreateCalcRuleInputBody"];
-export type UpdateCalcRule = components["schemas"]["UpdateCalcRuleInputBody"];
+export type CalcPreviewInput = CalcPreviewInputBody;
+export type CalcPreviewOwner = Lists<CalcPreviewOwnerBody, "missing" | "skipped" | "stale">;
+export type CalcPreview = Omit<CalcPreviewOutputBody, "owners"> & { owners: CalcPreviewOwner[] };
+export type CreateCalcRule = CreateCalcRuleInputBody;
+export type UpdateCalcRule = UpdateCalcRuleInputBody;
 export type OwnerKind = CalcRule["owner_kind"];
 
 export const CALC_RULES_KEY = ["calc_rules"] as const;
@@ -46,7 +46,7 @@ export async function listCalcRules(): Promise<CalcRule[]> {
   return (data?.calc_rules ?? []).map(normalizeRule);
 }
 
-function normalizeRule(r: components["schemas"]["CalcRuleBody"]): CalcRule {
+function normalizeRule(r: CalcRuleBody): CalcRule {
   return { ...r, inputs: r.inputs ?? [] };
 }
 
@@ -70,13 +70,13 @@ export async function getCalcState(name: string, limit?: number): Promise<CalcRu
 export async function createCalcRule(body: CreateCalcRule): Promise<CalcRule> {
   const { data, error } = await api.POST("/calc-rules", { body });
   if (error) throw error;
-  return normalizeRule(data as components["schemas"]["CalcRuleBody"]);
+  return normalizeRule(data as CalcRuleBody);
 }
 
 export async function updateCalcRule(name: string, body: UpdateCalcRule): Promise<CalcRule> {
   const { data, error } = await api.PATCH("/calc-rules/{name}", { params: { path: { name } }, body });
   if (error) throw error;
-  return normalizeRule(data as components["schemas"]["CalcRuleBody"]);
+  return normalizeRule(data as CalcRuleBody);
 }
 
 // renameCalcRule moves a rule's name: its own custom method, as for event
@@ -84,7 +84,7 @@ export async function updateCalcRule(name: string, body: UpdateCalcRule): Promis
 export async function renameCalcRule(name: string, to: string): Promise<CalcRule> {
   const { data, error } = await api.POST("/calc-rules/{name}:rename", { params: { path: { name } }, body: { name: to } });
   if (error) throw error;
-  return normalizeRule(data as components["schemas"]["CalcRuleBody"]);
+  return normalizeRule(data as CalcRuleBody);
 }
 
 export async function deleteCalcRule(name: string): Promise<void> {
@@ -95,7 +95,7 @@ export async function deleteCalcRule(name: string): Promise<void> {
 export async function previewCalcRule(body: CalcPreviewInput): Promise<CalcPreview> {
   const { data, error } = await api.POST("/calc-rules:preview", { body });
   if (error) throw error;
-  return { ...(data as components["schemas"]["CalcPreviewOutputBody"]), owners: (data?.owners ?? []).map((o) => lists(o) as CalcPreviewOwner) };
+  return { ...(data as CalcPreviewOutputBody), owners: (data?.owners ?? []).map((o) => lists(o) as CalcPreviewOwner) };
 }
 
 // ---- the value types ------------------------------------------------------

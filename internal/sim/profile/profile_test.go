@@ -14,21 +14,13 @@ func TestLoadStore(t *testing.T) {
 		t.Fatalf("LoadStore: %v", err)
 	}
 
-	// Lab's current generic-vendor catalog. Cross-check the names so any
-	// rename is caught at unit-test time rather than at fleet compile.
+	// The catalog's generic-vendor devices. Cross-check the names so any
+	// rename is caught at unit-test time rather than at fleet seed.
 	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "boreal-edge-86", "polaris-dsp-16"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
 		}
-	}
-
-	if _, ok := store.Systems["large-conference-a"]; !ok {
-		t.Fatal("expected system profile 'large-conference-a' to be loaded")
-	}
-
-	if err := store.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
 	}
 }
 
@@ -64,63 +56,6 @@ func TestDeviceProfileFields(t *testing.T) {
 	}
 	if kv.Defaults == nil {
 		t.Error("expected defaults to be loaded")
-	}
-}
-
-func TestSystemProfileFields(t *testing.T) {
-	root := findProfilesRoot(t)
-	store, err := LoadStore(root)
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
-
-	sys := store.Systems["large-conference-a"]
-	if sys == nil {
-		t.Fatal("large-conference-a not loaded")
-	}
-
-	if len(sys.Devices) != 4 {
-		t.Fatalf("expected 4 device slots, got %d", len(sys.Devices))
-	}
-
-	expected := map[string]struct {
-		suffix string
-		count  int
-	}{
-		"kestrel-vroom":   {"COD", 1},
-		"newtron-panel-7": {"TP", 1},
-		"boreal-edge-86":  {"DS", 2},
-		"polaris-dsp-16":  {"DSP", 1},
-	}
-	for _, d := range sys.Devices {
-		exp, ok := expected[d.Profile]
-		if !ok {
-			t.Errorf("unexpected device profile %q in system", d.Profile)
-			continue
-		}
-		if d.Suffix != exp.suffix {
-			t.Errorf("device %q suffix = %q, want %q", d.Profile, d.Suffix, exp.suffix)
-		}
-		if d.Count != exp.count {
-			t.Errorf("device %q count = %d, want %d", d.Profile, d.Count, exp.count)
-		}
-	}
-}
-
-func TestValidateMissingProfile(t *testing.T) {
-	store := &Store{
-		Devices: map[string]*DeviceProfile{},
-		Systems: map[string]*SystemProfile{
-			"test-system": {
-				Name: "test-system",
-				Devices: []SystemDevice{
-					{Profile: "nonexistent", Suffix: "X", Count: 1},
-				},
-			},
-		},
-	}
-	if err := store.Validate(); err == nil {
-		t.Error("expected validation error for missing device profile")
 	}
 }
 

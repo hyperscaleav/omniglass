@@ -324,3 +324,48 @@ func TestFleetProjectionVerdictLookupsAreIndexed(t *testing.T) {
 		}
 	}
 }
+
+// The Home tile reads one fleet-wide number: the alarms open on the components
+// the caller may read. A cleared alarm is history, not open, and a caller with
+// no component read gets no number at all (nil), never a zero that reads as
+// "nothing is wrong".
+func TestFleetProjectionCountsTheOpenAlarmsInComponentScope(t *testing.T) {
+	t.Parallel()
+	f := newFleetFixture(t)
+	ctx := context.Background()
+
+	prod := storagetest.MintProduct(t, ctx, f.gw, "video-bar").Name
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &prod}, f.all, f.all, f.all, f.all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	raise := func(comp, key string) string {
+		t.Helper()
+		a, err := f.gw.RaiseAlarm(ctx, "", comp, storage.AlarmSpec{Severity: "high", Message: key, DedupKey: key})
+		if err != nil {
+			t.Fatalf("raise %s on %s: %v", key, comp, err)
+		}
+		return a.ID
+	}
+	raise("bar-1", "no-signal")
+	cleared := raise("bar-1", "fan")
+	raise("bar-2", "no-signal")
+	if err := f.gw.ClearAlarm(ctx, "", "bar-1", cleared); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+
+	got := func(comp scope.Set) *int { return f.project(t, f.all, f.all, comp).OpenAlarms }
+
+	if n := got(f.all); n == nil || *n != 2 {
+		t.Errorf("open alarms in full scope = %v, want 2 (the cleared one is history)", n)
+	}
+	if n := got(scope.Set{}); n != nil {
+		t.Errorf("open alarms with no component read = %d, want nil: absent, never zero", *n)
+	}
+	bar2, err := f.gw.GetComponent(ctx, "bar-2", f.all)
+	if err != nil {
+		t.Fatalf("get bar-2: %v", err)
+	}
+	if n := got(scope.Set{IDs: []string{bar2.ID}}); n == nil || *n != 1 {
+		t.Errorf("open alarms scoped to bar-2 = %v, want 1: bar-1's alarm is out of scope", n)
+	}
+}

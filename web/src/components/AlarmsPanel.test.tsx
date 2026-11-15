@@ -364,7 +364,7 @@ describe("AlarmsPanel", () => {
     viewer.unmount();
     const op = mount({ rows, canSnooze: true });
     // The snoozed rows end the snooze; the unsnoozed active one offers it.
-    expect(op.getAllByRole("button", { name: "Unsnooze" })).toHaveLength(2);
+    expect(op.getAllByRole("button", { name: /^Unsnooze/ })).toHaveLength(2);
     expect(op.getAllByRole("button", { name: /^Snooze/ })).toHaveLength(1);
   });
 });

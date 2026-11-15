@@ -490,7 +490,22 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 	if run.Delivery.Read {
 		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
 	}
+	if run.Worklist, run.WorklistUnreported, err = h.readWorklist(ctx, db0.At, db1.At); err != nil {
+		run.WorklistGap = err.Error()
+		h.say("worklist pull loss not measured: %v", err)
+	}
 	return db1.At, nil
+}
+
+// readWorklist reads each node's worst worklist pull loss over the window
+// (#1868), and the nodes that reported none. Its failure leaves the figure
+// not measured and every other figure read.
+func (h *harness) readWorklist(ctx context.Context, from, to time.Time) (map[string]float64, []string, error) {
+	out, err := h.psql(ctx, WorklistQuery(from, to))
+	if err != nil {
+		return nil, nil, fmt.Errorf("the worklist pull loss did not read: %w", err)
+	}
+	return ParseWorklist(out)
 }
 
 // loadWindow reads the fleet view cfg.FleetReads times across the window
@@ -881,7 +896,8 @@ func (h *harness) redeliveries(ctx context.Context, server string, since time.Ti
 }
 
 // consumerLane reads the lane tallies the server logged since the window
-// began and measures the lane between the first and last of them inside it.
+// began and measures each partition's lane between the first and last of its
+// tallies inside it (LaneOf).
 func (h *harness) consumerLane(ctx context.Context, server string, from, to time.Time) (Lane, error) {
 	log, err := h.serverLog(ctx, server, from)
 	if err != nil {

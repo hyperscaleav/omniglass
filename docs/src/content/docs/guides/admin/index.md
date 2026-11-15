@@ -75,7 +75,8 @@ time, every hour (every minute while it is catching up). The windows are the **r
 on **Admin > Settings**, each from 1 to 36,500 days:
 
 - `metric_days`, 14 by default: how long a metric sample (a reading such as a round-trip time) is
-  kept.
+  kept, at least. Samples are stored by UTC day and usually removed a whole day at a time, so a
+  sample can stay up to a day past the window, until its day goes.
 - `property_days`, 90 by default: how long a property transition (a change such as a power state
   going from on to off) is kept.
 - `trend_days`, 730 by default: how long the hourly trends of each metric (count, minimum, maximum,
@@ -128,7 +129,7 @@ its window and none past it, so a series no longer measured shows no reading wit
 Every endpoint reports on its own collection once a **report window**. This is built-in data: every
 endpoint gets it, whatever its driver, with nothing to set up
 ([built-in and collected data](/guides/admin/drivers/#built-in-and-collected-data)):
-- how long its polls took, and how many failed;
+- how long its polls took, how much CPU they cost the node, and how many failed;
 - how many pushed messages its listeners claimed, and how many they did not;
 - for a webhook endpoint, how many posts the server accepted and refused.
 

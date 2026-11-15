@@ -209,6 +209,25 @@ describe("alarmRows", () => {
     expect(alarmRows(off, SEEDED_LEVELS)[0]).toMatchObject({ component: "dsp-1", componentId: uuidFor("sz-c-dsp") });
   });
 
+  // The health read carries the acknowledgement beside the alarm (#990), so the
+  // strip offers and shows it without opening each component.
+  it("carries the acknowledgement the health read reports, unacknowledged by default", () => {
+    const acked = {
+      ...health,
+      roles: [{
+        name: "dsp", label: "DSP", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
+        impaired: true, active: true, assigned_to: [], down: [],
+        alarms: [
+          { id: "al-seen", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "high", message: "Seen", raised_at: "2026-08-15T14:20:00Z", acknowledged: true, acknowledged_at: "2026-08-15T15:00:00Z", acknowledged_by: "alice" },
+          { id: "al-new", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "warning", message: "New", raised_at: "2026-08-15T14:30:00Z", acknowledged: false },
+        ],
+      }],
+    } as never;
+    const rows = alarmRows(acked, SEEDED_LEVELS);
+    expect(rows.find((r) => r.id === "al-seen")).toMatchObject({ acknowledged: true, acknowledgedAt: "2026-08-15T15:00:00Z", acknowledgedBy: "alice" });
+    expect(rows.find((r) => r.id === "al-new")).toMatchObject({ acknowledged: false, acknowledgedAt: null, acknowledgedBy: "" });
+  });
+
   it("is empty for a healthy report", () => {
     expect(alarmRows({ ...health, roles: [] } as never)).toEqual([]);
   });

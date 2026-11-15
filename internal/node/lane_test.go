@@ -473,7 +473,7 @@ func TestThreeEndpointsOnOneHostPingOncePerSlot(t *testing.T) {
 // counted, never queued; the window reports offers against refusals.
 func TestTheOperatorQueueRefusesPastItsCapAndCounts(t *testing.T) {
 	t.Parallel()
-	p := newLanePool(1)
+	p := newLanePool(1, nil)
 	release := blockLane(t, p, "ep-1")
 	for i := range operatorQueueCap {
 		if !p.offer("ep-1", laneOperator, func() {}) {

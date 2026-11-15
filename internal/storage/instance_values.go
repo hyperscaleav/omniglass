@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -32,6 +33,10 @@ import (
 // every row (latestIntendedSQL reads told instead).
 //
 // Which instances are live is liveInstanceSQL's to say.
+// Each instance's newest row is by `ts desc, id desc` and ts must lead (#712):
+// the lane is observed, whose ts a caller supplies, so a late-arriving older
+// sample must not become current by being written last. The declared and intended lanes'
+// order is insertion instead (seriesOrderSQL).
 // lane is property or metric; value is the column expression read as value.
 func latestObservedPerInstanceSQL(lane, value, col string) string {
 	return fmt.Sprintf(`with recursive inst(instance) as (
@@ -102,7 +107,11 @@ func transportNames() []string {
 // command targeting the key on the owner named, newest first. An intended row
 // is a command's (ADR-0456: its stamper is the command, on the command's
 // instance), so those instances are every series one can sit on, and each is
-// one probe, never a walk of the observed instances.
+// one probe, never a walk of the observed instances. Each instance's newest row,
+// and the newest across instances, is by `id desc`, insertion order (#712): an
+// intended row's ts is the database's now at the command's open, never a
+// caller's, so a clock stepping backwards must not make an earlier command's
+// intent the told value (seriesOrderSQL). ts is only read out as an annotation.
 func latestIntendedSQL(col string) string {
 	return fmt.Sprintf(`select n.value, n.ts, n.provenance, i.instance from
 			(select distinct c.instance from command c
@@ -112,9 +121,9 @@ func latestIntendedSQL(col string) string {
 			lateral (select %[1]s as value, ts, provenance, id from property
 				where owner_kind = $1 and %[2]s = $2 and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 				  and instance = i.instance and provenance = 'intended'
-				order by ts desc, id desc limit 1) n
+				order by id desc limit 1) n
 		where n.value is not null
-		order by n.ts desc, n.id desc`, declaredCurrentExpr, col)
+		order by n.id desc`, declaredCurrentExpr, col)
 }
 
 // latestObservedValues reads the current observed value of every live
@@ -135,7 +144,7 @@ func (p *PG) latestObservedValues(ctx context.Context, q querier, ownerKind, own
 	} else if err != nil {
 		return nil, err
 	}
-	return readPropertyValues(ctx, q, ownerID, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
+	return readPropertyValues(ctx, q, ownerID, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
 }
 
 // readPropertyValues runs a per-instance property read whose rows are
@@ -209,6 +218,22 @@ func (p *PG) latestObservedTargetValues(ctx context.Context, q querier, ct *Comm
 	}
 }
 
+// sameValue reports whether two current values mean the same JSON value: the
+// one comparison every reader that sets an observed value beside a declared or
+// intended one shares (Settle, worstCaseValue, agreeingValue). Both are
+// already typed (observedValueExpr), so what is left is spelling: 3 and 3.0,
+// or an object's key order and spacing. Pure.
+func sameValue(a, b json.RawMessage) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
+}
+
 // worstCaseValue is reconciliation's reduction of the observed instances of a
 // key against want (ADR-0456): drift when any instance disagrees with want,
 // and the value shown is then the newest disagreeing one, else the newest
@@ -221,7 +246,7 @@ func worstCaseValue(want json.RawMessage, values []CurrentValue) (*CurrentValue,
 	}
 	if want != nil {
 		for i := range values {
-			if !bytes.Equal(values[i].Value, want) {
+			if !sameValue(values[i].Value, want) {
 				return &values[i], true
 			}
 		}
@@ -241,7 +266,7 @@ func agreeingValue(intended *CurrentValue, values []CurrentValue) *CurrentValue 
 	}
 	if intended != nil {
 		for i := range values {
-			if bytes.Equal(values[i].Value, intended.Value) {
+			if sameValue(values[i].Value, intended.Value) {
 				return &values[i]
 			}
 		}

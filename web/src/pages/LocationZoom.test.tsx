@@ -114,6 +114,14 @@ const types: LocationType[] = [
   { id: uuidFor("lzt-room"), name: "room", label: "Room", icon: "door-open", official: true, forked: false, allowed_parent_types: ["building", "floor"] },
 ] as unknown as LocationType[];
 
+// The locations read as the face self-fetches it; the same rows seed the cache
+// and answer a refetch, so a save's invalidation re-reads what the page holds.
+const locationRows = [
+  { id: uuidFor("lz-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "delete", "move", "rename"] },
+  { id: uuidFor("lz-b1"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("lz-hq"), actions: ["update", "delete", "move", "rename"] },
+  { id: uuidFor("lz-hq2"), name: "lab", label: "Lab", location_type: "campus", parent_id: null, actions: ["update"] },
+];
+
 // lateTypes starts the location-type catalog EMPTY, so a test can deliver it
 // after the editor is open and reproduce the order a deep link actually hits:
 // the row is in hand well before the catalog answers (#782).
@@ -125,11 +133,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   qc.setQueryData([...LOCATION_TYPES_KEY], lateTypes ? [] : types);
   // The configure face self-fetches its row and parent options from this
   // list; a test that strips it renders the face as a skeleton (#800-1).
-  qc.setQueryData([...LOCATIONS_KEY], [
-    { id: uuidFor("lz-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "delete", "move", "rename"] },
-    { id: uuidFor("lz-b1"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("lz-hq"), actions: ["update", "delete", "move", "rename"] },
-    { id: uuidFor("lz-hq2"), name: "lab", label: "Lab", location_type: "campus", parent_id: null, actions: ["update"] },
-  ]);
+  qc.setQueryData([...LOCATIONS_KEY], locationRows);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
@@ -331,7 +335,10 @@ describe("the configure mover keeps the classic contract (#800)", () => {
       if (req.url.includes(":move")) {
         return new Response(JSON.stringify({ title: "Unprocessable Entity", detail: "a building cannot contain a campus" }), { status: 422, headers: { "content-type": "application/json" } });
       }
-      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+      // A fresh Response per call (a body reads once), serving the page's own
+      // reads so the refetch after the refused move leaves the page as it was.
+      const reply = req.url.endsWith("/views/fleet") ? view : req.url.endsWith("/locations") ? { locations: locationRows } : {};
+      return new Response(JSON.stringify(reply), { status: 200, headers: { "content-type": "application/json" } });
     });
     try {
       mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
@@ -349,6 +356,33 @@ describe("the configure mover keeps the classic contract (#800)", () => {
     } finally {
       stub.mockRestore();
     }
+  });
+});
+
+// The face owns its edit slot and drafts, so another place under the same route
+// must be another face: left alone, west would open already editing, holding
+// hq's half-typed name under its own page (#854).
+describe("moving to another place while editing (#854)", () => {
+  it("resets the edit slot and the drafts instead of carrying hq's over", async () => {
+    mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure&edit=1`);
+    const face = await screen.findByTestId("configure-face");
+    const name = (await within(face).findByDisplayValue("hq")) as HTMLInputElement;
+    fireEvent.input(name, { target: { value: "hq-renamed" } });
+    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+
+    window.history.pushState({}, "", `/web/locations/${uuidFor("lz-b1")}?tab=configure`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => expect(screen.getByTestId("configure-face")).toBeTruthy());
+    const next = screen.getByTestId("configure-face");
+    await within(next).findByText("west");
+    expect(within(next).queryByRole("button", { name: /save/i })).toBeNull();
+    expect(within(next).getByRole("button", { name: "Edit" })).toBeTruthy();
+
+    fireEvent.click(within(next).getByRole("button", { name: "Edit" }));
+    const field = (await within(next).findByDisplayValue("west")) as HTMLInputElement;
+    expect(field.value).toBe("west");
+    expect(within(next).queryByDisplayValue("hq-renamed")).toBeNull();
   });
 });
 

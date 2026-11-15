@@ -72,7 +72,9 @@ const display: ComponentType = { id: uuidFor("ct-display"), name: "display", lab
 const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", label: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] };
 const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", label: "Generic Device", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", resolved_icon: "box", default_tags: [] };
 
-const seededTree: ComponentType[] = [mic, wirelessMic, ceilingMic, display, interactiveDisplay, genericDevice];
+// In the order ListComponentTypes serves: by label (#757). The tree builder
+// groups without sorting, so each level below keeps this order.
+const seededTree: ComponentType[] = [ceilingMic, display, genericDevice, interactiveDisplay, mic, wirelessMic];
 
 describe("resolveComponentTypeIcon", () => {
   it("returns the icon the server resolved for a root that sets one", () => {
@@ -111,7 +113,7 @@ describe("resolveComponentTypeIcon", () => {
 });
 
 describe("componentTypeTree / flattenComponentTypeTree", () => {
-  it("groups by parent_id, sorted by label at each level, roots before children", () => {
+  it("groups by parent_id, keeping the received order at each level", () => {
     const roots = componentTypeTree(seededTree);
     // Alphabetical by label: Display, Generic Device, Microphone.
     expect(roots.map((r) => r.name)).toEqual(["display", "generic-device", "mic"]);

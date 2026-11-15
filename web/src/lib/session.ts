@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { ReachRejectionBody, ReachSessionBody } from "../api/api.gen";
 import { can, type Me } from "./auth";
 import { STALENESS_WINDOW_MS, lastSeenAt, layerUp, type ReachEndpoint } from "./reachability";
 
@@ -9,8 +9,8 @@ import { STALENESS_WINDOW_MS, lastSeenAt, layerUp, type ReachEndpoint } from "./
 // climbs (ADR-0158). Pure: the reachability read carries every value, and
 // this file only says what each one means to an operator.
 
-export type ReachSession = components["schemas"]["ReachSessionBody"];
-export type ReachRejection = components["schemas"]["ReachRejectionBody"];
+export type ReachSession = ReachSessionBody;
+export type ReachRejection = ReachRejectionBody;
 export type SessionState = ReachSession["state"];
 
 // stale is not a state the node publishes: it is the read's verdict on a state

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EffectiveRoleBody, RoleSpecBody, SystemRoleBody } from "../api/api.gen";
 
 // The system-roles data layer: thin typed wrappers over the generated client.
 //
@@ -22,18 +22,20 @@ import type { components } from "../api/schema.gen";
 // surface the server's message verbatim rather than a generic failure.
 
 // A role as a SYSTEM sees it: the declaration, plus who fills it here.
-export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
+export type EffectiveRole = EffectiveRoleBody;
 // A role as its OWNER declares it (the standard's line, and the write's echo).
-export type DeclaredRole = components["schemas"]["SystemRoleBody"];
+export type DeclaredRole = SystemRoleBody;
 // The declaration body. Partial by default: what it carries changes, what it
 // omits is left alone. update_mask names the fields the write means to set
 // regardless, which is the only way to clear one (#666); accepted_types and
 // pinned_products still replace their set wholesale when written.
-export type RoleSpec = components["schemas"]["RoleSpecBody"];
+export type RoleSpec = RoleSpecBody;
 
 // One cache namespace per arc, so a standard and a system that share an address
 // never collide.
-export const systemRolesKey = (name: string) => ["system-roles", name] as const;
+// The prefix every system's roles share, for a write that moves them all.
+export const SYSTEM_ROLES_PREFIX = ["system-roles"] as const;
+export const systemRolesKey = (name: string) => [...SYSTEM_ROLES_PREFIX, name] as const;
 export const standardRolesKey = (id: string) => ["standard-roles", id] as const;
 
 // systemRoles reads every role this system needs filled: those its standard
@@ -66,6 +68,25 @@ export async function setStandardRole(id: string, role: string, body: RoleSpec):
 // assignment conforming systems made to it.
 export async function deleteStandardRole(id: string, role: string): Promise<void> {
   const { error } = await api.DELETE("/standards/{id}/roles/{role}", { params: { path: { id, role } } });
+  if (error) throw error;
+}
+
+// setSystemRole declares a role directly on the system (an ad hoc role, which is
+// how a one-off system gets roles at all), or revises it in place. The same
+// idempotent, partial PATCH as setStandardRole. A name the system's standard
+// already declares is refused with a 409: a role name means one role in a
+// system, so the caller shows the server's message.
+export async function setSystemRole(name: string, role: string, body: RoleSpec): Promise<DeclaredRole> {
+  const { data, error } = await api.PATCH("/systems/{name}/roles/{role}", { params: { path: { name, role } }, body });
+  if (error) throw error;
+  return data as DeclaredRole;
+}
+
+// deleteSystemRole withdraws a role declared on the system, and with it every
+// assignment to it. A role inherited from the standard is withdrawn on the
+// standard, not here (404).
+export async function deleteSystemRole(name: string, role: string): Promise<void> {
+  const { error } = await api.DELETE("/systems/{name}/roles/{role}", { params: { path: { name, role } } });
   if (error) throw error;
 }
 

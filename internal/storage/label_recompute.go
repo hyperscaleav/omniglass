@@ -76,7 +76,12 @@ import (
 //     of their own: each runs inside the write that already holds that row's
 //     lock from its own UPDATE ... RETURNING.
 //
-// The order is fixed and stated so it cannot drift: a path that takes both the
+// The order is fixed and stated so it cannot drift. The label lock comes before
+// every row this file locks and before any lock a membership write takes (the
+// component's membership lock, and the system row a first-time bind's foreign
+// key shares): a cascade holds the label lock and then waits for system rows
+// FOR UPDATE, so a write that held a system row while it waited for the label
+// lock would close a cycle with every cascade (#1214). A path that takes both the
 // label lock and a health lock takes the LABEL one first (UpdateSystem is the
 // only such path today). Nothing takes them the other way round, so there is no
 // cycle to deadlock on.
@@ -85,6 +90,14 @@ import (
 // on. One key, not one per row: 15,000 advisory locks in a transaction is a
 // lock table, not a lock.
 const labelRecomputeKey = "label/recompute"
+
+// lockLabelRecompute takes the label lock for the rest of the transaction. A
+// write that restamps labels takes it before it takes anything a cascade also
+// waits on (see Locking above); it is reentrant within a transaction, so taking
+// it early costs the later cascade nothing.
+func lockLabelRecompute(ctx context.Context, q txQuerier) error {
+	return lockAdvisory(ctx, q, labelRecomputeKey)
+}
 
 // LabelChange is one row a recompute would alter: what it reads now, and what
 // its rules produce. It is the preview's whole content and the apply's receipt.
@@ -207,6 +220,29 @@ func (p *PG) labelDrift(ctx context.Context, q querier, eng *label.Engine, kind 
 	}
 }
 
+// forUpdateSuffix locks the scanned rows IN the resolving read, which #709
+// showed is not a lock on what that read resolves: at READ COMMITTED a
+// statement's snapshot predates its wait on a row lock, and the re-read after
+// the wait refreshes the locked row but not the correlated subqueries
+// (location_name, product_handle, standard_handle, parent_name and the rest of
+// componentCols, systemCols and locationCols) already evaluated against the
+// stale snapshot. Here that is harmless, and #731 settled why rather than
+// splitting the lock out:
+//
+//   - a label reads only two kinds of input: the locked row's OWN columns
+//     (name, ordinal, product_id, standard_id, system_type_id, location_type,
+//     location_id), which the re-read refreshes, and facts the *Drift
+//     functions resolve in SEPARATE statements after this scan returns
+//     (componentPlacements, systemPlacements, the *LabelChain calls,
+//     globalLabelRule), each with a snapshot taken after the wait is over;
+//   - no label key reads a subquery-filled column, which
+//     TestNoLabelKeyReadsAScanSubqueryColumn holds by construction.
+//
+// TestALabelRecomputeWaitingOnARowLockRendersTheNamesCommittedDuringTheWait is
+// the witness: it forces a recompute to wait here while a product rename
+// commits, proves with a control statement that the subqueries DID go stale,
+// and asserts the label did not. A key that ever needs a subquery column is the
+// change that makes this hazard real; resolve it after the scan instead.
 func forUpdateSuffix(forUpdate bool) string {
 	if forUpdate {
 		return " for update"
@@ -549,7 +585,7 @@ func ladderOf(label, name string) string {
 // write it. Everything above it differs only in the narrowing and in what, if
 // anything, it audits.
 func (p *PG) lockedRecompute(ctx context.Context, tx pgx.Tx, eng *label.Engine, tbl scopeTable, kind string, n labelNarrow, read, action scope.Set) ([]LabelChange, error) {
-	if err := lockAdvisory(ctx, tx, labelRecomputeKey); err != nil {
+	if err := lockLabelRecompute(ctx, tx); err != nil {
 		return nil, err
 	}
 	changes, err := p.labelDrift(ctx, tx, eng, kind, n, read, action, true)

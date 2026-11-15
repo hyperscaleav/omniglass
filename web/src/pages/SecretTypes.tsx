@@ -35,9 +35,9 @@ const columns: FlatColumn<SecretType>[] = [
 export default function SecretTypes() {
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
 
-  // Sorted alphabetically by label then name.
-  const rows = () =>
-    [...(types.data ?? [])].sort(byLabel);
+  // byLabel stays here (#757): ListSecretTypes serves `order by name`, not the
+  // label rule, so the order the operator reads is composed client-side.
+  const rows = () => [...(types.data ?? [])].sort(byLabel);
 
   return (
     <FlatList<SecretType>

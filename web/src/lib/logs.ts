@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components, operations } from "../api/schema.gen";
+import type { ListComponentLogsParams, LogBody } from "../api/api.gen";
 
 // The logs data layer: a thin typed wrapper over the generated client for a
 // component's recent raw log lines (ADR-0066, the ingest lane, distinct from the
@@ -10,12 +10,12 @@ import type { components, operations } from "../api/schema.gen";
 // generated client and unit-testable against a mocked fetch. The row type is the
 // generated LogBody, never hand-typed.
 
-export type ComponentLog = components["schemas"]["LogBody"];
+export type ComponentLog = LogBody;
 export type ComponentLogs = { component: string; logs: ComponentLog[]; sources?: string[] };
 
 // LogSeverity is the canonical set the API's severity filter takes, from the
 // generated operation, so the console cannot offer a word the gateway refuses.
-export type LogSeverity = NonNullable<NonNullable<operations["list-component-logs"]["parameters"]["query"]>["severity"]>;
+export type LogSeverity = NonNullable<ListComponentLogsParams["severity"]>;
 
 // LOG_SEVERITIES is RFC 5424's eight levels, most severe first. The list is
 // written once here for the picker; the type below fails the typecheck if the

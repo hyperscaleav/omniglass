@@ -40,10 +40,10 @@ var t0 = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
-	r.poll("ep-bar", 40*time.Millisecond, false)
-	r.poll("ep-bar", 20*time.Millisecond, false)
-	r.poll("ep-bar", 90*time.Millisecond, true)
-	r.poll("ep-display", 12*time.Millisecond, false)
+	r.poll("ep-bar", runCost{took: 40 * time.Millisecond}, false)
+	r.poll("ep-bar", runCost{took: 20 * time.Millisecond}, false)
+	r.poll("ep-bar", runCost{took: 90 * time.Millisecond}, true)
+	r.poll("ep-display", runCost{took: 12 * time.Millisecond}, false)
 
 	if r.due(t0.Add(59 * time.Second)) {
 		t.Fatal("the window is due before it has run its length")
@@ -68,6 +68,33 @@ func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
 		if len(got[task]) != len(keys) {
 			t.Errorf("%s carries %v, want only %v", task, got[task], keys)
 		}
+	}
+}
+
+// A window's polls report the CPU the kernel charged them as one mean per
+// endpoint, in milliseconds, over the runs whose thread clock read (#1870).
+// An endpoint none of whose runs read it (a platform with no thread clock)
+// lands no CPU time rather than a false zero, and its duration still lands.
+func TestAReportWindowAveragesAnEndpointsPollCPUTime(t *testing.T) {
+	t.Parallel()
+	r := newCollectionReport(time.Minute, 0, t0)
+	r.poll("ep-bar", runCost{took: 40 * time.Millisecond, cpu: 4 * time.Millisecond, cpuRead: true}, false)
+	r.poll("ep-bar", runCost{took: 20 * time.Millisecond, cpu: 2 * time.Millisecond, cpuRead: true}, false)
+	r.poll("ep-bar", runCost{took: 30 * time.Millisecond}, false)
+	r.poll("ep-unread", runCost{took: 12 * time.Millisecond}, false)
+
+	got := reportValues(t, r.take(t0.Add(time.Minute), map[string]string{"ep-bar": "task-bar", "ep-unread": "task-unread"}))
+	if v := got["task-bar"][probekeys.PollCPUTime]; v != 3 {
+		t.Errorf("task-bar %s = %v, want 3 (the mean of the two runs that read the clock)", probekeys.PollCPUTime, v)
+	}
+	if v := got["task-bar"][probekeys.PollDuration]; v != 30 {
+		t.Errorf("task-bar %s = %v, want 30 (every run)", probekeys.PollDuration, v)
+	}
+	if v, landed := got["task-unread"][probekeys.PollCPUTime]; landed {
+		t.Errorf("task-unread landed %s %v from runs that never read the clock", probekeys.PollCPUTime, v)
+	}
+	if got["task-unread"][probekeys.PollDuration] != 12 {
+		t.Errorf("task-unread = %v, want its duration 12", got["task-unread"])
 	}
 }
 
@@ -103,7 +130,7 @@ func TestAReportWindowCountsAHeldEndpointsPushes(t *testing.T) {
 func TestAReportWindowStampsItsTakeAndStartsTheNextOnTheGrid(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
-	r.poll("ep", time.Millisecond, false)
+	r.poll("ep", runCost{took: time.Millisecond}, false)
 	taken := t0.Add(61 * time.Second)
 	for _, row := range r.take(taken, map[string]string{"ep": "task"}) {
 		for _, s := range row.samples {
@@ -144,8 +171,8 @@ func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
-	r.poll("ep-bar", 30*time.Millisecond, false)
-	r.poll("ep-gone", 30*time.Millisecond, false)
+	r.poll("ep-bar", runCost{took: 30 * time.Millisecond}, false)
+	r.poll("ep-gone", runCost{took: 30 * time.Millisecond}, false)
 	got := reportValues(t, r.take(t0.Add(time.Minute), map[string]string{"ep-bar": "task-revised"}))
 	if _, ok := got["task-revised"]; !ok || len(got) != 1 {
 		t.Fatalf("report = %v, want the bar's rows under its current task alone", got)
@@ -158,7 +185,7 @@ func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
 func TestARefusedPollIsAFailureWithoutATime(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
-	r.poll("ep", 40*time.Millisecond, false)
+	r.poll("ep", runCost{took: 40 * time.Millisecond}, false)
 	r.refused("ep")
 	r.refused("ep")
 	got := reportValues(t, r.take(t0.Add(time.Minute), map[string]string{"ep": "task"}))["task"]

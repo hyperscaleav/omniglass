@@ -62,6 +62,14 @@
   ],
   "walkthroughs": [
     {
+      "id": "declare-a-first-role",
+      "title": "Declare a first role",
+      "description": "Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.",
+      "setup": [
+        "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
+      ]
+    },
+    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
@@ -167,7 +175,7 @@
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
       "setup": [
-        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-display --product boreal-edge-55"
+        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
       ]
     },
     {
@@ -175,7 +183,7 @@
       "title": "Snooze an alarm",
       "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
       "setup": [
-        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch input lost\" --severity high"
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch controller resetting\" --severity high"
       ]
     },
     {

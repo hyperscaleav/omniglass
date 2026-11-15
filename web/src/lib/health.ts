@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { FleetHealthOutputBody, HealthRoleBody, HealthTransitionBody } from "../api/api.gen";
 
 // The health data layer: thin typed wrappers over the generated client plus the
 // pure read-time derivations the console renders.
@@ -29,9 +29,9 @@ import type { components } from "../api/schema.gen";
 // filters through activeRoles rather than the raw list.
 
 export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
-export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type HealthTransition = components["schemas"]["HealthTransitionBody"];
-export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
+export type HealthRole = HealthRoleBody;
+export type HealthTransition = HealthTransitionBody;
+export type FleetHealth = FleetHealthOutputBody;
 
 // One cache namespace per arc, so a system and a location that share a name never
 // collide.

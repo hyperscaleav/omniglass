@@ -7,7 +7,7 @@ description: Use when writing or reviewing SolidJS code in the web/ SPA (any .ts
 
 The console SPA under `web/src` is SolidJS, not React. The JSX looks identical, so the trap is importing React mental models. Solid has no virtual DOM and no re-render: a component function runs **once**, and reactivity is fine-grained through signals and effects that update the exact DOM nodes that depend on them. Get this wrong and you write code that does not react, or you review correct code as broken.
 
-**Stack note (so you ignore the wrong half of generic Solid guides).** This is a **plain Solid SPA**, `go:embed`-ed into the binary: **no SolidStart and no SSR**. Routing is `@solidjs/router`; server state is **TanStack Solid Query** (`useQuery`) over an `openapi-fetch` client, **not `createResource`**. So when a public Solid skill or doc leans on SolidStart, server functions, SSR/SSG, or `createResource`, that does not apply here; the data layer is TanStack Query and the thin typed `lib/*` wrappers over the generated client.
+**Stack note (so you ignore the wrong half of generic Solid guides).** This is a **plain Solid SPA**, `go:embed`-ed into the binary: **no SolidStart and no SSR**. Routing is `@solidjs/router`; server state is **TanStack Solid Query** (`useQuery`) over the orval-generated client (`api` in `web/src/api/client.ts`), **not `createResource`**. So when a public Solid skill or doc leans on SolidStart, server functions, SSR/SSG, or `createResource`, that does not apply here; the data layer is TanStack Query and the thin typed `lib/*` wrappers over the generated client.
 
 ## The one that bites hardest: JSX is eager real DOM
 

@@ -23,7 +23,7 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // (#1081), for a value whose only fixed container also holds what the shot is
 // there to show. These tests drive the capture's own mask code (shotmasklib.mjs)
 // against synthetic markup, so they can change the value on demand: the shots'
-// own proof is a clock-shifted recapture (DOCS_SHOTS_TZ with DOCS_SHOTS_EXACT=1),
+// own proof is a clock-shifted recapture (DOCS_SHOTS_TZ with the gate),
 // which cannot reach a single-digit day on most days of the month. No server
 // needed, so this spec runs wherever Playwright does.
 //
@@ -31,9 +31,8 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // tests judge the masks the capture actually uses: a page that loosens a mask back
 // onto its text fails this spec.
 //
-// The comparison is BYTE equality rather than the gate's default compareShot,
-// whose pixelmatch threshold cannot see a mask edge move over a dark surface at
-// all (#774). Byte equality is the property a mask owes the gate.
+// The comparison is BYTE equality, the property a mask owes the gate: the gate's
+// compareShot is exact too (#774), and byte equality is its fast path.
 
 const DOCS = fileURLToPath(new URL("../../docs/src/content/docs/", import.meta.url));
 

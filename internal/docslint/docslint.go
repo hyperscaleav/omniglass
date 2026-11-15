@@ -173,6 +173,14 @@ var Banned = []BannedTerm{
 		Origin:      "the list-surface split (build-log.md)",
 	},
 	{
+		// The simulator catalog's room archetypes and fleet manifests retired
+		// (#914): a simulated system is built to a standard, and a fleet is
+		// the dev seed's or a scale lab scenario.
+		Pattern:     regexp.MustCompile(`(?i)\b(system profile|fleet manifest|fleet compiler)s?\b`),
+		Replacement: "a standard (a simulated system) or a scale lab scenario (a fleet)",
+		Origin:      "ADR-0914",
+	},
+	{
 		Pattern:     regexp.MustCompile(`\bUpsertOfficial\b`),
 		Replacement: "the per-registry upserts (UpsertPropertyType and siblings)",
 		Origin:      "internal/storage/registries.go",

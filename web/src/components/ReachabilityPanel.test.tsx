@@ -5,6 +5,7 @@ import ReachabilityPanel from "./ReachabilityPanel";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
+import { Router, Route } from "@solidjs/router";
 
 // The panel is read-only and derives verdict/strip/reason client-side from the
 // real API fields. Data is seeded into the query cache so no server is needed.
@@ -462,5 +463,48 @@ describe("a udp endpoint", () => {
     const { getByText, queryByTestId } = mount();
     fireEvent.click(getByText("disp-1-tcp"));
     expect(queryByTestId("request-rung")).toBeNull();
+  });
+});
+
+// An endpoint with a null verdict says why (#981): beneath the row, without
+// expanding it, with a link to where the operator fixes it. The panel sits in
+// the app's router, so these mount inside one for the link.
+describe("ReachabilityPanel pending reason", () => {
+  function mountPending(endpoint: Reachability["endpoints"][number]) {
+    const data: Reachability = { component: "panel-1", endpoints: [endpoint] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...REACHABILITY_KEY(data.component)], data);
+    return render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <ReachabilityPanel name={data.component} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+  }
+
+  it("explains an endpoint with no node and links to the Nodes page", () => {
+    const { getByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", verdict: null, pending: "no-node", layers: [], history: [],
+    });
+    const notice = getByTestId("endpoint-pending-notice");
+    expect(notice.textContent).toMatch(/no node is assigned/i);
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/nodes$/);
+  });
+
+  it("names the node an endpoint awaits its first probe from, linking its blade", () => {
+    const { getByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", node: "edge-1", verdict: null, pending: "awaiting-probe", layers: [], history: [],
+    });
+    const notice = getByTestId("endpoint-pending-notice");
+    expect(notice.textContent).toContain("edge-1");
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/nodes\?n=edge-1$/);
+  });
+
+  it("shows no reason once the endpoint has a verdict", () => {
+    const { queryByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", node: "edge-1", verdict: { value: "up", ts: nowIso }, layers: [], history: [],
+    });
+    expect(queryByTestId("endpoint-pending-notice")).toBeNull();
   });
 });

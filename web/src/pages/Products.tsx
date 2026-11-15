@@ -7,7 +7,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
@@ -74,9 +74,7 @@ export default function Products() {
   const me = useMe();
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
-  const rows = createMemo(() =>
-    [...(products.data ?? [])].sort(byLabel),
-  );
+  const rows = createMemo(() => products.data ?? []);
 
   return (
     <FlatList<Product>
@@ -330,9 +328,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
 // write path resolves either form).
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
-  const options = createMemo(() =>
-    [...(vendors.data ?? [])].sort(byLabel),
-  );
+  const options = createMemo(() => vendors.data ?? []);
   // The registry answers on its own schedule and the blade is often on screen
   // first, so the value is bound through the shared binder (lib/selectvalue.ts,
   // #772) rather than a value= prop that would not re-run when the rows land.
@@ -348,9 +344,7 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
 // Stores the driver's name (the write path resolves either form).
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
-  const options = createMemo(() =>
-    [...(drivers.data ?? [])].sort(byLabel),
-  );
+  const options = createMemo(() => drivers.data ?? []);
   return (
     <select ref={bindSelectValue(() => p.value, options)} class="select select-bordered w-full" onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>

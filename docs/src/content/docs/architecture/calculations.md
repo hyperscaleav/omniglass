@@ -152,8 +152,11 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   holds one of its inputs, so a rule over stable values computes at once and an edit recomputes.
   Changing a component's product does the same for the component rules whose type selection it moves:
   a rule that now selects it is marked when it holds one of the rule's inputs, and a rule that no longer
-  does drops its mark and state there. A component staffing a system role cannot be deleted, so a
-  delete never leaves a system rule computing over a member that is gone.
+  does drops its mark and state there. Reclassifying a product (changing its component type) marks the
+  type-selecting rules on every component of the product in one statement, and the serve settles each:
+  it computes a rule a component came into and drops the state of one it left. A component staffing a
+  system role cannot be deleted, so a delete never leaves a system rule computing over a member that is
+  gone.
 - **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a
   10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
   queue and never compute a mark twice; a mark is deleted only by the transaction that computes it, so a
@@ -172,6 +175,14 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   as a **calculated** sample naming the rule (`source_rule`) and its version (`source_rule_version`),
   on the lane the rule holds its output by, so event rules judge it there and downstream calc rules are
   marked in turn. An unchanged result writes no row, on either lane, so storage grows only with change.
+- **The value check.** A property output passes the check ingest applies to the same key
+  (`key.ValidateValue` against the property's data type and its validation, so an enum, a pattern or a
+  JSON schema holds for a calculated value as for a pushed one; a `json` property reads the result text as the JSON document, so text that is
+  not valid JSON is refused). A result the property cannot hold is
+  not a database fault and is not retried: nothing is written, the mark is not deferred, and the rule's
+  last outcome on the owner (`calc_rule_state.error`, shown in the blade's State) names the output key,
+  the value and the validator's reason. The next input change recomputes it. The metric lane needs no
+  such check: its output is already a float.
 - **Never itself.** A write knows the rule that produced it and never marks that rule, which stops a
   rule feeding itself at runtime; longer loops are refused at authoring, and a loop written around the
   gateway is out of contract

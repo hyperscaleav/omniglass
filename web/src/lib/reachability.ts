@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EndpointWebhookBody, ReachRejectionBody, ReachSessionBody, ReachTLSBody } from "../api/api.gen";
 import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
@@ -36,6 +36,9 @@ export type ReachEndpoint = {
   transport: string;
   address?: string;
   node?: string;
+  // Why verdict is null (#981), present only while it is: no node is assigned
+  // to probe the endpoint, or its node has not landed a first probe.
+  pending?: "no-node" | "awaiting-probe";
   // When ingest last landed a batch this endpoint's task delivered, by the
   // server's clock, whatever the batch carried (#933). The one freshness
   // every endpoint has, a driver endpoint's included.
@@ -47,16 +50,16 @@ export type ReachEndpoint = {
   authenticated?: ReachVerdict | null;
   // The held session, when the endpoint has held one (#1059): its latest
   // state, when it changed, and why (lib/session reads it).
-  session?: components["schemas"]["ReachSessionBody"];
+  session?: ReachSessionBody;
   // The gate a terminal refusal holds, whether or not a session is held: its
   // rung and class (ADR-0158), for a changed key the pinned and offered keys
   // (#1035), and why it holds and since when (#1110).
-  rejection?: components["schemas"]["ReachRejectionBody"];
+  rejection?: ReachRejectionBody;
   // A tls endpoint's handshake and certificate (#1035): lib/tls reads it.
-  tls?: components["schemas"]["ReachTLSBody"];
+  tls?: ReachTLSBody;
   // A webhook endpoint's block (#1024): a push endpoint, no ladder, read by
   // last_seen (last heard), its scheme and refusals.
-  webhook?: components["schemas"]["EndpointWebhookBody"];
+  webhook?: EndpointWebhookBody;
   layers: ReachLayer[];
   history: ReachHistory[];
 };
@@ -80,6 +83,31 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
   const age = now - new Date(v.ts).getTime();
   if (age > STALENESS_WINDOW_MS) return "stale";
   return v.value === "up" ? "responding" : "down";
+}
+
+// A pending notice is the reason an endpoint has no verdict yet and where the
+// operator acts on it: the Nodes page to make a node and assign it, or the
+// assigned node's blade to see whether it is running (#981).
+export type PendingNotice = { text: string; href: string; linkLabel: string };
+
+export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
+  if (iface.verdict) return null;
+  switch (iface.pending) {
+    case "no-node":
+      return {
+        text: "No node is assigned, so nothing probes this endpoint. Create and enroll a node, run it, then assign this endpoint to it.",
+        href: "/nodes",
+        linkLabel: "Open Nodes",
+      };
+    case "awaiting-probe":
+      return {
+        text: `Waiting for node ${iface.node}'s first probe of this endpoint.`,
+        href: `/nodes?n=${encodeURIComponent(iface.node ?? "")}`,
+        linkLabel: "Open node",
+      };
+    default:
+      return null;
+  }
 }
 
 // lastSeenAt is when the endpoint last delivered anything: the server's

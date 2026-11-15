@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -95,6 +96,10 @@ const blade = () =>
     return el as HTMLElement;
   });
 
+// The expression editor loads CodeMirror lazily; until it mounts, "Fires when"
+// labels a host div, so under a loaded full run the default 1s wait is too short.
+const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -163,6 +168,26 @@ describe("Rules page", () => {
     expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
+  });
+
+  // #1013: JetBrains Mono draws `==` as one bar and `!=` as a not-equals sign,
+  // so a criterion would read as characters nobody can type. The stylesheet's
+  // data-font rule turns ligatures off once, for every code rendering; loading
+  // the real app.css lets jsdom resolve the cascade the browser does.
+  it("renders a rule's criteria in the typed characters, not ligatures", async () => {
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync("src/app.css", "utf8");
+    document.head.append(sheet);
+    try {
+      mount(admin, [reach], { state: false });
+      fireEvent.click(screen.getByText("Reachability lost"));
+      const b = await blade();
+      for (const id of ["rule-fire-expr", "rule-clear-expr"]) {
+        expect(getComputedStyle(within(b).getByTestId(id)).fontVariantLigatures).toBe("none");
+      }
+    } finally {
+      sheet.remove();
+    }
   });
 
   it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
@@ -398,7 +423,7 @@ describe("Rules page", () => {
     fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
     fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
-    const area = await screen.findByLabelText("Fires when");
+    const area = await firesWhen();
     // The builder's comparison (equals 40) is where the expression starts.
     expect(expressionText(area)).toBe("value == 40.0");
     typeExpression(area, "value > 40 &&\n  humidity > 2");
@@ -421,7 +446,7 @@ describe("Rules page", () => {
     mount(admin, [reach, rich]);
     fireEvent.click(screen.getByText("Rich"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = await waitFor(() => screen.getByLabelText("Fires when"));
+    const area = await firesWhen();
     expect(expressionText(area)).toBe('value > 40 && instance != "aux"');
     expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
   });
@@ -434,7 +459,7 @@ describe("Rules page", () => {
     mount(admin, [reach, door]);
     fireEvent.click(screen.getByText("Door ajar"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = await waitFor(() => screen.getByLabelText("Fires when"));
+    const area = await firesWhen();
     expect(expressionText(area)).toBe('value == "open"');
     typeExpression(area, "value");
     const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;

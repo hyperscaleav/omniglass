@@ -204,3 +204,80 @@ func TestListedSinceIsTheFirstHandover(t *testing.T) {
 		t.Fatal("a component no longer handed over still reads listed")
 	}
 }
+
+func TestRegistryForgetDropsANode(t *testing.T) {
+	r := New()
+	r.now = func() time.Time { return at(0) }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+	r.Pulled("edge-b", collection.SimCapabilities{}, []string{"c2"})
+
+	r.Forget("edge-a")
+	r.Forget("never-pulled") // forgetting an unknown node is a no-op
+
+	if got := r.Nodes(); len(got) != 1 || got[0] != "edge-b" {
+		t.Fatalf("Nodes() = %v, want [edge-b]", got)
+	}
+	if _, ok := r.Status("edge-a"); ok {
+		t.Fatal("Status still answers for a forgotten node")
+	}
+	if acc, rej := r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "http"}}}); acc != 0 || rej != 1 {
+		t.Fatalf("a forgotten node's report: accepted %d rejected %d, want 0 and 1", acc, rej)
+	}
+}
+
+func TestRegistryAgesOutASilentNode(t *testing.T) {
+	r := New()
+	now := at(0)
+	r.now = func() time.Time { return now }
+	r.Pulled("silent", collection.SimCapabilities{}, []string{"c1"})
+	r.Pulled("reports", collection.SimCapabilities{}, []string{"c2"})
+
+	now = at(int(SilenceTTL/time.Second) - 1)
+	if got := r.Nodes(); len(got) != 2 {
+		t.Fatalf("inside the TTL Nodes() = %v, want both", got)
+	}
+	// A report is hearing from the simulator: it keeps the node listed
+	// without moving its pull time.
+	r.Report("reports", collection.SimHitBatch{Serving: []string{"c2"}})
+
+	now = at(int(SilenceTTL/time.Second) + 1)
+	if got := r.Nodes(); len(got) != 1 || got[0] != "reports" {
+		t.Fatalf("past the TTL Nodes() = %v, want [reports]", got)
+	}
+	if _, ok := r.Status("silent"); ok {
+		t.Fatal("Status still answers for a node silent past the TTL")
+	}
+	if st, ok := r.Status("reports"); !ok || !st.LastSeen.Equal(at(0)) {
+		t.Fatalf("a report moved the pull time: %+v %v", st, ok)
+	}
+
+	now = at(2*int(SilenceTTL/time.Second) + 2)
+	if got := r.Nodes(); len(got) != 0 {
+		t.Fatalf("a node silent again past the TTL stays listed: %v", got)
+	}
+}
+
+func TestRegistryTakesANodeBackAfterEviction(t *testing.T) {
+	r := New()
+	now := at(0)
+	r.now = func() time.Time { return now }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+	r.Report("edge-a", collection.SimHitBatch{Serving: []string{"c1"}, Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "http"}}})
+
+	now = at(int(SilenceTTL/time.Second) + 1)
+	if len(r.Nodes()) != 0 {
+		t.Fatal("node not evicted")
+	}
+	r.Pulled("edge-a", collection.SimCapabilities{LowPorts: true}, []string{"c1"})
+
+	st, ok := r.Status("edge-a")
+	if !ok || !st.Capabilities.LowPorts || !st.LastSeen.Equal(now) {
+		t.Fatalf("after re-pull: %+v %v", st, ok)
+	}
+	if len(st.Devices) != 0 || len(st.Serving) != 0 {
+		t.Fatalf("the re-pulled node carries old state: %+v", st)
+	}
+	if got := r.Nodes(); len(got) != 1 {
+		t.Fatalf("Nodes() = %v, want [edge-a]", got)
+	}
+}

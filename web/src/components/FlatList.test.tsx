@@ -51,3 +51,25 @@ describe("FlatList blades rowKind", () => {
     await waitFor(() => expect(screen.queryByText("y-body beta")).toBeNull());
   });
 });
+
+// The list primitive renders rows in the order it is given (#757). Registry
+// pages hand it the server's order, which is the SQL label rule, so a new list
+// picks that order up by default; sorting is the operator's, by a column header.
+describe("FlatList row order", () => {
+  it("renders rows as received until the operator sorts a column", () => {
+    const sent = [{ id: "zulu" }, { id: "alpha" }, { id: "mike" }];
+    render(() => (
+      <FlatList<{ id: string }>
+        config={{
+          entity: { name: "thing", plural: "things" },
+          rows: () => sent,
+          filterKeys: [{ key: "name", type: "string", hint: "substring", get: (r) => r.id, values: () => [] }],
+          columns: [{ key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span>{r.id}</span> }],
+          rowId: (r) => r.id,
+        }}
+      />
+    ));
+    const cells = screen.getAllByRole("row").slice(1).map((tr) => tr.textContent);
+    expect(cells).toEqual(["zulu", "alpha", "mike"]);
+  });
+});

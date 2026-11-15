@@ -186,15 +186,15 @@ func TestEndpointAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": tlsOffered}, http.StatusOK)
 }
 
-// TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the
+// TestEndpointCreateWithAmbiguousComponentIs404 closes I1's other half: the
 // gateway resolves the create body's "component" field through
 // resolveScopedRef (ruling 2, #627), and on more than one in-scope match that
 // surfaces storage.ErrAmbiguousName, which mapEndpointErr translates through
-// its mapRefErr check into a 409 naming the reference. Before that check
+// its mapRefErr check into a 404 naming the reference. Before that check
 // existed, it fell through to the handler's default, an unmapped 500, for a
 // state #627 makes routine (two same-named components in different placement
 // buckets), not exceptional. Skipped under -short.
-func TestEndpointCreateWithAmbiguousComponentIs409(t *testing.T) {
+func TestEndpointCreateWithAmbiguousComponentIs404(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -231,11 +231,11 @@ func TestEndpointCreateWithAmbiguousComponentIs409(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	status, body := c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "tcp", "component": "dup-cmp"})
-	if status != http.StatusConflict {
-		t.Fatalf("create endpoint with ambiguous component status = %d, want 409\nbody: %s", status, body)
+	if status != http.StatusNotFound {
+		t.Fatalf("create endpoint with ambiguous component status = %d, want 404\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-cmp") {
-		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 
@@ -267,4 +267,58 @@ func listEndpoints(c *apiClient, tok string) []endpointResp {
 		c.t.Fatalf("decode endpoint list: %v", err)
 	}
 	return body.Endpoints
+}
+
+// TestDeletingAComponentThatOwnsEndpointsIs409 pins #138 over HTTP: the delete
+// is refused as occupied, the 409 names the endpoints and the next step, and
+// the endpoint is still attached to its component afterwards. Once the endpoint
+// is deleted, as the message asks, the component delete succeeds. Skipped under
+// -short.
+func TestDeletingAComponentThatOwnsEndpointsIs409(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "has-endpoint"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	ep := createEndpoint(c, ownerTok, map[string]any{"transport": "tcp", "component": "has-endpoint"})
+
+	status, body := c.send(ownerTok, http.MethodDelete, "/components/has-endpoint", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("delete component with an endpoint status = %d, want 409\nbody: %s", status, body)
+	}
+	for _, want := range []string{"1 endpoint", "delete or reassign"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("409 body = %s, want it to contain %q", body, want)
+		}
+	}
+	// The refusal must not have orphaned the endpoint.
+	if eps := listEndpoints(c, ownerTok); len(eps) != 1 || eps[0].Component == nil || *eps[0].Component != "has-endpoint" {
+		t.Errorf("endpoints after refused delete = %+v, want the one still on has-endpoint", eps)
+	}
+
+	c.do(ownerTok, http.MethodDelete, "/endpoints/"+ep.ID, nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/components/has-endpoint", nil, http.StatusNoContent)
 }

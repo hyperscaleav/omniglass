@@ -44,8 +44,8 @@ const BASELINE = process.env.DOCS_SHOTS_BASELINE ?? 'docs/screenshots/baseline';
 // character count: `d.toLocaleString()` does not zero-pad the hour, so 9:47 PM is
 // one character narrower than 11:47 PM, and fmtTime's AM is wider than its PM.
 // Two captures minutes apart share an hour and a day, so they are structurally
-// blind to exactly that class of jitter. Run the proof with DOCS_SHOTS_EXACT=1:
-// the gate's default comparison cannot see a one-pixel mask move (#774, #1081).
+// blind to exactly that class of jitter. Run the gate with it set: the
+// comparison is exact, so a one-pixel mask move fails (#774, #1081).
 const TZ = process.env.DOCS_SHOTS_TZ ?? '';
 
 async function walk(dir) {

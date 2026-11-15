@@ -126,3 +126,27 @@ func TestParseGateReasonsServesEveryReasonBesideTheRefusal(t *testing.T) {
 		t.Fatalf("an open gate served reasons %+v", got)
 	}
 }
+
+// TestPendingReason holds why a verdict is null (#981): an endpoint no node
+// probes is waiting on an assignment, an assigned one on its first probe, and a
+// row with a verdict is waiting on nothing, so the field is absent.
+func TestPendingReason(t *testing.T) {
+	t.Parallel()
+	verdict := &reachVerdictBody{Value: "up"}
+	cases := []struct {
+		name    string
+		node    string
+		verdict *reachVerdictBody
+		want    string
+	}{
+		{"no node, no verdict", "", nil, pendingNoNode},
+		{"node assigned, no verdict", "edge-1", nil, pendingAwaitingProbe},
+		{"node assigned, verdict", "edge-1", verdict, ""},
+		{"no node, verdict", "", verdict, ""},
+	}
+	for _, c := range cases {
+		if got := pendingReason(c.node, c.verdict); got != c.want {
+			t.Errorf("%s: pendingReason(%q, %v) = %q, want %q", c.name, c.node, c.verdict, got, c.want)
+		}
+	}
+}

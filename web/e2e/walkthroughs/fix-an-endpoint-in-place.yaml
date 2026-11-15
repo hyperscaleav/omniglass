@@ -2,7 +2,8 @@
 # octet short collects nothing; the host is corrected on the endpoint itself,
 # checked against the driver's inputs, and samples arrive with no re-attach.
 # Its setup places bay-2-display (a Boreal Edge 55 in Bay 2, SNMP on
-# 127.60.9.9) with no endpoint, off camera, as set-up-monitoring's does. The edit moves the endpoint's connection fingerprint, so the node's
+# 127.60.9.9) with no endpoint, off camera. It is its own component, not
+# set-up-monitoring's, which attaches SNMP to its component too (#1404). The edit moves the endpoint's connection fingerprint, so the node's
 # poll runs at its next 2s check-in rather than waiting out the backoff the
 # wrong address built up.
 title: Fix an endpoint in place

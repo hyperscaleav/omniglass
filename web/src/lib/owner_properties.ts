@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EffectivePropertyBody } from "../api/api.gen";
 
 // The owner-properties data layer: thin typed wrappers over the generated client
 // for the VALUE side of the property model, generic over the three owner kinds
@@ -25,7 +25,7 @@ export type PropertyOwnerKind = "component" | "system" | "location";
 // component, system, or location).
 export type PropertyOwner = { kind: PropertyOwnerKind; name: string };
 
-export type EffectiveProperty = components["schemas"]["EffectivePropertyBody"];
+export type EffectiveProperty = EffectivePropertyBody;
 
 // One cache namespace per owner kind, so two owners that share a name (a system
 // and a location both called "hq") never collide.

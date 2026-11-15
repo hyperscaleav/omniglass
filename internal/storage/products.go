@@ -450,6 +450,15 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		componentTypeID = &ctid
 	}
 	setLabel, labelVal := labelPatch(patch.Label)
+	// The type before the write, to tell a reclassification from a patch that
+	// restates it (#1030).
+	var priorTypeID string
+	if componentTypeID != nil {
+		if err := tx.QueryRow(ctx, `select component_type_id::text from product where id = $1::uuid`, auditImageID(before)).
+			Scan(&priorTypeID); err != nil {
+			return nil, fmt.Errorf("storage: read product component_type: %w", err)
+		}
+	}
 	m, err := scanProduct(tx.QueryRow(ctx, `
 		update product set
 			label      = case when $10::boolean then $2 else label end,
@@ -487,6 +496,14 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	// the uuid the before-image already carries, so a later rename cannot orphan it.
 	if err := writeAuditRes(ctx, tx, actorID, "update", "product", auditImageID(before), before, after); err != nil {
 		return nil, err
+	}
+	// A reclassification moves every component of the product into or out of
+	// the component rules that select by type, as a component's product change
+	// does (#1015): mark their rules, and the serve settles each.
+	if componentTypeID != nil && *componentTypeID != priorTypeID {
+		if err := markProductCalcRules(ctx, tx, m.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update product: %w", err)

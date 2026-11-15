@@ -14,7 +14,7 @@ summary: "`display_name` becomes **`label`** on all twenty-three tables that car
   keeps a plain string, because every read projection coalesces.
 - **The rename finishes a word rather than introducing one.** When it was first proposed, "label"
   was a candidate. It is now the system's vocabulary everywhere except the column it named:
-  `internal/label/` is the rule engine ([ADR-0098](#adr-0098-a-label-is-rendered-from-a-rule-and-a-name-is-not)),
+  `internal/label/` is the rule engine ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)),
   `label_rule` is a column on five tables plus a table of its own, the API says `:renderLabel`,
   `:previewLabels` and `:recomputeLabels`, and forty console files say `entityLabel`, `labelPen` or
   `labelGenerated`. Until this decision a route called `:recomputeLabels` wrote a column called

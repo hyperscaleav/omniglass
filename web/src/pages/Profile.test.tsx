@@ -121,6 +121,22 @@ describe("Profile bulk revoke", () => {
   });
 });
 
+describe("Profile form controls are labelled", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("resolves Username and Email inputs via getByLabelText for accessibility", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    mount(false);
+    // Both Username and Email inputs should be resolvable by their label text for screen readers.
+    const username = screen.getByLabelText("Username");
+    const email = screen.getByLabelText("Email");
+    expect(username).toBeTruthy();
+    expect(email).toBeTruthy();
+  });
+});
+
 // The token drawer's lifetime field, converted by #724. It carried `min="1"
 // max="365"` from the day it was written and neither could ever fire: the
 // drawer's Create button is portaled outside the <form>, so the browser never

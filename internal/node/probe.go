@@ -114,12 +114,12 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 		faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
 		c.report.refused(task.EndpointID)
 	} else {
-		started := time.Now()
-		dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions)
-		// The run's own account of itself (#1369): how long it took,
-		// answered or failed, and whether it failed as bookPollRun reads a
-		// failure, faulted and landed nothing.
-		c.report.poll(task.EndpointID, time.Since(started), !landedData(dps) && len(faults) > 0)
+		cost := measureRun(func() { dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions) })
+		// The run's own account of itself (#1369): how long it took and
+		// the CPU the kernel charged it (#1870), answered or failed, and
+		// whether it failed as bookPollRun reads a failure, faulted and
+		// landed nothing.
+		c.report.poll(task.EndpointID, cost, !landedData(dps) && len(faults) > 0)
 		if ownRequest {
 			for _, f := range faults {
 				if terr, ok := collection.AsTerminal(f); ok {

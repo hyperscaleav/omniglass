@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { ActionRuleBody, CreateActionRuleInputBody, NotificationBody, UpdateActionRuleInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { TRANSITIONS, type Transition } from "./subscriptions";
 
@@ -12,8 +12,8 @@ import { TRANSITIONS, type Transition } from "./subscriptions";
 // A person's own subscriptions are /auth/me/action-rules (lib/subscriptions),
 // never listed here.
 
-export type ActionRule = components["schemas"]["ActionRuleBody"];
-export type Notification = components["schemas"]["NotificationBody"];
+export type ActionRule = ActionRuleBody;
+export type Notification = NotificationBody;
 
 export const ACTION_RULES_KEY = ["action_rules"] as const;
 
@@ -67,8 +67,8 @@ export function actionRuleDraftErrors(d: ActionRuleDraft, editing = false): Acti
   return out;
 }
 
-export type CreateActionRule = components["schemas"]["CreateActionRuleInputBody"];
-export type UpdateActionRule = components["schemas"]["UpdateActionRuleInputBody"];
+export type CreateActionRule = CreateActionRuleInputBody;
+export type UpdateActionRule = UpdateActionRuleInputBody;
 
 export function createActionRuleBody(d: ActionRuleDraft): CreateActionRule {
   const body: CreateActionRule = { name: d.name.trim(), on: d.on, targets: d.targets, enabled: d.enabled, opt_out_allowed: d.optOutAllowed };
