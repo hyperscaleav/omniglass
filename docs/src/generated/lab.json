@@ -62,6 +62,14 @@
   ],
   "walkthroughs": [
     {
+      "id": "declare-a-first-role",
+      "title": "Declare a first role",
+      "description": "Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.",
+      "setup": [
+        "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
+      ]
+    },
+    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",

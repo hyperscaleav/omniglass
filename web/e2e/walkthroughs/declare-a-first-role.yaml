@@ -1,0 +1,24 @@
+# Declare a first role (#321): a one-off system conforms to no standard, so
+# nothing declares its roles but the system itself. Its setup places
+# lectern-cart in the Media Lab with no standard and no roles, off camera.
+title: Declare a first role
+description: Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.
+setup:
+  - post: /systems
+    body: { name: lectern-cart, label: Lectern cart, location: media-lab }
+steps:
+  - goto: /systems/lectern-cart?tab=configure
+    caption: A one-off system. No standard declares its roles, and it has none yet.
+  - click: 'button:has-text("Edit") >> nth=-1'
+    caption: Edit it. The Ad hoc group opens with a row to declare the first role.
+  - type: { target: 'input[aria-label="Role name"]', text: lectern-mic }
+    caption: Name the slot. The name is what a rule or a probe refers to.
+  - type: { target: 'input[placeholder="name, e.g. Table microphone"]', text: Lectern microphone }
+    caption: Give it a label an operator reads.
+  - select: { target: 'select[aria-label="Accept a component type…"]', value: boundary-mic }
+    caption: Say what fills it. Any product of an accepted type can.
+  - click: { role: button, name: Declare role }
+    caption: Declare it.
+  - wait: { selector: '[role="group"][aria-label="Ad hoc roles"]:has-text("0 of 1 satisfying")', timeout: 10000 }
+    caption: The role is the system's own, short one until a component fills it.
+    poster: true
