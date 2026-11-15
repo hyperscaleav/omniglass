@@ -618,7 +618,9 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	// The reply is an observation of a property target, recorded where the
 	// driver's polls of it land: held to the property's validation like any
 	// telemetry (a value outside it fails the command and records nothing),
-	// and written only as a transition.
+	// written only as a transition, and not at all when the target was
+	// observed after the exchange began (#1606): a late reply is evidence for
+	// the command, never a newer state of the device.
 	if ct.TargetPropertyType != "" {
 		var dataType string
 		var validation []byte
@@ -632,7 +634,11 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		if err != nil {
 			return nil, err
 		}
-		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
+		newer, err := observedSinceDispatch(ctx, tx, commandID, latest)
+		if err != nil {
+			return nil, err
+		}
+		if !newer && (latest == nil || !replyMatchesIntent(latest.Value, verdict.Value)) {
 			now, err := dbNow(ctx, tx)
 			if err != nil {
 				return nil, err
@@ -650,6 +656,25 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		return failed(fmt.Sprintf("the reply carried %s, not the intended %s", verdict.Value, valueText(intended.Value)))
 	}
 	return &settlementOutcome{status: "settled", by: SettledByReply, reason: fmt.Sprintf("the reply carried %s, the intended value", verdict.Value)}, nil
+}
+
+// observedSinceDispatch reports whether the target's latest observation was
+// taken after the command's latest delivery to a node, the moment its exchange
+// with the device began (#1606). A reply read after that is older than such an
+// observation however late it reaches the server, so it must not be written
+// over it. The observation's time is the one it carries (a node's sample time
+// for a poll, the database's for a push); a node clock ahead of the database's
+// only withholds a reply observation the next poll restores (ADR-0141's "late,
+// never wrong"), and one behind it leaves today's behavior.
+func observedSinceDispatch(ctx context.Context, q querier, commandID int64, latest *CurrentValue) (bool, error) {
+	if latest == nil {
+		return false, nil
+	}
+	var dispatched *time.Time
+	if err := q.QueryRow(ctx, `select dispatched_at from command where id = $1`, commandID).Scan(&dispatched); err != nil {
+		return false, fmt.Errorf("storage: delivery time of command %d: %w", commandID, err)
+	}
+	return dispatched != nil && latest.TS.After(*dispatched), nil
 }
 
 // writeReplyObservation records a command's reply, read through its driver

@@ -259,6 +259,47 @@ func TestARepeatedReplyValueIsOneTransition(t *testing.T) {
 	}
 }
 
+// A reply that reaches the server after the device has already pushed a newer
+// value settles its command, but never overwrites that value (#1606): the
+// latest observation of the target stays the push's, not the reply's.
+func TestALateReplyDoesNotOverwriteANewerObservation(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	// The device's own pushes land while the exchange is still retrying.
+	r.observeOn(t, "tcp", "hdmi3")
+	r.observeOn(t, "tcp", "dp1")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("status = %q, want settled from its reply", got)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "dp1" {
+		t.Fatalf("latest video-input = %+v (%v), want the newer push dp1", latest, err)
+	}
+	if n := r.observedRows(t); n != 2 {
+		t.Fatalf("%d observed rows, want the two pushes and no reply row", n)
+	}
+}
+
+// An observation older than the exchange does not stop the reply being
+// recorded: only one taken after the command was dispatched is newer than it.
+func TestAReplyIsRecordedOverAnObservationOlderThanTheExchange(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	r.observeOn(t, "tcp", "dp1")
+	id := r.issueAndDispatch(t, "hdmi3")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "hdmi3" {
+		t.Fatalf("latest video-input = %+v (%v), want the reply hdmi3", latest, err)
+	}
+}
+
 // A reply that cannot be stored (a NUL byte) fails the command, and the
 // execution is still recorded, so the command is not redelivered.
 func TestAnUnstorableReplyStillRecordsTheExecution(t *testing.T) {
