@@ -81,7 +81,7 @@
   {
    "id": "deploy",
    "label": "Deploy",
-   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. A grant of it reaches ONE tier, the tier it is scoped at. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own; it reaches no system and no component there, not even to read one. Building those out inside a building takes a system-scoped and a component-scoped grant of this role beside the location one, until a grant's scope can span tiers. Inherits Viewer, whose read floor is scoped the same way.",
+   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own. The same grant reads the systems and components placed in that location and creates new ones there, but does not edit, rename, or move them: that takes a system-scoped or component-scoped grant of this role, until a location grant's scope spans the modify actions too. Inherits Viewer, whose read floor is scoped the same way.",
    "inherits": [
     "viewer"
    ],

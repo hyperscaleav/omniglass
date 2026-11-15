@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
@@ -830,20 +831,14 @@ func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdic
 	if read.Empty() {
 		return nil, nil
 	}
-	args := []any{}
-	key := "$1"
-	if !read.All {
-		roots := uuidRoots(read.IDs)
-		selfIDs := uuidRoots(read.SelfIDs)
-		if len(roots) == 0 && len(selfIDs) == 0 {
-			return nil, nil // every scope root is malformed: nothing is in scope
-		}
-		args = append(args, roots, selfIDs)
-		key = "$3"
+	args, ok := scopedListArgs(systemConfig.table, read)
+	if !ok {
+		return nil, nil // every scope root is malformed: nothing is in scope
 	}
 	args = append(args, healthKey)
+	key := "$" + strconv.Itoa(len(args))
 	rows, err := p.pool.Query(ctx, `
-		with sys as (`+scopedListSQL(systemConfig.table, "id", read.All)+`),
+		with sys as (`+scopedListSQL(systemConfig.table, "id", read)+`),
 		latest as (
 			select distinct on (v.system_id) v.system_id, v.value #>> '{}' as verdict
 			from property v

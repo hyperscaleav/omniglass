@@ -625,7 +625,8 @@ func (p *PG) GetSystem(ctx context.Context, name string, read scope.Set) (*Syste
 
 // CreateSystem inserts a system under an optional parent and optional location,
 // writing the audit row in the same transaction. A root system requires an all
-// create scope; a child requires the parent within the create scope.
+// create scope, or a location in the create scope's cross-tier roots (#1498,
+// placeAdmits); a child requires the parent within the create scope.
 //
 // spec.Name empty is not an error (#686): it is the operator handing the pen to
 // the platform, which mints the system_type chain's stem plus the lowest free
@@ -673,7 +674,8 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 
 	var parentID *string
 	if spec.ParentName == nil {
-		if !create.All {
+		// A root is placed by its location alone (see createComponentTx).
+		if !create.All && (spec.LocationName == nil || len(create.LocationIDs) == 0) {
 			return nil, ErrSystemForbidden
 		}
 	} else {
@@ -706,6 +708,13 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *spec.LocationName, locationRead)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+		}
+		if spec.ParentName == nil {
+			if ok, err := placeAdmits(ctx, tx, loc.ID, create); err != nil {
+				return nil, err
+			} else if !ok {
+				return nil, ErrSystemForbidden
+			}
 		}
 		locationID = &loc.ID
 	}

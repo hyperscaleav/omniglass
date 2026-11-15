@@ -392,7 +392,8 @@ users:
         scope_kind: location
         scope_ref: hq
         scope_op: subtree
-  # A field tech scoped to the East campus, who builds out rooms under it but cannot
+  # A field tech scoped to the East campus, who builds out rooms under it (and creates
+  # and reads the systems and components placed in them, #1498) but cannot
   # touch the campus root itself (exercises subtree_excl_root, on a different site than
   # the viewer, so the seed shows per-site scoping).
   - username: tech-east
