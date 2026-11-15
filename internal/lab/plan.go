@@ -181,10 +181,10 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		// An endpoint change nudges its node to pull at once (#1945), but
-		// the rest of the console's changes reach the node at its next pull,
-		// so the lab pulls every 5s: within seconds, without a 1,000-system
-		// lab rebuilding every site's worklist every 2s (#1577).
+		// A console change nudges its node to pull at once (#1945, #1997);
+		// the lab still pulls every 5s, so a lost nudge costs seconds,
+		// without a 1,000-system lab rebuilding every site's worklist
+		// every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes every 2s, so

@@ -112,8 +112,8 @@ materialized, resolved task and command instances.
 :::note[Built: a declared change reaches a running node at once, and on its next pull at worst]
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
-carried, and the commit of an endpoint write nudges it to pull now ([the change
-nudge](#the-change-nudge), #1945), so a change the server has written is running within a second,
+carried, and the commit of any write that changes its worklist nudges it to pull now ([the change
+nudge](#the-change-nudge), #1945, #1997), so a change the server has written is running within a second,
 or within one pull interval if the nudge is lost (the pull
 carries it, and the node reconciles its held sessions the moment it lands, #1636, and hands the
 new worklist to its dispatcher at once, a new or moved task running then,
@@ -237,18 +237,39 @@ per endpoint and is what waits on secrets decrypted on use (#1250).
 :::
 ### The change nudge
 
-:::note[Built (#1945): a commit nudges the node it changed]
+:::note[Built (#1945, #1997): a commit nudges the node it changed]
 A scheduled pull alone leaves an edit waiting up to one interval plus its jitter, about 33 s at the
 30 s default. The commit of a write that changes a node's worklist nudges that node instead, and
 the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-change-nudges-its-node-through-a-postgres-notify-on-commit)).
 
-- **The write announces, in its transaction.** An endpoint create, edit, session retry or delete,
-  and a driver spec change that re-derives an endpoint's tasks, issue a Postgres `NOTIFY` naming
-  each node the write touched (an edit that moves an endpoint names both). Postgres delivers it
-  only when the transaction commits, once per node however many rows it touched, so a refused or
-  rolled-back write nudges nothing. Other writes that change a worklist (a secret rotation, a
-  property pin, a dependency edge, the report cadence) do not nudge yet and reach the node on its
-  next pull (#1997).
+- **The write announces, in its transaction.** Each write that changes a worklist issues a Postgres
+  `NOTIFY` naming each node the write touched. Postgres delivers it only when the transaction
+  commits, once per node however many rows it touched, so a refused or rolled-back write nudges
+  nothing. The writes, and the nodes each names:
+  - an endpoint create, edit, session retry or delete: the endpoint's node (an edit that moves an
+    endpoint names both). A retry that trusts a replaced key is also the only writer of a key pin
+    (`ssh-host-key`, `tls-certificate`): the plain property route refuses those keys;
+  - a driver edit or upsert that changes its spec: the nodes of every endpoint attached through it.
+    A task carries its driver's session block and ladder off the live spec, so an edit to either
+    alone changes the worklist though it re-derives no task; a label-only edit, or the same spec
+    written again, nudges nothing;
+  - a secret create, delete, or edit of its fields: the nodes of every endpoint whose inputs name
+    it and whose component it covers (the platform's, the component's or an ancestor's, or one in
+    the component's location chain). A label-only edit changes no worklist and nudges nothing;
+  - a path dependency added or removed: the nodes holding an in-band endpoint on both ends;
+  - a component rename (or a name reset): the nodes carrying it as a path upstream by name. A move
+    to a new parent names the nodes of every endpoint below it, whose component secrets now resolve
+    along another chain; a move to a new place names its own endpoints' nodes;
+  - a location moved to a new parent: the nodes of every endpoint on a component placed in it or
+    below it;
+  - a platform settings write that moves `collection.report_seconds`, which every worklist carries:
+    every node. Only a write to the `collection` namespace (or a reset of every override) reads the
+    window before and after; a write elsewhere cannot move it.
+
+  Writes that change no worklist nudge nothing: a component delete is refused while it owns
+  endpoints or children, a location delete while a component sits in it or it has children, and a
+  webhook token rotation reaches no node (a push endpoint has none).
+  A node's own observed pin (trust on first use) is the node's own write, already in force there.
 - **The server forwards it.** The bus holds one listening connection to the database, outside the
   pool, and publishes each named node an empty message on `og.v1.worklist-changed.<node>`. A dropped
   connection is re-opened on a backoff (100 ms, doubling to 5 s) and logged at WARN; a change
@@ -533,7 +554,7 @@ two-phase confirmation above); under the endpoint-by-endpoint sync it rides the 
 beside the set digest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). A move reaches both nodes on their next worklist pull
 (30 s, jittered); the move's endpoint write nudges both nodes on `og.v1.worklist-changed.<node>`
 where it commits through an endpoint edit ([the change nudge](#the-change-nudge)); the
-rebalancer's own moves will nudge the same way (#1997). The worklist
+rebalancer's own moves are endpoint moves and must announce both nodes the same way. The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 
