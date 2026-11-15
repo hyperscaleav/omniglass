@@ -330,9 +330,11 @@ type Grant struct {
 	// distinctly from direct. A principal's effective grants are its direct grants
 	// unioned with its groups' grants; both flatten and scope-resolve the same way.
 	GroupID *string
-	// GroupName is the source group's label (label or name), set alongside
-	// GroupID, so a caller can name where an inherited grant comes from.
-	GroupName *string
+	// GroupName is the source group's name (the identifier a client can type
+	// back), set alongside GroupID, so a caller can name where an inherited grant
+	// comes from. GroupLabel is its friendly string, nil when the group has none.
+	GroupName  *string
+	GroupLabel *string
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
@@ -1578,7 +1580,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	// both read pr.Grants, so a member inherits a group's role and scope here and
 	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.label, pg.name)
+		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, pg.name, pg.label
 		   from principal_grant g
 		   left join principal_group pg on pg.id = g.group_id
 		  where g.principal_id = $1
@@ -1590,7 +1592,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName, &g.GroupLabel); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)

@@ -77,20 +77,25 @@ first commit.
 
 ## Cutting a release (manual)
 
-Releases are **not** cut automatically on merge to `main` (deliberately, for now). A release
-is a deliberate act, run from an up-to-date `main` with [semantic-release](https://semantic-release.gitbook.io/),
-which reads the conventional-commit subjects since the last tag, computes the next version,
-pushes a git tag, and creates a GitHub Release with generated notes.
+Releases are **not** cut automatically on merge to `main` (deliberately, for now), and there is
+exactly one way to cut one: dispatch the **release** workflow (`release.yml`) from its "Run
+workflow" button. It runs [semantic-release](https://semantic-release.gitbook.io/), which reads the
+conventional-commit subjects since the last tag, computes the next version, pushes a git tag, and
+creates a GitHub Release with generated notes; the same job then builds the release image and the
+binaries (below). There is no local publish target: a release cut from a laptop could not build
+the image first, so its binaries would carry no image digest.
 
-Two make targets:
+**Releasing is switched off** until the repository variable `RELEASES_ENABLED` is `true`
+(Settings, Secrets and variables, Actions, Variables). While it is unset, a dispatch can only
+plan: the `dry_run` toggle works, and a dispatch without it fails at its first step, before
+semantic-release can push a tag. Every publishing step checks the flag too, so nothing reaches
+the tag, the Release, or GHCR until it is flipped (#1940).
+
+To preview locally:
 
 ```bash
 make release-plan    # dry run: print the next version + notes, publish nothing
-make release-apply   # tag + create the GitHub Release
 ```
-
-The same thing can be dispatched in CI from the **release** workflow's "Run workflow" button
-(with a `dry_run` toggle), for a release cut from a clean checkout instead of a laptop.
 
 | Title prefix | Release |
 |--------------|---------|
@@ -103,32 +108,29 @@ No changelog is ever committed back to `main`, so the release never writes to th
 branch. The generated notes live on the GitHub Release.
 
 To switch to release-on-merge later, change the release workflow's trigger to `push` on
-`main`; the make targets stay as the local preview path.
+`main`; `make release-plan` stays as the local preview.
 
 ## Binaries on the release
 
-semantic-release cuts the tag and the Release; [GoReleaser](https://goreleaser.com/) then
-fills that Release with the cross-platform binaries. The two split cleanly: semantic-release
-owns the version and the notes, GoReleaser only builds artifacts and attaches them (its
-`release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
+semantic-release cuts the tag and the Release; the same job then builds and pushes the
+multi-platform release image to GHCR, and [GoReleaser](https://goreleaser.com/) fills the
+Release with the cross-platform binaries, each stamped with that image's digest so a release
+binary's `omniglass lab run` pulls exactly the image it was released with
+([ADR-1257](/architecture/decisions/#adr-1257-a-release-binary-pulls-its-lab-image-by-the-digest-stamped-at-release)).
+semantic-release owns the version and the notes, GoReleaser only builds artifacts and attaches
+them (its `release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus a `checksums.txt`
 and an SBOM per archive. Because the binary is pure Go with CGO disabled, all of it
 cross-compiles from one runner; the SPA is built once by a `before` hook (`make web`) and
 embedded in every target via `-tags web`.
 
-The binaries are always built in CI, never on a laptop, but which workflow builds them
-depends on how the release was cut:
-
-- **`make release-apply`** pushes the tag with your token, which cascades, so the
-  tag-triggered `goreleaser.yml` workflow builds the binaries.
-- **The CI-dispatch path** pushes the tag with `GITHUB_TOKEN`, which by design does not
-  cascade, so `release.yml` builds the binaries inline in the same job.
-
-Both drive the same `.goreleaser.yaml`, so the artifacts are identical either way. Validate a
-config change locally with `make release-snapshot` (builds the whole matrix, no tag, no
-publish), and CI runs the same snapshot on any pull request that touches the release config,
+The tag is pushed with `GITHUB_TOKEN`, which by design triggers no other workflow, so the
+image and the binaries are built inline in `release.yml` rather than by a tag-triggered
+workflow; a `v*` tag pushed any other way builds nothing. Validate a config change locally
+with `make release-snapshot` (builds the whole matrix, no tag, no publish), and
+`goreleaser.yml` runs the same snapshot on any pull request that touches the release config,
 uploading the archives as downloadable workflow artifacts. A green PR snapshot is real
-evidence that the tagged release will build.
+evidence that the release will build.
 
 ## Why the PR title, not the commits
 

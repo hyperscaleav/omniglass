@@ -374,9 +374,8 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 	}
 	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", jetStreamPublish(js))
 	big := strings.Repeat("x", int(nc.MaxPayload())+1024)
-	// The shipper tells the drop as it goes idle, after it wakes drain, so
-	// the capture stays in place until the notice arrives rather than ending
-	// when drain returns.
+	// The shipper tells the drop before it wakes drain, so the notice is in
+	// the capture by the time drain returns.
 	h := &recordingHandler{}
 	prior := slog.Default()
 	slog.SetDefault(slog.New(h))
@@ -403,10 +402,6 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 			}
 		}
 		return false
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for !told() && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
 	}
 	if !told() {
 		t.Fatal("the dropped batch was never told with its count")

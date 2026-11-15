@@ -33,7 +33,7 @@ make
 `./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
 
 With a [release binary](/guides/install/#download-a-binary) there is nothing to build: run
-`omniglass lab run`, and it pulls its own release's image.
+`omniglass lab run`, and it pulls its own release's image, by the digest stamped into it at release.
 
 ## What you see
 
@@ -313,9 +313,13 @@ own build id, saying to run `make`. The lab resolves the tag to an image ID once
 anything, and creates the server, the seed and every node (each site's, in a scale lab) from that ID,
 so a build that re-tags `omniglass:dev-<build id>` or `omniglass:dev` mid-run changes nothing. The lab
 never builds anything itself, so it always runs the code you built. Old `omniglass:dev-<build id>`
-tags pile up as you rebuild; `docker image prune` or `docker rmi` clears them. A release binary runs
-`ghcr.io/hyperscaleav/omniglass:v<version>`, pulled if absent
-([container image](/guides/container-image/#where-it-ships)).
+tags pile up as you rebuild; `docker image prune` or `docker rmi` clears them. A release binary runs the image its release
+was built with, `ghcr.io/hyperscaleav/omniglass@sha256:...`, pulled if absent: the release builds and
+pushes the image first and stamps its digest into the binary, so the binary never asks the registry
+what the `v<version>` tag points at, and a tag pushed again later cannot change what it runs
+([container image](/guides/container-image/#where-it-ships)). A release-versioned binary that carries
+no digest (one built outside the release workflow) refuses to start a lab and says
+to name an image with `--image`, which runs it with the usual warning.
 
 ## Scale lab scenarios
 
@@ -412,27 +416,38 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
   thousandth of a core.
 
 So `corporate` at 1,000 systems (18 sites, 3,016 components) needs about 3.4 GiB and 3.2 cores, and at
-3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores. CPU, not memory, is what runs out
-first on most machines: the reference WSL setup of 12 GB on a 12-core host fits 3,000 systems only
-just. `--plan` ends with the decision for this machine:
+3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
+12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 3.4 GiB of memory and 3.2 cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components).
-This Docker host can spare 25.1 GiB and 9.6 cores (80% of its 31.3 GiB and 12 cores).
+Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, a node for each of 30 sites, 8950 simulated components).
+Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
 
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.4 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 447, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
 ```
 
-That one was forced with the hidden `--host-memory 2g`, which plans against a memory limit of your
-choosing, so you can see where a smaller machine's ceiling sits without one. The estimate is a
-model, not a promise: it was measured at small sizes, and [`omniglass lab measure`](#measuring-a-scale-lab)
-measures a running lab.
+Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
+choosing (`12g`, then `2g`), so you can see where a smaller machine's ceiling sits without one. The
+estimate is a model, not a promise: it was measured at small sizes, and
+[`omniglass lab measure`](#measuring-a-scale-lab) measures a running lab.
+
+**A scale lab's Postgres is sized for the host and the fleet**, the way a production one is
+([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
+host's memory (8 GB at most), and never more than the fleet's estimate leaves of what the host can
+spare, so the buffers grow into spare memory and never refuse a fleet that fits. They never drop
+below Postgres's stock 128 MB, the size the estimate was measured with. A forced `--host-memory`
+sizes them only when it is less than the host has. The preflight counts buffers above the stock size
+on top of the estimate, since they fill as the lab reads. Checkpoints spread to 15 minutes and 8 GB
+of WAL, compressed, so leave that much disk free for the lab's volume beside its data. A `dev` lab runs the image's stock Postgres, which is plenty for
+the fleet it simulates.
 
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
 the seed included. Past it the lab removes everything it started and names what was not up: each
@@ -544,22 +559,25 @@ How to read each row:
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so
   this is a floor: zero means none was logged, not none happened. Anything above zero in a quiet lab
   is worth a look.
-- **consumer lane busy**: how much of the window the ingest consumer spent inside its handler, landing
-  batches. The telemetry stream is a work queue with one durable consumer and one message in flight,
-  so the consumer is one lane, and its busy fraction is the lane's utilisation: at 100 % every batch
-  waits for the one before it and lag grows without bound; at 25 % the lane could carry four times the
-  load before it saturates. The row also gives the service time a batch (busy time over batches) and
-  the batches it counted over the span. The server tallies every batch's handler time and logs the
-  cumulative count and busy milliseconds every 30 s (`msg="ingest lane"`, only when the count moved,
-  so an idle server is quiet); the harness reads the first and last tally inside the window and
-  divides the busy time between them by the time between them, so the fraction is exact to the
-  millisecond over that span and no boundary estimate is needed (a batch in flight at a tick counts
-  toward the next interval). It needs two tallies inside the window, 30 s apart: a window too short
-  to hold two ticks, a lane that was idle at a tick, or a server built before this line reads
-  `not measured` with the reason under the table, as does a tally that went backwards (the server
-  restarted inside the window). Together with the lag this answers
-  whether more consumers would help: a lag at the spool wait with a lane mostly idle means the lane is
-  not the bottleneck.
+- **consumer lane busy**: how much of the window the busiest ingest lane spent inside its handler,
+  landing batches. The telemetry stream is a work queue filed by a partition of each node's name, with
+  one durable and one message in flight a partition (`OMNIGLASS_INGEST_PARTITIONS`, 4 by default), so
+  each partition is one lane and a node's batches always share one. The busiest lane bounds ingest, not
+  the lanes' sum: at 100 % every batch on it waits for the one before it and its nodes' lag grows
+  without bound; at 25 % it could carry four times the load before it saturates. The push lane and any
+  partition left draining share a tally of their own, which is no one lane's and is left out. The row
+  also gives the service time a batch (busy time over batches) and the batches every lane counted over
+  its span. The server tallies every batch's handler time and logs each lane's cumulative count and
+  busy milliseconds every 30 s (`msg="ingest lane"`, a line a lane naming its `partition`, only when
+  the count moved, so an idle server is quiet); the harness reads each lane's first and last tally
+  inside the window and divides the busy time between them by the time between them, so the fraction
+  is exact to the millisecond over that span and no boundary estimate is needed (a batch in flight at a
+  tick counts toward the next interval). It needs a lane with two tallies inside the window, 30 s
+  apart: a window too short to hold two ticks, lanes that were idle at a tick, or a server built before
+  this line reads `not measured` with the reason under the table, as does a tally that went backwards
+  (the server restarted inside the window). Together with the lag this answers whether more lanes
+  would help: a lag at the spool wait with the busiest lane mostly idle means the lanes are not the
+  bottleneck.
 - **fleet view p50, p95**: the time of `GET /api/v1/views/fleet`, the whole-fleet view the console
   opens on, read through the API with a token the harness mints, spread evenly over the window so it
   is read while the lab collects, not while it idles. The reads are sequential, so these are one
@@ -1273,6 +1291,10 @@ then the CLI's current context, then the platform's default socket or named pipe
 - **The image is not built, or was built from another tree.** Run `make`, which builds the binary
   and the image together, then run the lab again. A binary built without `make` carries no build id
   and cannot tell which image is its own, so it asks for `make` too.
+- **A release binary carries no image digest.** It was built outside the release workflow (from a
+  tagged tree, or by a tag pushed from a workstation), so it cannot name the image its release was
+  built with, and it will not trust the tag. Run an image you choose with `--image`, such as
+  `--image ghcr.io/hyperscaleav/omniglass:v<version>`, with the usual warning.
 
 ## The console fast loop
 

@@ -1,14 +1,18 @@
 name: release
 
-# Manual release. Releases are NOT cut on merge to main (deliberately, for now):
-# this runs only when dispatched by hand, and the primary path is the local
-# `make release-plan` / `make release-apply` targets. It reads the conventional-
-# commit subjects since the last tag (each is a squash-merged PR title, linted by
-# pr-title.yml), computes the next version, pushes a git tag, and creates a
-# GitHub Release with generated notes. No changelog is committed back to main;
-# the tag is the artifact, and the binary release pipeline (#55) builds off it.
-# To switch to release-on-merge later, change the trigger to `push: branches:
-# [main]`.
+# The one release path. Releases are NOT cut on merge to main (deliberately, for
+# now): this runs only when dispatched by hand. It reads the conventional-commit
+# subjects since the last tag (each is a squash-merged PR title, linted by
+# pr-title.yml), computes the next version, pushes a git tag, creates a GitHub
+# Release with generated notes, builds and pushes the release image, and attaches
+# the binaries, each stamped with that image's digest (#1257). No changelog is
+# committed back to main; the tag is the artifact. To switch to release-on-merge
+# later, change the trigger to `push: branches: [main]`.
+#
+# Releasing is switched off until the repository variable RELEASES_ENABLED is
+# `true` (Settings, Secrets and variables, Actions, Variables). Until then a
+# dispatch may only dry-run; a real run fails at the first step, before
+# semantic-release can push a tag.
 
 on:
   workflow_dispatch:
@@ -22,6 +26,7 @@ permissions:
   contents: write       # push the tag, create the GitHub Release
   issues: write         # comment on released issues
   pull-requests: write  # comment on released PRs
+  packages: write       # push the release image to GHCR
 
 concurrency:
   group: release
@@ -30,16 +35,27 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      # Every publishing step after semantic-release checks this as well as
+      # new_release_published, which a dry run can also report.
+      PUBLISH: ${{ !inputs.dry_run && vars.RELEASES_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0          # full history + tags for version analysis
           persist-credentials: false
 
+      - name: Refuse unless releases are enabled
+        if: ${{ !inputs.dry_run && vars.RELEASES_ENABLED != 'true' }}
+        run: |
+          echo "::error::Releases are disabled: set the repository variable RELEASES_ENABLED to true to publish, or dispatch with dry_run."
+          exit 1
+
       - uses: cycjimmy/semantic-release-action@ad51787758d9654d5a75150a89a6fa9b3ccef95e # v8.1.4
         id: semantic
         with:
-          dry_run: ${{ inputs.dry_run }}
+          # Forced on while releases are disabled, so a dispatch can only plan.
+          dry_run: ${{ env.PUBLISH != 'true' }}
           # Plugins are pinned in .releaserc.json (the npm publish plugin is
           # deliberately excluded: this is a Go repo, nothing publishes to npm).
           extra_plugins: |
@@ -49,32 +65,77 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build and push the release image before the binaries, so each binary
+      # carries the image's digest and its `omniglass lab run` pulls exactly
+      # this image, never whatever the v<version> tag points at later (#1257).
+      # The tag push above uses GITHUB_TOKEN, which by design triggers no other
+      # workflow, so the image is built inline here, the same way image.yml
+      # builds it.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # Only the release tag: the commit's sha tag is image.yml's, built
+          # on main.
+          tags: |
+            type=raw,value=${{ steps.semantic.outputs.new_release_git_tag }}
+
+      - name: Build and push the release image
+        id: image
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The release version, which the image's
+          # org.opencontainers.image.version label then carries too.
+          build-args: |
+            VERSION=${{ steps.semantic.outputs.new_release_git_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       # Attach the cross-platform binaries to the Release semantic-release just
-      # cut. This path pushed its tag with GITHUB_TOKEN, which by design does
-      # not cascade to the tag-triggered goreleaser workflow, so the binaries
-      # are built inline here. Gated on an actual new release (dry-runs skip
-      # it). Shares .goreleaser.yaml with goreleaser.yml.
+      # cut, built inline for the same reason as the image. Shares
+      # .goreleaser.yaml with goreleaser.yml's PR snapshot.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: steps.semantic.outputs.new_release_published == 'true'
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Node (for the embedded console build)
-        if: steps.semantic.outputs.new_release_published == 'true'
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: Install syft (SBOM generator)
-        if: steps.semantic.outputs.new_release_published == 'true'
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
         uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
 
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        if: steps.semantic.outputs.new_release_published == 'true'
+        if: env.PUBLISH == 'true' && steps.semantic.outputs.new_release_published == 'true'
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ steps.semantic.outputs.new_release_git_tag }}
+          # Stamped into each binary as main.imageDigest (.goreleaser.yaml).
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}

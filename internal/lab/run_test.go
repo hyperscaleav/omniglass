@@ -37,6 +37,10 @@ type fakeEngine struct {
 	published string
 	nextID    int
 	host      HostResources
+	// hostReads counts each read of the host's resources.
+	hostReads int
+	// cmds is each service's command as it was run.
+	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
 	seedHangs bool
 }
@@ -75,6 +79,7 @@ func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
 	return EngineInfo{APIVersion: "1.56"}, nil
 }
 func (f *fakeEngine) Resources(context.Context) (HostResources, error) {
+	f.hostReads++
 	return f.host, nil
 }
 func (f *fakeEngine) InspectImage(_ context.Context, ref string) (ImageInfo, bool, error) {
@@ -157,6 +162,10 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	}
 	f.states[id] = st
 	f.created = append(f.created, "container "+svc.Name)
+	if f.cmds == nil {
+		f.cmds = map[string][]string{}
+	}
+	f.cmds[svc.Name] = svc.Cmd
 	return id, nil
 }
 func (f *fakeEngine) Inspect(_ context.Context, id string) (ContainerState, error) {
@@ -229,7 +238,7 @@ func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 func testConfig() Config {
 	o := testOptions()
 	o.Owner = Owner{Host: "box", PID: 42}
-	choice := SelectImage("abc123", "")
+	choice, _ := SelectImage("abc123", "", "")
 	o.Image = choice.Ref
 	return Config{Options: o, Image: choice, PlantedFaults: []string{"Panel SNMP"}}
 }
@@ -311,7 +320,10 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	cfg := testConfig()
-	cfg.Image = SelectImage("1.2.3", "")
+	var err error
+	if cfg.Image, err = SelectImage("1.2.3", testDigest, ""); err != nil {
+		t.Fatal(err)
+	}
 	cfg.Options.Image = cfg.Image.Ref
 	eng.imageIDs[cfg.Image.Ref] = "sha256:released"
 	var out bytes.Buffer
@@ -498,7 +510,7 @@ func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 			eng.images["stack:x"] = map[string]string{VersionLabel: tc.label}
 			var out bytes.Buffer
 			cfg := testConfig()
-			cfg.Image = SelectImage("abc123", "stack:x")
+			cfg.Image, _ = SelectImage("abc123", "", "stack:x")
 			cfg.Options.Image = "stack:x"
 			if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 				t.Fatalf("%v\n%s", err, out.String())

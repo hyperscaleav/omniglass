@@ -196,22 +196,30 @@ func CountRedeliveries(r io.Reader) (Redeliveries, error) {
 	return n, sc.Err()
 }
 
-// LaneSample is one "ingest lane" line of the server's log: the consumer
-// lane's running total of batches handled and the time its handler held the
-// lane for them, since the server started (internal/bus, startLaneLog).
+// LaneSample is one "ingest lane" line of the server's log: an ingest lane's
+// running total of batches handled and the time its handler held the lane for
+// them, since the server started (internal/bus, startLaneLog). Partition names
+// the lane: a partition's index, "other" for the durables outside the
+// partitions, or empty from a server that ran one lane.
 type LaneSample struct {
-	At      time.Time
-	Batches int64
-	Busy    time.Duration
+	At        time.Time
+	Partition string
+	Batches   int64
+	Busy      time.Duration
 }
 
 const logLane = `msg="ingest lane"`
 
+// otherLane is the tally of the durables outside the partitions (the push
+// lane's, and one left draining after the lane count changed). They share it,
+// so it is no one lane's utilisation.
+const otherLane = "other"
+
 // ParseLaneLog reads the lane tally lines out of a server's log, as the text
-// handler writes them: time=<RFC 3339> ... msg="ingest lane" ... batches=N
-// busy_ms=M. Any other line is skipped; a tally line that does not parse is
-// an error, since a harness that misread the server's count would print a
-// wrong figure with a straight face.
+// handler writes them: time=<RFC 3339> ... msg="ingest lane" ... partition=P
+// batches=N busy_ms=M. Any other line is skipped; a tally line that does not
+// parse is an error, since a harness that misread the server's count would
+// print a wrong figure with a straight face.
 func ParseLaneLog(r io.Reader) ([]LaneSample, error) {
 	var out []LaneSample
 	sc := bufio.NewScanner(r)
@@ -234,6 +242,8 @@ func ParseLaneLog(r io.Reader) ([]LaneSample, error) {
 			switch key {
 			case "time":
 				sample.At, err = time.Parse(time.RFC3339Nano, value)
+			case "partition":
+				sample.Partition = value
 			case "batches":
 				sample.Batches, err = strconv.ParseInt(value, 10, 64)
 			case "busy_ms":
@@ -252,59 +262,95 @@ func ParseLaneLog(r io.Reader) ([]LaneSample, error) {
 	return out, sc.Err()
 }
 
-// Lane is the consumer lane's utilisation over a window: how much of the
-// wall time its one handler held the lane, and the mean time a batch held it.
-// It answers whether the lane is the bottleneck (busy near 1) or waiting on
-// its publishers (busy near 0 with the ingest lag at the spool wait).
+// Lane is the ingest lanes' utilisation over a window: how much of the wall
+// time the busiest lane's one handler held it, and the mean time a batch held
+// a lane. It answers whether ingest is the bottleneck (the busiest lane near
+// 1) or waiting on its publishers (busy near 0 with the ingest lag at the
+// spool wait). The lanes run side by side, each a partition of the nodes
+// (#1896), so the busiest one is what bounds ingest, not their sum.
 type Lane struct {
-	// Measured is false when the window held fewer than two tallies, or the
-	// server restarted inside it; Reason then says which.
+	// Measured is false when no lane held two tallies in the window, or a
+	// lane's tallies went backwards inside it (a restart); Reason then says
+	// which.
 	Measured bool   `json:"measured"`
 	Reason   string `json:"reason,omitempty"`
-	// Batches is the batches handled between the first and last tally in the
-	// window, BusyFraction the lane's busy time over the span between them,
-	// ServiceMs the mean milliseconds a batch held the lane, SpanSeconds the
-	// span itself.
+	// Lanes is how many lanes held two tallies in the window, and Busiest
+	// the one with the highest busy fraction ("" from a one-lane server).
+	Lanes   int    `json:"lanes"`
+	Busiest string `json:"busiest,omitempty"`
+	// Batches is the batches every measured lane handled between its first
+	// and last tally in the window, BusyFraction the busiest lane's busy time
+	// over the span between its two, ServiceMs the mean milliseconds a batch
+	// held a lane, SpanSeconds the busiest lane's span.
 	Batches      int64   `json:"batches"`
 	BusyFraction float64 `json:"busy_fraction"`
 	ServiceMs    float64 `json:"service_ms"`
 	SpanSeconds  float64 `json:"span_seconds"`
 }
 
-// LaneOf is the lane's utilisation between the first and last tally inside
-// [from, to]. The tallies are running totals, so the difference between two
-// is exact for the span between them, and the span, not the window, is the
-// denominator: the warm-up's tallies and the partial intervals at the
-// window's edges do not count.
+// laneSpan is one lane's movement between its first and last tally in a
+// window.
+type laneSpan struct {
+	batches int64
+	busy    time.Duration
+	span    time.Duration
+}
+
+// LaneOf is the lanes' utilisation between each lane's first and last tally
+// inside [from, to]. The tallies are running totals, so the difference
+// between two is exact for the span between them, and the span, not the
+// window, is the denominator: the warm-up's tallies and the partial intervals
+// at the window's edges do not count. A lane logs only while its count moves,
+// so a lane with fewer than two tallies in the window is left out; the tally
+// of the durables outside the partitions is no lane and is left out too.
 func LaneOf(samples []LaneSample, from, to time.Time) Lane {
-	var in []LaneSample
+	byLane := map[string][]LaneSample{}
+	var order []string
+	in := 0
 	for _, s := range samples {
-		if !s.At.Before(from) && !s.At.After(to) {
-			in = append(in, s)
+		if s.At.Before(from) || s.At.After(to) || s.Partition == otherLane {
+			continue
+		}
+		in++
+		if _, seen := byLane[s.Partition]; !seen {
+			order = append(order, s.Partition)
+		}
+		byLane[s.Partition] = append(byLane[s.Partition], s)
+	}
+	l := Lane{}
+	var busy time.Duration
+	for _, name := range order {
+		ls := byLane[name]
+		// Every tally is a running total, so one that falls below the one
+		// before it is a fresh process: a restart inside the window, even one
+		// whose new count overtook the old by the window's end, measures
+		// nothing.
+		for i := 1; i < len(ls); i++ {
+			if ls[i].Batches < ls[i-1].Batches || ls[i].Busy < ls[i-1].Busy {
+				return Lane{Reason: "the lane's tallies went backwards in the window (the server restarted?)"}
+			}
+		}
+		if len(ls) < 2 {
+			continue
+		}
+		first, last := ls[0], ls[len(ls)-1]
+		sp := laneSpan{batches: last.Batches - first.Batches, busy: last.Busy - first.Busy, span: last.At.Sub(first.At)}
+		if sp.span <= 0 {
+			continue
+		}
+		l.Lanes++
+		l.Batches += sp.batches
+		busy += sp.busy
+		// With one message in flight a lane is one handler at a time, so its
+		// fraction cannot pass 1.
+		if f := float64(sp.busy) / float64(sp.span); l.Lanes == 1 || f > l.BusyFraction {
+			l.BusyFraction, l.Busiest, l.SpanSeconds = f, name, sp.span.Seconds()
 		}
 	}
-	if len(in) < 2 {
-		return Lane{Reason: fmt.Sprintf("the server logged %d lane tallies in the window, two are needed", len(in))}
+	if l.Lanes == 0 {
+		return Lane{Reason: fmt.Sprintf("the server logged %d lane tallies in the window, two from one lane are needed", in)}
 	}
-	// Every tally is a running total, so one that falls below the one before
-	// it is a fresh process: a restart inside the window, even one whose new
-	// count overtook the old by the window's end, measures nothing.
-	for i := 1; i < len(in); i++ {
-		if in[i].Batches < in[i-1].Batches || in[i].Busy < in[i-1].Busy {
-			return Lane{Reason: "the lane's tallies went backwards in the window (the server restarted?)"}
-		}
-	}
-	first, last := in[0], in[len(in)-1]
-	span := last.At.Sub(first.At)
-	if span <= 0 {
-		return Lane{Reason: "the lane's tallies in the window span no time"}
-	}
-	l := Lane{Measured: true, Batches: last.Batches - first.Batches, SpanSeconds: span.Seconds()}
-	// With one message in flight the lane is one handler at a time, so the
-	// fraction cannot pass 1. A partitioned consumer (#1585) would hold
-	// several lanes at once and need their count as the denominator.
-	busy := last.Busy - first.Busy
-	l.BusyFraction = float64(busy) / float64(span)
+	l.Measured = true
 	if l.Batches > 0 {
 		l.ServiceMs = float64(busy) / float64(time.Millisecond) / float64(l.Batches)
 	}
@@ -316,8 +362,12 @@ func (l Lane) describe() string {
 	if !l.Measured {
 		return "not measured"
 	}
-	return fmt.Sprintf("%.1f %%   (%.1f ms a batch, %s batches over %.0f s)",
-		l.BusyFraction*100, l.ServiceMs, count(float64(l.Batches)), l.SpanSeconds)
+	of := ""
+	if l.Lanes > 1 {
+		of = fmt.Sprintf("busiest of %d lanes, ", l.Lanes)
+	}
+	return fmt.Sprintf("%.1f %%   (%s%.1f ms a batch, %s batches over %.0f s)",
+		l.BusyFraction*100, of, l.ServiceMs, count(float64(l.Batches)), l.SpanSeconds)
 }
 
 // DrainSample is the retention backlog still in the table at an instant.

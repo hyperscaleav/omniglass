@@ -635,15 +635,45 @@ func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
 }
 
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
-// the ingest lag from (a row's commit time less its probe time). A dev lab's
-// does not: it pays for nothing it does not read.
-func TestPlanScaleLabRecordsCommitTimestamps(t *testing.T) {
-	s, err := Plan(scaleOptions())
+// the ingest lag from (a row's commit time less its probe time), and runs
+// sized for the fleet it simulates (#1930): shared buffers from the host's
+// memory, checkpoints spaced by time rather than forced by WAL volume, WAL
+// compressed, and I/O timed so pg_stat_io says where a stall went. It never
+// turns synchronous_commit off: the bus acks a batch once its commit returns.
+// A dev lab's does none of it: it pays for nothing it does not read.
+func TestPlanScaleLabSizesPostgres(t *testing.T) {
+	o := scaleOptions()
+	o.SharedBuffersMiB = 4096
+	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(s.DB.Cmd, " "); got != "postgres -c track_commit_timestamp=on" {
-		t.Fatalf("a scale lab's database runs %q, want postgres with commit timestamps on", got)
+	if len(s.DB.Cmd) == 0 || s.DB.Cmd[0] != "postgres" {
+		t.Fatalf("a scale lab's database runs %q, want postgres with its settings", s.DB.Cmd)
+	}
+	got := map[string]string{}
+	for i := 1; i < len(s.DB.Cmd); i += 2 {
+		if s.DB.Cmd[i] != "-c" || i+1 >= len(s.DB.Cmd) {
+			t.Fatalf("a scale lab's database runs %q, want postgres then -c name=value pairs", s.DB.Cmd)
+		}
+		name, value, _ := strings.Cut(s.DB.Cmd[i+1], "=")
+		got[name] = value
+	}
+	for name, want := range map[string]string{
+		"track_commit_timestamp": "on",
+		"shared_buffers":         "4096MB",
+		"max_wal_size":           "8GB",
+		"checkpoint_timeout":     "15min",
+		"wal_compression":        "lz4",
+		"track_io_timing":        "on",
+		"track_wal_io_timing":    "on",
+	} {
+		if got[name] != want {
+			t.Errorf("a scale lab's database sets %s=%q, want %q (command %q)", name, got[name], want, s.DB.Cmd)
+		}
+	}
+	if v, ok := got["synchronous_commit"]; ok {
+		t.Errorf("a scale lab's database sets synchronous_commit=%s: the bus acks after commit and assumes it durable", v)
 	}
 	dev, err := Plan(testOptions())
 	if err != nil {
@@ -651,6 +681,36 @@ func TestPlanScaleLabRecordsCommitTimestamps(t *testing.T) {
 	}
 	if len(dev.DB.Cmd) != 0 {
 		t.Fatalf("a dev lab's database runs %q, want the image's own command", dev.DB.Cmd)
+	}
+}
+
+// Shared buffers are at most a quarter of the Docker host's memory, never
+// below Postgres's own 128 MB nor above 8 GB; a host not read (a plan
+// rendered for the docs) gets 1 GB, which an 8 GB laptop carries.
+func TestPostgresSharedBuffersIsAQuarterOfTheHostBounded(t *testing.T) {
+	for _, tc := range []struct {
+		mem  int64
+		want int64
+	}{
+		{0, 1024},
+		{256 << 20, 128},
+		{2 << 30, 512},
+		{8 << 30, 2048},
+		{(8 << 30) + (3 << 20), 2048},
+		{32 << 30, 8192},
+		{128 << 30, 8192},
+	} {
+		if got := PostgresSharedBuffersMiB(tc.mem); got != tc.want {
+			t.Errorf("a host of %d bytes: shared_buffers %d MiB, want %d", tc.mem, got, tc.want)
+		}
+	}
+	o := scaleOptions()
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(s.DB.Cmd, " "); !strings.Contains(got, "shared_buffers=1024MB") {
+		t.Fatalf("a scale lab planned for a host not read runs %q, want shared_buffers=1024MB", got)
 	}
 }
 

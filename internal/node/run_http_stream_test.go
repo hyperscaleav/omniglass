@@ -87,8 +87,12 @@ func setVolume(t *testing.T, bar *sim.Device, v int) {
 	}
 }
 
-func (s *httpStack) waitVolume(comp, instance string, want float64) time.Duration {
+// waitVolume waits for the endpoint to land the bar's volume, which the bar
+// holds as a percent (0 to 100) and the metric holds on the ratio canon (0
+// to 1), so the wait takes the bar's percent and reads it as a ratio.
+func (s *httpStack) waitVolume(comp, instance string, percent float64) time.Duration {
 	s.t.Helper()
+	want := percent / 100
 	start := time.Now()
 	deadline := start.Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -142,7 +146,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	setVolume(t, bar, 40)
 	s.waitVolume("bar-1", ep.Name, 40)
 	time.Sleep(300 * time.Millisecond)
-	if got := s.volumes("bar-1", ep.Name); !slices.Equal(got, []float64{37, 38, 39, 40}) {
+	if got := s.volumes("bar-1", ep.Name); !slices.Equal(got, []float64{0.37, 0.38, 0.39, 0.4}) {
 		t.Fatalf("volume samples = %v, want each change exactly once", got)
 	}
 	if states := s.sessionStates("bar-1", ep.Name); !slices.Contains(states, "recovering") || states[len(states)-1] != "up" {
@@ -209,7 +213,8 @@ func TestNodeHTTPStreamBehindAFormLogin(t *testing.T) {
 		},
 		"listeners": []any{map[string]any{"name": "volume-change",
 			"match": map[string]any{"event": "change", "field": map[string]any{"path": "path", "equals": "status.audio.volume"}},
-			"emits": []any{map[string]any{"name": "volume", "extract": map[string]any{"jsonpath": "value"}}}}},
+			"emits": []any{map[string]any{"name": "volume", "extract": map[string]any{"jsonpath": "value"},
+				"transform": map[string]any{"scale": 0.01}}}}},
 	})
 	s.component("bar-2")
 	s.secret("bar-form-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})

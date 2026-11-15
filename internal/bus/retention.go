@@ -58,6 +58,7 @@ type retentionStore interface {
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
@@ -113,8 +114,9 @@ type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
 	// Created and Dropped are the metric partitions the pass's roll made
-	// and the days it dropped whole (#420, #1527).
-	Created, Dropped []string
+	// and the days it dropped whole (#420, #1527); Summarized the finished
+	// days whose block range indexes it summarized (#1929).
+	Created, Dropped, Summarized []string
 	// Trends is what the pass's trend compaction did (#1276).
 	Trends storage.TrendCompaction
 	// Blocks is what the pass's block fold did (#1528).
@@ -159,8 +161,10 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	var errs []error
 	// The metric table's roll (#420, #1527): the next days' partitions made,
 	// then each day wholly past the metric window (and past every longer
-	// window of a type it holds a sample of) dropped, before the lanes'
-	// chunked prune keeps the window exact inside the rest.
+	// window of a type it holds a sample of) dropped. The lanes' chunked prune
+	// works only inside a day a longer type holds (#1957), so the drop is the
+	// only way out of every other day: a failed one is retried at the
+	// catch-up cadence.
 	pctx, pdone := bounded()
 	created, err := store.EnsureMetricPartitions(pctx)
 	rep.Created = created
@@ -172,9 +176,19 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		rep.Dropped = dropped
 		if err != nil {
 			errs = append(errs, fmt.Errorf("drop metric partitions: %w", err))
+			rep.Behind = append(rep.Behind, "metric partition drop")
 		}
 	}
 	pdone()
+	// Each finished day left (#1929), on a deadline of its own so a slow
+	// roll does not starve it, and after the drop so no day about to go is
+	// summarized: a day that fails is named and the rest still summarized.
+	sctx, sdone := bounded()
+	rep.Summarized, err = store.SummarizeMetricPartitions(sctx)
+	sdone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("summarize metric partitions: %w", err))
+	}
 	// The hours past the late-data horizon close into trends (#1276) before
 	// any prune, which never removes a sample of an hour still open.
 	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {

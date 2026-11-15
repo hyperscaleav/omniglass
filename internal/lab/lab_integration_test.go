@@ -43,7 +43,11 @@ func labTestChoice(t *testing.T, ctx context.Context, eng Engine) ImageChoice {
 	t.Helper()
 	ref := os.Getenv("OMNIGLASS_LAB_IMAGE")
 	if ref == "" && labTestBuild() != "" {
-		ref = SelectImage(labTestBuild(), "").Ref
+		c, err := SelectImage(labTestBuild(), "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref = c.Ref
 	}
 	if ref == "" {
 		ref = DevImage
@@ -52,9 +56,8 @@ func labTestChoice(t *testing.T, ctx context.Context, eng Engine) ImageChoice {
 	if err != nil || !found {
 		t.Fatalf("the image %s (run make first): found %v, %v", ref, found, err)
 	}
-	c := SelectImage(info.Labels[VersionLabel], "")
-	c.Ref = ref
-	return c
+	v := info.Labels[VersionLabel]
+	return ImageChoice{Ref: ref, WantVersion: v, Why: "built by make beside this binary", BinaryVersion: v}
 }
 
 func TestIntegrationLabOnARealDaemon(t *testing.T) {
@@ -543,7 +546,10 @@ func TestIntegrationLabRunsItsOwnBuildWhileTheSharedTagMovesOn(t *testing.T) {
 		return strings.TrimSpace(string(out))
 	}
 
-	choice := SelectImage(build, "")
+	choice, err := SelectImage(build, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	own, found, err := eng.InspectImage(ctx, choice.Ref)
 	if err != nil || !found || own.Labels[VersionLabel] != build {
 		t.Fatalf("the image %s (run make first): found %v, %v, labels %v", choice.Ref, found, err, own.Labels)

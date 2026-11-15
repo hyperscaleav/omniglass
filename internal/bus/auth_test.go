@@ -70,7 +70,6 @@ func (f fakeStore) ListMetricTypes(context.Context) ([]storage.MetricType, error
 func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
-func (f fakeStore) StampEndpointsSeen(context.Context, []string) error { return nil }
 func (f fakeStore) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
 	return nil
 }
@@ -105,6 +104,7 @@ func (f fakeStore) CompactMetricBlocks(context.Context, storage.BlockFold) (stor
 func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (f fakeStore) SummarizeMetricPartitions(context.Context) ([]string, error) { return nil, nil }
 func (f fakeStore) RetentionStatus(context.Context) (storage.RetentionStatus, error) {
 	return storage.RetentionStatus{}, nil
 }
