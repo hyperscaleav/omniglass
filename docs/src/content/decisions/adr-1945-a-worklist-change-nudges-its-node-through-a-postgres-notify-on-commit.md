@@ -11,7 +11,7 @@ refs: [1945, 1997, 1586, 1638, 1577, 81]
   reserved and [ADR-1586](#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest) item 9 kept separate.)
   1. **The trigger is met.** A node pulled only on its `--worklist-every` interval, 30 s jittered
      within 10%, so an operator edit waited up to about 33 s to run, and a move between nodes
-     ([ADR-1638](#adr-1638-a-sites-components-spread-across-its-nodes-by-expected-cost) item 7)
+     ([ADR-1638](#adr-1638-a-sites-components-spread-across-its-nodes-by-expected-cost-guarded-by-measured-headroom) item 7)
      waited a pull on each side. The target is under a second.
   2. **The write announces inside its transaction.** The Storage Gateway, in the transaction of a
      write that changes a node's worklist, runs `pg_notify` on one channel with each touched node's
