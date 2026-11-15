@@ -25,3 +25,9 @@ SNMP or plain HTTP poll costs 5 to 10 KiB and 0.03 to 0.07 millicores a task (1.
 a device API 3.5 to 48 KiB and up to 0.24 millicores, and a held NVP session 60 to 168 KiB a
 task at under 0.07 millicores. The nine drivers it does not sweep are the listener and the eight
 alternate drivers no product defaults to, which #1943 costs by kind of work.
+
+The page also rolls the drivers up by kind (the transport a driver speaks) and poll interval, the unit a
+node is sized in: a run costs what its kind costs, and the interval only sets how often it runs, so
+each row's millicores per task is the kind's CPU per run over its interval, read as the median and
+range across the kind's measured drivers. Memory per endpoint, a driver's memory per task times its
+polls, is the figure a held session is costed by: 168 to 183 KiB an NVP endpoint over `tcp`.

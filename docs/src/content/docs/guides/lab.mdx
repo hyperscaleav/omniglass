@@ -1029,8 +1029,8 @@ The run writes its table to `internal/labfootprint/drivercost/shipped.json`, rel
 directory, so run it from the repository's root. The table is stamped with the date and the build, and
 with the host's cores and memory when the lab's Docker daemon is local. A sweep stopped part way (an
 interrupt, a lab that failed) still writes the drivers it had measured. Commit it after `make gen`, which renders it on the
-[scaling page](/architecture/scaling/#what-a-driver-costs-a-node); a shipped driver the table lacks
-reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
+[scaling page](/architecture/scaling/#what-a-driver-costs-a-node), each driver on its own and rolled
+up by its kind and poll interval; a shipped driver the table lacks reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
 measures named drivers. A full sweep takes several hours, most of it in the windows of drivers that
 poll every five minutes; run it on the host class the figures should describe. Every flag is in the
 [CLI reference](/reference/cli/#omniglass-lab-perf-drivers).

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func TestTheDocsListEveryDriverThePlanKnows(t *testing.T) {
 		Rows: []DriverCost{{Driver: "a", Product: "pa", Polls: []string{"1m0s"}, MemoryPerTaskBytes: 3072, MillicoresPerTask: 0.02, CPUPerRunMillis: 1.2, ThreadCPUPerRunMillis: 0.6, ThreadShare: 0.5, MemoryWarmBytes: 2 << 20},
 			{Driver: "e", Product: "pe", Polls: []string{"1m0s"}, MillicoresPerTask: 0.03, CPUPerRunMillis: 1.8, ThreadCPUPerRunMillis: 0.9, ThreadShare: 0.5, MemoryNotMeasured: "e memory: the sweep is not a line"}},
 		NotMeasured: []DriverSkip{{Driver: "b", Reason: "b cpu: the sweep does not rise"}, {Driver: "s", Reason: SkipNoPolls}}}
-	f := driverCostFacts(targets, skips, table)
+	f := driverCostFacts(targets, skips, nil, table)
 	if f.Build != "v" || f.Date != "d" || f.StepTasks != 400 {
 		t.Fatalf("facts header = %+v", f)
 	}
@@ -98,7 +99,7 @@ func TestDriverCostFactsJSONIsCommitted(t *testing.T) {
 // a blank the unmeasured rows leave.
 func TestAMeasuredZeroReadsAsZero(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
-	f := driverCostFacts(targets, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 1024}}})
+	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 1024}}})
 	b, err := json.Marshal(f.Drivers[0])
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +109,7 @@ func TestAMeasuredZeroReadsAsZero(t *testing.T) {
 			t.Fatalf("%s lacks %s", b, want)
 		}
 	}
-	f = driverCostFacts(targets[:0], []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}, DriverCostTable{})
+	f = driverCostFacts(targets[:0], []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}, nil, DriverCostTable{})
 	if b, _ = json.Marshal(f.Drivers[0]); strings.Contains(string(b), "thread_share") {
 		t.Fatalf("an unmeasured driver has no figures: %s", b)
 	}
@@ -132,7 +133,7 @@ func TestAnEmptyTableWritesEmptyLists(t *testing.T) {
 // blank with its reason, not a zero.
 func TestADriversFactsCarryItsStepAndAMissingWarm(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
-	f := driverCostFacts(targets, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", StepTasks: 1600,
+	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", StepTasks: 1600,
 		MemoryPerTaskBytes: 4096, WarmNotMeasured: "a memory: the loaded line starts below the idle node"}}})
 	d := f.Drivers[0]
 	if d.StepTasks != 1600 {
@@ -140,5 +141,93 @@ func TestADriversFactsCarryItsStepAndAMissingWarm(t *testing.T) {
 	}
 	if d.MemoryWarmMiB != nil || d.MemoryPerTaskKiB == nil || !strings.Contains(d.Reason, "below the idle node") {
 		t.Fatalf("fact %+v, want memory per task, no warm, and the warm's reason", d)
+	}
+}
+
+// Each driver reads with its kind, the transport it speaks, and what one
+// endpoint on it holds: a task per poll, so its memory per task times its
+// polls. A held session is per endpoint, so that is the figure that sizes it.
+func TestADriversFactsCarryItsKindAndItsEndpoint(t *testing.T) {
+	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{30 * time.Second, 30 * time.Second, 5 * time.Minute}}}
+	skips := []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}
+	f := driverCostFacts(targets, skips, map[string]string{"a": "tcp", "s": "webhook"},
+		DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 60 * 1024, CPUPerRunMillis: 2}}})
+	a, s := f.Drivers[0], f.Drivers[1]
+	if a.Kind != "tcp" || s.Kind != "webhook" {
+		t.Fatalf("kinds %q and %q, want tcp and webhook", a.Kind, s.Kind)
+	}
+	if a.MemoryPerEndpointKiB == nil || *a.MemoryPerEndpointKiB != 180 {
+		t.Fatalf("a's endpoint = %v, want 60 KiB a task times 3 polls", a.MemoryPerEndpointKiB)
+	}
+	f = driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryNotMeasured: "a memory: not a line"}}})
+	if f.Drivers[0].MemoryPerEndpointKiB != nil {
+		t.Fatal("a driver with no memory per task has no memory per endpoint")
+	}
+}
+
+// The kind table is keyed by kind and interval: each interval a kind's swept
+// drivers poll at, with the median and range of its measured drivers' cost.
+// A run's CPU is the kind's; the interval is how often it runs, so the
+// millicores a task holds at an interval are its CPU per run over it.
+func TestTheKindTableIsKeyedByKindAndInterval(t *testing.T) {
+	m := func(d time.Duration) []time.Duration { return []time.Duration{d} }
+	targets := []DriverTarget{
+		{Driver: "h1", Product: "p", Polls: []time.Duration{5 * time.Minute, 30 * time.Second}},
+		{Driver: "h2", Product: "p", Polls: m(30 * time.Second)},
+		{Driver: "h3", Product: "p", Polls: m(30 * time.Second)},
+		{Driver: "h4", Product: "p", Polls: m(30 * time.Second)},
+		{Driver: "n1", Product: "p", Polls: m(time.Minute)},
+	}
+	skips := []DriverSkip{{Driver: "w", Reason: SkipNoPolls}}
+	kinds := map[string]string{"h1": "https", "h2": "https", "h3": "https", "h4": "https", "n1": "snmp", "w": "webhook"}
+	f := driverCostFacts(targets, skips, kinds, DriverCostTable{Rows: []DriverCost{
+		{Driver: "h1", MemoryPerTaskBytes: 4 * 1024, CPUPerRunMillis: 3},
+		{Driver: "h2", MemoryPerTaskBytes: 10 * 1024, CPUPerRunMillis: 6},
+		{Driver: "h3", MemoryPerTaskBytes: 8 * 1024, CPUPerRunMillis: 9, MemoryNotMeasured: "h3 memory: not a line"},
+	}, NotMeasured: []DriverSkip{{Driver: "n1", Reason: "n1 cpu: the sweep does not rise"}}})
+
+	type key struct{ kind, interval string }
+	got := map[key]KindCostFact{}
+	var order []key
+	for _, k := range f.Kinds {
+		got[key{k.Kind, k.Interval}] = k
+		order = append(order, key{k.Kind, k.Interval})
+	}
+	want := []key{{"https", "30s"}, {"https", "5m0s"}, {"snmp", "1m0s"}, {"webhook", ""}}
+	if !slices.Equal(order, want) {
+		t.Fatalf("kind rows %v, want %v", order, want)
+	}
+
+	fast, slow := got[key{"https", "30s"}], got[key{"https", "5m0s"}]
+	if !slices.Equal(fast.Drivers, []string{"h1", "h2", "h3"}) || !slices.Equal(fast.PolledBy, []string{"h1", "h2", "h3", "h4"}) {
+		t.Fatalf("https 30s measured by %v and polled by %v", fast.Drivers, fast.PolledBy)
+	}
+	if !slices.Equal(slow.PolledBy, []string{"h1"}) || !slices.Equal(slow.Drivers, fast.Drivers) {
+		t.Fatalf("https 5m measured by %v and polled by %v: a run costs the kind's, at any interval", slow.Drivers, slow.PolledBy)
+	}
+	if c := fast.CPUPerRunMillis; c == nil || *c != (Spread{Median: 6, Min: 3, Max: 9, N: 3}) {
+		t.Fatalf("https cpu per run = %+v, want the median and range of 3, 6 and 9", c)
+	}
+	// h3's memory did not fit, so the kind's memory reads from h1 and h2:
+	// an even count takes the middle two's mean. h1 polls twice an endpoint.
+	if mem := fast.MemoryPerTaskKiB; mem == nil || *mem != (Spread{Median: 7, Min: 4, Max: 10, N: 2}) {
+		t.Fatalf("https memory per task = %+v, want 4 and 10", mem)
+	}
+	if ep := fast.MemoryPerEndpointKiB; ep == nil || *ep != (Spread{Median: 9, Min: 8, Max: 10, N: 2}) {
+		t.Fatalf("https memory per endpoint = %+v, want 8 and 10", ep)
+	}
+	if mc := fast.MillicoresPerTask; mc == nil || *mc != (Spread{Median: 0.2, Min: 0.1, Max: 0.3, N: 3}) {
+		t.Fatalf("https millicores per task at 30s = %+v, want cpu per run over 30 s", mc)
+	}
+	if mc := slow.MillicoresPerTask; mc == nil || *mc != (Spread{Median: 0.02, Min: 0.01, Max: 0.03, N: 3}) {
+		t.Fatalf("https millicores per task at 5m = %+v, want cpu per run over 300 s", mc)
+	}
+	// A kind whose drivers the sweep could not measure, or does not sweep,
+	// keeps its rows with no figures, so every kind the seed ships reads.
+	if n := got[key{"snmp", "1m0s"}]; n.CPUPerRunMillis != nil || len(n.Drivers) != 0 || !slices.Equal(n.PolledBy, []string{"n1"}) {
+		t.Fatalf("snmp = %+v, want polled by n1 and no figures", n)
+	}
+	if w := got[key{"webhook", ""}]; w.CPUPerRunMillis != nil || len(w.PolledBy) != 0 {
+		t.Fatalf("webhook = %+v, want a row with nothing polled and no figures", w)
 	}
 }

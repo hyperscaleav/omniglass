@@ -1,0 +1,60 @@
+---
+// The kind cost table, rendered from the sweep's own (docs/src/generated/
+// drivercost.json, written by make gen via cmd/labgen from internal/
+// labfootprint's DriverCostFacts): the measured drivers rolled up by the
+// transport they speak and each interval its swept drivers poll at. Every
+// kind the seed ships is a row, so a kind no driver of which is measured reads
+// as such rather than going missing.
+//
+// Usage: <KindCost />
+import facts from '../generated/drivercost.json';
+
+if (!facts.kinds.length) {
+  throw new Error('KindCost: drivercost.json has no kinds; run make gen');
+}
+
+// A Go duration as an operator writes it: 5m0s reads 5m, 1h0m0s reads 1h.
+const every = (d: string) => d.replace(/(\D)0s$/, '$1').replace(/(\D)0m$/, '$1');
+type Spread = { median: number; min: number; max: number; n: number };
+type Row = (typeof facts.kinds)[number];
+const spread = (r: Row, k: string, digits: number) => {
+  const v = (r as Record<string, unknown>)[k] as Spread | undefined;
+  if (!v) return '';
+  const m = v.median.toFixed(digits);
+  return v.n > 1 ? `${m} (${v.min.toFixed(digits)} to ${v.max.toFixed(digits)})` : m;
+};
+const list = (r: Row, k: 'polled_by' | 'drivers') => ((r as Record<string, unknown>)[k] as string[] | undefined) ?? [];
+---
+
+<table class="driver-cost kind-cost">
+  <thead>
+    <tr>
+      <th>Kind</th>
+      <th>Interval</th>
+      <th>Polled by</th>
+      <th>Drivers measured</th>
+      <th>Memory per task (KiB)</th>
+      <th>Memory per endpoint (KiB)</th>
+      <th>CPU per run (ms)</th>
+      <th>Millicores per task</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      facts.kinds.map((r) => (
+        <tr>
+          <td>
+            <code>{r.kind}</code>
+          </td>
+          <td>{'interval' in r && r.interval ? every(r.interval) : 'not swept'}</td>
+          <td>{list(r, 'polled_by').join(', ')}</td>
+          <td>{list(r, 'drivers').length || 'none'}</td>
+          <td>{spread(r, 'memory_per_task_kib', 1)}</td>
+          <td>{spread(r, 'memory_per_endpoint_kib', 1)}</td>
+          <td>{spread(r, 'cpu_per_run_ms', 2)}</td>
+          <td>{spread(r, 'millicores_per_task', 3)}</td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

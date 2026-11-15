@@ -98,3 +98,25 @@ func ShippedDriverPolls() map[string][]time.Duration {
 	}
 	return out
 }
+
+// ShippedDriverTransports returns the transport each official driver speaks,
+// its spec's `transport`: the kind of work its polls are, which the driver
+// cost table rolls its drivers up by (#1871).
+func ShippedDriverTransports() map[string]string {
+	var doc struct {
+		Drivers []struct {
+			ID   string `yaml:"id"`
+			Spec struct {
+				Transport string `yaml:"transport"`
+			} `yaml:"spec"`
+		} `yaml:"drivers"`
+	}
+	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
+		panic("seed: parse drivers.yaml: " + err.Error())
+	}
+	out := make(map[string]string, len(doc.Drivers))
+	for _, d := range doc.Drivers {
+		out[d.ID] = d.Spec.Transport
+	}
+	return out
+}

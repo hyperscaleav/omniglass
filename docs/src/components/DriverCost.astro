@@ -22,7 +22,9 @@ const share = (r: Row) => {
   const v = (r as Record<string, unknown>).thread_share;
   return typeof v === 'number' ? `${Math.round(v * 100)}%` : '';
 };
-const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.join(', ') : '');
+// A Go duration as an operator writes it: 5m0s reads 5m, 1h0m0s reads 1h.
+const every = (d: string) => d.replace(/(\D)0s$/, '$1').replace(/(\D)0m$/, '$1');
+const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.map(every).join(', ') : '');
 const host = (facts as { host?: { cores?: number; memory_gib?: number } }).host;
 const maxStep = (facts as { max_step_tasks?: number }).max_step_tasks;
 const measured = facts.drivers.filter((r) => r.measured).length;
@@ -45,10 +47,12 @@ const measured = facts.drivers.filter((r) => r.measured).length;
   <thead>
     <tr>
       <th>Driver</th>
+      <th>Kind</th>
       <th>Product</th>
       <th>Polls</th>
       <th>Step (tasks)</th>
       <th>Memory per task (KiB)</th>
+      <th>Memory per endpoint (KiB)</th>
       <th>Warm memory (MiB)</th>
       <th>Millicores per task</th>
       <th>CPU per run (ms)</th>
@@ -64,10 +68,12 @@ const measured = facts.drivers.filter((r) => r.measured).length;
           <td>
             <code>{r.driver}</code>
           </td>
+          <td>{'kind' in r && r.kind ? <code>{r.kind}</code> : ''}</td>
           <td>{'product' in r && r.product ? <code>{r.product}</code> : ''}</td>
           <td>{polls(r)}</td>
           <td>{num(r, 'step_tasks', 0)}</td>
           <td>{num(r, 'memory_per_task_kib', 1)}</td>
+          <td>{num(r, 'memory_per_endpoint_kib', 1)}</td>
           <td>{num(r, 'memory_warm_mib', 1)}</td>
           <td>{num(r, 'millicores_per_task', 3)}</td>
           <td>{num(r, 'cpu_per_run_ms', 2)}</td>
