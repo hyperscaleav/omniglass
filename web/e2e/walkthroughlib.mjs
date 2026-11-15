@@ -101,13 +101,14 @@ export const MAX_BYTES = 10_000_000;
 // load inline, so it is held well under the mp4's.
 export const MAX_PREVIEW_BYTES = 5_000_000;
 
-// Where the preview starts (#937). The video runs from the moment the page
-// opens, before the title card is painted (a blank or half-painted lead-in), so
-// the recorder notes when the card was painted and the preview starts a settle
-// beat after that, well inside the card's own 2.2s hold. The beat covers the
-// video lagging the page: on the recordings a frame 0.25s after the paint was
-// still half-painted, one 0.4s after it whole.
-export const PREVIEW_SETTLE_MS = 500;
+// Where the preview starts (#937, #1271). The video runs from the moment the page
+// opens, before the title card is painted (a blank or half-painted lead-in), and
+// on a loaded runner it can lag the page by more than any fixed beat, so the
+// start is chosen from the recording itself: the recorder notes when the card was
+// painted, and the preview opens on the first frame at or after that whose
+// brightest luma shows the card's text (previewStartFromLumas), looked for through
+// the card's own hold (TITLE_HOLD_MS, the recorder's PACE.title).
+export const TITLE_HOLD_MS = 2200;
 // The brightest luma (0 to 255) the preview's opening frame must reach: the
 // title card's text is near-white, while a blank or text-less frame (the
 // ground and the teal rule) stays well under it.
@@ -572,18 +573,80 @@ export function idProblem(id) {
   return /^[a-z0-9-]+$/.test(id) ? null : `walkthrough id ${JSON.stringify(id)} must be lowercase letters, digits and hyphens`;
 }
 
-// Seconds into the video at which the preview starts: when the title card was
-// painted, measured from when the video started (both wall-clock ms, taken by
-// the recorder), plus the settle beat.
+// Seconds into the video at which the title card was painted, measured from when
+// the video started (both wall-clock ms, taken by the recorder): the earliest the
+// preview may open.
 /**
  * @param {number} videoStartMs
  * @param {number} paintedMs
  * @returns {number}
  */
-export function previewStartSeconds(videoStartMs, paintedMs) {
+export function paintSeconds(videoStartMs, paintedMs) {
   if (!Number.isFinite(videoStartMs) || !Number.isFinite(paintedMs)) throw new Error('the title card timing was not measured');
   if (paintedMs < videoStartMs) throw new Error('the title card painted before the video started');
-  return Math.round(paintedMs - videoStartMs + PREVIEW_SETTLE_MS) / 1000;
+  return Math.round(paintedMs - videoStartMs) / 1000;
+}
+
+/** @typedef {{ t: number, ymax: number }} LumaFrame */
+
+// The frames of an ffmpeg `signalstats,metadata=mode=print:key=lavfi.signalstats.YMAX`
+// listing: each `pts_time:` line is followed by its `lavfi.signalstats.YMAX=` line.
+/**
+ * @param {string} text
+ * @returns {LumaFrame[]}
+ */
+export function parseLumas(text) {
+  /** @type {LumaFrame[]} */
+  const frames = [];
+  let t = NaN;
+  for (const line of text.split('\n')) {
+    const at = /pts_time:(\S+)/.exec(line);
+    if (at) t = Number(at[1]);
+    const y = /^lavfi\.signalstats\.YMAX=(\S+)/.exec(line.trim());
+    if (y) frames.push({ t, ymax: Number(y[1]) });
+  }
+  return frames;
+}
+
+// The window of the recording searched for the painted card: from the paint
+// through the card's hold.
+/**
+ * @param {number} paint
+ * @returns {{ from: number, to: number }}
+ */
+export const previewWindow = (paint) => ({ from: paint, to: paint + TITLE_HOLD_MS / 1000 });
+
+// Where the preview starts: the first frame at or after the paint (a frame before
+// it is the lead-in, bright or not) and within the card's hold whose brightest
+// luma reaches PREVIEW_MIN_YMAX. Null when no frame in the window does: the card
+// never painted.
+/**
+ * @param {number} paint seconds into the video the card was painted
+ * @param {LumaFrame[]} frames
+ * @returns {number | null}
+ */
+export function previewStartFromLumas(paint, frames) {
+  const { from, to } = previewWindow(paint);
+  const hit = frames.find((f) => f.t >= from && f.t <= to && f.ymax >= PREVIEW_MIN_YMAX);
+  return hit ? hit.t : null;
+}
+
+// Null when previewStartFromLumas found a start, else why the card never painted:
+// the window scanned and the brightest luma in it.
+/**
+ * @param {string} id
+ * @param {number} paint
+ * @param {LumaFrame[]} frames
+ * @returns {string | null}
+ */
+export function previewScanProblem(id, paint, frames) {
+  if (previewStartFromLumas(paint, frames) !== null) return null;
+  const { from, to } = previewWindow(paint);
+  const seen = frames.filter((f) => f.t >= from && f.t <= to && Number.isFinite(f.ymax));
+  const window = `${from.toFixed(2)}s and ${to.toFixed(2)}s`;
+  if (seen.length === 0) return `walkthrough ${id}: no frame to open the preview on between ${window} (the recording has none there)`;
+  const brightest = Math.max(...seen.map((f) => f.ymax));
+  return `walkthrough ${id}: the title card never painted between ${window} (brightest luma ${brightest} over ${seen.length} frames, the card's text reaches at least ${PREVIEW_MIN_YMAX})`;
 }
 
 // Null when the preview's opening frame shows the painted title card, judged
