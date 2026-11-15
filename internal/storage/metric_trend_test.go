@@ -32,13 +32,15 @@ func (f *pruneFixture) plant(ts time.Time, provenance string, v float64) {
 }
 
 // trendOf reads the trend row of prune-rtt's observed series on prune-c1 for
-// the hour starting at hour, as "count min max sum first last", or "" for none.
+// the hour starting at hour, as "count min max sum first last", or "" for none;
+// a held day's prune-kept series is not read.
 func (f *pruneFixture) trendOf(hour time.Time) string {
 	f.t.Helper()
 	var out string
 	err := f.conn.QueryRow(f.ctx, `select concat_ws(' ', t.count, t.min, t.max, t.sum, t.first, t.last)
 		from metric_trend t join metric_series s on s.id = t.series_id
-		where s.provenance = 'observed' and t.hour = $1`, hour).Scan(&out)
+		where s.provenance = 'observed' and t.hour = $1
+			and s.metric_type_id = (select id from metric_type where name = 'prune-rtt')`, hour).Scan(&out)
 	if err != nil {
 		return ""
 	}
@@ -437,6 +439,10 @@ func TestACompactionCancelledMidFoldSkipsNoHour(t *testing.T) {
 	for i := range 5 {
 		f.plant(start.Add(time.Duration(i)*time.Hour+time.Minute), "observed", float64(i+1))
 	}
+	// A longer type holds the days, so the lane's prune works in them rather
+	// than leaving them to the drop (#1957).
+	f.hold(start)
+	f.hold(start.Add(4 * time.Hour))
 	if err := f.gw.SetMetricTrendMark(f.ctx, start); err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +455,8 @@ func TestACompactionCancelledMidFoldSkipsNoHour(t *testing.T) {
 	defer func() { _ = blocker.Rollback(context.Background()) }()
 	stuck := start.Add(2 * time.Hour)
 	if _, err := blocker.Exec(f.ctx, `insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
-		select id, $1, 1, 0, 0, 0, 0, 0 from metric_series where provenance = 'observed'`, stuck); err != nil {
+		select id, $1, 1, 0, 0, 0, 0, 0 from metric_series where provenance = 'observed'
+			and metric_type_id = (select id from metric_type where name = 'prune-rtt')`, stuck); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(f.ctx)
@@ -513,6 +520,7 @@ func TestAnIdleTransactionElsewhereDoesNotStallCompaction(t *testing.T) {
 	now := time.Now().UTC()
 	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
 	f.plant(hour, "observed", 1)
+	f.hold(hour)
 	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
 		t.Fatal(err)
 	}

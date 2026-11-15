@@ -479,7 +479,7 @@ func interpretSample(em BakedEmit, p Payload) (Emitted, error) {
 			return Emitted{}, fmt.Errorf("value %q is not numeric, and the metric lane carries numbers", raw)
 		}
 		if em.Transform != nil && em.Transform.Scale != 0 {
-			v *= em.Transform.Scale
+			v = scaled(v, em.Transform.Scale)
 		}
 		if em.Transform != nil && em.Transform.Cast == "int" {
 			v = math.Trunc(v)
@@ -498,6 +498,18 @@ func interpretSample(em BakedEmit, p Payload) (Emitted, error) {
 	return e, nil
 }
 
+// scaled is v times a declared scale, held to 15 significant digits: a float
+// product carries noise past that (41 * 0.01 is 0.41000000000000003), and a
+// percentage read as a ratio must equal the ratio an operator intended, so the
+// observed and intended values compare equal. Pure.
+func scaled(v, scale float64) float64 {
+	out, err := strconv.ParseFloat(strconv.FormatFloat(v*scale, 'g', 15, 64), 64)
+	if err != nil {
+		return v * scale
+	}
+	return out
+}
+
 // numericText applies a text lane's scale and int cast to a raw value (the
 // map has already run): a scale or an int cast means the value is numeric,
 // so it is parsed, shaped, and rendered back.
@@ -507,7 +519,7 @@ func numericText(raw string, tr *Transform) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("value %q is not numeric, and the transform declares a scale", raw)
 		}
-		raw = strconv.FormatFloat(v*tr.Scale, 'f', -1, 64)
+		raw = strconv.FormatFloat(scaled(v, tr.Scale), 'f', -1, 64)
 	}
 	if tr != nil && tr.Cast == "int" {
 		v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
@@ -991,4 +1003,27 @@ func RenderRequestTyped(req Request, value string, typed json.RawMessage, params
 		return Request{}, err
 	}
 	return Request{Get: req.Get, Line: line, Path: path, Reply: req.Reply, Retries: req.Retries}, nil
+}
+
+// RenderCommand renders a command binding's request for one issued command:
+// the binding's transform (#1429) shapes the intended value into the
+// device's units first, then RenderRequestTyped substitutes it, so a typed
+// JSON leaf stays a number. Without a transform it is RenderRequestTyped. A
+// transform on a value that is not a number refuses, so a half-scaled request
+// never reaches a device.
+func RenderCommand(b CommandBinding, value string, typed json.RawMessage, params map[string]any) (Request, error) {
+	if b.Transform != nil && b.Transform.Scale != 0 {
+		if value == "" {
+			return Request{}, fmt.Errorf("driver: command %q scales its intended value, and the command carries none", b.CommandType)
+		}
+		v, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return Request{}, fmt.Errorf("driver: command %q scales its intended value, and %q is not a number", b.CommandType, value)
+		}
+		value = strconv.FormatFloat(scaled(v, b.Transform.Scale), 'f', -1, 64)
+		if len(typed) > 0 {
+			typed = json.RawMessage(value)
+		}
+	}
+	return RenderRequestTyped(b.Request, value, typed, params)
 }

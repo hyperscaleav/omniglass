@@ -117,7 +117,7 @@ type NotificationSettings struct {
 // returns node_log to the shared window. A set value is held to the same range
 // as every other window.
 type RetentionSettings struct {
-	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)"`
+	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later"`
 	PropertyDays   int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept, unless its type keeps its own (a property type's retention_days)"`
 	TrendDays      int `json:"trend_days" minimum:"1" maximum:"36500" default:"730" doc:"Days an hourly metric trend is kept (#1276)"`
 	DebugLogDays   int `json:"log_debug_days" minimum:"1" maximum:"36500" default:"3" doc:"Days a debug log line is kept"`

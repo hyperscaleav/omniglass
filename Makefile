@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -439,12 +439,12 @@ clean-testcontainers:
 	docker ps -aq --filter "label=org.testcontainers=true" --filter "ancestor=postgres:18" | xargs -r docker rm -f
 
 # ---- release ---------------------------------------------------------------
-# Releases are cut MANUALLY (not on merge to main). `release-plan` is the
-# dry-run preview: it prints the next version and the generated notes and
-# publishes nothing. `release-apply` performs the release: it pushes the git tag
-# and creates the GitHub Release. Run both from an up-to-date `main`.
-# semantic-release reads the conventional-commit subjects since the last tag
-# (.releaserc.json drives the plugins).
+# Releases are cut only by the release workflow (.github/workflows/release.yml),
+# which builds the image and stamps its digest into the binaries (#1257); there
+# is no local publish target. `release-plan` is the local dry-run preview: it
+# prints the next version and the generated notes and publishes nothing. Run it
+# from an up-to-date `main`. semantic-release reads the conventional-commit
+# subjects since the last tag (.releaserc.json drives the plugins).
 SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
 	-p @semantic-release/commit-analyzer \
 	-p @semantic-release/release-notes-generator \
@@ -458,11 +458,6 @@ release-plan:
 	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
 	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
 	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
-
-release-apply:
-	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
-	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
-	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --no-ci
 
 # Local dry build of the release matrix (all OS/arch archives + checksums), with
 # no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs

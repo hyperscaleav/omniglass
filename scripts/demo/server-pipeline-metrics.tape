@@ -2,7 +2,7 @@
 #
 # Once a report window the server measures its own pipeline from inside and lands the figures on its
 # platform component: ingest lag (its clock at the batch's commit minus the sample's ts), the
-# telemetry consumer's backlog and lane busy share, the calc, outbox and sweep ticks, the node
+# ingest lanes' backlog and the busiest lane's busy share, the calc, outbox and sweep ticks, the node
 # request paths and the Go runtime. The seeded ingest-lag-high rule raises a warning on the server's
 # component when the oldest landing holds over 30 s (#1628, ADR-1628).
 
@@ -26,7 +26,7 @@ Wait
 Type `omniglass component metric list server | jq -c '[.metrics[] | select(.metric_type_name | test("^ingest-(lag|lag-max|batch-count|sample-count)$")) | {(.metric_type_name): (.value * 1000 | round / 1000)}] | add'`
 Enter
 Wait
-Type "# The telemetry consumer at the window's close: its backlog, and the lane's busy share"
+Type "# The ingest lanes at the window's close: their backlog, and the busiest lane's busy share"
 Enter
 Wait
 Type `omniglass component metric list server | jq -c '[.metrics[] | select(.metric_type_name | test("^bus-consumer-|^ingest-lane-busy$")) | {(.metric_type_name): (.value * 1000 | round / 1000)}] | add'`

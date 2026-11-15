@@ -7480,17 +7480,24 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fBody, fBodyFile string
 				cmd := &cobra.Command{
 					Use:     "update <namespace>",
 					Short:   "Update a settings namespace",
-					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
-					Example: "  omniglass setting update <namespace>",
+					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.",
+					Example: "  omniglass setting update notification --body '{\"egress_allow\":[\"smtp.example.com\"]}'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/settings/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "PATCH", path, nil)
+						body, err := freeFormBody(cmd, fBody, fBodyFile, true)
+						if err != nil {
+							return err
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fBody, "body", "", "the request body as a JSON object")
+				cmd.Flags().StringVar(&fBodyFile, "body-file", "", "read the request body, a JSON object, from this file (- for stdin)")
 				return cmd
 			}()
 			return cmd

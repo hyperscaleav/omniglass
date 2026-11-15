@@ -1,13 +1,15 @@
 import { entityLabel } from "../lib/entities";
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { Check, GripVertical, X } from "./icons";
+import { Check, GripVertical, Pencil, Trash, X } from "./icons";
+import { RoleDeclareRow, RoleEditForm, type RoleOwner } from "./RoleEditor";
 import { describeError } from "../lib/format";
 import { COMPONENTS_KEY, listComponents, type Component as Comp } from "../lib/components";
 import {
   assignRole,
+  deleteSystemRole,
   staffingLabel,
   swapPath,
   swapRolePositions,
@@ -62,6 +64,14 @@ import {
 // and hit a 422 they could not have anticipated, which throws away the same
 // lesson the typed-slot refusal above teaches.
 //
+// The ad hoc group is also where a system's own roles are authored: in edit, an
+// add row declares one (a one-off system has no other source of roles, so the
+// empty state carries it too), and each ad hoc row edits in place or is
+// withdrawn. These are RoleEditor's owner-generic pieces with the system as
+// owner. An inherited row offers neither, since it is edited on the standard,
+// and a name the standard already declares is refused by the server (409) on
+// the add row itself.
+//
 // Writes are immediate, like the tag panel, so the panel has no Save of its own;
 // the caller passes canUpdate (the system detail computes it as "in edit mode AND
 // holding system:update"), which keeps view read-only per the console invariant.
@@ -100,8 +110,14 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   const inactiveByName = createMemo(() => new Map<string, HealthRole>(inactiveRolesOf(healthQ.data).map((h) => [h.name, h])));
 
   const roles = createMemo<EffectiveRole[]>(() => q.data ?? []);
+  const owner = (): RoleOwner => ({ kind: "system", name: props.system });
   const inherited = createMemo(() => roles().filter((r) => r.from_standard));
   const adhoc = createMemo(() => roles().filter((r) => !r.from_standard));
+
+  // The ad hoc role open for editing (one at a time). Leaving edit mode closes
+  // it, so it does not resurrect on the next pencil press.
+  const [editingRole, setEditingRole] = createSignal<string | null>(null);
+  createEffect(() => { if (!props.canUpdate) setEditingRole(null); });
 
   // Per-role write state: the picked component, and the server's last refusal.
   const [picked, setPicked] = createStore<Record<string, string>>({});
@@ -173,6 +189,18 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     }
   }
 
+  // A declaration changes the roles read and everything health derives from it.
+  const refreshRoles = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: key() }),
+      qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
+      qc.invalidateQueries({ queryKey: SYSTEM_VERDICTS_KEY }),
+    ]);
+  const withdraw = (role: string) => {
+    if (!confirm(`Withdraw "${role}" from this system? Everything assigned to it is unassigned.`)) return;
+    return run(role, () => deleteSystemRole(props.system, role));
+  };
+
   const assign = (role: string) => {
     const component = picked[role];
     if (!component) return;
@@ -224,6 +252,12 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         <span class="text-sm font-medium">{entityLabel(r)}</span>
         <span class="font-data text-[11px] text-base-content/45">{r.name}</span>
         <span class="flex-1" />
+        <Show when={props.canUpdate && !r.from_standard}>
+          <Show when={editingRole() !== r.name}>
+            <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => setEditingRole(r.name)} />
+          </Show>
+          <Button square size="xs" icon={Trash} label={`Withdraw ${r.name}`} title="Withdraw" disabled={busy()} onClick={() => void withdraw(r.name)} />
+        </Show>
         {/* short/spare are occupancy-aware (health read); understaffed is pure
             assignment arithmetic (roles read) and only falls back here while
             health has not loaded yet, so the row never shows undefined. An
@@ -274,6 +308,9 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         </span>
       </div>
 
+      <Show
+        when={props.canUpdate && !r.from_standard && editingRole() === r.name}
+        fallback={
       <div class="flex flex-col gap-1">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">accepts</span>
@@ -309,6 +346,15 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
           </div>
         </Show>
       </div>
+        }
+      >
+        <RoleEditForm
+          owner={owner()}
+          role={r}
+          onWritten={async () => { await refreshRoles(); }}
+          onClose={() => setEditingRole(null)}
+        />
+      </Show>
 
       <div class="flex flex-wrap items-center gap-1.5">
         <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">
@@ -429,15 +475,20 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
           border, exactly as an off-contract property does: the standard declares
           nothing about them, and a conforming system's inherited roles are
           withdrawn on the standard instead. */}
-      <Show when={adhoc().length}>
+      <Show when={adhoc().length || (props.canUpdate && !q.isLoading && !q.error)}>
         <div class="flex flex-col gap-1" role="group" aria-label="Ad hoc roles">
           <div class="flex items-baseline gap-2">
             <span class="text-[10.5px] font-semibold uppercase tracking-wide text-base-content/50">Ad hoc</span>
             <span class="text-[10.5px] text-base-content/40">declared on this system, not by its standard</span>
           </div>
-          <div class="overflow-hidden rounded-box border border-dashed border-base-300">
-            <For each={adhoc()}>{(r, i) => roleRow(r, () => i() === 0)}</For>
-          </div>
+          <Show when={adhoc().length}>
+            <div class="overflow-hidden rounded-box border border-dashed border-base-300">
+              <For each={adhoc()}>{(r, i) => roleRow(r, () => i() === 0)}</For>
+            </div>
+          </Show>
+          <Show when={props.canUpdate}>
+            <RoleDeclareRow owner={owner()} onWritten={refreshRoles} />
+          </Show>
         </div>
       </Show>
     </div>

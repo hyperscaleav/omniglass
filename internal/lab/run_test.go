@@ -29,6 +29,10 @@ type fakeEngine struct {
 	published  string
 	nextID     int
 	host       HostResources
+	// hostReads counts each read of the host's resources.
+	hostReads int
+	// cmds is each service's command as it was run.
+	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
 	seedHangs bool
 }
@@ -60,6 +64,7 @@ func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
 	return EngineInfo{APIVersion: "1.56"}, nil
 }
 func (f *fakeEngine) Resources(context.Context) (HostResources, error) {
+	f.hostReads++
 	return f.host, nil
 }
 func (f *fakeEngine) ImageLabels(_ context.Context, ref string) (map[string]string, bool, error) {
@@ -131,6 +136,10 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	}
 	f.states[id] = st
 	f.created = append(f.created, "container "+svc.Name)
+	if f.cmds == nil {
+		f.cmds = map[string][]string{}
+	}
+	f.cmds[svc.Name] = svc.Cmd
 	return id, nil
 }
 func (f *fakeEngine) Inspect(_ context.Context, id string) (ContainerState, error) {
@@ -203,7 +212,8 @@ func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 func testConfig() Config {
 	o := testOptions()
 	o.Owner = Owner{Host: "box", PID: 42}
-	return Config{Options: o, Image: SelectImage("abc123", ""), PlantedFaults: []string{"Panel SNMP"}}
+	c, _ := SelectImage("abc123", "", "")
+	return Config{Options: o, Image: c, PlantedFaults: []string{"Panel SNMP"}}
 }
 
 func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
@@ -406,7 +416,7 @@ func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 			eng.images["stack:x"] = map[string]string{VersionLabel: tc.label}
 			var out bytes.Buffer
 			cfg := testConfig()
-			cfg.Image = SelectImage("abc123", "stack:x")
+			cfg.Image, _ = SelectImage("abc123", "", "stack:x")
 			cfg.Options.Image = "stack:x"
 			if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 				t.Fatalf("%v\n%s", err, out.String())

@@ -16,7 +16,7 @@ import (
 // The script-only flags of lab run (#1197) exist for the demo pipeline's
 // recorders and the probe, and stay out of a learner's help.
 func TestLabRunScriptFlagsAreHidden(t *testing.T) {
-	cmd := newLabRunCmd("test")
+	cmd := newLabRunCmd("test", "")
 	for _, name := range []string{"project", "ephemeral", "ready-file", "while-pid", "no-node"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
@@ -64,7 +64,7 @@ func TestWalkthroughSetupCommandsAreRealCommands(t *testing.T) {
 		for _, line := range w.Setup {
 			n++
 			words := strings.Fields(line)
-			cmd, rest, err := newRoot("test").Find(words[1:])
+			cmd, rest, err := newRoot("test", "").Find(words[1:])
 			if err != nil || cmd.Name() != "create" {
 				t.Errorf("%s: %q is not a command: %v", w.ID, line, err)
 				continue
@@ -90,7 +90,7 @@ func TestLabNodeCommandIsARealCommand(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cmd, rest, err := newRoot("test").Find(s.Node.Cmd)
+		cmd, rest, err := newRoot("test", "").Find(s.Node.Cmd)
 		if err != nil || cmd.CommandPath() != "omniglass node run" {
 			t.Fatalf("lab node %v is not node run: %v", s.Node.Cmd, err)
 		}
@@ -107,7 +107,7 @@ func TestLabNodeCommandIsARealCommand(t *testing.T) {
 func TestLabRunScenarioPlan(t *testing.T) {
 	for size, sites := range map[string]string{"100": "3", "1000": "18", "3000": "30"} {
 		var out strings.Builder
-		root := newRoot("test")
+		root := newRoot("test", "")
 		root.SetOut(&out)
 		root.SetErr(&out)
 		root.SetArgs([]string{"lab", "run", "--scenario", "corporate", "--systems", size, "--plan"})
@@ -159,7 +159,7 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
 	} {
-		root := newRoot("test")
+		root := newRoot("test", "")
 		var out strings.Builder
 		root.SetOut(&out)
 		root.SetErr(&out)
@@ -202,7 +202,11 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		"fits": {1000, "", host, []string{
 			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components)",
 				lab.FormatMiB(need.MemMiB), need.CPU),
+			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, come to 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
 			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
+		// The corporate 3,000 runs on a 12 GB laptop: the buffers take what
+		// the fleet leaves spare rather than a quarter of the host.
+		"3,000 on a laptop": {3000, "12g", host, []string{"Decision: fits."}},
 		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 8950 simulated components)",
 			"this Docker host has 4.0 GiB and 12 cores", ", the largest that fits"}},
 		"none fits": {100, "64m", host, []string{"Decision: refused.", "Not even the smallest size fits", "the smallest scale lab, --systems 3"}},
@@ -264,5 +268,33 @@ func TestLabRunScaleKeepReachesTheRunConfig(t *testing.T) {
 			t.Errorf("keep %v: project %q, scale run %v, %d site nodes; want the scale lab's own project and its nodes",
 				tc.keep, got.Project, got.ScaleRun != nil, len(got.SiteNodes))
 		}
+	}
+}
+
+// A release binary's lab runs the image its release was built with, pulled by
+// the digest stamped into the binary (#1257); one with no digest is refused
+// before anything starts, naming --image. The run is captured, so no Docker
+// is needed.
+func TestLabRunReleasePullsByStampedDigest(t *testing.T) {
+	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	run := func(digest string) (lab.Config, bool, error) {
+		var got lab.Config
+		started := false
+		var out strings.Builder
+		err := runLab(context.Background(), &out, "0.4.1", labFlags{scenario: "corporate", systems: 20, imageDigest: digest,
+			project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort,
+			start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got, started = cfg, true; return nil }})
+		return got, started, err
+	}
+	got, _, err := run(digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := lab.ReleaseRepo + "@" + digest; got.Image.Ref != want || got.Options.Image != want {
+		t.Errorf("image %q (options %q), want %q", got.Image.Ref, got.Options.Image, want)
+	}
+	_, started, err := run("")
+	if err == nil || !strings.Contains(err.Error(), "--image") || started {
+		t.Errorf("no digest: started %v, err %v; want a refusal naming --image before anything starts", started, err)
 	}
 }

@@ -93,9 +93,12 @@ type Store interface {
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// EnsureMetricPartitions and DropMetricPartitions are the metric table's
 	// daily roll (#420, #1527): three days ahead at boot and on every
-	// retention pass, and each day past every window dropped whole.
+	// retention pass, and each day past every window dropped whole;
+	// SummarizeMetricPartitions summarizes each finished day's block range
+	// indexes after (#1929).
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	// RetentionStatus is the storage read after each pass (#1629): the
 	// metric partitions held and the stored tables' and database's bytes.
 	RetentionStatus(ctx context.Context) (storage.RetentionStatus, error)
@@ -116,9 +119,6 @@ type Store interface {
 	// windows of their own, and one chunk of one such type (#417).
 	RetentionOverrides(ctx context.Context) ([]storage.TypeRetention, error)
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
-	// StampEndpointsSeen records that a batch an endpoint's task delivered
-	// landed, whatever it carried: an endpoint's freshness (#933).
-	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

@@ -13,10 +13,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The ingest lane has drained past a time once it has landed a sample a node
-// collected after it: a node's sample probed at or before the time, a sample
-// no node collected (a webhook count the server writes outside the lane), and a sample stamped in the database's future do not drain it.
-func TestIntegrationDrainedQueryWaitsForANodesSampleAfterTheTime(t *testing.T) {
+// The ingest lanes have drained past a time once every live node that
+// collects has landed a sample it probed after it: a node's sample probed at
+// or before the time, a sample no node collected (a webhook count the server
+// writes outside the lanes), and a sample stamped in the database's future do
+// not drain it, and one node's sample says nothing of another's lane (#1896).
+// A node that heartbeated within the live window before the time is waited
+// for though it has not heartbeated since, and a node silent for longer than
+// the window is not.
+func TestIntegrationDrainedQueryWaitsForEveryLiveNodesSampleAfterTheTime(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -33,6 +38,18 @@ func TestIntegrationDrainedQueryWaitsForANodesSampleAfterTheTime(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeB, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-b"}, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	silent, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-silent"}, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeC, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-c"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +71,7 @@ func TestIntegrationDrainedQueryWaitsForANodesSampleAfterTheTime(t *testing.T) {
 	drained := func() bool {
 		t.Helper()
 		var flag, epoch string
-		if err := conn.QueryRow(ctx, drainedQuery(at)).Scan(&flag, &epoch); err != nil {
+		if err := conn.QueryRow(ctx, drainedQuery(at, liveWindow)).Scan(&flag, &epoch); err != nil {
 			t.Fatal(err)
 		}
 		ok, clock, err := parseDrained(flag + "|" + epoch)
@@ -75,9 +92,32 @@ func TestIntegrationDrainedQueryWaitsForANodesSampleAfterTheTime(t *testing.T) {
 	}
 	collected := storage.NodeWriter(comp.ID, "ssh")
 	collected.Node = node.PrincipalID
+	collectedB := storage.NodeWriter(comp.ID, "ssh")
+	collectedB.Node = nodeB.PrincipalID
+	collectedSilent := storage.NodeWriter(comp.ID, "ssh")
+	collectedSilent.Node = silent.PrincipalID
+	collectedC := storage.NodeWriter(comp.ID, "ssh")
+	collectedC.Node = nodeC.PrincipalID
 
 	write(collected, at)
 	write(collected, at.Add(-time.Second))
+	write(collectedB, at.Add(-time.Second))
+	write(collectedSilent, at.Add(-time.Second))
+	write(collectedC, at.Add(-time.Second))
+	// node-a and node-b heartbeated after the time (a heartbeat reaches the
+	// server outside the lanes); node-c last heartbeated just before it, inside
+	// the live window, as a node whose next heartbeat is not due yet does;
+	// node-silent last spoke longer than the window before it.
+	for _, name := range []string{"node-a", "node-b"} {
+		if err := gw.RecordHeartbeat(ctx, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, hb := range map[string]time.Time{"node-c": at.Add(-time.Second), "node-silent": at.Add(-liveWindow - time.Second)} {
+		if _, err := conn.Exec(ctx, `update node set last_heartbeat_at = $1 where name = $2`, hb, name); err != nil {
+			t.Fatal(err)
+		}
+	}
 	plant := func(instance string, ts time.Time) {
 		t.Helper()
 		if _, err := conn.Exec(ctx, storagetest.WideMetricInsert("ts, owner_kind, component_id, metric_type_id, instance, value",
@@ -98,7 +138,15 @@ func TestIntegrationDrainedQueryWaitsForANodesSampleAfterTheTime(t *testing.T) {
 		t.Fatal("drained before any node's sample probed after the time landed")
 	}
 	write(collected, at.Add(time.Second))
+	if drained() {
+		t.Fatal("drained once node-a's sample after the time landed, while node-b's lane may still hold its batches")
+	}
+	write(collectedB, at.Add(2*time.Second))
+	if drained() {
+		t.Fatal("drained before node-c's sample after the time landed, though node-c heartbeated inside the live window")
+	}
+	write(collectedC, at.Add(3*time.Second))
 	if !drained() {
-		t.Fatal("not drained once a node's sample probed after the time landed")
+		t.Fatal("not drained once every live node's sample probed after the time landed")
 	}
 }
