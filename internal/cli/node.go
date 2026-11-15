@@ -130,7 +130,7 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", node.DefaultProbeEvery, "how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
 	cmd.Flags().IntVar(&laneWorkers, "lane-workers", node.DefaultLaneWorkers, "how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS)")
-	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; an endpoint change nudges the node to pull at once, and any other change, or a lost nudge, waits for this pull")
+	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change to the node's worklist nudges it to pull at once, and only a lost nudge waits for this pull")
 	cmd.Flags().IntVar(&sessionDials, "session-dials", node.DefaultSessionDials, "how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS)")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
