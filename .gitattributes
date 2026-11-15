@@ -1,13 +1,18 @@
 # Generated artifacts (make gen, pnpm diagrams): collapsed in GitHub's PR diffs
 # and left out of the language stats. A conflict in one is resolved by
 # regenerating, never by hand (#1095). No custom merge drivers here: GitHub's
-# server-side merge ignores them.
+# server-side merge ignores them. Every file a `make gen` generator writes is
+# listed here (#1492); internal/simfleet/plan.go and internal/sim/profiles/coverage.yaml
+# are hand-written sources, no generator emits them, so they are not listed.
 api/openapi.json linguist-generated=true
 api/openapi.yaml linguist-generated=true
 internal/cli/api_gen.go linguist-generated=true
+internal/mcp/catalog_gen.go linguist-generated=true
 web/src/api/*.gen.ts linguist-generated=true
+web/src/lib/*.gen.ts linguist-generated=true
 proto/og/v1/*.pb.go linguist-generated=true
 docs/src/generated/*.json linguist-generated=true
 docs/src/content/docs/reference/cli/index.md linguist-generated=true
+docs/src/content/docs/reference/mcp/index.md linguist-generated=true
 docs/src/content/docs/architecture/data-model.md linguist-generated=true
 docs/public/d2/** linguist-generated=true

@@ -38,6 +38,31 @@ One command runs them all (`make gen`); two focused targets regenerate a subset
 client). The committed `*.pb.go` lets a contributor build without protoc or a running
 server.
 
+### After main moves
+
+Two PRs that each change a source (a seed row, a route) and each regenerate will usually merge
+without help, because every generator's output is built to merge: one entry per line, map keys
+sorted, list entries in their source order. Hunks that touch different entries of a derived file
+(`docs/src/generated/seed.json`, `api/openapi.json`) merge on their own. `cmd/seedgen`'s tests hold
+that shape (deterministic bytes, one entry per line, sorted map keys).
+
+When main has moved under your branch:
+
+1. Rebase or merge `origin/main`.
+2. Resolve conflicts in the **sources** only (a seed YAML, a Go struct). A derived file's conflict
+   markers do not need reading: skip them.
+3. Run `make gen`. It overwrites every derived file from the merged sources.
+4. Commit the result.
+
+A merge that comes back clean can still leave a derived file stale (your row and theirs both merged,
+but a count or a summary the generator computes moved), which is what `gen-drift` catches; step 3
+fixes it the same way. The conflicts that remain are real: two PRs adding a row at the very same
+spot of one list conflict in the YAML and the derived file alike, and the regeneration resolves the
+second.
+
+`internal/simfleet/plan.go` and `internal/sim/profiles/coverage.yaml` are not derived: no generator
+writes them, so they are edited and merged like any source.
+
 ## A name is the address, a uuid is identity
 
 **Every response carries both forms of a reference: the name an operator types and the id it
