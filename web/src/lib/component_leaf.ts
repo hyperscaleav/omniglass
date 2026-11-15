@@ -39,7 +39,7 @@ export type CollectionState = {
   // (#1110, lib/session's pollsHeld).
   // listening: a push endpoint (#1024), which the server hosts and a sender
   // posts to; silence is never read as down, so it has no other state.
-  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown" | "listening";
+  kind: "collecting" | "component-or-path" | "node-offline" | "no-node" | "down" | "rejected" | "session-down" | "unknown" | "listening";
   node?: string;
 };
 
@@ -51,10 +51,13 @@ export type CollectionState = {
 // freshness does.
 export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
   if (iface.webhook) return { kind: "listening" };
-  const nodeDown = !node || nodeStatus(node, now) !== "up";
+  // No node at all is its own state (#1454), not an offline one: a node that
+  // does not exist cannot have stopped heartbeating.
+  const missing = !node;
+  const nodeDown = !!node && nodeStatus(node, now) !== "up";
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
-  if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
-  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "component-or-path", node: iface.node };
+  if (!last) return { kind: missing ? "no-node" : nodeDown ? "node-offline" : "unknown", node: iface.node };
+  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-node" : nodeDown ? "node-offline" : "component-or-path", node: iface.node };
   if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", node: iface.node };
   if (iface.session?.state === "down") return { kind: "session-down", node: iface.node };
   if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };

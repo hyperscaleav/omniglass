@@ -26,6 +26,7 @@ import { useSeverity } from "../lib/severity";
 import SimulationSection from "../components/SimulationSection";
 import ReachLadder from "../components/ReachLadder";
 import SessionPill from "../components/SessionPill";
+import { ladderObserved } from "../lib/session";
 import SessionNotice from "../components/SessionNotice";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
@@ -491,7 +492,9 @@ export default function ComponentLeaf() {
                                   when={iface().webhook}
                                   fallback={
                                     <>
-                                      <ReachLadder iface={iface()} />
+                                      <Show when={ladderObserved(iface())}>
+                                        <ReachLadder iface={iface()} />
+                                      </Show>
                                       <SessionPill iface={iface()} now={pageNow()} />
                                     </>
                                   }
@@ -510,6 +513,7 @@ export default function ComponentLeaf() {
                                       collecting: "collecting",
                                       "component-or-path": "stale sample; the node is healthy, so check the component or the path",
                                       "node-offline": "node offline",
+                                      "no-node": "no node collecting it",
                                       down: "component reports down",
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",
