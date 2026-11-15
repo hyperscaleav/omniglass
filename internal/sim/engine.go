@@ -365,6 +365,9 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 		}
 		arriving = append(arriving, snap)
 	}
+	// The fleet is changing from here when a device may start or stop. Its
+	// generation advances below only for what did: an arrival that failed to
+	// start changed nothing served.
 	changing := len(arriving) > 0 || len(kept) != len(current)
 	if changing {
 		e.mu.Lock()

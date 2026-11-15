@@ -453,12 +453,20 @@ func (d *Device) Observed(protocol string) ObservationCounters {
 }
 
 // Observation reads every device's counters, the per-protocol latency and
-// in-flight high water, and the faces that saw an overlap.
+// in-flight high water, and the faces that saw an overlap. The fleet is read
+// on both sides of the counters, and a fleet that moved between the two
+// reads as changing, so counters taken across a sync never read as steady.
 func (e *Engine) Observation() ObservationSnapshot {
-	e.mu.Lock()
-	f := e.fleet
-	e.mu.Unlock()
+	before := e.fleetNow()
 	snap := e.obs.snapshot(time.Now())
-	snap.FleetGeneration, snap.FleetChanging = f.generation, f.changing
+	after := e.fleetNow()
+	snap.FleetGeneration = after.generation
+	snap.FleetChanging = before != after || after.changing
 	return snap
+}
+
+func (e *Engine) fleetNow() fleetState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.fleet
 }
