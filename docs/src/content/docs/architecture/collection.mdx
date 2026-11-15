@@ -589,9 +589,18 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   secrets. The count says how often; the log line says which statement. 0 is healthy.
 - **`db-pool-acquired`, `db-pool-idle`, `db-pool-total`, `db-pool-max`**: the database pool's
   connections in use, idle and open and its cap, as they stand at the window's close.
+  **`db-pool-acquire-count`** is the connections the pool handed out in the window.
   **`db-pool-wait-count`** and **`db-pool-wait-duration`** are the window's acquires that found the
-  pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
-  healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+  pool exhausted and waited, and how long they waited in all. The health page reads the waits as a
+  share of the acquires, since a bare count of waits is not a loss ratio; 0 is healthy, and a nonzero
+  share beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+- **`db-connection-count`, `db-connection-limit`, `db-connection-idle-in-transaction-count`,
+  `db-transaction-oldest-age`** (#1980): the database's own side of its connections, read from
+  `pg_stat_activity` each window. The server's pool counts only what it opened; these count every
+  client backend (a `migrate`, a lab measure, a `psql` session, a second server) against
+  `max_connections` less `superuser_reserved_connections`, the connections left idle inside an open
+  transaction against those held (0 healthy), and the age in seconds of the oldest open
+  transaction. A read the database cannot answer writes nothing for that window.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
   files of the server process, read by the one runtime sampler a node reports its own through. The
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime

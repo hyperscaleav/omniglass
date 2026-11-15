@@ -142,7 +142,8 @@ func TestServerComponentIsReserved(t *testing.T) {
 // serverKeys is every key the server writes of itself.
 var serverKeys = []string{writerclass.HTTPRequestCount, writerclass.HTTPRequestDuration, writerclass.HTTPRequestDurationMax,
 	writerclass.DBSlowQueryCount, writerclass.DBPoolAcquired, writerclass.DBPoolIdle, writerclass.DBPoolTotal,
-	writerclass.DBPoolMax, writerclass.DBPoolWaitCount, writerclass.DBPoolWaitDuration}
+	writerclass.DBPoolMax, writerclass.DBPoolAcquireCount, writerclass.DBPoolWaitCount, writerclass.DBPoolWaitDuration,
+	writerclass.DBConnectionCount, writerclass.DBConnectionLimit, writerclass.DBConnectionIdleInTransactionCount, writerclass.DBTransactionOldestAge}
 
 // TestServerKeysRefuseEveryOtherWriter: the server's keys land from the
 // process and are refused from a node or a push, so no device or operator

@@ -241,10 +241,18 @@ not a lab run. Read them together:
   `db-pool-wait-duration`); past that the lane needs to run in parallel, which waits on sequencing per
   publisher ([workers](/architecture/workers/#one-machinery-several-consumers)); #1517 measures where
   the ceiling sits in a scale lab. This is the scale-out signal.
-- **The database or the process is the ceiling.** `db-pool-wait-count` nonzero with
-  `db-pool-acquired` at `db-pool-max`, or `process-cpu-seconds` divided by the window near the cores
-  the server has, while the lane is not saturated: the server is starved, not the design. Scale up (more
-  cores, a larger pool, a faster database) before adding a replica that would share the same database.
+- **The database or the process is the ceiling.** `db-pool-wait-count` a nonzero share of
+  `db-pool-acquire-count` with `db-pool-acquired` at `db-pool-max`, or `process-cpu-seconds` divided
+  by the window near the cores the server has, while the lane is not saturated: the server is
+  starved, not the design. Scale up (more cores, a larger pool, a faster database) before adding a
+  replica that would share the same database.
+- **The database is out of connections, whatever the pool says.** `db-connection-count` near
+  `db-connection-limit` (`max_connections` less the superuser reserve) while every server's pool shows
+  headroom: other clients hold the rest (a `migrate`, a lab measure, a `psql` session) and a replica
+  would add its own pool to the pile, so raise the limit or put a pooler in front before scaling out.
+  `db-connection-idle-in-transaction-count` above 0 with `db-transaction-oldest-age` climbing is a
+  leaked transaction, a held connection that also blocks vacuum; it is a fault to find, not a
+  capacity to buy.
 - **The lag is not the server's.** `ingest-lag` high while `ingest-lane-busy` is low and the backlog
   near 0: the samples arrive late (a node's spool holding through an outage, a slow WAN) or the node's
   clock is behind the server's. The lag is commit time minus the node's `ts`, two clocks

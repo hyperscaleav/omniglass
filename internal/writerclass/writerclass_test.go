@@ -338,7 +338,8 @@ func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 // its node-self lane is refused like any key not its own.
 func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
-		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration}
+		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolAcquireCount, DBPoolWaitCount, DBPoolWaitDuration,
+		DBConnectionCount, DBConnectionLimit, DBConnectionIdleInTransactionCount, DBTransactionOldestAge}
 	for _, key := range keys {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)

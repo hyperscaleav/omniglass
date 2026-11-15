@@ -444,6 +444,25 @@ describe("panelSections", () => {
     expect(sections[1].rows[0].of).toMatchObject({ value: 7, unit: "d" });
   });
 
+  it("keeps the row of a key that is both a pair's second key and a pair's first", () => {
+    const connections = {
+      name: "requests",
+      label: "Requests",
+      keys: [
+        { name: "db-connection-count", label: "Connections Held", unit: "", description: "Held.", of: "db-connection-limit" },
+        { name: "db-connection-limit", label: "Connection Limit", unit: "", description: "The limit." },
+        { name: "db-connection-idle-in-transaction-count", label: "Idle In Transaction", unit: "", description: "Idle.", of: "db-connection-count" },
+      ],
+      figures: [
+        { key: "db-connection-count", instance: "", value: 9, observed_at: readAt },
+        { key: "db-connection-limit", instance: "", value: 97, observed_at: readAt },
+        { key: "db-connection-idle-in-transaction-count", instance: "", value: 0, observed_at: readAt },
+      ],
+    };
+    const sections = panelSections(connections);
+    expect(sections.map((s) => panelRowText(s.rows[0]))).toEqual(["9 / 97", "0 / 9"]);
+  });
+
   it("is a not-reported row per key for a server with no samples yet", () => {
     const bare = { ...server().groups![0], figures: [] };
     const sections = panelSections(bare);

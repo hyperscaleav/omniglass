@@ -882,10 +882,16 @@
    "description": "The most connections the server's pool may open; db-pool-total reaching it means a new query waits."
   },
   {
+   "name": "db-pool-acquire-count",
+   "data_type": "int",
+   "label": "Pool Acquires",
+   "description": "Connections the server's pool handed out over the report window, the denominator db-pool-wait-count is a share of; a pool that waited 40 times of 50 acquires is starved, of 50,000 it is not."
+  },
+  {
    "name": "db-pool-wait-count",
    "data_type": "int",
    "label": "Pool Waits",
-   "description": "Connection acquires that found the pool exhausted and waited for a connection, over the report window."
+   "description": "Connection acquires that found the pool exhausted and waited for a connection, over the report window; read against db-pool-acquire-count, 0 is healthy."
   },
   {
    "name": "db-pool-wait-duration",
@@ -893,6 +899,31 @@
    "unit": "ms",
    "label": "Pool Wait Time",
    "description": "Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window."
+  },
+  {
+   "name": "db-connection-count",
+   "data_type": "int",
+   "label": "Database Connections Held",
+   "description": "Client connections open on the database from every source (the server's pool, migrate, psql, a lab measure, a second server) at the end of the report window, read against db-connection-limit; at the limit the database refuses the next client whatever headroom the server's pool shows."
+  },
+  {
+   "name": "db-connection-limit",
+   "data_type": "int",
+   "label": "Database Connection Limit",
+   "description": "The connections the database admits an ordinary role, max_connections less superuser_reserved_connections."
+  },
+  {
+   "name": "db-connection-idle-in-transaction-count",
+   "data_type": "int",
+   "label": "Idle In Transaction",
+   "description": "Database connections sitting idle inside an open transaction at the end of the report window, read against db-connection-count; 0 is healthy. Each holds a connection and its locks and blocks vacuum from reclaiming rows, a leak that shows nowhere until something fails."
+  },
+  {
+   "name": "db-transaction-oldest-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Oldest Transaction",
+   "description": "How long the oldest open transaction on the database has been open at the end of the report window, whatever state it is in; a figure that only climbs is a transaction nothing is finishing."
   },
   {
    "name": "ingest-lag",

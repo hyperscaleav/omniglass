@@ -108,7 +108,17 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.BusRequestCount, Window: true},
 		{Name: writerclass.DBPoolAcquired, Of: writerclass.DBPoolMax},
 		{Name: writerclass.DBPoolMax},
-		{Name: writerclass.DBPoolWaitCount},
+		// Waits against the acquires they were a share of, so a pool that
+		// waited 40 times reads differently at 50 acquires than at 50,000.
+		{Name: writerclass.DBPoolWaitCount, Of: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolWaitDuration},
+		// The database's own side (#1980): what the pool cannot see, the
+		// connections other clients hold and a transaction left open.
+		{Name: writerclass.DBConnectionCount, Of: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionIdleInTransactionCount, Of: writerclass.DBConnectionCount},
+		{Name: writerclass.DBTransactionOldestAge},
 	}},
 	{Name: "ingest", Label: "Ingest", Keys: []PlatformServerKey{
 		{Name: writerclass.IngestLag, Window: true},
