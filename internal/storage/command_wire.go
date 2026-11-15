@@ -619,8 +619,8 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	// driver's polls of it land: held to the property's validation like any
 	// telemetry (a value outside it fails the command and records nothing),
 	// written only as a transition, and not at all when the target was
-	// observed after the exchange began (#1606): a late reply is evidence for
-	// the command, never a newer state of the device.
+	// observed after the command was first delivered (#1606): a late reply is
+	// evidence for the command, never a newer state of the device.
 	if ct.TargetPropertyType != "" {
 		var dataType string
 		var validation []byte
@@ -659,10 +659,12 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 }
 
 // observedSinceDispatch reports whether the target's latest observation was
-// taken after the command's latest delivery to a node, the moment its exchange
-// with the device began (#1606). A reply read after that is older than such an
-// observation however late it reaches the server, so it must not be written
-// over it. The observation's time is the one it carries (a node's sample time
+// taken after the command's first delivery to a node, the earliest moment an
+// exchange that could have produced the reply began (#1606). A redelivery
+// advances dispatched_at, but the report of an earlier delivery's exchange is
+// still accepted, so the last take would miss a push made between the two. A
+// reply read after the first delivery is older than such an observation
+// however late it reaches the server, so it must not be written over it. The observation's time is the one it carries (a node's sample time
 // for a poll, the database's for a push); a node clock ahead of the database's
 // only withholds a reply observation the next poll restores (ADR-0141's "late,
 // never wrong"), and one behind it leaves today's behavior.
@@ -671,8 +673,8 @@ func observedSinceDispatch(ctx context.Context, q querier, commandID int64, late
 		return false, nil
 	}
 	var dispatched *time.Time
-	if err := q.QueryRow(ctx, `select dispatched_at from command where id = $1`, commandID).Scan(&dispatched); err != nil {
-		return false, fmt.Errorf("storage: delivery time of command %d: %w", commandID, err)
+	if err := q.QueryRow(ctx, `select first_dispatched_at from command where id = $1`, commandID).Scan(&dispatched); err != nil {
+		return false, fmt.Errorf("storage: first delivery time of command %d: %w", commandID, err)
 	}
 	return dispatched != nil && latest.TS.After(*dispatched), nil
 }

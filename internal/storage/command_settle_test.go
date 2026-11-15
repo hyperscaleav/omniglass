@@ -284,6 +284,37 @@ func TestALateReplyDoesNotOverwriteANewerObservation(t *testing.T) {
 	}
 }
 
+// A redelivery moves dispatched_at past a push the device made after the
+// first take, yet the first delivery's report is still accepted: the reply
+// must be judged against the first delivery, or that push is overwritten
+// (#1606).
+func TestALateReplyAfterARedeliveryDoesNotOverwriteANewerObservation(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	r.observeOn(t, "tcp", "dp1")
+	// The node went silent: age both stamps past the redelivery interval, so
+	// the push sits after the first take and the pull below redelivers.
+	if _, err := r.conn.Exec(r.ctx, `update command set dispatched_at = dispatched_at - interval '31 seconds',
+		first_dispatched_at = first_dispatched_at - interval '31 seconds' where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.gw.PendingNodeCommands(r.ctx, "edge")
+	if err != nil || len(got) != 1 || got[0].ID != id {
+		t.Fatalf("redelivery = %+v (%v), want command %d again", got, err, id)
+	}
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("status = %q, want settled from its reply", got)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "dp1" {
+		t.Fatalf("latest video-input = %+v (%v), want the newer push dp1", latest, err)
+	}
+}
+
 // An observation older than the exchange does not stop the reply being
 // recorded: only one taken after the command was dispatched is newer than it.
 func TestAReplyIsRecordedOverAnObservationOlderThanTheExchange(t *testing.T) {

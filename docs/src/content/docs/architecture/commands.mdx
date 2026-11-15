@@ -233,7 +233,7 @@ spec says how its commands settle:
   and settles the command if it matches the intent or fails it if not. For a property target the
   value is also recorded as an observation on the dispatched endpoint, held to the property's
   validation like any telemetry (a value outside it fails the command and records nothing) and
-  written only when it changes and only when the target was not observed after the command's latest
+  written only when it changes and only when the target was not observed after the command's first
   delivery: a reply that reaches the server after the device has pushed a newer value still settles
   the command, but leaves that value as the latest
   ([ADR-1606](/architecture/decisions/#adr-1606-a-late-reply-settles-its-command-but-never-overwrites-a-newer-observation)).
