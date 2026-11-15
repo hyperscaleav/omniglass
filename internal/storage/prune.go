@@ -182,9 +182,17 @@ func pruneMetricSampleSQL(part string, typed bool) string {
 
 // pruneMetricSamples is pruneSamples on the metric lane: the partitions that
 // begin before the cutoff, oldest first, a statement each until limit rows
-// are deleted. A day wholly past every window is dropped whole by
-// DropMetricPartitions; this keeps the window exact inside the days that
-// remain, a day a longer type's window still holds among them.
+// are deleted. A typed prune (typeID set) works in every such day, so a
+// type's own window is exact. The lane's prune (typeID empty) works only in
+// a day a longer type holds (#1957): any other day past the cutoff, the one
+// the cutoff sits in included, is one DropMetricPartitions takes whole once
+// it ends, so its rows go with it rather than one delete at a time. The held
+// test is the drop's own, asked of each day as the drop will first ask it: a
+// day wholly past the cutoff on its own end, as the drop asks it now, and the
+// day the cutoff sits in on the cutoff, which is what its end reads against
+// the window once the day is past. A day skipped here is one the drop takes.
+// It is read every call, so a day a late sample of a longer type comes to
+// hold is pruned again from then on.
 func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
 	// No sample of an hour the trend compaction has not closed is removed
 	// (#1276), so the trend tier never misses an hour retention reached first.
@@ -204,11 +212,25 @@ func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, be
 		if total >= int64(limit) || !part.From.Before(before) {
 			break
 		}
+		name := pgx.Identifier{"public", part.Name}.Sanitize()
+		if typeID == "" {
+			bound := part.To
+			if before.Before(bound) {
+				bound = before
+			}
+			var held bool
+			if err := p.pool.QueryRow(ctx, metricPartitionHeldSQL(name), bound).Scan(&held); err != nil {
+				return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
+			}
+			if !held {
+				continue
+			}
+		}
 		args := []any{before, int64(limit) - total}
 		if typeID != "" {
 			args = append(args, typeID, days)
 		}
-		tag, err := p.pool.Exec(ctx, pruneMetricSampleSQL(pgx.Identifier{"public", part.Name}.Sanitize(), typeID != ""), args...)
+		tag, err := p.pool.Exec(ctx, pruneMetricSampleSQL(name, typeID != ""), args...)
 		if err != nil {
 			return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
 		}

@@ -15,7 +15,8 @@ runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kube
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
 `set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
 JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
-Helm chart. Today one stream and one serial consumer do confinement and persistence inline; the
+Helm chart. Today one stream and its ingest lanes, one serial lane a partition of the nodes ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
+do confinement and persistence inline; the
 design fences below mark the parts of this page that are target design, each naming its tracker. See
 [implementation status](/architecture/status/).
 :::
