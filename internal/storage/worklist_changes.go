@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -11,9 +12,10 @@ import (
 
 // A write that changes what a node's worklist holds announces the node on
 // commit (#1945, ADR-1945; every writer beyond the endpoint's own, #1997), so
-// the bus can nudge it to pull now rather than on its next scheduled pull. The announcement is a Postgres NOTIFY issued in the
-// writing transaction: Postgres delivers it only if that transaction commits,
-// once per node however many rows the write touched. Nothing depends on it
+// the bus can nudge it to pull now rather than on its next scheduled pull.
+// The announcement is a Postgres NOTIFY issued in the writing transaction:
+// Postgres delivers it only if that transaction commits, once per node
+// however many rows the write touched. Nothing depends on it
 // arriving: a lost one costs the node only the wait until its scheduled pull.
 
 // worklistChangedChannel is the NOTIFY channel; each payload is a node name.
@@ -120,6 +122,31 @@ const subtreeLocationNodesSQL = `
 	)
 	select e.node_name from endpoint e join component c on c.id = e.component
 	where c.location_id in (select id from sub)`
+
+// driverSpecNodesSQL selects the nodes of every endpoint attached through
+// driver $2 when its spec now differs from $3, the spec before the write. A
+// task carries its driver's session block and ladder off the live spec and no
+// task id hashes them, so an edit to either alone re-derives no task and still
+// changes the worklist; a label edit, or a spec rewritten unchanged, selects
+// none.
+const driverSpecNodesSQL = `
+	select e.node_name from endpoint e join driver d on d.id = e.driver_id
+	where d.id = $2 and d.spec is distinct from $3::jsonb`
+
+// priorDriverSpec reads the spec of the driver driverRowSQL selects ($1 and
+// on are args) and locks the row, so the write that follows compares against
+// the spec it replaced. A driver not yet written reads nil.
+func priorDriverSpec(ctx context.Context, tx pgx.Tx, driverRowSQL string, args ...any) ([]byte, error) {
+	var spec []byte
+	err := tx.QueryRow(ctx, `select spec from driver where `+driverRowSQL+` for update`, args...).Scan(&spec)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read the driver spec before the write: %w", err)
+	}
+	return spec, nil
+}
 
 // WorklistChanges listens for worklist changes and sends each announced node
 // name on the returned channel until ctx ends, when it closes. When the first

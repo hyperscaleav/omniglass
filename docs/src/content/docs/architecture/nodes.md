@@ -246,10 +246,13 @@ the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-
   `NOTIFY` naming each node the write touched. Postgres delivers it only when the transaction
   commits, once per node however many rows it touched, so a refused or rolled-back write nudges
   nothing. The writes, and the nodes each names:
-  - an endpoint create, edit, session retry or delete, and a driver spec change that re-derives an
-    endpoint's tasks: the endpoint's node (an edit that moves an endpoint names both). A retry
-    that trusts a replaced key is also the only writer of a key pin (`ssh-host-key`,
-    `tls-certificate`): the plain property route refuses those keys;
+  - an endpoint create, edit, session retry or delete: the endpoint's node (an edit that moves an
+    endpoint names both). A retry that trusts a replaced key is also the only writer of a key pin
+    (`ssh-host-key`, `tls-certificate`): the plain property route refuses those keys;
+  - a driver edit or upsert that changes its spec: the nodes of every endpoint attached through it.
+    A task carries its driver's session block and ladder off the live spec, so an edit to either
+    alone changes the worklist though it re-derives no task; a label-only edit, or the same spec
+    written again, nudges nothing;
   - a secret create, delete, or edit of its fields: the nodes of every endpoint whose inputs name
     it and whose component it covers (the platform's, the component's or an ancestor's, or one in
     the component's location chain). A label-only edit changes no worklist and nudges nothing;
@@ -260,7 +263,8 @@ the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-
   - a location moved to a new parent: the nodes of every endpoint on a component placed in it or
     below it;
   - a platform settings write that moves `collection.report_seconds`, which every worklist carries:
-    every node.
+    every node. Only a write to the `collection` namespace (or a reset of every override) reads the
+    window before and after; a write elsewhere cannot move it.
 
   Writes that change no worklist nudge nothing: a component delete is refused while it owns
   endpoints or children, a location delete while a component sits in it or it has children, and a

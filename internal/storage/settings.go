@@ -70,7 +70,10 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	window := p.reportWindowOf(ctx, tx)
+	window, err := p.reportWindowBefore(ctx, tx, namespace)
+	if err != nil {
+		return nil, err
+	}
 	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, doc, locks)
 	if err != nil {
 		return nil, err
@@ -151,7 +154,10 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 			return nil, err
 		}
 	}
-	window := p.reportWindowOf(ctx, tx)
+	window, err := p.reportWindowBefore(ctx, tx, namespace)
+	if err != nil {
+		return nil, err
+	}
 	merged := settings.ApplyMergePatch(current, patch)
 	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, merged, nil)
 	if err != nil {
@@ -215,7 +221,10 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	window := p.reportWindowOf(ctx, tx)
+	window, err := p.reportWindowBefore(ctx, tx, namespace)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`delete from setting_override where scope = $1 and principal_id is null and namespace = $2`,
 		scope, namespace); err != nil {
@@ -239,7 +248,10 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	window := p.reportWindowOf(ctx, tx)
+	window, err := p.reportWindowBefore(ctx, tx, "")
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`delete from setting_override where scope = $1 and principal_id is null`, scope); err != nil {
 		return fmt.Errorf("storage: reset setting overrides: %w", err)
@@ -253,23 +265,56 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 	return tx.Commit(ctx)
 }
 
-// reportWindowOf is the platform report window as of this point in tx, the one
-// setting every worklist carries, or 0 when the settings do not resolve: a
-// settings write must not fail on that, since the restore that repairs them is
-// one of the writes that reads it.
-func (p *PG) reportWindowOf(ctx context.Context, tx pgx.Tx) int {
-	s, err := p.platformSettings(ctx, tx)
-	if err != nil {
-		return 0
+// reportWindowNamespace is the settings namespace the report window lives in,
+// the one setting every worklist carries.
+const reportWindowNamespace = "collection"
+
+// noReportWindow stands for a write that cannot move the report window, and
+// unresolvedReportWindow for settings that do not resolve; neither is a window
+// (its minimum is 10), so a resolved window always differs from both.
+const (
+	noReportWindow         = -1
+	unresolvedReportWindow = 0
+)
+
+// reportWindowBefore is the platform report window as of this point in tx, read
+// before a write to namespace ("" for every namespace) so the write can say
+// whether it moved it; a write to another namespace reads nothing.
+func (p *PG) reportWindowBefore(ctx context.Context, tx pgx.Tx, namespace string) (int, error) {
+	if namespace != "" && namespace != reportWindowNamespace {
+		return noReportWindow, nil
 	}
-	return s.Collection.ReportSeconds
+	return p.reportWindowOf(ctx, tx)
+}
+
+// reportWindowOf is the platform report window as of this point in tx. Settings
+// that do not resolve read unresolvedReportWindow rather than failing: a
+// settings write must not fail on that, since the restore that repairs them is
+// one of the writes that reads it. A read that fails is the write's error.
+func (p *PG) reportWindowOf(ctx context.Context, tx pgx.Tx) (int, error) {
+	doc, locks, err := p.settingLevel(ctx, tx, "platform")
+	if err != nil {
+		return 0, err
+	}
+	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	if err != nil {
+		return unresolvedReportWindow, nil
+	}
+	return s.Collection.ReportSeconds, nil
 }
 
 // announceReportWindowChange announces every node when this write moved the
-// report window from before (or either side did not resolve, where a spare
-// pull is cheaper than a guess).
+// report window from before, including into or out of settings that do not
+// resolve.
 func (p *PG) announceReportWindowChange(ctx context.Context, tx pgx.Tx, before int) error {
-	if after := p.reportWindowOf(ctx, tx); after == before && after != 0 {
+	if before == noReportWindow {
+		return nil
+	}
+	after, err := p.reportWindowOf(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if after == before {
 		return nil
 	}
 	return announceEveryNode(ctx, tx)

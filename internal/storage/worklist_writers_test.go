@@ -3,6 +3,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // Every write that changes what NodeWorklist serves, beyond the endpoint
@@ -27,6 +29,7 @@ import (
 // the card, other-comm for amp-c.
 type writersFixture struct {
 	ctx     context.Context
+	dsn     string
 	gw      *storage.PG
 	changes <-chan string
 }
@@ -105,7 +108,7 @@ func newWritersFixture(t *testing.T) *writersFixture {
 		}
 		gw.Close()
 	})
-	return &writersFixture{ctx: ctx, gw: gw, changes: changes}
+	return &writersFixture{ctx: ctx, dsn: dsn, gw: gw, changes: changes}
 }
 
 // quiet fails on any announcement within the settle window: a write that
@@ -302,6 +305,29 @@ func TestWorklistWritersReportWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a factory reset", every...)
+
+	// Settings that no longer resolve still take the write that repairs them,
+	// and the repair moves every worklist back onto a window.
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+		t.Fatal(err)
+	}
+	expectChanges(t, f.changes, "a report window upsert", every...)
+	conn, err := pgx.Connect(ctx, f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `update setting_override set doc = '{"report_seconds": "soon"}' where namespace = 'collection'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
+		t.Fatalf("a write beside settings that do not resolve: %v", err)
+	}
+	f.quiet(t, "another namespace beside settings that do not resolve")
+	if err := gw.DeleteSettingOverride(ctx, "", "platform", "collection"); err != nil {
+		t.Fatalf("the restore that repairs the settings: %v", err)
+	}
+	expectChanges(t, f.changes, "the restore that repairs the settings", every...)
 }
 
 func TestWorklistWritersMoves(t *testing.T) {
@@ -342,4 +368,44 @@ func TestWorklistWritersMoves(t *testing.T) {
 		t.Fatal("a move to an unknown location was accepted")
 	}
 	f.quiet(t, "a refused component move")
+}
+
+// A driver's session block and ladder ride every task it derives, read off the
+// live spec, but no task id hashes them: an edit to either alone changes the
+// worklist of every node running the driver without re-deriving a task.
+func TestWorklistWritersDriverSpec(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWritersFixture(t)
+	ctx, gw := f.ctx, f.gw
+	laddered := []byte(strings.Replace(snmpSpec, `"transport": "snmp",`, `"transport": "snmp", "ladder": {"ping": {"enabled": false}},`, 1))
+
+	if _, err := gw.UpdateDriver(ctx, "", "snmp-scalar", storage.DriverPatch{Spec: laddered}); err != nil {
+		t.Fatal(err)
+	}
+	expectChanges(t, f.changes, "a ladder-only driver edit", "edge-a", "edge-b", "edge-c", "edge-d")
+
+	label := "SNMP Scalar, relabelled"
+	if _, err := gw.UpdateDriver(ctx, "", "snmp-scalar", storage.DriverPatch{Label: &label}); err != nil {
+		t.Fatal(err)
+	}
+	f.quiet(t, "a label-only driver edit")
+
+	if _, err := gw.UpdateDriver(ctx, "", "snmp-scalar", storage.DriverPatch{Spec: laddered}); err != nil {
+		t.Fatal(err)
+	}
+	f.quiet(t, "a driver edit that rewrites the same spec")
+
+	// The boot seed's upsert path hears the same edit.
+	if err := gw.UpsertDriver(ctx, storage.Driver{Name: "snmp-scalar", Label: label, Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
+		t.Fatal(err)
+	}
+	expectChanges(t, f.changes, "a ladder-only driver upsert", "edge-a", "edge-b", "edge-c", "edge-d")
+
+	if _, err := gw.UpdateDriver(ctx, "", "snmp-scalar", storage.DriverPatch{Spec: []byte(`{"version": 99}`)}); err == nil {
+		t.Fatal("an unknown spec version was accepted")
+	}
+	f.quiet(t, "a refused driver edit")
 }
