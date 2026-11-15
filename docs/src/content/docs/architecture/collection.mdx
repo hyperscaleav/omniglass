@@ -148,6 +148,11 @@ endpoints:
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
 - **Node placement is not declared here**; it is server-assigned from the component's location.
+- **A component that owns endpoints cannot be deleted.** The component delete is refused (409) on
+  two conditions: it still has child components, or it still owns endpoints. The second message
+  names how many and the next step, delete or reassign them first. The foreign key would otherwise
+  set the endpoints' component to null and strand them, and the tasks derived from them, in the
+  all-scope-only bucket; refusing rather than cascading is [ADR-0528](/architecture/decisions/#adr-0528-a-component-with-endpoints-is-occupied-its-delete-is-refused-not-cascaded).
 - **`out_of_band`** marks an endpoint that answers through a reboot of its own device: a BMC, a
   management port on its own controller. It is set on create or PATCH (`out_of_band: true`) and
   read by the [hold set](/architecture/commands/#the-hold-set-follows-dependency-edges): a reboot
