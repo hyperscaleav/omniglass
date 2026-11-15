@@ -20,7 +20,8 @@ import (
 // not break as the interface grows.
 type UnimplementedGateway struct{}
 
-func (UnimplementedGateway) Ping(context.Context) error { return nil }
+func (UnimplementedGateway) Ping(context.Context) error                            { return nil }
+func (UnimplementedGateway) ReconcileReservedKeys(context.Context, []string) error { return nil }
 func (UnimplementedGateway) UpsertLabelRuleDefault(context.Context, string, string) error {
 	return nil
 }

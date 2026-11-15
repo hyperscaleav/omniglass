@@ -6194,6 +6194,16 @@
      }
     ]
    },
+   "reserved_key": {
+    "columns": [
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     }
+    ]
+   },
    "severity_level": {
     "columns": [
      {

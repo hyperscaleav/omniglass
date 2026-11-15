@@ -377,6 +377,11 @@ type Gateway interface {
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin read the ancestor chain in one recursive query and fold it in Go.
+	// ReconcileReservedKeys makes reserved_key exactly names (#1447): the
+	// boot seed mirrors writerclass.ReservedNames() into it on every start, so
+	// the signal catalogs' search path refuses a reserved key both tiers hold,
+	// as ResolveNameLane does. A name no longer reserved is deleted.
+	ReconcileReservedKeys(ctx context.Context, names []string) error
 	// The global tier of the label rules (#682): one row per entity kind,
 	// its shipped default rewritten authoritatively on every boot and an
 	// operator's override left alone, which is why they are two columns.

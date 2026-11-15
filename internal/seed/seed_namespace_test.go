@@ -2,11 +2,13 @@ package seed_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -60,6 +62,10 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 
 	seeded := 0
 	countOfficial := map[string]int{}
+	// A reserved key an operator holds beside og's reaches neither row in the
+	// signal catalogs (#1447), so a bare name of one reaches nothing.
+	countReserved := map[string]int{}
+	signal := map[string]bool{"metric_type": true, "property_type": true, "event_type": true}
 	for _, table := range tables {
 		id := pgx.Identifier{table}.Sanitize()
 		var stray, unofficialOg, n int
@@ -78,6 +84,21 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 		}
 		seeded += n
 		countOfficial[table] = n
+		if signal[table] {
+			rows, err := conn.Query(ctx, `select name from `+id+` where official`)
+			if err != nil {
+				t.Fatalf("%s: read the shipped names: %v", table, err)
+			}
+			names, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				t.Fatalf("%s: read the shipped names: %v", table, err)
+			}
+			for _, name := range names {
+				if _, ok := writerclass.Reserved(name); ok {
+					countReserved[table]++
+				}
+			}
+		}
 	}
 	if seeded == 0 {
 		t.Fatal("the seed shipped no official row: nothing was tested")
@@ -134,8 +155,9 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 
 	// The shipped rows are back in og beside the operator's (#1432), and a bare
 	// name resolves to the operator's: local shadows og. A role refuses the
-	// ambiguity instead, so its bare name resolves to nothing; severity levels
-	// keep one row per name (overridden, never shadowed), so none is written.
+	// ambiguity instead, so its bare name resolves to nothing, as does a
+	// reserved signal key (#1447); severity levels keep one row per name
+	// (overridden, never shadowed), so none is written.
 	for _, table := range tables {
 		id := pgx.Identifier{table}.Sanitize()
 		var og, shadowedOg int
@@ -158,7 +180,7 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 		if err := conn.QueryRow(ctx, `select count(*), count(*) filter (where namespace = 'local') from `+table+`_in_effect()`).Scan(&reached, &local); err != nil {
 			t.Fatalf("%s: read the search path: %v", table, err)
 		}
-		want := countOfficial[table]
+		want := countOfficial[table] - countReserved[table]
 		if table == "role" {
 			want = 0
 		}
@@ -179,5 +201,60 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 				t.Errorf("%s: the seed wrote the operator's row %s\nbefore: %s\nafter:  %s", table, rid, img, now)
 			}
 		}
+	}
+}
+
+// TestTheSeedMirrorsTheReservedKeysIntoSQL holds reserved_key to the code's
+// list (#1447): every name writerclass reserves is in it after a boot, and a
+// name the code no longer reserves is gone after the next, so the search path
+// never refuses a key the registry would resolve.
+func TestTheSeedMirrorsTheReservedKeysIntoSQL(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("storage.NewPG: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(ctx) })
+
+	read := func() []string {
+		t.Helper()
+		rows, err := conn.Query(ctx, `select name from reserved_key`)
+		if err != nil {
+			t.Fatalf("read reserved_key: %v", err)
+		}
+		got, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatalf("read reserved_key: %v", err)
+		}
+		// Sorted in Go, as ReservedNames is: the database's collation orders
+		// a hyphen differently.
+		slices.Sort(got)
+		return got
+	}
+	want := writerclass.ReservedNames()
+
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if got := read(); !slices.Equal(got, want) {
+		t.Fatalf("reserved_key after a boot = %v, want writerclass.ReservedNames() %v", got, want)
+	}
+
+	// A name an earlier release reserved and this one does not.
+	if _, err := conn.Exec(ctx, `insert into reserved_key (name) values ('retired-probe-key')`); err != nil {
+		t.Fatalf("plant a retired reserved key: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("reseed: %v", err)
+	}
+	if got := read(); !slices.Equal(got, want) {
+		t.Errorf("reserved_key after the next boot = %v, want the retired name gone and %v alone", got, want)
 	}
 }
