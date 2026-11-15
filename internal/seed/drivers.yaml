@@ -398,7 +398,8 @@ drivers:
         - name: volume-change
           match: { event: change, field: { path: path, equals: status.audio.volume } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            # The bar reports 0 to 100; the canon stores the ratio.
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
         - name: mute-change
           match: { event: change, field: { path: path, equals: status.audio.mic_mute } }
           emits:
@@ -453,12 +454,15 @@ drivers:
           schedule: { every: 30s }
           request: { path: /api/audio }
           emits:
-            - { name: volume, extract: { jsonpath: volume } }
+            - { name: volume, extract: { jsonpath: volume }, transform: { scale: 0.01 } }
             - { name: mute, extract: { jsonpath: mic_mute } }
       commands:
         # A whole-leaf ${value} keeps the intended value's type: the volume
-        # rides as a number. The bar acknowledges with {"ok": true}.
+        # rides as a number. The intended ratio goes out in the bar's own
+        # 0 to 100 (the inverse of the emit scale). The bar acknowledges with
+        # {"ok": true}.
         - command_type: set-volume
+          transform: { scale: 100 }
           request: { method: POST, path: /api/audio/volume, body: { volume: "${value}" } }
           settle: { from: response, success: { regex: '"ok":\s*true' } }
         - command_type: set-mute
@@ -596,7 +600,7 @@ drivers:
         - name: volume-change
           match: { field: { path: path, equals: status.audio.volume } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
       polls:
         # A get is a frame; reply.correlate names the field the node writes
         # a fresh id into, and the answer is the frame carrying it back.
@@ -604,7 +608,7 @@ drivers:
           schedule: { every: 60s }
           request: { body: { type: get, path: status.audio.volume }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
         - name: mute
           schedule: { every: 60s }
           request: { body: { type: get, path: status.audio.mic_mute }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
@@ -616,10 +620,12 @@ drivers:
           emits:
             - { name: power-state, extract: { jsonpath: value } }
       commands:
-        # A whole-leaf ${value} keeps the intended value's type. The bar
-        # pushes the change, then answers with the value it set, which
-        # settles the command against its intent.
+        # A whole-leaf ${value} keeps the intended value's type. The intended
+        # ratio goes out in the bar's own 0 to 100 and its answer is read back
+        # through the same scale. The bar pushes the change, then answers with
+        # the value it set, which settles the command against its intent.
         - command_type: set-volume
+          transform: { scale: 100 }
           request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           settle: { from: response, extract: { jsonpath: value } }
         - command_type: set-mute
