@@ -536,8 +536,10 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 	}
 	// Both nodes hear an edit that moves the endpoint: the one it leaves
 	// (announced as placed now) and the one it lands on (after the update).
-	if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
-		return nil, err
+	if nodeID != nil {
+		if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
+			return nil, err
+		}
 	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanEndpoint(tx.QueryRow(ctx, `

@@ -23,8 +23,10 @@ refs: [1945, 1997, 1586, 1638, 1577, 81]
      #1997.
   3. **One listener, outside the pool.** The bus holds one dedicated connection that `LISTEN`s on
      the channel and publishes each name as an empty message on `og.v1.worklist-changed.<node>`. The
-     connection is re-opened on a backoff (100 ms doubling to a 5 s cap) and the drop logged at
-     WARN. A notification sent while it is down is lost, not replayed.
+     connection is re-opened on a backoff (100 ms doubling to a 5 s cap, reset only once a
+     connection has held for the cap) and the drop logged at WARN. A notification sent while it is
+     down is lost, not replayed. A listener that cannot connect at boot retries the same way and
+     does not stop the server: the nudge only shortens a wait the scheduled pull already bounds.
   4. **The node coalesces and rate-limits.** It subscribes before its first pull, holds at most one
      pending nudge, pulls at once on one, and pulls at most once every 200 ms. During a failed
      pull's backoff it ignores nudges, so a nudge never turns the backoff into a retry storm.

@@ -118,6 +118,20 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	}
 	expectChanges(t, changes, "a driver spec edit", b)
 
+	// A bare NOTIFY names no node: the listener skips it and stays up.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `notify og_worklist_changed`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"host": "10.20.4.72"}}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	expectChanges(t, changes, "an edit after a bare notify", b)
+
 	// A write that rolls back announces nothing: the notify rides the commit.
 	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"nope": "x"}}, all, all); err == nil {
 		t.Fatal("an undeclared input was accepted")
@@ -129,15 +143,10 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	}
 
 	// The listener survives its connection dying: a later change still arrives.
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close(ctx)
 	var killed int
 	if err := conn.QueryRow(ctx, `
 		select count(pg_terminate_backend(pid)) from pg_stat_activity
-		where application_name = $1`, storage.WorklistListenApp).Scan(&killed); err != nil {
+		where application_name = $1 and datname = current_database()`, storage.WorklistListenApp).Scan(&killed); err != nil {
 		t.Fatal(err)
 	}
 	if killed == 0 {

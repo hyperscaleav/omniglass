@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -44,15 +43,18 @@ func notifyWorklistChanged(ctx context.Context, tx pgx.Tx, endpointIDs ...string
 }
 
 // WorklistChanges listens for worklist changes and sends each announced node
-// name on the returned channel until ctx ends, when it closes. It returns once
-// the listen is in place, so a change committed after it returns arrives. The
-// listen holds one connection of its own, outside the pool; when that
-// connection drops it reconnects on backoff, and the changes committed while
-// it was down are not replayed.
+// name on the returned channel until ctx ends, when it closes. When the first
+// connect succeeds it returns with the listen in place, so a change committed
+// after it returns arrives. The listen holds one connection of its own,
+// outside the pool. When that connection cannot be opened, or drops, it is
+// retried on backoff, and the changes committed while it was down are not
+// replayed: a nudge only shortens the wait, so the listener never stops the
+// server, and a node it misses pulls on its schedule.
 func (p *PG) WorklistChanges(ctx context.Context) (<-chan string, error) {
 	conn, err := p.listenWorklist(ctx)
 	if err != nil {
-		return nil, err
+		slog.Warn("worklist change listener could not connect, retrying", "facility", "collection",
+			"retry_in", listenBackoffBase.String(), "error", err.Error())
 	}
 	out := make(chan string, 64)
 	go func() {
@@ -60,6 +62,7 @@ func (p *PG) WorklistChanges(ctx context.Context) (<-chan string, error) {
 		backoff := listenBackoffBase
 		for {
 			if conn != nil {
+				up := time.Now()
 				err := forwardChanges(ctx, conn, out)
 				cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 				_ = conn.Close(cctx)
@@ -68,7 +71,14 @@ func (p *PG) WorklistChanges(ctx context.Context) (<-chan string, error) {
 				if ctx.Err() != nil {
 					return
 				}
-				slog.Warn("worklist change listener dropped, reconnecting", "facility", "collection", "error", err.Error())
+				// A connection that held resets the backoff; one dropped as
+				// soon as it listened (a pooler that refuses LISTEN, a
+				// reaper) keeps backing off, so the retry does not spin.
+				if time.Since(up) >= listenBackoffCap {
+					backoff = listenBackoffBase
+				}
+				slog.Warn("worklist change listener dropped, reconnecting", "facility", "collection",
+					"retry_in", backoff.String(), "error", err.Error())
 			}
 			t := time.NewTimer(backoff)
 			select {
@@ -77,13 +87,11 @@ func (p *PG) WorklistChanges(ctx context.Context) (<-chan string, error) {
 				return
 			case <-t.C:
 			}
+			backoff = min(backoff*2, listenBackoffCap)
 			if conn, err = p.listenWorklist(ctx); err != nil {
-				backoff = min(backoff*2, listenBackoffCap)
 				slog.Warn("worklist change listener could not reconnect", "facility", "collection",
 					"retry_in", backoff.String(), "error", err.Error())
-				continue
 			}
-			backoff = listenBackoffBase
 		}
 	}()
 	return out, nil
@@ -113,7 +121,7 @@ func forwardChanges(ctx context.Context, conn *pgx.Conn, out chan<- string) erro
 			return err
 		}
 		if n.Payload == "" {
-			return errors.New("storage: an empty worklist change")
+			continue // a bare NOTIFY names no node; nothing to nudge
 		}
 		select {
 		case out <- n.Payload:
