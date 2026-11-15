@@ -390,7 +390,7 @@ with a corporate fleet, and it is never a measurement basis.
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
 | `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the rung (`300` or `1000` systems) its baseline states | refuses a run of another scenario, size or device set as invalid |
-| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
+| the soak ([a soak run](#a-soak-run)) | corporate, 3,000 systems | the goal size, held for days, then judged by the platform's own alarms |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
 16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
@@ -1183,6 +1183,27 @@ machine through a tunnel, then open `http://127.0.0.1:8080/web`:
 ```sh
 ssh -L 8080:127.0.0.1:8080 <soak-host>
 ```
+
+**The verdict.** A week of the series says how the platform grew; whether it failed silently is the
+platform's own to say, and `lab soak verdict` reads exactly that, through the API alone: the platform
+system's alarm history and every loss ratio on the Platform health page. It judges the window from
+`--since` to now (or `--until`), prints pass or fail with every reason, and exits 1 on a fail:
+
+```sh
+omniglass lab soak verdict --since 2026-11-20T08:00:00Z --record-dir docs/src/content/soak-records
+```
+
+It passes when the soak ran at least 7 days, no platform alarm is open, none raised in the window was
+open longer than `--tolerance` (30 minutes by default), and every loss ratio on the page reads 0. A
+reading that cannot answer fails instead of passing: no build, two builds, no loss ratio to read, a
+token that cannot read the whole page (it needs node, system and component read over everything,
+which the lab's token has), or an alarm history cut at the API's 500-alarm cap. The alarm history
+reaches back 30 days, so `--since` may be no older than that. The thresholds are named in
+`internal/lab/soak.go` (`SoakMinWindow`, `SoakAlarmTolerance`, `SoakLossCeiling`).
+
+`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A release needs a
+passing record for its build: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the
+record format and the rule.
 
 ### The manifest format
 
