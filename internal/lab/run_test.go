@@ -203,7 +203,8 @@ func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 func testConfig() Config {
 	o := testOptions()
 	o.Owner = Owner{Host: "box", PID: 42}
-	return Config{Options: o, Image: SelectImage("abc123", ""), PlantedFaults: []string{"Panel SNMP"}}
+	c, _ := SelectImage("abc123", "", "")
+	return Config{Options: o, Image: c, PlantedFaults: []string{"Panel SNMP"}}
 }
 
 func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
@@ -406,7 +407,7 @@ func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 			eng.images["stack:x"] = map[string]string{VersionLabel: tc.label}
 			var out bytes.Buffer
 			cfg := testConfig()
-			cfg.Image = SelectImage("abc123", "stack:x")
+			cfg.Image, _ = SelectImage("abc123", "", "stack:x")
 			cfg.Options.Image = "stack:x"
 			if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 				t.Fatalf("%v\n%s", err, out.String())

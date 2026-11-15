@@ -293,7 +293,8 @@ of it into main, and a default clone never fetches it (a clone fetches branches 
 refs). The ref was chosen over an orphan branch for that last reason: GitHub's raw host and
 jsDelivr serve a commit on any ref of a public repository by its SHA, the workflow token can push
 the ref, and an orphan branch would sit in every clone and in the branch list. Each run commits a
-fresh tree on top of the ref's last commit, so an older comment's links keep resolving. The record
+fresh tree on top of the ref's last commit, so an older comment's links keep resolving. A run in
+which no demo recorded commits an empty tree, so its comment and clip still say what happened. The record
 jobs that run the PR's code (both recorders, every command a tape types, and the script that
 stages the evidence, the comment and the clip) hold only a read-only token; a separate publish job,
 which checks nothing out and runs nothing from the PR, builds the evidence commit in a fresh

@@ -136,7 +136,7 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
         </span>
       }
     >
-      <code class="truncate font-data text-[12px] [font-variant-ligatures:none]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
+      <code class="truncate font-data text-[12px]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
     </Show>
   );
 }
@@ -536,7 +536,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reduce" hint={CALC_HINTS.reduce} />
-            <code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80 [font-variant-ligatures:none]">{r().reduce.expr}</code>
+            <code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80">{r().reduce.expr}</code>
           </section>
 
           <section class="flex flex-col gap-2" aria-label="State">
@@ -938,7 +938,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
                     aria-label={`Input ${i + 1} alias`}
                     aria-invalid={inputErr(i) ? "true" : undefined}
                     aria-describedby={inputErr(i) ? errId : undefined}
-                    class="input input-bordered w-full font-data text-[13px] [font-variant-ligatures:none]"
+                    class="input input-bordered w-full font-data text-[13px]"
                     classList={{ "input-error": !!inputErr(i) && !!x().key }}
                     placeholder="t"
                     spellcheck={false}

@@ -19,6 +19,15 @@ user-facing behavior. Bug fixes start with a failing regression test that stays 
 suite. `make test` is the gate: green before commit and before merge. Validate locally;
 do not lean on CI to find what a local run would.
 
+## npm version requirement
+
+`make test`, `make gen`, and other build targets use `npm ci` (clean install) to keep
+`web/package-lock.json` stable across npm versions. `npm ci` respects the pinned versions
+in the lockfile and never rewrites it. The web console's `package.json` declares a minimum
+npm version (`engines.npm`); if your environment's npm does not meet it, `npm ci` will
+fail with a clear error. Upgrade npm to the version `package.json` specifies (or newer),
+and the lockfile will remain untouched across runs, so `git status` stays clean.
+
 ## The spike carve-out
 
 A spike to learn whether something is *possible* may precede tests, but it must be labeled
@@ -53,7 +62,9 @@ unproven proves nothing about the capability.
   concurrent run can be handed before the dial. A UDP refusal aims at a privileged port, which
   `bind(:0)` never hands out. A guard test (`TestNoTestUsesAReleasedPort`) fails any test that
   uses a raw listener's or an httptest server's address after closing it; a port released through a
-  wrapper (a simulated face stopped and restarted) is outside what it reads.
+  wrapper (a simulated face stopped and restarted) is the sibling guard
+  `TestNoTestRestartsAFaceAtALiteralAddress`'s: such a test takes its address from
+  `simtest.ClaimLoopback`, never a literal.
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
   SPA). Assert the user-observable outcome, not internals. The real binary follows the same
