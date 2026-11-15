@@ -40,25 +40,37 @@ server.
 
 ### After main moves
 
-Two PRs that each change a source (a seed row, a route) and each regenerate will usually merge
-without help, because every generator's output is built to merge: one entry per line, map keys
-sorted, list entries in their source order. Hunks that touch different entries of a derived file
-(`docs/src/generated/seed.json`, `api/openapi.json`) merge on their own. `cmd/seedgen`'s tests hold
-that shape (deterministic bytes, one entry per line, sorted map keys).
+Two derived files are held to a merge-friendly layout by tests: one entry per line, map keys
+sorted, list entries in their source order. For those two, hunks that touch different entries merge
+on their own:
+
+- `docs/src/generated/seed.json`: `cmd/seedgen`'s tests hold the layout, and
+  `internal/seed`'s merge test adds two property types at different places in one YAML, regenerates
+  each branch, and requires git's line merge of the two `seed.json` files to come back clean and
+  equal to a fresh render.
+- `api/openapi.json`: `cmd/openapigen`'s canonical-layout test holds the same shape.
+
+The other generators' outputs carry no such layout test, so a merge of two branches that both
+regenerated them may conflict even when the sources did not. What every generator is held to is the
+weaker property, determinism. `gen-drift` runs `make gen` on every PR and diffs its outputs against
+the committed ones, a second run held byte-identical to the author's first (the two
+`web/src/lib/*.gen.ts` files it does not diff are held the same way by `make test`). Locally,
+`make gen-twice` runs `make gen` twice and fails if the second run moves a byte of the tree.
 
 When main has moved under your branch:
 
 1. Rebase or merge `origin/main`.
 2. Resolve conflicts in the **sources** only (a seed YAML, a Go struct). A derived file's conflict
    markers do not need reading: skip them.
-3. Run `make gen`. It overwrites every derived file from the merged sources.
+3. Run `make gen`. It overwrites every derived file from the merged sources, so a conflict left in
+   one (resolved any way, or not at all) is replaced.
 4. Commit the result.
 
 A merge that comes back clean can still leave a derived file stale (your row and theirs both merged,
 but a count or a summary the generator computes moved), which is what `gen-drift` catches; step 3
 fixes it the same way. The conflicts that remain are real: two PRs adding a row at the very same
-spot of one list conflict in the YAML and the derived file alike, and the regeneration resolves the
-second.
+spot of one list conflict in the YAML and the derived file alike: resolve the YAML by hand and let
+the regeneration settle the derived file.
 
 `internal/simfleet/plan.go` and `internal/sim/profiles/coverage.yaml` are not derived: no generator
 writes them, so they are edited and merged like any source.
