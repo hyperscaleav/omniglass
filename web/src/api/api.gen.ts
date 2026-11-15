@@ -3551,10 +3551,12 @@ export const GrantBodyScopeOp = {
 export type GrantBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited. */
+  group?: string;
   /** Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal. */
   group_id?: string;
-  /** The source group's label, present when the grant is inherited. */
-  group_name?: string;
+  /** The source group's friendly label, present when the grant is inherited and the group has one. */
+  group_label?: string;
   id?: string;
   role: string;
   scope_id?: string;

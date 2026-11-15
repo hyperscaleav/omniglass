@@ -4697,11 +4697,14 @@ components:
           format: uri
           readOnly: true
           type: string
+        group:
+          description: The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited.
+          type: string
         group_id:
           description: Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal.
           type: string
-        group_name:
-          description: The source group's label, present when the grant is inherited.
+        group_label:
+          description: The source group's friendly label, present when the grant is inherited and the group has one.
           type: string
         id:
           type: string
