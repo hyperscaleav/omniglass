@@ -71,7 +71,10 @@ URL facts (`TabRail`): Overview (why, the components, the standard's declared ma
 occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
 logs), and Configure (the one form). A place holding exactly one system lands on it; a place
 holding none or several keeps its own view, a brief card per system and the outline rooted
-there; a component's view carries its place card, marked as its own or its system's. The
+there; a component's view carries its place card, marked as its own or its system's. Its Vitals
+card reads each metric's unit off the effective-metrics read (the metric type's, one source, #1550),
+so an uptime reads `306 s`; a float keeps at most two decimals (`lib/component_leaf.ts`,
+`vitalValueText`) and the raw value sits on the title. The
 model behind it is pure, in `lib/detail.ts` (where a place lands, the path that names each
 place once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
