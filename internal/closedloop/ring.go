@@ -35,7 +35,8 @@ const (
 	// WindowMeasured: the window is read.
 	WindowMeasured = "measured"
 	// WindowRestarted: the node or its sim started again inside the window,
-	// so no figure for it is meaningful until the window slides past.
+	// or the fleet the sim serves changed (#1895), so no figure for it is
+	// meaningful until the window slides past.
 	WindowRestarted = "restarted"
 )
 

@@ -34,7 +34,7 @@ import (
 // http polls and commands end to end (#902): Postgres, the bus, a real
 // node, and the simulator's http faces on ephemeral ports. The shipped
 // kestrel-api driver reads the simulated bar over https with basic auth and
-// actuates it; the shipped http-json driver reads the simulated sensor with
+// actuates it; the shipped tessellate-census-http driver reads the simulated sensor with
 // its header key; and a DSP's namespaced XML and its HTML status page are
 // read by drivers authored here, behind a bearer token and a query key. A
 // refused credential is sent once per connection fingerprint, and a changed
@@ -357,7 +357,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 }
 
 // TestNodeHTTPAuthVariantsAndTheRefusedCredential: an api key in a header
-// (the shipped http-json driver on the simulated sensor), a bearer token over
+// (the shipped tessellate-census-http driver on the simulated sensor), a bearer token over
 // namespaced XML, and an api key in a query parameter over an HTML status
 // page (drivers authored here, on a DSP's faces). A wrong key is sent once
 // per connection fingerprint, across ticks and a node restart, while the
@@ -384,15 +384,15 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 		variant(store, "dsp-bearer", profile.Auth{Type: "bearer", APIKey: "dsp-token", Enforce: true})
 		variant(store, "dsp-query", profile.Auth{Type: "query", Query: "key", APIKey: "dsp-key", Enforce: true})
 	}, func(store *profile.Store) []string {
-		sensorProfile = driverProfile(t, store, "http-json")
+		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile, "dsp-bearer", "dsp-query"}
 	})
 
-	// The header key: the shipped http-json driver.
+	// The header key: the shipped tessellate-census-http driver.
 	s.component("sensor-1")
 	census := s.secret("census-key", "api-key", map[string]string{"key": "wrong-key"})
 	sensor := s.devices[sensorProfile]
-	sep := s.attachHTTP("sensor-1", "http-json", "edge-http", map[string]string{
+	sep := s.attachHTTP("sensor-1", "tessellate-census-http", "edge-http", map[string]string{
 		"host": s.ips[sensorProfile], "port": fmt.Sprint(s.httpPort(sensorProfile)), "key": "census-key"})
 
 	// A bearer token over namespaced XML, and a query key over HTML.

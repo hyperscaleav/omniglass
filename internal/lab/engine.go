@@ -28,7 +28,10 @@ type Engine interface {
 	// Resources is the memory and CPUs the daemon's host has, for the
 	// scale lab's capacity check.
 	Resources(ctx context.Context) (HostResources, error)
-	ImageLabels(ctx context.Context, ref string) (labels map[string]string, found bool, err error)
+	// InspectImage resolves an image reference to the image it names right
+	// now: its ID and labels together, so what the build-id check read is
+	// the image a container is created from by that ID (#1422).
+	InspectImage(ctx context.Context, ref string) (info ImageInfo, found bool, err error)
 	PullImage(ctx context.Context, ref string) error
 	CreateNetwork(ctx context.Context, name string, labels map[string]string) error
 	RemoveNetwork(ctx context.Context, name string) error
@@ -44,6 +47,13 @@ type Engine interface {
 	Logs(ctx context.Context, id string, tail int) (string, error)
 	StopAndRemove(ctx context.Context, id string) error
 	Containers(ctx context.Context, labels map[string]string) ([]Resource, error)
+}
+
+// ImageInfo is one image as the engine resolved a reference to it.
+type ImageInfo struct {
+	// ID is the content-addressed image ID, which no re-tagging moves.
+	ID     string
+	Labels map[string]string
 }
 
 // EngineInfo is what a ping reports.
@@ -114,18 +124,18 @@ func (d *dockerEngine) Resources(ctx context.Context) (HostResources, error) {
 	return HostResources{MemBytes: r.Info.MemTotal, CPUs: r.Info.NCPU}, nil
 }
 
-func (d *dockerEngine) ImageLabels(ctx context.Context, ref string) (map[string]string, bool, error) {
+func (d *dockerEngine) InspectImage(ctx context.Context, ref string) (ImageInfo, bool, error) {
 	r, err := d.c.ImageInspect(ctx, ref)
 	if cerrdefs.IsNotFound(err) {
-		return nil, false, nil
+		return ImageInfo{}, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return ImageInfo{}, false, err
 	}
 	if r.Config == nil {
-		return map[string]string{}, true, nil
+		return ImageInfo{ID: r.ID, Labels: map[string]string{}}, true, nil
 	}
-	return r.Config.Labels, true, nil
+	return ImageInfo{ID: r.ID, Labels: r.Config.Labels}, true, nil
 }
 
 func (d *dockerEngine) PullImage(ctx context.Context, ref string) error {
@@ -188,6 +198,25 @@ func (d *dockerEngine) Volumes(ctx context.Context, labels map[string]string) ([
 }
 
 func (d *dockerEngine) RunContainer(ctx context.Context, svc Service, net string) (string, error) {
+	opts, err := createOptions(svc, net)
+	if err != nil {
+		return "", err
+	}
+	created, err := d.c.ContainerCreate(ctx, opts)
+	if err != nil {
+		return "", err
+	}
+	if _, err := d.c.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+		return created.ID, err
+	}
+	return created.ID, nil
+}
+
+// createOptions is the container a service runs as: on the lab network
+// under its service name, or in the network namespace of the container its
+// NetworkOf names, which gives it no network, alias or published port of its
+// own.
+func createOptions(svc Service, net string) (client.ContainerCreateOptions, error) {
 	cfg := &container.Config{
 		Image:  svc.Image,
 		Cmd:    svc.Cmd,
@@ -214,11 +243,11 @@ func (d *dockerEngine) RunContainer(ctx context.Context, svc Service, net string
 	if p := svc.Publish; p != nil {
 		port, err := network.ParsePort(strconv.Itoa(p.ContainerPort) + "/tcp")
 		if err != nil {
-			return "", err
+			return client.ContainerCreateOptions{}, err
 		}
 		ip, err := netip.ParseAddr(p.HostIP)
 		if err != nil {
-			return "", err
+			return client.ContainerCreateOptions{}, err
 		}
 		hostPort := ""
 		if p.HostPort != 0 {
@@ -227,19 +256,18 @@ func (d *dockerEngine) RunContainer(ctx context.Context, svc Service, net string
 		cfg.ExposedPorts = network.PortSet{port: struct{}{}}
 		host.PortBindings = network.PortMap{port: {{HostIP: ip, HostPort: hostPort}}}
 	}
-	netCfg := &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{
+	opts := client.ContainerCreateOptions{Config: cfg, HostConfig: host, Name: svc.Container}
+	if svc.NetworkOf != "" {
+		if svc.Publish != nil {
+			return client.ContainerCreateOptions{}, fmt.Errorf("%s shares the network of %s, so it cannot publish a port", svc.Name, svc.NetworkOf)
+		}
+		host.NetworkMode = container.NetworkMode("container:" + svc.NetworkOf)
+		return opts, nil
+	}
+	opts.NetworkingConfig = &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{
 		net: {Aliases: []string{svc.Name}},
 	}}
-	created, err := d.c.ContainerCreate(ctx, client.ContainerCreateOptions{
-		Config: cfg, HostConfig: host, NetworkingConfig: netCfg, Name: svc.Container,
-	})
-	if err != nil {
-		return "", err
-	}
-	if _, err := d.c.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
-		return created.ID, err
-	}
-	return created.ID, nil
+	return opts, nil
 }
 
 func (d *dockerEngine) Inspect(ctx context.Context, id string) (ContainerState, error) {

@@ -40,7 +40,7 @@ func newLabCmd(version, imageDigest string) *cobra.Command {
 		Use:   "lab",
 		Short: "A working omniglass on Docker, to learn on",
 	}
-	group.AddCommand(newLabRunCmd(version, imageDigest), newLabMeasureCmd(), newLabPerfCmd(), newLabSeedCmd())
+	group.AddCommand(newLabRunCmd(version, imageDigest), newLabMeasureCmd(), newLabPerfCmd(), newLabSoakCmd(), newLabSeedCmd())
 	return group
 }
 

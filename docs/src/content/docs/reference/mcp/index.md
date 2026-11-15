@@ -144,7 +144,7 @@ Lists the components the caller may read, each filtered to its scope subtree. Ga
 
 Create a component
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
 
 - Route: `POST /api/v1/components`
 - Gate: `component:create`
@@ -419,7 +419,7 @@ Every property the component has: each its product declares, resolved to the com
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/properties/{property}/samples`
 - Gate: `component:read`
@@ -428,7 +428,7 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
@@ -460,7 +460,7 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) |
+| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform) |
 
 ## `create-component-from-template`
 
@@ -976,7 +976,7 @@ The samples behind the effective read's latest value for one series, newest firs
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/properties/{property}/samples`
 - Gate: `system:read`
@@ -985,7 +985,7 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |

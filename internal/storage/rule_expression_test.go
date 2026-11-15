@@ -212,7 +212,10 @@ func TestCriteriaBackfill(t *testing.T) {
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into severity_level (name, rank, official) values ('high', 40, true) on conflict do nothing`)
 	mustExec(t, conn, `insert into event_type (name) values ('cond-x')`)
-	mustExec(t, conn, `insert into property_type (name, data_type) values ('endpoint-reachable', 'string'), ('door-open', 'bool'), ('doc', 'json')`)
+	// endpoint-reachable ships (official), as it did then: it is a reserved
+	// key, so an operator's row of it beside the shipped one reaches no
+	// reader (#1447).
+	mustExec(t, conn, `insert into property_type (name, data_type, official) values ('endpoint-reachable', 'string', true), ('door-open', 'bool', false), ('doc', 'json', false)`)
 	type old struct {
 		name, key, lane, dataType string
 		fire, clear               string

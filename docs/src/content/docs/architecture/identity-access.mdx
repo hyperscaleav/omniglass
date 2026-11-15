@@ -194,7 +194,7 @@ What the permission strings above do not say, per role:
 
 - **`viewer`** reads every operator-facing resource in scope, and two families are deliberately not operator-facing. The IAM directories (`principal`, `role`, `principal_group`) read at the admin tier (`<resource>:read:admin`), which a two-token `*:read` structurally cannot reach, so the Users, Roles and Groups pages stay closed to it ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). `secret` is a **sensitive resource** a bare `*` does not reach at all, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
 - **`operator`** holds the operational secrets in its scope and never the platform's: secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is absent from the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator mints only operational ones.
-- **`deploy`** is the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root, and **a grant of it reaches one tier, the tier it is scoped at**. Its permission set names three tiers, but a location-kind grant fills no system-tier or component-tier scope at all, not even to read one, because a scope kind contains only its own tier until the cross-tier expansion lands ([#10](https://github.com/hyperscaleav/omniglass/issues/10)). Building out a building therefore takes a location-scoped, a system-scoped and a component-scoped grant of this role together, the shape `internal/api/placement_scope_e2e_test.go` uses; the reach is pinned by `internal/seed/role_reach_test.go` and the role's own description says so.
+- **`deploy`** is the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root. Granted at a location, it builds out and edits the rooms under it, and since [#1498](https://github.com/hyperscaleav/omniglass/issues/1498) the same single grant also **reads and creates the systems and components placed in that location** (a root system or component at a room in scope is a 201, one outside it the placement bind's non-disclosing 422, one with no location a 403). It does **not** edit, rename, move or delete those systems and components: the modify half of the cross-tier expansion is [#10](https://github.com/hyperscaleav/omniglass/issues/10), so changing one still takes a system-scoped or component-scoped grant of this role. The dev seed's `tech-east` is exactly this shape; the reach is pinned by `internal/seed/role_reach_test.go`, driven over the wire by `internal/api/location_grant_reach_e2e_test.go`, and the role's own description says so.
 - **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-fleet-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
 - **`owner`** is break-glass and unkillable: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), an owner account cannot be impersonated, and the bootstrap creates the first one.
 
@@ -260,7 +260,7 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
 
 ### Scopes
 
-:::design[The cross-tier scope expansion and the group scope kind, tracked in #10]
+:::design[The cross-tier modify actions and the group scope kind, tracked in #10]
 | scope_kind | scope_id | expansion |
 |---|---|---|
 | `all` | null | every entity in the database |
@@ -275,9 +275,24 @@ place is inherited from its primary system unless set
 #878), and a `system` scope reaches its subsystems as well as its members.
 :::
 
-Today each fleet entity is scoped by its own tier (a `location` scope contains locations only, and
-so on; only `secret` / `variable` / `endpoint` / `task` resolve through their owning entity's
-tier), and a `group` scope is refused with a 422.
+**Built: a location grant reads and creates what is placed in it**
+([ADR-1498](/architecture/decisions/#adr-1498-a-location-grant-reads-and-creates-the-systems-and-components-placed-in-it)).
+The `location` row of the table above is live for **read** and **create** on `system` and
+`component`. A subtree-op location grant that carries `system:read` / `component:read` resolves to
+the location as a **cross-tier root** (`scope.Set.LocationIDs`), and the Storage Gateway matches a
+row by its placement: a system placed in the location subtree, plus its subsystems; a component
+whose own location is in it or, with none of its own, whose primary system is, plus its
+subcomponents. Every read derived from a component's scope (its alarms, notifications, dependencies,
+rule previews, the fleet view's dots) follows through the same read-filter primitive. On create, a
+root system or component needs either an all-scoped grant or a location inside a cross-tier root of
+its create scope, and a root with no location still needs the all-scoped grant (403). A `self`
+location grant reaches no system or component, and a `system` or `component` grant still confers no
+location access.
+
+Everything else is still scoped by its own tier: the modify actions (update, rename, move, delete)
+on systems and components, a `location` scope against every other resource (only `secret` /
+`variable` / `endpoint` / `task` resolve through their owning entity's tier), a `system` scope
+against its member components, and a `group` scope, which is refused with a 422.
 
 `expand` realizes a scope to a **bound id set** the gateway injects as a parameterized `owner IN (...)` predicate (or a closure-table join for deep trees), never string-built; the tree walk carries a cycle guard, and the set is **fleet-size-bounded** (entities), an indexed membership filter. `scope_kind` is enumerated; adding a kind is a schema change (CHECK constraint) plus a new `expand` case. `scope_id` is operator data.
 

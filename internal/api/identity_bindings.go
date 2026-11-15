@@ -33,17 +33,17 @@ func toIdentityBindingBody(b storage.IdentityBinding) identityBindingBody {
 }
 
 type identityBindingsInput struct {
-	Name string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-service-1"`
+	Name string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-platform"`
 }
 
 type identityBindingPathInput struct {
-	Name  string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-service-1"`
+	Name  string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-platform"`
 	Key   string `path:"key" doc:"The match key, a registered property type" example:"ucc-room-id"`
 	Value string `path:"value" minLength:"1" maxLength:"256" doc:"The identity value the conduit reports, 1 to 256 characters" example:"room-17c-415a"`
 }
 
 type putIdentityBindingInput struct {
-	Name  string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-service-1"`
+	Name  string `path:"name" doc:"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)" example:"ucc-platform"`
 	Key   string `path:"key" doc:"The match key, a registered property type" example:"ucc-room-id"`
 	Value string `path:"value" minLength:"1" maxLength:"256" doc:"The identity value the conduit reports, 1 to 256 characters" example:"room-17c-415a"`
 	Body  struct {

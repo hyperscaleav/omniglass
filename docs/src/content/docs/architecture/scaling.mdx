@@ -7,6 +7,10 @@ sidebar:
     variant: note
 ---
 
+import DriverCost from '../../../components/DriverCost.astro';
+import DriverCostSource from '../../../components/DriverCostSource.astro';
+import KindCost from '../../../components/KindCost.astro';
+
 Omniglass is **one Go binary**, and that is a packaging decision, not a scale ceiling. The same artifact
 runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kubernetes; you scale by
 **topology**, not by swapping products.
@@ -256,6 +260,73 @@ not a lab run. Read them together:
 The seeded `ingest-lag-high` rule opens a warning alarm on the server's component when
 `ingest-lag-max` holds over 30 s for 2 minutes, the point at which a reader of any panel is looking at
 data at least half a minute old.
+
+## What a driver costs a node
+
+A node's size is the sum of what its tasks cost it, and that cost differs by driver: a poll that parses
+a large JSON answer, one that walks an SNMP table, and one that asks a held session a short question do
+different work. Each shipped driver's cost per task on one node is measured by the lab's
+[driver cost sweep](/guides/lab/#measuring-each-drivers-cost) on a node with no simulator in its
+process, and rendered from the sweep's committed result by `make gen`. The first table rolls the drivers
+up by the unit a node is sized in, a **kind** of work (the transport a driver speaks) at a poll
+**interval**; the second is each driver on its own.
+
+- **Kind and interval** key the first table. A run of a poll costs what its kind costs, whatever its
+  interval: an SNMP get is an SNMP get every 30 seconds or every 5 minutes. The interval is only how
+  often it runs, so **millicores per task** at an interval is the kind's **CPU per run** over that
+  interval, and the table lists every interval a swept driver of the kind ships, with the drivers
+  that poll at it. Each figure is the median across the kind's measured drivers, with their range in
+  parentheses where more than one measured it, since a driver that parses a large answer costs more per
+  run than one that reads a short one.
+- **Memory per endpoint** is what one endpoint on the driver holds on the node: its memory per task
+  times the driver's polls, one task each. For a session transport such as `tcp` this is the held
+  session, near-constant whatever the driver asks of it. It includes the endpoint's share of the
+  node's probes, which grow with endpoints as the polls do.
+- To size a node, add the memory per endpoint over its endpoints, and the CPU per run over the interval
+  over its tasks: a node of N endpoints on a driver of a kind holds N times the kind's memory per
+  endpoint beyond the idle node, and spends N times the sum, over the driver's polls, of the kind's
+  millicores per task at each poll's interval.
+- A kind's CPU per run is measured across all of a driver's polls at once, weighted by how often each
+  runs, so a heavy poll that runs rarely beside light ones that run often is costed at nearer the light
+  ones' run: its own interval's row under-reads it. The sweep cannot part them, since each component
+  brings every poll of its driver.
+
+In the driver table:
+
+- **Memory per task** and **millicores per task** are slopes: what the node's container gains in working
+  set and CPU for each task of the driver it adds. Multiply by a node's task count for that driver,
+  and add across its drivers, to read what its worklist costs beyond the idle node. **Warm memory** is
+  paid once rather than per task: the jump a node's working set takes when its first tasks of the
+  driver land, before the slope.
+- **Step** is how many tasks the sweep added at a time for that driver. A cheap driver's memory rise
+  hides inside the heap's own swing at a small step, so the sweep grows the step for such a driver
+  until its memory shows or the step reaches its cap.
+- **CPU per run** is the same CPU spread over how often each task runs, so drivers with different
+  polls compare per poll. A driver with polls at more than one interval runs them all on every
+  component the sweep adds, so its CPU per run is the mean over its runs, weighted by how often each
+  poll runs.
+- **Thread CPU per run** is the node's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
+  it over the cgroup's figure: the part of a run the polling thread does itself
+  ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). A low share is a transport
+  that does its I/O on another goroutine, not a cheap driver.
+
+<DriverCostSource />
+
+<KindCost />
+
+<DriverCost />
+
+The figures hold for the host and build named above the tables and for the simulated devices, whose answers
+are smaller and quicker than many real ones; read them as the relative cost of drivers and the order
+of a node's footprint, not a promise for a given site. A kind with no swept driver has a row with no
+figures, and a shipped driver the sweep has not measured reads as such, with why, and so does a figure the sweep could not fit when the driver's other one stands. A driver no shipped product defaults to (a session or listener transport an endpoint picks
+instead) has no product to sweep on; the per-kind cost card (#1943) is where a held session or a bound
+listener is costed.
+
+One limit on a node's size is not its cost: the server sends a node its worklist as one bus reply, and
+a reply over the bus's maximum payload after compression is refused, leaving the node on its last
+worklist. At the default 1 MiB that is about 18,000 tasks on one node; syncing the worklist endpoint
+by endpoint (#1586) removes the ceiling. Split a site's devices across nodes well before it.
 
 ## Platform configuration
 

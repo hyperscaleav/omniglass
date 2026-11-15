@@ -377,6 +377,11 @@ type Gateway interface {
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin read the ancestor chain in one recursive query and fold it in Go.
+	// ReconcileReservedKeys makes reserved_key exactly names (#1447): the
+	// boot seed mirrors writerclass.ReservedNames() into it on every start, so
+	// the signal catalogs' search path refuses a reserved key both tiers hold,
+	// as ResolveNameLane does. A name no longer reserved is deleted.
+	ReconcileReservedKeys(ctx context.Context, names []string) error
 	// The global tier of the label rules (#682): one row per entity kind,
 	// its shipped default rewritten authoritatively on every boot and an
 	// operator's override left alone, which is why they are two columns.
@@ -707,6 +712,10 @@ type Gateway interface {
 	// measured rows in the window, or answers *AmbiguousInstanceError (#1485).
 	ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (MetricBuckets, error)
 	ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (PropertyBuckets, error)
+	// PropertyCarriedIn is the value in force when a raw property read's window
+	// opens (#1488), the bucketed read's CarriedIn for a raw step chart: nil
+	// when none holds.
+	PropertyCarriedIn(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window time.Duration) (*string, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);

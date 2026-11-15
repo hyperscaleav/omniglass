@@ -91,6 +91,8 @@ plan: the `dry_run` toggle works, and a dispatch without it fails at its first s
 semantic-release can push a tag. Every publishing step checks the flag too, so nothing reaches
 the tag, the Release, or GHCR until it is flipped (#1940).
 
+**Before the dispatch, the candidate's build has passed [the soak gate](#the-soak-gate).**
+
 To preview locally:
 
 ```bash
@@ -109,6 +111,63 @@ branch. The generated notes live on the GitHub Release.
 
 To switch to release-on-merge later, change the release workflow's trigger to `push` on
 `main`; `make release-plan` stays as the local preview.
+
+## The soak gate
+
+No release ships unless the build has run a week under the 3,000-system corporate soak without
+failing silently (#1988). This is a release blocker run by hand on a test host, never a CI job: a
+week-long run on a dedicated machine does not belong on a runner, and its scheduling is not
+automated. The steps, before the release workflow is dispatched:
+
+1. Build the release candidate's image and binary from one commit, and start the soak on the test
+   host as the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
+2. Leave it for 7 days.
+3. Judge it, from any machine that reaches the soak's server, with a token that reads nodes,
+   systems and components over everything:
+
+   ```bash
+   omniglass lab soak verdict --since <start> --record-dir docs/src/content/soak-records
+   ```
+
+4. Commit the record the command wrote, in the release's PR. **No passing record for the
+   candidate's build, no release.** A failing verdict exits 1, names every reason, and is also
+   recorded; fix the build and run a new week.
+
+The verdict is the platform's own, not a harness's figures derived again: it reads through the API
+the platform system's alarm history and the Platform health page's loss ratios, and nothing from
+the database. It passes when all of these hold:
+
+| Rule | Threshold |
+|------|-----------|
+| The soak ran | at least 7 days (`--since` to `--until`, now by default) |
+| A platform alarm still open | none, however old |
+| A platform alarm raised in the window | open no longer than `--tolerance` (default 30 minutes) |
+| A loss ratio on the page (each hop, kind, component and node, the newest window and the last hour, the end to end, the worklist pull) | 0 |
+
+A reading that cannot answer fails rather than passes: no build reported, two builds among the
+servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history
+that reached the API's 500-alarm cap. The thresholds are named in code (`SoakMinWindow`,
+`SoakAlarmTolerance` and `SoakLossCeiling` in `internal/lab/soak.go`), and the alarm history reaches back
+30 days, so a verdict is read within 30 days of the soak's start. It gets stricter as the
+platform raises more alarms about itself: it judges by whatever the platform alarms on today.
+
+**The record** is one file per build, `docs/src/content/soak-records/<build>.md`, so the release's
+notes can link the soak it passed. Its front matter carries the facts and its body the verdict in
+words (a failure lists its reasons):
+
+```md
+---
+title: "Soak record: v1.4.0"
+build: v1.4.0
+verdict: pass
+since: 2026-11-20T08:00:00Z
+until: 2026-11-27T09:12:00Z
+host: soak-1 linux/amd64 16 cpu machine-id:3f2a9c1d7b40
+---
+```
+
+The host is the machine the verdict ran on (name, platform, cores and a short digest of its
+machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release
 

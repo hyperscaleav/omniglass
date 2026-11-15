@@ -747,7 +747,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	hub.Pulled("site-a", collection.SimCapabilities{}, []string{panelID})
 	observe := func(k int) {
 		n := int64(100 + 60*k)
-		sim := collection.SimObservation{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
+		sim := collection.SimObservation{Node: "site-a", At: at(k), FleetGeneration: 1, Started: base.Add(-time.Hour),
 			Protocols: []collection.SimProtocolObservation{{Protocol: "http", Accepted: n / 10, Received: n, Answered: n}}}
 		hub.observation = map[string]collection.EndpointObservation{"site-a": {
 			SimBefore: sim,

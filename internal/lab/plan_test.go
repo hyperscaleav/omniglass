@@ -825,3 +825,34 @@ func TestFleetOf(t *testing.T) {
 		})
 	}
 }
+
+// WithImage re-points the omniglass image's services (the seed, the server,
+// the node and every site's node) and nothing else, leaving the receiver
+// as it was.
+func TestSpecWithImageRepointsOnlyTheOmniglassServices(t *testing.T) {
+	o := testOptions()
+	o.Systems, o.Scenario = 20, "corporate"
+	o.SiteNodes = []SiteNode{{Name: "edge-a", Token: "t", TokenHash: "h"}, {Name: "edge-b", Token: "t", TokenHash: "h"}}
+	spec, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := spec.WithImage("sha256:pinned")
+	if got.Seed.Image != "sha256:pinned" || got.Server.Image != "sha256:pinned" {
+		t.Errorf("seed %q server %q, want the pinned image", got.Seed.Image, got.Server.Image)
+	}
+	if len(got.Nodes) != 2 {
+		t.Fatalf("%d site nodes, want 2", len(got.Nodes))
+	}
+	for _, n := range got.Nodes {
+		if n.Image != "sha256:pinned" {
+			t.Errorf("site node %s runs %q, want the pinned image", n.Name, n.Image)
+		}
+	}
+	if got.DB.Image != PostgresImage {
+		t.Errorf("the database runs %q, want %q", got.DB.Image, PostgresImage)
+	}
+	if spec.Server.Image != o.Image || spec.Nodes[0].Image != o.Image {
+		t.Errorf("the receiver changed: server %q node %q", spec.Server.Image, spec.Nodes[0].Image)
+	}
+}

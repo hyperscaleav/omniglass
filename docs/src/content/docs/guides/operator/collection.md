@@ -153,7 +153,7 @@ running over an **endpoint**, so it reads as its endpoint (the anchor) plus that
 never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
 **panel on the node's detail** (open a node from **Nodes**, with `task:read`): each
 shows its endpoint, the function it runs (the built-in **reachability** check, or a driver
-function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-nvp/status`, a
+function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-panel-nvp/status`, a
 standing listener), and an **enabled** state; the node it runs on follows its endpoint's
 placement. To change what a node
 collects, add or remove the **endpoint**; there is no task create, edit, or delete.

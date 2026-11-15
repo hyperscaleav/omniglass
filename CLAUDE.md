@@ -161,8 +161,8 @@ Three buckets, never conflated:
   dump/squash silently drops them).
 - **Boot seed phase** (idempotent upsert on every server start): ship-with reference data as
   embedded YAML, authoritative via `ON CONFLICT DO UPDATE`; operator rows untouched. Narrow
-  carve-out: a table with no operator write path and a packed positional ordering may
-  reconcile-and-delete instead (`choice_alternate` only, today; ADR-0087); see
+  carve-out: a table with no operator write path whose leftover rows are not inert may
+  reconcile-and-delete instead (`choice_alternate`, ADR-0087, and `reserved_key`, #1447); see
   [storage](docs/src/content/docs/architecture/storage.md) before extending it to another table.
 - **One-time data backfills** (dbmate): transforming existing operator data, run once.
 

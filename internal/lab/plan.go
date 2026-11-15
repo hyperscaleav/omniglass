@@ -397,6 +397,9 @@ type Service struct {
 	Sysctls map[string]string
 	Mounts  []Mount
 	Publish *Publish
+	// NetworkOf is the container whose network namespace this one shares,
+	// loopback included; empty joins the lab network under Name.
+	NetworkOf string
 	// Health is a container healthcheck command (exec form), if any.
 	Health []string
 	// Restart is the restart policy: the node restarts if it crashes.
@@ -445,6 +448,23 @@ func (s Spec) Services() []Service {
 		out = append(out, s.Node)
 	}
 	return append(out, s.Nodes...)
+}
+
+// WithImage is the spec with the omniglass image's services (the seed, the
+// server and every node) running image, which a run pins to the image ID its
+// preflight checked. Pure: the receiver is unchanged.
+func (s Spec) WithImage(image string) Spec {
+	s.Seed.Image, s.Server.Image = image, image
+	if s.Node.Name != "" {
+		s.Node.Image = image
+	}
+	nodes := make([]Service, len(s.Nodes))
+	for i, n := range s.Nodes {
+		n.Image = image
+		nodes[i] = n
+	}
+	s.Nodes = nodes
+	return s
 }
 
 // ProjectLabels are the labels that select everything a project created.

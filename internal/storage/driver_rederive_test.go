@@ -66,7 +66,7 @@ func rederiveFixture(t *testing.T) (context.Context, *storage.PG, *pgx.Conn, *st
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-r"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, drv, node := "panel-r", "newtron-nvp", "edge-r"
+	comp, drv, node := "panel-r", "newtron-panel-nvp", "edge-r"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
 		Inputs: map[string]string{"host": "10.20.4.60"}, SecretRead: all, CanAdmin: true,
@@ -96,7 +96,7 @@ func TestReseedWithNoChangeTouchesNothing(t *testing.T) {
 	// driver or its tasks; the rows' xmin (the writing transaction) stays.
 	xmins := func() string {
 		var drv, tasks string
-		if err := conn.QueryRow(ctx, `select xmin::text from driver where name = 'newtron-nvp'`).Scan(&drv); err != nil {
+		if err := conn.QueryRow(ctx, `select xmin::text from driver where name = 'newtron-panel-nvp'`).Scan(&drv); err != nil {
 			t.Fatal(err)
 		}
 		if err := conn.QueryRow(ctx, `select coalesce(string_agg(xmin::text, ',' order by id), '') from task where endpoint_id = $1`, ep.ID).Scan(&tasks); err != nil {
@@ -136,7 +136,7 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 	ctx, gw, conn, ep := rederiveFixture(t)
 	// Roll the official spec back to one without reply shapes, as an older
 	// binary's seed carried it.
-	d, err := gw.GetDriver(ctx, "newtron-nvp")
+	d, err := gw.GetDriver(ctx, "newtron-panel-nvp")
 	if err != nil {
 		t.Fatal(err)
 	}
