@@ -142,12 +142,13 @@ func holdsSession(task collection.TaskSpec) bool {
 	return driver.IsBaked(task.Spec) && !driver.IsHTTP(task.Transport) && (task.Session != nil || task.Transport != "tcp")
 }
 
-// channelOf reads the ssh channel the driver declares.
+// channelOf reads the line channel the driver declares: the ssh shell or
+// exec, and the first ask's banner wait.
 func channelOf(ss *driver.SessionSpec) collection.ChannelOptions {
 	if ss == nil {
 		return collection.ChannelOptions{}
 	}
-	return collection.ChannelOptions{PTY: ss.PTY, Exec: ss.Exec}
+	return collection.ChannelOptions{PTY: ss.PTY, Exec: ss.Exec, ConnectQuiet: ss.ConnectQuietWindow()}
 }
 
 // sessionAuthOf renders the driver's session block for one endpoint: the
