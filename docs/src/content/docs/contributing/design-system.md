@@ -333,6 +333,19 @@ announces the field to a screen reader without claiming the browser will refuse 
 `validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
 `textarea`, so the next form cannot reintroduce one by habit.
 
+### A scrollable region needs a focus stop
+
+**A node that can scroll (`overflow-auto`, `overflow-x-auto`, `overflow-y-auto`) must be reachable by
+keyboard**, or a keyboard user cannot scroll what a mouse user can. axe's `scrollable-region-focusable`
+(serious) fires on a scroll container with no focusable descendant. A region that holds a control, a
+link or a button already has its focus stop (the Drawer body holds its form fields, the calc-rule
+preview's owner list holds an owner link per row). A region of plain text has none: give it
+`tabindex="0"`, `role="region"` and an `aria-label` that names what it holds, and never `aria-hidden`,
+since a focusable node hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
+`ExpressionField`'s source-and-caret echo is the worked example (#1101): it scrolls sideways because
+the caret under a column only stays aligned on one unwrapped line, so it takes the focus stop rather
+than wrapping.
+
 ### A select over a loaded collection binds through `bindSelectValue`, not `value=`
 
 **A `<select>` whose options come from a collection the server answers for does not carry a
@@ -551,6 +564,13 @@ by `--og-font-ui` and `--og-font-data` in `web/src/app.css`. Both are **self-hos
 loads no stylesheet and preconnects to no host off its own origin, because a console that needs a
 third party to render is a console that renders wrong on the closed campus and AV networks this
 product is deployed into ([ADR-0121](/architecture/decisions/)).
+
+The data face renders **without ligatures**: the `.font-data` rule in `app.css` sets
+`font-variant-ligatures: none`, once, for every code and expression rendering. JetBrains Mono's
+ligatures would draw `!=` as ≠, `==` as one long bar and `>=` as ≥, and the console shows
+expressions so an operator can read them back and type them: a criterion that displays a glyph
+no keyboard has teaches the wrong syntax, and `==` drawn as one bar is easy to misread as `=`.
+A surface that renders code wears `font-data` and inherits this; it does not opt out site by site.
 
 The files are vendored under `web/public/fonts/`, which Vite copies verbatim into the build that
 `internal/webui/spa_embed.go` compiles into the binary, so the faces ship inside the one artifact and
