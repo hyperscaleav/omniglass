@@ -10,6 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 import SeededSet from '../../../components/SeededSet.astro';
 import PlatformKeys from '../../../components/PlatformKeys.astro';
+import PlatformCoverage from '../../../components/PlatformCoverage.astro';
 
 :::note[Partial]
 The first collection path is live end to end: an edge node runs **reachability probes** against a
@@ -611,6 +612,14 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   no value and logs a WARN once, when the reads start failing, and the other figures still land. The
   seeded `disk-nearly-full` rule raises a warning alarm on this component when the ratio holds over
   0.9 for 2 minutes and clears it at 0.85 or under.
+
+**Which figures alarm.** Every figure the Platform health page reads is the `sample_key` of a shipped
+event rule or is named, with a reason, on an exemption list in code (`PlatformRuleExemptions`); a test
+fails when a figure is added to a panel with neither, and when an exemption outlives the rule that
+overtakes it. A ratio panel is watched through its numerator, by a rule on the ratio's key where one
+exists. The table is rendered from the rules and the list, so it shows what alarms today:
+
+<PlatformCoverage />
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
 gone by the write is dropped rather than failed, as a node's is. The same component carries the

@@ -181,3 +181,79 @@ func TestPlatformPipelineHopsAreSeeded(t *testing.T) {
 		}
 	}
 }
+
+// shippedRuleKeys maps each sample key the official event rules watch to the
+// rules that watch it.
+func shippedRuleKeys(t *testing.T) map[string][]string {
+	t.Helper()
+	var doc eventRulesDoc
+	if err := yaml.Unmarshal(eventRulesYAML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][]string{}
+	for _, r := range doc.Rules {
+		out[r.SampleKey] = append(out[r.SampleKey], r.Name)
+	}
+	return out
+}
+
+// TestEveryPlatformHealthFigureHasARuleOrAnExemption (#1983) is the coverage
+// gate on the Platform health page: every figure it reads is the sample_key of
+// a shipped event rule or is named in storage.PlatformRuleExemptions with a
+// reason, so a figure cannot ship watched by nobody without someone writing
+// down why. An exemption whose figure has since gained a rule must leave the
+// list, so the list only ever shrinks as the rules arrive.
+func TestEveryPlatformHealthFigureHasARuleOrAnExemption(t *testing.T) {
+	_, problems := platformCoverage(storage.PlatformHealthKeys(), shippedRuleKeys(t), storage.PlatformRuleExemptions)
+	for _, p := range problems {
+		t.Error(p)
+	}
+}
+
+// TestPlatformCoverageRefusesABareFigure proves the gate itself: a figure with
+// neither a rule nor an exemption fails, and either one passes it; an
+// exemption with no reason fails; an exemption that a rule has overtaken, or
+// that names no figure, fails.
+func TestPlatformCoverageRefusesABareFigure(t *testing.T) {
+	figures := []storage.PlatformHealthKey{{Key: "a-ratio", Group: "g"}, {Key: "b-gauge", Group: "g"}}
+	cases := []struct {
+		name    string
+		rules   map[string][]string
+		exempt  map[string]string
+		wantErr string
+	}{
+		{"both bare", nil, nil, "a-ratio has neither"},
+		{"rule and exemption", map[string][]string{"a-ratio": {"r"}, "b-gauge": {"s"}}, nil, ""},
+		{"one rule, one exemption", map[string][]string{"a-ratio": {"r"}}, map[string]string{"b-gauge": "no rule yet, #1"}, ""},
+		{"second bare", map[string][]string{"a-ratio": {"r"}}, nil, "b-gauge has neither"},
+		{"empty reason", map[string][]string{"a-ratio": {"r"}}, map[string]string{"b-gauge": ""}, "b-gauge has an exemption with no reason"},
+		{"rule overtook exemption", map[string][]string{"a-ratio": {"r"}, "b-gauge": {"s"}}, map[string]string{"b-gauge": "no rule yet, #1"}, "b-gauge has a rule and an exemption"},
+		{"exemption of no figure", map[string][]string{"a-ratio": {"r"}, "b-gauge": {"s"}}, map[string]string{"gone": "x"}, "gone is not a platform health figure"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rows, problems := platformCoverage(figures, c.rules, c.exempt)
+			if len(rows) != len(figures) {
+				t.Errorf("rows = %d, want one per figure (%d)", len(rows), len(figures))
+			}
+			joined := strings.Join(problems, "\n")
+			if c.wantErr == "" && joined != "" {
+				t.Errorf("problems = %q, want none", joined)
+			}
+			if c.wantErr != "" && !strings.Contains(joined, c.wantErr) {
+				t.Errorf("problems = %q, want one containing %q", joined, c.wantErr)
+			}
+		})
+	}
+}
+
+// TestPlatformRuleExemptionsAreAFloorNotAPlace proves the exemption list reads
+// as a promise: a reason that says "no rule yet" names the issue that adds
+// the rule, so no unwatched figure is left without an owner.
+func TestPlatformRuleExemptionsAreAFloorNotAPlace(t *testing.T) {
+	for key, reason := range storage.PlatformRuleExemptions {
+		if strings.HasPrefix(reason, "no rule yet") && !strings.Contains(reason, "#") {
+			t.Errorf("%s: %q says no rule yet without the issue that adds one", key, reason)
+		}
+	}
+}
