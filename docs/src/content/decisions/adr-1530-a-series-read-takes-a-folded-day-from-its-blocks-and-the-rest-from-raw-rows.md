@@ -2,7 +2,7 @@
 title: "A series read takes a folded day from its blocks and the rest from raw rows"
 date: 2026-11-08
 status: Accepted
-summary: "Every reader of a metric series' samples (the bucketed read at every resolution, the raw read, the series API and the CLI) reads them through one Storage Gateway read over raw metric rows and unnested metric_block rows. A late sample lands raw and merges into its block, so a folded day holds it twice; the read takes each series-day of each lineage from one source: from its blocks when a block of its lineage covers the day (an hour or day block of the day, or its ISO week's block) and the day is intact (blockIntact, the merge's own test), else from its raw rows. Not chosen: stopping the raw insert of a merged sample. Samples come back by ts, then lineage, then landing order, which moves a bucket's last off the raw row id. Amends #1530's spec: ListMetricBuckets did not read unchanged, it read raw rows only."
+summary: "Every reader of a metric series' samples (the bucketed read at every resolution, the raw read, the series API and the CLI; from #1573 the calc window, the current value, settlement, the rule preview and backtest and the trend recompute, held there by a guard test) reads them through one Storage Gateway read over raw metric rows and unnested metric_block rows. A late sample lands raw and merges into its block, so a folded day holds it twice; the read takes each series-day of each lineage from one source: from its blocks when a block of its lineage covers the day (an hour or day block of the day, or its ISO week's block) and the day is intact (blockIntact, the merge's own test), else from its raw rows. Not chosen: stopping the raw insert of a merged sample. Samples come back by ts, then lineage, then landing order, which moves a bucket's last off the raw row id. Amends #1530's spec: ListMetricBuckets did not read unchanged, it read raw rows only."
 refs: [1530, 1572, 1529, 1528, 1534, 1566, 1573, 1574]
 ---
 
@@ -46,6 +46,56 @@ refs: [1530, 1572, 1529, 1528, 1534, 1566, 1573, 1574]
      decision 3's day covered: once a covered day's raw rows are gone, a day past the cutoff has to be
      read from its block (and from the raw rows of the late samples that did not merge) rather than
      from raw rows alone.
+- **Every reader moves onto the read (#1573, the second slice).** No non-test code outside the series
+  read and the folds names the raw `metric` table now:
+  1. **The readers.** The calc window (`readCalcWindow`), the calc's current inputs and output, the
+     event rule's priming, stale check and streak re-read, the rule preview (an event rule's backtest
+     replay and a calc preview), settlement's latest observation, the effective and instance values
+     and the platform pipeline all read through `metricReadSQL` or `metricNewestSQL`, and so answer
+     the same before a day folds, after, and with the folded days' raw rows gone. A check that a series
+     holds a sample at all (`metricStoredSQL`: the preview's instances, the held-series and
+     preview-owner checks) counts a block as a raw row, with no window, as a raw row's existence never
+     had one.
+  2. **The current value is the raw rows' newest, unless a block holds a newer sample.** ADR-0079's
+     latest row per series is the series read's newest sample: the newest raw row, by the per-day index
+     probe as before, and a block sample only where one is newer, read only from blocks that end after
+     the newest raw row (none, while the series is still sampled), or for a series with no raw row from
+     its newest block start back a week. Taking the raw rows alone would read a late sample's raw row,
+     landed in a folded day whose other raw rows the early drop (#1574) has taken, as the series'
+     newest, and clear a rule holding on a newer folded sample. `metric_pending` (#1574) is one more
+     arm of it. Steady state costs one index range probe on `metric_block` beside the raw probe, and no
+     unnest.
+  3. **The trend recompute** (`recomputeDirtyChunk`, ADR-1276) reads a dirtied hour through
+     `metricReadFromSQL`, with blocks switched off for an hour marked `raw_only`: #1546's
+     one-source-per-hour rule is the read's own switch rather than a second copy of the read.
+  4. **Ties no longer break by raw id.** A block keeps one instant's samples of one lineage in their
+     rows' id order but no id, so a reader of several series (the calc window, the preview's window
+     and seeds) breaks a tie at one instant by series, then lineage, then landing order
+     (`metricLineageOrder`). It differs from the raw id order only where two series or two lineages
+     share an instant.
+  5. **A folded sample arrives in time order.** The backtest replay judges samples in the order they
+     arrived, by raw id, and drops a sample that landed after a newer one as history. The read marks
+     each sample `folded` when a block gave it, and the replay takes a folded sample as arriving in
+     time order: never history and never making another history. A day's arrival order is a fact of its
+     raw rows, which the fold does not keep; a replay over a folded day loses only the late-arrival
+     history that was inside it, which the live judge already ruled on when it landed.
+  6. **A calc write runs at READ COMMITTED.** `serveCalcMark` begins its transaction with
+     `trendTxOptions`, as every other metric write does: a calc output is a metric insert that takes the
+     trend lock shared and can land in a day the fold or a late merge is writing, so what it reads after
+     the lock must be what committed before the lock was granted, whatever the operator's default
+     isolation.
+  7. **The guard.** `TestNoDirectMetricReads` parses every non-test file under `internal/` and `cmd/`
+     and fails on a string literal that reads `metric` in a from or a join outside an allowlist, each
+     entry with why: the read's own raw arms, the folds and the fold's verify (which read the raw rows to
+     write and check a block), the trend fold of the open hour (no block can cover it yet), the event
+     reconcile's arrival feed (`ruleMarksSQL`, `ruleCandidatesSQL`: an id cursor over the rows inserted,
+     no sample's value, whose values come from the read), and the test, lab-footprint and
+     compression-bench tools. An entry that no longer reads the table fails the test too.
+     `TestDirectMetricReadGuardCatchesAPlantedRead` proves it catches a planted read.
+  8. **What #1574 inherits.** The arrival feed's cursor is the raw id, so the early drop must keep a
+     day's raw rows until the reconcile's mark has passed them. A rows-identical test needs a clock that
+     stands still across the fold, so `storagetest.StopClock` holds the database's clock at an instant
+     (`PinClock` still ticks from one).
 - **Amendment.** #1530's spec said bucketed reads were unchanged by the block reads. That was wrong:
   `ListMetricBuckets` read raw `metric` rows only, so it would have lost every folded day once the raw
   rows went. Ruled on #1530 (option A): bucketed reads go through the series read at every resolution;

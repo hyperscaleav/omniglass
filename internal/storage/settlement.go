@@ -539,7 +539,11 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	// The intended tier orders by insertion (`id desc`), every other lane by
 	// `ts desc, id desc`: an intended row's ts is the database's, never a
 	// caller's, while a node supplies the hot tier's (#712, seriesOrderSQL).
-	newest := metricNewestSQL("s.id")
+	lane, err := p.metricLane(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	newest := metricNewestSQL("s.id", lane)
 	order := "n.ts desc, n.id desc"
 	if provenance == "intended" {
 		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.id desc limit 1`

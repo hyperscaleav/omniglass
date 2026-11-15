@@ -314,7 +314,12 @@ type markResult struct {
 // serveCalcMark serves the oldest due mark it can lock whose rule is not in
 // held.
 func (p *PG) serveCalcMark(ctx context.Context, held []string) (markResult, error) {
-	tx, err := p.pool.Begin(ctx)
+	// READ COMMITTED (trendTxOptions), whatever the operator's default: a
+	// calc output is a metric insert, which takes the trend lock shared and
+	// can land in a day the block fold or a late merge is working on, and
+	// what it reads after that lock must be what committed before the lock
+	// was granted, as on every other metric write.
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return markResult{}, fmt.Errorf("storage: begin calc mark: %w", err)
 	}
@@ -504,16 +509,18 @@ type calcMember struct {
 
 // calcPlan is a rule's reduce ready to run: its inputs typed from the
 // registries and its program, read and compiled once per computation (or
-// once per preview).
+// once per preview), and the metric lane's days its metric inputs are read
+// through the series read by (metricLane).
 type calcPlan struct {
 	typed []rules.TypedInput
 	prog  *rules.CalcProgram
+	days  string
 }
 
 // calcPlan types a rule's inputs and compiles its reduce; a non-empty fault
 // is a rule that cannot reduce (an input key gone, a reduce that no longer
 // compiles), recorded rather than returned.
-func (p *PG) calcPlan(_ context.Context, _ pgx.Tx, r CalcRule) (calcPlan, string, error) {
+func (p *PG) calcPlan(ctx context.Context, tx pgx.Tx, r CalcRule) (calcPlan, string, error) {
 	typed := typedInputs(r)
 	var prog *rules.CalcProgram
 	var err error
@@ -526,7 +533,11 @@ func (p *PG) calcPlan(_ context.Context, _ pgx.Tx, r CalcRule) (calcPlan, string
 	if err != nil {
 		return calcPlan{}, err.Error(), nil
 	}
-	return calcPlan{typed: typed, prog: prog}, "", nil
+	days, err := p.metricLane(ctx, tx)
+	if err != nil {
+		return calcPlan{}, "", err
+	}
+	return calcPlan{typed: typed, prog: prog, days: days}, "", nil
 }
 
 func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (calcOutcome, error) {
@@ -567,7 +578,7 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 		if in.Window > 0 {
 			// A windowed input is a component rule's (rules.checkWindow): one
 			// member, the owner.
-			vs, due, err := readCalcWindow(ctx, tx, owner, in)
+			vs, due, err := readCalcWindow(ctx, tx, owner, in, plan.days)
 			if err != nil {
 				var bad *calcValueError
 				if errors.As(err, &bad) {
@@ -585,7 +596,7 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 			continue
 		}
 		for j, m := range members {
-			vs, own, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, false)
+			vs, own, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, false, plan.days)
 			if err != nil {
 				var bad *calcValueError
 				if errors.As(err, &bad) {
@@ -679,8 +690,8 @@ func calcSeries(lane rules.Lane) (table, typeCol, value string) {
 // rules.MaxCalcWindow. The window is in the samples' own time (ts) against
 // the server's now. ts leads the order, not id (#712): the lane is observed
 // and calculated, whose ts a caller supplies, so insertion order is not their
-// order.
-func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
+// order. days is the metric lane's days (metricLane).
+func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, days string) (samples []any, due *time.Time, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
 	sql := fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
 		where %[4]s = $1::uuid and %[2]s = $2::uuid and provenance in ('observed', 'calculated')
@@ -688,12 +699,16 @@ func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Ty
 		order by ts desc, id desc limit $4`, table, typeCol, value, owner.col())
 	if in.Lane == rules.LaneMetric {
 		// The owner's series of the key, observed and calculated, and their
-		// samples inside the window, through each series' (series_id, ts) index.
-		sql = `select s.instance, m.value::text, m.ts from metric_series s
-			join metric m on m.series_id = s.id
+		// samples inside the window through the series read (ADR-1530), so a
+		// window reads the same over a folded day as over its raw rows. One
+		// instant's samples order by series, then as the read orders them
+		// (metricLineageOrder), never by a raw row's id, which a block
+		// does not keep.
+		sql = `select s.instance, r.value::text, r.ts from metric_series s
+			cross join lateral (` + metricReadSQL("s.id", "now() - make_interval(secs => $3)", "'infinity'::timestamptz", days) + `) r
 			where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.provenance in ('observed', 'calculated')
-				and m.ts > now() - make_interval(secs => $3)
-			order by m.ts desc, m.id desc limit $4`
+				and r.ts > now() - make_interval(secs => $3)
+			order by r.ts desc, s.id desc, ` + metricLineageOrder("r", true) + ` limit $4`
 	}
 	rows, err := tx.Query(ctx, sql, owner.id, in.KeyID, in.Window, rules.MaxCalcWindowSamples)
 	if err != nil {
@@ -750,8 +765,8 @@ func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Ty
 // must not become current by being written last. Only the declared and intended lanes order
 // by insertion (seriesOrderSQL). With
 // aggregateOnly it reads the aggregate instance alone, as own (an output's
-// current value).
-func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool) (values []any, own any, stale []staleInstance, err error) {
+// current value). days is the metric lane's days (metricLane).
+func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool, days string) (values []any, own any, stale []staleInstance, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
 	col := owner.col()
 	var sql string
@@ -779,7 +794,7 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 		}
 		sql = `select x.instance, x.v, x.ts from (
 				select distinct on (s.instance) s.instance, n.value::text as v, n.ts
-				from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n
+				from metric_series s cross join lateral (` + metricNewestSQL("s.id", days) + `) n
 				where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.provenance in ('observed', 'calculated') ` + only + `
 				order by s.instance, n.ts desc, n.id desc) x
 			order by x.instance`
@@ -845,8 +860,8 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 
 // currentOutput is a rule's output's current value on an owner (its
 // aggregate instance's), nil when it has none or cannot be read.
-func currentOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (any, error) {
-	_, own, _, err := readCalcInput(ctx, tx, owner, rules.TypedInput{Key: r.OutputKey, KeyID: r.outputID, Lane: r.OutputLane, ValueType: r.outputType}, true)
+func currentOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, days string) (any, error) {
+	_, own, _, err := readCalcInput(ctx, tx, owner, rules.TypedInput{Key: r.OutputKey, KeyID: r.outputID, Lane: r.OutputLane, ValueType: r.outputType}, true, days)
 	var bad *calcValueError
 	if errors.As(err, &bad) {
 		return nil, nil
@@ -862,7 +877,11 @@ func currentOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) 
 // output is not judged by event rules yet: the evaluator judges component
 // samples only (#1002).
 func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, v any) error {
-	current, err := currentOutput(ctx, tx, r, owner)
+	days, err := p.metricLane(ctx, tx)
+	if err != nil {
+		return err
+	}
+	current, err := currentOutput(ctx, tx, r, owner, days)
 	if err != nil {
 		return err
 	}
@@ -874,7 +893,7 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 		// inside its window reads as no value. An output that holds steady
 		// is written again once its newest row is calcOutputRefresh old, so
 		// a rule still producing it keeps a value within retention.
-		fresh, err := metricOutputFresh(ctx, tx, r, owner)
+		fresh, err := metricOutputFresh(ctx, tx, r, owner, days)
 		if err != nil || fresh {
 			return err
 		}
@@ -939,9 +958,9 @@ const calcOutputRefresh = 12 * time.Hour
 
 // metricOutputFresh reports whether a rule's metric output on an owner has an
 // aggregate-instance row newer than calcOutputRefresh.
-func metricOutputFresh(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (bool, error) {
+func metricOutputFresh(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, days string) (bool, error) {
 	var fresh bool
-	err := tx.QueryRow(ctx, `select exists (select 1 from metric_series s cross join lateral (`+metricNewestSQL("s.id")+`) n
+	err := tx.QueryRow(ctx, `select exists (select 1 from metric_series s cross join lateral (`+metricNewestSQL("s.id", days)+`) n
 		where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.instance = ''
 		  and s.provenance in ('observed', 'calculated') and n.ts > now() - make_interval(secs => $3))`,
 		owner.id, r.outputID, calcOutputRefresh.Seconds()).Scan(&fresh)

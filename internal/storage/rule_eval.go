@@ -34,6 +34,9 @@ type ruleEvaluator struct {
 	// judged is the rules the batch judged a sample by, stamped once at the
 	// end of the batch (stampJudged).
 	judged map[string]bool
+	// days is the metric lane's days (metricLane), read once a batch, on
+	// the first metric sample it judges.
+	days string
 }
 
 // ruleLive is a rule's coalesced last-judged stamp (#929). A batch judges only
@@ -372,9 +375,18 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		// The metric lane's samples are its hot tier: a command's intended
 		// row (the declared tier) is not an observation and judges nothing
 		// (#1275).
+		// Newest is the series read's current value (ADR-1530), so a
+		// series whose newest day is folded still knows its newest sample.
+		if e.days == "" {
+			days, err := e.p.metricLane(ctx, tx)
+			if err != nil {
+				return nil, err
+			}
+			e.days = days
+		}
 		newer = `select exists (select 1 from metric_series s join metric_type_in_effect() t on t.id = s.metric_type_id
-			join metric m on m.series_id = s.id
-			where s.owner_id = $1::uuid and s.owner_kind = 'component' and t.name = $2 and s.instance = $3 and m.ts > $4)`
+			cross join lateral (` + metricNewestSQL("s.id", e.days) + `) n
+			where s.owner_id = $1::uuid and s.owner_kind = 'component' and t.name = $2 and s.instance = $3 and n.ts > $4)`
 	}
 	var stale bool
 	if err := tx.QueryRow(ctx, newer, ownerID, key, instance, ts).Scan(&stale); err != nil {
@@ -496,14 +508,15 @@ func laneTables(lane rules.Lane) (table, typeTable, value string) {
 // component, type id and instance are SQL expressions (parameters, or a
 // lateral's columns). It is an index probe on each lane, the series' own
 // (component, type, instance, ts desc) index, never a scan of the key's
-// history (TestSeriesNewestIsAnIndexProbe).
-func seriesNewestSQL(lane rules.Lane, component, typeID, instance string) string {
+// history (TestSeriesNewestIsAnIndexProbe). days is the metric lane's days
+// (metricLane), which the series read's block fallback needs.
+func seriesNewestSQL(lane rules.Lane, component, typeID, instance, days string) string {
 	if lane == rules.LaneMetric {
 		// Every series of the key on the component's instance (one per
 		// provenance, source and collecting node), each one probe.
 		return fmt.Sprintf(`select n.value from metric_series s cross join lateral (%[4]s) n
 		where s.owner_id = %[1]s and s.owner_kind = 'component' and s.metric_type_id = %[2]s and s.instance = %[3]s
-		order by n.ts desc, n.id desc limit 1`, component, typeID, instance, metricNewestSQL("s.id"))
+		order by n.ts desc, n.id desc limit 1`, component, typeID, instance, metricNewestSQL("s.id", days))
 	}
 	table, typeTable, value := laneTables(lane)
 	return fmt.Sprintf(`select %[3]s as value from %[1]s s
@@ -514,9 +527,16 @@ func seriesNewestSQL(lane rules.Lane, component, typeID, instance string) string
 // newestSamples reads the newest sample (by its timestamp, the series'
 // order) of every component series of a key on a lane, or of one series
 // when componentID is set.
-func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
+func (p *PG) newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
+	days := ""
+	if lane == rules.LaneMetric {
+		var err error
+		if days, err = p.metricLane(ctx, tx); err != nil {
+			return nil, err
+		}
+	}
 	if componentID != "" {
-		return newestOfSeries(ctx, tx, lane, key, componentID, instance)
+		return newestOfSeries(ctx, tx, lane, key, componentID, instance, days)
 	}
 	table, typeTable, value := laneTables(lane)
 	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
@@ -528,7 +548,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 		// than a read of the key's history.
 		q = `select distinct on (s.owner_id, s.instance) s.owner_id::text, s.instance, n.value
 			from metric_series s join metric_type_in_effect() t on t.id = s.metric_type_id
-			cross join lateral (` + metricNewestSQL("s.id") + `) n
+			cross join lateral (` + metricNewestSQL("s.id", days) + `) n
 			where t.name = $1 and s.owner_kind = 'component'
 			order by s.owner_id, s.instance, n.ts desc, n.id desc`
 	}
@@ -551,7 +571,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 
 // newestOfSeries reads one series' newest sample: an index probe
 // (seriesNewestSQL), none when the series has no sample or the key is gone.
-func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
+func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance, days string) ([]seriesSample, error) {
 	_, typeTable, _ := laneTables(lane)
 	var typeID string
 	err := tx.QueryRow(ctx, `select t.id::text from `+catalogRows(typeTable, "")+` t where t.name = $1`, key).Scan(&typeID)
@@ -562,7 +582,7 @@ func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compon
 		return nil, fmt.Errorf("storage: newest sample of %s: %w", key, err)
 	}
 	s := seriesSample{component: componentID, instance: instance}
-	err = tx.QueryRow(ctx, seriesNewestSQL(lane, "$1::uuid", "$2::uuid", "$3"), componentID, typeID, instance).Scan(&s.value)
+	err = tx.QueryRow(ctx, seriesNewestSQL(lane, "$1::uuid", "$2::uuid", "$3", days), componentID, typeID, instance).Scan(&s.value)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -583,7 +603,7 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 	if err != nil {
 		return err
 	}
-	series, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, "", "")
+	series, err := p.newestSamples(ctx, tx, r.SampleLane, r.SampleKey, "", "")
 	if err != nil {
 		return err
 	}
@@ -887,7 +907,7 @@ func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d due
 	if err != nil || !picked {
 		return nil, nil, nil, err
 	}
-	newest, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, d.component, d.instance)
+	newest, err := p.newestSamples(ctx, tx, r.SampleLane, r.SampleKey, d.component, d.instance)
 	if err != nil || len(newest) == 0 {
 		return nil, nil, nil, err
 	}
@@ -1324,6 +1344,10 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 		st.started = true
 	}
 	from := st.marks[0].Min(st.marks[1])
+	days, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return err
+	}
 	var drifted []ruleCandidate
 	for _, lane := range []struct {
 		lane     rules.Lane
@@ -1332,7 +1356,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 		if lane.to <= lane.from {
 			continue
 		}
-		cands, err := ruleCandidates(ctx, p.pool, lane.lane, lane.from, lane.to)
+		cands, err := ruleCandidates(ctx, p.pool, lane.lane, lane.from, lane.to, days)
 		if err != nil {
 			return err
 		}
@@ -1342,7 +1366,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 			}
 		}
 	}
-	drifted, err := p.watched(ctx, drifted)
+	drifted, err = p.watched(ctx, drifted)
 	if err != nil {
 		return err
 	}
@@ -1380,8 +1404,8 @@ const ruleMarksSQL = `select coalesce((select max(id) from property), 0),
 // lane that took a sample with an id in (from, to]: the newest sample of the
 // series, whether the rule holds its condition in force there, and its
 // streak.
-func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64) ([]ruleCandidate, error) {
-	rows, err := q.Query(ctx, ruleCandidatesSQL(lane), string(lane), from, to)
+func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64, days string) ([]ruleCandidate, error) {
+	rows, err := q.Query(ctx, ruleCandidatesSQL(lane, days), string(lane), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
 	}
@@ -1400,8 +1424,8 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 }
 
 // ruleCandidatesSQL is ruleCandidates' statement on a lane ($1 the lane, $2
-// and $3 the id window).
-func ruleCandidatesSQL(lane rules.Lane) string {
+// and $3 the id window), days the metric lane's days (metricLane).
+func ruleCandidatesSQL(lane rules.Lane, days string) string {
 	table, typeTable, _ := laneTables(lane)
 	touched := fmt.Sprintf(`select distinct s.component_id, s.%[2]s_id as type_id, s.instance
 			from %[1]s s
@@ -1438,7 +1462,7 @@ func ruleCandidatesSQL(lane rules.Lane) string {
 		join event_rule r on r.enabled and r.sample_lane = $1 and r.sample_key = t.name
 		cross join lateral (%[4]s) n
 		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
-		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance"),
+		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance", days),
 		ruleAlarmOn("r.id", "tc.instance"), touched)
 }
 
@@ -1524,7 +1548,7 @@ func (p *PG) rejudgeSeries(ctx context.Context, c ruleCandidate, releaseEmpty bo
 	if err != nil || !picked {
 		return err
 	}
-	newest, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, c.component, c.instance)
+	newest, err := p.newestSamples(ctx, tx, r.SampleLane, r.SampleKey, c.component, c.instance)
 	if err != nil {
 		return err
 	}

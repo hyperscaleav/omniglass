@@ -28,7 +28,7 @@ observed series also folds into lossless blocks sized by its sample count, writt
 and every reader of a series' samples reads them through one series read that takes a folded day from
 its blocks ([below](#the-narrow-metric-lane),
 [ADR-1528](/architecture/decisions/#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)). Current values are derived
-from the series (latest row per series); the maintained latest-value cache retired
+from the series (its newest sample, raw or folded); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the server prunes `metric` and `property` samples to their retention windows above the
 provenance-aware floor, and `log_line` and `node_log` by severity band
@@ -446,9 +446,10 @@ where b.series_id = $1 order by b.span_start, b.span;
   its batch lands and is acknowledged. The warning goes out when the batch commits, so a batch
   retried whole (a day made on a routing miss) logs its drop once.
 - **One series read, each sample once.** The raw read, the bucketed read at every resolution (min,
-  max, avg, count and last), the series API and the CLI all read a series' samples through one
-  Storage Gateway read (`metricReadSQL`, `MetricSeriesSamples`), so each answers the same before a
-  day folds and after
+  max, avg, count and last), the series API and the CLI, the calc window and inputs, the event rule's
+  judge, the rule preview and backtest, settlement, the current value and the trend recompute all
+  read a series' samples through one Storage Gateway read (`metricReadSQL`, `metricNewestSQL`,
+  `MetricSeriesSamples`), so each answers the same before a day folds and after
   ([ADR-1530](/architecture/decisions/#adr-1530-a-series-read-takes-a-folded-day-from-its-blocks-and-the-rest-from-raw-rows)).
   A late sample lands raw and merges, so a folded day holds it twice; the read takes each day of
   each lineage from one source. A day is read from its blocks when a block of its lineage covers it
@@ -458,7 +459,8 @@ where b.series_id = $1 order by b.span_start, b.span;
   then lineage, then landing order. The raw arm drops a covered row with a hashed anti-join on day
   and lineage, so a folded week costs the read one probe a row; one ten-day series of 864,000
   samples at one a second reads hourly buckets in about 1.3 s, most of it the sort that picks each
-  bucket's last.
+  bucket's last. A series' current value is its newest raw row unless a block holds a newer sample,
+  and `TestNoDirectMetricReads` fails on any other read of the raw table outside the folds.
 - **Raw rows stay.** The blocks are written beside the raw rows, which no pass drops yet.
   `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by
   sample, and names any that differ. The early drop of raw days and the block prune follow (#1574);

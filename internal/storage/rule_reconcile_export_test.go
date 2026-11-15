@@ -10,7 +10,7 @@ func ExportRuleMarks(st *RuleReconcileState) [2]RuleMark { return st.marks }
 // on a lane, parameterized ($1 component, $2 type id, $3 instance), so a test
 // can EXPLAIN exactly what the reconcile and sweep run.
 func ExportSeriesNewestSQL(lane string) string {
-	return seriesNewestSQL(rules.Lane(lane), "$1::uuid", "$2::uuid", "$3")
+	return seriesNewestSQL(rules.Lane(lane), "$1::uuid", "$2::uuid", "$3", "14")
 }
 
 // SetRulePreviewRowCap lowers the preview's row cap for a test and returns
@@ -26,18 +26,18 @@ func SetRulePreviewRowCap(n int) func() {
 func ExportPreviewSQL(lane, part string) string {
 	switch part {
 	case "instances":
-		return previewInstancesSQL(rules.Lane(lane))
+		return previewInstancesSQL(rules.Lane(lane), "14")
 	case "seed":
-		return previewSeedSQL(rules.Lane(lane))
+		return previewSeedSQL(rules.Lane(lane), "14")
 	}
-	return previewWindowSQL(rules.Lane(lane))
+	return previewWindowSQL(rules.Lane(lane), "14")
 }
 
 // ExportLatestPerInstanceSQL is the multi-instance current-value read
 // (ADR-0456) on the component arc, for its plan test.
 func ExportLatestPerInstanceSQL(lane string) string {
 	if lane == "metric" {
-		return latestObservedMetricPerInstanceSQL
+		return latestObservedMetricPerInstanceSQL("14")
 	}
 	return latestObservedPerInstanceSQL(lane, declaredCurrentExpr, "component_id")
 }
@@ -59,4 +59,4 @@ const ExportRuleMarksSQL = ruleMarksSQL
 
 // ExportRuleCandidatesSQL is the reconcile's candidates scan on a lane ($1
 // the lane, $2 and $3 the id window), so a test can EXPLAIN it.
-func ExportRuleCandidatesSQL(lane string) string { return ruleCandidatesSQL(rules.Lane(lane)) }
+func ExportRuleCandidatesSQL(lane string) string { return ruleCandidatesSQL(rules.Lane(lane), "14") }

@@ -104,6 +104,10 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	// rendered to jsonb so the coalesce against the contract default stays in
 	// SQL. Shared by both arms; kindParam and transportsParam are the
 	// placeholders each arm binds the owner kind and transport names to.
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	kindParam, transportsParam := "$2", "$3"
 	if oc.metricContractTable != "" {
 		kindParam, transportsParam = "$3", "$4"
@@ -139,7 +143,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			from live l
 			join spread sp on sp.metric_type_id = l.metric_type_id
 			order by l.metric_type_id, l.ts desc, l.id desc
-		)`, metricNewestSQL("s.id"), liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
+		)`, metricNewestSQL("s.id", lane), liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
 
 	var q string
 	if oc.metricContractTable == "" {

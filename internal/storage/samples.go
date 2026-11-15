@@ -560,12 +560,16 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 	} else if err != nil {
 		return nil, err
 	}
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
 		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type_in_effect() mt on mt.id = s.metric_type_id
-		cross join lateral (`+metricNewestSQL("s.id")+`) n
+		cross join lateral (`+metricNewestSQL("s.id", lane)+`) n
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and mt.name = $2 and s.provenance = 'observed'
 		order by n.ts desc, n.id desc
 		limit 1`, c.ID, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
@@ -594,12 +598,16 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	} else if err != nil {
 		return nil, err
 	}
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
 		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type_in_effect() mt on mt.id = s.metric_type_id
-		cross join lateral (`+metricNewestSQL("s.id")+`) n
+		cross join lateral (`+metricNewestSQL("s.id", lane)+`) n
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and mt.name = $2 and s.instance = $3
 		  and s.provenance = 'observed'
 		order by n.ts desc, n.id desc
@@ -645,7 +653,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 		cross join lateral (
 			`+metricReadSQL("s.id", from, "'infinity'::timestamptz", "$5")+`
 			union all
-			select d.ts, d.value, null, null, null, d.id from metric_declared d where d.series_id = s.id and d.ts >= `+from+`) x
+			select d.ts, d.value, null, null, null, d.id, false from metric_declared d where d.series_id = s.id and d.ts >= `+from+`) x
 		where s.owner_id = $1::uuid and s.owner_kind = $4 and mt.name = $2
 		order by x.ts desc, s.id desc, `+metricLineageOrder("x", true)+`
 		limit $3`, args...)
@@ -668,14 +676,4 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 // instance (the batch's writer fixes the provenance).
 func metricSeriesKey(ev MetricSampleWrite, arc string) string {
 	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Key + "\x00" + ev.Instance
-}
-
-// metricNewestSQL is one metric series' newest hot-tier sample (ts, id, value
-// and the lineage columns), series an SQL expression (a lateral's column): an
-// index probe of metric_series_ts_idx in each day, newest day first, stopping
-// at the first day that holds one (TestMetricNewestReadsTheNewestDayFirst).
-func metricNewestSQL(series string) string {
-	return `select m.ts, m.id, m.value, m.source_rule, m.source_rule_version, m.source_rule_id
-		from metric m where m.series_id = ` + series + `
-		order by m.ts desc, m.id desc limit 1`
 }

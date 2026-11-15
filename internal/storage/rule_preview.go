@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -79,11 +80,14 @@ type RulePreview struct {
 // previewCandidate is a component the candidate selects, in scope.
 type previewCandidate struct{ id, name, typeName string }
 
-// previewSample is one sample a preview judges.
+// previewSample is one sample a preview judges: id its arrival order, unless
+// folded, a sample a block gave the metric lane's series read, whose arrival
+// order its block did not keep (ADR-1530).
 type previewSample struct {
-	id    int64
-	ts    time.Time
-	value any
+	id     int64
+	ts     time.Time
+	value  any
+	folded bool
 }
 
 // PreviewEventRule judges a candidate rule without writing anything (#959),
@@ -128,6 +132,10 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 	if err != nil {
 		return nil, err
 	}
+	days, err := p.metricLane(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	since := until.Add(-RulePreviewWindow)
 	out := &RulePreview{Window: RulePreviewWindow, Since: since, Until: until, RowCap: rulePreviewRowCap, SustainsIgnored: true,
 		InForce: []RulePreviewSeries{}, Edges: []RulePreviewEdge{}, StateUnknown: []RulePreviewSeries{}}
@@ -145,7 +153,7 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 	type series struct{ component, instance string }
 	var all []series
 	if len(candIDs) > 0 {
-		rows, err := tx.Query(ctx, previewInstancesSQL(r.SampleLane), typeID, candIDs)
+		rows, err := tx.Query(ctx, previewInstancesSQL(r.SampleLane, days), typeID, candIDs)
 		if err != nil {
 			return nil, fmt.Errorf("storage: rule preview series: %w", err)
 		}
@@ -177,7 +185,7 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 			}
 			return a
 		}
-		window, err := previewProbe(ctx, tx, previewWindowSQL(r.SampleLane), k.component, typeID, k.instance, since, rulePreviewRowCap-read+1)
+		window, err := previewProbe(ctx, tx, previewWindowSQL(r.SampleLane, days), k.component, typeID, k.instance, since, rulePreviewRowCap-read+1)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +194,7 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 			break
 		}
 		read += len(window)
-		seeds, err := previewProbe(ctx, tx, previewSeedSQL(r.SampleLane), k.component, typeID, k.instance, since, since.Add(-RulePreviewSeedLookback), RulePreviewSeedProbe)
+		seeds, err := previewProbe(ctx, tx, previewSeedSQL(r.SampleLane, days), k.component, typeID, k.instance, since, since.Add(-RulePreviewSeedLookback), RulePreviewSeedProbe)
 		if err != nil {
 			return nil, err
 		}
@@ -236,22 +244,33 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 // order it judged them: a sample is history (decides nothing) when one that
 // arrived before it (a lower id) is newer (a later ts), which is the ingest's
 // stale check. The rest arrive in time order, so they are returned by time.
+// A folded sample (a block's, ADR-1530) has no arrival order to compare: it
+// is taken as arriving in time order, so it is never history and makes no
+// other sample history, and one instant's folded samples keep the order the
+// window, newest first, read them in.
 func judgedInArrival(window []previewSample) []previewSample {
-	sorted := append([]previewSample(nil), window...)
-	sort.Slice(sorted, func(i, j int) bool {
-		if !sorted[i].ts.Equal(sorted[j].ts) {
-			return sorted[i].ts.Before(sorted[j].ts)
+	sorted := slices.Clone(window)
+	slices.Reverse(sorted)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		if !a.ts.Equal(b.ts) {
+			return a.ts.Before(b.ts)
 		}
-		return sorted[i].id < sorted[j].id
+		if a.folded != b.folded {
+			return a.folded
+		}
+		return !a.folded && a.id < b.id
 	})
 	keep := make([]bool, len(sorted))
-	minAbove := int64(math.MaxInt64) // the lowest id among strictly newer samples
+	minAbove := int64(math.MaxInt64) // the lowest id among strictly newer raw samples
 	for i := len(sorted) - 1; i >= 0; {
 		j := i
 		groupMin := int64(math.MaxInt64)
 		for j >= 0 && sorted[j].ts.Equal(sorted[i].ts) {
-			keep[j] = sorted[j].id < minAbove
-			groupMin = min(groupMin, sorted[j].id)
+			keep[j] = sorted[j].folded || sorted[j].id < minAbove
+			if !sorted[j].folded {
+				groupMin = min(groupMin, sorted[j].id)
+			}
 			j--
 		}
 		minAbove = min(minAbove, groupMin)
@@ -324,12 +343,14 @@ func previewCandidates(ctx context.Context, q querier, sel EventRuleSelector, id
 // previewInstancesSQL lists each candidate component's instances of a key
 // ($1 the type id, $2 the component ids) by a loose index skip on the
 // series index: one probe per instance, never a scan of the key's samples.
-func previewInstancesSQL(lane rules.Lane) string {
+// days is the metric lane's days (metricLane); the other lanes take none.
+func previewInstancesSQL(lane rules.Lane, _ string) string {
 	if lane == rules.LaneMetric {
-		// The candidates' component series of the key that hold a sample.
+		// The candidates' component series of the key that hold a sample,
+		// in a raw row or a block (metricStoredSQL).
 		return `select distinct s.owner_id::text, s.instance from metric_series s
 			where s.owner_id = any($2::uuid[]) and s.owner_kind = 'component' and s.metric_type_id = $1::uuid
-			  and s.provenance in ('observed', 'calculated') and exists (select 1 from metric m where m.series_id = s.id)
+			  and s.provenance in ('observed', 'calculated') and ` + metricStoredSQL("s.id") + `
 			order by 1, 2`
 	}
 	table, typeTable, _ := laneTables(lane)
@@ -347,31 +368,36 @@ func previewInstancesSQL(lane rules.Lane) string {
 
 // previewSeedSQL reads a series' samples before the window, newest first,
 // within the lookback ($1 component, $2 type id, $3 instance, $4 since, $5
-// the lookback's start, $6 the probe's bound): an index probe.
-func previewSeedSQL(lane rules.Lane) string {
+// the lookback's start, $6 the probe's bound): an index probe. days is the
+// metric lane's days (metricLane): the metric lane reads through the series
+// read (ADR-1530), so a folded day seeds as its raw rows did.
+func previewSeedSQL(lane rules.Lane, days string) string {
 	if lane == rules.LaneMetric {
-		return `select m.id, m.ts, m.value from metric_series s join metric m on m.series_id = s.id
+		return `select r.ord, r.ts, r.value, r.folded from metric_series s
+		cross join lateral (` + metricReadSQL("s.id", "$5", "$4", days) + `) r
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and s.metric_type_id = $2::uuid and s.instance = $3
-		  and s.provenance in ('observed', 'calculated') and m.ts < $4 and m.ts >= $5
-		order by m.ts desc limit $6`
+		  and s.provenance in ('observed', 'calculated')
+		order by r.ts desc, s.id desc, ` + metricLineageOrder("r", true) + ` limit $6`
 	}
 	table, typeTable, value := laneTables(lane)
-	return fmt.Sprintf(`select s.id, s.ts, %[3]s from %[1]s s
+	return fmt.Sprintf(`select s.id, s.ts, %[3]s, false from %[1]s s
 		where s.component_id = $1::uuid and s.%[2]s_id = $2::uuid and s.instance = $3 and s.ts < $4 and s.ts >= $5
 		order by s.ts desc limit $6`, table, typeTable, value)
 }
 
 // previewWindowSQL reads a series' samples in the window ($1 component, $2
-// type id, $3 instance, $4 since, $5 the bound): an index probe.
-func previewWindowSQL(lane rules.Lane) string {
+// type id, $3 instance, $4 since, $5 the bound): an index probe. days is the
+// metric lane's days, as previewSeedSQL takes it.
+func previewWindowSQL(lane rules.Lane, days string) string {
 	if lane == rules.LaneMetric {
-		return `select m.id, m.ts, m.value from metric_series s join metric m on m.series_id = s.id
+		return `select r.ord, r.ts, r.value, r.folded from metric_series s
+		cross join lateral (` + metricReadSQL("s.id", "$4", "'infinity'::timestamptz", days) + `) r
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and s.metric_type_id = $2::uuid and s.instance = $3
-		  and s.provenance in ('observed', 'calculated') and m.ts >= $4
-		order by m.ts desc limit $5`
+		  and s.provenance in ('observed', 'calculated')
+		order by r.ts desc, s.id desc, ` + metricLineageOrder("r", true) + ` limit $5`
 	}
 	table, typeTable, value := laneTables(lane)
-	return fmt.Sprintf(`select s.id, s.ts, %[3]s from %[1]s s
+	return fmt.Sprintf(`select s.id, s.ts, %[3]s, false from %[1]s s
 		where s.component_id = $1::uuid and s.%[2]s_id = $2::uuid and s.instance = $3 and s.ts >= $4
 		order by s.ts desc limit $5`, table, typeTable, value)
 }
@@ -386,7 +412,7 @@ func previewProbe(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]pr
 	var out []previewSample
 	for rows.Next() {
 		var s previewSample
-		if err := rows.Scan(&s.id, &s.ts, &s.value); err != nil {
+		if err := rows.Scan(&s.id, &s.ts, &s.value, &s.folded); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

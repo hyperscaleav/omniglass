@@ -437,7 +437,7 @@ func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 		join comps on comps.id = s.component_id
 		join component c on c.id = s.component_id
 		join metric_type mt on mt.id = s.metric_type_id
-		cross join lateral (`+metricNewestSQL("s.id")+`) n
+		cross join lateral (`+metricNewestSQL("s.id", "$2")+`) n
 		where s.owner_kind = 'component'
 		  and mt.namespace = 'og' and mt.name = any($1::text[])
 		  and s.provenance in `+measuredProvenance+`

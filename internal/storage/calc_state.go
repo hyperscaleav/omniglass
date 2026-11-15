@@ -423,7 +423,7 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 		if row.Missing == nil {
 			row.Missing = []string{}
 		}
-		current, err := currentOutput(ctx, tx, r, o.owner)
+		current, err := currentOutput(ctx, tx, r, o.owner, plan.days)
 		if err != nil {
 			return nil, err
 		}
@@ -517,7 +517,7 @@ func orderPreviewOwners(ctx context.Context, tx pgx.Tx, r CalcRule, owners []pre
 			and x.provenance in ('observed', 'calculated'))`
 	if r.OutputLane == rules.LaneMetric {
 		held = `exists (select 1 from metric_series x where x.owner_id = o.id and x.metric_type_id = $2::uuid and x.instance = ''
-			and x.provenance in ('observed', 'calculated') and exists (select 1 from metric m where m.series_id = x.id))`
+			and x.provenance in ('observed', 'calculated') and ` + metricStoredSQL("x.id") + `)`
 	}
 	rows, err := tx.Query(ctx, `select o.id::text from unnest($1::uuid[]) as o(id)
 		where `+held, ids, r.outputID)

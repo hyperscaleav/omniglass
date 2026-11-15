@@ -32,7 +32,7 @@ func metricSeriesWhere(s, ownerKind, owner, typeID string) string {
 // comparison's right side (a type id expression, or any(...)).
 func metricHeldSQL(owner, typeMatch string) string {
 	return `exists (select 1 from metric_series hs where hs.owner_id = ` + owner + ` and hs.metric_type_id = ` + typeMatch + `
-		and (exists (select 1 from metric hm where hm.series_id = hs.id)
+		and (` + metricStoredSQL("hs.id") + `
 			or exists (select 1 from metric_declared hd where hd.series_id = hs.id)))`
 }
 

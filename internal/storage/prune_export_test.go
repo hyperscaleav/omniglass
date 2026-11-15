@@ -48,9 +48,9 @@ func (p *PG) MakeMetricDays(ctx context.Context, at ...time.Time) error {
 	return err
 }
 
-// ExportMetricNewestSQL is one metric series' newest-sample read ($1 the
+// ExportMetricNewestSQL is one metric series' newest raw row read ($1 the
 // series id), for the test that plans it (#1275).
-func ExportMetricNewestSQL() string { return metricNewestSQL("$1::bigint") }
+func ExportMetricNewestSQL() string { return metricNewestRawSQL("$1::bigint") }
 
 // ExportMetricCoverageGap is the check the roll refuses an uncovered day by
 // (#1527).
