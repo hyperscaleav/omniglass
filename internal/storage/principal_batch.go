@@ -142,7 +142,7 @@ func (p *PG) attachPrincipalGrants(ctx context.Context, ids []string, at map[str
 func eachPrincipalGrant(ctx context.Context, q querier, ids []string, fn func(owner string, g Grant)) error {
 	rows, err := q.Query(ctx,
 		`select o.owner, g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op,
-		        g.group_id, coalesce(pg.label, pg.name)
+		        g.group_id, pg.name, pg.label
 		   from (select id as grant_id, principal_id as owner
 		           from principal_grant where principal_id = any($1::uuid[])
 		          union all
@@ -160,7 +160,7 @@ func eachPrincipalGrant(ctx context.Context, q querier, ids []string, fn func(ow
 	for rows.Next() {
 		var owner string
 		var g Grant
-		if err := rows.Scan(&owner, &g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName); err != nil {
+		if err := rows.Scan(&owner, &g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName, &g.GroupLabel); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		fn(owner, g)

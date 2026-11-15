@@ -32,10 +32,24 @@ type batchTx struct {
 	// bindings is each node writer's component, by the name it named, once
 	// resolved (nodeBinding).
 	bindings map[string]string
+	// The locks the batch took up front for every lane (lockGroups, #1928),
+	// so a lane writer's own take of one is skipped rather than repeated:
+	// ruleKeys is every sample key whose enabled event rules it read FOR
+	// SHARE, rules those rules by key, marked each writer rule's calc marks
+	// (by the rule a write excepts), and series each property series lock.
+	// Only the batch's own transaction records them, never a savepoint, so a
+	// rolled-back savepoint never leaves a lock recorded that it released:
+	// lockGroups refuses a batchTx whose sp is set.
+	sp       bool
+	ruleKeys map[string]bool
+	rules    map[string][]EventRule
+	marked   map[string]*calcMarks
+	series   map[string]bool
 }
 
 func newBatchTx(tx pgx.Tx) *batchTx {
-	return &batchTx{Tx: tx, arcs: map[string]string{}, writers: map[writeLane]map[string]keyWriterOf{}, bindings: map[string]string{}}
+	return &batchTx{Tx: tx, arcs: map[string]string{}, writers: map[writeLane]map[string]keyWriterOf{}, bindings: map[string]string{},
+		ruleKeys: map[string]bool{}, rules: map[string][]EventRule{}, marked: map[string]*calcMarks{}, series: map[string]bool{}}
 }
 
 // savepoint is sp, a savepoint opened in b, answering from b's memos: what
@@ -43,7 +57,51 @@ func newBatchTx(tx pgx.Tx) *batchTx {
 // for the batch (a read a rolled-back savepoint made is still the
 // transaction's answer).
 func (b *batchTx) savepoint(sp pgx.Tx) *batchTx {
-	return &batchTx{Tx: sp, arcs: b.arcs, now: b.now, targeted: b.targeted, writers: b.writers, bindings: b.bindings}
+	return &batchTx{Tx: sp, sp: true, arcs: b.arcs, now: b.now, targeted: b.targeted, writers: b.writers, bindings: b.bindings,
+		ruleKeys: b.ruleKeys, rules: b.rules, marked: b.marked, series: b.series}
+}
+
+// heldRules is the enabled event rules reading keys, when the batch already
+// read every one of them FOR SHARE.
+func (b *batchTx) heldRules(keys []string) (map[string][]EventRule, bool) {
+	byKey := map[string][]EventRule{}
+	for _, k := range keys {
+		if !b.ruleKeys[k] {
+			return nil, false
+		}
+		if rs := b.rules[k]; len(rs) > 0 {
+			byKey[k] = rs
+		}
+	}
+	return byKey, true
+}
+
+// heldMarks reports whether the batch already marked every sample in marks
+// for the writer rule exceptRule.
+func (b *batchTx) heldMarks(marks *calcMarks, exceptRule string) bool {
+	held := b.marked[exceptRule]
+	if held == nil {
+		return false
+	}
+	for owner, ks := range marks.keys {
+		for k := range ks {
+			if !held.keys[owner][k] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// heldSeries reports whether the batch already holds every property series
+// lock in keys.
+func (b *batchTx) heldSeries(keys []string) bool {
+	for _, k := range keys {
+		if !b.series[k] {
+			return false
+		}
+	}
+	return true
 }
 
 // arc resolves an owner's primary key once per batch.

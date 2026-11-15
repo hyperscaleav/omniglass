@@ -25,17 +25,17 @@ import (
 
 // One tick of a node lands as one batch of task groups (#1582): the handler
 // resolves every group's task in one read, lands every group in one
-// LandBatch, and stamps every landed group's endpoint in one write. A group
-// the gateway refuses, or one the confinement fence orphans, drops alone.
+// LandBatch, whose transaction stamps every landed group's endpoint seen
+// (#1928). A group the gateway refuses, or one the confinement fence
+// orphans, drops alone.
 
-// tickStore is the real gateway, counted at the three calls a tick costs, and
+// tickStore is the real gateway, counted at the two calls a tick costs, and
 // able to stand in for a gateway that refuses one task's group.
 type tickStore struct {
 	*storage.PG
 	mu         sync.Mutex
 	resolves   int
 	lands      []storage.IngestBatch
-	stamps     [][]string
 	refuseTask string
 }
 
@@ -70,13 +70,6 @@ func (s *tickStore) LandBatch(ctx context.Context, b storage.IngestBatch) (stora
 	res, err := s.PG.LandBatch(ctx, b)
 	res.Refused = append(res.Refused, refused...)
 	return res, err
-}
-
-func (s *tickStore) StampEndpointsSeen(ctx context.Context, ids []string) error {
-	s.mu.Lock()
-	s.stamps = append(s.stamps, slices.Clone(ids))
-	s.mu.Unlock()
-	return s.PG.StampEndpointsSeen(ctx, ids)
 }
 
 // tickFixture is node-a holding three tasks, each on its own component's
@@ -189,6 +182,34 @@ func (f *tickFixture) deliver(t *testing.T, ev *ogv1.TelemetryBatch) *deliveredM
 	return m
 }
 
+// seen is every endpoint stamped seen, sorted.
+func (f *tickFixture) seen(t *testing.T) []string {
+	t.Helper()
+	conn, err := pgx.Connect(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(f.ctx)
+	rows, err := conn.Query(f.ctx, `select endpoint_id::text from endpoint_live order by 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+// stamped is the named endpoints' ids, sorted.
+func (f *tickFixture) stamped(names ...string) []string {
+	ids := make([]string, len(names))
+	for i, n := range names {
+		ids[i] = f.endpoints[n]
+	}
+	return slices.Sorted(slices.Values(ids))
+}
+
 func (f *tickFixture) tcpConnectTime(t *testing.T, comp string) *storage.MetricSample {
 	t.Helper()
 	got, err := f.gw.LatestMetricInstance(f.ctx, comp, "tcp-connect-time", comp+"-tcp")
@@ -229,12 +250,7 @@ func TestNodeTickLandsAsOneBatch(t *testing.T) {
 			t.Errorf("%s tcp-connect-time under %s-tcp = %+v, want %v", comp, comp, got, want)
 		}
 	}
-	if len(f.store.stamps) != 1 {
-		t.Fatalf("seen stamps = %d calls, want one for the tick: %v", len(f.store.stamps), f.store.stamps)
-	}
-	got := slices.Sorted(slices.Values(f.store.stamps[0]))
-	want := slices.Sorted(slices.Values([]string{f.endpoints["disp-1-tcp"], f.endpoints["disp-2-tcp"], f.endpoints["disp-3-tcp"]}))
-	if !slices.Equal(got, want) {
+	if got, want := f.seen(t), f.stamped("disp-1-tcp", "disp-2-tcp", "disp-3-tcp"); !slices.Equal(got, want) {
 		t.Errorf("stamped %v, want every group's endpoint %v", got, want)
 	}
 }
@@ -289,8 +305,8 @@ func TestNodeBatchRefusedGroupAcks(t *testing.T) {
 	if len(warned) != 1 || warned[0]["task"] != "t-2" || !strings.Contains(fmt.Sprint(warned[0]["error"]), "writer class") {
 		t.Errorf("refusal warnings = %v, want one naming t-2 and its cause", warned)
 	}
-	if len(f.store.stamps) != 1 || slices.Contains(f.store.stamps[0], f.endpoints["disp-2-tcp"]) || len(f.store.stamps[0]) != 2 {
-		t.Errorf("seen stamps = %v, want one call stamping the two landed groups' endpoints only", f.store.stamps)
+	if got, want := f.seen(t), f.stamped("disp-1-tcp", "disp-3-tcp"); !slices.Equal(got, want) {
+		t.Errorf("seen stamps = %v, want the two landed groups' endpoints only %v", got, want)
 	}
 }
 
@@ -337,8 +353,8 @@ func TestNodeBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
 	if len(f.store.lands) != 1 || len(f.store.lands[0].Groups) != 2 {
 		t.Errorf("LandBatch = %+v, want one call with the two resolved groups", f.store.lands)
 	}
-	if len(f.store.stamps) != 1 || len(f.store.stamps[0]) != 2 || slices.Contains(f.store.stamps[0], f.endpoints["disp-b-tcp"]) {
-		t.Errorf("seen stamps = %v, want the two resolved groups' endpoints", f.store.stamps)
+	if got := f.seen(t); len(got) != 2 || slices.Contains(got, f.endpoints["disp-b-tcp"]) {
+		t.Errorf("seen stamps = %v, want the two resolved groups' endpoints", got)
 	}
 }
 
@@ -376,7 +392,7 @@ func TestNodeBatchPostgresRefusedGroupAcks(t *testing.T) {
 	if receipts != 1 {
 		t.Errorf("receipts for the tick = %d, want one", receipts)
 	}
-	if len(f.store.stamps) != 1 || !slices.Equal(f.store.stamps[0], []string{f.endpoints["disp-1-tcp"]}) {
-		t.Errorf("seen stamps = %v, want one call stamping disp-1-tcp only", f.store.stamps)
+	if got, want := f.seen(t), f.stamped("disp-1-tcp"); !slices.Equal(got, want) {
+		t.Errorf("seen stamps = %v, want disp-1-tcp only %v", got, want)
 	}
 }

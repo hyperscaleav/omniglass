@@ -109,6 +109,22 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
 - **Expect a failure out loud.** A command the tape types that exits non-zero fails the demo. One
   that is meant to fail says so on screen, with `|| true`.
 
+**A tape that needs a database says so.** A behavior that depends on what the database holds (a
+server refusing a schema a newer release migrated) cannot be staged through the API, so the tape
+declares a `# demo-needs: database` comment line, anywhere in the file (the header is read by
+`NEEDS` in the same module, and an unknown need is refused naming the line). For such a tape the
+recorder makes a database of its own on the lab's Postgres (`tape_<id>`, hyphens as underscores)
+before it plays, hands the tape `OMNIGLASS_DSN` pointing at it, so the direct-database commands
+(`omniglass migrate`, `omniglass server`) run against it, and drops it when the tape ends, passed or
+failed. The recorder image carries `psql` (the lab's Postgres client, pinned by digest at the lab's
+major) to stage a row in it. It is never the lab's own database: a tape may stamp a schema no
+later tape could migrate. A tape that declares nothing is handed no DSN. A tape that needs the
+Docker socket (`# demo-needs: docker-socket`, opt-in as above) does not combine with `database`,
+since it runs on the host's network, which cannot reach the lab's Postgres.
+[`scripts/demo/schema-ahead.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/schema-ahead.tape)
+is the first: it migrates its database, stamps a version past this build's head, and shows the
+server refusing it (#1289).
+
 `make test-web` holds every tape in the tree to the rules, so a malformed one fails before a lab
 starts. [`scripts/demo/http-logins.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/http-logins.tape)
 is the first one.
@@ -174,6 +190,15 @@ and a recording with no preview fails too. A recording at or over a limit fails,
 only one that passed carries the budget mark in its manifest (`demo.json`, `walkthrough.json`),
 which is what the PR comment, and the docs copy of a walkthrough, refuse to go without. A demo that
 will not fit is two demos: split it.
+
+A walkthrough's animated preview also has to open on the painted title card, not the blank or
+half-painted lead-in the video starts with. The opening frame is chosen from the recording, not by a
+fixed beat after the paint: the recorder notes when the card was painted, and the preview opens on
+the first frame at or after that, within the card's hold, whose brightest luma
+(`signalstats` YMAX) reaches `PREVIEW_MIN_YMAX` (`previewStartFromLumas`). A loaded runner whose
+video lags the page only moves the start later. The gate fails only when no frame in that window
+qualifies, which means the card never painted, and it names the window scanned and the brightest
+luma it found.
 
 ## Record it locally
 
@@ -284,7 +309,8 @@ of it into main, and a default clone never fetches it (a clone fetches branches 
 refs). The ref was chosen over an orphan branch for that last reason: GitHub's raw host and
 jsDelivr serve a commit on any ref of a public repository by its SHA, the workflow token can push
 the ref, and an orphan branch would sit in every clone and in the branch list. Each run commits a
-fresh tree on top of the ref's last commit, so an older comment's links keep resolving. The record
+fresh tree on top of the ref's last commit, so an older comment's links keep resolving. A run in
+which no demo recorded commits an empty tree, so its comment and clip still say what happened. The record
 jobs that run the PR's code (both recorders, every command a tape types, and the script that
 stages the evidence, the comment and the clip) hold only a read-only token; a separate publish job,
 which checks nothing out and runs nothing from the PR, builds the evidence commit in a fresh

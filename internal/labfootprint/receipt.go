@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/node"
 )
 
 // maxEndpointWindow is the longest window the receipt count can read: the
@@ -18,7 +19,7 @@ const maxEndpointWindow = 23 * time.Hour
 // receiptCountQuery counts one node's telemetry receipts around the window
 // [t0, t1], each read off the database's clock: every receipt landed from t0
 // minus the margin, and of those, how many landed before t0, how many from
-// t0 until the lane drained past the start read (the backlog of batches the
+// t0 until the lanes drained past the start read (the backlog of batches the
 // bus acknowledged before it, stopped at t1), and how many after t1. A
 // receipt's batch id is the subject the node published on and its message
 // id, so the node's prefix is its subject and a space; starts_with keeps a
@@ -53,22 +54,43 @@ func parseReceiptCount(out string) (closedloop.ReceiptCount, error) {
 	return closedloop.ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
 }
 
-// drainedQuery reads whether the ingest lane has drained past at, and the
-// database's clock. The lane lands one batch at a time in the order the
-// stream stored them, a redelivery included (MaxAckPending 1 in
-// internal/bus), so once it has landed a sample a node probed after at,
-// every batch the bus acknowledged before at has landed or been refused,
-// and every receipt of one landed before the clock this reads. Only a
-// node's own samples count: a push or a webhook count the server writes
-// outside the lane says nothing of it, and a sample stamped past the
-// database's clock is a node's clock running ahead.
-func drainedQuery(at time.Time) string {
-	return fmt.Sprintf(`select case when exists (
-			select 1 from metric m join metric_series s on s.id = m.series_id
-			where m.source_rule is null and s.collector_node_id is not null
-				and m.ts > to_timestamp(%s) and m.ts <= clock_timestamp())
+// liveWindow is how long before a drain's time a node's last heartbeat still
+// counts it live: three of the default 30 s heartbeats, so a node whose next
+// heartbeat is not due yet is waited for, while a node silent for longer is
+// not.
+const liveWindow = 3 * node.DefaultHeartbeat
+
+// drainedQuery reads whether the ingest lanes have drained past at, and the
+// database's clock. Each lane lands its batches one at a time in the order
+// the stream stored them, a redelivery included (MaxAckPending 1 in
+// internal/bus), and a node's batches all share one lane (ADR-1896), so once
+// a node's sample probed after at has landed, every batch of that node's
+// lane the bus acknowledged before at has landed or been refused. One node's
+// sample says nothing of another lane, so the lanes have drained once every
+// live node that collects has landed one: live is a heartbeat within live
+// before at, read off at rather than the clock so the set holds still while
+// the drain is polled, and a heartbeat reaches the server outside the lanes,
+// so a backlog does not hide a node, while a node silent for longer is not
+// waited for. A live node that collects but lands nothing holds the drain
+// until its bound, which fails the measure rather than reading it short.
+// Only a node's own samples count: a push or a webhook count the server
+// writes outside the lanes says nothing of them, and a sample stamped past
+// the database's clock is a node's clock running ahead. No live node that
+// collects reads as not drained.
+func drainedQuery(at time.Time, live time.Duration) string {
+	return fmt.Sprintf(`with live as (
+			select n.principal_id from node n
+			where n.last_heartbeat_at > to_timestamp(%[2]s)
+				and exists (select 1 from metric_series s where s.collector_node_id = n.principal_id))
+		select case when exists (select 1 from live) and not exists (
+			select 1 from live l where not exists (
+				select 1 from metric_series s
+				where s.collector_node_id = l.principal_id and exists (
+					select 1 from metric m
+					where m.series_id = s.id and m.source_rule is null
+						and m.ts > to_timestamp(%[1]s) and m.ts <= clock_timestamp())))
 		then 't' else 'f' end,
-		extract(epoch from clock_timestamp())::text`, epochLiteral(at))
+		extract(epoch from clock_timestamp())::text`, epochLiteral(at), epochLiteral(at.Add(-live)))
 }
 
 // parseDrained reads the drain query's one row as psql -At prints it.

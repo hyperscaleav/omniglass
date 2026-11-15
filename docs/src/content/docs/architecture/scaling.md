@@ -15,7 +15,8 @@ runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kube
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
 `set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
 JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
-Helm chart. Today one stream and one serial consumer do confinement and persistence inline; the
+Helm chart. Today one stream and its ingest lanes, one serial lane a partition of the nodes ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
+do confinement and persistence inline; the
 design fences below mark the parts of this page that are target design, each naming its tracker. See
 [implementation status](/architecture/status/).
 :::
@@ -159,7 +160,9 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   parallel without a second subscriber
   ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
   The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
-  second server exists; a second server is also a trigger for the materialized worklist (#1586).
+  second server exists. The worklist's target design leaves nothing to hand over: a node syncs it endpoint by
+  endpoint against a manifest any server can answer (#1586,
+  [ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)).
 
 :::
 
@@ -175,7 +178,7 @@ the metric table.
 
 Now a node publishes one batch per tick, a group per task
 ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and it lands in one transaction
-([storage](/architecture/storage/)) whose cost is a fixed `C1` (about twenty statements) plus `R`
+([storage](/architecture/storage/)) whose cost is a fixed `C1` (about a dozen statements since #1928, the seen stamp among them) plus `R`
 (series the batch carries twice), `J` (judged samples that fire a rule), `T` (settled targeted
 properties) and three per conduit group that carries identified samples. With none of those it is
 the same for one group and for fifty. Before the transaction, the identity bindings of every conduit

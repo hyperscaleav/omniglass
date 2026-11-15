@@ -85,6 +85,12 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err != nil {
 		return err
 	}
+	// The label lock before the insert, not at the cascade below: the insert's
+	// foreign key shares the system's row, and a label cascade holding the lock
+	// waits for that row FOR UPDATE (#1214).
+	if err := lockMemberWrite(ctx, tx, componentID); err != nil {
+		return err
+	}
 	if err := addMemberTx(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
@@ -175,7 +181,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := refusePlatformMembership(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
-	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
+	if err := lockMemberWrite(ctx, tx, componentID); err != nil {
 		return err
 	}
 	var staffing int
@@ -234,6 +240,21 @@ func lockMemberComponent(ctx context.Context, q txQuerier, componentID string) e
 	return lockAdvisory(ctx, q, "system_member/"+componentID)
 }
 
+// lockMemberWrite is lockMemberComponent for a write that restamps the
+// component's label afterwards: the label lock first, then the component's. The
+// order is the same on every such path (bind, unbind, re-default, a system's
+// release), because two of them taking the pair in opposite orders on one
+// component would deadlock on each other, and a bind that took the label lock
+// only at its cascade would hold the system row's key share while it waited
+// (#1214). CreateComponent's bind does not use it: its component is new, so no
+// other write can name it, and it restamps by its own row without the lock.
+func lockMemberWrite(ctx context.Context, q txQuerier, componentID string) error {
+	if err := lockLabelRecompute(ctx, q); err != nil {
+		return err
+	}
+	return lockMemberComponent(ctx, q, componentID)
+}
+
 // promoteSolePrimary makes a component's only remaining membership its default,
 // when losing one left it without a default and with nothing to choose between.
 // Takes the component's id directly (see addMemberTx).
@@ -278,6 +299,9 @@ func (p *PG) releaseSystemMembers(ctx context.Context, tx pgx.Tx, systemID strin
 	}
 	if len(ids) == 0 {
 		return nil
+	}
+	if err := lockLabelRecompute(ctx, tx); err != nil {
+		return err
 	}
 	for _, id := range ids {
 		if err := lockMemberComponent(ctx, tx, id); err != nil {
@@ -336,7 +360,7 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	if err != nil {
 		return err
 	}
-	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
+	if err := lockMemberWrite(ctx, tx, componentID); err != nil {
 		return err
 	}
 	// Clear first: the index permits at most one primary per component, so the old

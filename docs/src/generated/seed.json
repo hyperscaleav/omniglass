@@ -1145,9 +1145,10 @@
   {
    "name": "volume",
    "data_type": "float",
-   "unit": "%",
+   "unit": "ratio",
+   "precision": 3,
    "label": "Volume",
-   "description": "The output volume a component reports, as a percentage of its range. A settable quantity: the set-volume command opens an intended volume and settles when the component reports it."
+   "description": "The output volume a component reports, as a fraction of its range (0 to 1). A settable quantity: the set-volume command opens an intended volume and settles when the component reports it."
   },
   {
    "name": "participant-count",
@@ -1393,7 +1394,7 @@
   {
    "name": "set-volume",
    "label": "Set Volume",
-   "description": "Tell a component its output volume, as a percentage. A settleable command: it opens an intended volume and settles when the component reports it, or when its reply confirms the change."
+   "description": "Tell a component its output volume, as a fraction of its range (0 to 1). A settleable command: it opens an intended volume and settles when the component reports it, or when its reply confirms the change."
   },
   {
    "name": "set-mute",

@@ -5,6 +5,9 @@
 //       the tape the recorder plays, on stdout: <tape> held to the house rules
 //       (a refusal names the line and exits 1) and wrapped in the house
 //       settings
+//   node e2e/tape.mjs needs <tape>
+//       what <tape> declares it needs of the recorder (# demo-needs:), one per
+//       line, none for a tape that declares none (a refusal as for wrap)
 //   node e2e/tape.mjs finish <tape> <out> <seconds>
 //       the verdict on <tape>'s recording in directory <out>: the commands the
 //       prelude listed as failed (failed-commands.txt), the GIF and MP4, and
@@ -32,6 +35,9 @@ function main([cmd, ...args]) {
     case 'wrap':
       process.stdout.write(wrapTape(read(args[0])) + '\n');
       return 0;
+    case 'needs':
+      for (const need of read(args[0]).needs) console.log(need);
+      return 0;
     case 'finish': {
       const [file, out, secs] = args;
       const tape = read(file);
@@ -57,7 +63,7 @@ function main([cmd, ...args]) {
       console.log(PACE.output.baseMs);
       return 0;
     default:
-      console.error('usage: tape.mjs wrap <tape> | finish <tape> <out> <seconds> | pace-base');
+      console.error('usage: tape.mjs wrap <tape> | needs <tape> | finish <tape> <out> <seconds> | pace-base');
       return 2;
   }
 }
