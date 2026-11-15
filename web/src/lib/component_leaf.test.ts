@@ -72,6 +72,18 @@ describe("collectionState", () => {
     expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
   });
 
+  // #1454: no node at all is not an offline node. An endpoint nothing collects
+  // has no node to be down; "node offline" there blames hardware that does not
+  // exist, and the fix is enrolling one, not waiting for it.
+  it("no node is its own state, never node-offline", () => {
+    expect(collectionState(iface(null), undefined, now).kind).toBe("no-node");
+    expect(collectionState({ ...iface(null), last_seen: iso(600) } as ReachEndpoint, undefined, now).kind).toBe("no-node");
+  });
+  it("a node that exists and is not up is still node-offline", () => {
+    expect(collectionState(iface(null, "edge-1"), node(600), now).kind).toBe("node-offline");
+    expect(collectionState(iface(null, "edge-1"), node(null), now).kind).toBe("node-offline");
+  });
+
   // A held session (#1059): the probes keep delivering while it is refused or
   // gone, so freshness alone would read collecting beside a session that
   // polls nothing. A rejected session stops polls; a down one fails them.

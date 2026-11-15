@@ -4132,7 +4132,7 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 | `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull |
+| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change to the node's worklist nudges it to pull at once, and only a lost nudge waits for this pull |
 
 ### `omniglass node setTag`
 

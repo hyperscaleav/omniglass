@@ -619,6 +619,9 @@ func rederiveEndpoint(ctx context.Context, tx pgx.Tx, ep string, d *Driver, sp *
 		if _, err := tx.Exec(ctx, `update endpoint set updated_at = now() where id = $1`, ep); err != nil {
 			return fmt.Errorf("storage: bump endpoint %q after re-derive: %w", ep, err)
 		}
+		if err := notifyWorklistChanged(ctx, tx, ep); err != nil {
+			return err
+		}
 	}
 	return nil
 }

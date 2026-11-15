@@ -463,7 +463,8 @@ today is `worklist` (request-reply), `heartbeat`, `telemetry` (the JetStream fir
 `command` (the per-node command-queue pull, request-reply like the worklist, #815), and
 `commandstatus` (the node's execution reports), plus `simlist` (request-reply) and `simhit` for the
 [simulator](/architecture/simulation/) beside a node, which holds that node's credential;
-`worklist-changed` is reserved for the server's re-pull nudge; the worklist's target sync
+`worklist-changed`, the server's empty re-pull nudge, sent when a commit changes the node's worklist
+([the change nudge](/architecture/nodes/#the-change-nudge), #1945); the worklist's target sync
 ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) keeps its one subject, the manifest and each batch both
 requests on `og.v1.worklist.<node>` told apart by a header, so it adds no grant. The trusted push lane `og.v1.api.telemetry` deliberately
 sits in its **own segment** rather than as a reserved node name under `og.v1.telemetry.*` (above):
