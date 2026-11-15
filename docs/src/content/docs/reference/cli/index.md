@@ -3031,6 +3031,31 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario (corporate) sized by --systems |
 | `--systems` | int | `0` | how many systems a scale lab scenario resolves to |
 
+### `omniglass lab soak`
+
+Judge a 3,000-system soak from the platform's own alarm history
+
+#### `omniglass lab soak verdict`
+
+Print pass or fail for a soak: no platform alarm left open or open too long, every loss ratio at 0
+
+```
+omniglass lab soak verdict [flags]
+```
+
+Judges a soak from what the platform says about itself, and nothing else: it reads, through the API (--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history and the Platform health page, and prints pass or fail with every reason. The token needs read over nodes, systems and components, all of them, since a verdict from part of the page would pass what it could not see.
+
+Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and node, the newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds among the servers.
+
+With --record-dir it also writes the release record, one file named for the build, which the release commits: docs/src/content/soak-records from the repository's root. The exit status is 1 on a fail.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--record-dir` | string | (none) | also write the release record into this directory, one file named for the build (docs/src/content/soak-records is where releases keep them) |
+| `--since` | string | (none) | when the soak started, an RFC 3339 timestamp; required |
+| `--tolerance` | duration | `30m0s` | the longest a platform alarm may stay open and still pass |
+| `--until` | string | (none) | when the soak ended, an RFC 3339 timestamp; empty is now |
+
 ## `omniglass location`
 
 Commands for the location resource
