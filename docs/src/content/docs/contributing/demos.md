@@ -175,6 +175,15 @@ only one that passed carries the budget mark in its manifest (`demo.json`, `walk
 which is what the PR comment, and the docs copy of a walkthrough, refuse to go without. A demo that
 will not fit is two demos: split it.
 
+A walkthrough's animated preview also has to open on the painted title card, not the blank or
+half-painted lead-in the video starts with. The opening frame is chosen from the recording, not by a
+fixed beat after the paint: the recorder notes when the card was painted, and the preview opens on
+the first frame at or after that, within the card's hold, whose brightest luma
+(`signalstats` YMAX) reaches `PREVIEW_MIN_YMAX` (`previewStartFromLumas`). A loaded runner whose
+video lags the page only moves the start later. The gate fails only when no frame in that window
+qualifies, which means the card never painted, and it names the window scanned and the brightest
+luma it found.
+
 ## Record it locally
 
 With nothing but Docker:
@@ -284,7 +293,8 @@ of it into main, and a default clone never fetches it (a clone fetches branches 
 refs). The ref was chosen over an orphan branch for that last reason: GitHub's raw host and
 jsDelivr serve a commit on any ref of a public repository by its SHA, the workflow token can push
 the ref, and an orphan branch would sit in every clone and in the branch list. Each run commits a
-fresh tree on top of the ref's last commit, so an older comment's links keep resolving. The record
+fresh tree on top of the ref's last commit, so an older comment's links keep resolving. A run in
+which no demo recorded commits an empty tree, so its comment and clip still say what happened. The record
 jobs that run the PR's code (both recorders, every command a tape types, and the script that
 stages the evidence, the comment and the clip) hold only a read-only token; a separate publish job,
 which checks nothing out and runs nothing from the PR, builds the evidence commit in a fresh
