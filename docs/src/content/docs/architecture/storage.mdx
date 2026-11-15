@@ -354,7 +354,7 @@ Properties have no trends.
 - **The prune waits for the trend.** The metric prune and the day drop never pass the compacted
   mark, so no hour leaves the hot tier before its trend exists.
 
-Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time, a window of
+Trends are kept for `retention.trend_days` and pruned a chunk at a time, a window of
 their own: nothing forces it to exceed `retention.metric_days`, so a trend can go before its samples. A trend row
 costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
 window is the bucketed series read (#1269).
@@ -531,11 +531,12 @@ type, instance, provenance)?
 
 The server prunes the two sample tables to a window each
 ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)):
-`metric` to `retention.metric_days` (14 by default) and `property` to `retention.property_days`
-(90), install-wide settings an admin changes on the console's Settings page (a platform-domain
-namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
-[above](#the-narrow-metric-lane)). The compacted tier's blocks are not pruned yet: they go with their
-series, and the block prune is #1574. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+`metric` to `retention.metric_days` and `property` to `retention.property_days`,
+install-wide settings an admin changes on the console's Settings page (a platform-domain
+namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days`
+([above](#the-narrow-metric-lane)). The compacted tier's blocks are not pruned yet: they go with their
+series, and the block prune is #1574. Each window is whole days; the defaults and range of every window are in the
+[generated settings reference](/architecture/settings/#reference-every-setting). The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
@@ -582,9 +583,9 @@ On the property lane, finding the old rows reads every page the `ts` BRIN cannot
 reused pages widen over time: hence the hourly steady state.
 
 The same pass keeps the two log tables, a component's `log_line` and a node's `node_log`, by
-severity band (`logline.RetentionBands`): `retention.log_debug_days` (3 by default) for debug,
-`log_info_days` (14) for info and notice, `log_warning_days` (30) for warning, and
-`log_error_days` (90) for error, critical, alert and emergency. A line with no severity is kept with
+severity band (`logline.RetentionBands`): `retention.log_debug_days` for debug,
+`log_info_days` for info and notice, `log_warning_days` for warning, and
+`log_error_days` for error, critical, alert and emergency. A line with no severity is kept with
 info. A node's own logs may keep a band for a window of their own: `retention.node_log_debug_days`,
 `node_log_info_days`, `node_log_warning_days` and `node_log_error_days` are unset by default, and while
 one is unset `node_log` follows the shared band; once an admin sets one, the pass prunes that band of

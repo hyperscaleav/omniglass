@@ -37,7 +37,7 @@ not static diagrams.
 [docs/contributing/design-system.md](docs/src/content/docs/contributing/design-system.md). Authorization is
 two layers, both in the app: a `<resource>:<action>` permission checked on **every** route,
 and ABAC **scope** injected by the Storage Gateway on **every** applicable query. These are
-invariants, not conventions; see [identity and access](docs/src/content/docs/architecture/identity-access.md) and [storage](docs/src/content/docs/architecture/storage.md).
+invariants, not conventions; see [identity and access](docs/src/content/docs/architecture/identity-access.md) and [storage](docs/src/content/docs/architecture/storage.mdx).
 
 ## Generate first
 
@@ -163,7 +163,7 @@ Three buckets, never conflated:
   embedded YAML, authoritative via `ON CONFLICT DO UPDATE`; operator rows untouched. Narrow
   carve-out: a table with no operator write path and a packed positional ordering may
   reconcile-and-delete instead (`choice_alternate` only, today; ADR-0087); see
-  [storage](docs/src/content/docs/architecture/storage.md) before extending it to another table.
+  [storage](docs/src/content/docs/architecture/storage.mdx) before extending it to another table.
 - **One-time data backfills** (dbmate): transforming existing operator data, run once.
 
 ## Skills

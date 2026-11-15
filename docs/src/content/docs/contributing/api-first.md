@@ -28,6 +28,7 @@ failing the PR on any diff in the committed generated artifacts.
 | `cmd/erdgen` | the embedded migrations, applied to a throwaway Postgres and introspected | the D2 region of `docs/src/content/docs/architecture/data-model.md` and the schema facts `docs/src/generated/schema.json` | the published ERD and every docs storage table |
 | `cmd/seedgen` | the twelve embedded seed YAMLs, parsed in-process (no database) | `docs/src/generated/seed.json`, roles carrying effective permissions | the docs' shipped-set claims |
 | `cmd/configgen` | the declarative env registry in `internal/config` | `docs/src/generated/config.json` | the deployment guides' env tables |
+| `cmd/settingsgen` | the tagged `Settings` struct in `internal/settings` | `docs/src/generated/settings.json` | the settings reference on the [settings](/architecture/settings/#reference-every-setting) page and the admin guide's retention table |
 | `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the NATS `TelemetryBatch` telemetry message |
 
 One more stage is planned but has **no generator yet**: a JSONSchema for YAML editor validation.

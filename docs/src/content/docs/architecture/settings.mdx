@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SettingsTable from '../../../components/SettingsTable.astro';
+
 :::note[Partial]
 Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
 :::
@@ -225,6 +227,16 @@ edits.
 since one tag buys the console picker, the inline validation, and the server 422 together; and never
 seed a default outside the tag (no `defaults.yaml`, no boot-seed `ON CONFLICT`), a second source
 being exactly the drift the single-source struct prevents.
+
+## Reference: every setting
+
+Every key of every namespace, with its type, default, range, purpose, domain and client visibility,
+rendered from the `Settings` struct's tags by `make gen` (`cmd/settingsgen`, into
+`docs/src/generated/settings.json`). No page types a default by hand: a changed `default:` tag
+fails the drift test in `internal/settings` until the reference is regenerated. A key shown as
+*unset* declares no default, so it is absent from the effective document until a level sets it.
+
+<SettingsTable />
 
 ## Generated validation, one rule set from the struct
 

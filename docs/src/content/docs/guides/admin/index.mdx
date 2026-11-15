@@ -3,6 +3,8 @@ title: Admin guide
 description: "Administering an Omniglass platform: the people who can sign in, the access they carry, the audit trail, and the config and credentials that resolve down the fleet."
 ---
 
+import SettingsTable from '../../../../components/SettingsTable.astro';
+
 This is the how-to for **administering the platform**, the standing job of deciding who may
 sign in, what each account can see and do, and the config and credentials the fleet runs on.
 It is a different job from **operating** the fleet (running the inventory, reading the data),
@@ -72,20 +74,21 @@ Every task on these pages has two front doors, and they call the same API with t
 
 The server keeps each sample lane for a window of days and removes what is older, a little at a
 time, every hour (every minute while it is catching up). The windows are the **retention** settings
-on **Admin > Settings**, each from 1 to 36,500 days:
+on **Admin > Settings**, each a whole number of days with the range and default below:
 
-- `metric_days`, 14 by default: how long a metric sample (a reading such as a round-trip time) is
-  kept.
-- `property_days`, 90 by default: how long a property transition (a change such as a power state
-  going from on to off) is kept.
-- `trend_days`, 730 by default: how long the hourly trends of each metric (count, minimum, maximum,
-  sum, first and last value of every hour) are kept, counted from the hour, like `metric_days`. It is
-  a window of its own: set it below `metric_days` and an hour's trend goes before its samples do.
-- Log lines, from your components and from your nodes, by severity:
-  - `log_debug_days`, 3 by default;
-  - `log_info_days`, 14 by default, which also covers notice and a line with no severity;
-  - `log_warning_days`, 30 by default;
-  - `log_error_days`, 90 by default, which also covers critical, alert and emergency.
+<SettingsTable namespace="retention" />
+
+What each window means:
+
+- `metric_days`: how long a metric sample (a reading such as a round-trip time) is kept.
+- `property_days`: how long a property transition (a change such as a power state going from on to
+  off) is kept.
+- `trend_days`: how long the hourly trends of each metric (count, minimum, maximum, sum, first and
+  last value of every hour) are kept, counted from the hour, like `metric_days`. It is a window of
+  its own: set it below `metric_days` and an hour's trend goes before its samples do.
+- Log lines, from your components and from your nodes, by severity: `log_debug_days`;
+  `log_info_days`, which also covers notice and a line with no severity; `log_warning_days`;
+  and `log_error_days`, which also covers critical, alert and emergency.
 - Your nodes' own logs, if you want them kept for a different window than your components' lines:
   `node_log_debug_days`, `node_log_info_days`, `node_log_warning_days` and `node_log_error_days`.
   Each reads **not set** until you set it, and while it is not set a node's lines of that severity

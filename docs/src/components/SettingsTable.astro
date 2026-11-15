@@ -1,0 +1,90 @@
+---
+// The settings reference rendered from the generated schema facts
+// (docs/src/generated/settings.json, written by make gen via cmd/settingsgen).
+// Every key, type, default, range, doc string, domain and client visibility is
+// read off the Settings struct's tags, so no page restates a default by hand
+// and a changed tag cannot drift: the drift test in internal/settings fails
+// until the file is regenerated.
+//
+// Usage: <SettingsTable /> renders every namespace under its own heading;
+// <SettingsTable namespace="retention" /> renders one namespace's table alone,
+// for a guide that teaches that namespace.
+import facts from '../generated/settings.json';
+
+interface Props {
+  namespace?: string;
+}
+
+const { namespace } = Astro.props;
+const all = facts.settings;
+const names = [...new Set(all.map((s) => s.namespace))];
+const want = namespace ? [namespace] : names;
+if (namespace && !names.includes(namespace)) {
+  throw new Error(`SettingsTable: no namespace ${namespace} (have ${names.join(', ')})`);
+}
+
+const groups = want.map((name) => {
+  const rows = all.filter((s) => s.namespace === name);
+  return { name, rows, domain: rows[0].domain, client: rows[0].client_visible };
+});
+
+function showDefault(s) {
+  if (s.default === undefined) return null;
+  if (Array.isArray(s.default)) return s.default.length ? s.default.join(', ') : '(empty list)';
+  if (s.default === '') return '(empty)';
+  return String(s.default);
+}
+
+function showRange(s) {
+  const parts = [];
+  if (s.enum) parts.push(`one of ${s.enum.join(', ')}`);
+  if (s.pattern) parts.push(`matches ${s.pattern}`);
+  if (s.minimum !== undefined && s.maximum !== undefined) parts.push(`${s.minimum} to ${s.maximum}`);
+  else if (s.minimum !== undefined) parts.push(`at least ${s.minimum}`);
+  else if (s.maximum !== undefined) parts.push(`at most ${s.maximum}`);
+  return parts.join('; ');
+}
+
+const showType = (s) => (s.items ? `${s.type} of ${s.items}` : s.type);
+---
+
+{
+  groups.map((g) => (
+    <>
+      {!namespace && (
+        <>
+          <h3 id={`settings-${g.name}`}>
+            <code>{g.name}</code>
+          </h3>
+          <p>
+            {g.domain} domain, {g.client ? 'client-visible' : 'admin-only read'}.
+          </p>
+        </>
+      )}
+      <table class="settings-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Range</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          {g.rows.map((s) => (
+            <tr>
+              <td>
+                <code>{`${s.namespace}.${s.key}`}</code>
+              </td>
+              <td>{showType(s)}</td>
+              <td>{showDefault(s) === null ? <em>unset</em> : <code>{showDefault(s)}</code>}</td>
+              <td>{showRange(s)}</td>
+              <td>{s.doc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  ))
+}
