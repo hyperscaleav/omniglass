@@ -3525,8 +3525,8 @@
    "commands": 2
   },
   {
-   "id": "newtron-nvp",
-   "label": "Newtron NVP",
+   "id": "newtron-panel-nvp",
+   "label": "Newtron Panel NVP",
    "version": "1.0.0",
    "transport": "tcp",
    "polls": 2,
@@ -3587,8 +3587,8 @@
    "commands": 1
   },
   {
-   "id": "http-json",
-   "label": "HTTP JSON",
+   "id": "tessellate-census-http",
+   "label": "Tessellate Census HTTP",
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
@@ -3834,7 +3834,7 @@
    "id": "newtron-panel-7",
    "label": "Newtron Panel 7",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-panel-nvp",
    "component_type": "touch-panel",
    "kind": "device"
   },
@@ -3889,7 +3889,7 @@
    "id": "tessellate-census-c1",
    "label": "Tessellate Census C1",
    "vendor_id": "tessellate",
-   "driver_id": "http-json",
+   "driver_id": "tessellate-census-http",
    "component_type": "occupancy-sensor",
    "kind": "device"
   },

@@ -107,7 +107,7 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-p", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
-	snmpProduct, nvpProduct := simulatedProductOn(t, "snmp-generic"), simulatedProductOn(t, "newtron-nvp")
+	snmpProduct, nvpProduct := simulatedProductOn(t, "snmp-generic"), simulatedProductOn(t, "newtron-panel-nvp")
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	displayIP, panelIP := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	as("endpoint", "create", "--component", "sim-display", "--node", "edge-p", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, displayIP, 161+protocolsPortShift))
-	as("endpoint", "create", "--component", "sim-panel", "--node", "edge-p", "--driver", "newtron-nvp",
+	as("endpoint", "create", "--component", "sim-panel", "--node", "edge-p", "--driver", "newtron-panel-nvp",
 		"--inputs", fmt.Sprintf(`{"host":%q}`, panelIP))
 
 	// The simulator and the collector beside each other, on the node's identity.

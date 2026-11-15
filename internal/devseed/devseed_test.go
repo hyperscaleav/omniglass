@@ -1754,7 +1754,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	if len(bare) > 0 {
 		t.Errorf("Boreal Edge displays with no boreal-edge-snmp attach in the simulated fleet: %v", bare)
 	}
-	for driver, n := range map[string]int{"snmp-generic": 0, "boreal-edge-snmp": 0, "newtron-nvp": 0} {
+	for driver, n := range map[string]int{"snmp-generic": 0, "boreal-edge-snmp": 0, "newtron-panel-nvp": 0} {
 		if err := conn.QueryRow(ctx, `select count(*) from endpoint e join driver d on d.id = e.driver_id where d.name = $1 and e.params->>'target' like '127.60.%'`, driver).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
@@ -1971,7 +1971,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	if err := conn.QueryRow(ctx, `
 		select e.inputs->>'host'
 		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
-		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
 	// The panel's own simulated address, its real telnet port, on the dev
@@ -2223,7 +2223,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 	if err := conn.QueryRow(ctx, `
 		select e.inputs->>'host'
 		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
-		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
 	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.node != "edge-hq" {
@@ -2278,7 +2278,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 	if err := conn.QueryRow(ctx, `
 		select e.inputs->>'host'
 		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
-		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
 	if e := got[0]; e.host != nvpHost || e.port != "51327" || e.listen != "" || e.target != nvpHost+":51327" || e.node != "edge-hq" {
