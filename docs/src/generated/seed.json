@@ -4207,5 +4207,205 @@
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
   }
+ ],
+ "platform_figures": [
+  {
+   "key": "checkin-age",
+   "group": "Checkin",
+   "rules": [
+    "node-silent"
+   ]
+  },
+  {
+   "key": "schedule-lateness",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "tick-overrun-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "schedule-skip-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-age",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-stuck-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-expired-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "worklist-pull-loss-ratio",
+   "group": "Worklist",
+   "rules": [
+    "worklist-stale"
+   ]
+  },
+  {
+   "key": "http-request-duration-max",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "http-request-count",
+   "group": "Requests",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "db-slow-query-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-request-failure-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "db-pool-acquired",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-pool-wait-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "ingest-lag",
+   "group": "Ingest",
+   "exemption": "read beside ingest-lag-max, which the ingest-lag-high rule watches"
+  },
+  {
+   "key": "ingest-lag-max",
+   "group": "Ingest",
+   "rules": [
+    "ingest-lag-high"
+   ]
+  },
+  {
+   "key": "ingest-batch-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "ingest-sample-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "push-lane-refusal-count",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-p99",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-max",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "bus-consumer-ack-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-ack-floor",
+   "group": "Queues",
+   "exemption": "a stream position, read against the stream's head by the lab's measure, not a health figure"
+  },
+  {
+   "key": "bus-telemetry-ack-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "calc-pending-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-queued-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-due-age",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "ingest-lane-busy",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "sweep-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "retention-behind",
+   "group": "Retention",
+   "rules": [
+    "retention-behind"
+   ]
+  },
+  {
+   "key": "retention-deleted-count",
+   "group": "Retention",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "retention-pass-failure-count",
+   "group": "Retention",
+   "exemption": "read beside retention-behind, which flags a failing pass too"
+  },
+  {
+   "key": "metric-oldest-day-age",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "database-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "table-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "delivery-loss-ratio",
+   "group": "Pipeline",
+   "exemption": "no rule yet, #1977"
+  }
  ]
 }
