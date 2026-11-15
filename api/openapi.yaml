@@ -4908,6 +4908,23 @@ components:
         - ts
         - verdict
       type: object
+    HeartbeatSettings:
+      additionalProperties: false
+      properties:
+        interval_seconds:
+          default: 60
+          description: Seconds between heartbeats
+          format: int64
+          maximum: 86400
+          minimum: 10
+          type: integer
+        target:
+          description: The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list
+          type: string
+      required:
+        - target
+        - interval_seconds
+      type: object
     HumanBody:
       additionalProperties: false
       properties:
@@ -10680,6 +10697,8 @@ components:
           $ref: "#/components/schemas/CollectionSettings"
         database:
           $ref: "#/components/schemas/DatabaseSettings"
+        heartbeat:
+          $ref: "#/components/schemas/HeartbeatSettings"
         keybindings:
           $ref: "#/components/schemas/Keybindings"
         label:
@@ -10698,6 +10717,7 @@ components:
         - collection
         - notification
         - database
+        - heartbeat
       type: object
     SettingsMeOutputBody:
       additionalProperties: false

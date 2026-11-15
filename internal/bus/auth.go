@@ -30,6 +30,12 @@ type Store interface {
 	// written on its platform component.
 	NodeCheckins(ctx context.Context) ([]storage.NodeCheckin, error)
 	RecordPlatformMetrics(ctx context.Context, rows []storage.PlatformMetric) error
+	// StampRuleSweep, ReleaseRuleSweep and ServerSweepAges are the rule sweep
+	// age's shared-database half (#1986): this server's completed sweep, its
+	// clean stop, and every server's stamp as a peer reads it.
+	StampRuleSweep(ctx context.Context, componentID string) error
+	ReleaseRuleSweep(ctx context.Context, componentID string) error
+	ServerSweepAges(ctx context.Context) ([]storage.ServerSweepAge, error)
 	// CommandQueueHealth is the command queue health timer's read (#1626):
 	// every node's queue, and the window's counts since the previous read.
 	CommandQueueHealth(ctx context.Context, since time.Time) (storage.CommandQueueRead, error)

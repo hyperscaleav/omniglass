@@ -953,6 +953,20 @@ type Gateway interface {
 	// NodeCheckins reads every claimed node's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// StampRuleSweep records a completed event rule sweep on the server's
+	// platform component, ReleaseRuleSweep clears it on a clean stop, and
+	// ServerSweepAges reads every held stamp as an age, a peer's view of a
+	// stalled sweep (#1986).
+	StampRuleSweep(ctx context.Context, componentID string) error
+	ReleaseRuleSweep(ctx context.Context, componentID string) error
+	ServerSweepAges(ctx context.Context) ([]ServerSweepAge, error)
+	// The heartbeat's reads and audit (#1986): its settings, the webhook
+	// target it names, the open alarms on the platform system, and one
+	// outcome recorded.
+	HeartbeatSettings(ctx context.Context) (settings.HeartbeatSettings, error)
+	HeartbeatTarget(ctx context.Context, name string) (*TargetSend, error)
+	PlatformAlarmCount(ctx context.Context) (int, error)
+	AuditHeartbeat(ctx context.Context, targetID string, ok bool, status int, reason string) error
 	// CommandQueueHealth reads every node's command queue (#1626): the
 	// pending, oldest and stuck now, and the redelivered and expired since the
 	// previous read's Now (none for a zero since).

@@ -619,6 +619,13 @@
    "description": "Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent."
   },
   {
+   "name": "rule-sweep-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Rule Sweep Age",
+   "description": "Seconds since the server's event rule sweep last completed, on the server's platform component; written every report window by the server itself and, from the shared database, by each peer server, so it keeps growing while the sweep is stalled."
+  },
+  {
    "name": "worklist-task-count",
    "data_type": "int",
    "label": "Worklist Tasks",
@@ -4167,6 +4174,17 @@
    "sample_key": "checkin-age",
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
+   "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "rule-sweep-stalled",
+   "label": "Rule sweep stalled",
+   "description": "The server's event rule sweep has not completed for more than 30 seconds, so rules that depend on time are not firing or clearing.",
+   "sample_key": "rule-sweep-age",
+   "fire": "value \u003e 30",
+   "clear": "value \u003c= 30",
    "severity": "high",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"

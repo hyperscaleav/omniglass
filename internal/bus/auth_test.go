@@ -55,6 +55,11 @@ func (f fakeStore) NodeCheckins(context.Context) ([]storage.NodeCheckin, error) 
 func (f fakeStore) RecordPlatformMetrics(context.Context, []storage.PlatformMetric) error {
 	return nil
 }
+func (f fakeStore) StampRuleSweep(context.Context, string) error   { return nil }
+func (f fakeStore) ReleaseRuleSweep(context.Context, string) error { return nil }
+func (f fakeStore) ServerSweepAges(context.Context) ([]storage.ServerSweepAge, error) {
+	return nil, nil
+}
 func (f fakeStore) CommandQueueHealth(context.Context, time.Time) (storage.CommandQueueRead, error) {
 	return storage.CommandQueueRead{}, nil
 }

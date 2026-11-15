@@ -78,6 +78,8 @@ type Server struct {
 	stopCalc          context.CancelFunc // ends the calc tick
 	stopPrune         context.CancelFunc // ends the receipt retention pass
 	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
+	stopPeerSweep     context.CancelFunc // ends the peer sweep age timer (#1986)
+	sweepClock        *sweepClock        // when the event rule sweep last completed (#1986)
 	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
 	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
 	orphans           *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
@@ -118,7 +120,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
 		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
-		platformComponentID: cfg.PlatformComponentID, push: delivery.NewPublisher(collection.NewBatchID(), time.Now, pushTurnWait)}
+		platformComponentID: cfg.PlatformComponentID, sweepClock: newSweepClock(time.Now()), push: delivery.NewPublisher(collection.NewBatchID(), time.Now, pushTurnWait)}
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
@@ -244,6 +246,7 @@ func (s *Server) subscribe() error {
 	}
 	s.startSettlementSweep()
 	s.startCheckinAge()
+	s.startPeerSweepAges()
 	s.startCommandHealth()
 	s.startRuleReconcile()
 	s.startCalcTick()
@@ -333,6 +336,9 @@ func (s *Server) Shutdown() {
 	if s.stopCheckinAge != nil {
 		s.stopCheckinAge()
 	}
+	if s.stopPeerSweep != nil {
+		s.stopPeerSweep()
+	}
 	if s.stopCommandHealth != nil {
 		s.stopCommandHealth()
 	}
@@ -348,6 +354,9 @@ func (s *Server) Shutdown() {
 	if s.stopSweep != nil {
 		s.sweepStop.Do(func() { close(s.stopSweep) })
 		s.sweepDone.Wait()
+		// The sweep has stopped for good: release its stamp, so a peer does
+		// not alarm on a server that was told to stop (#1986).
+		s.releaseRuleSweep()
 	}
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
@@ -642,6 +651,8 @@ func (s *Server) startSettlementSweep() {
 					return s.store.SweepEventRules(context.Background(), time.Now())
 				}); err != nil {
 					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
+				} else {
+					s.stampRuleSweep(context.Background(), time.Now())
 				}
 			}
 		}

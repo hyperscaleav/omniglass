@@ -96,15 +96,17 @@ func retentionLaneNames() []string {
 // TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBPoolAcquired:            count(0.3, 1),
-		writerclass.DBPoolMax:                 count(12, 0),
-		writerclass.DBPoolWaitCount:           zero(),
-		writerclass.BusConsumerPending:        zero(),
-		writerclass.BusConsumerAckPending:     zero(),
-		writerclass.CalcPendingDepth:          zero(),
-		writerclass.OutboxQueuedDepth:         zero(),
-		writerclass.OutboxDueAge:              zero(),
-		writerclass.IngestLaneBusy:            zero(),
+		writerclass.DBPoolAcquired:        count(0.3, 1),
+		writerclass.DBPoolMax:             count(12, 0),
+		writerclass.DBPoolWaitCount:       zero(),
+		writerclass.BusConsumerPending:    zero(),
+		writerclass.BusConsumerAckPending: zero(),
+		writerclass.CalcPendingDepth:      zero(),
+		writerclass.OutboxQueuedDepth:     zero(),
+		writerclass.OutboxDueAge:          zero(),
+		writerclass.IngestLaneBusy:        zero(),
+		// The sweep ticks every 5 s, so a healthy lab's age runs 0 to 5.
+		writerclass.RuleSweepAge:              one(2.5, 0.4),
 		writerclass.RetentionPassFailureCount: zero(),
 		writerclass.RetentionWindowDays:       {{instance: "metric", base: 14, whole: true}},
 	}

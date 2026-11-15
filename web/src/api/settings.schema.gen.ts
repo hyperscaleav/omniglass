@@ -18,6 +18,19 @@ export const settingsSchema = {
       "format": "int64"
     }
   },
+  "heartbeat": {
+    "interval_seconds": {
+      "description": "Seconds between heartbeats",
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 86400,
+      "format": "int64"
+    },
+    "target": {
+      "description": "The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list",
+      "type": "string"
+    }
+  },
   "keybindings": {
     "close_blade": {
       "description": "Close the top blade",

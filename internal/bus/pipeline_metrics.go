@@ -327,6 +327,7 @@ func (s *Server) Sampler() platformmetric.Sampler {
 			m.max(writerclass.BusWorklistReplyBytesMax, "", float64(b))
 		}
 		s.sampleConsumer(ctx, m)
+		m.gauge(writerclass.RuleSweepAge, "", s.sweepClock.Age(now).Seconds())
 		for _, rd := range s.flow.Take().Readings() {
 			m.gauge(rd.Key, rd.Instance, rd.Value)
 		}

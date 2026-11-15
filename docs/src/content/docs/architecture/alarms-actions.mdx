@@ -29,7 +29,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `node-silent` on a node's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
+sustains held by a durable streak and a sweep, seven official rules (`reachability-lost`; `node-silent` and `worklist-stale` on a node's own component; `ingest-lag-high`, `rule-sweep-stalled`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
 live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
@@ -399,7 +399,10 @@ age is one; the node's next heartbeat brings the age back under and clears it
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a `warning` alarm on the server's component when a retention lane or
 compaction stays behind its window for 5 minutes, and clears on the first pass that catches up
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+([storage](/architecture/storage/#what-a-retention-pass-reports)). `rule-sweep-stalled` opens a
+`high` alarm on a server's component when its `rule-sweep-age`, the seconds since its event rule
+sweep last completed, reads past 30 s, with no sustain since the age is one, and clears when the
+sweep resumes ([collection](/architecture/collection/#what-an-alarm-inside-the-platform-cannot-see)).
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
@@ -831,6 +834,32 @@ switch reboot downs 20 endpoints; the system-scoped rule owns the room-level cau
 system-owned alarm, dependency suppression mutes the 20 child alarms, and grouping coalesces the
 rest into one dispatch: the cause, not 20 symptoms.
 :::
+
+## The heartbeat: what an alarm inside the platform cannot see
+
+An alarm is raised by the thing it reports on: the event rule sweep decides it, the server writes it,
+the notifier sends it. So the failures an alarm can never report are the ones that stop all three at
+once. A server that has crashed, lost its network or lost its database raises nothing, and silence
+reads as health. The `rule-sweep-stalled` alarm closes the narrow part of that gap: the sweep is the
+clock that fires and clears every rule that needs time, and when it stops while the server lives on,
+`rule-sweep-age` grows past 30 s and the alarm opens (in the same server's report window, and from a
+second server's read of the shared database). It catches **a stalled sweep, not a dead server**, and
+it can alarm on a peer only when a live peer is there to raise it.
+
+The remedy for the rest is a **dead-man's switch**: a signal whose *absence* is the alarm, watched from
+outside. The server's **heartbeat** is that signal. Name a webhook
+[notification target](#notification-targets-where-a-message-goes) in the `heartbeat.target` platform
+setting and the server sends it a signed request every `heartbeat.interval_seconds` (60 by default).
+The request is a notification like any other: built and signed by the same pipeline (the target's bound
+`hmac-key` secret signs it), sent through the egress contract (`internal/egress`, above) so the allow list
+decides where it may go, and audited. The body carries the server's name, its build and the count of
+open alarms on the platform's own components, as the `heartbeat` transition's facts
+(`server`, `build`, `open_platform_alarms`). It is **off by default**: with no target set the server
+sends nothing.
+
+Omniglass does not host the receiver. Point it at a dead-man's-switch service (anything that pages when
+a ping fails to arrive within a grace period) and size that period to a few intervals. Each server
+sends its own; a count that stays above zero tells the receiver the install is up and not quiet.
 
 ::::design[Action durability and egress (ADR-0050)]
 

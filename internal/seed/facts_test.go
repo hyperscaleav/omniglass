@@ -216,7 +216,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		names = append(names, r.Name)
 		rules[r.Name] = r
 	}
-	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "worklist-stale", "disk-nearly-full", "retention-behind"}
+	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "rule-sweep-stalled", "worklist-stale", "disk-nearly-full", "retention-behind"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("event_rules = %v, want the official rules %v in file order", names, want)
 	}
@@ -233,6 +233,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// a disk hovering at the line does not flap (#1707).
 		{Name: "disk-nearly-full", SampleKey: "data-dir-disk-used-ratio", Fire: "value > 0.9", Clear: "value <= 0.85", FireSustain: "2m", Severity: "warning"},
 		// The retention pass's lane behind past its catch-up passes (#1629).
+		{Name: "rule-sweep-stalled", SampleKey: "rule-sweep-age", Fire: "value > 30", Clear: "value <= 30", Severity: "high"},
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
 	} {
 		w.FireEventType, w.ClearEventType = "condition-started", "condition-ended"

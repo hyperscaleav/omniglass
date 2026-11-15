@@ -83,8 +83,9 @@ These are all the server's own clock against its own database, so unlike ingest 
 in them and no skew moves them. The definitions are
 [ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
 
-The `event-rule` sweep is also how the server's self-monitoring alarms hold their sustain. Four
-official rules watch Omniglass itself: `ingest-lag-high`, `retention-behind`, `disk-nearly-full`
+The `event-rule` sweep is also how the server's self-monitoring alarms hold their sustain. Five
+official rules watch Omniglass itself: `ingest-lag-high`, `retention-behind`, `rule-sweep-stalled`
+(the sweep's own age, `rule-sweep-age`, past 30 s: a stalled sweep, not a dead server), `disk-nearly-full`
 (the server's data directory disk, `data-dir-disk-used-ratio`, over 0.9 for 2 minutes, cleared at
 0.85 or under) on the server's component, and `node-silent` (a claimed node's `checkin-age` past
 90 s, three missed heartbeats, with no sustain) on the node's

@@ -111,6 +111,7 @@ const (
 // Omniglass process reports them of itself.
 const (
 	CheckinAge            = "checkin-age"
+	RuleSweepAge          = "rule-sweep-age"
 	WorklistTaskCount     = "worklist-task-count"
 	WorklistPullLossRatio = "worklist-pull-loss-ratio"
 	TickDuration          = "tick-duration"
@@ -304,6 +305,7 @@ var platform = map[string]string{
 	WebhookPostCount:      "the webhook receiver",
 	WebhookRefusalCount:   "the webhook receiver",
 	CheckinAge:            "the server's check-in timer",
+	RuleSweepAge:          "the server's sweep age timer (a server's own, and each peer's)",
 	WorklistTaskCount:     nodeSelfWriter,
 	WorklistPullLossRatio: nodeSelfWriter,
 	TickDuration:          nodeSelfWriter,

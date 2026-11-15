@@ -3587,6 +3587,17 @@ export type HealthOutputBody = {
   status: string;
 };
 
+export type HeartbeatSettings = {
+  /**
+     * Seconds between heartbeats
+     * @minimum 10
+     * @maximum 86400
+     */
+  interval_seconds: number;
+  /** The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list */
+  target: string;
+};
+
 export type HumanBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7128,6 +7139,7 @@ export type UISettings = {
 export type Settings = {
   collection: CollectionSettings;
   database: DatabaseSettings;
+  heartbeat: HeartbeatSettings;
   keybindings: Keybindings;
   label: LabelSettings;
   notification: NotificationSettings;

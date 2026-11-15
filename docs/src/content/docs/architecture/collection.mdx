@@ -603,6 +603,14 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   the calc, notification and settlement ticks' depth, pace and failures
   ([workers](/architecture/workers/#measuring-the-ticks)). The seeded `ingest-lag-high` rule raises a
   warning alarm on this component when the server falls 30 s behind its samples for 2 minutes.
+- **`rule-sweep-age`**: the seconds since the server's event rule sweep last completed (#1986). The
+  sweep goroutine stamps a clock each time it finishes and the report window reads that clock, so the
+  figure does not depend on the goroutine it measures: a stalled sweep stops stamping and the age grows.
+  Each server also stamps the shared database on the database's clock, and every server writes its
+  **peers'** ages onto their components every 10 s, so a live server raises the alarm for a stalled
+  one. The seeded `rule-sweep-stalled` rule raises a `high` alarm on the stalled server's component
+  when the age passes 30 s, six missed sweeps, and clears when the sweep resumes. A server that stops
+  cleanly releases its stamp so a rolling deploy does not alarm; one that dies keeps it.
 - **`data-dir-disk-used-ratio`**: how full the filesystem holding the server's data directory
   (`OMNIGLASS_DATA_DIR`, where the bus keeps its stream) is, its used bytes over its total, 0 empty
   and 1 full, read with a `statfs` at each window's close. The blocks a filesystem reserves for root
@@ -621,6 +629,20 @@ succeeds (it still re-reads `database.slow_query_ms` each window): self-monitori
 server down. The decisions are
 [ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
 and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
+
+#### What an alarm inside the platform cannot see
+
+An alarm raised by the thing it reports on cannot report that thing's death. `rule-sweep-stalled`
+catches a **stalled sweep, not a dead server**: a server that has crashed or lost its database writes
+no age, a lone server has no peer to read its stamp, and a peer that died with a stale stamp is
+alarmed on only while another server lives. The server's optional outbound **heartbeat**
+(`heartbeat.target` and `heartbeat.interval_seconds`, platform settings) covers the rest: a signed
+request to a webhook notification target every interval, through the same egress allow list and audit
+as a notification, carrying the server's name, build and count of open platform alarms. A receiver
+outside the install alarms on its absence, the one signal an in-platform alarm cannot give
+([alarms and actions](/architecture/alarms-actions/#the-heartbeat-what-an-alarm-inside-the-platform-cannot-see),
+[ADR-1986](/architecture/decisions/#adr-1986-the-heartbeat-is-a-signed-request-through-a-notification-target-and-the-sweep-age-is-read-from-a-shared-stamp)).
+It is off by default, and hosting the receiver is out of scope.
 
 **One component, not a bus, a database and a worker pool.** #1094 designed the bus, the database
 and the worker pool as platform components of their own. Their figures land on the server's

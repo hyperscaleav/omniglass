@@ -26,6 +26,9 @@ type Settings struct {
 	// Database is how the server watches its own queries (#1627): platform
 	// domain and not client-visible, an admin's tuning of the server's log.
 	Database DatabaseSettings `json:"database" settings:"platform"`
+	// Heartbeat is the outbound dead-man's switch (#1986): platform domain and
+	// not client-visible, since it names where the server announces itself.
+	Heartbeat HeartbeatSettings `json:"heartbeat" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -153,6 +156,20 @@ type CollectionSettings struct {
 // re-reads it each report window, so a change takes without a restart.
 type DatabaseSettings struct {
 	SlowQueryMS int `json:"slow_query_ms" minimum:"0" maximum:"600000" default:"500" doc:"Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off"`
+}
+
+// HeartbeatSettings is the heartbeat namespace (#1986): the optional signed
+// request the server sends on an interval, so a monitor outside this install
+// can tell when it goes quiet, the one failure an alarm raised inside it can
+// never report.
+//
+// Target names a notification target (webhook kind), so the request goes
+// through the egress contract, its allow list, its bound secret and its audit
+// like any notification. Empty turns the heartbeat off. The server re-reads
+// both each beat, so a change takes without a restart.
+type HeartbeatSettings struct {
+	Target          string `json:"target" default:"" doc:"The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list"`
+	IntervalSeconds int    `json:"interval_seconds" minimum:"10" maximum:"86400" default:"60" doc:"Seconds between heartbeats"`
 }
 
 // LogDays is the window for one log retention band; 0 for an unknown band.
