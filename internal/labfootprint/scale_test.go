@@ -699,8 +699,8 @@ func TestScaleDeliveryUnsettled(t *testing.T) {
 // sim settled in requests of protocol p: withheld of them it chose not to
 // answer, and the node got returned replies back (the rest timed out).
 func simBracket(node, p string, in, withheld, returned int64) closedloop.NodeBracket {
-	start := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{{Protocol: p}}}
-	end := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{
+	start := collection.SimObservation{Node: node, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: p}}}
+	end := collection.SimObservation{Node: node, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{
 		{Protocol: p, Received: in, Answered: in - withheld, Withheld: withheld}}}
 	return closedloop.NodeBracket{Node: node, Window: 2 * time.Minute,
 		Start: collection.EndpointObservation{SimBefore: start, SimAfter: start,
@@ -820,7 +820,7 @@ func TestScaleDeliverySimNamesRestartedNode(t *testing.T) {
 	west.End.SimAfter.Started = west.End.SimBefore.Started
 	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "snmp", 30, 0, 30), west}
 	table := SummarizeScale(run).Table()
-	for _, want := range []string{"snmp        node  sim     30       30       0        -      -\n", "sim         not counted: edge-west restarted in the window\n"} {
+	for _, want := range []string{"snmp        node  sim     30       30       0        -      -\n", "sim         not counted: edge-west restarted or changed fleet in the window\n"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}

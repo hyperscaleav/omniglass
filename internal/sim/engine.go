@@ -20,8 +20,9 @@ type Engine struct {
 	templates  fs.FS
 	portMap    func(int) int // nil serves each profile port as declared
 	syncMu     sync.Mutex    // serializes Sync
-	mu         sync.Mutex    // guards devices
+	mu         sync.Mutex    // guards devices and fleet
 	devices    []*Device
+	fleet      fleetState
 	seamMu     sync.RWMutex // guards the observer seams below
 	logger     RequestLogger
 	reqPub     RequestPublisher
@@ -364,6 +365,12 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 		}
 		arriving = append(arriving, snap)
 	}
+	changing := len(arriving) > 0 || len(kept) != len(current)
+	if changing {
+		e.mu.Lock()
+		e.fleet.changing = true
+		e.mu.Unlock()
+	}
 	for id, d := range current {
 		if kept[id] == nil {
 			e.stopDevice(d)
@@ -401,8 +408,23 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	}
 	e.mu.Lock()
 	e.devices = next
+	if e.fleet.generation == 0 || len(started) > 0 || len(kept) != len(current) {
+		e.fleet.generation++
+	}
+	e.fleet.changing = false
 	e.mu.Unlock()
 	return errors.Join(errs...)
+}
+
+// fleetState is which fleet the engine serves (#1895). The generation is zero
+// until the first Sync and advances each time a Sync changes the devices
+// served; changing holds while a Sync is stopping or starting devices. Two
+// observations that read the same generation, neither of them changing, saw
+// one fleet throughout, so a request sent to a device between them reached a
+// bound face.
+type fleetState struct {
+	generation int64
+	changing   bool
 }
 
 // startInterface dispatches one profile interface to the matching

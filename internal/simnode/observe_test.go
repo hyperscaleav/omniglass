@@ -22,7 +22,7 @@ func counters(received, answered int64) sim.ObservationCounters {
 // served devices that saw nothing on it, and names a few of them.
 func TestObservationWireSumsProtocolsAndNamesUnhitDevices(t *testing.T) {
 	at := time.Unix(1_000_000, 0)
-	snap := sim.ObservationSnapshot{At: at, Started: at.Add(-time.Hour),
+	snap := sim.ObservationSnapshot{At: at, Started: at.Add(-time.Hour), FleetGeneration: 4, FleetChanging: true,
 		Protocols: []sim.ProtocolObservation{{Protocol: "http", Latency: []uint64{3, 1},
 			InFlightHigh: []obsstat.EpochHigh{{Epoch: 1, Max: 2}}}, {Protocol: "snmp"}},
 		Devices: []sim.DeviceObservation{
@@ -33,7 +33,7 @@ func TestObservationWireSumsProtocolsAndNamesUnhitDevices(t *testing.T) {
 		Faces: []sim.FaceOverlap{{DeviceID: "a", Hostname: "dsp", Face: "api", Protocol: "http", Received: 3, Overlapped: 1}},
 	}
 	w := observationWire("edge", snap, 1)
-	if w.Node != "edge" || w.Devices != 3 || w.Impaired != 1 || !w.At.Equal(at) {
+	if w.Node != "edge" || w.Devices != 3 || w.Impaired != 1 || !w.At.Equal(at) || w.FleetGeneration != 4 || !w.FleetChanging {
 		t.Fatalf("header = %+v", w)
 	}
 	h := w.Protocol("http")

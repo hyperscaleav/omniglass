@@ -30,8 +30,15 @@ type SimObservation struct {
 	Node    string    `json:"node"`
 	At      time.Time `json:"at"`
 	Started time.Time `json:"started"`
-	// Devices is how many devices the simulator serves; Impaired how many of
-	// them carry an applied impairment.
+	// FleetGeneration counts the changes to the fleet the simulator serves,
+	// zero before its first sync; FleetChanging holds while a sync is
+	// starting or stopping devices. Reads with one generation, none of them
+	// changing, saw one fleet throughout (#1895).
+	FleetGeneration int64 `json:"fleet_generation"`
+	FleetChanging   bool  `json:"fleet_changing,omitempty"`
+	// Devices is how many devices the simulator has observed since it
+	// started, served now or not; Impaired how many it serves carry an
+	// applied impairment.
 	Devices   int                      `json:"devices"`
 	Impaired  int                      `json:"impaired"`
 	Protocols []SimProtocolObservation `json:"protocols"`

@@ -370,6 +370,14 @@ connected simulator once a minute (faster on a lab) and reads the last ten brack
 window, shown on [Platform health](/guides/operator/platform-health/#with-a-simulator). The counters
 never reset, so a window is a difference of two reads, never a total since start.
 
+A difference only compares over one fleet, so each read also carries the simulator's
+`fleet_generation`, zero before its first sync and advanced by each sync that starts or stops a
+device, and `fleet_changing` while such a sync is binding or releasing addresses. A request the
+node sends to a device the simulator has not bound yet, or has just stopped, is sent and never
+received, which is no loss of the path, so a window whose reads include a zero generation, a
+changing fleet, or two generations reads `restarted` until it slides past ([ADR-1895](/architecture/decisions/#adr-1895-a-window-across-a-change-to-the-sims-fleet-reads-restarted)). A lab's
+first windows span the simulator's first sync, and read that way rather than as loss.
+
 ### In the node's own process
 
 `omniglass node run --simulate` runs the same simulator inside the node's process: the node's run
