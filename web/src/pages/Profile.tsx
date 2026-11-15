@@ -350,7 +350,7 @@ export default function Profile() {
             </div>
             <Note note={avatarMsg()} />
             <KVStacked label="Username" hint="Your sign-in name. An administrator can change it." value={human()?.username ?? ""} />
-            <FieldRow bind="name" eyebrow>
+            <FieldRow label="Name" eyebrow>
               <input
                 type="text"
                 class="input input-bordered w-full"
@@ -362,11 +362,7 @@ export default function Profile() {
             <KVStacked
               label="Email"
               hint="An administrator sets your email."
-              value={
-                <Show when={human()?.email} fallback={<span class="text-base-content/40">not set</span>}>
-                  {human()?.email}
-                </Show>
-              }
+              value={human()?.email || <span class="text-base-content/40">not set</span>}
             />
             <Note note={profileMsg()} />
             <div class="card-actions mt-1 justify-between border-t border-base-300 pt-3">

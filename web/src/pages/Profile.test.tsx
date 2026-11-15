@@ -12,18 +12,18 @@ import { ME_KEY, type Me } from "../lib/auth";
 // avatar endpoints are stubbed on fetch, so no server is needed.
 const jpegB64 = "/9j/4AAQSkZJRg==";
 
-function meWith(hasAvatar: boolean): Me {
+function meWith(hasAvatar: boolean, email?: string): Me {
   return {
     principal: { id: "u-me", kind: "human" },
-    human: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
+    human: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar, email },
     permissions: [">"],
     grants: [],
   };
 }
 
-function mount(hasAvatar: boolean) {
+function mount(hasAvatar: boolean, email?: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...ME_KEY], meWith(hasAvatar));
+  qc.setQueryData([...ME_KEY], meWith(hasAvatar, email));
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
@@ -140,6 +140,19 @@ describe("Profile form controls are labelled", () => {
     const nameInput = screen.getByLabelText("Name");
     expect(nameInput).toBeTruthy();
     expect((nameInput as HTMLInputElement).type).toBe("text");
+  });
+
+  it("renders a set email as visible text and hides 'not set'", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify(meWith(false, "ada@example.com")), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    mount(false, "ada@example.com");
+    // Email is not a textbox, it renders as a fact.
+    expect(screen.queryByRole("textbox", { name: "Email" })).toBeNull();
+    // Email value is visible text.
+    expect(screen.getByText("ada@example.com")).toBeTruthy();
+    // "not set" is absent when email is set.
+    expect(screen.queryByText("not set")).toBeNull();
   });
 });
 
