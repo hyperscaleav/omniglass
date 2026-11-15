@@ -712,6 +712,10 @@ type Gateway interface {
 	// measured rows in the window, or answers *AmbiguousInstanceError (#1485).
 	ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (MetricBuckets, error)
 	ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (PropertyBuckets, error)
+	// PropertyCarriedIn is the value in force when a raw property read's window
+	// opens (#1488), the bucketed read's CarriedIn for a raw step chart: nil
+	// when none holds.
+	PropertyCarriedIn(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window time.Duration) (*string, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);

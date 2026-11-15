@@ -1037,6 +1037,10 @@ func (UnimplementedGateway) ListPropertyBuckets(context.Context, string, string,
 	return PropertyBuckets{}, nil
 }
 
+func (UnimplementedGateway) PropertyCarriedIn(context.Context, string, string, string, *string, time.Duration) (*string, error) {
+	return nil, nil
+}
+
 func (UnimplementedGateway) UpsertSeverityLevel(context.Context, SeverityLevel) error { return nil }
 func (UnimplementedGateway) ListSeverityLevels(context.Context) ([]SeverityLevel, error) {
 	return nil, nil

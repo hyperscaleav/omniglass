@@ -603,10 +603,14 @@ export function EntityCreateForm(props: {
   // The name and the label the platform would write, both rendered by the one
   // engine on the server (ADR-0098, #702) from the same body this form posts.
   // Asked only once the classification is chosen where the classification is
-  // what names it; a system is always asked, since the global rule may still
-  // render something and the refusal to name one is the answer the field needs.
+  // what names it. A system is also asked once its name is typed, since the
+  // global rule may still render a label for an unclassified one; with neither,
+  // the answer is a known 422 and the browser would log it as a failed request
+  // (#1548), so the form states the refusal itself (unclassifiedSystem below).
+  const unclassifiedSystem = () => isSystem() && !systemType() && namePen.value().trim() === "";
   const labelDraft = useLabelDraft(() => {
     if (isSystem()) {
+      if (unclassifiedSystem()) return null;
       return { kind: "system" as const, body: { system_type_id: systemType() || undefined, standard_id: standard() || undefined, name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined } };
     }
     if (isLocation()) {
@@ -765,7 +769,7 @@ export function EntityCreateForm(props: {
         kind={props.kind}
         draft={() => labelDraft.data}
         pending={() => labelDraft.isFetching}
-        nameRefused={() => nameRefused(labelDraft.error)}
+        nameRefused={() => unclassifiedSystem() || nameRefused(labelDraft.error)}
         bucket={bucketText}
         namePen={namePen}
         displayPen={displayPen}

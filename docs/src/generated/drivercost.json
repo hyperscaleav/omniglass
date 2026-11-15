@@ -24,11 +24,11 @@
       "interval": "30s",
       "polled_by": [
         "boreal-cast-api",
-        "http-json"
+        "tessellate-census-http"
       ],
       "drivers": [
         "boreal-cast-api",
-        "http-json"
+        "tessellate-census-http"
       ],
       "memory_per_task_kib": {
         "median": 5.983750000000001,
@@ -60,11 +60,11 @@
       "interval": "5m0s",
       "polled_by": [
         "boreal-cast-api",
-        "http-json"
+        "tessellate-census-http"
       ],
       "drivers": [
         "boreal-cast-api",
-        "http-json"
+        "tessellate-census-http"
       ],
       "memory_per_task_kib": {
         "median": 5.983750000000001,
@@ -326,12 +326,12 @@
       "interval": "30s",
       "polled_by": [
         "newtron-core-nvp",
-        "newtron-nvp",
+        "newtron-panel-nvp",
         "newtron-slate-nvp"
       ],
       "drivers": [
         "newtron-core-nvp",
-        "newtron-nvp",
+        "newtron-panel-nvp",
         "newtron-slate-nvp"
       ],
       "memory_per_task_kib": {
@@ -460,24 +460,6 @@
       "cpu_per_run_ms": 2.816549640672733,
       "thread_cpu_per_run_ms": 0.45310638649305457,
       "thread_share": 0.16087285661502848
-    },
-    {
-      "driver": "http-json",
-      "kind": "http",
-      "product": "tessellate-census-c1",
-      "polls": [
-        "5m0s",
-        "30s"
-      ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 5.99875,
-      "memory_per_endpoint_kib": 11.9975,
-      "memory_warm_mib": 9.119791666666664,
-      "millicores_per_task": 0.0744592368472029,
-      "cpu_per_run_ms": 4.06141291893834,
-      "thread_cpu_per_run_ms": 0.4069566457638892,
-      "thread_share": 0.10020075621128134
     },
     {
       "driver": "kestrel-api",
@@ -633,24 +615,6 @@
       "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
-      "driver": "newtron-nvp",
-      "kind": "tcp",
-      "product": "newtron-panel-7",
-      "polls": [
-        "30s",
-        "30s"
-      ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 91.33375,
-      "memory_per_endpoint_kib": 182.6675,
-      "millicores_per_task": 0.05539313508431951,
-      "cpu_per_run_ms": 1.6617940525295853,
-      "thread_cpu_per_run_ms": 0.12078262858333327,
-      "thread_share": 0.07268206815367872,
-      "reason": "newtron-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
-    },
-    {
       "driver": "newtron-nvp-ssh",
       "kind": "ssh",
       "measured": false,
@@ -673,6 +637,24 @@
       "kind": "udp",
       "measured": false,
       "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-panel-nvp",
+      "kind": "tcp",
+      "product": "newtron-panel-7",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 91.33375,
+      "memory_per_endpoint_kib": 182.6675,
+      "millicores_per_task": 0.05539313508431951,
+      "cpu_per_run_ms": 1.6617940525295853,
+      "thread_cpu_per_run_ms": 0.12078262858333327,
+      "thread_share": 0.07268206815367872,
+      "reason": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "newtron-panel-web",
@@ -765,6 +747,24 @@
       "thread_cpu_per_run_ms": 0.3583686765946816,
       "thread_share": 0.08990660250947524,
       "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "tessellate-census-http",
+      "kind": "http",
+      "product": "tessellate-census-c1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.99875,
+      "memory_per_endpoint_kib": 11.9975,
+      "memory_warm_mib": 9.119791666666664,
+      "millicores_per_task": 0.0744592368472029,
+      "cpu_per_run_ms": 4.06141291893834,
+      "thread_cpu_per_run_ms": 0.4069566457638892,
+      "thread_share": 0.10020075621128134
     },
     {
       "driver": "ucc-rooms",
