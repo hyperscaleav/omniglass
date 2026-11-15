@@ -1,0 +1,793 @@
+{
+  "host": {
+    "cpu": "QEMU Virtual CPU version 2.5+",
+    "cores": 8,
+    "memory_gib": 8,
+    "go": "go1.26.11"
+  },
+  "date": "2026-11-14",
+  "build": "86d74adec",
+  "other_builds": [
+    {
+      "build": "3284c96e8",
+      "drivers": [
+        "boreal-beam-snmp",
+        "kestrel-relay-api"
+      ]
+    }
+  ],
+  "step_tasks": 1600,
+  "max_step_tasks": 6400,
+  "kinds": [
+    {
+      "kind": "http",
+      "interval": "30s",
+      "polled_by": [
+        "boreal-cast-api",
+        "http-json"
+      ],
+      "drivers": [
+        "boreal-cast-api",
+        "http-json"
+      ],
+      "memory_per_task_kib": {
+        "median": 5.983750000000001,
+        "min": 5.96875,
+        "max": 5.99875,
+        "n": 2
+      },
+      "memory_per_endpoint_kib": {
+        "median": 11.967500000000001,
+        "min": 11.9375,
+        "max": 11.9975,
+        "n": 2
+      },
+      "cpu_per_run_ms": {
+        "median": 3.591217469721508,
+        "min": 3.1210220205046753,
+        "max": 4.06141291893834,
+        "n": 2
+      },
+      "millicores_per_task": {
+        "median": 0.11970724899071691,
+        "min": 0.10403406735015584,
+        "max": 0.135380430631278,
+        "n": 2
+      }
+    },
+    {
+      "kind": "http",
+      "interval": "5m0s",
+      "polled_by": [
+        "boreal-cast-api",
+        "http-json"
+      ],
+      "drivers": [
+        "boreal-cast-api",
+        "http-json"
+      ],
+      "memory_per_task_kib": {
+        "median": 5.983750000000001,
+        "min": 5.96875,
+        "max": 5.99875,
+        "n": 2
+      },
+      "memory_per_endpoint_kib": {
+        "median": 11.967500000000001,
+        "min": 11.9375,
+        "max": 11.9975,
+        "n": 2
+      },
+      "cpu_per_run_ms": {
+        "median": 3.591217469721508,
+        "min": 3.1210220205046753,
+        "max": 4.06141291893834,
+        "n": 2
+      },
+      "millicores_per_task": {
+        "median": 0.011970724899071692,
+        "min": 0.010403406735015584,
+        "max": 0.013538043063127801,
+        "n": 2
+      }
+    },
+    {
+      "kind": "https",
+      "interval": "30s",
+      "polled_by": [
+        "kestrel-api",
+        "kestrel-gaze-api",
+        "kestrel-relay-api",
+        "recording-service-api",
+        "ucc-rooms"
+      ],
+      "drivers": [
+        "kestrel-api",
+        "kestrel-gaze-api",
+        "kestrel-relay-api",
+        "recording-service-api",
+        "ucc-rooms"
+      ],
+      "memory_per_task_kib": {
+        "median": 13.66875,
+        "min": 3.47375,
+        "max": 48.41875,
+        "n": 5
+      },
+      "memory_per_endpoint_kib": {
+        "median": 13.895,
+        "min": 13.175,
+        "max": 123.83520599250937,
+        "n": 5
+      },
+      "cpu_per_run_ms": {
+        "median": 5.752682805473865,
+        "min": 5.0743377372085,
+        "max": 7.21982653700496,
+        "n": 5
+      },
+      "millicores_per_task": {
+        "median": 0.19175609351579548,
+        "min": 0.16914459124028333,
+        "max": 0.240660884566832,
+        "n": 5
+      }
+    },
+    {
+      "kind": "https",
+      "interval": "5m0s",
+      "polled_by": [
+        "kestrel-api",
+        "kestrel-gaze-api",
+        "kestrel-relay-api"
+      ],
+      "drivers": [
+        "kestrel-api",
+        "kestrel-gaze-api",
+        "kestrel-relay-api",
+        "recording-service-api",
+        "ucc-rooms"
+      ],
+      "memory_per_task_kib": {
+        "median": 13.66875,
+        "min": 3.47375,
+        "max": 48.41875,
+        "n": 5
+      },
+      "memory_per_endpoint_kib": {
+        "median": 13.895,
+        "min": 13.175,
+        "max": 123.83520599250937,
+        "n": 5
+      },
+      "cpu_per_run_ms": {
+        "median": 5.752682805473865,
+        "min": 5.0743377372085,
+        "max": 7.21982653700496,
+        "n": 5
+      },
+      "millicores_per_task": {
+        "median": 0.01917560935157955,
+        "min": 0.016914459124028336,
+        "max": 0.0240660884566832,
+        "n": 5
+      }
+    },
+    {
+      "kind": "snmp",
+      "interval": "30s",
+      "polled_by": [
+        "boreal-beam-snmp",
+        "boreal-edge-snmp",
+        "ferrite-pdu-snmp",
+        "lyra-arc-snmp",
+        "lyra-hx-snmp",
+        "meridian-mx-snmp",
+        "meridian-xl-snmp",
+        "polaris-amp-snmp",
+        "polaris-dsp-snmp"
+      ],
+      "drivers": [
+        "boreal-beam-snmp",
+        "boreal-edge-snmp",
+        "ferrite-pdu-snmp",
+        "lyra-arc-snmp",
+        "lyra-hx-snmp",
+        "meridian-mx-snmp",
+        "meridian-xl-snmp",
+        "polaris-amp-snmp",
+        "polaris-dsp-snmp",
+        "snmp-generic"
+      ],
+      "memory_per_task_kib": {
+        "median": 5.805937500000001,
+        "min": 4.865,
+        "max": 10.2925,
+        "n": 8
+      },
+      "memory_per_endpoint_kib": {
+        "median": 11.52,
+        "min": 9.73,
+        "max": 13.1725,
+        "n": 8
+      },
+      "cpu_per_run_ms": {
+        "median": 2.677907902870901,
+        "min": 1.5444207381351678,
+        "max": 3.9860106665348987,
+        "n": 10
+      },
+      "millicores_per_task": {
+        "median": 0.08926359676236337,
+        "min": 0.05148069127117226,
+        "max": 0.13286702221782995,
+        "n": 10
+      }
+    },
+    {
+      "kind": "snmp",
+      "interval": "1m0s",
+      "polled_by": [
+        "snmp-generic"
+      ],
+      "drivers": [
+        "boreal-beam-snmp",
+        "boreal-edge-snmp",
+        "ferrite-pdu-snmp",
+        "lyra-arc-snmp",
+        "lyra-hx-snmp",
+        "meridian-mx-snmp",
+        "meridian-xl-snmp",
+        "polaris-amp-snmp",
+        "polaris-dsp-snmp",
+        "snmp-generic"
+      ],
+      "memory_per_task_kib": {
+        "median": 5.805937500000001,
+        "min": 4.865,
+        "max": 10.2925,
+        "n": 8
+      },
+      "memory_per_endpoint_kib": {
+        "median": 11.52,
+        "min": 9.73,
+        "max": 13.1725,
+        "n": 8
+      },
+      "cpu_per_run_ms": {
+        "median": 2.677907902870901,
+        "min": 1.5444207381351678,
+        "max": 3.9860106665348987,
+        "n": 10
+      },
+      "millicores_per_task": {
+        "median": 0.044631798381181684,
+        "min": 0.02574034563558613,
+        "max": 0.06643351110891497,
+        "n": 10
+      }
+    },
+    {
+      "kind": "snmp",
+      "interval": "5m0s",
+      "polled_by": [
+        "boreal-beam-snmp",
+        "boreal-edge-snmp",
+        "ferrite-pdu-snmp",
+        "lyra-arc-snmp",
+        "lyra-hx-snmp",
+        "meridian-mx-snmp",
+        "meridian-xl-snmp",
+        "polaris-amp-snmp",
+        "polaris-dsp-snmp"
+      ],
+      "drivers": [
+        "boreal-beam-snmp",
+        "boreal-edge-snmp",
+        "ferrite-pdu-snmp",
+        "lyra-arc-snmp",
+        "lyra-hx-snmp",
+        "meridian-mx-snmp",
+        "meridian-xl-snmp",
+        "polaris-amp-snmp",
+        "polaris-dsp-snmp",
+        "snmp-generic"
+      ],
+      "memory_per_task_kib": {
+        "median": 5.805937500000001,
+        "min": 4.865,
+        "max": 10.2925,
+        "n": 8
+      },
+      "memory_per_endpoint_kib": {
+        "median": 11.52,
+        "min": 9.73,
+        "max": 13.1725,
+        "n": 8
+      },
+      "cpu_per_run_ms": {
+        "median": 2.677907902870901,
+        "min": 1.5444207381351678,
+        "max": 3.9860106665348987,
+        "n": 10
+      },
+      "millicores_per_task": {
+        "median": 0.008926359676236336,
+        "min": 0.0051480691271172255,
+        "max": 0.013286702221782996,
+        "n": 10
+      }
+    },
+    {
+      "kind": "ssh"
+    },
+    {
+      "kind": "tcp",
+      "interval": "30s",
+      "polled_by": [
+        "newtron-core-nvp",
+        "newtron-nvp",
+        "newtron-slate-nvp"
+      ],
+      "drivers": [
+        "newtron-core-nvp",
+        "newtron-nvp",
+        "newtron-slate-nvp"
+      ],
+      "memory_per_task_kib": {
+        "median": 91.33375,
+        "min": 59.45692883895131,
+        "max": 167.82875,
+        "n": 3
+      },
+      "memory_per_endpoint_kib": {
+        "median": 178.37078651685394,
+        "min": 167.82875,
+        "max": 182.6675,
+        "n": 3
+      },
+      "cpu_per_run_ms": {
+        "median": 1.8104263133584706,
+        "min": 1.6617940525295853,
+        "max": 2.005973277218494,
+        "n": 3
+      },
+      "millicores_per_task": {
+        "median": 0.06034754377861569,
+        "min": 0.05539313508431951,
+        "max": 0.06686577590728313,
+        "n": 3
+      }
+    },
+    {
+      "kind": "telnet"
+    },
+    {
+      "kind": "tls"
+    },
+    {
+      "kind": "udp"
+    },
+    {
+      "kind": "webhook"
+    },
+    {
+      "kind": "wss"
+    }
+  ],
+  "drivers": [
+    {
+      "driver": "boreal-beam-snmp",
+      "build": "3284c96e8",
+      "kind": "snmp",
+      "product": "boreal-beam-340",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 3200,
+      "memory_per_task_kib": 5.850625,
+      "memory_per_endpoint_kib": 11.70125,
+      "memory_warm_mib": 7.921875,
+      "millicores_per_task": 0.04298505050282776,
+      "cpu_per_run_ms": 2.3446391183360595,
+      "thread_cpu_per_run_ms": 0.37259723056857486,
+      "thread_share": 0.1589145330105211
+    },
+    {
+      "driver": "boreal-cast-api",
+      "kind": "http",
+      "product": "boreal-cast-m1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.96875,
+      "memory_per_endpoint_kib": 11.9375,
+      "memory_warm_mib": 8.6953125,
+      "millicores_per_task": 0.05721873704258571,
+      "cpu_per_run_ms": 3.1210220205046753,
+      "thread_cpu_per_run_ms": 0.3369400539496531,
+      "thread_share": 0.10795824308063333
+    },
+    {
+      "driver": "boreal-edge-snmp",
+      "kind": "snmp",
+      "product": "boreal-edge-55",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 4.865,
+      "memory_per_endpoint_kib": 9.73,
+      "memory_warm_mib": 6.29296875,
+      "millicores_per_task": 0.04251187896629939,
+      "cpu_per_run_ms": 2.3188297617981486,
+      "thread_cpu_per_run_ms": 0.3447886945659723,
+      "thread_share": 0.14869081820763078
+    },
+    {
+      "driver": "boreal-edge-web",
+      "kind": "http",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "ferrite-pdu-api",
+      "kind": "http",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "ferrite-pdu-snmp",
+      "kind": "snmp",
+      "product": "ferrite-pdu-4c",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 4.95375,
+      "memory_per_endpoint_kib": 9.9075,
+      "memory_warm_mib": 9.528645833333336,
+      "millicores_per_task": 0.05163674341233344,
+      "cpu_per_run_ms": 2.816549640672733,
+      "thread_cpu_per_run_ms": 0.45310638649305457,
+      "thread_share": 0.16087285661502848
+    },
+    {
+      "driver": "http-json",
+      "kind": "http",
+      "product": "tessellate-census-c1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.99875,
+      "memory_per_endpoint_kib": 11.9975,
+      "memory_warm_mib": 9.119791666666664,
+      "millicores_per_task": 0.0744592368472029,
+      "cpu_per_run_ms": 4.06141291893834,
+      "thread_cpu_per_run_ms": 0.4069566457638892,
+      "thread_share": 0.10020075621128134
+    },
+    {
+      "driver": "kestrel-api",
+      "kind": "https",
+      "product": "kestrel-vroom",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 41.278401997503124,
+      "memory_per_endpoint_kib": 123.83520599250937,
+      "memory_warm_mib": 5.350260416666657,
+      "millicores_per_task": 0.13422926546105685,
+      "cpu_per_run_ms": 5.752682805473865,
+      "thread_cpu_per_run_ms": 0.5075498524266534,
+      "thread_share": 0.08822837441057992
+    },
+    {
+      "driver": "kestrel-gaze-api",
+      "kind": "https",
+      "product": "kestrel-gaze-p2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.5875,
+      "memory_per_endpoint_kib": 13.175,
+      "memory_warm_mib": 15.876302083333336,
+      "millicores_per_task": 0.1279843500804416,
+      "cpu_per_run_ms": 6.980964549842269,
+      "thread_cpu_per_run_ms": 0.6084199894965298,
+      "thread_share": 0.08715414398004309
+    },
+    {
+      "driver": "kestrel-relay-api",
+      "build": "3284c96e8",
+      "kind": "https",
+      "product": "kestrel-relay-c1",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s",
+        "5m0s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 3.47375,
+      "memory_per_endpoint_kib": 13.895,
+      "memory_warm_mib": 11.231770833333336,
+      "millicores_per_task": 0.09302952518215583,
+      "cpu_per_run_ms": 5.0743377372085,
+      "thread_cpu_per_run_ms": 0.4847921661857645,
+      "thread_share": 0.09553801723344864
+    },
+    {
+      "driver": "kestrel-ws",
+      "kind": "wss",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "lyra-arc-snmp",
+      "kind": "snmp",
+      "product": "lyra-arc-a2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.75875,
+      "memory_per_endpoint_kib": 11.5175,
+      "memory_warm_mib": 6.821614583333336,
+      "millicores_per_task": 0.05166387206848197,
+      "cpu_per_run_ms": 2.818029385553562,
+      "thread_cpu_per_run_ms": 0.3997052385416658,
+      "thread_share": 0.1418385630010559
+    },
+    {
+      "driver": "lyra-hx-snmp",
+      "kind": "snmp",
+      "product": "lyra-hx-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 6400,
+      "millicores_per_task": 0.02842376350193632,
+      "cpu_per_run_ms": 1.5503871001056175,
+      "thread_cpu_per_run_ms": 0.39338812220426594,
+      "thread_share": 0.2537354201266684,
+      "reason": "lyra-hx-snmp memory: the sweep is not a line: a step sits 33% of its rise off the fit (residual 0.333, bound 0.100)"
+    },
+    {
+      "driver": "meridian-mx-snmp",
+      "kind": "snmp",
+      "product": "meridian-mx-84",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.58625,
+      "memory_per_endpoint_kib": 13.1725,
+      "memory_warm_mib": 1.0546875,
+      "millicores_per_task": 0.05013722335396845,
+      "cpu_per_run_ms": 2.734757637489188,
+      "thread_cpu_per_run_ms": 0.38196722842881914,
+      "thread_share": 0.13967132706483912
+    },
+    {
+      "driver": "meridian-xl-snmp",
+      "kind": "snmp",
+      "product": "meridian-xl-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 6.39375,
+      "memory_per_endpoint_kib": 12.7875,
+      "memory_warm_mib": 3.4322916666666643,
+      "millicores_per_task": 0.06105237532455252,
+      "cpu_per_run_ms": 3.3301295631574104,
+      "thread_cpu_per_run_ms": 0.4846469984548611,
+      "thread_share": 0.1455339767607572
+    },
+    {
+      "driver": "newtron-core-nvp",
+      "kind": "tcp",
+      "product": "newtron-core-3",
+      "polls": [
+        "30s",
+        "30s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 59.45692883895131,
+      "memory_per_endpoint_kib": 178.37078651685394,
+      "millicores_per_task": 0.06034754377861569,
+      "cpu_per_run_ms": 1.8104263133584706,
+      "thread_cpu_per_run_ms": 0.14369666406575113,
+      "thread_share": 0.07937172753481665,
+      "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "newtron-nvp",
+      "kind": "tcp",
+      "product": "newtron-panel-7",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 91.33375,
+      "memory_per_endpoint_kib": 182.6675,
+      "millicores_per_task": 0.05539313508431951,
+      "cpu_per_run_ms": 1.6617940525295853,
+      "thread_cpu_per_run_ms": 0.12078262858333327,
+      "thread_share": 0.07268206815367872,
+      "reason": "newtron-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "newtron-nvp-ssh",
+      "kind": "ssh",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-telnet",
+      "kind": "telnet",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-tls",
+      "kind": "tls",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-udp",
+      "kind": "udp",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-panel-web",
+      "kind": "https",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-slate-nvp",
+      "kind": "tcp",
+      "product": "newtron-slate-5",
+      "polls": [
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 167.82875,
+      "memory_per_endpoint_kib": 167.82875,
+      "millicores_per_task": 0.06686577590728313,
+      "cpu_per_run_ms": 2.005973277218494,
+      "thread_cpu_per_run_ms": 0.11126806335069432,
+      "thread_share": 0.05546836770676224,
+      "reason": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "polaris-amp-snmp",
+      "kind": "snmp",
+      "product": "polaris-amp-4100",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 6400,
+      "millicores_per_task": 0.028314380199144742,
+      "cpu_per_run_ms": 1.5444207381351678,
+      "thread_cpu_per_run_ms": 0.3959368054740885,
+      "thread_share": 0.25636589544385935,
+      "reason": "polaris-amp-snmp memory: the sweep is not a line: a step sits 32% of its rise off the fit (residual 0.315, bound 0.100)"
+    },
+    {
+      "driver": "polaris-dsp-snmp",
+      "kind": "snmp",
+      "product": "polaris-dsp-16",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 5.76125,
+      "memory_per_endpoint_kib": 11.5225,
+      "memory_warm_mib": 6.213541666666664,
+      "millicores_per_task": 0.048052733084631254,
+      "cpu_per_run_ms": 2.6210581682526137,
+      "thread_cpu_per_run_ms": 0.4068201409027783,
+      "thread_share": 0.15521217568933005
+    },
+    {
+      "driver": "recording-service-api",
+      "kind": "https",
+      "product": "recording-service",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 48.41875,
+      "memory_per_endpoint_kib": 96.8375,
+      "millicores_per_task": 0.182803268295925,
+      "cpu_per_run_ms": 5.48409804887775,
+      "thread_cpu_per_run_ms": 0.4779903481249993,
+      "thread_share": 0.08715933666116962,
+      "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "snmp-generic",
+      "kind": "snmp",
+      "product": "generic-device",
+      "polls": [
+        "1m0s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 10.2925,
+      "memory_per_endpoint_kib": 10.2925,
+      "millicores_per_task": 0.06643351110891497,
+      "cpu_per_run_ms": 3.9860106665348987,
+      "thread_cpu_per_run_ms": 0.3583686765946816,
+      "thread_share": 0.08990660250947524,
+      "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "ucc-rooms",
+      "kind": "https",
+      "product": "ucc-platform",
+      "polls": [
+        "30s"
+      ],
+      "measured": true,
+      "step_tasks": 1600,
+      "memory_per_task_kib": 13.66875,
+      "memory_per_endpoint_kib": 13.66875,
+      "millicores_per_task": 0.240660884566832,
+      "cpu_per_run_ms": 7.21982653700496,
+      "thread_cpu_per_run_ms": 0.6972145544097208,
+      "thread_share": 0.09656943291312788,
+      "reason": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "ucc-webhook",
+      "kind": "webhook",
+      "measured": false,
+      "reason": "no polls: the driver only listens, so it runs no task to cost"
+    }
+  ]
+}

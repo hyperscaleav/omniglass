@@ -985,6 +985,68 @@ an hour, and its times and usage gate only on the baseline's host class, which a
 ([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
 on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
 
+#### Measuring each driver's cost
+
+A scale lab measures whole nodes, and each of its nodes runs the simulator in its own process
+(`node run --simulate`), so a node's memory and CPU there include the devices it polls. What one task
+of a driver costs a node is a separate measurement, and `omniglass lab perf drivers` makes it:
+
+```bash
+omniglass lab perf drivers --image omniglass:dev
+```
+
+It brings up a throwaway lab with no fleet and no node of its own, then measures each shipped driver
+in turn on a node that runs only the node:
+
+- **A node of its own.** The driver's node runs in one container and the simulator beside it in
+  another, sharing the node's network namespace, so the node polls the simulated devices on its own
+  loopback while the simulator's work lands in a different cgroup. The node runs the product's own
+  cadence (the heartbeat, probe and worklist pull a deployed node runs, not the lab's quicker clock),
+  so its background work weighs on the figures as it would in the field.
+- **Four steps.** The node is measured holding none of the driver's components, then N, 2N and 3N,
+  where N components bring about `--step-tasks` tasks (each component brings one task per poll the
+  driver declares). Each step warms up, then reads the node container's cgroup across a window long
+  enough for the driver's slowest poll to run: CPU between the window's ends, and the working set
+  (memory less file cache) as the median of reads spread across it.
+- **A line, or a refusal.** Millicores per task is the slope across all four steps. Memory per task
+  is the slope across the three loaded steps alone: a node's memory jumps when its first tasks land
+  (its lanes start and its heap grows to its working size) and then rises by a slope, so the idle
+  step sits apart, and the loaded line's value at zero tasks over the idle node is the **warm cost**,
+  paid once. A step off its line by more than a tenth of the rise in memory, or a quarter in CPU,
+  refuses that figure, which is listed as not measured with why, never written down as a cost; the
+  other figure still stands, and only a driver with neither is left out. A loaded line that starts
+  below the idle node has no warm cost to show (the first tasks filled heap the idle node already
+  held), so the warm figure is left empty with that reason rather than written as zero.
+- **A bigger step when memory hides.** A cheap driver costs a node a few KiB a task, and at a small
+  step that rise is inside the heap's own swing, so its memory does not fit. Such a driver is swept
+  again on a fresh node at four times the step, up to `--max-step-tasks`, and the attempt that
+  measured the most figures is kept (the bigger step on a tie). A figure that still does not fit is
+  listed with why. Each row records the step it was measured at.
+- **A step the node actually runs.** Before a step is measured, the sweep waits until the node's
+  installed worklist (its `worklist-task-count`) holds every task the server holds for it. The server
+  sends a node's worklist as one bus reply, and a reply still over the bus's maximum payload once
+  compressed is refused, so the node keeps its last worklist (#1586); at the default 1 MiB payload that
+  ceiling is about 18,000 tasks a node. A step past it would measure a node running the previous
+  step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
+  and caps any later growth there.
+- **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
+  node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
+  polling thread's kernel clock, averaged over the reports wholly inside each step's window and read
+  once the last has landed, after two of the lab's live report windows. Thread share is the one over
+  the other: the part of a run's cost the thread clock sees. A low share is work the run hands
+  to other goroutines, such as a held session's reader, which is why thread CPU compares drivers only
+  within one transport and the cgroup slope compares them across.
+
+The run writes its table to `internal/labfootprint/drivercost/shipped.json`, relative to the working
+directory, so run it from the repository's root. The table is stamped with the date and the build, and
+with the host's cores and memory when the lab's Docker daemon is local. A sweep stopped part way (an
+interrupt, a lab that failed) still writes the drivers it had measured. Commit it after `make gen`, which renders it on the
+[scaling page](/architecture/scaling/#what-a-driver-costs-a-node), each driver on its own and rolled
+up by its kind and poll interval; a shipped driver the table lacks reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
+measures named drivers. A full sweep takes several hours, most of it in the windows of drivers that
+poll every five minutes; run it on the host class the figures should describe. Every flag is in the
+[CLI reference](/reference/cli/#omniglass-lab-perf-drivers).
+
 ### Sampling a scale lab over time
 
 One window says what a fleet costs now; whether growth, retention and vacuum keep up shows only over

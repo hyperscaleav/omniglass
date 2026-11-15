@@ -397,6 +397,9 @@ type Service struct {
 	Sysctls map[string]string
 	Mounts  []Mount
 	Publish *Publish
+	// NetworkOf is the container whose network namespace this one shares,
+	// loopback included; empty joins the lab network under Name.
+	NetworkOf string
 	// Health is a container healthcheck command (exec form), if any.
 	Health []string
 	// Restart is the restart policy: the node restarts if it crashes.
