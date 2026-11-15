@@ -625,3 +625,23 @@ func TestSessionManagerDialsThroughItsSlots(t *testing.T) {
 		t.Fatalf("peak dials in flight = %d, want at most 2", peak)
 	}
 }
+
+// The driver's connect quiet window (#1418) reaches the line channel a
+// session opens: absent is the default, 0s turns it off.
+func TestChannelOfCarriesTheConnectQuietWindow(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		ss   *driver.SessionSpec
+		want time.Duration
+	}{
+		{"no session block", nil, 0},
+		{"no declaration", &driver.SessionSpec{}, collection.DefaultConnectQuiet},
+		{"a declared window", &driver.SessionSpec{ConnectQuiet: "1s"}, time.Second},
+		{"none", &driver.SessionSpec{ConnectQuiet: "0s"}, collection.NoConnectQuiet},
+	} {
+		if got := channelOf(tc.ss).ConnectQuiet; got != tc.want {
+			t.Errorf("%s: window = %s, want %s", tc.name, got, tc.want)
+		}
+	}
+}

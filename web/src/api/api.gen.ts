@@ -3551,10 +3551,12 @@ export const GrantBodyScopeOp = {
 export type GrantBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited. */
+  group?: string;
   /** Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal. */
   group_id?: string;
-  /** The source group's label, present when the grant is inherited. */
-  group_name?: string;
+  /** The source group's friendly label, present when the grant is inherited and the group has one. */
+  group_label?: string;
   id?: string;
   role: string;
   scope_id?: string;
@@ -6753,7 +6755,7 @@ export type RetentionSettings = {
      */
   log_warning_days: number;
   /**
-     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
+     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
      * @minimum 1
      * @maximum 36500
      */
@@ -22034,7 +22036,7 @@ export const getPatchSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
+ * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
  * @summary Update a settings namespace
  */
 export const patchSettingsNamespace = async (namespace: string,

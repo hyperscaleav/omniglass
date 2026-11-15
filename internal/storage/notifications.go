@@ -440,8 +440,28 @@ func insertNotifications(ctx context.Context, tx pgx.Tx, alarmID, componentID, t
 
 // rulesOn reads the enabled rules on a transition with their templates and
 // enabled targets; none (the usual case) costs one indexed statement.
+//
+// It takes the rule, type and target rows FOR KEY SHARE SKIP LOCKED, the lock
+// the insert's foreign key checks would take anyway, so a row someone is
+// deleting is passed over, not waited on (#1335): a rule mid-delete is
+// skipped for this transition (as it would be a moment later, when it is
+// gone), and a target mid-delete is dropped from its rule. Without it the
+// insert's check waits behind a DELETE that itself waits on a notification
+// row the tick holds across a slow send, and the transition waits up to the
+// send timeout. A plain update of those rows takes a lock KEY SHARE does not
+// conflict with, so only a delete or a key change skips anything.
 func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, error) {
 	rows, err := q.Query(ctx, `
+		with lockable_rule as (
+			select r.id from action_rule r
+			join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where namespace = 'og' and name = $2))
+			where r.enabled and $1 = any(r.on_transitions)
+			for key share of r, t skip locked
+		), lockable_target as (
+			select nt.id from notification_target nt
+			where nt.enabled and nt.id in (select art.target_id from action_rule_target art where art.rule_id in (select id from lockable_rule))
+			for key share skip locked
+		)
 		select r.id::text, r.name, r.when_expr, t.id::text, t.name, t.subject, t.text,
 			coalesce(array_agg(nt.id::text order by nt.name) filter (where nt.id is not null), '{}'),
 			coalesce(array_agg(nt.name order by nt.name) filter (where nt.id is not null), '{}'),
@@ -450,10 +470,10 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 		from action_rule r
 		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where namespace = 'og' and name = $2))
 		left join action_rule_target art on art.rule_id = r.id
-		left join notification_target nt on nt.id = art.target_id and nt.enabled
+		left join notification_target nt on nt.id = art.target_id and nt.enabled and nt.id in (select id from lockable_target)
 		left join principal op on op.id = r.owner_principal_id
 		left join human oh on oh.principal_id = op.id
-		where r.enabled and $1 = any(r.on_transitions)
+		where r.enabled and $1 = any(r.on_transitions) and r.id in (select id from lockable_rule)
 		  and (r.owner_principal_id is null or (op.active and op.archived_at is null and oh.principal_id is not null))
 		group by r.id, r.name, r.when_expr, t.id, t.name, t.subject, t.text, oh.username, r.opt_out_allowed
 		order by r.name`, transition, officialTypeFor(transition))

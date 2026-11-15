@@ -763,6 +763,9 @@ func (UnimplementedGateway) EnsureMetricPartitions(context.Context) ([]string, e
 func (UnimplementedGateway) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SummarizeMetricPartitions(context.Context) ([]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CompactMetricTrends(context.Context, int, int) (TrendCompaction, error) {
 	return TrendCompaction{}, nil
 }
@@ -950,12 +953,6 @@ func (UnimplementedGateway) SetSystemRole(context.Context, string, string, strin
 }
 func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, string, string) error {
 	return nil
-}
-func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, SystemRoleSpec) error {
-	return nil
-}
-func (UnimplementedGateway) SeedRoleChoice(context.Context, string, string, RoleChoiceSpec) (map[string]string, error) {
-	return nil, nil
 }
 func (UnimplementedGateway) ResolveAlternate(context.Context, string, string, string) (string, error) {
 	return "", nil

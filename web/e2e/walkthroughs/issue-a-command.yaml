@@ -19,8 +19,8 @@ steps:
   - click: { role: button, name: Issue a command }
     caption: Issue a command. Only the commands its driver binds are offered, since only those reach it.
   - select: { target: 'form select', value: set-volume }
-    caption: Set its volume. A metric takes a number.
-  - type: { target: 'form input', text: '35' }
+    caption: Set its volume. A metric takes a number, and volume is a fraction of the bar's range.
+  - type: { target: 'form input', text: '0.35' }
     caption: The value it should hold.
   - click: { role: button, name: Issue, exact: true }
     caption: Issue it. The node takes it from its queue and sends it to the bar.
