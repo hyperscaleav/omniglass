@@ -61,6 +61,13 @@ type factsTransport struct {
 	Description string `json:"description,omitempty"`
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
+	// Rung, Params and ProbeKeys are the probe's facts (#1087): the ladder
+	// rung it proves, the endpoint params it reads and every key it can
+	// land, which the collection page renders as its probe table. A push
+	// transport has no probe and carries none.
+	Rung      string   `json:"rung,omitempty"`
+	Params    []string `json:"params,omitempty"`
+	ProbeKeys []string `json:"probe_keys,omitempty"`
 }
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
@@ -312,7 +319,8 @@ func FactsJSON() ([]byte, error) {
 	}
 
 	for _, tr := range transport.All() {
-		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built})
+		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built,
+			Rung: tr.Rung, Params: tr.Params, ProbeKeys: tr.ProbeKeys})
 	}
 
 	var lts locationTypesDoc

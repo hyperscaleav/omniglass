@@ -3,8 +3,11 @@ package seed
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // TestSeedFactsGroundTruth pins the generated seed facts against what the
@@ -29,8 +32,10 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 			Name string `json:"name"`
 		} `json:"metric_types"`
 		Transports []struct {
-			Name  string `json:"name"`
-			Built bool   `json:"built"`
+			Name      string   `json:"name"`
+			Built     bool     `json:"built"`
+			Params    []string `json:"params"`
+			ProbeKeys []string `json:"probe_keys"`
 		} `json:"transports"`
 		ComponentTypes []factsTypeNode `json:"component_types"`
 		SystemTypes    []factsTypeNode `json:"system_types"`
@@ -85,6 +90,26 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	}
 	if !builtICMP {
 		t.Error("transports: icmp missing or not built (the facts doc renders the code registry)")
+	}
+	// The collection page's probe table renders these (#1087): each dialed
+	// transport carries its params and probe keys through, snmp included.
+	probed := 0
+	for _, tr := range doc.Transports {
+		if len(tr.ProbeKeys) > 0 && len(tr.Params) > 0 {
+			probed++
+		}
+		if tr.Name == "snmp" && !slices.Contains(tr.ProbeKeys, "snmp-response-time") {
+			t.Errorf("transports: snmp probe keys = %v, want snmp-response-time (the probe table is generated from them)", tr.ProbeKeys)
+		}
+	}
+	dialed := 0
+	for _, tr := range transport.All() {
+		if tr.Built && !tr.Push {
+			dialed++
+		}
+	}
+	if probed != dialed {
+		t.Errorf("transports: %d carry probe facts, want the %d a node dials", probed, dialed)
 	}
 
 	// The two inheriting registries (#678). What the docs used to type out by
