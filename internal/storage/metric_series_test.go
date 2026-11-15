@@ -240,8 +240,8 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	if dropped, err := f.gw.DropMetricPartitions(f.ctx, today.AddDate(0, 0, -14)); err != nil || len(dropped) != 0 {
 		t.Fatalf("with a type kept a year holding a sample in %s, dropped %v (%v), want nothing", dayName(long), dropped, err)
 	}
-	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2,observed:3" {
-		t.Fatalf("rows %v, want the held day's two", v)
+	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2" {
+		t.Fatalf("rows %v, want the held day's prune-rtt row", v)
 	}
 	if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "rt-year", nil); err != nil {
 		t.Fatal(err)
@@ -332,7 +332,8 @@ func TestACollectingNodeStartsItsOwnSeries(t *testing.T) {
 
 // TestADeletedOwnersSamplesReadAsNothing: deleting an owner removes its series
 // in the delete's transaction and leaves its samples, which no read can reach
-// (every read joins the series), for retention to remove.
+// (every read joins the series), for retention to remove: a day no longer type
+// holds goes with the drop, not the lane's prune (#1957).
 func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
@@ -351,8 +352,18 @@ func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 	if series != 0 || hidden != 0 || orphans != 2 {
 		t.Fatalf("after the delete: %d series, %d readable samples, %d stored; want 0, 0 and the 2 left for retention", series, hidden, orphans)
 	}
-	if n := f.prune("metric", now.Add(-24*time.Hour), 100); n != 1 {
-		t.Fatalf("the lane prune took %d orphaned samples past the window, want 1", n)
+	cutoff := now.Add(-24 * time.Hour)
+	if n := f.prune("metric", cutoff, 100); n != 0 {
+		t.Fatalf("the lane prune took %d orphaned samples from a droppable day, want it left to the drop", n)
+	}
+	if _, err := f.gw.DropMetricPartitions(f.ctx, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from metric`).Scan(&orphans); err != nil {
+		t.Fatal(err)
+	}
+	if orphans != 1 {
+		t.Fatalf("after the drop %d orphaned samples stored, want the 1 inside the window", orphans)
 	}
 }
 

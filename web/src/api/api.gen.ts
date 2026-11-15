@@ -6746,7 +6746,7 @@ export type RetentionSettings = {
      */
   log_warning_days: number;
   /**
-     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
+     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
      * @minimum 1
      * @maximum 36500
      */

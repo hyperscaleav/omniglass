@@ -9785,7 +9785,7 @@ components:
           type: integer
         metric_days:
           default: 14
-          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
+          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
           format: int64
           maximum: 36500
           minimum: 1
