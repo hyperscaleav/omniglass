@@ -204,7 +204,7 @@
       ]
     },
     {
-      "driver": "http-json",
+      "driver": "tessellate-census-http",
       "product": "tessellate-census-c1",
       "polls": [
         "5m0s",
@@ -643,7 +643,7 @@
       ]
     },
     {
-      "driver": "newtron-nvp",
+      "driver": "newtron-panel-nvp",
       "product": "newtron-panel-7",
       "polls": [
         "30s",
@@ -659,7 +659,7 @@
       "thread_share": 0.07268206815367872,
       "memory_residual": 0.018033676853664055,
       "cpu_residual": 0.033793952127477364,
-      "warm_not_measured": "newtron-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,

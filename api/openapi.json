@@ -4781,6 +4781,10 @@
             "description": "That calc rule's uuid, the stable form of source_rule",
             "type": "string"
           },
+          "unit": {
+            "description": "The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none",
+            "type": "string"
+          },
           "value": {
             "description": "The effective value: the latest sample, or the contract default until one arrives"
           }

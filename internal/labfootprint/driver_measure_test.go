@@ -109,7 +109,7 @@ func TestAReportWindowIsTheLabsLiveSetting(t *testing.T) {
 // every driver with a product and lists the rest.
 func TestTheShippedPlanNamesEveryDriverOnce(t *testing.T) {
 	targets, skips := ShippedDriverSweep()
-	tt, ss, err := pickDrivers(targets, skips, []string{"http-json", "ucc-webhook"})
+	tt, ss, err := pickDrivers(targets, skips, []string{"tessellate-census-http", "ucc-webhook"})
 	if err != nil || len(tt) != 1 || len(ss) != 1 {
 		t.Fatalf("picked %v %v: %v", tt, ss, err)
 	}

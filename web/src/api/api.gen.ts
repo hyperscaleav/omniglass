@@ -1066,6 +1066,8 @@ export type EffectiveMetricBody = {
   source_rule?: string;
   /** That calc rule's uuid, the stable form of source_rule */
   source_rule_id?: string;
+  /** The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none */
+  unit?: string;
   /** The effective value: the latest sample, or the contract default until one arrives */
   value?: unknown;
 };

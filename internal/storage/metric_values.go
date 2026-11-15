@@ -23,7 +23,8 @@ type EffectiveMetric struct {
 	MetricTypeID   string
 	Label          string // optional human label; empty when unset
 	DataType       string
-	Required       bool // from the contract; always false for an ad-hoc metric
+	Unit           string // the metric type's display unit; empty when it names none
+	Required       bool   // from the contract; always false for an ad-hoc metric
 	DefaultValue   json.RawMessage
 	SampleValue    json.RawMessage // nil when the series holds no sample
 	Value          json.RawMessage // coalesce(SampleValue, DefaultValue)
@@ -146,7 +147,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		// from: every series the instance's arc holds.
 		q = fmt.Sprintf(`
 		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
-		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, false as required,
+		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, mt.unit, false as required,
 		       null::jsonb as default_value,
 		       s.value as sample_value,
 		       s.value as effective_value,
@@ -165,7 +166,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the series' latest sample.
-		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, c.required,
+		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, mt.unit, c.required,
 		       `+contractDefaultSQL("mt")+`,
 		       s.value as sample_value,
 		       coalesce(s.value, `+contractDefaultSQL("mt")+`) as effective_value,
@@ -180,7 +181,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		union all
 		-- The ad-hoc arm: series landing directly on the instance for metrics the
 		-- contract does not declare.
-		select mt.name, mt.id, mt.label, mt.data_type, false,
+		select mt.name, mt.id, mt.label, mt.data_type, mt.unit, false,
 		       null::jsonb,
 		       s.value, s.value, true, false, coalesce(s.source_rule, ''), coalesce(s.source_rule_id, ''),
 		       coalesce(s.instance, ''), coalesce(s.instance_count, 0), s.instances
@@ -213,8 +214,9 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			def, sample, val []byte
 			instances        []byte
 			label            *string // NULL when unset
+			unit             *string // NULL when the type names none
 		)
-		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &label, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &label, &e.DataType, &unit, &e.Required,
 			&def, &sample, &val, &e.IsSampled, &e.FromContract, &e.SourceRule, &e.SourceRuleID,
 			&e.Instance, &e.InstanceCount, &instances); err != nil {
 			return nil, fmt.Errorf("storage: scan effective metric: %w", err)
@@ -226,6 +228,9 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		}
 		if label != nil {
 			e.Label = *label
+		}
+		if unit != nil {
+			e.Unit = *unit
 		}
 		e.DefaultValue = copyRaw(def)
 		e.SampleValue = copyRaw(sample)
