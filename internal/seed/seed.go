@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"gopkg.in/yaml.v3"
 )
 
@@ -230,6 +231,11 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	} else if len(shared) > 0 {
 		return fmt.Errorf("seed: the ship-with metric, property and event registries share names %v", shared)
+	}
+	// The reserved keys before the registries: the search path refuses a
+	// reserved key both tiers hold (#1447), and it reads the names from here.
+	if err := gw.ReconcileReservedKeys(ctx, writerclass.ReservedNames()); err != nil {
+		return fmt.Errorf("seed: reserved keys: %w", err)
 	}
 	if err := seedPropertyTypes(ctx, gw); err != nil {
 		return err

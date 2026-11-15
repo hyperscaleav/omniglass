@@ -448,6 +448,10 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  reserved_key: {
+    shape: sql_table
+    name: text {constraint: primary_key}
+  }
   severity_level: {
     shape: sql_table
     id: uuid {constraint: primary_key}
