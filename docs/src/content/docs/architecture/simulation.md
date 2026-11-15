@@ -375,7 +375,7 @@ A difference only compares over one fleet, so each read also carries the simulat
 device, and `fleet_changing` while such a sync is binding or releasing addresses. A request the
 node sends to a device the simulator has not bound yet, or has just stopped, is sent and never
 received, which is no loss of the path, so a window whose reads include a zero generation, a
-changing fleet, or two generations reads `restarted` until it slides past ([ADR-1895](/architecture/decisions/#adr-1895-a-window-across-a-change-to-the-sims-fleet-reads-restarted)). A lab's
+changing fleet, or two generations reads `restarted` until it slides past ([ADR-1895](/architecture/decisions/#adr-1895-a-window-across-a-change-to-the-sims-served-fleet-reads-restarted)). A lab's
 first windows span the simulator's first sync, and read that way rather than as loss.
 
 ### In the node's own process
