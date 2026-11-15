@@ -125,7 +125,7 @@ func TestReadyFileSaysHowToReachTheLab(t *testing.T) {
 		"LAB_TOKEN='ogp_minted'",
 		"LAB_USER='dev'",
 		"LAB_PASSWORD='dev'",
-		"LAB_IMAGE='omniglass:dev'",
+		"LAB_IMAGE='" + DevImageFor("abc123") + "'",
 		"LAB_DSN='postgres://omniglass:omniglass@db:5432/omniglass?sslmode=disable'",
 		"LAB_DB='ogwalk-1-ab-db-1'",
 		"LAB_SERVER='ogwalk-1-ab-server-1'",

@@ -1215,7 +1215,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1429,7 +1429,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a
+omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a
 ```
 
 #### `omniglass component identity-binding list`
@@ -1448,7 +1448,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding list ucc-service-1
+omniglass component identity-binding list ucc-platform
 ```
 
 #### `omniglass component identity-binding update`
@@ -1472,7 +1472,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
+omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
 ```
 
 ### `omniglass component impairment`
@@ -2011,12 +2011,12 @@ omniglass component unbound-identity list <name>
 A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
 
 Arguments:
-  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
 ```sh
-omniglass component unbound-identity list 'hq.$comp.meetings-cloud'
+omniglass component unbound-identity list 'hq.$comp.ucc-platform'
 ```
 
 ### `omniglass component update`
@@ -2911,19 +2911,19 @@ A working omniglass on Docker, to learn on
 
 ### `omniglass lab measure`
 
-Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval
+Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the busiest ingest lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval
 
 ```
 omniglass lab measure [flags]
 ```
 
-Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the busiest ingest lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
-When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
+When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line, a line a lane, and needs two of a lane's tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
 
-The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
+The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
 
 Every database read the measure makes runs under what its run has left, and never longer than ten minutes: the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so no measure leaves a query running against the lab it measured.
 

@@ -600,7 +600,14 @@ in, and only those
 ([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). It
 detaches the day `CONCURRENTLY` (waiting for the readers already in it rather than queueing every
 reader behind an exclusive lock) and then drops it, and finishes a detach an earlier pass left
-halfway. The chunked prune keeps every window exact inside the days that remain.
+halfway. The lane's chunked prune works only in a day such a sample holds, and keeps every window
+exact there; a day nothing holds it leaves whole for the drop, so a sample with no window of its own
+is kept at least `retention.metric_days` and leaves with its day, at most a day later
+([ADR-1957](/architecture/decisions/#adr-1957-the-metric-lanes-prune-leaves-a-droppable-day-to-the-drop)).
+A type with a window of its own is pruned to it exactly, in every day. A type kept longer than the lane
+and sampled every day holds every day, so the lane's rows there still go one chunk at a time (#1958).
+Since the drop is the only way out of every other day, a pass whose drop failed is followed a minute
+later.
 On the property lane, finding the old rows reads every page the `ts` BRIN cannot rule out, which
 reused pages widen over time: hence the hourly steady state.
 

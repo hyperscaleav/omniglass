@@ -100,14 +100,28 @@ func (r *Runner) step(stage, detail string) { r.say("  %-10s %s", stage, detail)
 // PreflightError; a failure after tears down what was created.
 func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	start := time.Now()
+	if cfg.Scale() != (cfg.ScaleRun != nil) {
+		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
+	}
 	spec, err := Plan(cfg.Options)
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Scale() != (cfg.ScaleRun != nil) {
-		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
+	var capacity *Capacity
+	if cfg.ScaleRun != nil {
+		// A scale lab's Postgres is sized from the host and the fleet
+		// (#1930): once the options are known good, the host is read and the
+		// lab planned again with the buffers the assessment settles.
+		c, err := r.scaleCapacity(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		capacity, cfg.SharedBuffersMiB = &c, c.BuffersMiB
+		if spec, err = Plan(cfg.Options); err != nil {
+			return nil, err
+		}
 	}
-	if cfg.Image, err = r.preflight(ctx, spec, cfg); err != nil {
+	if cfg.Image, err = r.preflight(ctx, spec, cfg, capacity); err != nil {
 		return nil, err
 	}
 	lab, err := r.up(ctx, spec, cfg)
@@ -165,10 +179,10 @@ func (e *heldForGone) Error() string {
 // lab already holding the project, the console's port, and the image.
 // It returns the image choice as the image found settles it: an override
 // that is the binary's own build is no override worth a warning.
-func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageChoice, error) {
+func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config, capacity *Capacity) (ImageChoice, error) {
 	c := cfg.Image
-	if cfg.ScaleRun != nil {
-		if err := r.checkCapacity(ctx, cfg); err != nil {
+	if capacity != nil {
+		if err := r.checkCapacity(*capacity); err != nil {
 			return c, err
 		}
 	}
@@ -178,14 +192,17 @@ func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageCho
 	if err := r.PortFree(cfg.Listen, cfg.Port); err != nil {
 		return c, err
 	}
-	labels, found, err := r.Engine.ImageLabels(ctx, c.Ref)
+	info, found, err := r.Engine.InspectImage(ctx, c.Ref)
 	if err != nil {
 		return c, fmt.Errorf("look up the image %s: %w", c.Ref, err)
 	}
-	if err := CheckDevImage(c, found, labels); err != nil {
+	if err := CheckDevImage(c, found, info.Labels); err != nil {
 		return c, &PreflightError{Cause: err.Error(), Fix: "run `make` in your omniglass checkout, then run the lab again.", Err: err}
 	}
-	if c.Warning != "" && found && c.OwnBuild(labels) {
+	// Pin the image the check read: the containers are created from this ID,
+	// so a tag re-pointed by another build after this line changes nothing.
+	c.ID = info.ID
+	if c.Warning != "" && found && c.OwnBuild(info.Labels) {
 		c.Warning, c.Why = "", "this binary's own build"
 	}
 	if c.Warning != "" {
@@ -221,23 +238,42 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *string) (*Lab, error) {
 	lab := &Lab{Spec: spec, ids: map[string]string{}, guarded: []string{"db", "server"}}
 	*stage = "pulling the images"
-	for _, ref := range []struct{ ref string }{{cfg.Image.Ref}, {PostgresImage}} {
-		_, found, err := r.Engine.ImageLabels(ctx, ref.ref)
+	imageID := cfg.Image.ID
+	for _, ref := range []string{cfg.Image.Ref, PostgresImage} {
+		if ref == cfg.Image.Ref && imageID != "" {
+			// Preflight found it and pinned its ID; the tag is not read again.
+			continue
+		}
+		_, found, err := r.Engine.InspectImage(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
 		if found {
 			continue
 		}
-		if ref.ref == cfg.Image.Ref && !cfg.Image.Pull {
-			return nil, fmt.Errorf("the image %s is not built; run `make`", ref.ref)
+		if ref == cfg.Image.Ref && !cfg.Image.Pull {
+			return nil, fmt.Errorf("the image %s is not built; run `make`", ref)
 		}
-		r.step("image", "pulling "+ref.ref+" (a one-time download)")
-		if err := r.Engine.PullImage(ctx, ref.ref); err != nil {
-			return nil, fmt.Errorf("pull %s: %w", ref.ref, err)
+		r.step("image", "pulling "+ref+" (a one-time download)")
+		if err := r.Engine.PullImage(ctx, ref); err != nil {
+			return nil, fmt.Errorf("pull %s: %w", ref, err)
 		}
 	}
+	if imageID == "" {
+		// A pulled image has no ID until it is local.
+		info, found, err := r.Engine.InspectImage(ctx, cfg.Image.Ref)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("the image %s is not present after its pull", cfg.Image.Ref)
+		}
+		imageID = info.ID
+	}
 	r.step("image", fmt.Sprintf("%s (%s)", cfg.Image.Ref, cfg.Image.Why))
+	// The lab reports the spec as planned (the reference a person gave);
+	// its containers run the pinned image.
+	run := spec.WithImage(imageID)
 
 	if cfg.Fresh {
 		vols, err := r.Engine.Volumes(ctx, ProjectLabels(spec.Project))
@@ -282,7 +318,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	r.step("database", "Postgres is ready")
 
 	*stage = "seeding the fleet"
-	seedID, err := r.Engine.RunContainer(ctx, spec.Seed, spec.Network)
+	seedID, err := r.Engine.RunContainer(ctx, run.Seed, run.Network)
 	lab.ids["seed"] = seedID
 	if err != nil {
 		return nil, fmt.Errorf("start the seed: %w", err)
@@ -301,7 +337,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	delete(lab.ids, "seed")
 
 	*stage = "waiting for the server"
-	id, err = r.Engine.RunContainer(ctx, spec.Server, spec.Network)
+	id, err = r.Engine.RunContainer(ctx, run.Server, run.Network)
 	lab.ids["server"] = id
 	if err != nil {
 		return nil, fmt.Errorf("start the server: %w", err)
@@ -346,8 +382,8 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 
 	if cfg.ScaleRun != nil {
 		*stage = "starting the sites' nodes"
-		for _, n := range spec.Nodes {
-			id, err := r.Engine.RunContainer(ctx, n, spec.Network)
+		for _, n := range run.Nodes {
+			id, err := r.Engine.RunContainer(ctx, n, run.Network)
 			lab.ids[n.Name] = id
 			if err != nil {
 				return nil, fmt.Errorf("start the node %s: %w", n.Name, err)
@@ -371,7 +407,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 		}
 		return lab, nil
 	}
-	id, err = r.Engine.RunContainer(ctx, spec.Node, spec.Network)
+	id, err = r.Engine.RunContainer(ctx, run.Node, run.Network)
 	lab.ids["node"] = id
 	if err != nil {
 		return nil, fmt.Errorf("start the node: %w", err)

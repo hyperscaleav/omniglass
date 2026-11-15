@@ -119,11 +119,11 @@ func (o labMeasureOpts) check() error {
 func newLabMeasureCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "measure",
-		Short: "Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval",
+		Short: "Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the busiest ingest lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval",
 		Long: "Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints " +
 			"one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory " +
 			"per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the " +
-			"ingest consumer lane's busy fraction and service time a batch, the console's fleet view response " +
+			"busiest ingest lane's busy fraction and service time a batch, the console's fleet view response " +
 			"times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the " +
 			"ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, " +
 			"each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the " +
@@ -133,10 +133,10 @@ func newLabMeasureCmd() *cobra.Command {
 			"lab of that size, measures it, and removes it, so the one command is the whole run.\n\n" +
 			"When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the " +
 			"reason and the age of the newest landed sample under the table, and every other figure still prints. The " +
-			"consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s " +
-			"apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
+			"consumer lane row is read from the server's periodic `ingest lane` log line, a line a lane, and needs two of a " +
+			"lane's tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
 			"The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has " +
-			"landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, " +
+			"landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, " +
 			"every batch the stream held once all of those were published (its ack floor past the stream's last sequence), " +
 			"so a consumer that never empties under steady load still settles; then it reconciles each batch's " +
 			"ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch " +

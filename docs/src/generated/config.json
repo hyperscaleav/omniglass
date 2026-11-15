@@ -111,6 +111,12 @@
    "doc": "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"
   },
   {
+   "key": "OMNIGLASS_INGEST_PARTITIONS",
+   "default": "4",
+   "scope": "server",
+   "doc": "how many ingest lanes land node telemetry side by side, each node's batches always on one lane and in the order it sent them; 1 to 64, held under the database pool less one, and a value outside that range fails the boot; change it with the telemetry backlog drained, or a node's batches held across the change may land out of order"
+  },
+  {
    "key": "OMNIGLASS_SERVER",
    "scope": "cli",
    "doc": "server base URL the CLI and the node use when --server is omitted, read when the command runs"

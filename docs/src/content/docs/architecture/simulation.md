@@ -413,8 +413,8 @@ Beside those, the fixture's simulated endpoints wire the rest:
 - **The huddle panel's other carriers**: its line protocol over TLS (`newtron-nvp-tls` on 51326,
   pinning the panel's key on first use) and as datagrams (`newtron-nvp-udp` on 51327, dropping a
   seeded 5% of them each way).
-- **The webhooks**: the UCC service's and the UCC platform's webhook endpoints (`ucc-webhook`),
-  which the simulator subscribes each service to ([below](#a-simulated-service-posts-from-the-start)).
+- **The webhooks**: the UCC platform's webhook endpoint (`ucc-webhook`),
+  which the simulator subscribes the platform to ([below](#a-simulated-service-posts-from-the-start)).
 - **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
   the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
   9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
@@ -526,14 +526,14 @@ A route, or a behavior, may also **post a webhook** once its changes apply (#102
 real sender signs one: its `emit` names the URL, the body and headers, and a `sign` block (the
 scheme, `hmac`, `token`, `basic` or `none`; the secret; the header the signature or token rides
 and its prefix; the header carrying the signed unix timestamp; the header carrying each post's
-delivery id), each value a template over the device's state. The UCC service is the face the
+delivery id), each value a template over the device's state. The UCC platform is the face the
 webhook transport is proven against: its admin API takes a **webhook subscription**
 (its webhooks route takes the receiver's `url`, the `scheme`, the `secret` and an optional
 `fault`), and its meeting routes (a start naming the meeting's `id` and `room`, and an end) post
-`meeting.started` and `meeting.ended` to it, hmac sha256 over the
+`room.meeting.started` and `room.meeting.ended` to it, hmac sha256 over the
 timestamp, a dot and the body. A fault posts as a sender gone wrong: `bad-signature` signs with the
 wrong key, `stale` signs a timestamp ten minutes old, and `redeliver` sends one delivery twice. The
-shipped `ucc-webhook` driver maps them; the dev fleet carries the service at headquarters with its
+shipped `ucc-webhook` driver maps them; the dev fleet carries the platform at headquarters with its
 webhook endpoint, signed with the fleet's key (`sim-ucc-signing`) ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 
 ### A simulated service posts from the start
@@ -550,15 +550,15 @@ defaults. The fence is two facts the server holds and a node cannot assert: the 
 the lab mark, and the component sits in the simulated block (`127.60.0.0/16`), which only the seed
 allocates. A database with no lab mark hands out nothing (outside a lab, `make dev` included, a
 service is subscribed by hand through its subscribe route), a real device's webhook is never handed
-out, and a node's worklist never carries one. The UCC service's meeting behavior then posts `meeting.started` every minute, so a lab's
-webhook endpoint is heard within its first two minutes.
+out, and a node's worklist never carries one. The UCC platform's `rooms_report` behavior then posts the batched room state every 30 seconds, so a lab's
+webhook endpoint is heard within its first minute.
 
 The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the
 [fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven
 against (#1282): one service that speaks for every room on the account. Its room list answers
 every room's meeting state and participant count in one read, its meeting routes name the room by
 id (`room.meeting.started` and `room.meeting.ended`), and a report route posts one batched
-`rooms.state` naming every room at once, each signed as the UCC service signs. A room id the
+`rooms.state` naming every room at once, each signed as above. A room id the
 account has not seen joins it, the way a room added on the platform would, and a request's room id
 reaches state only as one path key (a template's `segment` function refuses any other). The
 shipped `ucc-rooms` driver polls the room list as records and the `ucc-webhook` driver's
@@ -577,7 +577,7 @@ not added yet through the provision route, so a room bound later is added on the
 restarted device has every room added again. That is how a scale scenario's meeting platform comes
 to speak for every system of its site ([the lab guide](/guides/lab/#scale-lab-scenarios)); it keeps
 the profile's five demo rooms beside them, which land in its unbound inbox until #1756 retires them.
-The lab's per-room UCC services stay beside it until #1390 retires them.
+It is the lab's one UCC shape: the per-room `ucc-service` it replaced is retired (#1390).
 
 ### A pusher pushes on its own cadence
 
