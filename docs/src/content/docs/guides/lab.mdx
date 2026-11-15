@@ -27,13 +27,13 @@ make
 ./bin/omniglass lab run
 ```
 
-`make` builds two things from one Dockerfile, with nothing but Docker: the image `omniglass:dev` and
-this machine's own binary, `bin/omniglass`, both stamped with one build id. It builds and runs
-nothing else. `make lab` is the short form of the last two commands (`make`, then
+`make` builds two things from one Dockerfile, with nothing but Docker: the image, tagged `omniglass:dev-<build id>`
+(and `omniglass:dev`, see [which image runs](#which-image-runs)), and this machine's own binary,
+`bin/omniglass`, both stamped with one build id. It builds and runs nothing else. `make lab` is the short form of the last two commands (`make`, then
 `./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
 
 With a [release binary](/guides/install/#download-a-binary) there is nothing to build: run
-`omniglass lab run`, and it pulls its own release's image.
+`omniglass lab run`, and it pulls its own release's image, by the digest stamped into it at release.
 
 ## What you see
 
@@ -43,7 +43,7 @@ The lab says what it is doing while it comes up, one line per stage, then where 
 Starting your omniglass lab. The first run takes a few minutes; later ones, under one.
 
   docker     running (Engine API 1.56, unix:///var/run/docker.sock, from the default socket)
-  image      omniglass:dev (built by make beside this binary)
+  image      omniglass:dev-4a34346d (built by make beside this binary)
   network    omniglass-lab_default (a private bridge; only the console is published)
   database   Postgres is ready
   seed       the dev fleet, seeded on this lab's first run
@@ -173,11 +173,12 @@ stale the moment every owner it covers carries the tier, so a closed issue canno
 `make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
 the scale lab runs the same judgment against a lab of any size.
 
-`make test-lab` builds `omniglass:dev` first and runs the lab's integration tests against it. On a
-machine where that tag is shared (another session's lab runs it), build a private tag instead, with
-the binary stamped to match, and run the tests against it with `make test-lab-image`, which builds
-nothing. `LAB_IMAGE` names the image (it reaches the tests and `lab run` as `OMNIGLASS_LAB_IMAGE`;
-empty runs `omniglass:dev`) and `LAB_RUN` narrows the tests:
+`make test-lab` builds the image first and runs the lab's integration tests against the
+`omniglass:dev-<build id>` tag its own build made, so another checkout rebuilding `omniglass:dev` on
+the same Docker host cannot change what it tests. `make test-lab-image` runs the same tests and
+builds nothing: `LAB_BUILD` is the build id whose image they run (`make test-lab` passes the one it
+just built), and `LAB_IMAGE` names an image outright instead (it reaches the tests and `lab run` as
+`OMNIGLASS_LAB_IMAGE`; with neither, they run `omniglass:dev`). `LAB_RUN` narrows the tests:
 
 ```sh
 make build image TAG=mine BUILD_ID=mine
@@ -280,8 +281,9 @@ command itself; here is when you would reach for each:
 - `--scenario` picks another fleet for the lab's first run (the [seed-dev reference](/reference/cli/#omniglass-seed-dev) lists them:
   an empty install, the dev fleet having a bad day, the dev fleet at enterprise size). On a lab that
   already has data, pair it with `--fresh`.
-- `--image` runs an omniglass image of your choosing, with a warning: a lab whose server and binary
-  disagree is yours to debug.
+- `--image` runs an omniglass image of your choosing (env `OMNIGLASS_LAB_IMAGE`), with a warning: a lab
+  whose server and binary disagree is yours to debug. A build-keyed `make` image needs no flag; reach
+  for it for an image that is not the one this binary's `make` built, such as a private build.
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.
@@ -301,12 +303,23 @@ database measures, so the live line carries on from the seeded one. It needs `--
 refuses it, so a lab you learn from or measure only ever shows what its own server measured. The
 [demos guide](/contributing/demos/) says how the repo uses them.
 
-**Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:
-the image carries its build id in the OCI label `org.opencontainers.image.version`, and the lab
-refuses an image whose label is not its own build id, saying to run `make`. The lab never builds
-anything itself, so it always runs the code you built. A release binary runs
-`ghcr.io/hyperscaleav/omniglass:v<version>`, pulled if absent
-([container image](/guides/container-image/#where-it-ships)).
+**Which image runs.** A binary built by `make` runs the image the same `make` built, by the tag keyed
+to their shared build id: `omniglass:dev-<build id>`. `make` also tags the build `omniglass:dev`, but
+that tag is shared by every checkout on a Docker host and the newest build anywhere wins it, so the
+lab does not run it (a binary with no build id, one not built by `make`, is the exception: it falls
+back to `omniglass:dev` and cannot tell whether that is its own). The image carries its build id in
+the OCI label `org.opencontainers.image.version`, and the lab refuses an image whose label is not its
+own build id, saying to run `make`. The lab resolves the tag to an image ID once, before it creates
+anything, and creates the server, the seed and every node (each site's, in a scale lab) from that ID,
+so a build that re-tags `omniglass:dev-<build id>` or `omniglass:dev` mid-run changes nothing. The lab
+never builds anything itself, so it always runs the code you built. Old `omniglass:dev-<build id>`
+tags pile up as you rebuild; `docker image prune` or `docker rmi` clears them. A release binary runs the image its release
+was built with, `ghcr.io/hyperscaleav/omniglass@sha256:...`, pulled if absent: the release builds and
+pushes the image first and stamps its digest into the binary, so the binary never asks the registry
+what the `v<version>` tag points at, and a tag pushed again later cannot change what it runs
+([container image](/guides/container-image/#where-it-ships)). A release-versioned binary that carries
+no digest (one built outside the release workflow) refuses to start a lab and says
+to name an image with `--image`, which runs it with the usual warning.
 
 ## Scale lab scenarios
 
@@ -377,7 +390,7 @@ with a corporate fleet, and it is never a measurement basis.
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
 | `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the rung (`300` or `1000` systems) its baseline states | refuses a run of another scenario, size or device set as invalid |
-| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
+| the soak ([a soak run](#a-soak-run)) | corporate, 3,000 systems | the goal size, held for days, then judged by the platform's own alarms |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
 16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
@@ -403,27 +416,38 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
   thousandth of a core.
 
 So `corporate` at 1,000 systems (18 sites, 3,016 components) needs about 3.4 GiB and 3.2 cores, and at
-3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores. CPU, not memory, is what runs out
-first on most machines: the reference WSL setup of 12 GB on a 12-core host fits 3,000 systems only
-just. `--plan` ends with the decision for this machine:
+3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
+12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 3.4 GiB of memory and 3.2 cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components).
-This Docker host can spare 25.1 GiB and 9.6 cores (80% of its 31.3 GiB and 12 cores).
+Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, a node for each of 30 sites, 8950 simulated components).
+Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
 
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.4 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 447, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
 ```
 
-That one was forced with the hidden `--host-memory 2g`, which plans against a memory limit of your
-choosing, so you can see where a smaller machine's ceiling sits without one. The estimate is a
-model, not a promise: it was measured at small sizes, and [`omniglass lab measure`](#measuring-a-scale-lab)
-measures a running lab.
+Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
+choosing (`12g`, then `2g`), so you can see where a smaller machine's ceiling sits without one. The
+estimate is a model, not a promise: it was measured at small sizes, and
+[`omniglass lab measure`](#measuring-a-scale-lab) measures a running lab.
+
+**A scale lab's Postgres is sized for the host and the fleet**, the way a production one is
+([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
+host's memory (8 GB at most), and never more than the fleet's estimate leaves of what the host can
+spare, so the buffers grow into spare memory and never refuse a fleet that fits. They never drop
+below Postgres's stock 128 MB, the size the estimate was measured with. A forced `--host-memory`
+sizes them only when it is less than the host has. The preflight counts buffers above the stock size
+on top of the estimate, since they fill as the lab reads. Checkpoints spread to 15 minutes and 8 GB
+of WAL, compressed, so leave that much disk free for the lab's volume beside its data. A `dev` lab runs the image's stock Postgres, which is plenty for
+the fleet it simulates.
 
 **Each node runs capped** (#1892), like the dev lab's single node in the [topology table](#what-runs-with-which-privilege):
 one CPU, an edge box's share, so on a cgroup v2 host (Docker's default) every node sizes its
@@ -543,22 +567,25 @@ How to read each row:
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so
   this is a floor: zero means none was logged, not none happened. Anything above zero in a quiet lab
   is worth a look.
-- **consumer lane busy**: how much of the window the ingest consumer spent inside its handler, landing
-  batches. The telemetry stream is a work queue with one durable consumer and one message in flight,
-  so the consumer is one lane, and its busy fraction is the lane's utilisation: at 100 % every batch
-  waits for the one before it and lag grows without bound; at 25 % the lane could carry four times the
-  load before it saturates. The row also gives the service time a batch (busy time over batches) and
-  the batches it counted over the span. The server tallies every batch's handler time and logs the
-  cumulative count and busy milliseconds every 30 s (`msg="ingest lane"`, only when the count moved,
-  so an idle server is quiet); the harness reads the first and last tally inside the window and
-  divides the busy time between them by the time between them, so the fraction is exact to the
-  millisecond over that span and no boundary estimate is needed (a batch in flight at a tick counts
-  toward the next interval). It needs two tallies inside the window, 30 s apart: a window too short
-  to hold two ticks, a lane that was idle at a tick, or a server built before this line reads
-  `not measured` with the reason under the table, as does a tally that went backwards (the server
-  restarted inside the window). Together with the lag this answers
-  whether more consumers would help: a lag at the spool wait with a lane mostly idle means the lane is
-  not the bottleneck.
+- **consumer lane busy**: how much of the window the busiest ingest lane spent inside its handler,
+  landing batches. The telemetry stream is a work queue filed by a partition of each node's name, with
+  one durable and one message in flight a partition (`OMNIGLASS_INGEST_PARTITIONS`, 4 by default), so
+  each partition is one lane and a node's batches always share one. The busiest lane bounds ingest, not
+  the lanes' sum: at 100 % every batch on it waits for the one before it and its nodes' lag grows
+  without bound; at 25 % it could carry four times the load before it saturates. The push lane and any
+  partition left draining share a tally of their own, which is no one lane's and is left out. The row
+  also gives the service time a batch (busy time over batches) and the batches every lane counted over
+  its span. The server tallies every batch's handler time and logs each lane's cumulative count and
+  busy milliseconds every 30 s (`msg="ingest lane"`, a line a lane naming its `partition`, only when
+  the count moved, so an idle server is quiet); the harness reads each lane's first and last tally
+  inside the window and divides the busy time between them by the time between them, so the fraction
+  is exact to the millisecond over that span and no boundary estimate is needed (a batch in flight at a
+  tick counts toward the next interval). It needs a lane with two tallies inside the window, 30 s
+  apart: a window too short to hold two ticks, lanes that were idle at a tick, or a server built before
+  this line reads `not measured` with the reason under the table, as does a tally that went backwards
+  (the server restarted inside the window). Together with the lag this answers whether more lanes
+  would help: a lag at the spool wait with the busiest lane mostly idle means the lanes are not the
+  bottleneck.
 - **fleet view p50, p95**: the time of `GET /api/v1/views/fleet`, the whole-fleet view the console
   opens on, read through the API with a token the harness mints, spread evenly over the window so it
   is read while the lab collects, not while it idles. The reads are sequential, so these are one
@@ -633,7 +660,8 @@ A loss is named per node under the totals, with the protocol and, for an unhit e
 component. An icmp target reads `not observed by the sim`, since the kernel answers a ping. A node
 whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
 impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
-simulator that restarted inside the window reads `restarted`, since none of its figures compare.
+simulator that restarted inside the window, or a simulator whose served fleet changed in it (a device
+added or removed), reads `restarted`, since none of its figures compare.
 The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
 the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
 than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
@@ -692,8 +720,8 @@ push lane's follow, its publish row ahead of its ingest rows:
   `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
   reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
   node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
-  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
-  the window`, so a row never reads as every node's when it is not.
+  (or whose simulator's served fleet changed in it) has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted or
+  changed fleet in the window`, so a row never reads as every node's when it is not.
   Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
   of a `kind`, with these four outcomes.
 - The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
@@ -948,7 +976,7 @@ missing rather than dropping out. A run whose worklist read failed, or found no 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
-baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted or its simulator's served fleet changed inside the window, or a device carried an impairment. A gated lab is never
 impaired, so an impaired gap can only mean a fault left on.
 
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
@@ -965,6 +993,68 @@ The gate never runs in CI and is never a required check: a run takes a scale lab
 an hour, and its times and usage gate only on the baseline's host class, which a GitHub runner is not
 ([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
 on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
+
+#### Measuring each driver's cost
+
+A scale lab measures whole nodes, and each of its nodes runs the simulator in its own process
+(`node run --simulate`), so a node's memory and CPU there include the devices it polls. What one task
+of a driver costs a node is a separate measurement, and `omniglass lab perf drivers` makes it:
+
+```bash
+omniglass lab perf drivers --image omniglass:dev
+```
+
+It brings up a throwaway lab with no fleet and no node of its own, then measures each shipped driver
+in turn on a node that runs only the node:
+
+- **A node of its own.** The driver's node runs in one container and the simulator beside it in
+  another, sharing the node's network namespace, so the node polls the simulated devices on its own
+  loopback while the simulator's work lands in a different cgroup. The node runs the product's own
+  cadence (the heartbeat, probe and worklist pull a deployed node runs, not the lab's quicker clock),
+  so its background work weighs on the figures as it would in the field.
+- **Four steps.** The node is measured holding none of the driver's components, then N, 2N and 3N,
+  where N components bring about `--step-tasks` tasks (each component brings one task per poll the
+  driver declares). Each step warms up, then reads the node container's cgroup across a window long
+  enough for the driver's slowest poll to run: CPU between the window's ends, and the working set
+  (memory less file cache) as the median of reads spread across it.
+- **A line, or a refusal.** Millicores per task is the slope across all four steps. Memory per task
+  is the slope across the three loaded steps alone: a node's memory jumps when its first tasks land
+  (its lanes start and its heap grows to its working size) and then rises by a slope, so the idle
+  step sits apart, and the loaded line's value at zero tasks over the idle node is the **warm cost**,
+  paid once. A step off its line by more than a tenth of the rise in memory, or a quarter in CPU,
+  refuses that figure, which is listed as not measured with why, never written down as a cost; the
+  other figure still stands, and only a driver with neither is left out. A loaded line that starts
+  below the idle node has no warm cost to show (the first tasks filled heap the idle node already
+  held), so the warm figure is left empty with that reason rather than written as zero.
+- **A bigger step when memory hides.** A cheap driver costs a node a few KiB a task, and at a small
+  step that rise is inside the heap's own swing, so its memory does not fit. Such a driver is swept
+  again on a fresh node at four times the step, up to `--max-step-tasks`, and the attempt that
+  measured the most figures is kept (the bigger step on a tie). A figure that still does not fit is
+  listed with why. Each row records the step it was measured at.
+- **A step the node actually runs.** Before a step is measured, the sweep waits until the node's
+  installed worklist (its `worklist-task-count`) holds every task the server holds for it. The server
+  sends a node's worklist as one bus reply, and a reply still over the bus's maximum payload once
+  compressed is refused, so the node keeps its last worklist (#1586); at the default 1 MiB payload that
+  ceiling is about 18,000 tasks a node. A step past it would measure a node running the previous
+  step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
+  and caps any later growth there.
+- **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
+  node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
+  polling thread's kernel clock, averaged over the reports wholly inside each step's window and read
+  once the last has landed, after two of the lab's live report windows. Thread share is the one over
+  the other: the part of a run's cost the thread clock sees. A low share is work the run hands
+  to other goroutines, such as a held session's reader, which is why thread CPU compares drivers only
+  within one transport and the cgroup slope compares them across.
+
+The run writes its table to `internal/labfootprint/drivercost/shipped.json`, relative to the working
+directory, so run it from the repository's root. The table is stamped with the date and the build, and
+with the host's cores and memory when the lab's Docker daemon is local. A sweep stopped part way (an
+interrupt, a lab that failed) still writes the drivers it had measured. Commit it after `make gen`, which renders it on the
+[scaling page](/architecture/scaling/#what-a-driver-costs-a-node), each driver on its own and rolled
+up by its kind and poll interval; a shipped driver the table lacks reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
+measures named drivers. A full sweep takes several hours, most of it in the windows of drivers that
+poll every five minutes; run it on the host class the figures should describe. Every flag is in the
+[CLI reference](/reference/cli/#omniglass-lab-perf-drivers).
 
 ### Sampling a scale lab over time
 
@@ -1101,6 +1191,27 @@ machine through a tunnel, then open `http://127.0.0.1:8080/web`:
 ```sh
 ssh -L 8080:127.0.0.1:8080 <soak-host>
 ```
+
+**The verdict.** A week of the series says how the platform grew; whether it failed silently is the
+platform's own to say, and `lab soak verdict` reads exactly that, through the API alone: the platform
+system's alarm history and every loss ratio on the Platform health page. It judges the window from
+`--since` to now (or `--until`), prints pass or fail with every reason, and exits 1 on a fail:
+
+```sh
+omniglass lab soak verdict --since 2026-11-20T08:00:00Z --record-dir docs/src/content/soak-records
+```
+
+It passes when the soak ran at least 7 days, no platform alarm is open, none raised in the window was
+open longer than `--tolerance` (30 minutes by default), and every loss ratio on the page reads 0. A
+reading that cannot answer fails instead of passing: no build, two builds, no loss ratio to read, a
+token that cannot read the whole page (it needs node, system and component read over everything,
+which the lab's token has), or an alarm history cut at the API's 500-alarm cap. The alarm history
+reaches back 30 days, so `--since` may be no older than that. The thresholds are named in
+`internal/lab/soak.go` (`SoakMinWindow`, `SoakAlarmTolerance`, `SoakLossCeiling`).
+
+`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A release needs a
+passing record for its build: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the
+record format and the rule.
 
 ### The manifest format
 
@@ -1272,6 +1383,10 @@ then the CLI's current context, then the platform's default socket or named pipe
 - **The image is not built, or was built from another tree.** Run `make`, which builds the binary
   and the image together, then run the lab again. A binary built without `make` carries no build id
   and cannot tell which image is its own, so it asks for `make` too.
+- **A release binary carries no image digest.** It was built outside the release workflow (from a
+  tagged tree, or by a tag pushed from a workstation), so it cannot name the image its release was
+  built with, and it will not trust the tag. Run an image you choose with `--image`, such as
+  `--image ghcr.io/hyperscaleav/omniglass:v<version>`, with the usual warning.
 
 ## The console fast loop
 

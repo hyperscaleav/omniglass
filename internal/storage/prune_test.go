@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,8 +86,24 @@ func (f *pruneFixture) row(lane, owner string, ts time.Time, provenance string, 
 		ts, owner, name, provenance, strconv.FormatFloat(value, 'f', -1, 64))
 }
 
+// hold plants one sample of prune-kept, a type kept 365 days, in ts's day on
+// the component, so the day the drop would take stays and the lane's prune
+// works inside it (#1957). values reads only prune-rtt, so a hold is never
+// among the rows a test reads back.
+func (f *pruneFixture) hold(ts time.Time) {
+	f.t.Helper()
+	if err := f.gw.MakeMetricDays(f.ctx, ts); err != nil {
+		f.t.Fatal(err)
+	}
+	mustExec(f.t, f.conn, `insert into metric_type (name, data_type, retention_days)
+		select 'prune-kept', 'float', 365 where not exists (select 1 from metric_type where name = 'prune-kept')`)
+	mustExec(f.t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+		`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = 'prune-kept'), '', 'observed', 0)`),
+		ts)
+}
+
 // values lists one lane's surviving rows for one owner, oldest first, as
-// provenance:value.
+// provenance:value; on the metric lane, prune-rtt's only.
 func (f *pruneFixture) values(lane, owner string) []string {
 	f.t.Helper()
 	col := "component_id"
@@ -97,12 +114,13 @@ func (f *pruneFixture) values(lane, owner string) []string {
 	if lane == "metric" {
 		value = `value::text`
 	}
-	table := lane
+	table, only := lane, ""
 	if lane == "metric" {
 		table = storagetest.MetricRows + " metric"
+		only = ` and metric_type_id = (select id from metric_type where name = 'prune-rtt')`
 	}
 	rows, err := f.conn.Query(f.ctx, `select provenance || ':' || `+value+` from `+table+`
-		where owner_kind = $1 and `+col+` is not null order by ts, id`, owner)
+		where owner_kind = $1 and `+col+` is not null`+only+` order by ts, id`, owner)
 	if err != nil {
 		f.t.Fatalf("read %s %s: %v", lane, owner, err)
 	}
@@ -135,7 +153,9 @@ func (f *pruneFixture) prune(lane string, before time.Time, limit int) int64 {
 // value a transition-only series still holds. On the metric lane the floor is
 // the latest row within retention (ADR-1275): every observation of a quantity
 // is stored, so a series still measured has a recent row, and one past its
-// window reads as no reading within retention. A re-run deletes nothing.
+// window reads as no reading within retention; both its days are held by a
+// longer type, so the prune, not the drop, removes them (#1957). A re-run
+// deletes nothing.
 func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
@@ -158,6 +178,8 @@ func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 		f.row("metric", owner, tenDays, "observed", 12)
 		f.row("metric", owner, fiveDays, "observed", 34)
 	}
+	f.hold(tenDays)
+	f.hold(fiveDays)
 
 	if n := f.prune("property", cutoff, 100); n != 2 {
 		t.Fatalf("property prune deleted %d rows, want 2 (the superseded observed row of each owner)", n)
@@ -181,7 +203,8 @@ func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 // TestPruneSamplesCompletesABacklogInChunks: a backlog larger than one call's
 // limit completes across calls, each deleting at most the limit in short
 // statements of its own, and the chunk boundary loses nothing and spares the
-// row inside the window.
+// row inside the window. The backlog's days (25 hours span at most two) are
+// held by a longer type, so the prune, not the drop, is what clears them.
 func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
@@ -190,6 +213,8 @@ func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
 	for i := 0; i < 25; i++ {
 		f.row("metric", "component", start.Add(time.Duration(i)*time.Hour), "observed", float64(i))
 	}
+	f.hold(start)
+	f.hold(start.Add(24 * time.Hour))
 	f.row("metric", "component", now.Add(-time.Hour), "observed", 99)
 	cutoff := now.Add(-24 * time.Hour)
 
@@ -203,6 +228,88 @@ func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
 	}
 	if v := f.values("metric", "component"); len(v) != 1 || v[0] != "observed:99" {
 		t.Fatalf("after the backlog, rows = %v, want only the row inside the window", v)
+	}
+}
+
+// TestPruneMetricSamplesLeaveADroppableDayToTheDrop pins #1957: the lane's
+// prune deletes no row of a day the partition drop will take, neither a day
+// wholly past the window nor the day the cutoff sits in, so the drop removes
+// those rows whole instead of finding them already deleted one by one. A day
+// a longer type still holds is one the drop refuses, and the prune keeps the
+// window exact inside it. A row inside the window survives both.
+func TestPruneMetricSamplesLeaveADroppableDayToTheDrop(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	f := newPruneFixtureAt(t, at)
+	day := func(d, h int) time.Time { return time.Date(2026, 6, d, h, 0, 0, 0, time.UTC) }
+	f.row("metric", "component", day(8, 12), "observed", 8)   // a held day, past the window
+	f.row("metric", "component", day(10, 12), "observed", 10) // a day wholly past the window
+	f.row("metric", "component", day(13, 6), "observed", 13)  // the cutoff's day, past the cutoff
+	f.row("metric", "component", day(14, 12), "observed", 14) // inside the window
+	f.hold(day(8, 13))
+	cutoff := at.Add(-48 * time.Hour)
+
+	if n := f.prune("metric", cutoff, 100); n != 1 {
+		t.Fatalf("the lane's prune deleted %d rows, want 1 (the held day's row only)", n)
+	}
+	if got := strings.Join(f.values("metric", "component"), ","); got != "observed:10,observed:13,observed:14" {
+		t.Fatalf("after the prune, rows %s, want the droppable days' rows left to the drop", got)
+	}
+	dropped, err := f.gw.DropMetricPartitions(f.ctx, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(dropped, "metric_p20260610") || slices.Contains(dropped, "metric_p20260608") {
+		t.Fatalf("the drop took %v, want metric_p20260610 and not the held metric_p20260608", dropped)
+	}
+	// Once its day ends inside the cutoff, the cutoff's day goes whole too.
+	if _, err := f.gw.DropMetricPartitions(f.ctx, day(14, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(f.values("metric", "component"), ","); got != "observed:14" {
+		t.Fatalf("after the drops, rows %s, want only the row inside the window", got)
+	}
+}
+
+// TestPruneMetricSamplesAskTheDropsQuestionOfEachDay pins the bound of the
+// lane prune's held test (#1957). A day wholly past the window is asked what
+// the drop asks of it now, so a type kept longer than the lane whose window
+// has passed the day holds nothing there. The day the cutoff sits in is asked
+// what the drop will ask once the day is past, so a type kept no longer than
+// the lane holds nothing there either. Either one held would have the prune
+// delete rows one by one that the drop then takes whole.
+func TestPruneMetricSamplesAskTheDropsQuestionOfEachDay(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	f := newPruneFixtureAt(t, at)
+	day := func(d, h int) time.Time { return time.Date(2026, 6, d, h, 0, 0, 0, time.UTC) }
+	f.row("metric", "component", day(10, 12), "observed", 10) // a day wholly past the window
+	f.row("metric", "component", day(13, 6), "observed", 13)  // the cutoff's day, past the cutoff
+	f.row("metric", "component", day(14, 12), "observed", 14) // inside the window
+	typed := func(name string, days int, ts time.Time) {
+		t.Helper()
+		mustExec(t, f.conn, `insert into metric_type (name, data_type, retention_days)
+			select $1::text, 'float', $2 where not exists (select 1 from metric_type where name = $1::text)`, name, days)
+		mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+			`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = $2), '', 'observed', 0)`),
+			ts, name)
+	}
+	typed("prune-longer", 4, day(10, 13)) // kept past the lane, but no longer into June 10
+	typed("prune-same", 2, day(13, 7))    // kept exactly as long as the lane
+	cutoff := at.Add(-48 * time.Hour)
+
+	if n := f.prune("metric", cutoff, 100); n != 0 {
+		t.Fatalf("the lane's prune deleted %d rows, want 0: no day is held when the drop asks", n)
+	}
+	dropped, err := f.gw.DropMetricPartitions(f.ctx, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(dropped, "metric_p20260610") {
+		t.Fatalf("the drop took %v, want metric_p20260610", dropped)
+	}
+	if got := strings.Join(f.values("metric", "component"), ","); got != "observed:13,observed:14" {
+		t.Fatalf("after the drop, rows %s, want the cutoff's day left whole for its drop", got)
 	}
 }
 

@@ -336,10 +336,14 @@ func (d *deviceObservation) counters(p obsProtocol) ObservationCounters {
 
 // ObservationSnapshot is one read of an engine's observation.
 type ObservationSnapshot struct {
-	At        time.Time
-	Started   time.Time
-	Protocols []ProtocolObservation
-	Devices   []DeviceObservation
+	At      time.Time
+	Started time.Time
+	// FleetGeneration and FleetChanging are the engine's fleetState when
+	// the snapshot was read.
+	FleetGeneration int64
+	FleetChanging   bool
+	Protocols       []ProtocolObservation
+	Devices         []DeviceObservation
 	// Faces lists only the faces that saw an overlap, so the snapshot stays
 	// small at fleet scale; the per-protocol overlap totals are on each row.
 	Faces []FaceOverlap
@@ -449,7 +453,20 @@ func (d *Device) Observed(protocol string) ObservationCounters {
 }
 
 // Observation reads every device's counters, the per-protocol latency and
-// in-flight high water, and the faces that saw an overlap.
+// in-flight high water, and the faces that saw an overlap. The fleet is read
+// on both sides of the counters, and a fleet that moved between the two
+// reads as changing, so counters taken across a sync never read as steady.
 func (e *Engine) Observation() ObservationSnapshot {
-	return e.obs.snapshot(time.Now())
+	before := e.fleetNow()
+	snap := e.obs.snapshot(time.Now())
+	after := e.fleetNow()
+	snap.FleetGeneration = after.generation
+	snap.FleetChanging = before != after || after.changing
+	return snap
+}
+
+func (e *Engine) fleetNow() fleetState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.fleet
 }

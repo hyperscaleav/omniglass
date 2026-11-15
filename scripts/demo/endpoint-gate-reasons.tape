@@ -66,7 +66,7 @@ Wait
 Type "# So is a preview against the sensor's address, through the same node"
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --driver http-json --polls '["occupancy"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
+Type `omniglass driver preview --node edge-hq --driver tessellate-census-http --polls '["occupancy"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
 Enter
 Wait
 

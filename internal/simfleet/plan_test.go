@@ -16,7 +16,7 @@ func TestPlan(t *testing.T) {
 		"x-player":  {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}}},
 	}
 	profileFor := func(p string) (*profile.DeviceProfile, bool) { d, ok := profiles[p]; return d, ok }
-	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-nvp", "x-bar": "kestrel-api", "x-sensor": "http-json",
+	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-panel-nvp", "x-bar": "kestrel-api", "x-sensor": "tessellate-census-http",
 		"x-cam": "a-stub", "x-player": "a-stub"}
 
 	got, err := Plan([]Component{
@@ -47,8 +47,8 @@ func TestPlan(t *testing.T) {
 		display[0].Inputs["host"] != "127.60.0.1" || display[0].Inputs["port"] != "10161" || display[0].Inputs["community"] != CommunitySecret {
 		t.Errorf("display endpoints = %+v, want an snmp-generic attach at the shifted port", display)
 	}
-	if panel := got[1].Endpoints; len(panel) != 1 || panel[0].Driver != "newtron-nvp" || panel[0].Inputs["host"] != "127.60.0.2" {
-		t.Errorf("panel endpoints = %+v, want a newtron-nvp attach", panel)
+	if panel := got[1].Endpoints; len(panel) != 1 || panel[0].Driver != "newtron-panel-nvp" || panel[0].Inputs["host"] != "127.60.0.2" {
+		t.Errorf("panel endpoints = %+v, want a newtron-panel-nvp attach", panel)
 	}
 	// The http drivers attach with the credential the simulator's face
 	// demands (#902): the bar's https on the shifted 443, the sensor's http on
@@ -56,8 +56,8 @@ func TestPlan(t *testing.T) {
 	if bar := got[2].Endpoints; len(bar) != 1 || bar[0].Driver != "kestrel-api" || bar[0].Inputs["port"] != "10443" || bar[0].Inputs["login"] != KestrelLoginSecret {
 		t.Errorf("bar endpoints = %+v, want a kestrel-api attach at the shifted 443", bar)
 	}
-	if sensor := got[3].Endpoints; len(sensor) != 1 || sensor[0].Driver != "http-json" || sensor[0].Inputs["port"] != "10080" || sensor[0].Inputs["key"] != CensusKeySecret {
-		t.Errorf("sensor endpoints = %+v, want an http-json attach at the shifted 80", sensor)
+	if sensor := got[3].Endpoints; len(sensor) != 1 || sensor[0].Driver != "tessellate-census-http" || sensor[0].Inputs["port"] != "10080" || sensor[0].Inputs["key"] != CensusKeySecret {
+		t.Errorf("sensor endpoints = %+v, want an tessellate-census-http attach at the shifted 80", sensor)
 	}
 	// Drivers with no spec yet get a reachability probe: plain HTTP where the
 	// device serves it, a TCP port check on a TLS-only device.

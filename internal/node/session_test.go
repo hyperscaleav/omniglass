@@ -115,7 +115,7 @@ func listenTask(id, endpointID, target string) collection.TaskSpec {
 	return collection.TaskSpec{
 		ID: id, Mode: "listen", Transport: "tcp", EndpointID: endpointID, EndpointName: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"` + target + `"}`),
-		Spec: json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+		Spec: json.RawMessage(`{"driver":"newtron-panel-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
 			"match":{"prefix":"EVT "},
 			"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\S+)$"}}]}`),
 	}
@@ -156,7 +156,7 @@ func TestSessionManagerHoldsBorrowsAndTearsDown(t *testing.T) {
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
 	defer m.closeAll()
 
-	pollSpec := json.RawMessage(`{"driver": "newtron-nvp", "function": "status",
+	pollSpec := json.RawMessage(`{"driver": "newtron-panel-nvp", "function": "status",
 		"request": {"line": "GET INPUT"},
 		"emits": [{"name": "video-input", "lane": "property", "extract": {"regex": "^INPUT (\\S+)$"}}]}`)
 	poll := collection.TaskSpec{
@@ -273,7 +273,7 @@ func TestSessionManagerKeepsTheConnectionAcrossATaskRehash(t *testing.T) {
 	rehashed := listenTask("l1-v2", "ep-1", "10.0.0.5:51325")
 	// The listener's emits change (its id re-hashes); its arm conversation
 	// does not, so the connection is kept.
-	rehashed.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+	rehashed.Spec = json.RawMessage(`{"driver":"newtron-panel-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
 		"match":{"prefix":"EVT "},
 		"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\w+)"}}]}`)
 	m.reconcile([]collection.TaskSpec{rehashed})
@@ -392,7 +392,7 @@ func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
 	t.Parallel()
 	c := newCapture()
 	task := listenTask("l1", "ep-1", "10.0.0.5:51325")
-	task.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+	task.Spec = json.RawMessage(`{"driver":"newtron-panel-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
 		"match":{"prefix":"EVT "}, "unmatched":"collection-failed",
 		"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\S+)$"}}]}`)
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}}, c.hooks(&transitionLog{}))
@@ -623,5 +623,25 @@ func TestSessionManagerDialsThroughItsSlots(t *testing.T) {
 	}
 	if _, peak := dialer.counts(); peak > 2 {
 		t.Fatalf("peak dials in flight = %d, want at most 2", peak)
+	}
+}
+
+// The driver's connect quiet window (#1418) reaches the line channel a
+// session opens: absent is the default, 0s turns it off.
+func TestChannelOfCarriesTheConnectQuietWindow(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		ss   *driver.SessionSpec
+		want time.Duration
+	}{
+		{"no session block", nil, 0},
+		{"no declaration", &driver.SessionSpec{}, collection.DefaultConnectQuiet},
+		{"a declared window", &driver.SessionSpec{ConnectQuiet: "1s"}, time.Second},
+		{"none", &driver.SessionSpec{ConnectQuiet: "0s"}, collection.NoConnectQuiet},
+	} {
+		if got := channelOf(tc.ss).ConnectQuiet; got != tc.want {
+			t.Errorf("%s: window = %s, want %s", tc.name, got, tc.want)
+		}
 	}
 }

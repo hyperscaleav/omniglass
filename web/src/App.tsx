@@ -11,7 +11,8 @@ import { sectionLabel } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
-// App is the authenticated shell: the nav rail, the sticky top bar, the routed
+// App is the authenticated shell (the data-app-shell root, which an open blade
+// makes inert): the nav rail, the sticky top bar, the routed
 // page, the global ⌘K command palette, and the toasts any surface raises. It
 // owns the rail collapse state, the theme effect (mirrors the mode onto
 // <html>), and the ⌘K keybinding.
@@ -45,7 +46,8 @@ const App: ParentComponent = (props) => {
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
   return (
-    <div class="flex min-h-screen bg-base-100">
+    <>
+    <div data-app-shell class="flex min-h-screen bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
         <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} />
@@ -55,9 +57,10 @@ const App: ParentComponent = (props) => {
           {props.children}
         </main>
       </div>
-      <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} />
-      <Toaster />
     </div>
+    <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} />
+    <Toaster />
+    </>
   );
 };
 

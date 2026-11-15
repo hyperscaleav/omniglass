@@ -1,0 +1,99 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/hyperscaleav/omniglass/internal/labfootprint"
+)
+
+// driverSweepProject is the sweep's throwaway lab, never the dev or scale
+// lab's project.
+const driverSweepProject = "omniglass-drivers"
+
+// driverSweepConfig reads `lab perf drivers`'s flags into the sweep's
+// config and where its table goes.
+func driverSweepConfig(cmd *cobra.Command, binary, dockerHost string) (labfootprint.DriverConfig, string) {
+	f := cmd.Flags()
+	cfg := labfootprint.DriverConfig{Binary: binary, DockerHost: dockerHost, Project: driverSweepProject}
+	cfg.Image, _ = f.GetString("image")
+	cfg.Only, _ = f.GetStringSlice("only")
+	cfg.StepTasks, _ = f.GetInt("step-tasks")
+	cfg.MaxStepTasks, _ = f.GetInt("max-step-tasks")
+	cfg.Warmup, _ = f.GetDuration("warmup")
+	cfg.Window, _ = f.GetDuration("window")
+	out, _ := f.GetString("out")
+	return cfg, out
+}
+
+// saveDriverTable writes the sweep's table and returns the sweep's own error.
+// A sweep that stopped part way keeps the drivers it measured, since each
+// took the better part of an hour; one that measured none writes nothing.
+func saveDriverTable(w io.Writer, out string, table labfootprint.DriverCostTable, measureErr error) error {
+	if measureErr != nil && len(table.Rows) == 0 {
+		return measureErr
+	}
+	b, err := table.JSON()
+	if err != nil {
+		return errors.Join(measureErr, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return errors.Join(measureErr, err)
+	}
+	if err := os.WriteFile(out, b, 0o644); err != nil {
+		return errors.Join(measureErr, err)
+	}
+	fmt.Fprintf(w, "wrote %s: %d drivers measured, %d not\n", out, len(table.Rows), len(table.NotMeasured))
+	if measureErr != nil {
+		fmt.Fprintf(w, "the sweep stopped before its last driver: %v\n", measureErr)
+	}
+	return measureErr
+}
+
+func newLabPerfDriversCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "drivers",
+		Short: "Measure what each shipped driver's polls cost a node, and write the table the docs render",
+		Long: "Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the " +
+			"simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver " +
+			"is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the " +
+			"node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm " +
+			"cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit " +
+			"a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap " +
+			"driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed " +
+			"as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.\n\n" +
+			"The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit " +
+			"both files in a reviewed change.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			log := cmd.ErrOrStderr()
+			_, daemon, err := labEngine(cmd.Context(), log)
+			if err != nil {
+				return err
+			}
+			binary, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			cfg, out := driverSweepConfig(cmd, binary, daemon.Host)
+			cfg.Out, cfg.LabLog = log, log
+			table, err := labfootprint.MeasureDrivers(cmd.Context(), cfg)
+			return saveDriverTable(log, out, table, err)
+		},
+	}
+	f := cmd.Flags()
+	f.String("image", "", "the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build")
+	f.StringSlice("only", nil, "sweep only these drivers; empty sweeps every shipped one")
+	f.Int("step-tasks", 400, "about how many poll tasks each step adds")
+	f.Int("max-step-tasks", 6400, "the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once")
+	f.Duration("warmup", 2*time.Minute, "how long each step runs before it is measured")
+	f.Duration("window", 2*time.Minute, "each step's measured window; a driver's slowest poll lengthens it")
+	f.String("out", labfootprint.DriverCostPath, "where to write the table, relative to the working directory: run it from the repository's root")
+	return cmd
+}

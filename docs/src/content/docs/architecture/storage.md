@@ -60,10 +60,14 @@ A node's batch is one tick of **task groups**, each with its own writer
 and the transaction's statement count does not grow with the groups. The gateway preloads every
 owner's arcs in one query, admits each group's writes against its writer in Go (a group it refuses
 is dropped before any write), takes the event-rule and calc-mark locks once over the union, then
-takes every property series' advisory lock in one sorted statement. Each lane (property, metric,
-event, log, node log) is then written as set inserts, one per distinct writer in the batch (a node's
-own rows share one, plus one per conduit that fans rows). So the cost of a batch is a fixed
-count, about twenty statements, plus a term for each repeated series row, each judged sample that
+takes every property series' advisory lock in one sorted statement. The transaction carries what
+it took (the event rules it read, the owners it marked for a calc rule, the series it locked), so
+no lane reads a rule, probes a calc mark or takes a series lock a second time
+([ADR-1928](/architecture/decisions/#adr-1928-a-telemetry-batch-reads-and-locks-once-and-stamps-seen-inside-its-transaction)).
+Each lane (property, metric, event, log, node log) is then written as set inserts, one per
+distinct writer in the batch (a node's own rows share one, plus one per conduit that fans rows),
+and the endpoints the batch carried are stamped seen in the same transaction. So the cost of a
+batch is a fixed count, about a dozen statements, plus a term for each repeated series row, each judged sample that
 fires a rule, each settled targeted property and each conduit group that carries identified
 samples; a batch of one group and a batch of fifty cost the same when those terms are zero. A
 series a batch carries twice keeps the transition guard: its second and later rows run in order
@@ -168,19 +172,20 @@ the two in one migration. Three buckets, never conflated:
 - **Boot seed phase** (idempotent upsert on every server start, `internal/seed/*.yaml`): ship-with
   reference data, authoritative via `ON CONFLICT DO UPDATE` for a canonical catalog (a release can
   correct it, and can **withdraw** a value it once shipped, which is the half insert-if-absent cannot
-  do at all). It lands every shipped row in the `og` namespace and upserts on `(namespace, name)`, so it never writes an operator's row: a shipped name an operator already holds lands beside theirs, and the search path (`<table>_in_effect()`, #1432) has a bare name reach the operator's. A shipped row's own references (a product's vendor, a child type's parent) resolve inside `og`. `location_type` seeds this way since
+  do at all). It lands every shipped row in the `og` namespace and upserts on `(namespace, name)`, so it never writes an operator's row: a shipped name an operator already holds lands beside theirs, and the search path (`<table>_in_effect()`, #1432) has a bare name reach the operator's. A reserved key (a node-probe, platform or command-lifecycle key `writerclass` declares) is never shadowed: held by both tiers in any of the three signal catalogs, it reaches neither, as the ingest registry's `ResolveNameLane` resolves it (#1447). The signal catalogs' search path reads the reserved names from `reserved_key`, a table the boot seed reconciles to `writerclass.ReservedNames()` on every start, so the list stays generated from code. A shipped row's own references (a product's vendor, a child type's parent) resolve inside `og`. `location_type` seeds this way since
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask),
   which is what an authoritative seed COSTS: the rows have to be platform-owned, so an operator's
   version of one lives in `registry_shadow` and resolves over it. **Narrow carve-out:** a seeded table can additionally
-  reconcile its child rows to the declared set every boot, deleting one that dropped out (refusing
+  reconcile its rows to the declared set every boot, deleting one that dropped out (refusing
   instead if something still points at it) rather than leaving it in place, but only where BOTH hold:
-  the table has **no operator write path** (nothing but the seed ever writes a row there) and its rows
-  carry a **packed positional ordering** where a leftover orphan does not sit inert, it collides with
-  the position a renamed or reordered entry now wants. `choice_alternate` is the only table this
-  applies to today
+  the table has **no operator write path** (nothing but the seed ever writes a row there) and a
+  leftover row **does not sit inert**. Two tables meet both today. `choice_alternate`'s rows carry a
+  packed positional ordering, so an orphan collides with the position a renamed or reordered entry
+  now wants
   ([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)).
-  Absent both preconditions, an operator-writable or unordered table keeps the ordinary
-  insert-if-absent rule above.
+  `reserved_key` mirrors a list in code (#1447), so a name the code no longer reserves would still
+  hide an operator's row of that name from every reader. Absent both preconditions, an
+  operator-writable or inert table keeps the ordinary insert-if-absent rule above.
 
   **A row that is both shipped and operator-owned splits into two columns.** The global label rules
   (`label_rule`, one row per labelled entity kind) carry `default_template` and `template`: the seed
@@ -198,6 +203,12 @@ the two in one migration. Three buckets, never conflated:
   answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
   rather than a list nobody updated passing
   ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+  **The label lock comes first.** A cascade holds the `label/recompute` advisory lock and then waits
+  for system rows `FOR UPDATE`, so any write that restamps a label takes that lock before anything a
+  cascade also waits on: a membership write (bind, unbind, re-default, a system's release, a role
+  assignment that binds a non-member) takes the label lock, then the component's membership lock, and
+  only then inserts, because the insert's foreign key shares the system's row. Holding that row while
+  waiting for the label lock deadlocks against every cascade (#1214).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
@@ -285,7 +296,9 @@ The lane is three tables:
 - **`metric`**, the hot tier: `(id, series_id, ts, value)`, plus a calculated sample's rule
   lineage in nullable columns that cost nothing when empty. Observed and calculated samples only.
   Range partitioned by UTC day on `ts`, with one btree, `(series_id, ts desc, id desc)`,
-  and block range indexes on `id` and `ts`. It has no primary key and no foreign key to the
+  and block range indexes on `id` and `ts`, each day's own index made to summarize a range once it
+  fills (`autosummarize`).
+  It has no primary key and no foreign key to the
   series: a deleted owner's samples are invisible to every reader (each joins the series) and
   leave with their day or the next retention pass.
 - **`metric_declared`**, the declared tier: a command's intended rows, with their command and
@@ -310,6 +323,17 @@ over a refusal. A partition is created detached and then attached, so the parent
 late roll, a batch across midnight, a node clock far out) is not a refused write: the batch's days
 are made and it lands, and a batch that misses again is redelivered, never dropped (#420). A day is
 UTC.
+
+**Finished days are summarized.** A block range no summary covers matches every query, so a day
+nobody summarized costs a read its whole heap. A partitioned index takes no storage option, so the
+roll makes each day's `id` and `ts` block range indexes itself, with `autosummarize`, before it
+attaches the day, and the attach adopts them. `autosummarize` takes a range once it fills, and a
+day's last range never does, so each retention pass, after it drops the days past the window and on a
+deadline of its own, summarizes the ranges of every finished day
+([ADR-1929](/architecture/decisions/#adr-1929-a-finished-day-is-summarized-and-the-reconcile-keeps-its-id-marks)).
+A summarized range stays exact as late samples land in it, so the event rule reconcile's id window
+reads a finished day's index alone. A day that fails under the five-second lock timeout is named in
+the pass's error and the rest are still summarized; the next pass tries it again.
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
 
@@ -577,7 +601,14 @@ in, and only those
 ([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). It
 detaches the day `CONCURRENTLY` (waiting for the readers already in it rather than queueing every
 reader behind an exclusive lock) and then drops it, and finishes a detach an earlier pass left
-halfway. The chunked prune keeps every window exact inside the days that remain.
+halfway. The lane's chunked prune works only in a day such a sample holds, and keeps every window
+exact there; a day nothing holds it leaves whole for the drop, so a sample with no window of its own
+is kept at least `retention.metric_days` and leaves with its day, at most a day later
+([ADR-1957](/architecture/decisions/#adr-1957-the-metric-lanes-prune-leaves-a-droppable-day-to-the-drop)).
+A type with a window of its own is pruned to it exactly, in every day. A type kept longer than the lane
+and sampled every day holds every day, so the lane's rows there still go one chunk at a time (#1958).
+Since the drop is the only way out of every other day, a pass whose drop failed is followed a minute
+later.
 On the property lane, finding the old rows reads every page the `ts` BRIN cannot rule out, which
 reused pages widen over time: hence the hourly steady state.
 

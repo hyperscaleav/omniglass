@@ -24,7 +24,7 @@ type platformSimulationGap struct {
 	Masked       int64    `json:"masked" doc:"How many the masking term accounts for, not counted as lost."`
 	MaskedBy     string   `json:"masked_by" doc:"What the masking term is, empty when the gap has none."`
 	AnsweredLate int64    `json:"answered_late" doc:"Answers the node gave up on before they arrived."`
-	Reading      string   `json:"reading" enum:"loss,impaired,restarted,not observed by the sim" doc:"How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful."`
+	Reading      string   `json:"reading" enum:"loss,impaired,restarted,not observed by the sim" doc:"How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful."`
 }
 
 // platformSimulationReceipts is the node's receipts counted for the window.
@@ -59,7 +59,7 @@ type platformSimulationDevice struct {
 // platformSimulationNode is one node with a simulator, read over the window.
 type platformSimulationNode struct {
 	Node      string                       `json:"node"`
-	State     string                       `json:"state" enum:"warming up,measured,restarted" doc:"warming up until the server holds a window and the bracket after it; restarted while the window holds a restart."`
+	State     string                       `json:"state" enum:"warming up,measured,restarted" doc:"warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves."`
 	Start     *time.Time                   `json:"start" required:"true" nullable:"true" doc:"The window's first bracket; null while warming up."`
 	End       *time.Time                   `json:"end" required:"true" nullable:"true" doc:"The window's last bracket; null while warming up."`
 	Brackets  int                          `json:"brackets" doc:"How many brackets the server holds for the node."`
@@ -126,7 +126,7 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodGet,
 		Path:        "/views/platform/simulation",
 		Summary:     "Read what each simulator saw against what the platform collected",
-		Description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
+		Description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*platformSimulationViewOutput, error) {
 		if !a.scopeFor(ctx, "component", "read").All {
 			return nil, huma.Error404NotFound("not found")

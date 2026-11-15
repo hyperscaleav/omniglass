@@ -4697,11 +4697,14 @@ components:
           format: uri
           readOnly: true
           type: string
+        group:
+          description: The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited.
+          type: string
         group_id:
           description: Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal.
           type: string
-        group_name:
-          description: The source group's label, present when the grant is inherited.
+        group_label:
+          description: The source group's friendly label, present when the grant is inherited and the group has one.
           type: string
         id:
           type: string
@@ -7908,7 +7911,7 @@ components:
             - number
             - "null"
         reading:
-          description: "How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful."
+          description: "How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful."
           enum:
             - loss
             - impaired
@@ -7988,7 +7991,7 @@ components:
             - string
             - "null"
         state:
-          description: warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+          description: warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves.
           enum:
             - warming up
             - measured
@@ -9785,7 +9788,7 @@ components:
           type: integer
         metric_days:
           default: 14
-          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
+          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
           format: int64
           maximum: 36500
           minimum: 1
@@ -10997,6 +11000,11 @@ components:
         faces_overlapped:
           format: int64
           type: integer
+        fleet_changing:
+          type: boolean
+        fleet_generation:
+          format: int64
+          type: integer
         impaired:
           format: int64
           type: integer
@@ -11015,6 +11023,7 @@ components:
         - node
         - at
         - started
+        - fleet_generation
         - devices
         - impaired
         - protocols
@@ -15054,7 +15063,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
-      description: "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not."
+      description: "Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not."
       operationId: create-component
       requestBody:
         content:
@@ -15081,7 +15090,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -15809,7 +15818,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
       responses:
         "200":
@@ -15839,7 +15848,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
         - description: The match key, a registered property type
           in: path
@@ -15885,7 +15894,7 @@ paths:
           schema:
             description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             examples:
-              - ucc-service-1
+              - ucc-platform
             type: string
         - description: The match key, a registered property type
           in: path
@@ -16430,14 +16439,14 @@ paths:
       description: A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
       operationId: list-unbound-identities
       parameters:
-        - description: The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)
+        - description: The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)
           in: path
           name: name
           required: true
           schema:
-            description: The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)
+            description: The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)
             examples:
-              - hq.$comp.meetings-cloud
+              - hq.$comp.ucc-platform
             type: string
       responses:
         "200":
@@ -16484,7 +16493,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}:move:
     post:
-      description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422)."
+      description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422)."
       operationId: move-component
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -21480,7 +21489,7 @@ paths:
       x-omniglass-permission: settings:update
       x-omniglass-platform-permission: platform:update
     patch:
-      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
       operationId: patch-settings-namespace
       parameters:
         - description: the settings namespace, e.g. ui
@@ -21489,6 +21498,8 @@ paths:
           required: true
           schema:
             description: the settings namespace, e.g. ui
+            examples:
+              - notification
             type: string
       requestBody:
         content:
@@ -21496,6 +21507,9 @@ paths:
             schema:
               additionalProperties: {}
               description: an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
+              examples:
+                - egress_allow:
+                    - smtp.example.com
               type: object
         required: true
       responses:
@@ -22337,7 +22351,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: system:read
     post:
-      description: Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
+      description: Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
       operationId: create-system
       requestBody:
         content:
@@ -23197,7 +23211,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}:move:
     post:
-      description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422)."
+      description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422)."
       operationId: move-system
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -24150,7 +24164,7 @@ paths:
       x-omniglass-permission: node:read
   /views/platform/simulation:
     get:
-      description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read."
+      description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read."
       operationId: get-platform-simulation-view
       responses:
         "200":

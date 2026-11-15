@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -55,7 +56,11 @@ func TestBodyFieldsJSON(t *testing.T) {
 
 	// The rendered source parses the JSON fields and passes the typed ones through.
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
-	out, err := render(tree([]command{cmd}))
+	roots, err := tree([]command{cmd})
+	if err != nil {
+		t.Fatalf("tree: %v", err)
+	}
+	out, err := render(roots)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -143,7 +148,11 @@ func TestBodyFieldFlagsCarryTheSchemaType(t *testing.T) {
 	}
 
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
-	out, err := render(tree([]command{cmd}))
+	roots, err := tree([]command{cmd})
+	if err != nil {
+		t.Fatalf("tree: %v", err)
+	}
+	out, err := render(roots)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -294,7 +303,11 @@ func TestRenderQueryFlags(t *testing.T) {
 		},
 	}
 	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
-	out, err := render(tree([]command{cmd}))
+	roots, err := tree([]command{cmd})
+	if err != nil {
+		t.Fatalf("tree: %v", err)
+	}
+	out, err := render(roots)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -401,5 +414,141 @@ func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 	}
 	if got := buildCommand(spec{}, "/api/v1", "/healthz", "get", operation{Description: "ok"}).Long; got != "ok" {
 		t.Errorf("long of an argless command = %q, want it untouched", got)
+	}
+}
+
+// TestTreeRefusesACommandPathCollision pins that `make gen` fails when two
+// operations derive one CLI command path, instead of silently keeping the later
+// one. Repro of the bug: register POST /auth/me/action-rules/{name}:test and
+// POST /auth/me/action-rules:test, run make gen, read the CLI reference: one
+// `omniglass auth me action-rule test`, the other operation gone. The runtime
+// guard in internal/cli cannot see it because only one cobra command is emitted.
+func TestTreeRefusesACommandPathCollision(t *testing.T) {
+	op := func(id, method, path string, words ...string) command {
+		return command{Words: words, OperationID: id, Method: method, APIPath: path}
+	}
+	named := op("test-auth-me-action-rule", "POST", "/api/v1/auth/me/action-rules/%s:test", "auth", "me", "action-rule", "test")
+	draft := op("test-auth-me-action-rules", "POST", "/api/v1/auth/me/action-rules:test", "auth", "me", "action-rule", "test")
+
+	_, err := tree([]command{named, draft})
+	if err == nil {
+		t.Fatal("tree returned no error for two operations deriving one path")
+	}
+	for _, w := range []string{
+		"test-auth-me-action-rule", "POST /api/v1/auth/me/action-rules/%s:test",
+		"test-auth-me-action-rules", "POST /api/v1/auth/me/action-rules:test",
+		`both derive "auth me action-rule test"`,
+	} {
+		if !strings.Contains(err.Error(), w) {
+			t.Errorf("error %q lacks %q", err, w)
+		}
+	}
+
+	t.Run("distinct paths generate cleanly", func(t *testing.T) {
+		other := op("test-auth-me-action-rules", "POST", "/api/v1/auth/me/action-rules:test", "auth", "me", "action-rule", "test-draft")
+		roots, err := tree([]command{named, other})
+		if err != nil {
+			t.Fatalf("tree: %v", err)
+		}
+		if len(roots) != 1 {
+			t.Errorf("roots = %d, want 1 (auth)", len(roots))
+		}
+	})
+
+	// A path that is both a command and a group is allowed (ADR-0059's tree has
+	// `component property` beside `component property list`): only a duplicate
+	// path is refused.
+	t.Run("a command beside its own group is not a collision", func(t *testing.T) {
+		group := op("list-component-properties", "GET", "/api/v1/components/%s/properties", "component", "property", "list")
+		leaf := op("get-component-property", "GET", "/api/v1/components/%s/property", "component", "property")
+		for _, cmds := range [][]command{{group, leaf}, {leaf, group}} {
+			if _, err := tree(cmds); err != nil {
+				t.Errorf("tree: %v", err)
+			}
+		}
+	})
+}
+
+// TestCurrentSpecDerivesDistinctCommandPaths runs the real OpenAPI document
+// through the generator's own path: no two operations may derive one command.
+func TestCurrentSpecDerivesDistinctCommandPaths(t *testing.T) {
+	raw, err := os.ReadFile("../../api/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc spec
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tree(buildCommands(doc, "/api/v1")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestAFreeFormBodyRendersABodyFlag is #1333. A request body that is an object
+// with no declared properties (an RFC 7386 merge patch such as PATCH
+// /settings/{namespace}, whose keys are the namespace's own) has nothing for
+// bodyFields to turn into per-property flags. It used to render a leaf that
+// passed a nil body, so the command could not carry the one thing it exists to
+// send. The generator now emits a --body JSON flag (and --body-file) and passes
+// the parsed document to runAPICommand. A schema that DOES declare properties
+// keeps its per-property flags and gains neither.
+func TestAFreeFormBodyRendersABodyFlag(t *testing.T) {
+	const docRaw = `{"components":{"schemas":{"CreateBody":{"properties":{"name":{"type":"string"}}}}}}`
+	var doc spec
+	if err := json.Unmarshal([]byte(docRaw), &doc); err != nil {
+		t.Fatalf("doc: %v", err)
+	}
+	opFor := func(schema string) operation {
+		var op operation
+		raw := `{"operationId":"patch-thing","requestBody":{"required":true,"content":{"application/json":{"schema":` + schema + `}}}}`
+		if err := json.Unmarshal([]byte(raw), &op); err != nil {
+			t.Fatalf("op: %v", err)
+		}
+		return op
+	}
+	renderOf := func(op operation) (command, string) {
+		cmd := buildCommand(doc, "/api/v1", "/things/{name}", "patch", op)
+		roots, err := tree([]command{cmd})
+		if err != nil {
+			t.Fatalf("tree: %v", err)
+		}
+		out, err := render(roots)
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return cmd, string(out)
+	}
+
+	for name, schema := range map[string]string{
+		"additionalProperties": `{"type":"object","additionalProperties":{},"description":"a merge patch"}`,
+		"bare object":          `{"type":"object"}`,
+	} {
+		cmd, src := renderOf(opFor(schema))
+		if !cmd.FreeBody {
+			t.Errorf("%s: a free-form object body was not marked FreeBody", name)
+		}
+		for _, want := range []string{
+			`cmd.Flags().StringVar(&fBody, "body"`,
+			`cmd.Flags().StringVar(&fBodyFile, "body-file"`,
+			`freeFormBody(cmd, fBody, fBodyFile, true)`,
+			`runAPICommand(cmd, "PATCH", path, body)`,
+		} {
+			if !strings.Contains(src, want) {
+				t.Errorf("%s: generated source missing %q", name, want)
+			}
+		}
+		if strings.Contains(src, `"PATCH", path, nil)`) {
+			t.Errorf("%s: the leaf still passes a nil body", name)
+		}
+		if !strings.Contains(cmd.Example, `--body '{`) {
+			t.Errorf("%s: the example does not show a --body document: %q", name, cmd.Example)
+		}
+	}
+
+	declared := opFor(`{"$ref":"#/components/schemas/CreateBody"}`)
+	cmd, src := renderOf(declared)
+	if cmd.FreeBody || strings.Contains(src, `"body-file"`) {
+		t.Errorf("a body with declared properties must keep per-property flags only:\n%s", src)
 	}
 }

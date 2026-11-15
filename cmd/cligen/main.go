@@ -12,6 +12,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/format"
@@ -38,7 +39,10 @@ func main() {
 	}
 
 	cmds := buildCommands(doc, base)
-	roots := tree(cmds)
+	roots, err := tree(cmds)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 
 	out, err := render(roots)
 	if err != nil {
@@ -94,11 +98,22 @@ type paramSchema struct {
 }
 
 type requestBody struct {
-	Content map[string]struct {
-		Schema struct {
-			Ref string `json:"$ref"`
-		} `json:"schema"`
+	Required bool `json:"required"`
+	Content  map[string]struct {
+		Schema bodySchema `json:"schema"`
 	} `json:"content"`
+}
+
+// bodySchema is a request body's schema: a $ref to a component, or the schema
+// inline (Huma inlines a body that is a bare map, which is how a free-form merge
+// patch arrives).
+type bodySchema struct {
+	Ref        string              `json:"$ref"`
+	Type       jsonType            `json:"type"`
+	Properties map[string]property `json:"properties"`
+	// Examples is a free-form body's worked document, from the Go field's
+	// `example:` tag; the command's Example line shows the first one.
+	Examples []json.RawMessage `json:"examples"`
 }
 
 type components struct {
@@ -106,6 +121,7 @@ type components struct {
 }
 
 type schema struct {
+	Type       jsonType            `json:"type"`
 	Required   []string            `json:"required"`
 	Properties map[string]property `json:"properties"`
 }
@@ -154,18 +170,27 @@ var httpMethods = []string{"get", "post", "put", "patch", "delete"}
 // --- command model ----------------------------------------------------------
 
 type command struct {
-	Words   []string // command path, e.g. ["location", "get"] or ["healthz"]
-	Method  string   // GET, POST, ...
-	APIPath string   // Go format template, e.g. /api/v1/locations/%s
-	Args    []string // positional arg names, in path order
+	Words       []string // command path, e.g. ["location", "get"] or ["healthz"]
+	Method      string   // GET, POST, ...
+	APIPath     string   // Go format template, e.g. /api/v1/locations/%s
+	OperationID string   // OpenAPI operationId, named in a path-collision error
+	Args        []string // positional arg names, in path order
 	// ArgExamples parallels Args: the OpenAPI example for that path parameter,
 	// or "" where it has none.
 	ArgExamples []string
 	Body        []bodyField
-	Query       []queryField // OpenAPI query parameters, as optional flags
-	Short       string
-	Long        string
-	Example     string
+	// FreeBody marks a request body that is an object with no declared
+	// properties (a merge patch whose keys belong to the thing patched): it has no
+	// per-property flags, so it takes the whole document as --body or --body-file
+	// (#1333). BodyRequired is the spec's `required` for that body;
+	// BodyExample is its first worked document, "" when the schema gives none.
+	FreeBody     bool
+	BodyRequired bool
+	BodyExample  string
+	Query        []queryField // OpenAPI query parameters, as optional flags
+	Short        string
+	Long         string
+	Example      string
 }
 
 type bodyField struct {
@@ -273,6 +298,11 @@ var nameOverride = map[string]([]string){
 	"list-auth-me-sessions":       {"session", "list"},
 	"revoke-auth-me-session":      {"session", "revoke"},
 	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
+	// The webhook receiver's URL is one item route carrying three methods; the
+	// verb the route derives for a POST on an item is `get`, so name the two the
+	// CLI emits (HEAD is not generated).
+	"verify-webhook":  {"webhook", "verify"},
+	"receive-webhook": {"webhook", "receive"},
 	// A node has one simulator: a singular read, not a list.
 	"get-node-simulation": {"node", "simulation"},
 	// A component has one impairment: read and set, not list and update.
@@ -334,6 +364,7 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		Words:       words,
 		Method:      strings.ToUpper(method),
 		APIPath:     apiPath,
+		OperationID: op.OperationID,
 		Args:        args,
 		ArgExamples: argExamples,
 		Short:       op.Summary,
@@ -341,7 +372,14 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 	}
 	c.Body = bodyFields(doc, op)
 	c.Query = queryFields(op)
+	if free, required, ex := freeFormSchema(doc, op); free {
+		c.FreeBody, c.BodyRequired, c.BodyExample = true, required, ex
+		c.Long = withBodyHelp(c.Long)
+	}
 	c.Example = example(words, args, argExamples, c.Body)
+	if c.FreeBody {
+		c.Example += bodyExample(c.BodyExample)
+	}
 	return c
 }
 
@@ -527,6 +565,66 @@ func bodyFields(doc spec, op operation) []bodyField {
 	return fields
 }
 
+// freeFormSchema reports whether an operation's JSON request body is an object
+// that declares no properties: a free-form document (`additionalProperties`, a
+// bare `type: object`, or a $ref to one) that bodyFields can make no flags from
+// (#1333). It returns the spec's `required` for the body and its first worked
+// example document, so the one rule serves any future free-form body, not the
+// settings patch alone.
+func freeFormSchema(doc spec, op operation) (free, required bool, example string) {
+	if op.RequestBody == nil {
+		return false, false, ""
+	}
+	ct, ok := op.RequestBody.Content["application/json"]
+	if !ok {
+		return false, false, ""
+	}
+	sc := ct.Schema
+	if sc.Ref != "" {
+		c, ok := doc.Components.Schemas[strings.TrimPrefix(sc.Ref, "#/components/schemas/")]
+		if !ok {
+			return false, false, ""
+		}
+		sc = bodySchema{Type: c.Type, Properties: c.Properties}
+	}
+	if sc.Type.Name != "object" || hasOperatorProperty(sc.Properties) {
+		return false, false, ""
+	}
+	if len(sc.Examples) > 0 {
+		var compact bytes.Buffer
+		if json.Compact(&compact, sc.Examples[0]) == nil {
+			example = compact.String()
+		}
+	}
+	return true, op.RequestBody.Required, example
+}
+
+// hasOperatorProperty reports whether a schema declares any property an
+// operator would set, Huma's `$schema` meta property aside (as bodyFields does).
+func hasOperatorProperty(props map[string]property) bool {
+	for k := range props {
+		if k != "$schema" {
+			return true
+		}
+	}
+	return false
+}
+
+// withBodyHelp appends the --body contract to a free-form body command's long
+// help, the one place the flags the generator invented are explained.
+func withBodyHelp(long string) string {
+	return strings.TrimSpace(long) + "\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made."
+}
+
+// bodyExample is the " --body '<doc>'" tail of a free-form body's Example line;
+// a schema with no worked document shows an empty object.
+func bodyExample(doc string) string {
+	if doc == "" {
+		doc = "{}"
+	}
+	return " --body " + shellWord(doc)
+}
+
 func example(words, args, argExamples []string, body []bodyField) string {
 	parts := append([]string{"omniglass"}, words...)
 	for i, a := range args {
@@ -604,7 +702,15 @@ func (n *node) Use() string {
 // the LAST word as the leaf name, so a three-word path like
 // `component property list` rendered as `component list` and silently collided
 // with the real one. Any depth the route implies is a real level here.
-func tree(cmds []command) []*node {
+//
+// Two operations that derive one command path cannot both be emitted, and
+// keeping one would silently drop the other from the CLI and its reference. tree
+// refuses it with an error naming both operations and the path, so `make gen`
+// fails at the cause. (Repro: register POST /x/{name}:test and POST /x:test;
+// both derive `x test` and the reference lists one.) A path that is both a
+// command and a group (`component property` beside `component property list`)
+// is not a collision: cobra runs the command and lists the children.
+func tree(cmds []command) ([]*node, error) {
 	var roots []*node
 	find := func(kids *[]*node, name string) *node {
 		for _, k := range *kids {
@@ -622,6 +728,9 @@ func tree(cmds []command) []*node {
 		for _, w := range c.Words[1:] {
 			cur = find(&cur.Kids, w)
 		}
+		if cur.Cmd != nil {
+			return nil, collision(&c, cur.Cmd, c.Words)
+		}
 		cur.Cmd = &c
 	}
 	var sortRec func(ns []*node)
@@ -632,7 +741,17 @@ func tree(cmds []command) []*node {
 		}
 	}
 	sortRec(roots)
-	return roots
+	return roots, nil
+}
+
+// collision is the error for two operations that derive one command path: each
+// is named by operationId, method and path, then the command path they share.
+func collision(a, b *command, path []string) error {
+	return fmt.Errorf("cligen: %s and %s both derive %q", b.describe(), a.describe(), strings.Join(path, " "))
+}
+
+func (c *command) describe() string {
+	return fmt.Sprintf("%s %s (%s)", c.Method, c.APIPath, c.OperationID)
 }
 
 // --- path helpers -----------------------------------------------------------
@@ -779,6 +898,9 @@ func generatedCommands() []*cobra.Command {
 		{{- range $q := .Query}}
 		var {{$q.Var}} {{$q.GoType}}
 		{{- end}}
+		{{- if .FreeBody}}
+		var fBody, fBodyFile string
+		{{- end}}
 		cmd := &cobra.Command{
 			Use:     {{quote .LeafUse}},
 			Short:   {{quote .Short}},
@@ -798,7 +920,13 @@ func generatedCommands() []*cobra.Command {
 					path += "?" + enc
 				}
 				{{- end}}
-				{{- if .Body}}
+				{{- if .FreeBody}}
+				body, err := freeFormBody(cmd, fBody, fBodyFile, {{.BodyRequired}})
+				if err != nil {
+					return err
+				}
+				return runAPICommand(cmd, {{quote .Method}}, path, body)
+				{{- else if .Body}}
 				body := map[string]any{}
 				{{- range $f := .Body}}
 				if cmd.Flags().Changed({{quote $f.Flag}}) {
@@ -816,6 +944,10 @@ func generatedCommands() []*cobra.Command {
 		{{- if $f.Required}}
 		_ = cmd.MarkFlagRequired({{quote $f.Flag}})
 		{{- end}}
+		{{- end}}
+		{{- if .FreeBody}}
+		cmd.Flags().StringVar(&fBody, "body", "", "the request body as a JSON object")
+		cmd.Flags().StringVar(&fBodyFile, "body-file", "", "read the request body, a JSON object, from this file (- for stdin)")
 		{{- end}}
 		{{- range $qp := .Query}}
 		cmd.Flags().{{$qp.FlagFunc}}(&{{$qp.Var}}, {{quote $qp.Flag}}, {{$qp.Zero}}, {{quote $qp.Desc}})

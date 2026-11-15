@@ -255,11 +255,17 @@ type Component struct {
 // DedupKey is the condition identity, so a re-raise on a second devseed run
 // returns the alarm already standing rather than a duplicate. That is what makes
 // this section idempotent without a read-before-write of its own.
+//
+// AppliesTo names the component types the condition is a template for (a type
+// matches itself and its descendants), so the degraded scenario never plants a
+// lamp warning on a microphone. Empty means any component. It only steers the
+// scenario's expansion; the fixture's own alarms name their component directly.
 type Alarm struct {
-	Component string `yaml:"component"`
-	Severity  string `yaml:"severity"`
-	Message   string `yaml:"message"`
-	DedupKey  string `yaml:"dedup_key"`
+	Component string   `yaml:"component"`
+	Severity  string   `yaml:"severity"`
+	Message   string   `yaml:"message"`
+	DedupKey  string   `yaml:"dedup_key"`
+	AppliesTo []string `yaml:"applies_to"`
 }
 
 // PropertyValue is one example literal a component declares over its product's

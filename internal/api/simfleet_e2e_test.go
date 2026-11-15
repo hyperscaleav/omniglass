@@ -329,8 +329,8 @@ func TestSimulationFleetAPI(t *testing.T) {
 		left join driver d on d.id = e.driver_id where e.component = (select id from component where name = 'panel-9')`).Scan(&driver, &onNode); err != nil {
 		t.Fatal(err)
 	}
-	if driver != "newtron-nvp" || onNode != "site-a" {
-		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-nvp attach on site-a", driver, onNode)
+	if driver != "newtron-panel-nvp" || onNode != "site-a" {
+		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-panel-nvp attach on site-a", driver, onNode)
 	}
 	var withNew simulationBody
 	get(ownerTok, "/nodes/site-a/simulation", &withNew)
@@ -381,7 +381,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "http-api", "method": "GE T", "path": "/"}, http.StatusUnprocessableEntity)
 }
 
-// lineProtocolProduct is a seeded product on the newtron-nvp driver that a
+// lineProtocolProduct is a seeded product on the newtron-panel-nvp driver that a
 // simulator profile simulates as its own product (a panel speaking the
 // line protocol), read from the catalog rather than named, so a catalog
 // rename does not break this test.
@@ -396,13 +396,13 @@ func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (str
 		t.Fatal(err)
 	}
 	for _, p := range products {
-		if p.DriverName == nil || *p.DriverName != "newtron-nvp" {
+		if p.DriverName == nil || *p.DriverName != "newtron-panel-nvp" {
 			continue
 		}
 		if d, ok := store.Devices[p.Name]; ok {
 			return p.Name, d
 		}
 	}
-	t.Fatal("no seeded newtron-nvp product is a simulator profile's own product")
+	t.Fatal("no seeded newtron-panel-nvp product is a simulator profile's own product")
 	return "", nil
 }

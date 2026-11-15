@@ -77,20 +77,27 @@ first commit.
 
 ## Cutting a release (manual)
 
-Releases are **not** cut automatically on merge to `main` (deliberately, for now). A release
-is a deliberate act, run from an up-to-date `main` with [semantic-release](https://semantic-release.gitbook.io/),
-which reads the conventional-commit subjects since the last tag, computes the next version,
-pushes a git tag, and creates a GitHub Release with generated notes.
+Releases are **not** cut automatically on merge to `main` (deliberately, for now), and there is
+exactly one way to cut one: dispatch the **release** workflow (`release.yml`) from its "Run
+workflow" button. It runs [semantic-release](https://semantic-release.gitbook.io/), which reads the
+conventional-commit subjects since the last tag, computes the next version, pushes a git tag, and
+creates a GitHub Release with generated notes; the same job then builds the release image and the
+binaries (below). There is no local publish target: a release cut from a laptop could not build
+the image first, so its binaries would carry no image digest.
 
-Two make targets:
+**Releasing is switched off** until the repository variable `RELEASES_ENABLED` is `true`
+(Settings, Secrets and variables, Actions, Variables). While it is unset, a dispatch can only
+plan: the `dry_run` toggle works, and a dispatch without it fails at its first step, before
+semantic-release can push a tag. Every publishing step checks the flag too, so nothing reaches
+the tag, the Release, or GHCR until it is flipped (#1940).
+
+**Before the dispatch, the candidate's build has passed [the soak gate](#the-soak-gate).**
+
+To preview locally:
 
 ```bash
 make release-plan    # dry run: print the next version + notes, publish nothing
-make release-apply   # tag + create the GitHub Release
 ```
-
-The same thing can be dispatched in CI from the **release** workflow's "Run workflow" button
-(with a `dry_run` toggle), for a release cut from a clean checkout instead of a laptop.
 
 | Title prefix | Release |
 |--------------|---------|
@@ -103,32 +110,86 @@ No changelog is ever committed back to `main`, so the release never writes to th
 branch. The generated notes live on the GitHub Release.
 
 To switch to release-on-merge later, change the release workflow's trigger to `push` on
-`main`; the make targets stay as the local preview path.
+`main`; `make release-plan` stays as the local preview.
+
+## The soak gate
+
+No release ships unless the build has run a week under the 3,000-system corporate soak without
+failing silently (#1988). This is a release blocker run by hand on a test host, never a CI job: a
+week-long run on a dedicated machine does not belong on a runner, and its scheduling is not
+automated. The steps, before the release workflow is dispatched:
+
+1. Build the release candidate's image and binary from one commit, and start the soak on the test
+   host as the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
+2. Leave it for 7 days.
+3. Judge it, from any machine that reaches the soak's server, with a token that reads nodes,
+   systems and components over everything:
+
+   ```bash
+   omniglass lab soak verdict --since <start> --record-dir docs/src/content/soak-records
+   ```
+
+4. Commit the record the command wrote, in the release's PR. **No passing record for the
+   candidate's build, no release.** A failing verdict exits 1, names every reason, and is also
+   recorded; fix the build and run a new week.
+
+The verdict is the platform's own, not a harness's figures derived again: it reads through the API
+the platform system's alarm history and the Platform health page's loss ratios, and nothing from
+the database. It passes when all of these hold:
+
+| Rule | Threshold |
+|------|-----------|
+| The soak ran | at least 7 days (`--since` to `--until`, now by default) |
+| A platform alarm still open | none, however old |
+| A platform alarm raised in the window | open no longer than `--tolerance` (default 30 minutes) |
+| A loss ratio on the page (each hop, kind, component and node, the newest window and the last hour, the end to end, the worklist pull) | 0 |
+
+A reading that cannot answer fails rather than passes: no build reported, two builds among the
+servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history
+that reached the API's 500-alarm cap. The thresholds are named in code (`SoakMinWindow`,
+`SoakAlarmTolerance` and `SoakLossCeiling` in `internal/lab/soak.go`), and the alarm history reaches back
+30 days, so a verdict is read within 30 days of the soak's start. It gets stricter as the
+platform raises more alarms about itself: it judges by whatever the platform alarms on today.
+
+**The record** is one file per build, `docs/src/content/soak-records/<build>.md`, so the release's
+notes can link the soak it passed. Its front matter carries the facts and its body the verdict in
+words (a failure lists its reasons):
+
+```md
+---
+title: "Soak record: v1.4.0"
+build: v1.4.0
+verdict: pass
+since: 2026-11-20T08:00:00Z
+until: 2026-11-27T09:12:00Z
+host: soak-1 linux/amd64 16 cpu machine-id:3f2a9c1d7b40
+---
+```
+
+The host is the machine the verdict ran on (name, platform, cores and a short digest of its
+machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release
 
-semantic-release cuts the tag and the Release; [GoReleaser](https://goreleaser.com/) then
-fills that Release with the cross-platform binaries. The two split cleanly: semantic-release
-owns the version and the notes, GoReleaser only builds artifacts and attaches them (its
-`release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
+semantic-release cuts the tag and the Release; the same job then builds and pushes the
+multi-platform release image to GHCR, and [GoReleaser](https://goreleaser.com/) fills the
+Release with the cross-platform binaries, each stamped with that image's digest so a release
+binary's `omniglass lab run` pulls exactly the image it was released with
+([ADR-1257](/architecture/decisions/#adr-1257-a-release-binary-pulls-its-lab-image-by-the-digest-stamped-at-release)).
+semantic-release owns the version and the notes, GoReleaser only builds artifacts and attaches
+them (its `release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus a `checksums.txt`
 and an SBOM per archive. Because the binary is pure Go with CGO disabled, all of it
 cross-compiles from one runner; the SPA is built once by a `before` hook (`make web`) and
 embedded in every target via `-tags web`.
 
-The binaries are always built in CI, never on a laptop, but which workflow builds them
-depends on how the release was cut:
-
-- **`make release-apply`** pushes the tag with your token, which cascades, so the
-  tag-triggered `goreleaser.yml` workflow builds the binaries.
-- **The CI-dispatch path** pushes the tag with `GITHUB_TOKEN`, which by design does not
-  cascade, so `release.yml` builds the binaries inline in the same job.
-
-Both drive the same `.goreleaser.yaml`, so the artifacts are identical either way. Validate a
-config change locally with `make release-snapshot` (builds the whole matrix, no tag, no
-publish), and CI runs the same snapshot on any pull request that touches the release config,
+The tag is pushed with `GITHUB_TOKEN`, which by design triggers no other workflow, so the
+image and the binaries are built inline in `release.yml` rather than by a tag-triggered
+workflow; a `v*` tag pushed any other way builds nothing. Validate a config change locally
+with `make release-snapshot` (builds the whole matrix, no tag, no publish), and
+`goreleaser.yml` runs the same snapshot on any pull request that touches the release config,
 uploading the archives as downloadable workflow artifacts. A green PR snapshot is real
-evidence that the tagged release will build.
+evidence that the release will build.
 
 ## Why the PR title, not the commits
 

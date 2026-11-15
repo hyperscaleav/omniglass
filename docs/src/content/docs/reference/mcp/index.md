@@ -144,7 +144,7 @@ Lists the components the caller may read, each filtered to its scope subtree. Ga
 
 Create a component
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
 
 - Route: `POST /api/v1/components`
 - Gate: `component:create`
@@ -460,7 +460,7 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) |
+| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform) |
 
 ## `create-component-from-template`
 

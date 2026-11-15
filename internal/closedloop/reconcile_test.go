@@ -27,7 +27,7 @@ func sent(tr string, connections, n int64) collection.TallyCounters {
 }
 
 func simRead(at time.Time, rows ...collection.SimProtocolObservation) collection.SimObservation {
-	return collection.SimObservation{Node: "edge", At: at, Started: simStarted, Devices: 3, Protocols: rows}
+	return collection.SimObservation{Node: "edge", At: at, Started: simStarted, FleetGeneration: 1, Devices: 3, Protocols: rows}
 }
 
 // balanced is a two-minute window in which every hop carried everything:
@@ -350,6 +350,55 @@ func TestReconcileCounterResetReadsRestarted(t *testing.T) {
 				t.Fatalf("gaps = %s, want one %q for the node", describe(gs), ReadingRestarted)
 			}
 		})
+	}
+}
+
+// A window over which the sim's served fleet did not hold still reads
+// restarted (#1895): a request sent to a device the sim had not bound yet, or
+// had just stopped, is sent and never received, and is no loss of the path.
+// A fleet that held one generation throughout, the reads between the ends
+// included, measures as usual.
+func TestReconcileFleetChangeReadsRestarted(t *testing.T) {
+	mid := func(gen int64, changing bool) collection.SimObservation {
+		o := simRead(windowStart.Add(time.Minute), served("http", 130, 130), served("snmp", 0, 65), served("tcp", 15, 0))
+		o.FleetGeneration, o.FleetChanging = gen, changing
+		return o
+	}
+	for _, c := range []struct {
+		name  string
+		plant func(*NodeBracket)
+	}{
+		{"the sim had not synced its fleet yet", func(b *NodeBracket) {
+			for _, o := range []*collection.SimObservation{&b.Start.SimBefore, &b.Start.SimAfter, &b.End.SimBefore, &b.End.SimAfter} {
+				o.FleetGeneration = 0
+			}
+		}},
+		{"the fleet changed between the ends", func(b *NodeBracket) {
+			endSims(b, func(o *collection.SimObservation) { o.FleetGeneration = 2 })
+		}},
+		{"a sync was changing the fleet at an end", func(b *NodeBracket) { b.Start.SimAfter.FleetChanging = true }},
+		{"a sync was changing the fleet between the ends", func(b *NodeBracket) {
+			b.Between = []collection.SimObservation{mid(1, false), mid(1, true)}
+		}},
+		{"the fleet changed and the ends agree only by the read between", func(b *NodeBracket) {
+			b.Between = []collection.SimObservation{mid(2, false)}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b := balanced()
+			c.plant(&b)
+			gs := Reconcile(b)
+			if len(gs) != 1 || gs[0].Reading != ReadingRestarted || gs[0].Node != "edge" {
+				t.Fatalf("gaps = %s, want one %q for the node", describe(gs), ReadingRestarted)
+			}
+		})
+	}
+	b := balanced()
+	b.Between = []collection.SimObservation{mid(1, false), mid(1, false)}
+	for _, g := range Reconcile(b) {
+		if g.Reading != ReadingLoss || g.Count != 0 {
+			t.Fatalf("a steady fleet read %+v, want a healthy 0", g)
+		}
 	}
 }
 

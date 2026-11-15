@@ -36,6 +36,12 @@ table.column references (against the generated schema facts), plus the badge-fen
 coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
 drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
+A worked example of the rule: the collection page's per-transport probe table (each transport's
+rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/node`
+drives each built transport's probe and fails when what it lands differs from what its entry
+declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
+
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
@@ -280,6 +286,16 @@ a varying value adds its case there. Every capture logs what each mask resolved 
 (`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=blade-since]`),
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
+
+Both renders' `page.screenshot` calls (the clean shot in `docs-shots.mjs` and the baseline in
+`shootBaseline`) go through `withCaptureRetry`, because Chromium can drop a capture under runner
+load (`Protocol error (Page.captureScreenshot): Unable to capture screenshot`, #1177). That error
+comes from the browser, not the page: Chromium has already forced the page to redraw and retried
+its copy of the compositor surface five times before reporting it, so waiting on the page (a load
+state, a `requestAnimationFrame`) cannot prevent it. The capture is retried once, and only on that
+exact error, logging the failing call and the page's state (URL, `readyState`, viewport) so a
+recurrence shows in the capture output. Any other error and a second drop fail the capture.
+Playwright's own `retries` stays off, since it would also hide a real assertion flake.
 
 ## Every PR demos its feature
 

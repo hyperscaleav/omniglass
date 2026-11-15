@@ -159,7 +159,7 @@ func TestUnmatchedLogIsAPolicy(t *testing.T) {
 }
 
 func lineFn(emits ...driver.BakedEmit) *driver.BakedFunction {
-	return &driver.BakedFunction{Driver: "newtron-nvp", Function: "events", Emits: emits}
+	return &driver.BakedFunction{Driver: "newtron-panel-nvp", Function: "events", Emits: emits}
 }
 
 func TestInterpretAnEvent(t *testing.T) {

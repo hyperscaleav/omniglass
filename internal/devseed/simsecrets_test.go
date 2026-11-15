@@ -180,3 +180,33 @@ func TestSecretSpecRejectsABadOwner(t *testing.T) {
 		t.Errorf("component owner = %+v, %v", spec, err)
 	}
 }
+
+// TestSimSecretSpecsIsACopy: a harness reads the simulated fleet's secrets
+// to land them through the API; editing what it read leaves the dev seed's
+// own list, fields included, as it was.
+func TestSimSecretSpecsIsACopy(t *testing.T) {
+	t.Parallel()
+	got := SimSecretSpecs()
+	if len(got) != len(simSecrets) {
+		t.Fatalf("got %d secrets, want %d", len(got), len(simSecrets))
+	}
+	for i := range got {
+		if got[i].Name != simSecrets[i].Name {
+			t.Fatalf("secret %d is %s, want %s", i, got[i].Name, simSecrets[i].Name)
+		}
+		for k := range got[i].Fields {
+			got[i].Fields[k] = "edited"
+		}
+		got[i].Name = "edited"
+	}
+	for _, s := range simSecrets {
+		if s.Name == "edited" {
+			t.Fatal("editing the copy renamed a dev seed secret")
+		}
+		for k, v := range s.Fields {
+			if v == "edited" {
+				t.Fatalf("editing the copy changed %s's %s", s.Name, k)
+			}
+		}
+	}
+}
