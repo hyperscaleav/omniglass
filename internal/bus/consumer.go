@@ -219,21 +219,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	stamp, err := s.landNode(ctx, id, node, &ev)
-	if err != nil {
+	if err := s.landNode(ctx, id, node, &ev); err != nil {
 		s.failed(msg, b, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
-	// Each landed group's endpoint delivered this tick, whatever the sinks
-	// kept of it (#933), stamped in one write after the ack so it holds
-	// nothing in flight. A failed stamp loses one tick's freshness, which the
-	// next tick restamps; it is not worth a redelivery of the whole tick.
-	if len(stamp) > 0 {
-		if err := s.store.StampEndpointsSeen(ctx, stamp); err != nil {
-			slog.Warn("endpoint seen stamp failed", "facility", "ingest", "node", node, "endpoints", len(stamp), "error", err.Error())
-		}
-	}
 }
 
 // undecodableLog is the warning for a telemetry message that does not
@@ -293,16 +283,18 @@ func nodeSelfReport(ev *ogv1.TelemetryBatch, node string) (r *storage.NodeSelfRe
 // Every group's task resolves in one read; a group whose task the node does
 // not hold (another node's, unknown, a shared interface) is an orphan the
 // fence drops (#1200) while its siblings land. A group the gateway refuses is
-// warned and dropped, never the tick. It returns the endpoints to stamp seen:
-// every resolved group's that was not refused. A returned error is the
-// resolve's, the registry's or the batch's (failed decides what it means).
+// warned and dropped, never the tick. Each resolved group carries the
+// endpoint that delivered its task, which the batch stamps seen in its own
+// transaction unless it refuses the group (#933, #1928). A returned error is
+// the resolve's, the registry's or the batch's (failed decides what it
+// means).
 //
 // The batch carries the node's ledger, and every item the consumer lands no
 // row for is counted on its Tally under its outcome (#1641): refused by its
 // lane, unplaced by the fan-out, orphaned, a node-self block that names an
 // identity, or declared by the ledger and absent from the batch. The
 // gateway counts the rest.
-func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
+func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) error {
 	batch := storage.IngestBatch{BatchID: id, Node: node, NodeLogs: nodeLogWrites(ev, node)}
 	t := &batch.Tally
 	if l := ev.GetLedger(); l != nil {
@@ -331,7 +323,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	if len(tasks) > 0 {
 		var err error
 		if owners, err = s.store.ResolveTaskOwners(ctx, node, tasks); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -344,7 +336,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	}
 	resolved := make([]resolvedGroup, 0, len(views))
 	wants := map[string][]storage.IdentityKey{}
-	sampled := false
+	var sampled []*ogv1.TelemetryBatch
 	for _, v := range views {
 		owner, ok := owners[v.GetTaskId()]
 		if !ok {
@@ -357,39 +349,38 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		bind := nodeBinding(node, owner)
 		if sampleCount(v) > 0 {
-			sampled = true
+			sampled = append(sampled, v)
 			identityWants(wants, v, bind.Conduit)
 		}
 		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
 	}
 	var reg collection.Registry
 	var identities map[string]*storage.IdentityResolution
-	if sampled {
+	if len(sampled) > 0 {
 		var err error
-		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store); err != nil {
-			return nil, err
+		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store, sampled...); err != nil {
+			return err
 		}
 		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	endpoints := make([]string, 0, len(resolved)) // parallel to batch.Groups
 	for _, r := range resolved {
 		v := r.view
-		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner)}
+		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner),
+			SeenEndpoint: r.owner.EndpointID}
 		if sampleCount(v) > 0 {
 			rows := s.deriveSamples(v, r.bind, reg, identities, t)
 			group.Metrics, group.Properties, group.Events = rows.Metrics, rows.Properties, rows.Events
 			group.Fanned, group.Unbound = rows.Fanned, rows.Unbound
 		}
 		batch.Groups = append(batch.Groups, group)
-		endpoints = append(endpoints, r.owner.EndpointID)
 	}
 
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.settled(ev, res)
 	refused := make(map[int]bool, len(res.Refused))
@@ -414,7 +405,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		s.committed(l)
 	}
-	return seenEndpoints(endpoints, refused), nil
+	return nil
 }
 
 // declaredShortfall counts on t, as missing, each item stamp declared that
@@ -431,22 +422,6 @@ func declaredShortfall(t *delivery.Tally, stamp delivery.Stamp, ev *ogv1.Telemet
 			slog.Warn(declaredOverLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "over", n)
 		}
 	}
-}
-
-// seenEndpoints is the endpoints a tick stamps seen: each landed group's,
-// once, in group order, skipping the refused groups (by index) and a group
-// with no endpoint.
-func seenEndpoints(endpoints []string, refused map[int]bool) []string {
-	var out []string
-	seen := make(map[string]bool, len(endpoints))
-	for i, e := range endpoints {
-		if refused[i] || e == "" || seen[e] {
-			continue
-		}
-		seen[e] = true
-		out = append(out, e)
-	}
-	return out
 }
 
 // groupView is one task group read as the single-task batch every derivation
@@ -639,8 +614,9 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
 		// The registry is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
-		// The command-targeted property names ride with it (#1299).
-		reg, targeted, err := s.registry.get(ctx, s.store)
+		// The command-targeted property names ride with it (#1299). A name
+		// the kept registry lacks reads the catalogs at once (#1928).
+		reg, targeted, err := s.registry.get(ctx, s.store, ev)
 		if err != nil {
 			return err
 		}
@@ -655,6 +631,15 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
+	// The endpoint delivered this batch, whatever the sinks kept of it: an
+	// instanced series, an unchanged property the guard skipped, a sample a
+	// node's clock dated ahead, or a copy of a batch that already landed. Its
+	// freshness is the server's receipt (#933), stamped by the batch's own
+	// transaction (#1928). The push lane has no endpoint, so nothing is
+	// stamped there.
+	if bind.SampleOwner != nil && taskBound(ev) > 0 {
+		batch.SeenEndpoint = bind.SampleOwner.EndpointID
+	}
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
 		return err
@@ -662,17 +647,6 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	s.settled(ev, res)
 	if res.Landed {
 		s.committed(batchLanding(ev))
-	}
-	// The endpoint delivered this batch, whatever the sinks kept of it: an
-	// instanced series, an unchanged property the guard skipped, a sample a
-	// node's clock dated ahead, or a copy of a batch that already landed. Its
-	// freshness is the server's receipt (#933), stamped after the batch's
-	// transaction so it adds no lock to it. The push lane has no endpoint, so
-	// nothing is stamped there.
-	if bind.SampleOwner != nil && taskBound(ev) > 0 {
-		if id := bind.SampleOwner.EndpointID; id != "" {
-			return s.store.StampEndpointsSeen(ctx, []string{id})
-		}
 	}
 	return nil
 }

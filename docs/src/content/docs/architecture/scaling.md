@@ -175,7 +175,7 @@ the metric table.
 
 Now a node publishes one batch per tick, a group per task
 ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and it lands in one transaction
-([storage](/architecture/storage/)) whose cost is a fixed `C1` (about twenty statements) plus `R`
+([storage](/architecture/storage/)) whose cost is a fixed `C1` (about a dozen statements since #1928, the seen stamp among them) plus `R`
 (series the batch carries twice), `J` (judged samples that fire a rule), `T` (settled targeted
 properties) and three per conduit group that carries identified samples. With none of those it is
 the same for one group and for fifty. Before the transaction, the identity bindings of every conduit
