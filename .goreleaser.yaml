@@ -24,7 +24,11 @@ builds:
       - -trimpath
       - -tags=web
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      # IMAGE_DIGEST is the release image's digest, set by release.yml, which
+      # builds and pushes the image first (#1257); a release binary's lab pulls
+      # by it. Unset (a PR snapshot, a tag-pushed build) it stamps empty, and
+      # such a release binary's lab refuses to run without --image.
+      - -s -w -X main.version={{ .Version }} -X main.imageDigest={{ index .Env "IMAGE_DIGEST" }}
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:
