@@ -809,7 +809,10 @@ func toGrantBody(g *storage.Grant) grantBody {
 		b.GroupID = *g.GroupID
 	}
 	if g.GroupName != nil {
-		b.GroupName = *g.GroupName
+		b.Group = *g.GroupName
+	}
+	if g.GroupLabel != nil {
+		b.GroupLabel = *g.GroupLabel
 	}
 	return b
 }

@@ -58,6 +58,7 @@ type retentionStore interface {
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
@@ -113,8 +114,9 @@ type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
 	// Created and Dropped are the metric partitions the pass's roll made
-	// and the days it dropped whole (#420, #1527).
-	Created, Dropped []string
+	// and the days it dropped whole (#420, #1527); Summarized the finished
+	// days whose block range indexes it summarized (#1929).
+	Created, Dropped, Summarized []string
 	// Trends is what the pass's trend compaction did (#1276).
 	Trends storage.TrendCompaction
 	// Blocks is what the pass's block fold did (#1528).
@@ -175,6 +177,15 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		}
 	}
 	pdone()
+	// Each finished day left (#1929), on a deadline of its own so a slow
+	// roll does not starve it, and after the drop so no day about to go is
+	// summarized: a day that fails is named and the rest still summarized.
+	sctx, sdone := bounded()
+	rep.Summarized, err = store.SummarizeMetricPartitions(sctx)
+	sdone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("summarize metric partitions: %w", err))
+	}
 	// The hours past the late-data horizon close into trends (#1276) before
 	// any prune, which never removes a sample of an hour still open.
 	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {

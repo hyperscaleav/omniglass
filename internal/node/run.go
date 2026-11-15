@@ -523,15 +523,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// Ship what the spool held since the last tick, so batches land
 			// in the order they were collected (#454).
 			spool.retry()
-			// A batch the spool dropped at its cap may have carried a
-			// transition the node remembers as sent: forget what was sent, so
-			// each task's next run sends current state again (the property
-			// lane's transition guard keeps an unchanged value from landing
-			// twice).
-			if spool.takeOverflow() {
-				coll.forgetTransitions()
-				sched.forgetOccurrences()
-			}
+			resendAfterOverflow(spool, coll, sched, sessions)
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
 				self.setEvery(wl.ReportEvery())
@@ -750,6 +742,22 @@ func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.D
 		}
 		out <- next
 	}
+}
+
+// resendAfterOverflow answers a spool overflow: a batch dropped at its cap may
+// have carried a transition the node remembers as sent, so it sends current
+// state again (ADR-0453, point 4). The polls forget what they landed, and their
+// next run says it (the property lane's transition guard keeps an unchanged
+// value from landing twice); the held sessions, which say a change only when
+// it happens, republish their state, auth verdict and listener faults now
+// (#1213). Without an overflow nothing is resent.
+func resendAfterOverflow(spool *telemetrySpool, coll *collector, sched *pollSchedule, sessions *sessionManager) {
+	if !spool.takeOverflow() {
+		return
+	}
+	coll.forgetTransitions()
+	sched.forgetOccurrences()
+	sessions.resync()
 }
 
 // sleepCtx waits d, or until ctx ends, and reports whether d elapsed.

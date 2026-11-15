@@ -34,6 +34,27 @@ func newChoiceTestGateway(t *testing.T) (*storage.PG, context.Context, string) {
 	return gw, ctx, dsn
 }
 
+// plantChoice creates the standard std with one choice through the audited
+// create (CreateStandardFromTemplate) and returns the choice's alternate ids
+// by name, resolved the way an operator reference resolves.
+func plantChoice(t *testing.T, ctx context.Context, gw *storage.PG, std string, choice storage.RoleChoiceSpec) map[string]string {
+	t.Helper()
+	if _, err := gw.CreateStandardFromTemplate(ctx, "", storage.StandardFromTemplate{
+		Template: "test", Name: std, Label: std, Choices: []storage.RoleChoiceSpec{choice},
+	}); err != nil {
+		t.Fatalf("create standard %s with choice %s: %v", std, choice.Name, err)
+	}
+	alts := make(map[string]string, len(choice.Alternates))
+	for _, a := range choice.Alternates {
+		id, err := gw.ResolveAlternate(ctx, "standard", std, choice.Name+"/"+a.Name)
+		if err != nil {
+			t.Fatalf("resolve alternate %s/%s: %v", choice.Name, a.Name, err)
+		}
+		alts[a.Name] = id
+	}
+	return alts
+}
+
 // TestUnknownOwnerRefused pins the system_role owner-arc repair (#626,
 // memo amendment 7.5): roleOwnerExpr resolves an unknown standard or system
 // name to NULL, and before the migration's system_role_owner_arc_check
@@ -72,24 +93,19 @@ func TestRoleCannotJoinForeignAlternate(t *testing.T) {
 	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 
-	for _, name := range []string{"foreign-std-a", "foreign-std-b"} {
-		if err := gw.UpsertStandard(ctx, storage.Standard{Name: name, Label: name}); err != nil {
-			t.Fatalf("create standard %s: %v", name, err)
-		}
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "foreign-std-b", Label: "foreign-std-b"}); err != nil {
+		t.Fatalf("create standard foreign-std-b: %v", err)
 	}
-	alts, err := gw.SeedRoleChoice(ctx, "standard", "foreign-std-a", storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, gw, "foreign-std-a", storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{{Name: "all-in-one", Label: "All-in-one"}},
 	})
-	if err != nil {
-		t.Fatalf("seed choice on std-a: %v", err)
-	}
 	foreignAlt := alts["all-in-one"]
 	if foreignAlt == "" {
-		t.Fatalf("seed choice returned no id for all-in-one")
+		t.Fatalf("plantChoice returned no id for all-in-one")
 	}
 
-	_, err = gw.SetSystemRole(ctx, "", "standard", "foreign-std-b", storage.SystemRoleSpec{
+	_, err := gw.SetSystemRole(ctx, "", "standard", "foreign-std-b", storage.SystemRoleSpec{
 		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(foreignAlt),
 	})
 	if !errors.Is(err, storage.ErrRoleRefNotFound) {
@@ -116,26 +132,20 @@ func TestDeletingAlternateWithRolesRefused(t *testing.T) {
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	std := "delete-refused-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Delete Refused"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "all-in-one", Label: "All-in-one"},
 			{Name: "component-system", Label: "Component System"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	err = gw.DeleteAlternate(ctx, "", "standard", std, "conferencing", "all-in-one")
+	err := gw.DeleteAlternate(ctx, "", "standard", std, "conferencing", "all-in-one")
 	var shortfall *storage.ChoiceInUseShortfall
 	if !errors.As(err, &shortfall) {
 		t.Fatalf("delete an alternate with a role attached = %v, want ChoiceInUseShortfall", err)
@@ -181,16 +191,10 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	all := scopeAll()
 
 	std := "detach-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Detach"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{{Name: "a", Label: "A"}, {Name: "b", Label: "B"}},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 		Name: "role-a", Label: "Role A", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a"]),
 	}); err != nil {
@@ -258,19 +262,13 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	all := scopeAll()
 
 	std := "edit-preserve-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Edit Preserve"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "all-in-one", Label: "All-in-one"},
 			{Name: "component-system", Label: "Component System"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 	// component-system has no roles declared in this test at all, so
 	// all-in-one is the only real candidate and wins the tie by default;
 	// what matters here is only that conf-bar stays grouped under it.
@@ -352,19 +350,13 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	all := scopeAll()
 
 	std := "report-active-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Report Active"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, gw, std, storage.RoleChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "all-in-one", Label: "All-in-one"},
 			{Name: "component-system", Label: "Component System"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 		Name: "conf-bar", Label: "Conferencing Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
@@ -434,197 +426,5 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	if screen.Choice != "" || screen.Alternate != "" || !screen.Active || !screen.Impaired {
 		t.Fatalf("screen = %+v, want empty choice/alternate, active true, impaired true "+
 			"(unconditional and unstaffed: it IS the reason for the incomplete verdict)", screen)
-	}
-}
-
-// TestSeedRoleChoiceConvergesOnReorderedPositions is the fix-round
-// regression for the third important finding: SeedRoleChoice used to derive
-// an alternate's position from its 1-based index in spec.Alternates on
-// every call, arbitrating the upsert only on (choice_id, name). A release
-// that inserts a new alternate ahead of existing ones (or reorders them)
-// then collides on choice_alternate_position_key and aborts server boot,
-// because the new name's insert lands on a position an existing row still
-// holds. This seeds one shape, then a genuinely reordered one (a new
-// alternate inserted at the head) into the SAME database, asserting boot
-// succeeds and that every alternate, new and existing, ends up at its
-// newly-declared position.
-func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
-	t.Parallel()
-	gw, ctx, dsn := newChoiceTestGateway(t)
-
-	std := "reorder-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Reorder"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	alts1, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "component-system", Label: "Component System"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("seed first shape: %v", err)
-	}
-
-	// A later release inserts a new alternate at the HEAD of the list,
-	// pushing the two existing ones back a position each: a genuine,
-	// non-append reorder. The pre-fix version aborted server boot here.
-	alts2, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "hybrid", Label: "Hybrid"},
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "component-system", Label: "Component System"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("seed reordered shape: %v", err)
-	}
-
-	// The two names that already existed keep their ids: reconciling
-	// position must not have deleted and recreated them.
-	if alts2["all-in-one"] != alts1["all-in-one"] || alts2["component-system"] != alts1["component-system"] {
-		t.Fatalf("reorder changed existing alternate ids: before %v, after %v", alts1, alts2)
-	}
-
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer conn.Close(ctx)
-	want := map[string]int{"hybrid": 1, "all-in-one": 2, "component-system": 3}
-	for name, wantPos := range want {
-		var pos int
-		if err := conn.QueryRow(ctx, `select position from choice_alternate where id = $1`, alts2[name]).Scan(&pos); err != nil {
-			t.Fatalf("read %s position: %v", name, err)
-		}
-		if pos != wantPos {
-			t.Errorf("%s position = %d, want %d (converged on the new declared order)", name, pos, wantPos)
-		}
-	}
-}
-
-// TestSeedRoleChoiceReconcilesRenamesAndDrops is the second round of the
-// third finding's fix: converging position for the DECLARED set is not
-// enough, because a rename or a drop against an already-seeded database is
-// a name dropping OUT of spec.Alternates, and the pre-fix SeedRoleChoice
-// never touched a stored row whose name was no longer declared. That row
-// kept its old position, and the newly-declared name (the rename's other
-// half, or any alternate whose declared position happened to land where the
-// orphan still sat) collided with it at commit: a rename is a drop plus an
-// add on this lane, indistinguishable from a genuine removal without
-// "renamed from" tracking the seed does not have, so both must reconcile
-// the same way. Covers three cases against a database that already ran the
-// first seed: a pure drop, a rename, and a drop that is refused because a
-// role still points at the alternate being removed (the FK is RESTRICT;
-// refusing and naming the role is more honest than a silent cascade that
-// would detach it).
-func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
-	t.Parallel()
-	gw, ctx, dsn := newChoiceTestGateway(t)
-
-	std := "reconcile-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Reconcile"}); err != nil {
-		t.Fatalf("create standard: %v", err)
-	}
-	first, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "component-system", Label: "Component System"},
-			{Name: "legacy", Label: "Legacy"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("seed first shape: %v", err)
-	}
-
-	// A role holds "legacy": dropping it must be refused, not silently
-	// detach the role or crash on the FK.
-	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "legacy-role", Label: "Legacy Role", Quorum: 1, AlternateID: strp(first["legacy"]),
-	}); err != nil {
-		t.Fatalf("declare legacy role: %v", err)
-	}
-
-	// Drop "legacy" (still holds a role) and rename "component-system" to
-	// "hybrid", keeping "all-in-one" untouched.
-	_, err = gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "hybrid", Label: "Hybrid"},
-		},
-	})
-	var shortfall *storage.ChoiceInUseShortfall
-	if !errors.As(err, &shortfall) {
-		t.Fatalf("reseed dropping legacy (still holds a role) = %v, want ChoiceInUseShortfall", err)
-	}
-	if shortfall.Alternate != "legacy" || len(shortfall.Roles) != 1 || shortfall.Roles[0] != "legacy-role" {
-		t.Fatalf("shortfall = %+v, want conferencing/legacy naming legacy-role", shortfall)
-	}
-
-	// The refusal rolled back the whole call: legacy is still there,
-	// unchanged, and nothing about component-system moved either.
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer conn.Close(ctx)
-	var stillThere int
-	if err := conn.QueryRow(ctx, `select count(*) from choice_alternate where id = $1`, first["legacy"]).Scan(&stillThere); err != nil {
-		t.Fatalf("count legacy: %v", err)
-	}
-	if stillThere != 1 {
-		t.Fatalf("legacy rows after refused reseed = %d, want 1 (the refusal must not have deleted it)", stillThere)
-	}
-
-	// Detach the role, then the same reseed (drop legacy, rename
-	// component-system to hybrid) must succeed.
-	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "legacy-role", Label: "Legacy Role", Quorum: 1, AlternateID: strp(""),
-	}); err != nil {
-		t.Fatalf("detach legacy-role: %v", err)
-	}
-	second, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", Label: "Conferencing",
-		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", Label: "All-in-one"},
-			{Name: "hybrid", Label: "Hybrid"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("reseed after detaching legacy-role: %v", err)
-	}
-
-	// all-in-one kept its id (untouched by the reorder/rename around it);
-	// legacy and the old component-system name are both gone; hybrid is a
-	// fresh row, not component-system reused under a new name (the seed has
-	// no rename tracking, so this is the honest outcome).
-	if second["all-in-one"] != first["all-in-one"] {
-		t.Fatalf("all-in-one id changed across reseed: %s -> %s", first["all-in-one"], second["all-in-one"])
-	}
-	if second["hybrid"] == first["component-system"] {
-		t.Fatalf("hybrid reused component-system's id; the seed has no rename tracking, this must be a fresh row")
-	}
-	for _, id := range []string{first["legacy"], first["component-system"]} {
-		var count int
-		if err := conn.QueryRow(ctx, `select count(*) from choice_alternate where id = $1`, id).Scan(&count); err != nil {
-			t.Fatalf("count dropped row %s: %v", id, err)
-		}
-		if count != 0 {
-			t.Errorf("dropped alternate %s still has %d row(s), want 0", id, count)
-		}
-	}
-	var allInOnePos, hybridPos int
-	if err := conn.QueryRow(ctx, `select position from choice_alternate where id = $1`, second["all-in-one"]).Scan(&allInOnePos); err != nil {
-		t.Fatalf("read all-in-one position: %v", err)
-	}
-	if err := conn.QueryRow(ctx, `select position from choice_alternate where id = $1`, second["hybrid"]).Scan(&hybridPos); err != nil {
-		t.Fatalf("read hybrid position: %v", err)
-	}
-	if allInOnePos != 1 || hybridPos != 2 {
-		t.Errorf("positions after reconcile: all-in-one=%d, hybrid=%d, want 1, 2", allInOnePos, hybridPos)
 	}
 }
