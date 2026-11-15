@@ -34,6 +34,10 @@ export type FlatConfig<T> = {
   entity: { name: string; plural: string };
   rows: Accessor<T[]>;
   loading?: Accessor<boolean>;
+  // Opt in to holding the table's space while `loading`: this many skeleton rows
+  // replace the "Loading…" line, so the loaded rows land in place instead of
+  // shifting what sits below the list (the probe's layout-shift budget).
+  loadingRows?: number;
   error?: Accessor<unknown>;
   filterKeys: FilterKeys<T>;
   filterPlaceholder?: string;
@@ -199,11 +203,24 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                     <For
                       each={shown()}
                       fallback={
-                        <tr>
-                          <td colspan={span()} class="py-8 text-center text-base-content/40">
-                            {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : (cfg.empty ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
-                          </td>
-                        </tr>
+                        <Show
+                          when={cfg.loading?.() && cfg.loadingRows}
+                          fallback={
+                            <tr>
+                              <td colspan={span()} class="py-8 text-center text-base-content/40">
+                                {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : (cfg.empty ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
+                              </td>
+                            </tr>
+                          }
+                        >
+                          <For each={Array.from({ length: cfg.loadingRows! })}>
+                            {() => (
+                              <tr data-testid="list-loading-row" aria-hidden="true">
+                                <td colspan={span()}><div class="skeleton h-5 w-full" /></td>
+                              </tr>
+                            )}
+                          </For>
+                        </Show>
                       }
                     >
                       {(r) => (
