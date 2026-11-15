@@ -285,10 +285,13 @@ func (p *HostKeyPin) Admit(fp string) (pinned string, ok bool) {
 func (a *SessionAuth) String() string { return "session auth" }
 
 // ChannelOptions shape the line channel a connection opens: over ssh, a
-// shell (with a PTY when asked) or an exec channel running Exec.
+// shell (with a PTY when asked) or an exec channel running Exec. ConnectQuiet
+// is how long the connection's first ask waits for a banner (#1418): zero is
+// DefaultConnectQuiet, NoConnectQuiet none.
 type ChannelOptions struct {
-	PTY  bool
-	Exec string
+	PTY          bool
+	Exec         string
+	ConnectQuiet time.Duration
 }
 
 // AuthVerdict is the auth step's outcome, the endpoint-authenticated rung:

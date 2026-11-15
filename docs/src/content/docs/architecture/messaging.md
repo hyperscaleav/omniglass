@@ -401,7 +401,9 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: the window's worklist
   pulls, counted as each window's own (the change in the server's running totals, never the totals),
   and the largest reply held for any node. Every outcome but `served` is a loss over the sum; a reply
-  size nearing the bus payload limit is the warning before `oversize`.
+  size nearing the bus payload limit is the warning before `oversize`. The target sync
+  ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) counts each request (a manifest or a batch), adds an
+  `unchanged` outcome that is not a loss, and counts one endpoint refused as too large as `oversize`.
 - **`bus-request-count`, `bus-request-failure-count`**, per path (`heartbeat`, `command-pull`,
   `command-report`): the node requests the server handled and those it failed to serve. A heartbeat
   write that fails also logs one WARN for the node, `heartbeat not recorded, the node may read as
@@ -457,7 +459,9 @@ today is `worklist` (request-reply), `heartbeat`, `telemetry` (the JetStream fir
 `command` (the per-node command-queue pull, request-reply like the worklist, #815), and
 `commandstatus` (the node's execution reports), plus `simlist` (request-reply) and `simhit` for the
 [simulator](/architecture/simulation/) beside a node, which holds that node's credential;
-`worklist-changed` is reserved for the server's re-pull nudge. The trusted push lane `og.v1.api.telemetry` deliberately
+`worklist-changed` is reserved for the server's re-pull nudge; the worklist's target sync
+([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) keeps its one subject, the manifest and each batch both
+requests on `og.v1.worklist.<node>` told apart by a header, so it adds no grant. The trusted push lane `og.v1.api.telemetry` deliberately
 sits in its **own segment** rather than as a reserved node name under `og.v1.telemetry.*` (above):
 structural impossibility beats a naming convention.
 

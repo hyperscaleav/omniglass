@@ -198,6 +198,37 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
 
 Why it is shaped this way, and what it defers (paging, set-based reads, the materialized
 worklist): [ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).
+Its target is now the endpoint-by-endpoint sync below ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)).
+:::
+
+:::design[Target design: the worklist syncs endpoint by endpoint against a manifest, tracked in #1586]
+One reply still carries a node's whole worklist, so the bus's 1 MB `max_payload` caps how much
+one node can run: headquarters on a 3,000-system seed is 463 KB gzipped, and a larger site crosses
+it. The target takes the whole worklist out of any one message
+([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)):
+
+- **A manifest first.** The node pulls its `config_generation`, a set digest and, per endpoint, its
+  id and a content digest (over the endpoint's fields, its tasks and the dictionary entries they
+  name, each secret by its sealed version; not the connection fingerprint). A node holding that set
+  digest is answered `unchanged` with no body, the steady state. The generation stays the ordered
+  value a move's confirmation reads.
+- **Then only what changed.** The node asks by id for the endpoints whose digest moved or that it
+  lacks, and the server answers whole endpoints up to `max_payload` before compression, halving a
+  batch still over the limit once compressed, grouped by endpoint with the dictionary entries they
+  name; the node asks again for the rest. Both requests ride `og.v1.worklist.<node>`, told apart by
+  a header.
+- **Applied as a set.** Each served endpoint is self-contained, so the node keeps every copy it is
+  served and applies the set once it holds every endpoint the manifest lists, dropping the ones it
+  no longer lists; a change mid-sync is caught by the next manifest, not by starting over. Until
+  then the node runs its last worklist.
+- **One oversize endpoint fails alone.** An endpoint over the batch budget rides in a batch of its
+  own and is refused, by id, only when that batch is over `max_payload` compressed, so the failure
+  is one device, not the site.
+
+A manifest entry is about 62 B gzipped, so headquarters' 1,609 endpoints on the corporate soak are
+about 100 KB, and the manifest itself reaches 1 MB at about 16,800 endpoints on one node. Any server
+answers any request, so a second server needs no handover; a key-value cache, if one comes, is keyed
+per endpoint and is what waits on secrets decrypted on use (#1250).
 :::
 ## The node-server protocol
 
@@ -265,6 +296,12 @@ The spool is **memory**, bounded at 10,000 batches, 16 MiB, or 12 hours: past an
 the oldest batch (never one with the stream), says so once when it starts dropping and once, with the
 count, when it drains, and the run loop forgets the transitions it remembers as sent (the
 reachability verdict, a poll's faults and occurrences), so the next tick sends current state again.
+A held session says its state, its auth verdict and its listeners' faults only when they change, so
+the same tick has the session manager **resend** them: each held session's current `session-state`
+and auth verdict, and each listener's current faults, once each. The resend rides the spool, so a
+resend it drops raises the overflow again and is resent on the next tick; a tick without an overflow
+resends nothing. The server therefore never keeps showing a session up that went down while the bus
+was unreachable.
 The age cap sits inside the receipt's 24-hour horizon, so a stored batch whose ack was lost cannot
 come back after its receipt is pruned and land twice. A one-shot run (`--once`) ends only once the
 stream has acked what it collected; a stopping node gives the spool five seconds to drain.
@@ -459,9 +496,11 @@ pins keep today's cascade.
   and the component goes back to the old node, so two live nodes never hold a single-session
   device.
 
-**The worklist wire is unchanged** but for one pull request header, the generation the node is
-running (the two-phase confirmation above). A move reaches both nodes on their next worklist pull
-(30 s, jittered), and the materialized worklist's nudge (#1586) shortens that later. The worklist
+**The worklist pull carries one more request header**, the generation the node is running (the
+two-phase confirmation above); under the endpoint-by-endpoint sync it rides the manifest request
+beside the set digest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). A move reaches both nodes on their next worklist pull
+(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later (#1945,
+[ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 

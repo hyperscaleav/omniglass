@@ -721,7 +721,7 @@ anything is issued. Every command reads back by its id under its component, with
 
 ```sh
 bar='depot.bay-1.$comp.videobar-1'
-omniglass component command issue "$bar" --command-type set-volume --value 42 --wait \
+omniglass component command issue "$bar" --command-type set-volume --value 0.42 --wait \
   | jq -c '{status, settled_by, reason, reply}'
 # {"status":"settled","settled_by":"reply","reason":"the reply confirmed it","reply":"{\"ok\": true}\n"}
 omniglass component command list "$bar" --status timed-out --since 2026-10-25T09:00:00Z
