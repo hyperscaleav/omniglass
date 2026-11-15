@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http/httptest"
 	"sort"
 	"strings"
@@ -258,7 +259,8 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	// poll's, so it is waited on rather than read the instant call-state is.
 	for deadline := time.Now().Add(20 * time.Second); ; {
 		v, ok := s.metric("bar-1", ep.Name, "volume")
-		if ok && fmt.Sprint(v) == fmt.Sprint(bar.ReadPath("status.audio.volume")) {
+		// The bar holds a percent; the metric holds the ratio canon.
+		if ok && fmt.Sprint(math.Round(v*100)) == fmt.Sprint(bar.ReadPath("status.audio.volume")) {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -279,7 +281,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	for _, c := range []struct {
 		typ, value, path, want string
 	}{
-		{"set-volume", `42`, "status.audio.volume", "42"},
+		{"set-volume", `0.42`, "status.audio.volume", "42"},
 		{"set-mute", `"true"`, "status.audio.mic_mute", "true"},
 		{"set-power", `"standby"`, "status.device.power", "standby"},
 	} {
@@ -305,6 +307,9 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 			t.Fatalf("%s = %q, want settled from its reply", typ, got)
 		}
 	}
+	// The round trip stays on the ratio: the 0.42 intended went out as the
+	// bar's 42, and the next poll reads it back as the same 0.42.
+	s.waitMetric("bar-1", ep.Name, "volume", func(v float64) bool { return v == 0.42 }, "the intended 0.42, read back from the bar's 42")
 
 	// The bar is replaced: a new key, refused at the transport rung, and
 	// beneath the gate no request reaches it (the probe connects only).

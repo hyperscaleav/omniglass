@@ -13,7 +13,7 @@ import (
 )
 
 // The pool is the asked-for size, or eight, held under the database pool
-// less the connection kept for ingest, and never under one.
+// less one connection, and never under one.
 func TestTheWorklistPoolIsHeldUnderTheDatabasePool(t *testing.T) {
 	for _, c := range []struct{ want, db, got int }{
 		{0, 0, DefaultWorklistWorkers},

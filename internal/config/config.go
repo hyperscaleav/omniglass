@@ -84,6 +84,11 @@ type Config struct {
 	// and the node cadence the server assumes. The server parses them at boot
 	// (closedloop.ParseSettings), so a bad value fails the boot, not this Load.
 	ClosedLoopBracket, ClosedLoopHeartbeat, ClosedLoopProbeEvery string
+	// IngestPartitions is the raw ingest lane count (#1896): how many
+	// partitions of the telemetry stream land side by side. The server parses
+	// it at boot (bus.ParseIngestPartitions), so a bad value fails the boot,
+	// not this Load. Set OMNIGLASS_INGEST_PARTITIONS.
+	IngestPartitions string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -111,6 +116,8 @@ func Load() Config {
 		ClosedLoopBracket:    Get("OMNIGLASS_CLOSED_LOOP_BRACKET"),
 		ClosedLoopHeartbeat:  Get("OMNIGLASS_CLOSED_LOOP_HEARTBEAT"),
 		ClosedLoopProbeEvery: Get("OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"),
+
+		IngestPartitions: Get("OMNIGLASS_INGEST_PARTITIONS"),
 	}
 }
 

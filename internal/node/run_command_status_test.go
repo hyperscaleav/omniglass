@@ -116,11 +116,11 @@ func TestNodeCommandWaitSettlesWithItsReply(t *testing.T) {
 
 	for _, tc := range []struct {
 		comp, endpoint, driver string
-		volume                 int
+		volume                 float64
 		reply                  string
 	}{
-		{"bar-socket", "wss", "kestrel-ws", 42, "42"},
-		{"bar-web", "https", "kestrel-api", 47, `"ok"`},
+		{"bar-socket", "wss", "kestrel-ws", 0.42, "42"},
+		{"bar-web", "https", "kestrel-api", 0.47, `"ok"`},
 	} {
 		var got waitedCommand
 		if status := s.api(tok, http.MethodPost, "/components/"+tc.comp+"/commands:issue?wait=true&wait_timeout=20",

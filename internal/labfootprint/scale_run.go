@@ -896,7 +896,8 @@ func (h *harness) redeliveries(ctx context.Context, server string, since time.Ti
 }
 
 // consumerLane reads the lane tallies the server logged since the window
-// began and measures the lane between the first and last of them inside it.
+// began and measures each partition's lane between the first and last of its
+// tallies inside it (LaneOf).
 func (h *harness) consumerLane(ctx context.Context, server string, from, to time.Time) (Lane, error) {
 	log, err := h.serverLog(ctx, server, from)
 	if err != nil {

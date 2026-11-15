@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -58,13 +59,23 @@ var telemetryAckWait = 30 * time.Second
 // shorten it.
 var telemetryNakDelay = 500 * time.Millisecond
 
-// startTelemetryConsumer creates (idempotently) the telemetry stream + durable
-// consumer over the full-permission internal client and begins consuming. The
+// startTelemetryConsumer creates (idempotently) the telemetry stream and its
+// durables over the full-permission internal client and begins consuming. The
 // stream persists a TelemetryBatch the instant a node publishes it, and (WorkQueuePolicy)
 // deletes it the instant it is acked, so disk stays bounded to the current
-// backlog rather than growing forever; the consumer redelivers a transient
+// backlog rather than growing forever; each durable redelivers a transient
 // failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
 // sample but a permanently-failing one still leaves the queue.
+//
+// The stream files each node's batches under the node's partition among
+// s.partitions (#1896, partitionTransform), and each partition has a durable
+// of its own; the durable named telemetryConsumer keeps the push lane's
+// subject and any batch stored under a node's own subject before the stream
+// filed by partition. A partition past the count, filed under by a server
+// that ran more lanes or left with a durable, is drained until empty and its
+// durable then deleted. A count changed over a held backlog is logged: a
+// node's batches filed before and after the change are on different lanes
+// and may land out of order (reorderRisk).
 //
 // The stream keeps a duplicate window over each batch's Nats-Msg-Id (#453),
 // and the stream's creation time is recorded as the epoch a batch with no id
@@ -77,39 +88,157 @@ func (s *Server) startTelemetryConsumer() error {
 	s.js = js
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	transform := partitionTransform(s.partitions)
+	prior, held, err := priorPartitions(ctx, js)
+	if err != nil {
+		return err
+	}
+	if reorderRisk(prior, s.partitions, held) {
+		slog.Warn("ingest partitions changed over a held backlog: a node's batches filed before and after may land out of order",
+			"facility", "ingest", "prior", prior, "partitions", s.partitions, "held", held)
+	}
+	// The stream also names the partitioned form among its subjects, so the
+	// durable that keeps the unpartitioned subjects is filtered to a strict
+	// subset of them. A durable whose filters equal the stream's subjects
+	// counts as unfiltered, and the work queue then holds every partition
+	// batch for it after its own partition acknowledged it. No node can
+	// publish the partitioned form: a node's grant is its own subject alone.
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       telemetryStream,
-		Subjects:   []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
-		Retention:  jetstream.WorkQueuePolicy,
-		Duplicates: telemetryDuplicateWindow,
+		Name:             telemetryStream,
+		Subjects:         []string{collection.TelemetryWildcard, telemetryPrefix + "*.*", collection.APITelemetrySubject},
+		Retention:        jetstream.WorkQueuePolicy,
+		Duplicates:       telemetryDuplicateWindow,
+		SubjectTransform: &transform,
 	})
 	if err != nil {
 		return err
 	}
 	s.streamEpoch = stream.CachedInfo().Created.UTC().Format(time.RFC3339Nano)
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:    telemetryConsumer,
-		AckPolicy:  jetstream.AckExplicitPolicy,
-		AckWait:    telemetryAckWait,
-		MaxDeliver: maxTelemetryDeliveries,
+	s.telemetry = stream
+
+	// The durable that keeps the unpartitioned subjects is filtered first: a
+	// work queue refuses two durables whose filters overlap, and one an older
+	// server created takes every subject.
+	other := s.tallies[s.partitions]
+	if err := s.consumeLane(ctx, stream, telemetryConsumer, []string{collection.TelemetryWildcard, collection.APITelemetrySubject}, other); err != nil {
+		return err
+	}
+	for i := range s.partitions {
+		if err := s.consumeLane(ctx, stream, partitionDurable(i), []string{partitionFilter(i)}, s.tallies[i]); err != nil {
+			return err
+		}
+	}
+	return s.drainPastPartitions(ctx, stream, prior, other)
+}
+
+// priorPartitions is the partition count the telemetry stream filed by
+// before this start, 0 for none, and how many batches it holds; -1 when
+// there is no stream yet.
+func priorPartitions(ctx context.Context, js jetstream.JetStream) (int, uint64, error) {
+	stream, err := js.Stream(ctx, telemetryStream)
+	if errors.Is(err, jetstream.ErrStreamNotFound) {
+		return -1, 0, nil
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("read the telemetry stream: %w", err)
+	}
+	info := stream.CachedInfo()
+	return transformPartitions(info.Config.SubjectTransform), info.State.Msgs, nil
+}
+
+// consumeLane creates (or updates) the durable name over filters and
+// consumes it, each batch's time in the handler kept in tally.
+func (s *Server) consumeLane(ctx context.Context, stream jetstream.Stream, name string, filters []string, tally *laneTally) error {
+	cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, filters))
+	if err != nil {
+		return fmt.Errorf("durable %s: %w", name, err)
+	}
+	return s.consume(name, cons, tally)
+}
+
+// laneConfig is a lane's durable name over filters.
+func laneConfig(name string, filters []string) jetstream.ConsumerConfig {
+	return jetstream.ConsumerConfig{
+		Durable:        name,
+		FilterSubjects: filters,
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		AckWait:        telemetryAckWait,
+		MaxDeliver:     maxTelemetryDeliveries,
 		// One batch in flight: nothing is delivered past a batch the
-		// consumer has not acked or dropped, a redelivery included, so each
-		// publisher's batches land in the order the stream stored them. The
-		// property lane's transition guard (a value equal to its series'
-		// latest is not written) is right only in that order (ADR-0311).
+		// durable has not acked or dropped, a redelivery included, so each
+		// publisher's batches land in the order the stream stored them, and
+		// a node's batches all share one durable. The property lane's
+		// transition guard (a value equal to its series' latest is not
+		// written) is right only in that order (ADR-0311, ADR-1896).
 		MaxAckPending: 1,
+	}
+}
+
+// consume runs cons's pull loop into the handler, as one of the server's
+// lanes.
+func (s *Server) consume(name string, cons jetstream.Consumer, tally *laneTally) error {
+	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		start := time.Now()
+		s.handleTelemetry(msg)
+		tally.observe(time.Since(start))
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("consume %s: %w", name, err)
 	}
-	s.cons = cons
-	s.telemetry = stream
-	cc, err := cons.Consume(func(msg jetstream.Msg) { s.handleTelemetry(msg) })
-	if err != nil {
-		return err
-	}
-	s.consumeCtx = cc
+	s.lanesMu.Lock()
+	s.lanes = append(s.lanes, &ingestLane{name: name, cons: cons, cc: cc})
+	s.lanesMu.Unlock()
 	return nil
+}
+
+// drainPastPartitions drains each partition past the count (pastPartitions:
+// every one the prior count filed under, and every durable left past it):
+// its durable, created again if it is gone, is deleted when it holds nothing
+// and consumed while it still does, so a server started with fewer lanes
+// lands what one with more left behind. The stream files no new batch under
+// it, so it empties and a later start deletes it.
+func (s *Server) drainPastPartitions(ctx context.Context, stream jetstream.Stream, prior int, tally *laneTally) error {
+	names := stream.ConsumerNames(ctx)
+	var durables []string
+	for name := range names.Name() {
+		durables = append(durables, name)
+	}
+	if err := names.Err(); err != nil {
+		return fmt.Errorf("list telemetry durables: %w", err)
+	}
+	for _, i := range pastPartitions(s.partitions, prior, durables) {
+		name := partitionDurable(i)
+		cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, []string{partitionFilter(i)}))
+		if err != nil {
+			return fmt.Errorf("durable %s: %w", name, err)
+		}
+		info, err := cons.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("durable %s: %w", name, err)
+		}
+		if info.NumPending+uint64(info.NumAckPending) == 0 {
+			if err := stream.DeleteConsumer(ctx, name); err != nil {
+				return fmt.Errorf("delete durable %s: %w", name, err)
+			}
+			continue
+		}
+		slog.Info("ingest partition draining", "facility", "ingest", "durable", name,
+			"pending", info.NumPending, "partitions", s.partitions)
+		if err := s.consume(name, cons, tally); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stopLanes stops every lane's pull loop.
+func (s *Server) stopLanes() {
+	s.lanesMu.Lock()
+	defer s.lanesMu.Unlock()
+	for _, l := range s.lanes {
+		l.cc.Stop()
+	}
+	s.lanes = nil
 }
 
 // maxBatchIDLen bounds a Nats-Msg-Id the receipt keys verbatim; a longer one
@@ -130,13 +259,13 @@ func (s *Server) batchID(msg jetstream.Msg) string {
 			sum := sha256.Sum256([]byte(id))
 			id = "sha256:" + hex.EncodeToString(sum[:])
 		}
-		return msg.Subject() + " " + id
+		return canonicalSubject(msg.Subject()) + " " + id
 	}
 	meta, err := msg.Metadata()
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%s seq:%s/%d", msg.Subject(), s.streamEpoch, meta.Sequence.Stream)
+	return fmt.Sprintf("%s seq:%s/%d", canonicalSubject(msg.Subject()), s.streamEpoch, meta.Sequence.Stream)
 }
 
 // ack confirms a batch to the stream and waits for the stream to take it
@@ -160,16 +289,15 @@ func (s *Server) ack(msg jetstream.Msg) {
 // left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
-	start := time.Now()
-	defer func() { s.lane.observe(time.Since(start)) }()
 	ctx := context.Background()
+	subject := canonicalSubject(msg.Subject())
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
 		// No ledger can be read from it, so it records no receipt: its items
 		// read as missing at the ledger's next read (#1641, ADR-1691); the
 		// warning says why.
-		slog.Warn(undecodableLog, "facility", "ingest", "subject", msg.Subject(), "bytes", len(msg.Data()), "error", err.Error())
+		slog.Warn(undecodableLog, "facility", "ingest", "subject", subject, "bytes", len(msg.Data()), "error", err.Error())
 		s.drop(msg, nil) // undecodable: it will never succeed, stop redelivery
 		return
 	}
@@ -179,7 +307,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
 	// carries an owner the route already authorized; the node lane's owner is the
 	// server's to resolve from the task's interface.
-	if msg.Subject() == collection.APITelemetrySubject {
+	if subject == collection.APITelemetrySubject {
 		bind, ok := apiBinding(&ev)
 		if !ok {
 			s.drop(msg, delivery.BatchItems(&ev)) // malformed owner: it will never resolve, stop redelivery
@@ -196,7 +324,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// The node published only its own telemetry subject (per-node grant), so the
 	// node extracted from the subject is trusted, the same trust the heartbeat sink
 	// relies on.
-	node := collection.NodeFromSubject(msg.Subject())
+	node := collection.NodeFromSubject(subject)
 	b.node = node
 
 	// A node does not get to assert its own owner. Populating owner on this lane is a
@@ -219,21 +347,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	stamp, err := s.landNode(ctx, id, node, &ev)
-	if err != nil {
+	if err := s.landNode(ctx, id, node, &ev); err != nil {
 		s.failed(msg, b, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
-	// Each landed group's endpoint delivered this tick, whatever the sinks
-	// kept of it (#933), stamped in one write after the ack so it holds
-	// nothing in flight. A failed stamp loses one tick's freshness, which the
-	// next tick restamps; it is not worth a redelivery of the whole tick.
-	if len(stamp) > 0 {
-		if err := s.store.StampEndpointsSeen(ctx, stamp); err != nil {
-			slog.Warn("endpoint seen stamp failed", "facility", "ingest", "node", node, "endpoints", len(stamp), "error", err.Error())
-		}
-	}
 }
 
 // undecodableLog is the warning for a telemetry message that does not
@@ -293,16 +411,18 @@ func nodeSelfReport(ev *ogv1.TelemetryBatch, node string) (r *storage.NodeSelfRe
 // Every group's task resolves in one read; a group whose task the node does
 // not hold (another node's, unknown, a shared interface) is an orphan the
 // fence drops (#1200) while its siblings land. A group the gateway refuses is
-// warned and dropped, never the tick. It returns the endpoints to stamp seen:
-// every resolved group's that was not refused. A returned error is the
-// resolve's, the registry's or the batch's (failed decides what it means).
+// warned and dropped, never the tick. Each resolved group carries the
+// endpoint that delivered its task, which the batch stamps seen in its own
+// transaction unless it refuses the group (#933, #1928). A returned error is
+// the resolve's, the registry's or the batch's (failed decides what it
+// means).
 //
 // The batch carries the node's ledger, and every item the consumer lands no
 // row for is counted on its Tally under its outcome (#1641): refused by its
 // lane, unplaced by the fan-out, orphaned, a node-self block that names an
 // identity, or declared by the ledger and absent from the batch. The
 // gateway counts the rest.
-func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
+func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) error {
 	batch := storage.IngestBatch{BatchID: id, Node: node, NodeLogs: nodeLogWrites(ev, node)}
 	t := &batch.Tally
 	if l := ev.GetLedger(); l != nil {
@@ -331,7 +451,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	if len(tasks) > 0 {
 		var err error
 		if owners, err = s.store.ResolveTaskOwners(ctx, node, tasks); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -344,7 +464,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	}
 	resolved := make([]resolvedGroup, 0, len(views))
 	wants := map[string][]storage.IdentityKey{}
-	sampled := false
+	var sampled []*ogv1.TelemetryBatch
 	for _, v := range views {
 		owner, ok := owners[v.GetTaskId()]
 		if !ok {
@@ -357,39 +477,38 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		bind := nodeBinding(node, owner)
 		if sampleCount(v) > 0 {
-			sampled = true
+			sampled = append(sampled, v)
 			identityWants(wants, v, bind.Conduit)
 		}
 		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
 	}
 	var reg collection.Registry
 	var identities map[string]*storage.IdentityResolution
-	if sampled {
+	if len(sampled) > 0 {
 		var err error
-		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store); err != nil {
-			return nil, err
+		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store, sampled...); err != nil {
+			return err
 		}
 		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	endpoints := make([]string, 0, len(resolved)) // parallel to batch.Groups
 	for _, r := range resolved {
 		v := r.view
-		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner)}
+		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner),
+			SeenEndpoint: r.owner.EndpointID}
 		if sampleCount(v) > 0 {
 			rows := s.deriveSamples(v, r.bind, reg, identities, t)
 			group.Metrics, group.Properties, group.Events = rows.Metrics, rows.Properties, rows.Events
 			group.Fanned, group.Unbound = rows.Fanned, rows.Unbound
 		}
 		batch.Groups = append(batch.Groups, group)
-		endpoints = append(endpoints, r.owner.EndpointID)
 	}
 
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.settled(ev, res)
 	refused := make(map[int]bool, len(res.Refused))
@@ -414,7 +533,7 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		s.committed(l)
 	}
-	return seenEndpoints(endpoints, refused), nil
+	return nil
 }
 
 // declaredShortfall counts on t, as missing, each item stamp declared that
@@ -431,22 +550,6 @@ func declaredShortfall(t *delivery.Tally, stamp delivery.Stamp, ev *ogv1.Telemet
 			slog.Warn(declaredOverLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "over", n)
 		}
 	}
-}
-
-// seenEndpoints is the endpoints a tick stamps seen: each landed group's,
-// once, in group order, skipping the refused groups (by index) and a group
-// with no endpoint.
-func seenEndpoints(endpoints []string, refused map[int]bool) []string {
-	var out []string
-	seen := make(map[string]bool, len(endpoints))
-	for i, e := range endpoints {
-		if refused[i] || e == "" || seen[e] {
-			continue
-		}
-		seen[e] = true
-		out = append(out, e)
-	}
-	return out
 }
 
 // groupView is one task group read as the single-task batch every derivation
@@ -639,8 +742,9 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
 		// The registry is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
-		// The command-targeted property names ride with it (#1299).
-		reg, targeted, err := s.registry.get(ctx, s.store)
+		// The command-targeted property names ride with it (#1299). A name
+		// the kept registry lacks reads the catalogs at once (#1928).
+		reg, targeted, err := s.registry.get(ctx, s.store, ev)
 		if err != nil {
 			return err
 		}
@@ -655,6 +759,15 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
+	// The endpoint delivered this batch, whatever the sinks kept of it: an
+	// instanced series, an unchanged property the guard skipped, a sample a
+	// node's clock dated ahead, or a copy of a batch that already landed. Its
+	// freshness is the server's receipt (#933), stamped by the batch's own
+	// transaction (#1928). The push lane has no endpoint, so nothing is
+	// stamped there.
+	if bind.SampleOwner != nil && taskBound(ev) > 0 {
+		batch.SeenEndpoint = bind.SampleOwner.EndpointID
+	}
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
 		return err
@@ -662,17 +775,6 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	s.settled(ev, res)
 	if res.Landed {
 		s.committed(batchLanding(ev))
-	}
-	// The endpoint delivered this batch, whatever the sinks kept of it: an
-	// instanced series, an unchanged property the guard skipped, a sample a
-	// node's clock dated ahead, or a copy of a batch that already landed. Its
-	// freshness is the server's receipt (#933), stamped after the batch's
-	// transaction so it adds no lock to it. The push lane has no endpoint, so
-	// nothing is stamped there.
-	if bind.SampleOwner != nil && taskBound(ev) > 0 {
-		if id := bind.SampleOwner.EndpointID; id != "" {
-			return s.store.StampEndpointsSeen(ctx, []string{id})
-		}
 	}
 	return nil
 }

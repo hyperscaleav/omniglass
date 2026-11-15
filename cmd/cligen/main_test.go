@@ -403,3 +403,67 @@ func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 		t.Errorf("long of an argless command = %q, want it untouched", got)
 	}
 }
+
+// TestAFreeFormBodyRendersABodyFlag is #1333. A request body that is an object
+// with no declared properties (an RFC 7386 merge patch such as PATCH
+// /settings/{namespace}, whose keys are the namespace's own) has nothing for
+// bodyFields to turn into per-property flags. It used to render a leaf that
+// passed a nil body, so the command could not carry the one thing it exists to
+// send. The generator now emits a --body JSON flag (and --body-file) and passes
+// the parsed document to runAPICommand. A schema that DOES declare properties
+// keeps its per-property flags and gains neither.
+func TestAFreeFormBodyRendersABodyFlag(t *testing.T) {
+	const docRaw = `{"components":{"schemas":{"CreateBody":{"properties":{"name":{"type":"string"}}}}}}`
+	var doc spec
+	if err := json.Unmarshal([]byte(docRaw), &doc); err != nil {
+		t.Fatalf("doc: %v", err)
+	}
+	opFor := func(schema string) operation {
+		var op operation
+		raw := `{"operationId":"patch-thing","requestBody":{"required":true,"content":{"application/json":{"schema":` + schema + `}}}}`
+		if err := json.Unmarshal([]byte(raw), &op); err != nil {
+			t.Fatalf("op: %v", err)
+		}
+		return op
+	}
+	renderOf := func(op operation) (command, string) {
+		cmd := buildCommand(doc, "/api/v1", "/things/{name}", "patch", op)
+		out, err := render(tree([]command{cmd}))
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return cmd, string(out)
+	}
+
+	for name, schema := range map[string]string{
+		"additionalProperties": `{"type":"object","additionalProperties":{},"description":"a merge patch"}`,
+		"bare object":          `{"type":"object"}`,
+	} {
+		cmd, src := renderOf(opFor(schema))
+		if !cmd.FreeBody {
+			t.Errorf("%s: a free-form object body was not marked FreeBody", name)
+		}
+		for _, want := range []string{
+			`cmd.Flags().StringVar(&fBody, "body"`,
+			`cmd.Flags().StringVar(&fBodyFile, "body-file"`,
+			`freeFormBody(cmd, fBody, fBodyFile, true)`,
+			`runAPICommand(cmd, "PATCH", path, body)`,
+		} {
+			if !strings.Contains(src, want) {
+				t.Errorf("%s: generated source missing %q", name, want)
+			}
+		}
+		if strings.Contains(src, `"PATCH", path, nil)`) {
+			t.Errorf("%s: the leaf still passes a nil body", name)
+		}
+		if !strings.Contains(cmd.Example, `--body '{`) {
+			t.Errorf("%s: the example does not show a --body document: %q", name, cmd.Example)
+		}
+	}
+
+	declared := opFor(`{"$ref":"#/components/schemas/CreateBody"}`)
+	cmd, src := renderOf(declared)
+	if cmd.FreeBody || strings.Contains(src, `"body-file"`) {
+		t.Errorf("a body with declared properties must keep per-property flags only:\n%s", src)
+	}
+}

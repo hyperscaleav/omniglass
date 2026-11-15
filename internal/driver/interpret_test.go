@@ -298,3 +298,65 @@ func TestInterpretSNMPLeadingDotOID(t *testing.T) {
 		t.Fatalf("emitted = %+v, want the model number located", emitted)
 	}
 }
+
+// TestRenderCommandScalesTheIntendedValue (#1429): a binding's transform is
+// the inverse of an emit's scale, applied to ${value} before substitution, so
+// an intended ratio goes out in the device's own units, a typed JSON leaf
+// staying a number.
+func TestRenderCommandScalesTheIntendedValue(t *testing.T) {
+	scale := &driver.Transform{Scale: 100}
+	body := driver.CommandBinding{CommandType: "set-volume", Transform: scale,
+		Request: driver.Request{Method: "POST", Path: "/v", Body: json.RawMessage(`{"volume":"${value}"}`)}}
+	got, err := driver.RenderCommand(body, "0.41", json.RawMessage(`0.41`), nil)
+	if err != nil || string(got.Body) != `{"volume":41}` {
+		t.Fatalf("body = %s, err %v, want {\"volume\":41}", got.Body, err)
+	}
+	// Float noise does not leak: 0.29 * 100 is not 28.999999999999996 on the wire.
+	got, err = driver.RenderCommand(body, "0.29", json.RawMessage(`0.29`), nil)
+	if err != nil || string(got.Body) != `{"volume":29}` {
+		t.Fatalf("body = %s, err %v, want {\"volume\":29}", got.Body, err)
+	}
+	// A text placement renders the scaled text.
+	line := driver.CommandBinding{CommandType: "set-volume", Transform: scale, Request: driver.Request{Line: "VOL ${value}"}}
+	if got, err := driver.RenderCommand(line, "0.5", nil, nil); err != nil || got.Line != "VOL 50" {
+		t.Fatalf("line = %q, err %v", got.Line, err)
+	}
+	// A value that is not a number, or none, refuses rather than sending a
+	// half-scaled request.
+	for _, v := range []string{"loud", ""} {
+		if _, err := driver.RenderCommand(body, v, json.RawMessage(`"`+v+`"`), nil); err == nil {
+			t.Errorf("value %q rendered under a scale", v)
+		}
+	}
+	// No transform: the same as RenderRequestTyped.
+	plain := driver.CommandBinding{CommandType: "set-volume", Request: body.Request}
+	if got, err := driver.RenderCommand(plain, "0.41", json.RawMessage(`0.41`), nil); err != nil || string(got.Body) != `{"volume":0.41}` {
+		t.Fatalf("untransformed body = %s, err %v", got.Body, err)
+	}
+}
+
+// TestJudgeReplyReadsTheReplyInIntendedUnits (#1429): a reply read in device
+// units (41) is compared to the intended value in the canon (0.41), so the
+// binding's scale is undone on the reply.
+func TestJudgeReplyReadsTheReplyInIntendedUnits(t *testing.T) {
+	b := driver.CommandBinding{CommandType: "set-volume", Transform: &driver.Transform{Scale: 100},
+		Request: driver.Request{Body: json.RawMessage(`{"value":"${value}"}`)},
+		Settle:  &driver.Settle{From: driver.SettleFromResponse, Extract: &driver.Extract{JSONPath: "value"}}}
+	if v := b.JudgeReply(`{"value":41}`); !v.Succeeded || v.Value != "0.41" {
+		t.Fatalf("verdict %+v, want the ratio 0.41", v)
+	}
+	if v := b.JudgeReply(`{"value":"loud"}`); v.Succeeded {
+		t.Fatalf("verdict %+v: a non-numeric reply settled", v)
+	}
+}
+
+// TestScaledEmitsCarryNoFloatNoise: 41 * 0.01 lands as 0.41, not
+// 0.41000000000000003, so an observed ratio equals the intended one.
+func TestScaledEmitsCarryNoFloatNoise(t *testing.T) {
+	fn := &driver.BakedFunction{Driver: "d", Function: "f", Emits: []driver.BakedEmit{
+		{Name: "volume", Lane: driver.LaneMetric, Extract: driver.Extract{JSONPath: "volume"}, Transform: &driver.Transform{Scale: 0.01}}}}
+	got, faults := fn.Interpret(driver.Payload{Text: `{"volume":41}`, JSON: []byte(`{"volume":41}`)}, time.Now())
+	if len(faults) > 0 || len(got) != 1 || got[0].Value != 0.41 {
+		t.Fatalf("got %+v faults %v, want exactly 0.41", got, faults)
+	}
+}

@@ -593,13 +593,14 @@ type svcBody struct {
 }
 
 type grantBody struct {
-	ID        string `json:"id,omitempty"`
-	Role      string `json:"role"`
-	ScopeKind string `json:"scope_kind"`
-	ScopeID   string `json:"scope_id,omitempty"`
-	ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope."`
-	GroupID   string `json:"group_id,omitempty" doc:"Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal."`
-	GroupName string `json:"group_name,omitempty" doc:"The source group's label, present when the grant is inherited."`
+	ID         string `json:"id,omitempty"`
+	Role       string `json:"role"`
+	ScopeKind  string `json:"scope_kind"`
+	ScopeID    string `json:"scope_id,omitempty"`
+	ScopeOp    string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope."`
+	GroupID    string `json:"group_id,omitempty" doc:"Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal."`
+	Group      string `json:"group,omitempty" doc:"The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited."`
+	GroupLabel string `json:"group_label,omitempty" doc:"The source group's friendly label, present when the grant is inherited and the group has one."`
 }
 
 func (a *authenticator) meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
