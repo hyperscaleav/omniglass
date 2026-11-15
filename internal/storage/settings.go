@@ -70,8 +70,12 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	window := p.reportWindowOf(ctx, tx)
 	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, doc, locks)
 	if err != nil {
+		return nil, err
+	}
+	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -147,6 +151,7 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 			return nil, err
 		}
 	}
+	window := p.reportWindowOf(ctx, tx)
 	merged := settings.ApplyMergePatch(current, patch)
 	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, merged, nil)
 	if err != nil {
@@ -156,6 +161,9 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 		if err := check(tx, before); err != nil {
 			return nil, err
 		}
+	}
+	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit merge-patch setting override: %w", err)
@@ -207,10 +215,14 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	window := p.reportWindowOf(ctx, tx)
 	if _, err := tx.Exec(ctx,
 		`delete from setting_override where scope = $1 and principal_id is null and namespace = $2`,
 		scope, namespace); err != nil {
 		return fmt.Errorf("storage: delete setting override: %w", err)
+	}
+	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
+		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", namespace, nil, nil); err != nil {
 		return err
@@ -227,12 +239,38 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	window := p.reportWindowOf(ctx, tx)
 	if _, err := tx.Exec(ctx,
 		`delete from setting_override where scope = $1 and principal_id is null`, scope); err != nil {
 		return fmt.Errorf("storage: reset setting overrides: %w", err)
+	}
+	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
+		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", "", nil, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// reportWindowOf is the platform report window as of this point in tx, the one
+// setting every worklist carries, or 0 when the settings do not resolve: a
+// settings write must not fail on that, since the restore that repairs them is
+// one of the writes that reads it.
+func (p *PG) reportWindowOf(ctx context.Context, tx pgx.Tx) int {
+	s, err := p.platformSettings(ctx, tx)
+	if err != nil {
+		return 0
+	}
+	return s.Collection.ReportSeconds
+}
+
+// announceReportWindowChange announces every node when this write moved the
+// report window from before (or either side did not resolve, where a spare
+// pull is cheaper than a guess).
+func (p *PG) announceReportWindowChange(ctx context.Context, tx pgx.Tx, before int) error {
+	if after := p.reportWindowOf(ctx, tx); after == before && after != 0 {
+		return nil
+	}
+	return announceEveryNode(ctx, tx)
 }
