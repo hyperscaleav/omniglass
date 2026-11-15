@@ -19,6 +19,15 @@ user-facing behavior. Bug fixes start with a failing regression test that stays 
 suite. `make test` is the gate: green before commit and before merge. Validate locally;
 do not lean on CI to find what a local run would.
 
+## npm version requirement
+
+`make test`, `make gen`, and other build targets use `npm ci` (clean install) to keep
+`web/package-lock.json` stable across npm versions. `npm ci` respects the pinned versions
+in the lockfile and never rewrites it. The web console's `package.json` declares a minimum
+npm version (`engines.npm`); if your environment's npm does not meet it, `npm ci` will
+fail with a clear error. Upgrade npm to the version `package.json` specifies (or newer),
+and the lockfile will remain untouched across runs, so `git status` stays clean.
+
 ## The spike carve-out
 
 A spike to learn whether something is *possible* may precede tests, but it must be labeled

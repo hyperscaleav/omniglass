@@ -235,7 +235,7 @@ export default function ExpressionField(p: {
               <Button
                 intent="quiet"
                 size="xs"
-                class="font-data text-[12px] font-normal"
+                class="font-data text-[12px] font-normal [font-variant-ligatures:none]"
                 title={t.title}
                 disabled={!editor()}
                 onClick={() => editor()?.insert(t.text, t.cursor)}
@@ -263,8 +263,10 @@ export default function ExpressionField(p: {
                 <Show when={at}>
                   {(a) => (
                     <pre
-                      aria-hidden="true"
-                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80"
+                      tabindex="0"
+                      role="region"
+                      aria-label={`Line ${d.line} of the expression, with the fault marked`}
+                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]"
                     >
                       {`${a().text}\n${a().caret}`}
                     </pre>

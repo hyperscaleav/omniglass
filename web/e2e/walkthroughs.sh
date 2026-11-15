@@ -13,7 +13,8 @@
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
 #                                 walkthrough (or preview) fails naming which limit,
-#                                 and a preview opening on a blank frame fails
+#                                 and a preview opening on a blank frame, or a recording
+#                                 whose title card never paints, fails
 #
 # Per walkthrough: the recorder (web/e2e/walkthrough.mjs) plays the script in a
 # Playwright container on the lab network (after the script's setup, if any)
@@ -115,10 +116,10 @@ walkthrough_one() {
   ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.webm" \
     -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -movflags +faststart -an "/o/$id.mp4" || return 1
   rm -- "$out/$id.webm"
-  # The preview starts where the recorder saw the title card painted
-  # (preview-start.txt), past the video's blank lead-in.
+  # The preview opens on a frame of the painted card, chosen from the
+  # recording (#1271), past the video's blank lead-in.
   local start
-  start=$(<"$out/preview-start.txt") || return 1
+  start=$(preview_start "$out" "$id") || return 1
   ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$start" -i "/o/$id.mp4" \
     -vf "fps=$PREVIEW_FPS,scale=$PREVIEW_WIDTH:-2:flags=lanczos" \
     -c:v libwebp_anim -lossless 0 -quality "$PREVIEW_QUALITY" -compression_level 6 -loop 0 -an /o/preview.webp || return 1
@@ -127,6 +128,23 @@ walkthrough_one() {
     -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "/o/$id.mp4") || return 1
   ymax=$(opening_ymax "$out" "$id" "$start") || return 1
   budget_one "$out" "$id" "$seconds" "$ymax" "${WT_ENV[@]}"
+}
+
+# Where the preview of out dir $1's mp4 ($2) opens, in seconds, printed: the
+# first frame at or after the title card's paint time (card-painted.txt, the
+# recorder's) through the card's hold whose brightest luma reaches the card's
+# text (previewStartFromLumas in walkthroughlib.mjs, run by `node
+# e2e/walkthrough.mjs preview-start`). One signalstats YMAX per frame over the
+# mp4, which that function windows; the choice is made from the recording, not a
+# guessed lag, so a loaded runner's slow video only moves the start later.
+# Fails, naming the window and the brightest luma, when the card never painted.
+preview_start() {
+  local out=$1 id=$2
+  rm -f -- "$out/preview-lumas.txt"
+  ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.mp4" \
+    -vf "signalstats,metadata=mode=print:key=lavfi.signalstats.YMAX:file=/o/preview-lumas.txt" -f null - || return 1
+  lab_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    "$LAB_PWIMG" node e2e/walkthrough.mjs preview-start "$id" "${out#web/}/card-painted.txt" "${out#web/}/preview-lumas.txt"
 }
 
 # The brightest luma (ffmpeg signalstats YMAX) of the frame the preview opens
@@ -227,7 +245,7 @@ echo "ok: an over-budget walkthrough fails naming which limit"
 WT_ENV=()
 seconds=$(ffmpeg_in "$ST/tiny" --entrypoint ffprobe "$FFMPEG_IMG" -v error \
   -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 /o/tiny.mp4)
-start=$(<"$ST/tiny/preview-start.txt")
+start=$(preview_start "$ST/tiny" tiny) || fail "the tiny walkthrough's title card was not found painted in its recording"
 ymax=$(opening_ymax "$ST/tiny" tiny "$start")
 budget_one "$ST/tiny" tiny "$seconds" "$ymax" || fail "the tiny walkthrough failed the real budget"
 grep -qF '"budget"' "$ST/tiny/walkthrough.json" || fail "a recording that passed the budget has no budget mark in its manifest"
@@ -247,11 +265,24 @@ grep -qF '"preview"' "$ST/tiny/walkthrough.json" && fail "a recording whose prev
 echo "ok: an over-budget preview fails naming its limit, and the mark needs both"
 
 # 5. A preview opening on a blank frame (the luma a blank lead-in measures)
-#    fails, naming it, and the mark stays off.
+#    fails the final assertion, naming it, and the mark stays off.
 log=$(budget_one "$ST/tiny" tiny "$seconds" 26 2>&1) && fail "a preview opening on a blank frame passed"
 echo "$log" | sed 's/^/  | /'
 grep -qF 'walkthrough tiny: the preview opens on a blank frame' <<<"$log" || fail "the blank opening frame was not named"
 grep -qF '"budget"' "$ST/tiny/walkthrough.json" && fail "a preview opening on a blank frame got the budget mark"
 echo "ok: a preview that opens on a blank frame fails"
+
+# 6. A recording whose title card never paints (a black video) has no frame to
+#    open the preview on: the scan fails, naming the window it looked in and the
+#    brightest luma it found, and no start is chosen.
+mkdir -p "$ST/blank"
+ffmpeg_in "$ST/blank" "$FFMPEG_IMG" -hide_banner -loglevel error -y -f lavfi -i "color=c=black:s=320x200:r=25:d=5" \
+  -c:v libx264 -pix_fmt yuv420p /o/blank.mp4 || fail "could not make the blank recording"
+echo 0.5 >"$ST/blank/card-painted.txt"
+log=$(preview_start "$ST/blank" blank 2>&1) && fail "a recording whose card never painted chose a preview start"
+echo "$log" | sed 's/^/  | /'
+grep -qF 'walkthrough blank: the title card never painted between 0.50s and 2.70s' <<<"$log" || fail "the scan window was not named"
+grep -qF 'brightest luma 16' <<<"$log" || fail "the brightest luma was not named"
+echo "ok: a recording whose card never paints fails naming the window and its brightest luma"
 lab_assert_intact
 echo "walkthroughs selftest: passed"
