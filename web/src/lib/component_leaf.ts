@@ -39,7 +39,7 @@ export type CollectionState = {
   // (#1110, lib/session's pollsHeld).
   // listening: a push endpoint (#1024), which the server hosts and a sender
   // posts to; silence is never read as down, so it has no other state.
-  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown" | "listening";
+  kind: "collecting" | "component-or-path" | "node-offline" | "no-node" | "down" | "rejected" | "session-down" | "unknown" | "listening";
   node?: string;
 };
 
@@ -51,10 +51,13 @@ export type CollectionState = {
 // freshness does.
 export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
   if (iface.webhook) return { kind: "listening" };
-  const nodeDown = !node || nodeStatus(node, now) !== "up";
+  // No node at all is its own state (#1454), not an offline one: a node that
+  // does not exist cannot have stopped heartbeating.
+  const missing = !node;
+  const nodeDown = !!node && nodeStatus(node, now) !== "up";
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
-  if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
-  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "component-or-path", node: iface.node };
+  if (!last) return { kind: missing ? "no-node" : nodeDown ? "node-offline" : "unknown", node: iface.node };
+  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-node" : nodeDown ? "node-offline" : "component-or-path", node: iface.node };
   if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", node: iface.node };
   if (iface.session?.state === "down") return { kind: "session-down", node: iface.node };
   if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };
@@ -133,7 +136,10 @@ export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
 // one did (#999). spread is present only when the metric has more than one
 // live instance (#1020): the row shows the newest, and says which and of how
 // many; a single-instance metric carries none and reads as it always did.
-export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean; sourceRule?: string; sourceRuleId?: string; spread?: VitalSpread };
+export type VitalRow = { name: string; label: string; value: unknown; unit?: string; sampled: boolean; sourceRule?: string; sourceRuleId?: string; spread?: VitalSpread };
+
+// unit is the metric type's display unit, carried by the read (#1550) so the
+// row never shows a bare number; absent when the type names none.
 
 // One live instance's latest sample, and the spread a multi-instance row
 // carries: the instance shown, how many there are, and each one's latest,
@@ -149,12 +155,24 @@ export function vitalRows(metrics: EffectiveMetricBody[]): VitalRow[] {
     .filter((m) => m.value !== null && m.value !== undefined)
     .map((m) => {
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
+      if (m.unit) row.unit = m.unit;
       if (m.source_rule && m.source_rule_id) Object.assign(row, { sourceRule: m.source_rule, sourceRuleId: m.source_rule_id });
       if ((m.instance_count ?? 0) > 1 && m.instances?.length) {
         row.spread = { shown: m.instance ?? "", count: m.instance_count, instances: m.instances.map((i) => ({ instance: i.instance, value: i.value, ts: i.ts, endpoint: i.endpoint })) };
       }
       return row;
     });
+}
+
+// vitalValueText is how a metric's value reads on the console (#1550): a
+// number keeps at most two decimals (a poll of 0.1527895 ms reads 0.15), a
+// whole number stays whole, and a small one keeps two significant digits
+// rather than rounding to 0. Anything that is not a finite number is shown as
+// it came. The raw value stays on the title and in the API.
+export function vitalValueText(value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value);
+  const fixed = Number(value.toFixed(2));
+  return String(fixed === 0 && value !== 0 ? Number(value.toPrecision(2)) : fixed);
 }
 
 // instanceName is how an instance reads on the console: its name, or

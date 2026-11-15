@@ -484,6 +484,9 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	if err := writeAuditRes(ctx, tx, actorID, "create", "endpoint", it.ID, nil, it); err != nil {
 		return nil, err
 	}
+	if err := notifyWorklistChanged(ctx, tx, it.ID); err != nil {
+		return nil, err
+	}
 	return it, nil
 }
 
@@ -531,6 +534,13 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 	if nodeID != nil && transport.IsPush(before.Transport) {
 		return nil, fmt.Errorf("%w: node: a %s endpoint is hosted by the server, so it takes no node", ErrEndpointPatchInvalid, before.Transport)
 	}
+	// Both nodes hear an edit that moves the endpoint: the one it leaves
+	// (announced as placed now) and the one it lands on (after the update).
+	if nodeID != nil {
+		if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
+			return nil, err
+		}
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanEndpoint(tx.QueryRow(ctx, `
 		update endpoint set
@@ -554,6 +564,9 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "endpoint", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := notifyWorklistChanged(ctx, tx, after.ID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -772,6 +785,9 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPi
 		returning `+endpointCols, before.ID))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
+	}
+	if err := notifyWorklistChanged(ctx, tx, after.ID); err != nil {
+		return nil, err
 	}
 	type pinned struct {
 		*Endpoint
@@ -1029,6 +1045,9 @@ func (p *PG) DeleteEndpoint(ctx context.Context, actorID, ref string, read, acti
 		return err
 	}
 	if err := deleteWebhookToken(ctx, tx, actorID, before.ID); err != nil {
+		return err
+	}
+	if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from endpoint where id = $1`, before.ID); err != nil {

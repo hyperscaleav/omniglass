@@ -76,6 +76,7 @@ type Server struct {
 	stopSweep         chan struct{}      // ends the settlement sweep
 	stopReconcile     context.CancelFunc // ends the rule reconcile loop
 	stopCalc          context.CancelFunc // ends the calc tick
+	stopNudge         context.CancelFunc // ends the worklist nudge forwarder (#1945)
 	stopPrune         context.CancelFunc // ends the receipt retention pass
 	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
 	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
@@ -247,6 +248,9 @@ func (s *Server) subscribe() error {
 	s.startCommandHealth()
 	s.startRuleReconcile()
 	s.startCalcTick()
+	if err := s.startWorklistNudge(); err != nil {
+		return err
+	}
 
 	// The metric table holds a partition for today and the next three days
 	// before anything is ingested (#420, #1527): a sample whose day has none
@@ -326,6 +330,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopCalc != nil {
 		s.stopCalc()
+	}
+	if s.stopNudge != nil {
+		s.stopNudge()
 	}
 	if s.stopPrune != nil {
 		s.stopPrune()

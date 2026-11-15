@@ -3596,6 +3596,9 @@ components:
         source_rule_id:
           description: That calc rule's uuid, the stable form of source_rule
           type: string
+        unit:
+          description: The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none
+          type: string
         value:
           description: "The effective value: the latest sample, or the contract default until one arrives"
       required:
@@ -5247,7 +5250,7 @@ components:
         component:
           type: string
         verdict:
-          description: "The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view"
+          description: "The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"
           type: string
       required:
         - component
@@ -8754,8 +8757,13 @@ components:
           description: Changes in the bucket
           format: int64
           type: integer
+        held:
+          description: "The value in force at the bucket's end: last, else the value held at the end of the bucket before it, else carried_in; null before any value is known (#1488)"
+          type:
+            - string
+            - "null"
         last:
-          description: The value in force at the bucket's end, from the newest change in it; null for a bucket with no change
+          description: The value the bucket's own changes end on, from the newest change in it; null for a bucket with no change
           type:
             - string
             - "null"
@@ -8767,6 +8775,7 @@ components:
         - ts
         - count
         - last
+        - held
       type: object
     PropertySampleBody:
       additionalProperties: false
@@ -8807,6 +8816,9 @@ components:
           type:
             - array
             - "null"
+        carried_in:
+          description: "The value in force when the window opens: the newest measured row (observed or calculated) of the instance from before it, no older than the type's retention; absent when none. A step chart draws it from the window's left edge to the first change"
+          type: string
         covered_from:
           description: "The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later"
           format: date-time
@@ -16276,7 +16288,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/properties/{property}/samples:
     get:
-      description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404."
+      description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404."
       operationId: list-component-property-series
       parameters:
         - description: The owner's name or uuid
@@ -16323,12 +16335,12 @@ paths:
             maximum: 2592000
             minimum: 1
             type: integer
-        - description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution
+        - description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it
           explode: false
           in: query
           name: instance
           schema:
-            description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution
+            description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it
             type: string
       responses:
         "200":
@@ -22905,7 +22917,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/properties/{property}/samples:
     get:
-      description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404."
+      description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404."
       operationId: list-system-property-series
       parameters:
         - description: The owner's name or uuid
@@ -22952,12 +22964,12 @@ paths:
             maximum: 2592000
             minimum: 1
             type: integer
-        - description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution
+        - description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it
           explode: false
           in: query
           name: instance
           schema:
-            description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution
+            description: The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it
             type: string
       responses:
         "200":

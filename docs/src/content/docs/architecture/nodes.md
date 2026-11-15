@@ -109,10 +109,12 @@ materialized, resolved task and command instances.
 
 ### Config propagation (declared change to running node)
 
-:::note[Built: a declared change reaches a running node on its next pull]
+:::note[Built: a declared change reaches a running node at once, and on its next pull at worst]
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
-carried, so a change the server has written is running within one pull interval (the pull
+carried, and the commit of any write that changes its worklist nudges it to pull now ([the change
+nudge](#the-change-nudge), #1945, #1997), so a change the server has written is running within a second,
+or within one pull interval if the nudge is lost (the pull
 carries it, and the node reconciles its held sessions the moment it lands, #1636, and hands the
 new worklist to its dispatcher at once, a new or moved task running then,
 [below](#scheduling-concurrency-and-self-observability)), with no restart and nothing to apply.
@@ -144,6 +146,9 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
   not up rather than as up with nothing to do. After it, a failed pull keeps the last good
   worklist, every task and every session of it.
+- **A change nudge pulls now (#1945).** The node subscribes to `og.v1.worklist-changed.<node>`
+  before its first pull and answers a nudge with a pull at once, so a change does not wait for the
+  next scheduled one ([the change nudge](#the-change-nudge)).
 - **A failed pull is counted, so a stale worklist reads as loss (#1868).** Keeping the last
   worklist hides the failure: the node's tasks still match the database until the first change for
   it, so every delivery hop reads 0 while the node misses every change. The node reports
@@ -230,6 +235,54 @@ about 100 KB, and the manifest itself reaches 1 MB at about 16,800 endpoints on 
 answers any request, so a second server needs no handover; a key-value cache, if one comes, is keyed
 per endpoint and is what waits on secrets decrypted on use (#1250).
 :::
+### The change nudge
+
+:::note[Built (#1945, #1997): a commit nudges the node it changed]
+A scheduled pull alone leaves an edit waiting up to one interval plus its jitter, about 33 s at the
+30 s default. The commit of a write that changes a node's worklist nudges that node instead, and
+the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-change-nudges-its-node-through-a-postgres-notify-on-commit)).
+
+- **The write announces, in its transaction.** Each write that changes a worklist issues a Postgres
+  `NOTIFY` naming each node the write touched. Postgres delivers it only when the transaction
+  commits, once per node however many rows it touched, so a refused or rolled-back write nudges
+  nothing. The writes, and the nodes each names:
+  - an endpoint create, edit, session retry or delete: the endpoint's node (an edit that moves an
+    endpoint names both). A retry that trusts a replaced key is also the only writer of a key pin
+    (`ssh-host-key`, `tls-certificate`): the plain property route refuses those keys;
+  - a driver edit or upsert that changes its spec: the nodes of every endpoint attached through it.
+    A task carries its driver's session block and ladder off the live spec, so an edit to either
+    alone changes the worklist though it re-derives no task; a label-only edit, or the same spec
+    written again, nudges nothing;
+  - a secret create, delete, or edit of its fields: the nodes of every endpoint whose inputs name
+    it and whose component it covers (the platform's, the component's or an ancestor's, or one in
+    the component's location chain). A label-only edit changes no worklist and nudges nothing;
+  - a path dependency added or removed: the nodes holding an in-band endpoint on both ends;
+  - a component rename (or a name reset): the nodes carrying it as a path upstream by name. A move
+    to a new parent names the nodes of every endpoint below it, whose component secrets now resolve
+    along another chain; a move to a new place names its own endpoints' nodes;
+  - a location moved to a new parent: the nodes of every endpoint on a component placed in it or
+    below it;
+  - a platform settings write that moves `collection.report_seconds`, which every worklist carries:
+    every node. Only a write to the `collection` namespace (or a reset of every override) reads the
+    window before and after; a write elsewhere cannot move it.
+
+  Writes that change no worklist nudge nothing: a component delete is refused while it owns
+  endpoints or children, a location delete while a component sits in it or it has children, and a
+  webhook token rotation reaches no node (a push endpoint has none).
+  A node's own observed pin (trust on first use) is the node's own write, already in force there.
+- **The server forwards it.** The bus holds one listening connection to the database, outside the
+  pool, and publishes each named node an empty message on `og.v1.worklist-changed.<node>`. A dropped
+  connection is re-opened on a backoff (100 ms, doubling to 5 s) and logged at WARN; a change
+  committed while it is down is not replayed, and reaches its node on the next scheduled pull.
+- **The node coalesces.** It subscribes before its first pull, so no change between the two is
+  missed. A nudge that lands while a pull runs, or several in a burst, become one more pull, and
+  the node pulls at most once every 200 ms, so a burst of 100 edits costs a handful of pulls, not
+  100. While a failed pull backs off, a nudge does not cut the backoff short.
+- **The nudge carries nothing.** A lost nudge costs only the wait until the next scheduled pull,
+  which stays the backstop: `--worklist-every` is still how stale a node can be at worst, and the
+  nudge is how fresh it is when nothing is lost.
+:::
+
 ## The node-server protocol
 
 The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:
@@ -499,8 +552,9 @@ pins keep today's cascade.
 **The worklist pull carries one more request header**, the generation the node is running (the
 two-phase confirmation above); under the endpoint-by-endpoint sync it rides the manifest request
 beside the set digest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). A move reaches both nodes on their next worklist pull
-(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later (#1945,
-[ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
+(30 s, jittered); the move's endpoint write nudges both nodes on `og.v1.worklist-changed.<node>`
+where it commits through an endpoint edit ([the change nudge](#the-change-nudge)); the
+rebalancer's own moves are endpoint moves and must announce both nodes the same way. The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 

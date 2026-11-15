@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows } from "./component_leaf";
+import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "./component_leaf";
 import type { FleetView } from "./fleet";
 import type { Node } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
@@ -70,6 +70,18 @@ describe("collectionState", () => {
 
   it("no verdict yet is unknown", () => {
     expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
+  });
+
+  // #1454: no node at all is not an offline node. An endpoint nothing collects
+  // has no node to be down; "node offline" there blames hardware that does not
+  // exist, and the fix is enrolling one, not waiting for it.
+  it("no node is its own state, never node-offline", () => {
+    expect(collectionState(iface(null), undefined, now).kind).toBe("no-node");
+    expect(collectionState({ ...iface(null), last_seen: iso(600) } as ReachEndpoint, undefined, now).kind).toBe("no-node");
+  });
+  it("a node that exists and is not up is still node-offline", () => {
+    expect(collectionState(iface(null, "edge-1"), node(600), now).kind).toBe("node-offline");
+    expect(collectionState(iface(null, "edge-1"), node(null), now).kind).toBe("node-offline");
   });
 
   // A held session (#1059): the probes keep delivering while it is refused or
@@ -244,6 +256,32 @@ describe("the leaf's dispatch facts (#786)", () => {
       instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
     });
     expect(rows[1]).toEqual({ name: "tcp-connect-time", label: "tcp-connect-time", value: 1, sampled: true });
+  });
+
+  // #1550: the read carries the metric type's unit and the row passes it on,
+  // so a bare number never reaches the card without it.
+  it("vitalRows carries a metric's unit, and none when the type names none", () => {
+    const rows = vitalRows([
+      { metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false },
+      { metric_type_name: "poll-count", data_type: "int", value: 4, is_sampled: true, from_contract: false, required: false },
+    ] as never);
+    expect(rows[0].unit).toBe("s");
+    expect(rows[1]).toEqual({ name: "poll-count", label: "poll-count", value: 4, sampled: true });
+  });
+
+  it("vitalValueText rounds a float to a sane precision, keeping a whole number whole", () => {
+    expect(vitalValueText(0.1527895)).toBe("0.15");
+    expect(vitalValueText(306)).toBe("306");
+    expect(vitalValueText(6.1)).toBe("6.1");
+    expect(vitalValueText(1200.567)).toBe("1200.57");
+    expect(vitalValueText(-2.499)).toBe("-2.5");
+    expect(vitalValueText(0)).toBe("0");
+    // A small value keeps its significant digits rather than rounding to 0.
+    expect(vitalValueText(0.00041234)).toBe("0.00041");
+    // Not a finite number: shown as it came.
+    expect(vitalValueText("up")).toBe("up");
+    expect(vitalValueText(NaN)).toBe("NaN");
+    expect(vitalValueText(1e21)).toBe("1e+21");
   });
 
   it("spreadSummary names the instance shown and counts endpoints, or instances when one is no endpoint", () => {

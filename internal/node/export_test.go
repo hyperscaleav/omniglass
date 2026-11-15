@@ -77,3 +77,6 @@ func (r *HopRig) Retry(t *testing.T) {
 
 // Pending is the batches the spool still holds.
 func (r *HopRig) Pending() int { return r.spool.pending() }
+
+// NudgeGap is the least time between two nudged worklist pulls (#1945).
+const NudgeGap = nudgeGap

@@ -50,8 +50,9 @@ func HeartbeatSubject(node string) string { return subjectPrefix + "heartbeat." 
 // OG_TELEMETRY JetStream stream.
 func TelemetrySubject(node string) string { return subjectPrefix + "telemetry." + node }
 
-// WorklistChangedSubject is reserved: the server publishes here to nudge a node
-// to re-pull when its config generation advances.
+// WorklistChangedSubject is where the server nudges a node to re-pull its
+// worklist the moment a committed write changes it (#1945). The message is
+// empty: the nudge says only "pull now", and the node coalesces a burst.
 func WorklistChangedSubject(node string) string { return subjectPrefix + "worklist-changed." + node }
 
 // CommandSubject is where a node pulls its pending command queue (#815), a

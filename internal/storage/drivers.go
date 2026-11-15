@@ -71,6 +71,10 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 		return fmt.Errorf("storage: begin upsert driver %q: %w", d.Name, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	prior, err := priorDriverSpec(ctx, tx, `namespace = case when $2 then 'og' else 'local' end and name = $1`, d.Name, d.Official)
+	if err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
 	var id string
 	err = tx.QueryRow(ctx, `
 		insert into driver (namespace, name, label, version, official, spec)
@@ -94,6 +98,9 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	if err := rederiveDriverTasks(ctx, tx, id); err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
+	if err := announceNodesOf(ctx, tx, driverSpecNodesSQL, id, prior); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -197,6 +204,10 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			return nil, err
 		}
 	}
+	prior, err := priorDriverSpec(ctx, tx, `id = (select id from `+refRows("driver", id)+` t where `+registryRefCol(id)+` = $1)`, id)
+	if err != nil {
+		return nil, err
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
@@ -214,6 +225,9 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 		return nil, fmt.Errorf("storage: update driver %q: %w", id, err)
 	}
 	if err := rederiveDriverTasks(ctx, tx, d.ID); err != nil {
+		return nil, err
+	}
+	if err := announceNodesOf(ctx, tx, driverSpecNodesSQL, d.ID, prior); err != nil {
 		return nil, err
 	}
 	after, err := registryAuditImage(ctx, tx, "driver", id)

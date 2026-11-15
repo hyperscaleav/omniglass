@@ -922,7 +922,11 @@ read, and then shows the name a blank field will be filled with, drafted by the 
 `POST /components:renderLabel` (and its system and location twins): the resolved stem and the lowest ordinal free in that placement
 bucket right now, `display-3` rather than `display-n`. Reading that number is not minting one, so the
 draft still takes no advisory lock, opens no write transaction and allocates nothing; a form may ask
-on every picker change without joining the queue every create in the fleet is waiting in. There is
+on every picker change without joining the queue every create in the fleet is waiting in. The form
+asks only when it can be answered: a location waits for its type and a component for its product, and
+a system waits for a type or a typed name, because an unclassified system with no name is a known
+**422** and the browser would log every such ask as a failed request. Until then the field says,
+without asking, that the platform cannot name it. There is
 deliberately still no draft verb that MINTS and rolls back, for the reason it never had one.
 
 The number is therefore true rather than reserved, and the create is where that is settled. The form

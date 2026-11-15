@@ -120,7 +120,7 @@ type listAlarmsOutput struct {
 	Body struct {
 		Component string      `json:"component"`
 		Alarms    []alarmBody `json:"alarms"`
-		Verdict   string      `json:"verdict" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view"`
+		Verdict   string      `json:"verdict" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"`
 	}
 }
 

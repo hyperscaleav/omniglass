@@ -137,8 +137,8 @@ These show beside the device's own values on the component's page (`poll-duratio
 `push-message-count`, `webhook-post-count` and the rest), so a device that pushes and is never polled
 still has telemetry. The window is the **collection** setting `report_seconds` on
 **Admin > Settings**: 60 by default, from 10 to 3,600. A shorter window shows a stall sooner and costs
-more rows; each endpoint lands a few rows per window, however fast its driver polls. A change reaches
-every node on its next worklist pull. See
+more rows; each endpoint lands a few rows per window, however fast its driver polls. A change nudges
+every node to pull its worklist at once, so it is in force within a second. See
 [collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
 for what each count means.
 
