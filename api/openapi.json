@@ -13156,7 +13156,7 @@
           },
           "metric_days": {
             "default": 14,
-            "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)",
+            "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later",
             "format": "int64",
             "maximum": 36500,
             "minimum": 1,
@@ -20625,7 +20625,7 @@
     },
     "/components/{name}": {
       "delete": {
-        "description": "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+        "description": "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
         "operationId": "delete-component",
         "parameters": [
           {
@@ -21723,7 +21723,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -21769,7 +21769,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -21835,7 +21835,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -22653,14 +22653,14 @@
         "operationId": "list-unbound-identities",
         "parameters": [
           {
-            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)",
               "examples": [
-                "hq.$comp.meetings-cloud"
+                "hq.$comp.ucc-platform"
               ],
               "type": "string"
             }

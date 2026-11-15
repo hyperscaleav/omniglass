@@ -18,6 +18,7 @@ var (
 	ErrComponentNotFound       = errors.New("storage: component not found")
 	ErrComponentForbidden      = errors.New("storage: action not permitted on this component")
 	ErrComponentOccupied       = errors.New("storage: component has child components")
+	ErrComponentHasEndpoints   = errors.New("storage: component still owns endpoints")
 	ErrComponentExists         = errors.New("storage: component name already exists")
 	ErrParentComponentNotFound = errors.New("storage: parent component not found")
 	ErrProductNotFound         = errors.New("storage: product not found")
@@ -36,6 +37,20 @@ var (
 	ErrComponentExistsInLocation  = fmt.Errorf("storage: a component with this name already exists at this location: %w", ErrComponentExists)
 	ErrComponentExistsUnplaced    = fmt.Errorf("storage: an unplaced component with this name already exists: %w", ErrComponentExists)
 )
+
+// ComponentHasEndpointsError is the delete refusal for a component that still
+// owns endpoints (#138). It is the second occupancy condition beside child
+// components, kept a distinct sentinel because the 409 must say which one held
+// the delete, and it carries the count so the message can name how many. It
+// unwraps to ErrComponentHasEndpoints, not ErrComponentOccupied: that one's text
+// is "has child components", which would be false here.
+type ComponentHasEndpointsError struct{ Count int }
+
+func (e *ComponentHasEndpointsError) Error() string {
+	return fmt.Sprintf("%s (%d)", ErrComponentHasEndpoints, e.Count)
+}
+
+func (e *ComponentHasEndpointsError) Unwrap() error { return ErrComponentHasEndpoints }
 
 // Component is a leaf of the fleet: name-addressable, nestable via parent_id,
 // belonging to a primary system and located at a location. Its shape (the
@@ -190,10 +205,32 @@ var componentConfig = scopedConfig[Component]{
 	scan: scanComponent, idOf: func(c *Component) string { return c.ID },
 	notFound: ErrComponentNotFound, forbidden: ErrComponentForbidden, occupied: ErrComponentOccupied,
 	attachPaths: attachComponentPaths,
-	// A node's platform component goes only with its node (#1625).
+	// A node's platform component goes only with its node (#1625). A component
+	// that still owns endpoints is occupied too (#138): the FK would SET NULL
+	// their component and strand them, and their tasks, in the all-scope-only
+	// bucket, so the delete is refused instead of cascaded (#528 owns cascade).
 	beforeDelete: func(ctx context.Context, _ *PG, tx pgx.Tx, before *Component) error {
-		return refusePlatformComponent(ctx, tx, before.ID)
+		if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
+			return err
+		}
+		return refuseOwnedEndpoints(ctx, tx, before.ID)
 	},
+}
+
+// refuseOwnedEndpoints is a *ComponentHasEndpointsError when any endpoint still
+// names componentID as its owner. The count is the whole fleet's, not the
+// caller's endpoint scope: occupancy is a fact about the row, and a scoped count
+// would let a narrow caller delete a component out from under endpoints they
+// cannot see.
+func refuseOwnedEndpoints(ctx context.Context, q querier, componentID string) error {
+	var n int
+	if err := q.QueryRow(ctx, `select count(*) from endpoint where component = $1`, componentID).Scan(&n); err != nil {
+		return fmt.Errorf("storage: count component endpoints: %w", err)
+	}
+	if n > 0 {
+		return &ComponentHasEndpointsError{Count: n}
+	}
+	return nil
 }
 
 // attachComponentPaths fills every c's Path/.PathSegments/.Renders (#627

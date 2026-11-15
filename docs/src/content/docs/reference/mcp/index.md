@@ -460,7 +460,7 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) |
+| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform) |
 
 ## `create-component-from-template`
 

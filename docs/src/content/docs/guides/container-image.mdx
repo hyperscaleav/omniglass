@@ -48,7 +48,7 @@ built with, whatever the tag points at later ([the lab](/guides/lab/#flags)).
 Every image carries the build it came from in the OCI label
 `org.opencontainers.image.version`: the release version, or the build id `make`
 stamps (the commit, plus a dirty marker and the build time for an uncommitted
-tree). A binary built by `make` runs a lab only on the `omniglass:dev` image whose
+tree). A binary built by `make` runs a lab only on the `omniglass:dev-<build id>` image whose
 label is its own build id, so a lab always runs the code it was built from.
 
 ## Platforms
@@ -111,13 +111,13 @@ docker run --rm -e OMNIGLASS_DSN="$DSN" \
 
 ## Building it locally
 
-The bare `make` builds `omniglass:dev` and exports this machine's own binary to
+The bare `make` builds the image, tagged `omniglass:dev-<build id>` and `omniglass:dev`, and exports this machine's own binary to
 `bin/omniglass` from the same Dockerfile, both stamped with one build id, with
 nothing but Docker (BuildKit cache mounts keep a Go-only change to seconds).
 `make image` builds just the image, for your host architecture only:
 
 ```bash
-make                       # omniglass:dev and bin/omniglass, one build id
+make                       # omniglass:dev-<build id>, omniglass:dev and bin/omniglass, one build id
 make image                 # omniglass:dev only, VERSION = the build id
 make image TAG=v1 IMAGE=ghcr.io/hyperscaleav/omniglass
 ```

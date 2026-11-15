@@ -28,7 +28,10 @@ type Engine interface {
 	// Resources is the memory and CPUs the daemon's host has, for the
 	// scale lab's capacity check.
 	Resources(ctx context.Context) (HostResources, error)
-	ImageLabels(ctx context.Context, ref string) (labels map[string]string, found bool, err error)
+	// InspectImage resolves an image reference to the image it names right
+	// now: its ID and labels together, so what the build-id check read is
+	// the image a container is created from by that ID (#1422).
+	InspectImage(ctx context.Context, ref string) (info ImageInfo, found bool, err error)
 	PullImage(ctx context.Context, ref string) error
 	CreateNetwork(ctx context.Context, name string, labels map[string]string) error
 	RemoveNetwork(ctx context.Context, name string) error
@@ -44,6 +47,13 @@ type Engine interface {
 	Logs(ctx context.Context, id string, tail int) (string, error)
 	StopAndRemove(ctx context.Context, id string) error
 	Containers(ctx context.Context, labels map[string]string) ([]Resource, error)
+}
+
+// ImageInfo is one image as the engine resolved a reference to it.
+type ImageInfo struct {
+	// ID is the content-addressed image ID, which no re-tagging moves.
+	ID     string
+	Labels map[string]string
 }
 
 // EngineInfo is what a ping reports.
@@ -114,18 +124,18 @@ func (d *dockerEngine) Resources(ctx context.Context) (HostResources, error) {
 	return HostResources{MemBytes: r.Info.MemTotal, CPUs: r.Info.NCPU}, nil
 }
 
-func (d *dockerEngine) ImageLabels(ctx context.Context, ref string) (map[string]string, bool, error) {
+func (d *dockerEngine) InspectImage(ctx context.Context, ref string) (ImageInfo, bool, error) {
 	r, err := d.c.ImageInspect(ctx, ref)
 	if cerrdefs.IsNotFound(err) {
-		return nil, false, nil
+		return ImageInfo{}, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return ImageInfo{}, false, err
 	}
 	if r.Config == nil {
-		return map[string]string{}, true, nil
+		return ImageInfo{ID: r.ID, Labels: map[string]string{}}, true, nil
 	}
-	return r.Config.Labels, true, nil
+	return ImageInfo{ID: r.ID, Labels: r.Config.Labels}, true, nil
 }
 
 func (d *dockerEngine) PullImage(ctx context.Context, ref string) error {

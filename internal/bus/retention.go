@@ -161,8 +161,10 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	var errs []error
 	// The metric table's roll (#420, #1527): the next days' partitions made,
 	// then each day wholly past the metric window (and past every longer
-	// window of a type it holds a sample of) dropped, before the lanes'
-	// chunked prune keeps the window exact inside the rest.
+	// window of a type it holds a sample of) dropped. The lanes' chunked prune
+	// works only inside a day a longer type holds (#1957), so the drop is the
+	// only way out of every other day: a failed one is retried at the
+	// catch-up cadence.
 	pctx, pdone := bounded()
 	created, err := store.EnsureMetricPartitions(pctx)
 	rep.Created = created
@@ -174,6 +176,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		rep.Dropped = dropped
 		if err != nil {
 			errs = append(errs, fmt.Errorf("drop metric partitions: %w", err))
+			rep.Behind = append(rep.Behind, "metric partition drop")
 		}
 	}
 	pdone()
