@@ -51,8 +51,15 @@ const (
 
 // telemetryAckWait is how long the stream waits for the consumer's ack
 // before it redelivers: a consumer that died with a batch unacked hands it
-// to the next one after this. A var so a test can shorten it.
+// to the next one after this. A landing that outlasts it keeps the wait
+// reset by sending InProgress (landing), so only a consumer that has gone
+// silent is waited out. A var so a test can shorten it.
 var telemetryAckWait = 30 * time.Second
+
+// heartbeatEvery is how often a landing tells the stream it is still at
+// work, given the ack wait it must stay inside: a third of it, so a beat
+// that is late or lost still leaves two before the wait is spent. Pure.
+func heartbeatEvery(ackWait time.Duration) time.Duration { return ackWait / 3 }
 
 // telemetryNakDelay is the base of the backoff a transiently failed batch is
 // redelivered after (the delay grows with each delivery). A var so a test can
@@ -313,7 +320,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			s.drop(msg, delivery.BatchItems(&ev)) // malformed owner: it will never resolve, stop redelivery
 			return
 		}
-		if err := s.land(ctx, id, &ev, bind); err != nil {
+		if err := s.landing(msg, func() error { return s.land(ctx, id, &ev, bind) }); err != nil {
 			s.failed(msg, b, delivery.BatchItems(&ev), err)
 			return
 		}
@@ -347,11 +354,44 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	if err := s.landNode(ctx, id, node, &ev); err != nil {
+	if err := s.landing(msg, func() error { return s.landNode(ctx, id, node, &ev) }); err != nil {
 		s.failed(msg, b, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
+}
+
+// landing runs land and, for as long as it runs, sends msg's InProgress every
+// heartbeatEvery(telemetryAckWait), which resets the stream's ack wait without
+// spending a delivery. A landing can wait minutes on the block lock behind a
+// fold chunk (ADR-1529 decision 9); with no beat the stream redelivers the
+// batch every ack wait, and once its deliveries are spent frees the one
+// ack-pending slot, so the publisher's next batch lands ahead of this one
+// (the order the property lane's transition guard relies on, ADR-0311). The
+// beats stop before landing returns, so none follows the ack.
+func (s *Server) landing(msg jetstream.Msg, land func() error) error {
+	stop, done := make(chan struct{}), make(chan struct{})
+	every := heartbeatEvery(telemetryAckWait)
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+				if err := msg.InProgress(); err != nil {
+					slog.Warn("telemetry in-progress heartbeat not sent, the batch may be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
+				}
+			}
+		}
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+	return land()
 }
 
 // undecodableLog is the warning for a telemetry message that does not
