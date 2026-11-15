@@ -64,7 +64,11 @@ type CostModel struct {
 // small sites. The server and Postgres took 180 MiB at 67 components and
 // 223 at 322: 170 MiB plus 0.17 MiB a component. CPU is the mean of spiky
 // samples: the server and Postgres a tenth of a core at 67 components and
-// three tenths at 322, a node a hundredth or less.
+// three tenths at 322, a node a hundredth or less. That Postgres ran stock,
+// its 128 MB of shared buffers barely touched; a scale lab's buffers are
+// sized to the host (#1930) and fill as it runs, so Need counts them apart.
+// A re-measure of a scale lab reads its filled buffers in Base: take them
+// out before updating Base, or Need counts them twice.
 var MeasuredCost = CostModel{
 	Base:      Footprint{MemMiB: 170, CPU: 0.05},
 	Node:      Footprint{MemMiB: 36, CPU: 0.01},
@@ -77,10 +81,46 @@ func (m CostModel) Estimate(sites, components int) Footprint {
 	return m.Base.plus(m.Node, sites).plus(m.Component, components)
 }
 
+// Need is what a lab of sites sites and components simulated components
+// takes of host h, and the shared_buffers its Postgres runs (#1930). The
+// buffers are a quarter of the host, bounded, but never more than the
+// estimate leaves of what the host can spare, so they grow into spare memory
+// rather than refusing a fleet that fits; never below Postgres's own 128 MB.
+// Need is the estimate and the buffers, less that floor when the buffers sit
+// on it: 128 MB is the size the estimate was measured with.
+func (m CostModel) Need(h HostResources, sites, components int) (need Footprint, buffersMiB int64) {
+	need = m.Estimate(sites, components)
+	spare := int64(h.Usable().MemMiB - need.MemMiB)
+	buffersMiB = max(min(h.PostgresBuffersMiB(), spare), sharedBuffersFloorMiB)
+	if buffersMiB > sharedBuffersFloorMiB {
+		need = need.plus(Footprint{MemMiB: float64(buffersMiB)}, 1)
+	}
+	return need, buffersMiB
+}
+
 // HostResources is what the Docker host has: its memory and its CPUs.
+// MemBytes is what the lab plans against, a forced limit when one is set;
+// ReportedMemBytes is what the host itself reported, when it was read.
 type HostResources struct {
-	MemBytes int64
-	CPUs     int
+	MemBytes         int64
+	ReportedMemBytes int64
+	CPUs             int
+}
+
+// PostgresMemBytes is the memory Postgres is sized to: the planned memory,
+// never more than the host reported, so a forced limit above the real
+// memory cannot size buffers the host does not have.
+func (h HostResources) PostgresMemBytes() int64 {
+	if h.ReportedMemBytes > 0 && h.ReportedMemBytes < h.MemBytes {
+		return h.ReportedMemBytes
+	}
+	return h.MemBytes
+}
+
+// PostgresBuffersMiB is the most shared_buffers a scale lab on h runs: a
+// quarter of the memory Postgres is sized to, bounded.
+func (h HostResources) PostgresBuffersMiB() int64 {
+	return PostgresSharedBuffersMiB(h.PostgresMemBytes())
 }
 
 // Headroom is the share of the host the scale lab leaves to everything
@@ -114,7 +154,8 @@ func LargestFit(shape Shape, lo, hi int, m CostModel, h HostResources) (systems 
 		if err != nil {
 			return false, err
 		}
-		return h.Fits(m.Estimate(sites, comps)), nil
+		need, _ := m.Need(h, sites, comps)
+		return h.Fits(need), nil
 	}
 	if f, err := fits(lo); err != nil || !f {
 		return 0, false, err
@@ -163,6 +204,7 @@ func scaleTotals(o Options) (sites, components int) {
 type Capacity struct {
 	Systems, Sites, Components int
 	Need                       Footprint
+	BuffersMiB                 int64
 	Host                       HostResources
 	Fits                       bool
 	Largest                    int
@@ -174,8 +216,8 @@ type Capacity struct {
 // components components) and decides whether the host fits it, searching
 // for the largest size that does when it does not.
 func AssessCapacity(sc ScaleRun, host HostResources, systems, sites, components int) (Capacity, error) {
-	c := Capacity{Systems: systems, Sites: sites, Components: components, Host: host, MinSystems: sc.MinSystems,
-		Need: sc.Cost.Estimate(sites, components)}
+	c := Capacity{Systems: systems, Sites: sites, Components: components, Host: host, MinSystems: sc.MinSystems}
+	c.Need, c.BuffersMiB = sc.Cost.Need(host, sites, components)
 	c.Fits = host.Fits(c.Need)
 	if c.Fits {
 		return c, nil
@@ -188,8 +230,8 @@ func AssessCapacity(sc ScaleRun, host HostResources, systems, sites, components 
 // Summary is the estimate set against what the host can spare.
 func (c Capacity) Summary() string {
 	use := c.Host.Usable()
-	return fmt.Sprintf("%d systems: %d sites, %d components; about %s and %.1f cores of the %s and %.1f cores this host can spare",
-		c.Systems, c.Sites, c.Components, FormatMiB(c.Need.MemMiB), c.Need.CPU, FormatMiB(use.MemMiB), use.CPU)
+	return fmt.Sprintf("%d systems: %d sites, %d components; about %s (Postgres's %s of shared buffers in it) and %.1f cores of the %s and %.1f cores this host can spare",
+		c.Systems, c.Sites, c.Components, FormatMiB(c.Need.MemMiB), FormatMiB(float64(c.BuffersMiB)), c.Need.CPU, FormatMiB(use.MemMiB), use.CPU)
 }
 
 // Err is the refusal of a size that does not fit, naming the largest that
@@ -215,24 +257,28 @@ func ScaleHost(ctx context.Context, eng Engine, forcedMem int64) (HostResources,
 	if err != nil {
 		return host, fmt.Errorf("read the Docker host's memory and CPUs: %w", err)
 	}
+	host.ReportedMemBytes = host.MemBytes
 	if forcedMem > 0 {
 		host.MemBytes = forcedMem
 	}
 	return host, nil
 }
 
-// checkCapacity refuses a scale lab the host cannot fit, before anything is
-// created, naming the estimate, the host, and the largest size that fits.
-func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
+// scaleCapacity reads the Docker host a scale lab runs on and assesses its
+// size against it: the decision preflight acts on, and the shared buffers the
+// lab's Postgres is planned with.
+func (r *Runner) scaleCapacity(ctx context.Context, cfg Config) (Capacity, error) {
 	host, err := ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory)
 	if err != nil {
-		return err
+		return Capacity{}, err
 	}
 	sites, comps := scaleTotals(cfg.Options)
-	c, err := AssessCapacity(*cfg.ScaleRun, host, cfg.Systems, sites, comps)
-	if err != nil {
-		return err
-	}
+	return AssessCapacity(*cfg.ScaleRun, host, cfg.Systems, sites, comps)
+}
+
+// checkCapacity refuses a scale lab the host cannot fit, before anything is
+// created, naming the estimate, the host, and the largest size that fits.
+func (r *Runner) checkCapacity(c Capacity) error {
 	r.step("capacity", c.Summary())
 	return c.Err()
 }
