@@ -271,6 +271,48 @@ func TestPruneMetricSamplesLeaveADroppableDayToTheDrop(t *testing.T) {
 	}
 }
 
+// TestPruneMetricSamplesAskTheDropsQuestionOfEachDay pins the bound of the
+// lane prune's held test (#1957). A day wholly past the window is asked what
+// the drop asks of it now, so a type kept longer than the lane whose window
+// has passed the day holds nothing there. The day the cutoff sits in is asked
+// what the drop will ask once the day is past, so a type kept no longer than
+// the lane holds nothing there either. Either one held would have the prune
+// delete rows one by one that the drop then takes whole.
+func TestPruneMetricSamplesAskTheDropsQuestionOfEachDay(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	f := newPruneFixtureAt(t, at)
+	day := func(d, h int) time.Time { return time.Date(2026, 6, d, h, 0, 0, 0, time.UTC) }
+	f.row("metric", "component", day(10, 12), "observed", 10) // a day wholly past the window
+	f.row("metric", "component", day(13, 6), "observed", 13)  // the cutoff's day, past the cutoff
+	f.row("metric", "component", day(14, 12), "observed", 14) // inside the window
+	typed := func(name string, days int, ts time.Time) {
+		t.Helper()
+		mustExec(t, f.conn, `insert into metric_type (name, data_type, retention_days)
+			select $1::text, 'float', $2 where not exists (select 1 from metric_type where name = $1::text)`, name, days)
+		mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+			`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = $2), '', 'observed', 0)`),
+			ts, name)
+	}
+	typed("prune-longer", 4, day(10, 13)) // kept past the lane, but no longer into June 10
+	typed("prune-same", 2, day(13, 7))    // kept exactly as long as the lane
+	cutoff := at.Add(-48 * time.Hour)
+
+	if n := f.prune("metric", cutoff, 100); n != 0 {
+		t.Fatalf("the lane's prune deleted %d rows, want 0: no day is held when the drop asks", n)
+	}
+	dropped, err := f.gw.DropMetricPartitions(f.ctx, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(dropped, "metric_p20260610") {
+		t.Fatalf("the drop took %v, want metric_p20260610", dropped)
+	}
+	if got := strings.Join(f.values("metric", "component"), ","); got != "observed:13,observed:14" {
+		t.Fatalf("after the drop, rows %s, want the cutoff's day left whole for its drop", got)
+	}
+}
+
 // TestPruneSamplesReachesAnIndexOnEveryArc holds the prune's access path with
 // the accesspath instrument: on every owner arc, the probe for a newer row of a
 // candidate's series (the scan aliased n) searches that arc's series index with

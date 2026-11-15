@@ -326,6 +326,11 @@ func TestRetentionPassRollsTheMetricDays(t *testing.T) {
 	if rep.Deleted["metric"] != 3 {
 		t.Errorf("a failed roll: metric lane deleted %d, want its 3 still pruned", rep.Deleted["metric"])
 	}
+	// The drop is the only path out of a day no longer type holds (#1957), so
+	// a failed one is retried at the catch-up cadence, not an hour on.
+	if got := nextRetentionWait(rep); got != sampleRetentionCatchUp {
+		t.Errorf("a failed drop: next pass in %v, want the catch-up %v", got, sampleRetentionCatchUp)
+	}
 }
 
 // A node override (#1350) moves node_log's band and only node_log's: with the

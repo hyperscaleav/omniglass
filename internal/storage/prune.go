@@ -187,13 +187,13 @@ func pruneMetricSampleSQL(part string, typed bool) string {
 // a day a longer type holds (#1957): any other day past the cutoff, the one
 // the cutoff sits in included, is one DropMetricPartitions takes whole once
 // it ends, so its rows go with it rather than one delete at a time. The held
-// test is the drop's own, bound to the lane's cutoff: a type holds a day
-// under it only when its window is longer than the lane's, as under the
-// drop's bound at the day's end, so a day skipped here is never one the drop
-// keeps. It is read every call, so a day a late sample of a longer type
-// comes to hold is pruned again from then on.
+// test is the drop's own, asked of each day as the drop will first ask it: a
+// day wholly past the cutoff on its own end, as the drop asks it now, and the
+// day the cutoff sits in on the cutoff, which is what its end reads against
+// the window once the day is past. A day skipped here is one the drop takes.
+// It is read every call, so a day a late sample of a longer type comes to
+// hold is pruned again from then on.
 func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
-	cutoff := before
 	// No sample of an hour the trend compaction has not closed is removed
 	// (#1276), so the trend tier never misses an hour retention reached first.
 	before, err := metricPruneHorizon(ctx, p.pool, before)
@@ -214,8 +214,12 @@ func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, be
 		}
 		name := pgx.Identifier{"public", part.Name}.Sanitize()
 		if typeID == "" {
+			bound := part.To
+			if before.Before(bound) {
+				bound = before
+			}
 			var held bool
-			if err := p.pool.QueryRow(ctx, metricPartitionHeldSQL(name), cutoff).Scan(&held); err != nil {
+			if err := p.pool.QueryRow(ctx, metricPartitionHeldSQL(name), bound).Scan(&held); err != nil {
 				return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
 			}
 			if !held {

@@ -243,6 +243,17 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2" {
 		t.Fatalf("rows %v, want the held day's prune-rtt row", v)
 	}
+	yearRows := func() int {
+		var n int
+		if err := f.conn.QueryRow(f.ctx, `select count(*) from metric m join metric_series s on s.id = m.series_id
+			where s.metric_type_id = (select id from metric_type where name = 'rt-year')`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := yearRows(); n != 1 {
+		t.Fatalf("rt-year rows %d, want the one that holds its day", n)
+	}
 	if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "rt-year", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -253,8 +264,8 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	if strings.Contains(strings.Join(partitionsOf(t, f.conn, "metric"), ","), dayName(long)) {
 		t.Fatalf("%s still attached after its drop", dayName(long))
 	}
-	if v := f.values("metric", "component"); len(v) != 0 {
-		t.Fatalf("rows of a dropped day still read: %v", v)
+	if v := f.values("metric", "component"); len(v) != 0 || yearRows() != 0 {
+		t.Fatalf("rows of a dropped day still read: %v, rt-year %d", v, yearRows())
 	}
 }
 

@@ -892,7 +892,8 @@ type Gateway interface {
 	// lane (metric or property): delete up to limit samples older than before,
 	// never a declared or intended row; on the property lane never the latest
 	// row of a series (#591, #417), on the metric lane the latest row within
-	// retention (ADR-1275).
+	// retention (ADR-1275), and there only inside a day a longer type holds:
+	// every other day goes whole with DropMetricPartitions (#1957).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// EnsureMetricPartitions keeps the metric table partitioned through the
 	// day three ahead of the current one, returning what it created, and
