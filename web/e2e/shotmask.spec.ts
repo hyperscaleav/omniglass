@@ -301,20 +301,46 @@ test.describe("docs screenshot masks", () => {
     expect(calls).toBe(2);
   });
 
-  test("an error that is not a dropped capture is not retried", async ({ page }) => {
+  for (const other of [
+    "locator.screenshot: Timeout 30000ms exceeded",
+    "page.screenshot: Protocol error (Page.captureScreenshot): Cannot take screenshot with 0 width.",
+  ]) {
+    test(`an error that is not a dropped capture is not retried: ${other}`, async ({ page }) => {
+      await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+      let calls = 0;
+      await expect(
+        withCaptureRetry(
+          page,
+          async () => {
+            calls++;
+            throw new Error(other);
+          },
+          { log: () => {} },
+        ),
+      ).rejects.toThrow(other);
+      expect(calls).toBe(1);
+    });
+  }
+
+  // The seam both docs-shots renders go through: shootBaseline itself survives the
+  // browser dropping its one capture, the failure the CI run hit, and still paints
+  // the masks (the retried raster is the one a clean run writes).
+  test("a baseline whose capture the browser drops once is shot on the retry", async ({ page }) => {
+    const entry = { selector: "[data-testid=blade-since]", width: 184 };
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    const clean = await shootBaseline(page, await planMasks(page, [entry]));
+
+    const capture = page.screenshot.bind(page);
     let calls = 0;
-    await expect(
-      withCaptureRetry(
-        page,
-        async () => {
-          calls++;
-          throw new Error("locator.screenshot: Timeout 30000ms exceeded");
-        },
-        { log: () => {} },
-      ),
-    ).rejects.toThrow("Timeout 30000ms exceeded");
-    expect(calls).toBe(1);
+    page.screenshot = async (opts) => {
+      if (++calls === 1) throw dropped();
+      return capture(opts);
+    };
+    const lines: string[] = [];
+    const retried = await shootBaseline(page, await planMasks(page, [entry]), { log: (l) => lines.push(l) });
+    expect(calls).toBe(2);
+    expect(lines).toHaveLength(1);
+    expect(retried.equals(clean)).toBe(true);
   });
 
   test("a value that outgrows its declared box after planning still fails by name", async ({ page }) => {
