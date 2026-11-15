@@ -93,7 +93,7 @@ func pollTaskWithLogin(id, endpointID, password string, revision int64) collecti
 	return collection.TaskSpec{
 		ID: id, Mode: "poll", Transport: "tcp", EndpointID: endpointID, EndpointName: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`),
-		Spec: json.RawMessage(`{"driver":"newtron-nvp","function":"status","schedule":{"every":"30s"},
+		Spec: json.RawMessage(`{"driver":"newtron-panel-nvp","function":"status","schedule":{"every":"30s"},
 			"request":{"line":"GET INPUT"},
 			"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^INPUT (\\S+)$"}}]}`),
 		Secrets:      map[string]map[string]string{"login": {"username": "admin", "password": password}},

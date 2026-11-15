@@ -819,7 +819,7 @@ settling from the response reads through the same extraction (`settle.extract` m
 or an `xpath`, `settle.success` a match on the body).
 
 The seeded `kestrel-api` reads the simulated Kestrel bar over https with basic auth (its system,
-call and audio polls; `set-volume`, `set-mute` and `set-power`), and `http-json` reads the simulated
+call and audio polls; `set-volume`, `set-mute` and `set-power`), and `tessellate-census-http` reads the simulated
 Tessellate sensor over http with its header key. Proven over real sockets
 (`internal/collection/httpfetch_integration_test.go`: the request and its key, a redirect not
 followed, the body cap, a query key never named, verify, pin and skip, the https probe) and end to
@@ -1587,7 +1587,7 @@ time, never at collection time
 spec declares:
 
 - **The transport it rides** (one, from the code registry): `snmp-generic` rides `snmp`,
-  `newtron-nvp` rides `tcp`, `kestrel-api` rides `https`.
+  `newtron-panel-nvp` rides `tcp`, `kestrel-api` rides `https`.
 - **Inputs** an attachment must supply: typed (`string`, `number`, `secret`), required or
   defaulted. A `secret` input carries a `secret_type` and is supplied as a **reference** (the name
   of a secret row of that shape), never a value; the reference is checked at attach.

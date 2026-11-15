@@ -30,7 +30,7 @@ Hide
 Type `demo_hush 'inputs=$(omniglass endpoint get "$s/http" | jq -c .inputs)'`
 Enter
 Wait
-Type `demo_hush 'spec=$(omniglass driver get http-json | jq -c ".spec | .commands = [{command_type: \"reboot\", request: {method: \"POST\", path: \"/api/admin/reboot\"}}]")'`
+Type `demo_hush 'spec=$(omniglass driver get tessellate-census-http | jq -c ".spec | .commands = [{command_type: \"reboot\", request: {method: \"POST\", path: \"/api/admin/reboot\"}}]")'`
 Enter
 Wait
 Type `demo_hush 'omniglass driver create --name census-reboot --label "Census sensor with reboot" --spec "$spec"'`

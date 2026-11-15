@@ -28,7 +28,7 @@ import (
 )
 
 // A driver emit lands on any lane (#1145), end to end over the real wire:
-// Postgres, the bus, a real node and the simulator. The shipped newtron-nvp
+// Postgres, the bus, a real node and the simulator. The shipped newtron-panel-nvp
 // driver lands one push on two lanes (the video-input property and an
 // input-changed event carrying the input), a diagnostics line as a log line
 // with its severity, and a push no listener claims whole as a log line, all
@@ -124,14 +124,14 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-lanes"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-lanes", "newtron-nvp", "edge-lanes"
+	comp, drv, nodeName := "panel-lanes", "newtron-panel-nvp", "edge-lanes"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
-		t.Fatalf("attach newtron-nvp: %v", err)
+		t.Fatalf("attach newtron-panel-nvp: %v", err)
 	}
 
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)

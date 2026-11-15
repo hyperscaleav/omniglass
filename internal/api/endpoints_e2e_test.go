@@ -106,7 +106,7 @@ func TestEndpointAPI(t *testing.T) {
 	// A driver-attached endpoint's connection inputs edit in place (#1061
 	// ruling): its port moves its derived target; a value the driver refuses
 	// is a 400 naming the field; the viewer floor is refused.
-	nvp := "newtron-nvp"
+	nvp := "newtron-panel-nvp"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-d"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}

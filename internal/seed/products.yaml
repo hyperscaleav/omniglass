@@ -148,7 +148,7 @@ products:
   - id: newtron-panel-7
     label: Newtron Panel 7
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-panel-nvp
     kind: device
     component_type: touch-panel
   - id: newtron-slate-5
@@ -192,7 +192,7 @@ products:
   - id: tessellate-census-c1
     label: Tessellate Census C1
     vendor_id: tessellate
-    driver_id: http-json
+    driver_id: tessellate-census-http
     kind: device
     component_type: occupancy-sensor
   # Shinra Cloud: the meeting platform's account-wide plane (the simulator's

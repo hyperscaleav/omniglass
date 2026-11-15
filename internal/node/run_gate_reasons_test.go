@@ -17,7 +17,7 @@ import (
 )
 
 // TestAGoneDeviceHoldsItsPollsUntilItReturns drives #1650 over the real
-// wire: the shipped http-json driver, its polls every second, against the
+// wire: the shipped tessellate-census-http driver, its polls every second, against the
 // simulated sensor. The device goes away; after two down verdicts the
 // endpoint's gate holds unreachable, so its due polls are held, counted
 // apart from failures, with no backoff booked, and a run now answers at
@@ -31,11 +31,11 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 	}
 	var sensorProfile string
 	s := newHTTPStack(t, "edge-held", nil, func(store *profile.Store) []string {
-		sensorProfile = driverProfile(t, store, "http-json")
+		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile}
 	})
 	owner := s.ownerToken()
-	s.fastDriver("http-json", "sensor-fast")
+	s.fastDriver("tessellate-census-http", "sensor-fast")
 	s.component("sensor-1")
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	ep := s.attachHTTP("sensor-1", "sensor-fast", "edge-held", map[string]string{

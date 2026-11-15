@@ -631,8 +631,8 @@ drivers:
         - command_type: set-mute
           request: { body: { type: set, path: status.audio.mic_mute, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           settle: { from: response, extract: { jsonpath: value } }
-  - id: newtron-nvp
-    label: Newtron NVP
+  - id: newtron-panel-nvp
+    label: Newtron Panel NVP
     version: "1.0.0"
     spec:
       version: 1
@@ -903,8 +903,8 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } }, retries: 2 }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
-  - id: http-json
-    label: HTTP JSON
+  - id: tessellate-census-http
+    label: Tessellate Census HTTP
     version: "1.0.0"
     spec:
       version: 1
