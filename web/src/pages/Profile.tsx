@@ -4,6 +4,8 @@ import InfoTip from "../components/InfoTip";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
+import KVStacked from "../components/KVStacked";
+import FieldRow from "../components/FieldRow";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/validate";
@@ -347,27 +349,25 @@ export default function Profile() {
               </div>
             </div>
             <Note note={avatarMsg()} />
-            <div>
-              <label class="eyebrow mb-1.5 block" for="profile-username">Username</label>
-              <input id="profile-username" type="text" class="input input-bordered w-full" value={human()?.username ?? ""} disabled readonly />
-              <p class="mt-1 text-[11px] text-base-content/40">Your sign-in name. An administrator can change it.</p>
-            </div>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="profile-label">Name</label>
+            <KVStacked label="Username" hint="Your sign-in name. An administrator can change it." value={human()?.username ?? ""} />
+            <FieldRow bind="name" eyebrow>
               <input
-                id="profile-label"
                 type="text"
                 class="input input-bordered w-full"
                 value={label()}
                 onInput={(e) => setLabel(e.currentTarget.value)}
                 disabled={profileBusy()}
               />
-            </div>
-            <div>
-              <label class="eyebrow mb-1.5 block" for="profile-email">Email</label>
-              <input id="profile-email" type="email" class="input input-bordered w-full" value={human()?.email ?? ""} disabled readonly placeholder="not set" />
-              <p class="mt-1 text-[11px] text-base-content/40">An administrator sets your email.</p>
-            </div>
+            </FieldRow>
+            <KVStacked
+              label="Email"
+              hint="An administrator sets your email."
+              value={
+                <Show when={human()?.email} fallback={<span class="text-base-content/40">not set</span>}>
+                  {human()?.email}
+                </Show>
+              }
+            />
             <Note note={profileMsg()} />
             <div class="card-actions mt-1 justify-between border-t border-base-300 pt-3">
               <Button icon={Key} onClick={() => setPwOpen(true)}>Change password</Button>

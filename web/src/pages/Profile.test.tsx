@@ -124,16 +124,22 @@ describe("Profile bulk revoke", () => {
 describe("Profile form controls are labelled", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("resolves Username and Email inputs via getByLabelText for accessibility", async () => {
+  it("renders Username and Email as facts, and Name as a labelled input", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
       async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
     );
     mount(false);
-    // Both Username and Email inputs should be resolvable by their label text for screen readers.
-    const username = screen.getByLabelText("Username");
-    const email = screen.getByLabelText("Email");
-    expect(username).toBeTruthy();
-    expect(email).toBeTruthy();
+    // Username and Email are no longer textboxes, they render as facts.
+    expect(screen.queryByRole("textbox", { name: "Username" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Email" })).toBeNull();
+    // Username and email values are visible text.
+    expect(screen.getByText("ada")).toBeTruthy();
+    // Unset email shows "not set".
+    expect(screen.getByText("not set")).toBeTruthy();
+    // Name is still a labelled input.
+    const nameInput = screen.getByLabelText("Name");
+    expect(nameInput).toBeTruthy();
+    expect((nameInput as HTMLInputElement).type).toBe("text");
   });
 });
 
