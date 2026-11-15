@@ -780,6 +780,9 @@ type Gateway interface {
 	// component on the node (ADR-1370), keyed by component id: only for the
 	// simulator's own device list, never an operator's read.
 	NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error)
+	// WorklistChanges announces each node a committed write changed the
+	// worklist of (#1945), until ctx ends; the bus nudges that node to pull.
+	WorklistChanges(ctx context.Context) (<-chan string, error)
 	// GetSimImpairment and SetSimImpairment read and record what is broken on
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)

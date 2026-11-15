@@ -1625,10 +1625,12 @@ driver update over the API, and the boot seed's upsert of an official spec, rewr
 endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
 the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
 a re-seed that changes nothing writes nothing at all (not the driver row, not a task); an endpoint
-whose tasks changed has its config generation moved, and its node runs the new spec from its next
-pull. An attach reads the driver row under a share lock, so one that races an update waits for it
+whose tasks changed has its config generation moved, and its node is nudged to pull at once
+([the change nudge](/architecture/nodes/#the-change-nudge)), so it runs the new spec within a
+second. An attach reads the driver row under a share lock, so one that races an update waits for it
 and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
-One gap is accepted: between the re-derive and the node's next pull (one tick), samples the node
+One gap is accepted: between the re-derive and the node's next pull (under a second, or one tick if
+the nudge is lost), samples the node
 still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
 that drops any unknown task id, warned and counted on the node like any orphan; the next tick
 publishes under the new one. Refusals name the fault as a 422: a missing required input, an

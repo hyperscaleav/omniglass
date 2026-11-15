@@ -548,6 +548,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
 	return nil, nil
 }

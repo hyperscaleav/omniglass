@@ -25,6 +25,10 @@ type Store interface {
 	// simulator serves (ADR-1370), for its device list alone.
 	NodeSimWebhooks(ctx context.Context, name string) (map[string]storage.SimWebhook, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// WorklistChanges announces each node a committed write changed the
+	// worklist of (#1945), so the bus nudges it to pull now. A nil channel
+	// announces nothing.
+	WorklistChanges(ctx context.Context) (<-chan string, error)
 	// NodeCheckins and RecordPlatformMetrics are the check-in age timer's
 	// read and write (#1625): every claimed node's last word, and the age
 	// written on its platform component.
