@@ -21,7 +21,9 @@ function answerStatus(status: () => Promise<Response>) {
 
 function mount(me: Me, status: () => Promise<Response> = () => Promise.resolve(Response.json({ lab: false }))) {
   answerStatus(status);
-  const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  // The console's own client defaults (index.tsx), retries included: a status
+  // read that retried would hold the shell for seconds.
+  const qc = new QueryClient();
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -72,7 +74,7 @@ describe("AuthGuard waits for the server status", () => {
     expect(await screen.findByText("the app shell")).toBeInTheDocument();
   });
 
-  it("lets the shell in when /auth/status fails", async () => {
+  it("lets the shell in at once when /auth/status fails", async () => {
     mount(base, () => Promise.resolve(new Response("{}", { status: 500 })));
     expect(await screen.findByText("the app shell")).toBeInTheDocument();
   });
