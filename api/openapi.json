@@ -21723,7 +21723,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -21769,7 +21769,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -21835,7 +21835,7 @@
             "schema": {
               "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "examples": [
-                "ucc-service-1"
+                "ucc-platform"
               ],
               "type": "string"
             }
@@ -22653,14 +22653,14 @@
         "operationId": "list-unbound-identities",
         "parameters": [
           {
-            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)",
               "examples": [
-                "hq.$comp.meetings-cloud"
+                "hq.$comp.ucc-platform"
               ],
               "type": "string"
             }

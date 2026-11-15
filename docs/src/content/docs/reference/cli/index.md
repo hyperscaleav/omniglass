@@ -1429,7 +1429,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a
+omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a
 ```
 
 #### `omniglass component identity-binding list`
@@ -1448,7 +1448,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding list ucc-service-1
+omniglass component identity-binding list ucc-platform
 ```
 
 #### `omniglass component identity-binding update`
@@ -1472,7 +1472,7 @@ Arguments:
 Example:
 
 ```sh
-omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
+omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
 ```
 
 ### `omniglass component impairment`
@@ -2011,12 +2011,12 @@ omniglass component unbound-identity list <name>
 A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
 
 Arguments:
-  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
 ```sh
-omniglass component unbound-identity list 'hq.$comp.meetings-cloud'
+omniglass component unbound-identity list 'hq.$comp.ucc-platform'
 ```
 
 ### `omniglass component update`

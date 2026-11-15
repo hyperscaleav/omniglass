@@ -1987,7 +1987,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "delete <name> <key> <value>",
 						Short:   "Unbind an identity a conduit reports",
 						Long:    "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a",
+						Example: "  omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
@@ -2004,7 +2004,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "list <name>",
 						Short:   "List the identities a conduit component fans out",
 						Long:    "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding list ucc-service-1",
+						Example: "  omniglass component identity-binding list ucc-platform",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings", pathSegment(args[0]))
@@ -2023,7 +2023,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "update <name> <key> <value>",
 						Short:   "Bind an identity a conduit reports to its owner",
 						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
+						Example: "  omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
@@ -2703,8 +2703,8 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the identities a conduit reported that no binding places",
-						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.\n\nArguments:\n  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component unbound-identity list 'hq.$comp.meetings-cloud'",
+						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.\n\nArguments:\n  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass component unbound-identity list 'hq.$comp.ucc-platform'",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/unbound-identities", pathSegment(args[0]))
