@@ -6,12 +6,13 @@
     "go": "go1.26.11"
   },
   "date": "2026-11-14",
-  "build": "3284c96e8",
+  "build": "86d74adec",
   "step_tasks": 1600,
   "max_step_tasks": 6400,
   "rows": [
     {
       "driver": "boreal-beam-snmp",
+      "build": "3284c96e8",
       "product": "boreal-beam-340",
       "polls": [
         "5m0s",
@@ -349,6 +350,7 @@
     },
     {
       "driver": "kestrel-relay-api",
+      "build": "3284c96e8",
       "product": "kestrel-relay-c1",
       "polls": [
         "5m0s",

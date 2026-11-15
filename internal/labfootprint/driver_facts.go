@@ -69,9 +69,11 @@ func ReadDriverCostTable(b []byte) (DriverCostTable, error) {
 // transport it speaks), its measured cost, or why it has none; a measured
 // driver with one figure the sweep could not fit carries that figure's
 // reason too. MemoryPerEndpointKiB is what one endpoint on the driver holds:
-// a task per poll, so its memory per task times its polls.
+// a task per poll, so its memory per task times its polls. Build is set only
+// where the driver was measured on another build than the table's.
 type DriverCostFact struct {
 	Driver                string   `json:"driver"`
+	Build                 string   `json:"build,omitempty"`
 	Kind                  string   `json:"kind,omitempty"`
 	Product               string   `json:"product,omitempty"`
 	Polls                 []string `json:"polls,omitempty"`
@@ -88,16 +90,41 @@ type DriverCostFact struct {
 }
 
 // DriverCostFacts is the docs' driver cost tables: where and on what build
-// the sweep ran, every driver the plan knows, and those drivers rolled up by
-// kind and interval.
+// the sweep ran (and any other build a merged re-sweep measured drivers on),
+// every driver the plan knows, and those drivers rolled up by kind and
+// interval.
 type DriverCostFacts struct {
 	Host         *Fingerprint     `json:"host,omitempty"`
 	Date         string           `json:"date"`
 	Build        string           `json:"build"`
+	OtherBuilds  []BuildDrivers   `json:"other_builds,omitempty"`
 	StepTasks    int              `json:"step_tasks"`
 	MaxStepTasks int              `json:"max_step_tasks,omitempty"`
 	Kinds        []KindCostFact   `json:"kinds"`
 	Drivers      []DriverCostFact `json:"drivers"`
+}
+
+// BuildDrivers is a build other than the table's and the drivers measured
+// on it.
+type BuildDrivers struct {
+	Build   string   `json:"build"`
+	Drivers []string `json:"drivers"`
+}
+
+// otherBuilds groups the drivers measured on a build other than the table's
+// by that build, in build order.
+func otherBuilds(drivers []DriverCostFact) []BuildDrivers {
+	by := map[string][]string{}
+	for _, d := range drivers {
+		if d.Build != "" {
+			by[d.Build] = append(by[d.Build], d.Driver)
+		}
+	}
+	var out []BuildDrivers
+	for _, b := range slices.Sorted(maps.Keys(by)) {
+		out = append(out, BuildDrivers{Build: b, Drivers: slices.Sorted(slices.Values(by[b]))})
+	}
+	return out
 }
 
 // Spread is a figure across a kind's measured drivers: its median (the mean
@@ -219,6 +246,9 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, kinds map[strin
 				continue
 			}
 			d.Measured, d.StepTasks = true, r.StepTasks
+			if r.Build != t.Build {
+				d.Build = r.Build
+			}
 			if r.MemoryNotMeasured == "" {
 				d.MemoryPerTaskKiB = new(r.MemoryPerTaskBytes / 1024)
 				d.MemoryPerEndpointKiB = new(*d.MemoryPerTaskKiB * float64(len(tg.Polls)))
@@ -245,6 +275,7 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, kinds map[strin
 	}
 	slices.SortFunc(f.Drivers, func(a, b DriverCostFact) int { return strings.Compare(a.Driver, b.Driver) })
 	f.Kinds = kindCostFacts(targets, f.Drivers, kinds)
+	f.OtherBuilds = otherBuilds(f.Drivers)
 	return f
 }
 

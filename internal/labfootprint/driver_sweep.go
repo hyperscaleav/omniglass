@@ -190,9 +190,12 @@ type DriverStep struct {
 // at zero with why in WarmNotMeasured. Memory and CPU are judged apart: a
 // figure whose steps are not a line is left at zero with its reason in
 // MemoryNotMeasured or CPUNotMeasured. StepTasks is the step the driver was
-// measured at.
+// measured at. Build is the build the row was measured on where a committed
+// table merges a re-sweep into a sweep and it is not the table's; empty is
+// the table's build.
 type DriverCost struct {
 	Driver                string       `json:"driver"`
+	Build                 string       `json:"build,omitempty"`
 	Product               string       `json:"product"`
 	Polls                 []string     `json:"polls"`
 	Tasks                 int          `json:"tasks"`

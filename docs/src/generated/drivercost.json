@@ -6,7 +6,16 @@
     "go": "go1.26.11"
   },
   "date": "2026-11-14",
-  "build": "3284c96e8",
+  "build": "86d74adec",
+  "other_builds": [
+    {
+      "build": "3284c96e8",
+      "drivers": [
+        "boreal-beam-snmp",
+        "kestrel-relay-api"
+      ]
+    }
+  ],
   "step_tasks": 1600,
   "max_step_tasks": 6400,
   "kinds": [
@@ -369,6 +378,7 @@
   "drivers": [
     {
       "driver": "boreal-beam-snmp",
+      "build": "3284c96e8",
       "kind": "snmp",
       "product": "boreal-beam-340",
       "polls": [
@@ -508,6 +518,7 @@
     },
     {
       "driver": "kestrel-relay-api",
+      "build": "3284c96e8",
       "kind": "https",
       "product": "kestrel-relay-c1",
       "polls": [

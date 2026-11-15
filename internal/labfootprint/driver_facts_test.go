@@ -269,3 +269,39 @@ func TestADriverWithNoKindIsNamed(t *testing.T) {
 		t.Fatalf("kindless = %v, want none", got)
 	}
 }
+
+// A committed table can merge a re-sweep into a sweep: a row measured on
+// another build than the table's names it, and the docs name each other
+// build with the drivers measured on it, so no row reads as measured on a
+// build it was not.
+func TestARowMeasuredOnAnotherBuildIsNamed(t *testing.T) {
+	targets := []DriverTarget{
+		{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}},
+		{Driver: "b", Product: "pb", Polls: []time.Duration{time.Minute}},
+		{Driver: "c", Product: "pc", Polls: []time.Duration{time.Minute}},
+	}
+	f := driverCostFacts(targets, nil, nil, DriverCostTable{Build: "v1", Rows: []DriverCost{
+		{Driver: "a", Polls: []string{"1m0s"}, MemoryPerTaskBytes: 1024},
+		{Driver: "b", Polls: []string{"1m0s"}, MemoryPerTaskBytes: 1024, Build: "v2"},
+		{Driver: "c", Polls: []string{"1m0s"}, MemoryPerTaskBytes: 1024, Build: "v1"},
+	}})
+	if f.Build != "v1" {
+		t.Fatalf("table build %q, want v1", f.Build)
+	}
+	for _, d := range f.Drivers {
+		want := map[string]string{"a": "", "b": "v2", "c": ""}[d.Driver]
+		if d.Build != want {
+			t.Fatalf("%s build %q, want %q (empty is the table's)", d.Driver, d.Build, want)
+		}
+	}
+	if len(f.OtherBuilds) != 1 || f.OtherBuilds[0].Build != "v2" || !slices.Equal(f.OtherBuilds[0].Drivers, []string{"b"}) {
+		t.Fatalf("other builds %+v, want v2: [b]", f.OtherBuilds)
+	}
+	b, err := DriverCostTable{Build: "v1", Rows: []DriverCost{{Driver: "a"}}}.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"build": ""`) {
+		t.Fatalf("a row on the table's build writes no build: %s", b)
+	}
+}
