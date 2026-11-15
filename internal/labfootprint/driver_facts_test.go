@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/seed"
 )
 
 func TestADriverCostTableReadsBackAsWritten(t *testing.T) {
@@ -303,5 +305,26 @@ func TestARowMeasuredOnAnotherBuildIsNamed(t *testing.T) {
 	}
 	if strings.Contains(string(b), `"build": ""`) {
 		t.Fatalf("a row on the table's build writes no build: %s", b)
+	}
+}
+
+// The committed table is a measurement nothing regenerates, so a driver
+// renamed in the seed has to move its row by hand; a row naming no shipped
+// driver is a rename that left it behind and reads as not yet measured.
+func TestTheCommittedTableNamesOnlyShippedDrivers(t *testing.T) {
+	tab, err := ReadDriverCostTable(shippedDriverCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped := seed.ShippedDriverPolls()
+	for _, r := range tab.Rows {
+		if _, ok := shipped[r.Driver]; !ok {
+			t.Errorf("%s names %s, which is no shipped driver: move its row to the driver's new name", DriverCostPath, r.Driver)
+		}
+	}
+	for _, s := range tab.NotMeasured {
+		if _, ok := shipped[s.Driver]; !ok {
+			t.Errorf("%s names %s, which is no shipped driver: move its entry to the driver's new name", DriverCostPath, s.Driver)
+		}
 	}
 }
