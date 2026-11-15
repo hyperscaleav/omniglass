@@ -27,6 +27,10 @@ type IngestGroup struct {
 	LogLines   []LogLineWrite
 	Fanned     *FannedRows
 	Unbound    []UnboundIdentityWrite
+	// SeenEndpoint is the endpoint that delivered the group's task, stamped
+	// seen (endpoint_live) in the batch's transaction unless the group is
+	// refused (#933, #1928). Empty stamps nothing.
+	SeenEndpoint string
 }
 
 // GroupRefusal is one group a batch dropped: its position in

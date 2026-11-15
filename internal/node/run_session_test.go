@@ -29,6 +29,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -61,7 +62,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	// The device: the simulator's panel, its NVP listener on the port the
 	// kernel handed it (unprivileged, and never another run's), which the
 	// endpoint takes from the panel.
-	panelIP := "127.89.16.1"
+	panelIP := simtest.ClaimLoopback(t)
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
@@ -229,7 +230,7 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	panelIP := "127.89.16.2"
+	panelIP := simtest.ClaimLoopback(t)
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
@@ -506,10 +507,14 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	nvp := nvpProfile(t, store)
+	panelIPs := make([]string, fleet)
+	for i := range fleet {
+		panelIPs[i] = simtest.ClaimLoopback(t)
+	}
 	var snaps []sim.DeviceSnapshot
 	for i := range fleet {
 		snaps = append(snaps, sim.DeviceSnapshot{DeviceID: fmt.Sprintf("panel-%02d", i), Hostname: fmt.Sprintf("panel-%02d", i),
-			LoopbackIP: fmt.Sprintf("127.89.19.%d", i+1), ProfileName: nvp, Version: 1})
+			LoopbackIP: panelIPs[i], ProfileName: nvp, Version: 1})
 	}
 	if err := engine.Sync(snaps); err != nil {
 		t.Fatalf("serve the panels: %v", err)
@@ -535,7 +540,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		if panel == nil {
 			t.Fatalf("the simulator serves no %s", host)
 		}
-		ip, port := fmt.Sprintf("127.89.19.%d", i+1), panelPort(t, panel, "tcp")
+		ip, port := panelIPs[i], panelPort(t, panel, "tcp")
 		comp := "fleet-" + host
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 			t.Fatalf("create component: %v", err)

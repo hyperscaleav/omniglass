@@ -96,3 +96,65 @@ func TestGroupGrantInheritanceAPI(t *testing.T) {
 		t.Fatalf("bob after removal: want 403 on /locations, got %d", code)
 	}
 }
+
+// TestInheritedGrantNamesItsGroupByIdentityTriad holds an inherited grant to the
+// identity triad (#1135): the source group is named by `group` (its name, the
+// identifier a client can type back into /principal-groups/{group}) beside
+// `group_id`, and its friendly string rides `group_label`. The old `group_name`
+// carried the label, so a client feeding it back broke on any labelled group.
+func TestInheritedGrantNamesItsGroupByIdentityTriad(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	memberTok := principalWithGrants(t, ctx, dsn, "member", nil)
+	memberID := meID(t, c, memberTok)
+
+	var grp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "ops", "label": "Operations"}, http.StatusCreated), &grp); err != nil || grp.ID == "" {
+		t.Fatalf("create group: %v (id %q)", err, grp.ID)
+	}
+	c.do(ownerTok, http.MethodPost, "/principal-groups/ops/members", map[string]any{"principal_id": memberID}, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPost, "/principal-groups/ops/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+
+	raw := c.do(ownerTok, http.MethodGet, "/principals/"+memberID, nil, http.StatusOK)
+	var body struct {
+		Grants []map[string]any `json:"grants"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decode principal: %v", err)
+	}
+	var inherited map[string]any
+	for _, g := range body.Grants {
+		if g["group_id"] != nil {
+			inherited = g
+		}
+	}
+	if inherited == nil {
+		t.Fatalf("no inherited grant in %s", raw)
+	}
+	if inherited["group"] != "ops" || inherited["group_id"] != grp.ID || inherited["group_label"] != "Operations" {
+		t.Errorf("inherited grant = %v, want group=ops group_id=%s group_label=Operations", inherited, grp.ID)
+	}
+	if _, has := inherited["group_name"]; has {
+		t.Errorf("inherited grant still carries group_name: %v", inherited)
+	}
+
+	// The carried `group` round-trips as the address of the group.
+	carried, _ := inherited["group"].(string)
+	if carried == "" {
+		t.Fatalf("inherited grant carries no group: %v", inherited)
+	}
+	c.do(ownerTok, http.MethodGet, "/principal-groups/"+carried, nil, http.StatusOK)
+}

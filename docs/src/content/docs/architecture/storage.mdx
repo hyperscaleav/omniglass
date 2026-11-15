@@ -60,10 +60,14 @@ A node's batch is one tick of **task groups**, each with its own writer
 and the transaction's statement count does not grow with the groups. The gateway preloads every
 owner's arcs in one query, admits each group's writes against its writer in Go (a group it refuses
 is dropped before any write), takes the event-rule and calc-mark locks once over the union, then
-takes every property series' advisory lock in one sorted statement. Each lane (property, metric,
-event, log, node log) is then written as set inserts, one per distinct writer in the batch (a node's
-own rows share one, plus one per conduit that fans rows). So the cost of a batch is a fixed
-count, about twenty statements, plus a term for each repeated series row, each judged sample that
+takes every property series' advisory lock in one sorted statement. The transaction carries what
+it took (the event rules it read, the owners it marked for a calc rule, the series it locked), so
+no lane reads a rule, probes a calc mark or takes a series lock a second time
+([ADR-1928](/architecture/decisions/#adr-1928-a-telemetry-batch-reads-and-locks-once-and-stamps-seen-inside-its-transaction)).
+Each lane (property, metric, event, log, node log) is then written as set inserts, one per
+distinct writer in the batch (a node's own rows share one, plus one per conduit that fans rows),
+and the endpoints the batch carried are stamped seen in the same transaction. So the cost of a
+batch is a fixed count, about a dozen statements, plus a term for each repeated series row, each judged sample that
 fires a rule, each settled targeted property and each conduit group that carries identified
 samples; a batch of one group and a batch of fifty cost the same when those terms are zero. A
 series a batch carries twice keeps the transition guard: its second and later rows run in order
@@ -198,6 +202,12 @@ the two in one migration. Three buckets, never conflated:
   answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
   rather than a list nobody updated passing
   ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+  **The label lock comes first.** A cascade holds the `label/recompute` advisory lock and then waits
+  for system rows `FOR UPDATE`, so any write that restamps a label takes that lock before anything a
+  cascade also waits on: a membership write (bind, unbind, re-default, a system's release, a role
+  assignment that binds a non-member) takes the label lock, then the component's membership lock, and
+  only then inserts, because the insert's foreign key shares the system's row. Holding that row while
+  waiting for the label lock deadlocks against every cascade (#1214).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
@@ -285,7 +295,9 @@ The lane is three tables:
 - **`metric`**, the hot tier: `(id, series_id, ts, value)`, plus a calculated sample's rule
   lineage in nullable columns that cost nothing when empty. Observed and calculated samples only.
   Range partitioned by UTC day on `ts`, with one btree, `(series_id, ts desc, id desc)`,
-  and block range indexes on `id` and `ts`. It has no primary key and no foreign key to the
+  and block range indexes on `id` and `ts`, each day's own index made to summarize a range once it
+  fills (`autosummarize`).
+  It has no primary key and no foreign key to the
   series: a deleted owner's samples are invisible to every reader (each joins the series) and
   leave with their day or the next retention pass.
 - **`metric_declared`**, the declared tier: a command's intended rows, with their command and
@@ -310,6 +322,17 @@ over a refusal. A partition is created detached and then attached, so the parent
 late roll, a batch across midnight, a node clock far out) is not a refused write: the batch's days
 are made and it lands, and a batch that misses again is redelivered, never dropped (#420). A day is
 UTC.
+
+**Finished days are summarized.** A block range no summary covers matches every query, so a day
+nobody summarized costs a read its whole heap. A partitioned index takes no storage option, so the
+roll makes each day's `id` and `ts` block range indexes itself, with `autosummarize`, before it
+attaches the day, and the attach adopts them. `autosummarize` takes a range once it fills, and a
+day's last range never does, so each retention pass, after it drops the days past the window and on a
+deadline of its own, summarizes the ranges of every finished day
+([ADR-1929](/architecture/decisions/#adr-1929-a-finished-day-is-summarized-and-the-reconcile-keeps-its-id-marks)).
+A summarized range stays exact as late samples land in it, so the event rule reconcile's id window
+reads a finished day's index alone. A day that fails under the five-second lock timeout is named in
+the pass's error and the rest are still summarized; the next pass tries it again.
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
 
