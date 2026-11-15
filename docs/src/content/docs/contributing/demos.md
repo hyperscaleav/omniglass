@@ -109,6 +109,22 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
 - **Expect a failure out loud.** A command the tape types that exits non-zero fails the demo. One
   that is meant to fail says so on screen, with `|| true`.
 
+**A tape that needs a database says so.** A behavior that depends on what the database holds (a
+server refusing a schema a newer release migrated) cannot be staged through the API, so the tape
+declares a `# demo-needs: database` comment line, anywhere in the file (the header is read by
+`NEEDS` in the same module, and an unknown need is refused naming the line). For such a tape the
+recorder makes a database of its own on the lab's Postgres (`tape_<id>`, hyphens as underscores)
+before it plays, hands the tape `OMNIGLASS_DSN` pointing at it, so the direct-database commands
+(`omniglass migrate`, `omniglass server`) run against it, and drops it when the tape ends, passed or
+failed. The recorder image carries `psql` (the lab's Postgres client, pinned by digest at the lab's
+major) to stage a row in it. It is never the lab's own database: a tape may stamp a schema no
+later tape could migrate. A tape that declares nothing is handed no DSN. A tape that needs the
+Docker socket (`# demo-needs: docker-socket`, opt-in as above) does not combine with `database`,
+since it runs on the host's network, which cannot reach the lab's Postgres.
+[`scripts/demo/schema-ahead.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/schema-ahead.tape)
+is the first: it migrates its database, stamps a version past this build's head, and shows the
+server refusing it (#1289).
+
 `make test-web` holds every tape in the tree to the rules, so a malformed one fails before a lab
 starts. [`scripts/demo/http-logins.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/http-logins.tape)
 is the first one.
