@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import DriverCost from '../../../components/DriverCost.astro';
+import DriverCostSource from '../../../components/DriverCostSource.astro';
 import KindCost from '../../../components/KindCost.astro';
 
 Omniglass is **one Go binary**, and that is a packaging decision, not a scale ceiling. The same artifact
@@ -281,9 +282,13 @@ up by the unit a node is sized in, a **kind** of work (the transport a driver sp
   session, near-constant whatever the driver asks of it. It includes the endpoint's share of the
   node's probes, which grow with endpoints as the polls do.
 - To size a node, add the memory per endpoint over its endpoints, and the CPU per run over the interval
-  over its tasks: a node of 400 `snmp` endpoints on a driver that polls every 30 s and every 5 m holds
-  about 400 &times; 11.5 KiB (4.5 MiB) for them and spends about 400 &times; (0.089 + 0.009), or 39
-  millicores, beyond the idle node.
+  over its tasks: a node of N endpoints on a driver of a kind holds N times the kind's memory per
+  endpoint beyond the idle node, and spends N times the sum, over the driver's polls, of the kind's
+  millicores per task at each poll's interval.
+- A kind's CPU per run is measured across all of a driver's polls at once, weighted by how often each
+  runs, so a heavy poll that runs rarely beside light ones that run often is costed at nearer the light
+  ones' run: its own interval's row under-reads it. The sweep cannot part them, since each component
+  brings every poll of its driver.
 
 In the driver table:
 
@@ -304,11 +309,13 @@ In the driver table:
   ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). A low share is a transport
   that does its I/O on another goroutine, not a cheap driver.
 
+<DriverCostSource />
+
 <KindCost />
 
 <DriverCost />
 
-The figures hold for the host and build named above the driver table and for the simulated devices, whose answers
+The figures hold for the host and build named above the tables and for the simulated devices, whose answers
 are smaller and quicker than many real ones; read them as the relative cost of drivers and the order
 of a node's footprint, not a promise for a given site. A kind with no swept driver has a row with no
 figures, and a shipped driver the sweep has not measured reads as such, with why, and so does a figure the sweep could not fit when the driver's other one stands. A driver no shipped product defaults to (a session or listener transport an endpoint picks

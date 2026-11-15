@@ -61,28 +61,39 @@ func ShippedSystemTypes() []string {
 	return out
 }
 
+// shippedDriverSpec is the part of an official driver's spec the pure
+// readers below need: the transport it speaks and its polls' schedules.
+type shippedDriverSpec struct {
+	ID   string `yaml:"id"`
+	Spec struct {
+		Transport string `yaml:"transport"`
+		Polls     []struct {
+			Schedule struct {
+				Every string `yaml:"every"`
+			} `yaml:"schedule"`
+		} `yaml:"polls"`
+	} `yaml:"spec"`
+}
+
+// shippedDriverSpecs parses drivers.yaml once for the readers below.
+func shippedDriverSpecs() []shippedDriverSpec {
+	var doc struct {
+		Drivers []shippedDriverSpec `yaml:"drivers"`
+	}
+	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
+		panic("seed: parse drivers.yaml: " + err.Error())
+	}
+	return doc.Drivers
+}
+
 // ShippedDriverPolls returns each official driver's poll intervals, in the
 // order its spec lists its polls: every `schedule: { every: D }`. A driver
 // with no polls (a stub, or one that only listens) maps to none. The perf
 // gate's window is held to a whole multiple of each (#1640).
 func ShippedDriverPolls() map[string][]time.Duration {
-	var doc struct {
-		Drivers []struct {
-			ID   string `yaml:"id"`
-			Spec struct {
-				Polls []struct {
-					Schedule struct {
-						Every string `yaml:"every"`
-					} `yaml:"schedule"`
-				} `yaml:"polls"`
-			} `yaml:"spec"`
-		} `yaml:"drivers"`
-	}
-	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
-		panic("seed: parse drivers.yaml: " + err.Error())
-	}
-	out := make(map[string][]time.Duration, len(doc.Drivers))
-	for _, d := range doc.Drivers {
+	drivers := shippedDriverSpecs()
+	out := make(map[string][]time.Duration, len(drivers))
+	for _, d := range drivers {
 		every := []time.Duration{}
 		for _, p := range d.Spec.Polls {
 			if p.Schedule.Every == "" {
@@ -103,19 +114,9 @@ func ShippedDriverPolls() map[string][]time.Duration {
 // its spec's `transport`: the kind of work its polls are, which the driver
 // cost table rolls its drivers up by (#1871).
 func ShippedDriverTransports() map[string]string {
-	var doc struct {
-		Drivers []struct {
-			ID   string `yaml:"id"`
-			Spec struct {
-				Transport string `yaml:"transport"`
-			} `yaml:"spec"`
-		} `yaml:"drivers"`
-	}
-	if err := yaml.Unmarshal(driversYAML, &doc); err != nil {
-		panic("seed: parse drivers.yaml: " + err.Error())
-	}
-	out := make(map[string]string, len(doc.Drivers))
-	for _, d := range doc.Drivers {
+	drivers := shippedDriverSpecs()
+	out := make(map[string]string, len(drivers))
+	for _, d := range drivers {
 		out[d.ID] = d.Spec.Transport
 	}
 	return out

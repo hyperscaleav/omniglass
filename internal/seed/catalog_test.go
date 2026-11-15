@@ -70,11 +70,7 @@ func TestShippedDriverPollsReadEveryDriversSchedule(t *testing.T) {
 // polls are: the driver cost table rolls its drivers up by it (#1871).
 func TestShippedDriverTransportsNameEveryDriversKind(t *testing.T) {
 	kinds := ShippedDriverTransports()
-	polls := ShippedDriverPolls()
-	if len(kinds) != len(polls) {
-		t.Fatalf("%d drivers name a transport, %d drivers ship", len(kinds), len(polls))
-	}
-	for driver := range polls {
+	for driver := range ShippedDriverPolls() {
 		if kinds[driver] == "" {
 			t.Errorf("driver %s names no transport", driver)
 		}

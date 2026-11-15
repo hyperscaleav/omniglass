@@ -4,10 +4,12 @@
 // labfootprint's DriverCostFacts: the committed sweep joined with the plan).
 // Every driver the plan knows is a row, so a driver the sweep has not measured
 // reads as such, with its reason, rather than going missing, and so does a
-// figure the sweep could not fit beside one it could.
+// figure the sweep could not fit beside one it could. Where the sweep ran is
+// DriverCostSource, above both tables.
 //
 // Usage: <DriverCost />
 import facts from '../generated/drivercost.json';
+import { every } from '../lib/duration';
 
 if (!facts.drivers.length) {
   throw new Error('DriverCost: drivercost.json has no drivers; run make gen');
@@ -22,27 +24,9 @@ const share = (r: Row) => {
   const v = (r as Record<string, unknown>).thread_share;
   return typeof v === 'number' ? `${Math.round(v * 100)}%` : '';
 };
-// A Go duration as an operator writes it: 5m0s reads 5m, 1h0m0s reads 1h.
-const every = (d: string) => d.replace(/(\D)0s$/, '$1').replace(/(\D)0m$/, '$1');
 const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.map(every).join(', ') : '');
-const host = (facts as { host?: { cores?: number; memory_gib?: number } }).host;
-const maxStep = (facts as { max_step_tasks?: number }).max_step_tasks;
-const measured = facts.drivers.filter((r) => r.measured).length;
 ---
 
-<p class="driver-cost-source">
-  {
-    facts.date ? (
-      <>
-        Measured {facts.date} on build <code>{facts.build}</code>
-        {host && host.cores ? `, a host of ${host.cores} cores and ${host.memory_gib} GiB` : ''}, stepping about {facts.step_tasks} tasks at a
-        time{maxStep && maxStep > facts.step_tasks ? `, and up to ${maxStep} for a driver whose memory did not show` : ''}. {measured} of {facts.drivers.length} drivers measured.
-      </>
-    ) : (
-      <>No sweep is committed yet: every driver reads as not yet measured.</>
-    )
-  }
-</p>
 <table class="driver-cost">
   <thead>
     <tr>

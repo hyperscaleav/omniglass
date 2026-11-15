@@ -8,13 +8,12 @@
 //
 // Usage: <KindCost />
 import facts from '../generated/drivercost.json';
+import { every } from '../lib/duration';
 
 if (!facts.kinds.length) {
   throw new Error('KindCost: drivercost.json has no kinds; run make gen');
 }
 
-// A Go duration as an operator writes it: 5m0s reads 5m, 1h0m0s reads 1h.
-const every = (d: string) => d.replace(/(\D)0s$/, '$1').replace(/(\D)0m$/, '$1');
 type Spread = { median: number; min: number; max: number; n: number };
 type Row = (typeof facts.kinds)[number];
 const spread = (r: Row, k: string, digits: number) => {

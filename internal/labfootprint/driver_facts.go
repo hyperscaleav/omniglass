@@ -3,6 +3,7 @@ package labfootprint
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -25,6 +26,21 @@ const DriverCostPath = "internal/labfootprint/drivercost/shipped.json"
 // NotYetMeasured is a planned driver the committed table has no word on:
 // before the first sweep is committed, or one added since it ran.
 const NotYetMeasured = "not yet measured"
+
+// PollsChanged is a planned driver whose polls are not the ones the committed
+// sweep measured it at: its slope was fit at the old polls, so it waits on
+// the next sweep rather than reading as a cost it no longer has.
+const PollsChanged = "its polls changed since the sweep; not yet measured at its polls"
+
+// samePolls is whether a driver's planned polls are the ones the sweep
+// measured, in any order.
+func samePolls(plan []time.Duration, measured []string) bool {
+	p := make([]string, len(plan))
+	for i, d := range plan {
+		p[i] = d.String()
+	}
+	return slices.Equal(slices.Sorted(slices.Values(p)), slices.Sorted(slices.Values(measured)))
+}
 
 // JSON is the table as it is committed, its lists written as lists even
 // when empty.
@@ -197,6 +213,11 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, kinds map[strin
 		}
 		if i := slices.IndexFunc(t.Rows, func(r DriverCost) bool { return r.Driver == tg.Driver }); i >= 0 {
 			r := t.Rows[i]
+			if !samePolls(tg.Polls, r.Polls) {
+				d.Reason = PollsChanged
+				f.Drivers = append(f.Drivers, d)
+				continue
+			}
 			d.Measured, d.StepTasks = true, r.StepTasks
 			if r.MemoryNotMeasured == "" {
 				d.MemoryPerTaskKiB = new(r.MemoryPerTaskBytes / 1024)
@@ -227,15 +248,32 @@ func driverCostFacts(targets []DriverTarget, skips []DriverSkip, kinds map[strin
 	return f
 }
 
+// kindlessDrivers names the drivers the facts list with no kind, which would
+// roll up into a kind with no name.
+func kindlessDrivers(f DriverCostFacts) []string {
+	var out []string
+	for _, d := range f.Drivers {
+		if d.Kind == "" {
+			out = append(out, d.Driver)
+		}
+	}
+	return out
+}
+
 // DriverCostFactsJSON is docs/src/generated/drivercost.json: the shipped
-// plan joined with the committed sweep.
+// plan joined with the committed sweep. A driver with no transport is an
+// error, not a blank row in the kind table.
 func DriverCostFactsJSON() ([]byte, error) {
 	t, err := ReadDriverCostTable(shippedDriverCost)
 	if err != nil {
 		return nil, err
 	}
 	targets, skips := ShippedDriverSweep()
-	b, err := json.MarshalIndent(driverCostFacts(targets, skips, seed.ShippedDriverTransports(), t), "", "  ")
+	f := driverCostFacts(targets, skips, seed.ShippedDriverTransports(), t)
+	if k := kindlessDrivers(f); len(k) > 0 {
+		return nil, fmt.Errorf("drivers with no transport to roll up by: %s", strings.Join(k, ", "))
+	}
+	b, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return nil, err
 	}

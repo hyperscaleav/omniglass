@@ -1,0 +1,26 @@
+---
+// Where and on what build the driver cost sweep ran, rendered once above the
+// kind and driver tables (KindCost, DriverCost) it is the source of both:
+// docs/src/generated/drivercost.json, written by make gen via cmd/labgen.
+//
+// Usage: <DriverCostSource />
+import facts from '../generated/drivercost.json';
+
+const host = (facts as { host?: { cores?: number; memory_gib?: number } }).host;
+const maxStep = (facts as { max_step_tasks?: number }).max_step_tasks;
+const measured = facts.drivers.filter((r) => r.measured).length;
+---
+
+<p class="driver-cost-source">
+  {
+    facts.date ? (
+      <>
+        Measured {facts.date} on build <code>{facts.build}</code>
+        {host && host.cores ? `, a host of ${host.cores} cores and ${host.memory_gib} GiB` : ''}, stepping about {facts.step_tasks} tasks at a
+        time{maxStep && maxStep > facts.step_tasks ? `, and up to ${maxStep} for a driver whose memory did not show` : ''}. {measured} of {facts.drivers.length} drivers measured.
+      </>
+    ) : (
+      <>No sweep is committed yet: every driver reads as not yet measured.</>
+    )
+  }
+</p>

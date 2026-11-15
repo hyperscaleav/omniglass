@@ -99,7 +99,7 @@ func TestDriverCostFactsJSONIsCommitted(t *testing.T) {
 // a blank the unmeasured rows leave.
 func TestAMeasuredZeroReadsAsZero(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
-	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 1024}}})
+	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", Polls: []string{"1m0s"}, MemoryPerTaskBytes: 1024}}})
 	b, err := json.Marshal(f.Drivers[0])
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestAnEmptyTableWritesEmptyLists(t *testing.T) {
 // blank with its reason, not a zero.
 func TestADriversFactsCarryItsStepAndAMissingWarm(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
-	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", StepTasks: 1600,
+	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", Polls: []string{"1m0s"}, StepTasks: 1600,
 		MemoryPerTaskBytes: 4096, WarmNotMeasured: "a memory: the loaded line starts below the idle node"}}})
 	d := f.Drivers[0]
 	if d.StepTasks != 1600 {
@@ -151,7 +151,7 @@ func TestADriversFactsCarryItsKindAndItsEndpoint(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{30 * time.Second, 30 * time.Second, 5 * time.Minute}}}
 	skips := []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}
 	f := driverCostFacts(targets, skips, map[string]string{"a": "tcp", "s": "webhook"},
-		DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryPerTaskBytes: 60 * 1024, CPUPerRunMillis: 2}}})
+		DriverCostTable{Rows: []DriverCost{{Driver: "a", Polls: []string{"30s", "30s", "5m0s"}, MemoryPerTaskBytes: 60 * 1024, CPUPerRunMillis: 2}}})
 	a, s := f.Drivers[0], f.Drivers[1]
 	if a.Kind != "tcp" || s.Kind != "webhook" {
 		t.Fatalf("kinds %q and %q, want tcp and webhook", a.Kind, s.Kind)
@@ -159,7 +159,7 @@ func TestADriversFactsCarryItsKindAndItsEndpoint(t *testing.T) {
 	if a.MemoryPerEndpointKiB == nil || *a.MemoryPerEndpointKiB != 180 {
 		t.Fatalf("a's endpoint = %v, want 60 KiB a task times 3 polls", a.MemoryPerEndpointKiB)
 	}
-	f = driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", MemoryNotMeasured: "a memory: not a line"}}})
+	f = driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", Polls: []string{"30s", "30s", "5m0s"}, MemoryNotMeasured: "a memory: not a line"}}})
 	if f.Drivers[0].MemoryPerEndpointKiB != nil {
 		t.Fatal("a driver with no memory per task has no memory per endpoint")
 	}
@@ -181,9 +181,9 @@ func TestTheKindTableIsKeyedByKindAndInterval(t *testing.T) {
 	skips := []DriverSkip{{Driver: "w", Reason: SkipNoPolls}}
 	kinds := map[string]string{"h1": "https", "h2": "https", "h3": "https", "h4": "https", "n1": "snmp", "w": "webhook"}
 	f := driverCostFacts(targets, skips, kinds, DriverCostTable{Rows: []DriverCost{
-		{Driver: "h1", MemoryPerTaskBytes: 4 * 1024, CPUPerRunMillis: 3},
-		{Driver: "h2", MemoryPerTaskBytes: 10 * 1024, CPUPerRunMillis: 6},
-		{Driver: "h3", MemoryPerTaskBytes: 8 * 1024, CPUPerRunMillis: 9, MemoryNotMeasured: "h3 memory: not a line"},
+		{Driver: "h1", Polls: []string{"5m0s", "30s"}, MemoryPerTaskBytes: 4 * 1024, CPUPerRunMillis: 3},
+		{Driver: "h2", Polls: []string{"30s"}, MemoryPerTaskBytes: 10 * 1024, CPUPerRunMillis: 6},
+		{Driver: "h3", Polls: []string{"30s"}, MemoryPerTaskBytes: 8 * 1024, CPUPerRunMillis: 9, MemoryNotMeasured: "h3 memory: not a line"},
 	}, NotMeasured: []DriverSkip{{Driver: "n1", Reason: "n1 cpu: the sweep does not rise"}}})
 
 	type key struct{ kind, interval string }
@@ -229,5 +229,43 @@ func TestTheKindTableIsKeyedByKindAndInterval(t *testing.T) {
 	}
 	if w := got[key{"webhook", ""}]; w.CPUPerRunMillis != nil || len(w.PolledBy) != 0 {
 		t.Fatalf("webhook = %+v, want a row with nothing polled and no figures", w)
+	}
+}
+
+// A driver whose polls changed since the sweep measured it reads as not
+// measured: its slope was fit at the polls it had, so its memory per endpoint
+// and its place in the kind table would be a guess. The order a spec lists
+// its polls in is not a change.
+func TestADriverWhosePollsChangedSinceTheSweepIsNotMeasured(t *testing.T) {
+	targets := []DriverTarget{
+		{Driver: "a", Product: "pa", Polls: []time.Duration{30 * time.Second, 5 * time.Minute}},
+		{Driver: "b", Product: "pb", Polls: []time.Duration{30 * time.Second, 5 * time.Minute}},
+	}
+	kinds := map[string]string{"a": "https", "b": "https"}
+	f := driverCostFacts(targets, nil, kinds, DriverCostTable{Rows: []DriverCost{
+		{Driver: "a", Polls: []string{"5m0s", "30s"}, MemoryPerTaskBytes: 4096, CPUPerRunMillis: 2},
+		{Driver: "b", Polls: []string{"30s", "30s", "5m0s"}, MemoryPerTaskBytes: 4096, CPUPerRunMillis: 2},
+	}})
+	if a := f.Drivers[0]; !a.Measured || a.MemoryPerEndpointKiB == nil || *a.MemoryPerEndpointKiB != 8 {
+		t.Fatalf("a = %+v, want measured: its polls are the same, in another order", a)
+	}
+	if b := f.Drivers[1]; b.Measured || b.MemoryPerTaskKiB != nil || b.Reason != PollsChanged {
+		t.Fatalf("b = %+v, want not measured, its polls changed", b)
+	}
+	if k := f.Kinds[0]; len(k.Drivers) != 1 || k.Drivers[0] != "a" {
+		t.Fatalf("kind row %+v, want a alone measured", k)
+	}
+}
+
+// Every driver the docs list names its kind: one with none would roll up
+// into a kind with no name, so the render refuses it at make gen.
+func TestADriverWithNoKindIsNamed(t *testing.T) {
+	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
+	skips := []DriverSkip{{Driver: "s", Reason: SkipNoPolls}}
+	if got := kindlessDrivers(driverCostFacts(targets, skips, map[string]string{"a": "http"}, DriverCostTable{})); !slices.Equal(got, []string{"s"}) {
+		t.Fatalf("kindless = %v, want s", got)
+	}
+	if got := kindlessDrivers(driverCostFacts(targets, skips, map[string]string{"a": "http", "s": "webhook"}, DriverCostTable{})); len(got) != 0 {
+		t.Fatalf("kindless = %v, want none", got)
 	}
 }
