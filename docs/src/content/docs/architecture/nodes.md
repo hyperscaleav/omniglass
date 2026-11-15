@@ -265,6 +265,12 @@ The spool is **memory**, bounded at 10,000 batches, 16 MiB, or 12 hours: past an
 the oldest batch (never one with the stream), says so once when it starts dropping and once, with the
 count, when it drains, and the run loop forgets the transitions it remembers as sent (the
 reachability verdict, a poll's faults and occurrences), so the next tick sends current state again.
+A held session says its state, its auth verdict and its listeners' faults only when they change, so
+the same tick has the session manager **resend** them: each held session's current `session-state`
+and auth verdict, and each listener's current faults, once each. The resend rides the spool, so a
+resend it drops raises the overflow again and is resent on the next tick; a tick without an overflow
+resends nothing. The server therefore never keeps showing a session up that went down while the bus
+was unreachable.
 The age cap sits inside the receipt's 24-hour horizon, so a stored batch whose ack was lost cannot
 come back after its receipt is pruned and land twice. A one-shot run (`--once`) ends only once the
 stream has acked what it collected; a stopping node gives the spool five seconds to drain.
