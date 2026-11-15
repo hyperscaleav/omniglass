@@ -450,7 +450,7 @@ describe("the one form, empty", () => {
     ]);
     qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
     qc.setQueryData([...STANDARDS_KEY], []);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-room"), name: "room", label: "Room" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
     window.history.pushState({}, "", "/web/x");
     render(() => (
@@ -475,6 +475,52 @@ describe("the one form, empty", () => {
     const form = await screen.findByTestId("entity-create-form");
     const location = within(form).getByLabelText("Location");
     await waitFor(() => expect(treeValue(location)).toBe("West Building"));
+  });
+
+  // An unclassified system is a refusal the server gives on every ask (a 422
+  // the browser logs as a failed request, #1548), so the form does not ask
+  // until a type or a typed name gives the question an answer, and reads the
+  // hint from the fact it already holds.
+  it("asks no label draft for an unclassified system, and still says to type a name", async () => {
+    const asked: string[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked.push(req.url);
+        return new Response(JSON.stringify({ name: "room", ordinal: 1, label: "Room", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("system");
+      const form = await screen.findByTestId("entity-create-form");
+      await waitFor(() => expect(within(form).getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
+      expect(asked).toEqual([]);
+
+      await pickTree(within(form).getByLabelText("Type"), "Room");
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0]).toContain("/systems:renderLabel");
+    } finally { stub.mockRestore(); }
+  });
+
+  it("asks once a name is typed on an unclassified system, since the label rule can still render it", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "one-off", label: "One Off", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("system");
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "one-off" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBe("one-off");
+      expect(asked[0].system_type_id).toBeUndefined();
+    } finally { stub.mockRestore(); }
   });
 
   it("prefills a location's parent from `under`", async () => {
