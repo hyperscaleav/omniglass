@@ -1755,12 +1755,12 @@ Read one property series' change history
 omniglass component property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
@@ -6913,12 +6913,12 @@ Read one property series' change history
 omniglass system property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
