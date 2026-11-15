@@ -198,6 +198,12 @@ the two in one migration. Three buckets, never conflated:
   answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
   rather than a list nobody updated passing
   ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+  **The label lock comes first.** A cascade holds the `label/recompute` advisory lock and then waits
+  for system rows `FOR UPDATE`, so any write that restamps a label takes that lock before anything a
+  cascade also waits on: a membership write (bind, unbind, re-default, a system's release, a role
+  assignment that binds a non-member) takes the label lock, then the component's membership lock, and
+  only then inserts, because the insert's foreign key shares the system's row. Holding that row while
+  waiting for the label lock deadlocks against every cascade (#1214).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
