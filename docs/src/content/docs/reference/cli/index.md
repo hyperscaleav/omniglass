@@ -5810,15 +5810,22 @@ omniglass setting restoreDefaults
 Update a settings namespace
 
 ```
-omniglass setting update <namespace>
+omniglass setting update <namespace> [flags]
 ```
 
-Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
+Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
+
+The request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--body` | string | (none) | the request body as a JSON object |
+| `--body-file` | string | (none) | read the request body, a JSON object, from this file (- for stdin) |
 
 Example:
 
 ```sh
-omniglass setting update <namespace>
+omniglass setting update notification --body '{"egress_allow":["smtp.example.com"]}'
 ```
 
 ## `omniglass severity-level`

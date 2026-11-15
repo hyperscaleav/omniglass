@@ -648,8 +648,9 @@ type Gateway interface {
 	// and the poll targets the sim should see hit.
 	CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error)
 	ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error)
-	// StampEndpointsSeen records that an ingest batch delivered by each
-	// endpoint landed, by the server's clock, coalesced (#933).
+	// StampEndpointsSeen records that something each endpoint delivered
+	// outside a telemetry batch landed, by the server's clock, coalesced
+	// (#933); a batch stamps its endpoints inside LandBatch.
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
 	// ResolveWebhook finds the endpoint a webhook token's digest names
 	// (#1024): its component, its scheme and credential, its listeners;
@@ -902,6 +903,10 @@ type Gateway interface {
 	// the trend compacted mark, and holding no sample a type's own longer
 	// window still reaches, returning what it dropped (#420, #1527).
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// SummarizeMetricPartitions summarizes the block range indexes of each
+	// finished day of metric, returning the days it did, past any day that
+	// fails (#1929).
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	// CompactMetricTrends closes up to maxHours hours of observed metric
 	// samples into hourly trends and recomputes the closed hours a late
 	// sample dirtied (#1276); laneDays is the metric lane's window.
@@ -1003,24 +1008,20 @@ type Gateway interface {
 	// (EffectiveRoles already reports the ordered result).
 	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, read, action scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
-	// it needs filled. ownerKind is "standard" or "system"; SeedSystemRole is the
-	// boot-seed lane.
+	// it needs filled. ownerKind is "standard" or "system".
 	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
 	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
 	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
-	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
 	// The choice side of the same tier (#626): a role can join an
 	// exclusive-or group (SystemRoleSpec.AlternateID) instead of
-	// contributing unconditionally. Seed-only lane for the choices
-	// themselves (same insert-if-absent shape as SeedSystemRole);
-	// ResolveAlternate turns the operator-facing "choice/alternate" wire
+	// contributing unconditionally. A standard's choices arrive with it
+	// (CreateStandardFromTemplate); ResolveAlternate turns the operator-facing "choice/alternate" wire
 	// reference into the id SystemRoleSpec.AlternateID expects, so the API
 	// layer can populate it deliberately instead of leaving it permanently
 	// unreachable through every route that declares a role. DeleteChoice and
 	// DeleteAlternate refuse while any role still names them rather than let
 	// alternate_id's ON DELETE RESTRICT surface as a bare constraint
 	// violation.
-	SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec RoleChoiceSpec) (map[string]string, error)
 	ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref string) (string, error)
 	DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name string) error
 	DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, choiceName, altName string) error

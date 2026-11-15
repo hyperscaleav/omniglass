@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -428,11 +429,17 @@ type Listener struct {
 }
 
 // CommandBinding declares how one command type actuates over this protocol,
-// and how a command of it settles.
+// and how a command of it settles. Transform shapes the intended value on its
+// way out, the inverse of an emit's transform on the way in (#1429): a device
+// that reports a percentage is read with scale 0.01 and written with scale
+// 100, so the canon (a ratio) is what the platform holds either side. Only
+// scale is declared outbound; a response settle's reply is read back through
+// the same scale, so it compares to the intended value in its own units.
 type CommandBinding struct {
-	CommandType string  `json:"command_type"`
-	Request     Request `json:"request"`
-	Settle      *Settle `json:"settle,omitempty"`
+	CommandType string     `json:"command_type"`
+	Request     Request    `json:"request"`
+	Transform   *Transform `json:"transform,omitempty"`
+	Settle      *Settle    `json:"settle,omitempty"`
 }
 
 // Settle declares what settles a command: the device's reply to it
@@ -473,6 +480,15 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 		v, err := locate(*st.Extract, b.replyPayload(reply))
 		if err != nil {
 			return ReplyVerdict{Judged: true}
+		}
+		if b.Transform != nil && b.Transform.Scale != 0 {
+			// The reply is in the device's units; the intended value it is
+			// compared to is in the canon's (#1429).
+			f, perr := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if perr != nil {
+				return ReplyVerdict{Judged: true}
+			}
+			v = strconv.FormatFloat(scaled(f, 1/b.Transform.Scale), 'f', -1, 64)
 		}
 		return ReplyVerdict{Judged: true, Succeeded: true, HasValue: true, Value: v}
 	}
@@ -871,6 +887,11 @@ func (s *Spec) Validate(cat Catalog) error {
 		if c.Request.Empty() {
 			return fmt.Errorf("driver: command binding %q has an empty request", c.CommandType)
 		}
+		if c.Transform != nil {
+			if err := validateCommandTransform(c.CommandType, *c.Transform); err != nil {
+				return err
+			}
+		}
 		// Only the line-protocol actuation wire exists today (over a line
 		// transport, or as a datagram over udp, #1037), so a binding on a
 		// transport it cannot reach refuses at write rather than dispatching a
@@ -1261,6 +1282,20 @@ func validateTransform(fn, name string, tr Transform) error {
 	case "", "int", "float", "text":
 	default:
 		return fmt.Errorf("driver: %s has unknown cast %q", what, tr.Cast)
+	}
+	return nil
+}
+
+// validateCommandTransform holds a command binding's transform to what the
+// outbound side applies: a scale. The shape checks are an emit's
+// (validateTransform); a cast or a map has no outbound meaning today, so it
+// refuses rather than being silently ignored.
+func validateCommandTransform(commandType string, tr Transform) error {
+	if err := validateTransform(fmt.Sprintf("command binding %q", commandType), "", tr); err != nil {
+		return err
+	}
+	if tr.Scale == 0 || tr.Cast != "" || len(tr.Map) > 0 {
+		return fmt.Errorf("driver: command binding %q transform declares a scale alone; a command carries no cast or map", commandType)
 	}
 	return nil
 }

@@ -1,12 +1,12 @@
 ---
 title: "The boot seed installs a shipped role whole, and repairs a set an unrevised role is missing"
 date: 2026-10-26
-status: Accepted
+status: "Superseded by [ADR-0827](#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)"
 summary: "SeedSystemRole writes a shipped role and its typed-slot sets (accepted types, pinned products) in one transaction, so a role never lands without them. On every later boot it repairs: a shipped role the seed itself wrote (no audit row names it, since every operator write of a role is audited and the seed never is) and nobody has revised (its updated_at still equals its created_at) whose accepted-types or pinned-products set is entirely empty while the shipped declaration names some gets the shipped set, which is what a complete install would carry. A set with any rows, any role an operator declared, and any role an operator has revised are left exactly as they stand, so an edit still survives every restart"
 refs: [508, 504]
 ---
 
-- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/)
+- **Date:** 2026-10-26 | **Status:** Superseded by [ADR-0827](#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec) | **Pages:** [core entities](/architecture/core-entities/)
 - **Decision:** (#508, the architect's ruling in session for the 0.1.0 release, #825: make the seed
   transactional and self-repairing.)
   1. **Whole or not at all.** The role row and its typed-slot sets are written in one transaction,
@@ -37,3 +37,7 @@ refs: [508, 504]
   guard accepted any component into the slot while health counted it against quorum. The typed-slot
   model (#626) replaced capabilities since the issue was filed; the window and the missing repair
   were the same.
+- **Superseded by** [ADR-0827](#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec): no boot plants a standard any more, so the seed lane this
+  decision repaired (`SeedSystemRole`, `SeedRoleChoice`, and the repair of a role an interrupted seed left without
+  its typed slot) was retired (#1332). A standard's roles and choices are written whole by the audited create
+  from a template (`CreateStandardFromTemplate`), in one transaction.
