@@ -8,7 +8,7 @@ refs: [1882, 1577, 1868]
 
 - **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [platform health](/guides/operator/platform-health/)
 - **Decision:** (#1882, amending the first-pull rule of
-  [ADR-1577](#adr-1577-a-node-worklist-is-compressed-served-by-a-bounded-responder-and-retried).)
+  [ADR-1577](#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).)
   The node builds its node-self report before its first pull and runs that pull on a goroutine of
   its own. Until the first worklist lands, each heartbeat tick publishes the heartbeat, retries the
   spool and sends the node-self account; each first pull is tallied on the report as served or
