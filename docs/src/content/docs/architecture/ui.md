@@ -42,10 +42,11 @@ Realized shell: the [design system](/contributing/design-system/); operating it:
 
 ## The renderer contract: ViewResult and the views BFF
 
-:::design[Target design: the ViewResult contract, tracked in #523]
-**All UI reads go through [views](/architecture/views/)** (the read-side BFF), CRUD for writes; the
-operator never queries raw tables. Every view returns a uniform **`ViewResult`** (`{columns, rows}`),
-rendered through **one renderer per view**: adding a view never adds a bespoke renderer.
+:::design[Target design: widgets over the binding, tracked in #1826]
+A coded page reads through its typed routes; a **dashboard widget** reads through a
+[view binding](/architecture/views/) (the read-side BFF), CRUD for writes, and the operator never queries
+raw tables. A binding answers typed series or rows per primitive, so one widget renders every binding
+of its primitive: adding a view never adds a bespoke renderer.
 :::
 
 The **dense-ops layout is an architectural pattern**: one counts line over the full set, keyboard
@@ -103,20 +104,21 @@ A detail view accepts a name-shaped address as an operator convenience, resolved
 
 ## One renderer library, two composition modes
 
-::::design[Target design: the renderer library and composable dashboards, tracked in #523]
+::::design[Target design: the renderer library and composable dashboards, tracked in #1826]
 Neither "every screen is hand-coded" nor "everything must be a dashboard":
 
 - **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
-  `line` / `area`. Each takes a **view result plus a field-mapping** (which column is the value /
-  label / time / series key); the set is closed but grown reactively.
+  `line` / `area`. Each takes a **binding's series or rows plus a field-mapping** (which field is the
+  value / label / time / series key); the set is closed but grown reactively.
 
   :::caution[Open question]
-  The field-mapping contract between a view result and each renderer (the column roles per renderer
-  type).
+  The field-mapping contract between a binding's result and each renderer (the field roles per
+  renderer type).
   :::
 - **Coded pages** compose renderers plus custom interaction: the built-in information architecture.
 - **Composable dashboards** (config-driven): operator-built grids, each
-  **widget = a view ref + a renderer + a field-mapping + params**, no code per dashboard.
+  **widget = a [view binding](/architecture/views/) + a renderer + a field-mapping + params**, no
+  code per dashboard.
   Dashboard-level params flow into widget view-params, so one "system overview" dashboard works
   for any system.
 
@@ -131,13 +133,14 @@ Neither "every screen is hand-coded" nor "everything must be a dashboard":
   :::
 ::::
 
-## Coded pages and dashboards share one view layer
+## Coded pages keep typed reads; dashboards read views
 
-:::design[Target design: default views behind coded pages, tracked in #523]
-A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
-`firing-now` view, not `GET /alarms` directly), so the same view backs a dashboard widget unchanged;
-composable dashboards are the customization layer over the complete coded console.
-:::
+A built-in page reads through its **typed routes** (a component's Alarms panel reads
+`GET /components/{name}/alarms`); a view exists for the consumer no typed route can be written for
+in advance, a dashboard widget pointed at any system or an agent's query
+([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
+A coded page may still read samples through a binding where it wants the live tail, as Platform health's
+sparklines do. Composable dashboards are the customization layer over the complete coded console.
 
 ## Live updates: polling by default
 

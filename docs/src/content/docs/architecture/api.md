@@ -1250,14 +1250,15 @@ visible file carries it); `GET /files/{file}:download` returns
 body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the content
 address.
 
-:::design[Views and the SSE live relay, tracked in #523]
-## Reads beyond one resource are views
+:::design[Named views and the SSE live relay, tracked in #2051]
+## Reads no route was written for are views
 
-A single resource reads through its typed `GET`. Anything richer (a dashboard, an explorer, the cascade
-"why did this value win" view) goes through a **[view](/architecture/views/)**: a named query returning a
-uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
-the same scoped gateway; an operator never gets raw SQL. A **live** read may upgrade from polling `:run`
-to a **server-relayed [SSE](/architecture/messaging/) stream** over the same seam: the subscribe is
+A coded page reads through its typed routes. A read nobody can write a route for ahead of time (a
+dashboard widget, an agent's query) goes through a **[view binding](/architecture/views/)** at
+`POST /views:run`, its live tail on `GET /views:watch` (both built, ADR-1830); a named, saved view bound by
+declared params at `/views/{id}:run` is the unbuilt half, executed through the same scoped gateway, and an
+operator never gets raw SQL. A live read beyond the sample tail upgrades to a **server-relayed
+[SSE](/architecture/messaging/) stream** over the same seam: the subscribe is
 **capability fast-rejected** at open (not authorized there), then the server holds the internal
 subscription, re-runs the gateway scope per message against each message's owner, and pushes only
 visible deltas. The operator never connects to the bus, so the live path adds no second authorization
@@ -1290,8 +1291,9 @@ problem+json. The server runs as the **authenticated `human` or `service` princi
 reach is exactly that principal's grants ([AI](/architecture/ai/)). Connecting one:
 [connect an agent](/guides/agents/).
 
-:::design[Views as MCP tools, tracked in #523]
-The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
+:::design[The fleet query tool over the binding, tracked in #2050]
+An agent's fleet query tool and the analytics skill over it call the [view binding](/architecture/views/)
+route, with no read path of their own; today `run-views` is the binding's generated tool.
 :::
 
 :::design[The full node NATS contract, per ADR-0036]

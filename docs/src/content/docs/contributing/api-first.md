@@ -151,11 +151,12 @@ The API is **self-describing**: the running server serves `GET /api/v1/openapi.j
 
 Writes go through resource CRUD (each emitting an `audit_log` row in the same transaction).
 
-:::design[Target design: the ViewResult contract, tracked in #523]
+:::design[Target design: named views, tracked in #2051]
 
-**Reads beyond a single resource go through views**, and views are part of the public API: a
-**view** is a named query returning a uniform `ViewResult` (`{columns, rows}`), so one renderer
-contract serves every view; **default views** ship with the binary, **private views** are
+**Reads no typed route was written for go through views**, and views are part of the public API (the
+[binding](/architecture/views/) at `POST /views:run` is built): a **view** is a named query over a
+binding, answering its typed series or rows, so one widget serves every view of a primitive;
+**default views** ship with the binary, **private views** are
 operator-saved *structured* queries, never raw SQL; `GET /views/{id}:run?param=` binds declared
 params (undeclared or missing-required is a clean 400); and every view executes through the
 **scoped Storage Gateway**, the safety boundary that lets the read side be a public BFF without

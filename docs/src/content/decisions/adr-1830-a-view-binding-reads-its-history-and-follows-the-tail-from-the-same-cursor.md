@@ -3,11 +3,11 @@ title: "A view binding reads its history and follows the tail from the same curs
 date: 2026-11-16
 status: Accepted
 summary: "A view binding (a primitive, an entity selector, keys, a range, an optional step) is the one scoped read of the sample store a dashboard widget, an agent or the CLI makes. POST /views:run answers its history and the tail cursor the snapshot was taken at; GET /views:watch follows the in-process ingest tail from that cursor, every binding of a page over one SSE stream. view:read is the door, the binding's <kind>:read and its scope the fence. Diverges from the ViewResult design: a binding answers typed series and rows, not {columns, rows}."
-refs: [1830, 523, 1829, 1161]
+refs: [1830, 523, 1829, 1161, 2050, 2051]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [views](/architecture/views/), [UI](/architecture/ui/)
-- **Decision:** (#1830, the read the dashboard widgets of #1831 to #1838 and the MCP tools of #1161 bind to.)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [views](/architecture/views/), [UI](/architecture/ui/), [API](/architecture/api/)
+- **Decision:** (#1830, the read the dashboard widgets of #1831 to #1838 and the agent query tool of #2050 bind to.)
   1. **A binding is the read.** It names a primitive (`metric`, `property`, `event`, `log`), an entity
      selector (literal `refs`, or a `kind` and a `filter`), the `keys`, and a range (`from` and `to`, or
      `window_seconds` back from now), with an optional `step_seconds`. A metric or property binding answers
@@ -42,10 +42,12 @@ refs: [1830, 523, 1829, 1161]
      binding's cursor itself and reconnects from it. Platform health's sparklines are the first consumer:
      one binding per panel, its sampled keys on the server's platform component.
 - **Context:** The [views](/architecture/views/) design names a `ViewResult` (`{columns, rows}`) behind
-  `/views/{id}:run` for named, saved queries (#523). A chart of a series, an event feed and an agent's
-  question about recent telemetry need the sample store read by entity, key and time, live, under the same
-  scope as every other read; that is a read shape of its own, not a named query. The binding is it, and a
-  named view can later bind one.
+  `/views/{id}:run` for named, saved queries (#523), behind which every read, coded pages included, was
+  to go. A chart of a series, an event feed and an agent's question about recent telemetry need the sample
+  store read by entity, key and time, live, under the same scope as every other read; that is a read shape
+  of its own, not a named query. The binding is it, and a named view (#2051) binds one. Coded console
+  pages keep their typed reads: a view exists for the consumer no typed route can be written for in
+  advance, so "everything read goes through a view" is withdrawn.
 - **Consequences:**
   - In the API end-to-end tests a viewer scoped to one location reads only its entities through a kind
     selector, gets a 404 for a ref outside it, and sees none of its samples on the stream

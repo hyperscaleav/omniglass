@@ -1,6 +1,6 @@
 ---
 title: Views
-description: "The read side: a view is a named, parameterized, scope-checked query returning a uniform ViewResult, the backend-for-frontend every read goes through."
+description: "The read side for consumers no typed endpoint was written for: a view binding reads samples inside the caller's scope, history then the live tail from one cursor, for dashboards, agents and scripts."
 sidebar:
   badge:
     text: Partial
@@ -12,8 +12,8 @@ Built today: the **view binding** ([below](#bindings-the-scoped-read-of-the-samp
 read of metric, property, event and log samples, with its history at `POST /views:run` and its live rows at
 `GET /views:watch`, every binding of a page over one SSE stream (#1830,
 [ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
-Platform health's sparklines read through it. Not built: the named, saved view and its `ViewResult`
-contract, in the design block that follows the binding.
+Platform health's sparklines read through it. Not built: the named, saved view (#2051), in the design
+block that follows the binding.
 :::
 
 ## Bindings: the scoped read of the sample store
@@ -59,6 +59,12 @@ resolves to the entities the caller can see; a literal ref outside the scope is 
 does not exist, so a binding never confirms what it may not show. The stream resolves its selectors once,
 when it connects, and carries rows of those entities only.
 
+### From the CLI and an agent
+
+The generated CLI reads a binding with `omniglass view run` and follows it with `omniglass view watch`,
+and `run-views` is on the [MCP tools](/reference/mcp/) catalog. An agent's fleet query tool and the
+analytics skill over it are #2050, which calls this route rather than a read path of its own.
+
 ### In the console
 
 `createViewBinding` (`web/src/lib/binding.ts`) is the console's primitive over it: it reads a binding's
@@ -67,12 +73,13 @@ history through the query cache, then subscribes it to the page's one hub, which
 On [Platform health](/guides/operator/platform-health/) each server panel is one binding over its
 sampled keys, and its sparklines move as the server records rather than on a poll.
 
-::::design[Target design: the ViewResult contract, tracked in #523]
+::::design[Target design: named, saved views, tracked in #2051]
 
-:::caution[Design: the ViewResult contract is entirely unbuilt]
-The named-view framework below is not built: there is no `view` table, no `ViewResult` shape, no
-`/views/{id}:run` route, and no renderer library. The binding above is the built read of samples a
-named view can later bind. Today's read side is typed CRUD `GET`s plus six
+:::caution[Design: named views are entirely unbuilt]
+The named-view framework below is not built: there is no `view` table and no `/views/{id}:run` route.
+The binding above is the built read of samples a named view will bind, and its typed series and rows,
+not a generic `{columns, rows}`, are the result shape a named view answers
+([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)). Today's read side is typed CRUD `GET`s plus six
 hand-written composed reads (reachability, events, the component and node log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
@@ -81,19 +88,20 @@ reads, the fleet projection at `GET /views/fleet`, the first route actually serv
 which the [API](/architecture/api/) page's views-exception note covers.
 :::
 
-Writes go through typed resource CRUD; in the target model **everything read goes through a view**:
-a named query returning a uniform **`ViewResult`** (`{columns, rows}`), executed through the scoped
-[Storage Gateway](/architecture/storage/), a safe backend-for-frontend hit without touching raw
-tables or writing SQL. The [API](/architecture/api/) exposes it, the [UI](/architecture/ui/)
-renders it, [API first](/contributing/api-first/) is the doctrine behind both.
+Writes go through typed resource CRUD, and a coded console page keeps its typed reads. A **view**
+exists for the consumer no typed endpoint can be written for in advance (a dashboard widget pointed at
+anything, an agent's question, an operator's saved query): a named query over a binding, executed
+through the scoped [Storage Gateway](/architecture/storage/), a safe backend-for-frontend hit without
+touching raw tables or writing SQL. The [API](/architecture/api/) exposes it and
+[API first](/contributing/api-first/) is the doctrine behind it.
 
 ## Why a view layer
 
-- A single resource reads through its typed `GET`; anything richer (the fleet-health grid, the
-  cascade "why did this value win" explainer) is a **view**, a named query the platform ships or an
-  operator saves, not a bespoke endpoint per page.
-- **One shape, one renderer**: adding a view never adds a bespoke renderer or a raw query path
-  ([UI](/architecture/ui/)).
+- A coded page reads through its typed routes; a read nobody can write a route for ahead of time (a
+  widget an operator points at any system, an agent's query, a saved report) is a **view**, a named
+  query the platform ships or an operator saves, not a bespoke endpoint per consumer.
+- **One shape per primitive**: a view answers the binding's typed series or rows, so a widget that
+  renders one renders every view of that primitive, with no raw query path.
 - **One safety boundary**: no view ever runs unscoped or as raw SQL, which is what lets the read
   side be a public BFF.
 
@@ -103,20 +111,18 @@ A `view` carries an id, a typed **params schema**, the query it runs, a **defaul
 and the `official` boolean:
 
 - **Default views** ship with the binary (curated, PR-governed, optionally Postgres-view-backed):
-  the read surface the console's coded pages would query, an Alarms page reading a `firing-now`
-  view rather than a bespoke route, the same view backing a dashboard widget unchanged.
+  a `firing-now` view a dashboard widget or an agent reads unchanged.
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**, following the official / private
   [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the registries.
 - **Parameterized**: typed params bound at run time at `/views/{id}:run?param=`; an undeclared or
   missing-required param is a clean 400.
 
-## ViewResult: the uniform shape
+## The result: the binding's shape
 
-`ViewResult` is `{columns, rows}`: columns carry a name, a type, and role hints, and a
-**field-mapping** tells a renderer which column is the value, label, time, or series key
-([UI](/architecture/ui/)). **Cursor-paginated** like the designed [API](/architecture/api/) list
-convention (`page_token`). **Views by default, materialized only when earned**: a hot view becomes
+A named view answers what its binding answers: one series per entity, key and instance for `metric`
+and `property`, a cursor-paged page of rows for `event` and `log`, each with the high-water cursor a
+live tail resumes from. **Views by default, materialized only when earned**: a hot view becomes
 a materialized projection only when a read profile proves the live query too slow
 ([storage](/architecture/storage/)).
 
@@ -135,12 +141,11 @@ a materialized projection only when a read profile proves the live query too slo
 
 One read contract, three consumers:
 
-- **The console**: coded pages and dashboard widgets both bind
-  `view ref + renderer + field-mapping + params` through the renderer library
-  ([UI](/architecture/ui/)), which arrives with this contract.
-- **The API**: every view at `/views/{id}:run`, part of the public contract.
-- **An AI agent**: view-backed tools on the [MCP surface](/architecture/api/) (the agent's search
-  and query tools *are* views), scoped and audited like any caller.
+- **Dashboards**: a widget binds a view or a binding through `createViewBinding`
+  ([UI](/architecture/ui/)); the widgets and canvas are #1826.
+- **The API and CLI**: every view at `/views/{id}:run`, part of the public contract.
+- **An AI agent**: the [MCP surface](/architecture/api/)'s query tool calls the same binding route,
+  scoped and audited like any caller, with no separate agent read path (#2050).
 
 ## Live updates
 
