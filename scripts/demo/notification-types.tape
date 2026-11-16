@@ -29,7 +29,7 @@ Wait
 Type `omniglass notification-type create --name page-oncall --subject '{{printf "%s" .Message}}' --text x 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
-Type `omniglass notification-type create --name page-oncall --label 'Page on-call' --subject '{{.SeverityLabel | upper}} {{.Component}}{{if .Place}} at {{.Place}}{{end}}' --text '{{.Message}} since {{.RaisedAt}}' | jq -c '{name, official}'`
+Type `omniglass notification-type create --name page-oncall --label 'Page on-call' --subject '{{.SeverityLabel | upper}} {{.Component}}{{if .Location}} at {{.Location}}{{end}}' --text '{{.Message}} since {{.RaisedAt}}' | jq -c '{name, official}'`
 Enter
 Wait
 
