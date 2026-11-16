@@ -524,3 +524,27 @@ func TestNodeReportReadsBusyOverThePoolsActualWorkerTime(t *testing.T) {
 		t.Fatalf("%s = %v for a pool busy throughout on 4 then 2 workers, want 1", key, v)
 	}
 }
+
+// #1869: the node reports how many lanes it runs once a window, under the
+// instance lane, beside how busy they were, so a pool sized at boot reads
+// in the console rather than only in the node's log.
+func TestNodeReportReadsTheLaneCountOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, 0, t0)
+	r.lanes(46)
+	key := writerclass.LaneWorkerCount + "/lane"
+
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[key] != 0 {
+		t.Fatalf("lane-worker-count emitted before its window ended: %v", mid)
+	}
+	for _, at := range []time.Time{t0.Add(time.Minute), t0.Add(2 * time.Minute)} {
+		got := readings(r.take(at))
+		if v, ok := got[key]; !ok || v != 46 {
+			t.Fatalf("%s at %v = %v (written %v), want 46 every window", key, at, v, ok)
+		}
+		if _, dup := got[key+"#dup"]; dup {
+			t.Fatalf("%s emitted twice in one window", key)
+		}
+	}
+}

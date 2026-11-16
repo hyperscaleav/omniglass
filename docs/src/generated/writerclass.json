@@ -103,6 +103,7 @@
       "ingest-lag-max",
       "ingest-lane-busy",
       "ingest-sample-count",
+      "lane-worker-count",
       "metric-block-mark-lag",
       "metric-oldest-day-age",
       "metric-partition-count",

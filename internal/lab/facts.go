@@ -37,6 +37,8 @@ type FactService struct {
 	Publish  string   `json:"publish"`
 	RunsOnce bool     `json:"runs_once"`
 	Role     string   `json:"role"`
+	// Limits is the container's CPU and memory caps, empty when it has none.
+	Limits string `json:"limits"`
 }
 
 // FactCadence is one cadence profile the lab's node runs at.
@@ -103,6 +105,23 @@ func SetupCommand(apiPath string, body map[string]any) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
+// FormatLimits names a container's caps as the topology table shows them:
+// "1 CPU, 512 MiB", either part left out when it has no cap.
+func FormatLimits(cpus float64, memoryBytes int64) string {
+	var parts []string
+	if cpus != 0 {
+		unit := "CPUs"
+		if cpus == 1 {
+			unit = "CPU"
+		}
+		parts = append(parts, fmt.Sprintf("%g %s", cpus, unit))
+	}
+	if memoryBytes != 0 {
+		parts = append(parts, fmt.Sprintf("%d MiB", memoryBytes>>20))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // collection reports whether a path segment names a collection: a plural word.
 func collection(seg string) bool {
 	return seg != "" && strings.HasSuffix(seg, "s") && !strings.ContainsAny(seg, "/:{}")
@@ -118,7 +137,8 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 	f := Facts{Published: fmt.Sprintf("%s:%d", DefaultListen, DefaultPort)}
 	for _, s := range spec.Services() {
 		row := FactService{Name: s.Name, Image: s.Image, Command: strings.Join(s.Cmd, " "),
-			User: s.User, Caps: append([]string{}, s.CapAdd...), RunsOnce: s.OneOff, Role: s.Role}
+			User: s.User, Caps: append([]string{}, s.CapAdd...), RunsOnce: s.OneOff, Role: s.Role,
+			Limits: FormatLimits(s.CPUs, s.MemoryBytes)}
 		if row.User == "" {
 			row.User = "the image's (nonroot)"
 			if s.Name == "db" {
