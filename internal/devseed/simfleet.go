@@ -138,7 +138,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	for _, dev := range plan {
 		comp := dev.ComponentID
 		for _, e := range dev.Endpoints {
-			spec := storage.EndpointSpec{Component: &comp, Node: &node, SecretRead: all, CanAdmin: true}
+			spec := storage.EndpointSpec{Component: &comp, Node: &node, SecretRead: all, SecretBind: all, CanAdmin: true}
 			if e.Driver != "" {
 				driver := e.Driver
 				spec.Driver, spec.Inputs = &driver, e.Inputs
@@ -208,7 +208,7 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 		return fmt.Errorf("devseed: the reachability demo's product %s has no simulated attach for driver %q", reachProduct, driver)
 	}
 	comp, node := *demo[0].ComponentID, reachNode
-	spec := storage.EndpointSpec{Component: &comp, Node: &node, Driver: &driver, Inputs: inputs(addr, shift), SecretRead: all, CanAdmin: true}
+	spec := storage.EndpointSpec{Component: &comp, Node: &node, Driver: &driver, Inputs: inputs(addr, shift), SecretRead: all, SecretBind: all, CanAdmin: true}
 	if _, err := gw.CreateEndpoint(ctx, actorID, spec, all); err != nil {
 		return fmt.Errorf("devseed: attach %s to the reachability demo: %w", driver, err)
 	}
@@ -337,7 +337,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			placed = nil
 		}
 		created, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
-			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: placed, SecretRead: all, CanAdmin: true,
+			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: placed, SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
@@ -413,7 +413,7 @@ func seedSimProbe(ctx context.Context, gw storage.Gateway, actorID string, se Si
 	comp, node := compID, reachNode
 	if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
 		Transport: se.Transport, Label: se.Label, Component: &comp, Node: &node,
-		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, CanAdmin: true,
+		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		return fmt.Errorf("devseed: create simulated %s probe on %s: %w", se.Transport, se.Component, err)
 	}

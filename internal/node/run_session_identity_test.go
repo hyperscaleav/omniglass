@@ -186,7 +186,7 @@ func (s *gateStack) attach(comp, drv, nodeName string, port int) *storage.Endpoi
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": s.ip, "port": fmt.Sprint(port), "login": "panel-login"},
-		SecretRead: s.all, CanAdmin: true,
+		SecretRead: s.all, SecretBind: s.all, CanAdmin: true,
 	}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
@@ -369,7 +369,7 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
 		Inputs:     map[string]string{"host": s.ip, "port": "2399", "login": "stale-login"},
-		SecretRead: s.all, CanAdmin: true,
+		SecretRead: s.all, SecretBind: s.all, CanAdmin: true,
 	}, s.all)
 	if err != nil {
 		t.Fatal(err)
@@ -377,7 +377,7 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	s.runNode("edge-e")
 	edit := func(p storage.EndpointPatch) {
 		t.Helper()
-		p.SecretRead, p.CanAdmin = s.all, true
+		p.SecretRead, p.SecretBind, p.CanAdmin = s.all, s.all, true
 		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, p, s.all, s.all); err != nil {
 			t.Fatalf("edit in place: %v", err)
 		}

@@ -116,20 +116,21 @@ type NotificationTargetSpec struct {
 // PeopleUse is the caller's right over the people a target would name: binding
 // a group or a person is reading the principal directory (its members are who
 // the target reaches), so it takes that directory's admin-tier read, as
-// binding a secret takes the right to reveal it.
+// binding a secret takes the right to bind it (secret:bind).
 type PeopleUse struct {
 	Groups, Principals bool
 }
 
-// SecretUse is the caller's right over a secret it binds to a target: its
-// secret read and reveal scopes and whether it holds the admin tier. Binding
-// a secret hands it to whatever the target's URL names on every send, so it
-// takes exactly what revealing the secret takes; a target holder without it
-// would be a confused deputy, sending a credential it cannot read to a URL it
-// chose.
+// SecretUse is the caller's right over a secret it binds, to a target, an
+// endpoint, a relay or a preview: its secret read and bind scopes and whether
+// it holds the admin tier. Binding hands the credential to whatever the
+// binding names (a target's URL, an endpoint's host) without showing it to
+// the caller, so it takes secret:bind, its own action beside reveal (#2047):
+// a reference the caller cannot read is the non-disclosing not-found, and one
+// it can read but not bind is forbidden.
 type SecretUse struct {
-	Read, Reveal scope.Set
-	CanAdmin     bool
+	Read, Bind scope.Set
+	CanAdmin   bool
 }
 
 // NotificationTargetPatch carries the mutable fields; nil is unchanged, and
@@ -280,10 +281,10 @@ func (p *PG) checkTargetURL(ctx context.Context, q querier, raw string) error {
 // resolveTargetSecret binds a target's credential: a PLATFORM secret (targets
 // are platform-owned, so a secret owned by one component or place is not
 // theirs to sign with), by name or uuid, of a type a send can use, that the
-// caller may reveal (SecretUse). The reveal check is the reveal route's own
-// (secretRowForAction): a secret outside the caller's read scope, or an
-// admin-sensitive one without the admin tier, is the non-disclosing
-// ErrSecretNotFound, and one it can read but not reveal is ErrSecretForbidden.
+// caller may bind (SecretUse). The check is secretRowForAction's: a secret
+// outside the caller's read scope, or an admin-sensitive one without the admin
+// tier, is the non-disclosing ErrSecretNotFound, and one it can read but not
+// bind is ErrSecretForbidden.
 // Empty is no secret.
 func (p *PG) resolveTargetSecret(ctx context.Context, q querier, ref string, use SecretUse) (*string, error) {
 	if ref == "" {
@@ -293,7 +294,7 @@ func (p *PG) resolveTargetSecret(ctx context.Context, q querier, ref string, use
 	if !isUUID(ref) && strings.Contains(ref, "/") {
 		return nil, fmt.Errorf("%w: secret %q: a target binds a platform secret by its bare name or uuid", ErrNotificationTargetInvalid, ref)
 	}
-	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Reveal, use.CanAdmin, true)
+	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Bind, use.CanAdmin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +544,7 @@ func resolveTargetPeople(ctx context.Context, q querier, spec NotificationTarget
 
 // UpdateNotificationTarget patches a target, audited (URL masked; a URL
 // change is recorded as changed without either value). Every path that
-// changes where a bound credential goes takes the right to reveal it: binding
+// changes where a bound credential goes takes the right to bind it: binding
 // a secret, and moving the URL of a target that keeps one. Nothing else on a
 // target redirects a send (no header, method or signing field exists, and a
 // target is not renamed or cloned); :test sends to the URL as it stands.

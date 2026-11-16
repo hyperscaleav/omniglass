@@ -129,7 +129,7 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 	comp, drv, nodeName := "panel-n", "panel-nudge", "edge-n"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs: map[string]string{"host": "127.0.0.1", "port": first}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "127.0.0.1", "port": first}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)

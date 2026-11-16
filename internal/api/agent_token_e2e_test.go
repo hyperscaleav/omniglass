@@ -11,7 +11,7 @@ import (
 
 // Agent tokens (#1179): a person mints a token for an agent that acts on their
 // behalf. It holds only what its own roles AND its person hold, never a reveal
-// or use action whatever either holds, cannot mint a token, change a password
+// or enroll action whatever either holds, cannot mint a token, change a password
 // or impersonate, is accepted only on its channels, needs an explicit expiry,
 // and every row it writes names the agent. Skipped under -short.
 
@@ -35,7 +35,7 @@ func mintAgent(t *testing.T, c *apiClient, tok string, body map[string]any) mint
 }
 
 // revealStamps reads the generated spec for every operation whose permission
-// is a reveal or use action, so a new one is covered the day it is registered.
+// is a reveal action, so a new one is covered the day it is registered.
 func revealStamps(t *testing.T) map[string]string {
 	t.Helper()
 	raw, err := os.ReadFile("../../api/openapi.json")
@@ -55,7 +55,7 @@ func revealStamps(t *testing.T) map[string]string {
 	for path, ops := range spec.Paths {
 		for method, op := range ops {
 			tokens := strings.Split(op.Permission, ":")
-			if len(tokens) < 2 || (tokens[1] != "reveal" && tokens[1] != "use") {
+			if len(tokens) < 2 || tokens[1] != "reveal" {
 				continue
 			}
 			out[strings.ToUpper(method)+" "+param.ReplaceAllString(strings.TrimPrefix(path, "/api/v1"), "lab-community")] = op.Permission
@@ -326,12 +326,12 @@ func loginBearer(t *testing.T, c *apiClient, user, password string) string {
 	return ""
 }
 
-// An agent never hands a credential to a target (#1179): binding a secret onto
-// an endpoint, or moving the address or the node of one that carries a secret,
-// sends the plaintext wherever the endpoint points, so until secret:use splits from
-// reveal the ceiling refuses those writes outright. A write that moves no
-// credential (a label) is still the agent's, and its owner keeps them all.
-func TestAgentTokenCannotSendACredentialToATarget(t *testing.T) {
+// An agent binds a credential it never reads (#2047): secret:bind is not
+// under the ceiling, so its owner's agent attaches a secret to an endpoint,
+// repoints the endpoint and moves it to another node, each audited as the
+// agent's, while the plaintext stays out of its reach: reveal, copy and a
+// node's enrollment token are still refused.
+func TestAgentTokenBindsACredentialItNeverReads(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -339,42 +339,64 @@ func TestAgentTokenCannotSendACredentialToATarget(t *testing.T) {
 	c, ownerTok := auditImagesStack(t)
 	agent := mintAgent(t, c, ownerTok, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 7})
 
-	if code, body := c.send(agent.Token, http.MethodPost, "/endpoints", map[string]any{
+	var ep struct {
+		ID string `json:"id"`
+	}
+	out := c.do(agent.Token, http.MethodPost, "/endpoints", map[string]any{
 		"driver": "snmp-generic", "component": "amp-9",
 		"inputs": map[string]string{"host": "203.0.113.9", "community": "lab-community"},
-	}); code < 400 {
-		t.Errorf("agent attach binding a secret = %d %s, want refused", code, body)
+	}, http.StatusCreated)
+	if err := json.Unmarshal(out, &ep); err != nil || ep.ID == "" {
+		t.Fatalf("agent attach: %v (%s)", err, out)
 	}
-
-	ep := attachAuditedEndpoint(t, c, ownerTok)
-	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
-		"inputs": map[string]string{"host": "203.0.113.9"},
-	}); code < 400 {
-		t.Errorf("agent repointing a secret-bound endpoint = %d %s, want refused", code, body)
+	if strings.Contains(string(out), auditedSecretValue) {
+		t.Errorf("the attach answered the secret's plaintext: %s", out)
 	}
-	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
-		"inputs": map[string]string{"community": "lab-community"},
-	}); code < 400 {
-		t.Errorf("agent rebinding a secret = %d %s, want refused", code, body)
-	}
+	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"inputs": map[string]string{"host": "10.20.4.70"}}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "relay-2"}, http.StatusCreated)
-	// Nor does an agent mint a node's enrollment token: that token is a node
-	// credential, and the node it enrolls receives the credentials placed on it.
-	c.do(agent.Token, http.MethodPost, "/nodes/relay-2:enroll", nil, http.StatusForbidden)
-	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
-		"node": "relay-2",
-	}); code < 400 {
-		t.Errorf("agent moving a secret-bound endpoint to another node = %d %s, want refused", code, body)
+	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"node": "relay-2"}, http.StatusOK)
+
+	var audit struct {
+		Events []struct {
+			Verb  string `json:"verb"`
+			Agent string `json:"agent"`
+		} `json:"events"`
 	}
-	got := string(c.do(ownerTok, http.MethodGet, "/endpoints/"+ep, nil, http.StatusOK))
-	if strings.Contains(got, "relay-2") {
-		t.Errorf("the endpoint moved to the agent's node: %s", got)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log?agent=claude&resource=endpoint", nil, http.StatusOK), &audit); err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(got, "203.0.113.9") {
-		t.Errorf("the endpoint moved to the agent's address: %s", got)
+	verbs := map[string]bool{}
+	for _, e := range audit.Events {
+		if e.Agent != "claude" {
+			t.Errorf("an agent-filtered row names agent %q", e.Agent)
+		}
+		verbs[e.Verb] = true
+	}
+	if !verbs["create"] || !verbs["update"] {
+		t.Errorf("the agent's attach and edits are not audited as its own: %+v", audit.Events)
 	}
 
-	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{"label": "agent-labelled"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"inputs": map[string]string{"host": "10.20.4.70"}}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"node": "relay-2"}, http.StatusOK)
+	c.do(agent.Token, http.MethodPost, "/secrets/lab-community:reveal", nil, http.StatusForbidden)
+	c.do(agent.Token, http.MethodPost, "/secrets/lab-community:copy", nil, http.StatusForbidden)
+	c.do(agent.Token, http.MethodPost, "/nodes/relay-2:enroll", nil, http.StatusForbidden)
+}
+
+// An agent binds a signing key it never reads to a webhook target (#2047):
+// the bind is the person's, the key stays out of the answer and out of reach.
+func TestAgentTokenBindsASigningKeyToATarget(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	c, ownerTok := auditImagesStack(t)
+	agent := mintAgent(t, c, ownerTok, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 7})
+	c.do(ownerTok, http.MethodPost, "/secrets", map[string]any{"name": "agent-signing", "secret_type": "hmac-key", "owner_kind": "platform",
+		"fields": map[string]string{"key": "s3cr3t-signing-key"}}, http.StatusCreated)
+
+	out := c.do(agent.Token, http.MethodPost, "/notification-targets", map[string]any{
+		"name": "agent-hook", "kind": "webhook", "url": "https://hooks.example.com/ops", "secret": "agent-signing"}, http.StatusCreated)
+	if strings.Contains(string(out), "s3cr3t-signing-key") {
+		t.Errorf("the target answered the key's plaintext: %s", out)
+	}
+	c.do(agent.Token, http.MethodPost, "/secrets/agent-signing:reveal", nil, http.StatusForbidden)
 }

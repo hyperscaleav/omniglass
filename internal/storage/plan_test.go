@@ -49,7 +49,7 @@ func planFixture(t *testing.T) (storage.Gateway, func(string) int) {
 func allScopes() storage.PlanScopes {
 	all := scope.Set{All: true}
 	return storage.PlanScopes{LocationCreate: all, LocationRead: all, SystemCreate: all, SystemRead: all, SystemUpdate: all,
-		ComponentCreate: all, ComponentRead: all, ComponentUpdate: all, EndpointCreate: all, SecretRead: all,
+		ComponentCreate: all, ComponentRead: all, ComponentUpdate: all, EndpointCreate: all, SecretRead: all, SecretBind: all,
 		CanAdmin: true, CanCreateStandard: true}
 }
 

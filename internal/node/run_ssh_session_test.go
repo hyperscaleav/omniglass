@@ -91,7 +91,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(sshPort), "login": "panel-login"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach newtron-nvp-ssh: %v", err)

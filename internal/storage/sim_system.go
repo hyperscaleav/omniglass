@@ -30,9 +30,9 @@ type SimSystemComponent struct {
 // assignments (which make each component a member, and so need both ends in
 // scope, #510: ComponentRead and ComponentUpdate are the component end).
 type SimSystemScopes struct {
-	SystemCreate, LocationRead, ComponentCreate, SystemRead, SystemUpdate, EndpointCreate, SecretRead scope.Set
-	ComponentRead, ComponentUpdate                                                                    scope.Set
-	CanAdmin                                                                                          bool
+	SystemCreate, LocationRead, ComponentCreate, SystemRead, SystemUpdate, EndpointCreate, SecretRead, SecretBind scope.Set
+	ComponentRead, ComponentUpdate                                                                                scope.Set
+	CanAdmin                                                                                                      bool
 }
 
 // SimSystem is what CreateSimSystem made.
@@ -67,7 +67,7 @@ func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystem
 	made, err := p.CreatePlan(ctx, actorID, Plan{Systems: []PlannedSystem{ps}}, PlanScopes{
 		LocationRead: sc.LocationRead, SystemCreate: sc.SystemCreate, SystemRead: sc.SystemRead, SystemUpdate: sc.SystemUpdate,
 		ComponentCreate: sc.ComponentCreate, ComponentRead: sc.ComponentRead, ComponentUpdate: sc.ComponentUpdate,
-		EndpointCreate: sc.EndpointCreate, SecretRead: sc.SecretRead, CanAdmin: sc.CanAdmin,
+		EndpointCreate: sc.EndpointCreate, SecretRead: sc.SecretRead, SecretBind: sc.SecretBind, CanAdmin: sc.CanAdmin,
 	})
 	if err != nil {
 		return nil, err

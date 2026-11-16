@@ -51,7 +51,7 @@ func (s *gateStack) attachTLS(comp, nodeName string, port int, extra map[string]
 	for k, v := range extra {
 		inputs[k] = v
 	}
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all}, s.all)
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
 	}
@@ -222,7 +222,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 
 	edit := func(mode string) {
 		t.Helper()
-		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": mode}, SecretRead: s.all}, s.all, s.all); err != nil {
+		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": mode}, SecretRead: s.all, SecretBind: s.all}, s.all, s.all); err != nil {
 			t.Fatalf("edit the mode to %s: %v", mode, err)
 		}
 	}

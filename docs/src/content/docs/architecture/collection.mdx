@@ -1440,7 +1440,7 @@ on a schedule ([ADR-1163](/architecture/decisions/#adr-1163-a-poll-runs-once-on-
   one, refused with its findings when it does not validate. A preview runs a poll that is its own
   request (http, https, an snmp get, a tcp line on a throwaway connection); a poll that rides a held
   session or a bound udp socket needs an endpoint, so it is attached and run now instead. A secret
-  input must be one the caller may **reveal**, since the preview hands it to the target named, and
+  input must be one the caller may **bind** (`secret:bind`), since the preview hands it to the target named, and
   each secret used is audited.
 - **Run now** (`POST /endpoints/{endpoint}/polls/{poll}:run`, `endpoint:run`) runs one of an
   attached endpoint's polls on the node that holds it, outside its schedule, and **lands** what it

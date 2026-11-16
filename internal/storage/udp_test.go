@@ -24,7 +24,7 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-udp"
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all}, f.all)
+		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all)
 	if err != nil {
 		t.Fatalf("attach newtron-nvp-udp: %v", err)
 	}
@@ -44,11 +44,11 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 		t.Fatalf("worklist task transport %s ladder %+v, want the request rung", task.Transport, task.Ladder)
 	}
 
-	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "70000"}, SecretRead: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), driver.ListenPortInput) {
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "70000"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), driver.ListenPortInput) {
 		t.Fatalf("a listen port off the range = %v, want ErrEndpointPatchInvalid naming %s", err, driver.ListenPortInput)
 	}
 	before := task.Fingerprint
-	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "51400"}, SecretRead: f.all}, f.all, f.all)
+	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "51400"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("set the listen port: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 	if moved == before {
 		t.Fatal("setting the listen port left the fingerprint")
 	}
-	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "51401"}, SecretRead: f.all}, f.all, f.all); err != nil {
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{driver.ListenPortInput: "51401"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
 	if f.task(t, ep.ID).Fingerprint == moved {
@@ -109,7 +109,7 @@ func TestAUDPCommandDeliveryCarriesItsRetries(t *testing.T) {
 	}
 	for comp, drv := range map[string]string{f.component: "newtron-nvp-udp", other: "udp-no-retry"} {
 		if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &f.node,
-			Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all}, f.all); err != nil {
+			Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all); err != nil {
 			t.Fatalf("attach %s: %v", drv, err)
 		}
 	}

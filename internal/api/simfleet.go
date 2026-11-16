@@ -452,14 +452,14 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return &simObservationOutput{Body: obs}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "add-node-simulation-component",
 		Method:        http.MethodPost,
 		Path:          "/nodes/{name}/simulation/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated component",
 		Description:   "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
-	}, "simulation", "update"), func(ctx context.Context, in *addSimComponentInput) (*addSimComponentOutput, error) {
+	}, "simulation", "update"), "secret", "bind"), func(ctx context.Context, in *addSimComponentInput) (*addSimComponentOutput, error) {
 		if !a.allows(ctx, "component", "create") || !a.allows(ctx, "endpoint", "create") {
 			return nil, huma.Error403Forbidden("adding a simulated component also needs component:create and endpoint:create")
 		}
@@ -482,7 +482,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error500InternalServerError("list products")
 		}
 		drivers := simDrivers(products)
-		secretRead, canAdmin := a.secretBind(ctx)
+		use := a.secretBind(ctx)
 		attachable := simAttachable(ctx, a, gw)
 		// Planning and creating hold the address lock, so two adds at once
 		// cannot be handed the same address.
@@ -532,7 +532,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			}
 			node, id := in.Name, c.ID
 			for _, spec := range simEndpointSpecs(plan[0].Endpoints) {
-				spec.Component, spec.Node, spec.SecretRead, spec.CanAdmin = &id, &node, secretRead, canAdmin
+				spec.Component, spec.Node, spec.SecretRead, spec.SecretBind, spec.CanAdmin = &id, &node, use.Read, use.Bind, use.CanAdmin
 				ep, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create"))
 				if err != nil {
 					undo()

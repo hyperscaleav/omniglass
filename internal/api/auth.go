@@ -258,14 +258,14 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 }
 
 // agentCeilingActions are the actions an agent principal never holds, whatever
-// its roles (#1179): reveal returns a credential's plaintext and use hands one
-// to a target, so with both gone an agent can drive a device without ever
-// learning the credential that reaches it. No route is stamped with use yet;
-// the writes that hand a credential to a target resolve it under secretBind,
-// which is the empty scope under the ceiling. enroll mints a node's enrollment
-// token, itself a credential, for a node that then receives the credentials
-// placed on it, so an agent never enrolls one.
-var agentCeilingActions = []string{"reveal", "use", "enroll"}
+// its roles (#1179): each puts a credential's plaintext in the caller's hands,
+// and an agent's hands are a model's context. reveal (and the copy gated by it)
+// returns a secret's plaintext; enroll mints a node's enrollment token, itself
+// a credential. Everything else the person may do, their agent may do (#2047):
+// secret:bind hands a credential to a target without showing it, so an agent
+// binds what its person may bind, audited as the agent's and approved on the
+// client, and drives a device without ever learning what reaches it.
+var agentCeilingActions = []string{"reveal", "enroll"}
 
 // ceilingChannels are the channels whose every request is an agent's, whatever
 // the credential: a tool call on the MCP server is made by the model the person

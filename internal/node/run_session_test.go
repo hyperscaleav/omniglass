@@ -93,7 +93,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach newtron-panel-nvp: %v", err)
@@ -269,7 +269,7 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach newtron-panel-nvp: %v", err)
@@ -548,7 +548,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 			Driver: &drv, Component: &comp, Node: &nodeName,
 			Inputs:     map[string]string{"host": ip, "port": fmt.Sprint(port)},
-			SecretRead: all, CanAdmin: true,
+			SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all)
 		if err != nil {
 			t.Fatalf("attach newtron-panel-nvp to %s: %v", comp, err)

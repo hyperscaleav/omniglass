@@ -29,7 +29,7 @@ func (s *gateStack) attachSNMP(comp, nodeName, ip string, port int, community st
 	s.t.Helper()
 	drv := "snmp-generic"
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs: map[string]string{"host": ip, "port": fmt.Sprint(port), "community": community}, SecretRead: s.all, CanAdmin: true}, s.all)
+		Inputs: map[string]string{"host": ip, "port": fmt.Sprint(port), "community": community}, SecretRead: s.all, SecretBind: s.all, CanAdmin: true}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach snmp-generic to %s: %v", comp, err)
 	}

@@ -475,7 +475,7 @@ type Gateway interface {
 	DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Finding, error)
 	// PlanDriverPreview plans a preview: the tasks a node runs to read a
 	// spec's polls once against a target, secrets unsealed only where the
-	// caller may reveal them, the asking audited (#1163).
+	// caller may bind them (#2047), the asking audited (#1163).
 	PlanDriverPreview(ctx context.Context, actorID string, in PreviewInput) (*PreviewPlan, error)
 	// PlanEndpointRun resolves an attached endpoint's poll for a run now,
 	// under the caller's read and run scopes, the asking audited (#1163).
@@ -1163,7 +1163,7 @@ type Gateway interface {
 	// sensitive: reads carry it for the API to mask, the reveal audits it.
 	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
 	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
-	// Binding a secret takes the caller's right to reveal it (SecretUse);
+	// Binding a secret takes the caller's right to bind it (SecretUse, secret:bind);
 	// binding a group or a person the principal directory's read (PeopleUse).
 	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse, people PeopleUse) (*NotificationTarget, error)
 	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
@@ -1178,7 +1178,7 @@ type Gateway interface {
 	// MailRelay reads the install's mail relay for a :test send (#1317).
 	MailRelay(ctx context.Context) (*MailRelay, string, error)
 	// MergePatchNotificationSettings patches the notification namespace,
-	// judging the mail relay's secret binding on the result (the reveal right).
+	// judging the mail relay's secret binding on the result (the bind right).
 	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
 	// The action rule (#618): reads registry-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)

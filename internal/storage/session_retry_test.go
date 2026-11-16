@@ -90,7 +90,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
 		Inputs:     map[string]string{"host": "10.20.4.41", "login": "panel-login"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)

@@ -162,7 +162,7 @@ func seedPlanSenders(ctx context.Context, gw storage.Gateway, actorID string, se
 		comp, drv := compIDs[s.Comp], s.Driver
 		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
 			Driver: &drv, Inputs: map[string]string{s.Input: s.Secret}, Label: "Room webhooks",
-			Component: &comp, SecretRead: all, CanAdmin: true,
+			Component: &comp, SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all); err != nil {
 			return 0, fmt.Errorf("devseed: create the webhook endpoint of %s: %w", s.Component, err)
 		}

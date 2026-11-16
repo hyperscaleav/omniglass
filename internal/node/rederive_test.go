@@ -93,7 +93,7 @@ func TestDriverFixReachesTheNextPoll(t *testing.T) {
 	comp, drv, nodeName := "panel-f", "panel-fix", "edge-f"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 	comp, drv, nodeName := "panel-s2", "panel-sched", "edge-s2"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ const closedUDPPort = 1
 func (s *gateStack) attachUDP(comp, nodeName string, inputs map[string]string) *storage.Endpoint {
 	s.t.Helper()
 	drv := "newtron-nvp-udp"
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all}, s.all)
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
 	}

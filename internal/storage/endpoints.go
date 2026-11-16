@@ -137,14 +137,15 @@ type EndpointSpec struct {
 	Inputs map[string]string
 	// OutOfBand marks the endpoint a management path (#1648).
 	OutOfBand bool
-	// SecretRead and CanAdmin fence the attach's secret-reference resolution to
-	// what the CALLER may read: a reference resolves only to a secret in this
-	// read scope, and an admin-sensitive one only with the admin tier. Without
-	// them a bare-name lookup would let an operator bind (and the worklist
-	// deliver) any tenant's credential; the API tier fills them from
-	// secret:read.
-	SecretRead scope.Set
-	CanAdmin   bool
+	// SecretRead, SecretBind and CanAdmin fence the attach's secret-reference
+	// resolution to what the CALLER may bind: a reference resolves only to a
+	// secret in the read scope (else it reads as absent), binds only one in the
+	// bind scope (else forbidden), and an admin-sensitive one only with the
+	// admin tier. Without them a bare-name lookup would let an operator bind
+	// (and the worklist deliver) any tenant's credential; the API tier fills
+	// them from secret:read and secret:bind (#2047).
+	SecretRead, SecretBind scope.Set
+	CanAdmin               bool
 }
 
 // EndpointPatch is the update input: nil fields unchanged. Type and component
@@ -167,11 +168,11 @@ type EndpointPatch struct {
 	Transport *string
 	// OutOfBand re-marks the endpoint a management path, or not (#1648).
 	OutOfBand *bool
-	// SecretRead and CanAdmin are the caller's secret scope and admin tier:
-	// an edit re-resolves every attached secret under them, so it cannot
-	// send a credential the caller could not use to a new address.
-	SecretRead scope.Set
-	CanAdmin   bool
+	// SecretRead, SecretBind and CanAdmin are the caller's secret scopes and
+	// admin tier: an edit re-resolves every attached secret under them, so it
+	// cannot send a credential the caller may not bind to a new address.
+	SecretRead, SecretBind scope.Set
+	CanAdmin               bool
 }
 
 // endpointCols is the bare select list (scan order), for the un-aliased
@@ -664,7 +665,7 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		}
 		stored[k] = v
 	}
-	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, patch.SecretRead, patch.CanAdmin)
+	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, SecretUse{Read: patch.SecretRead, Bind: patch.SecretBind, CanAdmin: patch.CanAdmin})
 	if err != nil {
 		if errors.Is(err, ErrAttachInvalid) {
 			return nil, nil, fmt.Errorf("%w: %s", ErrEndpointPatchInvalid, strings.TrimPrefix(err.Error(), ErrAttachInvalid.Error()+": "))

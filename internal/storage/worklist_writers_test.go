@@ -93,7 +93,7 @@ func newWritersFixture(t *testing.T) *writersFixture {
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 			Driver: &drv, Component: &comp, Node: &node,
 			Inputs:     map[string]string{"host": "10.20.4." + string(rune('1'+i)), "community": e.secret},
-			SecretRead: all, CanAdmin: true,
+			SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all); err != nil {
 			t.Fatalf("attach %s: %v", e.comp, err)
 		}

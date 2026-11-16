@@ -89,7 +89,7 @@ func TestNodeWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 			ref = "cred"
 		}
 		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-			Inputs: map[string]string{"host": "10.20.4.40", "community": ref}, SecretRead: all, CanAdmin: true}, all)
+			Inputs: map[string]string{"host": "10.20.4.40", "community": ref}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 		if err != nil {
 			t.Fatalf("attach %s: %v", comp, err)
 		}

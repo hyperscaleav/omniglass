@@ -206,14 +206,14 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "add-node-simulation-system",
 		Method:        http.MethodPost,
 		Path:          "/nodes/{name}/simulation/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated system",
 		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
-	}, "simulation", "update"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
+	}, "simulation", "update"), "secret", "bind"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
 		needs := [][2]string{{"system", "create"}, {"system", "update"}, {"system", "read"}, {"component", "create"}, {"component", "update"}, {"endpoint", "create"}, {"node", "read"}}
 		if in.Body.Location != nil && *in.Body.Location != "" {
 			needs = append(needs, [2]string{"location", "read"})
@@ -307,12 +307,12 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				}
 				spec.Components = append(spec.Components, storage.SimSystemComponent{Role: s.role, Product: s.product, Endpoints: simEndpointSpecs(addrs[i].Endpoints)})
 			}
-			secretRead, canAdmin := a.secretBind(ctx)
+			use := a.secretBind(ctx)
 			made, err := gw.CreateSimSystem(ctx, actorID(ctx), spec, storage.SimSystemScopes{
 				SystemCreate: a.scopeFor(ctx, "system", "create"), LocationRead: a.scopeFor(ctx, "location", "read"),
 				ComponentCreate: a.scopeFor(ctx, "component", "create"), SystemRead: a.scopeFor(ctx, "system", "read"),
 				SystemUpdate: a.scopeFor(ctx, "system", "update"), EndpointCreate: a.scopeFor(ctx, "endpoint", "create"),
-				SecretRead: secretRead, CanAdmin: canAdmin,
+				SecretRead: use.Read, SecretBind: use.Bind, CanAdmin: use.CanAdmin,
 				ComponentRead: a.scopeFor(ctx, "component", "read"), ComponentUpdate: a.scopeFor(ctx, "component", "update"),
 			})
 			if err != nil {

@@ -566,7 +566,7 @@ omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.display-1/http' identi
 
 Validate needs only `driver:read`. A preview (`driver:preview`) answers with the samples each poll
 extracted, each emit that did not locate, and an excerpt of the raw answer to write the next extractor
-against, masked of the secret it used; a secret input must be one you may reveal, since the preview
+against, masked of the secret it used; a secret input must be one you may bind (`secret:bind`), since the preview
 hands it to the target you name. A preview runs a poll that is its own request (http, https, snmp, a
 tcp line); a poll riding a held session (telnet, ssh, a websocket, a tls line, a login session) is
 attached first and run now (`endpoint:run`), which lands its samples and is refused, with the reason,

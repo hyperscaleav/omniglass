@@ -25,6 +25,7 @@ refs: [1179, 1162, 1175, 1166]
      fleet device) resolves its references under `secretBind`, which is the empty scope under the
      ceiling: until `secret:use` splits from `reveal` (#2047), a ceilinged caller binds, repoints
      and re-places no credential, and never holds `node:enroll`, while an unconstrained one binds what it may read, as before.
+     **Amended by [ADR-2047](#adr-2047-an-agent-may-do-what-its-person-may-except-take-a-credential-out-in-plaintext) (#2047):** binding is its own action, `secret:bind`, which the ceiling no longer strips; the ceiling is `reveal` and `enroll`, the operations whose output is a credential in plaintext.
   3. **Refused routes.** An agent-token caller gets a 403 from `authn`, before its body is read, on
      `create-auth-me-token`, `change-auth-me-password` and `impersonate-principal`, on every channel.
      This **amends** the ticket's "impersonation semantics unchanged": an impersonation token is not

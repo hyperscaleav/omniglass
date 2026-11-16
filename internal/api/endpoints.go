@@ -152,7 +152,7 @@ type updateEndpointInput struct {
 		Node      *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
 		Label     *string         `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
-		Inputs    inputScalars    `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"`
+		Inputs    inputScalars    `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it"`
 		Transport *string         `json:"transport,omitempty" doc:"The transport: a driver-attached endpoint takes only one its driver speaks"`
 		OutOfBand *bool           `json:"out_of_band,omitempty" doc:"Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone"`
 	}
@@ -224,19 +224,19 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return endpointWithWebhook(ctx, gw, it)
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-endpoint",
 		Extensions:    mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:        http.MethodPost,
 		Path:          "/endpoints",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an endpoint",
-		Description:   "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.",
-	}, "endpoint", "create"), func(ctx context.Context, in *createEndpointInput) (*endpointOutput, error) {
+		Description:   "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.",
+	}, "endpoint", "create"), "secret", "bind"), func(ctx context.Context, in *createEndpointInput) (*endpointOutput, error) {
 		if in.Body.Transport == "" && in.Body.Driver == nil {
 			return nil, huma.Error422UnprocessableEntity("set a transport (a bare probe endpoint) or a driver (an attach)")
 		}
-		secretRead, canAdmin := a.secretBind(ctx)
+		use := a.secretBind(ctx)
 		it, err := gw.CreateEndpoint(ctx, actorID(ctx), storage.EndpointSpec{
 			Transport: in.Body.Transport,
 			Label:     in.Body.Label,
@@ -247,12 +247,13 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Inputs:    in.Body.Inputs.strings(),
 			OutOfBand: in.Body.OutOfBand,
 			// An attach resolves its secret references under the caller's own
-			// secret read scope and admin tier, so it can only bind a secret the
-			// operator could themselves read (never another tenant's, never an
-			// admin-sensitive one without the tier), and never under the agent
-			// ceiling (#1179).
-			SecretRead: secretRead,
-			CanAdmin:   canAdmin,
+			// secret read scope and binds them under its secret:bind scope and
+			// admin tier, so it can only bind a secret the caller may itself
+			// bind (never another tenant's, never an admin-sensitive one without
+			// the tier, #2047).
+			SecretRead: use.Read,
+			SecretBind: use.Bind,
+			CanAdmin:   use.CanAdmin,
 		}, a.scopeFor(ctx, "endpoint", "create"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -260,15 +261,15 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return endpointWithWebhook(ctx, gw, it)
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID: "update-endpoint",
 		Extensions:  mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Update an endpoint",
-		Description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
-	}, "endpoint", "update"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
-		secretRead, canAdmin := a.secretBind(ctx)
+		Description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+	}, "endpoint", "update"), "secret", "bind"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
+		use := a.secretBind(ctx)
 		it, err := gw.UpdateEndpoint(ctx, actorID(ctx), in.Endpoint, storage.EndpointPatch{
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
@@ -277,10 +278,11 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Transport: in.Body.Transport,
 			OutOfBand: in.Body.OutOfBand,
 			// An edit re-resolves every attached secret under the caller's own
-			// secret scope and admin tier, as an attach does, so under the agent
-			// ceiling an edit cannot move a secret-bound endpoint's address.
-			SecretRead: secretRead,
-			CanAdmin:   canAdmin,
+			// secret scopes and admin tier, as an attach does, so an edit cannot
+			// move a secret-bound endpoint's address without secret:bind.
+			SecretRead: use.Read,
+			SecretBind: use.Bind,
+			CanAdmin:   use.CanAdmin,
 		}, a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "update"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -358,6 +360,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error404NotFound("endpoint not found")
 	case errors.Is(err, storage.ErrEndpointForbidden):
 		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden(strings.TrimPrefix(err.Error(), "storage: "))
 	case errors.Is(err, storage.ErrEndpointExists):
 		return huma.Error409Conflict("an endpoint of that transport already exists on this component")
 	case errors.Is(err, storage.ErrUnknownTransport):

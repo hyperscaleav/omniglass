@@ -36,6 +36,15 @@ func TestAgentCeilingCoversTheMCPChannel(t *testing.T) {
 	if !constrainPerms(owner, idx, nil, false).Allows("secret", "reveal") {
 		t.Error("an unceilinged owner reveals")
 	}
+	// The ceiling is plaintext-out only (#2047): an agent binds a credential
+	// it never reads, but never reveals one or mints a node's enrollment token.
+	ceilinged := constrainPerms(owner, idx, nil, true)
+	if !ceilinged.Allows("secret", "bind") {
+		t.Error("a ceilinged owner binds a secret it cannot read")
+	}
+	if ceilinged.Allows("node", "enroll") {
+		t.Error("a ceilinged owner must not mint an enrollment token")
+	}
 	viewerAgent := &storage.AgentCredential{Name: "bot", Roles: []string{"viewer"}}
 	got := constrainPerms(owner, idx, viewerAgent, true)
 	if got.Allows("location", "update") || !got.Allows("location", "read") {

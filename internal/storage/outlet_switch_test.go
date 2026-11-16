@@ -127,7 +127,7 @@ func attachFerritePDUAPI(t *testing.T, f *depFixture, pdu string) {
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &pdu, Node: &node,
 		Inputs:     map[string]string{"host": "10.20.9.20", "login": login},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach ferrite-pdu-api: %v", err)
 	}

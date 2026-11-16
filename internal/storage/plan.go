@@ -79,7 +79,7 @@ type PlanScopes struct {
 	LocationCreate, LocationRead                    scope.Set
 	SystemCreate, SystemRead, SystemUpdate          scope.Set
 	ComponentCreate, ComponentRead, ComponentUpdate scope.Set
-	EndpointCreate, SecretRead                      scope.Set
+	EndpointCreate, SecretRead, SecretBind          scope.Set
 	CanAdmin                                        bool
 	// CanCreateStandard says the caller holds standard:create, which creating a
 	// standard the plan needs requires; without it that create is ErrPlanStandardForbidden.
@@ -267,7 +267,7 @@ func (p *PG) createPlannedComponentTx(ctx context.Context, tx pgx.Tx, actorID st
 	}
 	for _, e := range pc.Endpoints {
 		id := c.ID
-		e.Component, e.SecretRead, e.CanAdmin = &id, sc.SecretRead, sc.CanAdmin
+		e.Component, e.SecretRead, e.SecretBind, e.CanAdmin = &id, sc.SecretRead, sc.SecretBind, sc.CanAdmin
 		if _, err := p.createEndpointTx(ctx, tx, actorID, e, sc.EndpointCreate); err != nil {
 			return nil, &PlanError{Stage: "endpoint", Role: pc.Role, Err: err}
 		}

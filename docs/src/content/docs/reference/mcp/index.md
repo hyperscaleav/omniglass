@@ -727,7 +727,7 @@ Binds a value for a key on a component. The key must exist and apply to this ent
 
 Start a component from a template
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
 
 - Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
@@ -735,7 +735,7 @@ Creates one component from a component template at a place: its product and the 
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read |
+| `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) |
 | `label` | string | no | The component's label |
 | `location` | string | no | The place the component sits in, by name or dotted path |
 | `name` | string | no | The component's name; minted as an unnamed create mints it when empty |
@@ -805,7 +805,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 
 Preview a driver spec's polls through a node
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
 
 - Route: `POST /api/v1/drivers:preview`
 - Gate: `driver:preview`
@@ -814,7 +814,7 @@ Runs a driver spec's polls once through the node named, against the target its i
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `driver` | string | no | A stored driver to preview, by name; or give spec |
-| `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target |
+| `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target |
 | `node` | string | yes | The node that runs the preview, by name: the one that reaches the target |
 | `polls` | array | no | The polls to run, by name; absent runs every poll |
 | `spec` | any | no | A driver spec to preview inline, unsaved; or give driver |
@@ -849,7 +849,7 @@ Lists the endpoints whose owning component the caller may read (the component ca
 
 Create an endpoint
 
-Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.
 
 - Route: `POST /api/v1/endpoints`
 - Gate: `endpoint:create`
@@ -884,7 +884,7 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 
 Update an endpoint
 
-Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
@@ -893,7 +893,7 @@ Patches an endpoint's node placement, params, label, out-of-band mark, or (drive
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
-| `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
+| `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it |
 | `label` | string | no | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `node` | string | no | Reassign the node placement, by name or id |
 | `out_of_band` | boolean | no | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |

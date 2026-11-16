@@ -88,7 +88,7 @@ func newStatusRig(t *testing.T, settle string) *statusRig {
 	}
 	name, drv, node := "switcher", "status-proto", "edge"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &name, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.60", "login": "switcher-login"}, SecretRead: all, CanAdmin: true}, all); err != nil {
+		Inputs: map[string]string{"host": "10.20.4.60", "login": "switcher-login"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
 	_, hash, prefix, err := auth.NewBearerToken()

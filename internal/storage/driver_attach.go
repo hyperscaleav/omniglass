@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"strconv"
 	"strings"
@@ -226,7 +225,7 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 		return nil, fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
 	}
 
-	effective, err := p.resolveInputs(ctx, q, d, sp, es.Inputs, es.SecretRead, es.CanAdmin)
+	effective, err := p.resolveInputs(ctx, q, d, sp, es.Inputs, SecretUse{Read: es.SecretRead, Bind: es.SecretBind, CanAdmin: es.CanAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -257,15 +256,15 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 // resolveInputs checks supplied inputs against a driver's declared ones and
 // returns the effective set (defaults baked): an undeclared input, a missing
 // required one, a number input that is not a number, or a secret reference
-// the caller cannot use (resolved under the caller's secret read scope and
-// admin tier) refuses with ErrAttachInvalid naming the input. The attach and
-// the in-place edit (#1061) share it.
-func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver.Spec, supplied map[string]string, secretRead scope.Set, canAdmin bool) (map[string]string, error) {
+// the caller cannot see (resolved under the caller's secret read scope and
+// admin tier) refuses with ErrAttachInvalid naming the input, and one it sees
+// but may not bind (#2047) with ErrSecretForbidden. The attach, the in-place
+// edit (#1061) and the preview share it.
+func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver.Spec, supplied map[string]string, use SecretUse) (map[string]string, error) {
 	es := struct {
-		Inputs     map[string]string
-		SecretRead scope.Set
-		CanAdmin   bool
-	}{supplied, secretRead, canAdmin}
+		Inputs map[string]string
+		SecretUse
+	}{supplied, use}
 	declared := map[string]driver.Input{}
 	for _, in := range sp.Inputs {
 		declared[in.Name] = in
@@ -327,6 +326,7 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
 		var visibleTypes []string
+		bindable := false
 		for rows.Next() {
 			var ownerKind, typeName string
 			var ownerID *string
@@ -338,13 +338,18 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			if adminSensitive && !es.CanAdmin {
 				continue
 			}
-			inScope, err := p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.SecretRead)
+			inScope, err := p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.Read)
 			if err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("storage: scope secret reference %q: %w", ref, err)
 			}
-			if inScope {
-				visibleTypes = append(visibleTypes, typeName)
+			if !inScope {
+				continue
+			}
+			visibleTypes = append(visibleTypes, typeName)
+			if bindable, err = p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.Bind); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scope secret reference %q: %w", ref, err)
 			}
 		}
 		rows.Close()
@@ -361,6 +366,10 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			return nil, fmt.Errorf("%w: input %q references secret %q, which names more than one secret you can use", ErrAttachInvalid, in.Name, ref)
 		case visibleTypes[0] != in.SecretType:
 			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, visibleTypes[0])
+		case !bindable:
+			// Seen but not bindable: binding hands the credential to the
+			// target the binding names, which is secret:bind's alone (#2047).
+			return nil, fmt.Errorf("%w: input %q references secret %q, and handing a secret to a target takes the right to bind it (secret:bind)", ErrSecretForbidden, in.Name, ref)
 		}
 	}
 

@@ -321,7 +321,7 @@ func TestADriverRenameRederivesItsTasks(t *testing.T) {
 	comp, name, node := "panel-n", "panel-proto", "edge-n"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &name, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.62"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.62"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("endpoint: %v", err)

@@ -161,36 +161,36 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		return &notificationTargetOutput{Body: toNotificationTargetBody(t, peopleUse(ctx, a))}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-notification-target",
 		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/notification-targets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a notification target",
-		Description:   "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
-	}, "notification_target", "create"), func(ctx context.Context, in *createNotificationTargetInput) (*notificationTargetOutput, error) {
+		Description:   "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+	}, "notification_target", "create"), "secret", "bind"), func(ctx context.Context, in *createNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.CreateNotificationTarget(ctx, actorID(ctx), storage.NotificationTargetSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Kind: in.Body.Kind, URL: in.Body.URL,
 			Secret: in.Body.Secret, PrincipalGroup: in.Body.Group, Principal: in.Body.Princ, Channels: in.Body.Chans, Addresses: in.Body.Addrs, Enabled: in.Body.Enabled,
-		}, a.scopeFor(ctx, "notification_target", "create"), secretUse(ctx, a), peopleUse(ctx, a))
+		}, a.scopeFor(ctx, "notification_target", "create"), a.secretBind(ctx), peopleUse(ctx, a))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
 		}
 		return &notificationTargetOutput{Body: toNotificationTargetBody(t, peopleUse(ctx, a))}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID: "update-notification-target",
 		Extensions:  plaintext(),
 		Method:      http.MethodPatch,
 		Path:        "/notification-targets/{name}",
 		Summary:     "Update a notification target",
-		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
-	}, "notification_target", "update"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
+		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+	}, "notification_target", "update"), "secret", "bind"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.UpdateNotificationTarget(ctx, actorID(ctx), in.Name, storage.NotificationTargetPatch{
 			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Channels: in.Body.Chans, Addresses: in.Body.Addrs, Enabled: in.Body.Enabled,
-		}, a.scopeFor(ctx, "notification_target", "update"), secretUse(ctx, a))
+		}, a.scopeFor(ctx, "notification_target", "update"), a.secretBind(ctx))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
 		}
@@ -256,13 +256,6 @@ func peopleUse(ctx context.Context, a *authenticator) storage.PeopleUse {
 	return storage.PeopleUse{Groups: a.canReadDirectory(ctx, "principal_group"), Principals: a.canReadDirectory(ctx, "principal")}
 }
 
-// secretUse is the caller's right over a secret it would bind: the reveal
-// route's own gate (secret:read and secret:reveal scopes, the admin tier for
-// an admin-sensitive one), since a bound secret is sent wherever the URL says.
-func secretUse(ctx context.Context, a *authenticator) storage.SecretUse {
-	return storage.SecretUse{Read: a.scopeFor(ctx, "secret", "read"), Reveal: a.scopeFor(ctx, "secret", "reveal"), CanAdmin: a.canSecretAdmin(ctx, "reveal")}
-}
-
 // testSend builds and sends a target's synthetic message.
 func testSend(ctx context.Context, gw storage.Gateway, ts *storage.TargetSend, eo egress.Options) egress.Result {
 	if ts.CredentialMissing {
@@ -314,7 +307,7 @@ func mapNotificationTargetErr(err error) error {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
-		return huma.Error403Forbidden("binding a secret to a target, or moving the URL of a target that binds one, takes the right to reveal that secret (secret:reveal)")
+		return huma.Error403Forbidden("binding a secret to a target, or moving the URL of a target that binds one, takes the right to bind that secret (secret:bind)")
 	case errors.Is(err, storage.ErrNotificationTargetInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: notification target is invalid: "))
 	}

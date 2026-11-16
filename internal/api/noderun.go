@@ -70,7 +70,7 @@ type previewDriverInput struct {
 		Node           string            `json:"node" doc:"The node that runs the preview, by name: the one that reaches the target" example:"edge-hq"`
 		Driver         string            `json:"driver,omitempty" doc:"A stored driver to preview, by name; or give spec"`
 		Spec           json.RawMessage   `json:"spec,omitempty" doc:"A driver spec to preview inline, unsaved; or give driver"`
-		Inputs         map[string]string `json:"inputs,omitempty" doc:"The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target"`
+		Inputs         map[string]string `json:"inputs,omitempty" doc:"The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target"`
 		Polls          []string          `json:"polls,omitempty" doc:"The polls to run, by name; absent runs every poll"`
 		TimeoutSeconds int               `json:"timeout_seconds,omitempty" minimum:"1" maximum:"30" doc:"How long the node may take for the whole preview (default 15, at most 30)"`
 	}
@@ -139,7 +139,7 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID: "preview-driver",
 		// A poll's request is whatever its spec says (a POST, any line), so a
 		// preview can change the component it reaches: not read-only, and
@@ -149,8 +149,8 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		Path:       "/drivers:preview",
 		Summary:    "Preview a driver spec's polls through a node",
 		Description: "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). " +
-			"A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
-	}, "driver", "preview"), func(ctx context.Context, in *previewDriverInput) (*previewDriverOutput, error) {
+			"A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+	}, "driver", "preview"), "secret", "bind"), func(ctx context.Context, in *previewDriverInput) (*previewDriverOutput, error) {
 		if runner == nil {
 			return nil, huma.Error503ServiceUnavailable("no bus is wired, so no node can run a preview")
 		}
@@ -167,9 +167,8 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		defer runs.release(principal)
 		plan, err := gw.PlanDriverPreview(ctx, principal, storage.PreviewInput{
 			Node: in.Body.Node, Driver: in.Body.Driver, Spec: in.Body.Spec, Inputs: in.Body.Inputs, Polls: in.Body.Polls,
-			NodeRead:     a.scopeFor(ctx, "node", "read"),
-			SecretReveal: a.scopeFor(ctx, "secret", "reveal"),
-			CanAdmin:     a.canSecretAdmin(ctx, "reveal"),
+			NodeRead: a.scopeFor(ctx, "node", "read"),
+			Secrets:  a.secretBind(ctx),
 		})
 		if err != nil {
 			return nil, mapNodeRunErr(err)
@@ -315,6 +314,8 @@ func mapNodeRunErr(err error) error {
 		return huma.Error504GatewayTimeout("the node did not answer within the run's budget")
 	case errors.Is(err, collection.ErrTaskNotOnWorklist):
 		return huma.Error409Conflict("the poll is not on its node's worklist (disabled, or moved); read the endpoint and retry")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden(strings.TrimPrefix(err.Error(), "storage: "))
 	case errors.Is(err, storage.ErrPreviewUnsupported), errors.Is(err, storage.ErrAttachInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: "))
 	case errors.Is(err, storage.ErrNoSuchPoll):

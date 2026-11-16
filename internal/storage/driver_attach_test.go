@@ -162,8 +162,8 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 		Driver:     &drv,
 		Component:  &comp,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
-		SecretRead: all,
-		CanAdmin:   true,
+		SecretRead: all, SecretBind: all,
+		CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
@@ -235,7 +235,7 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); !errors.Is(err, storage.ErrEndpointExists) {
 		t.Fatalf("second attach: err = %v, want ErrEndpointExists", err)
 	}
@@ -329,7 +329,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	attach := func(inputs map[string]string) error {
 		_, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 			Driver: &drv, Component: &comp, Inputs: inputs,
-			SecretRead: all, CanAdmin: true,
+			SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all)
 		return err
 	}
@@ -395,7 +395,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	_ = tr
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Transport: "tcp", Component: &comp, Inputs: map[string]string{"host": "h", "community": "lab-community"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); !errors.Is(err, storage.ErrAttachInvalid) {
 		t.Fatalf("driver+transport: err = %v, want ErrAttachInvalid", err)
 	}
@@ -442,7 +442,7 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -518,7 +518,7 @@ func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -884,7 +884,7 @@ func TestAttachScopesSecretReference(t *testing.T) {
 		_, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 			Driver: &drv, Component: &comp,
 			Inputs:     map[string]string{"host": "h", "community": ref},
-			SecretRead: secretRead, CanAdmin: canAdmin,
+			SecretRead: secretRead, SecretBind: secretRead, CanAdmin: canAdmin,
 		}, all)
 		return err
 	}
@@ -947,7 +947,7 @@ func TestUpdateEndpointRefusesDriverParams(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
