@@ -74,6 +74,11 @@
        "name": "link",
        "type": "string",
        "doc": "The component's page in the console; empty while notification.console_url is unset"
+      },
+      {
+       "name": "platform",
+       "type": "bool",
+       "doc": "Whether the component is one of Omniglass's own parts (a server's or a node's), a member of the reserved platform system"
       }
      ]
     }

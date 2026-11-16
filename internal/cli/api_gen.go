@@ -80,7 +80,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it for themselves (default false)")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
 				_ = cmd.MarkFlagRequired("targets")
-				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
+				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
 				return cmd
 			}()
 			return cmd
@@ -5461,12 +5461,13 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fPrincipal string
 				var fPrincipalGroup string
+				var fRole string
 				var fSecret string
 				var fUrl string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification target",
-					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition), one principal, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group or a role takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 					Example: "  omniglass notification-target create --kind kind --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5496,6 +5497,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("principal-group") {
 							body["principal_group"] = fPrincipalGroup
 						}
+						if cmd.Flags().Changed("role") {
+							body["role"] = fRole
+						}
 						if cmd.Flags().Changed("secret") {
 							body["secret"] = fSecret
 						}
@@ -5506,7 +5510,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fAddresses, "addresses", "", "An email target's recipient addresses")
-				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox, email")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group, person or role target's channels: inbox, email")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it (default true)")
 				cmd.Flags().StringVar(&fKind, "kind", "", "The target kind")
 				_ = cmd.MarkFlagRequired("kind")
@@ -5515,6 +5519,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fPrincipal, "principal", "", "A principal target's person, by username or uuid; binding one takes principal:read:admin")
 				cmd.Flags().StringVar(&fPrincipalGroup, "principal-group", "", "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin")
+				cmd.Flags().StringVar(&fRole, "role", "", "A role target's role, by name or uuid; binding one takes principal_group:read:admin, as a group does")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
 				cmd.Flags().StringVar(&fUrl, "url", "", "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
 				return cmd
@@ -5594,7 +5599,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "test <name>",
 					Short:   "Send a test notification to a target",
-					Long:    "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+					Long:    "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
 					Example: "  omniglass notification-target test <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

@@ -7,7 +7,8 @@ import { EMAIL_RE } from "./validate";
 // #1341): thin typed wrappers over /notification-targets plus the pure rules
 // the console's form judges a draft by. A target says WHERE a message about an
 // alarm goes: a webhook URL (masked on every read, revealed whole under an
-// audit row of its own), a shared mailbox, a group or one person. Every route
+// audit row of its own), a shared mailbox, a group, one person, or a role's
+// holders (#1987). Every route
 // is admin-only (notification_target:*, all-scope): a target is an egress
 // destination holding a credential.
 
@@ -17,6 +18,9 @@ export type TargetTest = TestNotificationTargetOutputBody;
 
 export const NOTIFICATION_TARGETS_KEY = ["notification_targets"] as const;
 
+// The kinds the create form offers. A role target (#1987) is read and edited
+// here but created through the API and the CLI for now (TODO(#2017): a role
+// picker in the create form).
 export const TARGET_KINDS: readonly TargetKind[] = ["webhook", "email", "principal_group", "principal"];
 export const PEOPLE_CHANNELS = ["inbox", "email"] as const;
 export type PeopleChannel = (typeof PEOPLE_CHANNELS)[number];
@@ -28,18 +32,19 @@ export const KIND_WORDS: Record<TargetKind, string> = {
   email: "Email",
   principal_group: "Group",
   principal: "Person",
+  role: "Role",
 };
 
 // testable says whether :test can reach a kind: a webhook or a mailbox takes a
 // synthetic message, while people are told only about alarms (the route
-// answers a group or person target with a 422).
+// answers a group, person or role target with a 422).
 export function testable(kind: TargetKind): boolean {
   return kind === "webhook" || kind === "email";
 }
 
 // destination is the one line a list row says about where a target sends:
-// the masked URL, the mailbox addresses, the group or the person (by name,
-// which a caller without the directory read is not shown).
+// the masked URL, the mailbox addresses, the group, the person (by name,
+// which a caller without the directory read is not shown) or the role.
 export function destination(t: NotificationTarget): string {
   switch (t.kind) {
     case "webhook":
@@ -50,6 +55,8 @@ export function destination(t: NotificationTarget): string {
       return t.principal_group ?? "";
     case "principal":
       return t.principal ?? "";
+    case "role":
+      return t.role ?? "";
   }
 }
 
@@ -137,6 +144,9 @@ export function targetDraftErrors(d: TargetDraft, editing = false): TargetDraftE
       if (!editing && !d.principal) out.principal = "Pick the person it tells.";
       if (d.channels.length === 0) out.channels = "Pick at least one way to tell them.";
       break;
+    case "role":
+      if (d.channels.length === 0) out.channels = "Pick at least one way to tell them.";
+      break;
   }
   return out;
 }
@@ -189,6 +199,7 @@ export function updateTargetBody(d: TargetDraft, was: NotificationTarget): Updat
     }
     case "principal_group":
     case "principal":
+    case "role":
       if (d.channels.join(",") !== (was.channels ?? []).join(",")) body.channels = d.channels;
       break;
   }

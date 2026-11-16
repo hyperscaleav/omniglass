@@ -427,6 +427,7 @@ telemetry: {
     id: uuid {constraint: primary_key}
     principal_group_id: uuid {constraint: foreign_key}
     principal_id: uuid {constraint: foreign_key}
+    role_id: uuid {constraint: foreign_key}
     secret_id: uuid {constraint: foreign_key}
   }
   notification_type: {
@@ -753,6 +754,7 @@ telemetry.notification.rule_id -> telemetry.action_rule.id
 telemetry.notification.target_id -> telemetry.notification_target.id
 telemetry.notification_target.principal_group_id -> identity.principal_group.id
 telemetry.notification_target.principal_id -> identity.principal.id
+telemetry.notification_target.role_id -> identity.role.id
 telemetry.notification_target.secret_id -> config.secret.id
 telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> fleet.component.id

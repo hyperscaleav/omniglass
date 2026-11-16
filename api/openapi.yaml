@@ -1777,7 +1777,7 @@ components:
             - array
             - "null"
         when:
-          description: A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column
+          description: A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column
           type: string
       required:
         - name
@@ -2652,7 +2652,7 @@ components:
             - array
             - "null"
         channels:
-          description: "A group or person target's channels: inbox, email"
+          description: "A group, person or role target's channels: inbox, email"
           items:
             type: string
           type:
@@ -2668,6 +2668,7 @@ components:
             - email
             - principal_group
             - principal
+            - role
           type: string
         label:
           description: A human label
@@ -2681,6 +2682,9 @@ components:
           type: string
         principal_group:
           description: A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin
+          type: string
+        role:
+          description: A role target's role, by name or uuid; binding one takes principal_group:read:admin, as a group does
           type: string
         secret:
           description: "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"
@@ -7196,7 +7200,7 @@ components:
             - bearer
           type: string
         channels:
-          description: "The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email)"
+          description: "The channels a group, person or role target delivers on: inbox (the console inbox) and email (each person's directory email)"
           items:
             type: string
           type:
@@ -7212,12 +7216,13 @@ components:
           description: The target's uuid, the stable form of name
           type: string
         kind:
-          description: "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"
+          description: "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read"
           enum:
             - webhook
             - email
             - principal_group
             - principal
+            - role
           type: string
         label:
           type: string
@@ -7234,6 +7239,12 @@ components:
           type: string
         principal_id:
           description: The person's uuid
+          type: string
+        role:
+          description: The role a role target reaches the holders of, by name
+          type: string
+        role_id:
+          description: The role's uuid
           type: string
         secret:
           description: The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned
@@ -19293,7 +19304,7 @@ paths:
       summary: List notification targets
       x-omniglass-permission: notification_target:read
     post:
-      description: "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
+      description: "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition), one principal, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group or a role takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
       operationId: create-notification-target
       requestBody:
         content:
@@ -19426,7 +19437,7 @@ paths:
       x-omniglass-permission: notification_target:reveal
   /notification-targets/{name}:test:
     post:
-      description: Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+      description: Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
       operationId: test-notification-target
       parameters:
         - description: The target's name or uuid

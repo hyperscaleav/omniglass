@@ -584,7 +584,8 @@ proves itself with. The kinds are a code-declared enum published through the API
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
 paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
 mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
-people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)).
+people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)),
+or everyone holding a `role` ([below](#role-targets-and-the-shipped-platform-routing)).
 Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
@@ -668,6 +669,46 @@ and to holders of `principal:read:admin`; everyone else reads it as withheld
 target takes `principal_group:read:admin` or `principal:read:admin` on top of
 `notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
+
+### Role targets, and the shipped platform routing
+
+A **`role`** target (#1987) reaches every person **holding a role**, directly or through a grant to one
+of their groups, on the channels it names. It is read at the transition exactly as a group's membership
+is: grant someone `admin` and the next alarm tells them, revoke it and the next one does not, with no
+group to keep in step. The match is on the role itself, whatever the grant's scope; a person holding it
+twice (directly and through a group, or through two groups) is told once, and the per-person scope check
+above still decides which alarms each holder hears about. Only active, unarchived humans are told.
+Binding one takes `principal_group:read:admin`, as a group does, since it names a set of people. A role a
+target names cannot be deleted from under it. Like a group, a role target takes no `:test`.
+
+```bash
+omniglass notification-target create --name site-admins --kind role \
+  --role admin --channels '["inbox","email"]'
+```
+
+**Platform alarms reach the admins by default.** The boot seed ships one target and one rule, so a fresh
+install tells somebody when Omniglass itself is unwell:
+
+- `platform-admins`, a `role` target naming `admin` on `inbox` and `email`;
+- `platform-alarms-to-admins`, an official action rule on `raised` and `cleared`, `when: platform`,
+  sending to `platform-admins`.
+
+`platform` is an [action-site binding](#the-action_rule-when-a-message-is-sent): true when the alarm's
+component is one of Omniglass's own parts, a member of the reserved
+[`platform` system](/guides/operator/platform-health/). The seed is authoritative on its own rows (each
+boot puts back the label, the description, `on`, `when`, the role and the channels) but leaves what an
+operator owns alone: **disabling the rule survives a restart**, and so do targets an operator adds to it.
+Deleting the shipped rule or target only lasts until the next boot, which seeds it again, so `enabled`
+is the way to silence it:
+
+```bash
+omniglass action-rule update platform-alarms-to-admins --enabled=false
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","ops-chat"]'
+```
+
+The email channel goes through the install's mail relay ([below](#email-a-shared-mailbox-and-a-persons-directory-email)).
+With no `mail_relay` set the inbox rows still deliver and each email row fails with the reason. A bootstrap
+user holds `owner`, not `admin`, so grant `admin` to the people who run the install.
 
 ### Email: a shared mailbox, and a person's directory email
 
@@ -756,7 +797,9 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
 
 `when` is the **action** site of the [expression engine](/architecture/expressions/): its bindings
 are the alarm facts above in snake_case (`component`, `place`, `severity`, `message`, `rule`, ...)
-plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
+plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above), and
+`platform`, true when the alarm is on one of Omniglass's own parts (the shipped
+[platform routing](#role-targets-and-the-shipped-platform-routing) is `when: platform`).
 **Acknowledgement never notifies**, and neither does a snooze: an operator act is not a condition
 edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's
 end announcing a still-raised condition again ([above](#snooze-a-fact-about-a-condition)). A clear is
@@ -988,11 +1031,12 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The target kind, a code-declared enum: webhook, email, principal_group or principal; a CHECK holds each kind to its own columns',
+    kind: 'The target kind, a code-declared enum: webhook, email, principal_group, principal or role; a CHECK holds each kind to its own columns',
     addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
     url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
     principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
     principal_id: 'The person a principal target reaches (ON DELETE RESTRICT)',
+    role_id: 'The role a role target reaches: every human holding it, directly or through a group grant, read at every transition (ON DELETE RESTRICT)',
     channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}

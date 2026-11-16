@@ -28,9 +28,10 @@ func TestTheActionSiteBindsEveryAlarmFact(t *testing.T) {
 			t.Errorf("the alarm fact %s has no %s binding at the action site", k, snake)
 		}
 	}
-	// The one binding beyond the facts is the severity's rank.
-	if len(bindings) != len(storage.AlarmFactKeys())+1 || !slices.Contains(bindings, "severity_rank") {
-		t.Errorf("action site bindings = %v, want the facts plus severity_rank", bindings)
+	// The two bindings beyond the facts are the severity's rank and whether
+	// the component is a platform one (#1987).
+	if len(bindings) != len(storage.AlarmFactKeys())+2 || !slices.Contains(bindings, "severity_rank") || !slices.Contains(bindings, "platform") {
+		t.Errorf("action site bindings = %v, want the facts plus severity_rank and platform", bindings)
 	}
 }
 

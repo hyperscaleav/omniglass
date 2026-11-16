@@ -291,6 +291,62 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 	return r, nil
 }
 
+// UpsertActionRule installs an official platform rule from the boot seed
+// (#1987), in the og namespace: authoritative on what it ships (label, description, transitions,
+// when, type) and on its shipped targets being linked, while enabled, the
+// opt-out allowance and any target an operator added are theirs, so a rule
+// they disabled stays disabled across restarts.
+func (p *PG) UpsertActionRule(ctx context.Context, spec ActionRuleSpec) error {
+	if err := ValidateName("action_rule", spec.Name); err != nil {
+		return fmt.Errorf("%w: %w", ErrActionRuleInvalid, err)
+	}
+	on, err := checkTransitions(spec.On)
+	if err != nil {
+		return err
+	}
+	if err := checkWhen(spec.When); err != nil {
+		return err
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert action rule: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	typeID, err := resolveRuleType(ctx, tx, spec.NotificationType)
+	if err != nil {
+		return err
+	}
+	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets)
+	if err != nil {
+		return err
+	}
+	var id string
+	// The shipped rule's own og row; an operator's rule of the same name is a
+	// different row (it shadows this one by the search path, #1432).
+	err = tx.QueryRow(ctx, `insert into action_rule (namespace, name, label, description, on_transitions, when_expr, notification_type_id, official, opt_out_allowed)
+		values ('og', $1, $2, $3, $4, $5, $6::uuid, true, $7)
+		on conflict (namespace, name) where owner_principal_id is null do update set label = excluded.label, description = excluded.description,
+			on_transitions = excluded.on_transitions, when_expr = excluded.when_expr,
+			notification_type_id = excluded.notification_type_id, official = true,
+			updated_at = case when (action_rule.label, action_rule.description, action_rule.on_transitions, action_rule.when_expr,
+					action_rule.notification_type_id, action_rule.official)
+				is distinct from (excluded.label, excluded.description, excluded.on_transitions, excluded.when_expr,
+					excluded.notification_type_id, true) then now() else action_rule.updated_at end
+		returning id::text`,
+		spec.Name, labelOrNull(spec.Label), spec.Description, on, spec.When, typeID, spec.OptOutAllowed).Scan(&id)
+	if err != nil {
+		return fmt.Errorf("storage: upsert action rule %q: %w", spec.Name, err)
+	}
+	if _, err := tx.Exec(ctx, `insert into action_rule_target (rule_id, target_id) select $1, unnest($2::uuid[])
+		on conflict do nothing`, id, targetIDs); err != nil {
+		return fmt.Errorf("storage: link action rule %q targets: %w", spec.Name, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit upsert action rule: %w", err)
+	}
+	return nil
+}
+
 // UpdateActionRule patches a rule, audited; an all-scope write.
 func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error) {
 	if !action.All {

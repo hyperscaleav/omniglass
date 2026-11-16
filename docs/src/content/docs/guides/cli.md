@@ -750,9 +750,22 @@ omniglass notification list --status failed                          # scoped by
 omniglass notification retry <id>                                     # notification:retry, an operator's
 omniglass notification-target create --name on-call-page --kind principal_group --principal-group on-call --channels '["inbox","email"]'
 omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
+omniglass notification-target create --name site-admins --kind role --role admin --channels '["inbox","email"]'  # whoever holds admin, read at each alarm
 omniglass auth me notification list --unread                          # your own inbox, scoped as you read now
 omniglass auth me notification markAllRead
 omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
+```
+
+A fresh install already routes its own alarms: the shipped `platform-alarms-to-admins` rule sends every
+alarm on the reserved `platform` system to the `platform-admins` target, a `role` target naming `admin`,
+in the inbox and by email ([role targets](/architecture/alarms-actions/#role-targets-and-the-shipped-platform-routing)).
+The boot seed puts its rows back on every start, so silence it with `enabled`, which a restart keeps;
+grant `admin` to the people who run the install (the bootstrap user holds `owner`).
+
+```sh
+omniglass action-rule get platform-alarms-to-admins | jq -c '{when, targets, enabled}'
+omniglass action-rule update platform-alarms-to-admins --enabled=false           # survives a restart
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","ops-chat"]'
 ```
 
 A noisy alarm's condition is snoozed from any alarm of it, for `1m` to `7d`: every notification about

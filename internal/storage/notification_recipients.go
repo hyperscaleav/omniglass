@@ -8,7 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
-// The queue-time recipient filter (#1341, ADR-1341): a group or person
+// The queue-time recipient filter (#1341, ADR-1341): a group, person or role
 // target is expanded to the people it names at the transition, and each
 // person is kept only when their own component read scope admits the alarm's
 // component, so nothing about an alarm reaches a person who could not read it.
@@ -24,7 +24,8 @@ type recipient struct {
 }
 
 // recipientsFor expands the person targets among targetIDs to the human,
-// active members they name today, keeping only those whose component read
+// active people they name today (a group's members, a role's holders by a
+// direct or a group grant, each once), keeping only those whose component read
 // scope admits componentID. The map is keyed by target uuid, each list in
 // username order.
 func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs []string) (map[string][]recipient, error) {
@@ -41,6 +42,15 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 		  join principal pr on pr.id = t.principal_id
 		  join human h on h.principal_id = pr.id
 		 where t.id = any($1::uuid[]) and t.kind = 'principal' and pr.active and pr.archived_at is null
+		union all
+		select t.id::text, pr.id::text, h.username, t.channels
+		  from notification_target t
+		  join principal pr on pr.active and pr.archived_at is null
+		  join human h on h.principal_id = pr.id
+		 where t.id = any($1::uuid[]) and t.kind = 'role'
+		   and (exists (select 1 from principal_grant g where g.role_id = t.role_id and g.principal_id = pr.id)
+		     or exists (select 1 from principal_grant g join principal_group_member m on m.group_id = g.group_id
+		                 where g.role_id = t.role_id and m.principal_id = pr.id))
 		order by 1, 3`, targetIDs)
 	if err != nil {
 		return nil, fmt.Errorf("storage: expand notification recipients: %w", err)

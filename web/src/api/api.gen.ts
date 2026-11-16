@@ -1367,7 +1367,7 @@ export type CreateActionRuleInputBody = {
      * @nullable
      */
   targets: string[] | null;
-  /** A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
+  /** A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
   when?: string;
 };
 
@@ -2085,6 +2085,7 @@ export const CreateNotificationTargetInputBodyKind = {
   email: 'email',
   principal_group: 'principal_group',
   principal: 'principal',
+  role: 'role',
 } as const;
 
 export type CreateNotificationTargetInputBody = {
@@ -2096,7 +2097,7 @@ export type CreateNotificationTargetInputBody = {
      */
   addresses?: string[] | null;
   /**
-     * A group or person target's channels: inbox, email
+     * A group, person or role target's channels: inbox, email
      * @nullable
      */
   channels?: string[] | null;
@@ -2115,6 +2116,8 @@ export type CreateNotificationTargetInputBody = {
   principal?: string;
   /** A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin */
   principal_group?: string;
+  /** A role target's role, by name or uuid; binding one takes principal_group:read:admin, as a group does */
+  role?: string;
   /** A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
   secret?: string;
   /** A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
@@ -4256,7 +4259,7 @@ export const NotificationTargetBodyAuth = {
 } as const;
 
 /**
- * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
+ * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read
  */
 export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof typeof NotificationTargetBodyKind];
 
@@ -4266,6 +4269,7 @@ export const NotificationTargetBodyKind = {
   email: 'email',
   principal_group: 'principal_group',
   principal: 'principal',
+  role: 'role',
 } as const;
 
 export type NotificationTargetBody = {
@@ -4279,7 +4283,7 @@ export type NotificationTargetBody = {
   /** How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned */
   auth: NotificationTargetBodyAuth;
   /**
-     * The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email)
+     * The channels a group, person or role target delivers on: inbox (the console inbox) and email (each person's directory email)
      * @nullable
      */
   channels?: string[] | null;
@@ -4288,7 +4292,7 @@ export type NotificationTargetBody = {
   enabled: boolean;
   /** The target's uuid, the stable form of name */
   id: string;
-  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read */
+  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read */
   kind: NotificationTargetBodyKind;
   label?: string;
   name: string;
@@ -4300,6 +4304,10 @@ export type NotificationTargetBody = {
   principal_group_id?: string;
   /** The person's uuid */
   principal_id?: string;
+  /** The role a role target reaches the holders of, by name */
+  role?: string;
+  /** The role's uuid */
+  role_id?: string;
   /** The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
   secret?: string;
   /** The bound secret's uuid, the stable form of secret */
@@ -18193,7 +18201,7 @@ export const getCreateNotificationTargetUrl = () => {
 }
 
 /**
- * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+ * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition), one principal, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group or a role takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
  * @summary Create a notification target
  */
 export const createNotificationTarget = async (createNotificationTargetInputBody: NonReadonly<CreateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTargetResponse> => {
@@ -18442,7 +18450,7 @@ export const getTestNotificationTargetUrl = (name: string,) => {
 }
 
 /**
- * Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+ * Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
  * @summary Send a test notification to a target
  */
 export const testNotificationTarget = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<testNotificationTargetResponse> => {

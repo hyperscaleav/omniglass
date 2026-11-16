@@ -369,7 +369,7 @@ func (p *PG) TestPersonalRule(ctx context.Context, ownerID, ref string, draft Ru
 			if err != nil {
 				return nil, err
 			}
-			in, err := actionInput(ctx, p.pool, facts)
+			in, err := actionInput(ctx, p.pool, a.componentID, facts)
 			if err != nil {
 				return nil, err
 			}

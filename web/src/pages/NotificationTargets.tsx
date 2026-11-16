@@ -67,6 +67,7 @@ export const TARGET_HINTS = {
   addresses: "The mailbox addresses it sends to, separated by commas or new lines, through the install's mail relay.",
   group: "Every human member, read at each alarm transition: add someone to the group and they are told next time.",
   person: "The one person it tells.",
+  role: "Every human holding the role, directly or through a group grant, read at each alarm transition: grant it and they are told next time.",
   channels: "Inbox puts an entry in each person's console inbox (the bell in the top bar). Email sends to each person's directory email.",
   enabled: "A disabled target is skipped: a rule sending to it queues nothing for it. It can still be tested.",
   test: "Sends one synthetic message (transition test, about no alarm) exactly as a delivery would be sent, and shows what the receiver answered. It records nothing but its audit row.",
@@ -299,6 +300,12 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
                     hint={t().kind === "principal" ? TARGET_HINTS.person : TARGET_HINTS.group}
                     value={<span class="font-data">{(t().kind === "principal" ? t().principal : t().principal_group) || "withheld"}</span>}
                   />
+                  <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
+                </div>
+              </Match>
+              <Match when={t().kind === "role"}>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <KVStacked label="Role" hint={TARGET_HINTS.role} value={<span class="font-data" data-testid="target-role">{t().role}</span>} />
                   <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
                 </div>
               </Match>
@@ -607,6 +614,10 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
               {shown("principal")}
             </div>
           </Show>
+          <ChannelBoxes />
+        </Match>
+        <Match when={kind() === "role"}>
+          <KVStacked label="Role" hint={TARGET_HINTS.role} mono value={p.target!.role} />
           <ChannelBoxes />
         </Match>
       </Switch>

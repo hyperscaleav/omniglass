@@ -1169,6 +1169,10 @@ func (UnimplementedGateway) ComponentEndpointNames(context.Context, string) ([]s
 func (UnimplementedGateway) UpsertNotificationType(context.Context, NotificationType) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertNotificationTarget(context.Context, NotificationTargetSpec) error {
+	return nil
+}
+func (UnimplementedGateway) UpsertActionRule(context.Context, ActionRuleSpec) error { return nil }
 func (UnimplementedGateway) ListNotificationTypes(context.Context) ([]NotificationType, error) {
 	return nil, nil
 }

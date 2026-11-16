@@ -43,7 +43,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
 | `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
-| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
 Example:
 
@@ -4287,18 +4287,19 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition), one principal, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group or a role takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--addresses` | string | (none) | An email target's recipient addresses |
-| `--channels` | string | (none) | A group or person target's channels: inbox, email |
+| `--channels` | string | (none) | A group, person or role target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
 | `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
 | `--principal` | string | (none) | A principal target's person, by username or uuid; binding one takes principal:read:admin |
 | `--principal-group` | string | (none) | A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin |
+| `--role` | string | (none) | A role target's role, by name or uuid; binding one takes principal_group:read:admin, as a group does |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
 | `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
 
@@ -4380,7 +4381,7 @@ Send a test notification to a target
 omniglass notification-target test <name>
 ```
 
-Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
 
 Example:
 

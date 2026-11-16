@@ -206,7 +206,7 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	if err != nil {
 		return fmt.Errorf("storage: notification facts for alarm %s: %w", alarmID, err)
 	}
-	in, err := actionInput(ctx, tx, facts)
+	in, err := actionInput(ctx, tx, componentID, facts)
 	if err != nil {
 		return err
 	}
@@ -385,7 +385,7 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 			continue
 		}
 		for _, p := range people[id] {
-			if r.targetKinds[i] == TargetPrincipalGroup && r.optedOut[p.id] {
+			if expandsToPeople(r.targetKinds[i]) && r.optedOut[p.id] {
 				continue
 			}
 			for _, ch := range p.channels {
@@ -494,14 +494,16 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 }
 
 // actionInput is the action site's input for a fact map: the facts in
-// snake_case, and the severity's rank.
-func actionInput(ctx context.Context, q querier, f sandbox.Data) (rules.ActionInput, error) {
+// snake_case, the severity's rank, and whether the component is one of
+// Omniglass's own (#1987).
+func actionInput(ctx context.Context, q querier, componentID string, f sandbox.Data) (rules.ActionInput, error) {
 	in := rules.ActionInput{
 		Component: f["Component"], ComponentLabel: f["ComponentLabel"], ComponentType: f["ComponentType"], Place: f["Place"],
 		Severity: f["Severity"], SeverityLabel: f["SeverityLabel"], Message: f["Message"], Transition: f["Transition"],
 		RaisedAt: f["RaisedAt"], ClearedAt: f["ClearedAt"], Rule: f["Rule"], Link: f["Link"],
 	}
-	err := q.QueryRow(ctx, `select coalesce((select rank from severity_level where name = $1), 0)`, in.Severity).Scan(&in.SeverityRank)
+	err := q.QueryRow(ctx, `select coalesce((select rank from severity_level where name = $1), 0), `+platformComponentExists("$2"),
+		in.Severity, componentID).Scan(&in.SeverityRank, &in.Platform)
 	if err != nil {
 		return in, fmt.Errorf("storage: severity rank: %w", err)
 	}

@@ -1,0 +1,25 @@
+# The shipped alarm routing (#1987): who is told about Omniglass's own alarms
+# by default. A role target reaches everyone holding the role, directly or
+# through a group grant, read at each alarm transition; each person is still
+# told only about alarms on components they can read. The seed is
+# authoritative on what it ships (a target's role and channels, a rule's on,
+# when and targets) on every boot, and leaves the enabled switch, and any
+# target an operator adds, to the operator: a disable survives a restart.
+notification_targets:
+  - name: platform-admins
+    label: Platform admins
+    kind: role
+    role: admin
+    channels: [inbox, email]
+
+action_rules:
+  - name: platform-alarms-to-admins
+    label: Platform alarms to admins
+    description: >-
+      Tells everyone holding admin when one of Omniglass's own parts (a
+      server or a node, the reserved platform system's members) raises or
+      clears an alarm, in the console inbox and by email. Email needs the
+      install's mail relay; without one the inbox still delivers.
+    on: [raised, cleared]
+    when: platform
+    targets: [platform-admins]

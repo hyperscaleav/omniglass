@@ -9,8 +9,10 @@ import (
 // The action site (#618): an action rule's `when`, a predicate over one
 // alarm transition's facts. Its bindings are the alarm fact map a
 // notification template reads (declared once in internal/storage, which a
-// test holds this struct to), in snake_case, plus the severity's rank so a
-// floor reads as a comparison (`severity_rank >= 40`, high and above).
+// test holds this struct to), in snake_case, plus two derived bindings: the
+// severity's rank so a floor reads as a comparison (`severity_rank >= 40`,
+// high and above), and whether the component is one of Omniglass's own
+// (`platform`, #1987), so a rule can route the platform's alarms.
 
 // ActionInput is the action site's prepared input: one alarm transition.
 type ActionInput struct {
@@ -27,6 +29,7 @@ type ActionInput struct {
 	ClearedAt      string `expr:"cleared_at" doc:"When it was cleared, RFC 3339 in UTC; empty while raised"`
 	Rule           string `expr:"rule" doc:"The event rule that raised it, by name; empty for an alarm an operator raised"`
 	Link           string `expr:"link" doc:"The component's page in the console; empty while notification.console_url is unset"`
+	Platform       bool   `expr:"platform" doc:"Whether the component is one of Omniglass's own parts (a server's or a node's), a member of the reserved platform system"`
 }
 
 // actionEnv is the action site's environment: the criteria builtins and

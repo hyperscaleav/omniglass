@@ -29,6 +29,11 @@ const onCall: NotificationTarget = {
   id: uuidFor("t-2"), name: "on-call-page", label: "On-call page", kind: "principal_group", auth: "none", principal_group: "on-call",
   channels: ["inbox", "email"], enabled: false, created_at: at, updated_at: at,
 };
+// The shipped target (#1987): whoever holds admin.
+const admins: NotificationTarget = {
+  id: uuidFor("t-3"), name: "platform-admins", label: "Platform admins", kind: "role", auth: "none", role: "admin", role_id: uuidFor("ro-1"),
+  channels: ["inbox", "email"], enabled: true, created_at: at, updated_at: at,
+};
 const pageOps: ActionRule = {
   id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised"], when: "", targets: ["ops-chat"], official: false,
   opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
@@ -45,10 +50,11 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...NOTIFICATION_TARGETS_KEY], [opsChat, onCall]);
+  qc.setQueryData([...NOTIFICATION_TARGETS_KEY], [opsChat, onCall, admins]);
   qc.setQueryData([...ACTION_RULES_KEY], [pageOps]);
   qc.setQueryData([...recentNotificationsKey({ target: "ops-chat" })], [sent]);
   qc.setQueryData([...recentNotificationsKey({ target: "on-call-page" })], []);
+  qc.setQueryData([...recentNotificationsKey({ target: "platform-admins" })], []);
   qc.setQueryData([...SECRETS_KEY], [signing]);
   qc.setQueryData([...GROUPS_KEY], [{ id: uuidFor("g-1"), name: "on-call", label: "On call" }]);
   window.history.pushState({}, "", "/notification-targets");
@@ -88,7 +94,7 @@ describe("NotificationTargets", () => {
     expect(screen.getByText("Ops chat")).toBeTruthy();
     expect(screen.getByText("https://chat.example.com/…")).toBeTruthy();
     expect(screen.getByText("Group")).toBeTruthy();
-    expect(screen.getByText("enabled")).toBeTruthy();
+    expect(screen.getAllByText("enabled")).toHaveLength(2);
     expect(screen.getByText("disabled")).toBeTruthy();
   });
 
@@ -143,6 +149,15 @@ describe("NotificationTargets", () => {
     const blade = await openBlade("On-call page");
     expect(within(blade).queryByTestId("target-test")).toBeNull();
     expect(within(blade).getByText("on-call")).toBeTruthy();
+  });
+
+  it("shows a role target's role and channels, and offers no test (#1987)", async () => {
+    stubFetch(refuse);
+    mount();
+    expect(screen.getByText("Role")).toBeTruthy();
+    const blade = await openBlade("Platform admins");
+    expect(within(blade).getByTestId("target-role").textContent).toBe("admin");
+    expect(within(blade).queryByTestId("target-test")).toBeNull();
   });
 
   it("disables a target from its blade footer", async () => {
