@@ -104,7 +104,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   const chips = createMemo<Chip[]>(() => parseChips(param("chips")));
 
   // The alarm text behind a red light, read only for the troubled systems on
-  // screen: those at a place the operator has opened, every location above it
+  // screen: those at a location the operator has opened, every location above it
   // open too, and none while the filter shows results instead of the tree.
   // Each read is shared with the system workspace's cache.
   const troubled = createMemo(() => {
@@ -178,7 +178,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     if (can(me.data, "component", "create")) kinds.push("component");
     return kinds;
   };
-  // New creates at the top of the fleet, or under the place a rooted
+  // New creates at the top of the fleet, or under the location a rooted
   // outline stands for, by the same rules as that row's +.
   const newKinds = (): AddKind[] => {
     const r = root();
@@ -332,7 +332,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
 }
 
 // A filter result opens what its tree row would: a location holding one system
-// opens that system, any other place the location, a component itself.
+// opens that system, any other the location, a component itself.
 function findLocation(roots: LocationNode[], id: string): LocationNode | undefined {
   for (const r of roots) {
     if (r.id === id) return r;

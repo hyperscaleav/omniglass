@@ -103,7 +103,7 @@ export default function Outline(props: {
   // The active alarm behind a component's light, when the caller has read one.
   issueOf?: (componentId: string) => string | undefined;
 }) {
-  // What the row's + offers: a section per place the row stands for. A folded
+  // What the row's + offers: a section per location the row stands for. A folded
   // row is several locations, and the outer ones must stay reachable, or a campus
   // of one building could never gain a second.
   const addTargets = (n: LocationNode): AddTarget[] =>
@@ -155,7 +155,7 @@ export default function Outline(props: {
   // one system holds no components yet has nothing beneath it.
   const expandable = (r: Row) =>
     r.kind === "location" && (r.node.children.length > 0 || r.node.groups.some((g) => g.components.length > 0 || (grouped(r.node) && g.system !== null)));
-  // What a selection names: a location row answers to every place a fold joined
+  // What a selection names: a location row answers to every location a fold joined
   // into it, and to the system it wears; a header or a component to its own.
   const answersTo = (r: Row, id: string) =>
     r.kind === "location"
