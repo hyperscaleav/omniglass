@@ -5567,6 +5567,8 @@ export type OauthClientOutputBody = {
   /** The name the client registered under; its token acts as this agent */
   client_name: string;
   id: string;
+  /** The host serving the client's metadata document, when the client is named by one (#2074): the one part of its identity it cannot choose */
+  metadata_host?: string;
   /**
      * The exact URIs a code may be sent back to
      * @nullable

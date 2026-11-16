@@ -15,13 +15,26 @@ import (
 // token linked to it. The protocol checks (PKCE, redirect match, expiry) are
 // the API's; this lane stores and consumes what it is given.
 
-// OAuthClient is a client that registered itself: the name it declared and
-// the exact redirect URIs a code may be sent to.
+// OAuthClient is a client that registered itself, or one named by its client
+// id metadata document (#2074): the name it declared and the exact redirect
+// URIs a code may be sent to. MetadataURL is the document's URL, empty for a
+// registered client, and FetchedAt when the document was last read.
 type OAuthClient struct {
 	ID           string
 	Name         string
 	RedirectURIs []string
+	MetadataURL  string
+	FetchedAt    time.Time
 	CreatedAt    time.Time
+}
+
+// oauthClientCols selects an OAuthClient; scanOAuthClient reads it.
+const oauthClientCols = `id, client_name, redirect_uris, coalesce(metadata_url, ''), coalesce(fetched_at, created_at), created_at`
+
+func scanOAuthClient(row pgx.Row) (OAuthClient, error) {
+	var c OAuthClient
+	err := row.Scan(&c.ID, &c.Name, &c.RedirectURIs, &c.MetadataURL, &c.FetchedAt, &c.CreatedAt)
+	return c, err
 }
 
 // OAuthCode is an authorization code between consent and exchange. Only its
@@ -95,7 +108,7 @@ func (p *PG) RegisterOAuthClient(ctx context.Context, name string, redirectURIs 
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 		delete from oauth_client c
-		where c.created_at < now() - $1::interval
+		where coalesce(c.fetched_at, c.created_at) < now() - $1::interval
 			and not exists (select 1 from credential where oauth_client_id = c.id)
 			and not exists (select 1 from oauth_code where client_id = c.id and expires_at > now())`,
 		oauthClientStale.String()); err != nil {
@@ -116,10 +129,7 @@ func (p *PG) RegisterOAuthClient(ctx context.Context, name string, redirectURIs 
 // GetOAuthClient returns a registered client, false when there is none (a
 // malformed id included).
 func (p *PG) GetOAuthClient(ctx context.Context, id string) (OAuthClient, bool, error) {
-	var c OAuthClient
-	err := p.pool.QueryRow(ctx,
-		`select id, client_name, redirect_uris, created_at from oauth_client where id = $1`, id).
-		Scan(&c.ID, &c.Name, &c.RedirectURIs, &c.CreatedAt)
+	c, err := scanOAuthClient(p.pool.QueryRow(ctx, `select `+oauthClientCols+` from oauth_client where id = $1`, id))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows), isInvalidText(err):
 		return OAuthClient{}, false, nil
@@ -127,6 +137,35 @@ func (p *PG) GetOAuthClient(ctx context.Context, id string) (OAuthClient, bool, 
 		return OAuthClient{}, false, fmt.Errorf("storage: get oauth client: %w", err)
 	}
 	return c, true, nil
+}
+
+// GetOAuthClientByURL returns the client a metadata document URL names, false
+// when its document has not been read.
+func (p *PG) GetOAuthClientByURL(ctx context.Context, metadataURL string) (OAuthClient, bool, error) {
+	c, err := scanOAuthClient(p.pool.QueryRow(ctx, `select `+oauthClientCols+` from oauth_client where metadata_url = $1`, metadataURL))
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return OAuthClient{}, false, nil
+	case err != nil:
+		return OAuthClient{}, false, fmt.Errorf("storage: get oauth client by url: %w", err)
+	}
+	return c, true, nil
+}
+
+// UpsertOAuthMetadataClient stores what a client's metadata document says,
+// keyed by its URL: the first read creates the client, a later one replaces
+// its name and redirect URIs and marks it fetched now. Its id is stable, so
+// its codes and tokens stay linked across reads.
+func (p *PG) UpsertOAuthMetadataClient(ctx context.Context, metadataURL, name string, redirectURIs []string) (OAuthClient, error) {
+	c, err := scanOAuthClient(p.pool.QueryRow(ctx, `
+		insert into oauth_client (client_name, redirect_uris, metadata_url, fetched_at) values ($1, $2, $3, now())
+		on conflict (metadata_url) where metadata_url is not null
+			do update set client_name = excluded.client_name, redirect_uris = excluded.redirect_uris, fetched_at = now()
+		returning `+oauthClientCols, name, redirectURIs, metadataURL))
+	if err != nil {
+		return OAuthClient{}, fmt.Errorf("storage: upsert oauth metadata client: %w", err)
+	}
+	return c, nil
 }
 
 // CreateOAuthCode stores a code a person's consent produced, sweeping the

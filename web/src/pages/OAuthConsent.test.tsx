@@ -12,10 +12,18 @@ import { consentRequest, redirectHost } from "../lib/oauth";
 const REQ =
   "/oauth/authorize?client_id=c-1&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcb&code_challenge=abc&code_challenge_method=S256&state=s-1&resource=http%3A%2F%2Flocalhost%2Fmcp";
 
-const CLIENT = { id: "c-1", client_name: "Claude Code", redirect_uris: ["http://127.0.0.1:5173/cb"], roles: ["auditor", "operator"] };
+const CLIENT = {
+  id: "c-1",
+  client_name: "Claude Code",
+  redirect_uris: ["http://127.0.0.1:5173/cb"],
+  roles: ["auditor", "operator"],
+};
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function mount() {
@@ -40,19 +48,30 @@ function stub(path: string, client: unknown = CLIENT, clientStatus = 200) {
     if (req.url.includes(":authorize")) {
       const body = await req.json();
       posted.push(body);
-      const v = body.approved ? "code=k&iss=x&state=s-1" : "error=access_denied&iss=x&state=s-1";
+      const v = body.approved
+        ? "code=k&iss=x&state=s-1"
+        : "error=access_denied&iss=x&state=s-1";
       return json({ redirect_to: `http://127.0.0.1:5173/cb?${v}` });
     }
     return json(client, clientStatus);
   });
   const assign = vi.fn();
-  vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, assign } as Location);
+  vi.spyOn(window, "location", "get").mockReturnValue({
+    ...window.location,
+    assign,
+  } as Location);
   return { posted, assign };
 }
 
 describe("consentRequest", () => {
   it("reads the forwarded request and refuses one missing a field or not S256", () => {
-    const q = { client_id: "c", redirect_uri: "http://127.0.0.1/cb", code_challenge: "x", code_challenge_method: "S256", resource: "r" };
+    const q = {
+      client_id: "c",
+      redirect_uri: "http://127.0.0.1/cb",
+      code_challenge: "x",
+      code_challenge_method: "S256",
+      resource: "r",
+    };
     expect(consentRequest(q)).toEqual({ ...q, state: "" });
     expect(consentRequest({ ...q, client_id: undefined })).toBeNull();
     expect(consentRequest({ ...q, code_challenge_method: "plain" })).toBeNull();
@@ -73,12 +92,18 @@ describe("OAuth consent page", () => {
     mount();
     expect(await screen.findByText("Connect Claude Code")).toBeTruthy();
     expect(screen.getByText("127.0.0.1:5173")).toBeTruthy();
-    const approve = screen.getByRole("button", { name: /Approve/ }) as HTMLButtonElement;
+    const approve = screen.getByRole("button", {
+      name: /Approve/,
+    }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "operator" }));
     expect(approve.disabled).toBe(false);
     fireEvent.click(approve);
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("http://127.0.0.1:5173/cb?code=k&iss=x&state=s-1"));
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        "http://127.0.0.1:5173/cb?code=k&iss=x&state=s-1",
+      ),
+    );
     expect(posted[0]).toMatchObject({
       approved: true,
       roles: ["operator"],
@@ -90,11 +115,30 @@ describe("OAuth consent page", () => {
     });
   });
 
+  it("names the host serving a metadata document client, and no host for a registered one", async () => {
+    stub(REQ, { ...CLIENT, metadata_host: "client.example" });
+    const { unmount } = mount();
+    expect(await screen.findByText("client.example")).toBeTruthy();
+    expect(screen.getByTestId("metadata-host").textContent).toContain(
+      "served from client.example",
+    );
+    unmount();
+    vi.restoreAllMocks();
+    stub(REQ);
+    mount();
+    expect(await screen.findByText("Connect Claude Code")).toBeTruthy();
+    expect(screen.queryByTestId("metadata-host")).toBeNull();
+  });
+
   it("denies with no roles and sends access_denied back", async () => {
     const { posted, assign } = stub(REQ);
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Deny/ }));
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("http://127.0.0.1:5173/cb?error=access_denied&iss=x&state=s-1"));
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        "http://127.0.0.1:5173/cb?error=access_denied&iss=x&state=s-1",
+      ),
+    );
     expect(posted[0]).toMatchObject({ approved: false, roles: [] });
   });
 
@@ -102,7 +146,9 @@ describe("OAuth consent page", () => {
     window.history.pushState({}, "", "/oauth/authorize?client_id=c-1");
     const spy = vi.spyOn(globalThis, "fetch");
     mount();
-    expect(await screen.findByText(/This sign-in request is incomplete/)).toBeTruthy();
+    expect(
+      await screen.findByText(/This sign-in request is incomplete/),
+    ).toBeTruthy();
     expect(spy).not.toHaveBeenCalled();
   });
 

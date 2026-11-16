@@ -1666,6 +1666,22 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "metadata_url",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "fetched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "uniques": [
+     {
+      "name": "oauth_client_metadata_url_idx",
+      "definition": "CREATE UNIQUE INDEX oauth_client_metadata_url_idx ON public.oauth_client USING btree (metadata_url) WHERE (metadata_url IS NOT NULL)"
      }
     ]
    },

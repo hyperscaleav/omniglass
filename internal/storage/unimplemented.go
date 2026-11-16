@@ -182,6 +182,12 @@ func (UnimplementedGateway) RegisterOAuthClient(context.Context, string, []strin
 func (UnimplementedGateway) GetOAuthClient(context.Context, string) (OAuthClient, bool, error) {
 	return OAuthClient{}, false, nil
 }
+func (UnimplementedGateway) GetOAuthClientByURL(context.Context, string) (OAuthClient, bool, error) {
+	return OAuthClient{}, false, nil
+}
+func (UnimplementedGateway) UpsertOAuthMetadataClient(context.Context, string, string, []string) (OAuthClient, error) {
+	return OAuthClient{}, nil
+}
 func (UnimplementedGateway) CreateOAuthCode(context.Context, OAuthCode) error { return nil }
 func (UnimplementedGateway) ConsumeOAuthCode(context.Context, []byte) (OAuthCode, bool, error) {
 	return OAuthCode{}, false, nil

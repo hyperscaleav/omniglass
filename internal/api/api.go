@@ -210,7 +210,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 
 	// OAuth 2.1 sign-in for MCP clients (#2048, ADR-2048): the metadata,
 	// registration, authorization and token endpoints, at the root beside /mcp.
-	mountOAuth(r, gw, o.trustedProxies)
+	mountOAuth(r, gw, o.trustedProxies, o.egressOpts)
 
 	return r
 }

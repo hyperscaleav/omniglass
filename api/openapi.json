@@ -10013,6 +10013,10 @@
           "id": {
             "type": "string"
           },
+          "metadata_host": {
+            "description": "The host serving the client's metadata document, when the client is named by one (#2074): the one part of its identity it cannot choose",
+            "type": "string"
+          },
           "redirect_uris": {
             "description": "The exact URIs a code may be sent back to",
             "items": {

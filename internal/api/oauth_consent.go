@@ -26,6 +26,7 @@ type oauthClientOutput struct {
 		ID           string   `json:"id"`
 		ClientName   string   `json:"client_name" doc:"The name the client registered under; its token acts as this agent"`
 		RedirectURIs []string `json:"redirect_uris" doc:"The exact URIs a code may be sent back to"`
+		MetadataHost string   `json:"metadata_host,omitempty" doc:"The host serving the client's metadata document, when the client is named by one (#2074): the one part of its identity it cannot choose"`
 		Roles        []string `json:"roles" doc:"The roles you may approve for the client: every role whose capabilities you hold"`
 	}
 }
@@ -111,6 +112,9 @@ func (a *authenticator) getOAuthClientHandler(ctx context.Context, in *oauthClie
 	}
 	out := &oauthClientOutput{}
 	out.Body.ID, out.Body.ClientName, out.Body.RedirectURIs, out.Body.Roles = c.ID, c.Name, c.RedirectURIs, roles
+	if u, err := url.Parse(c.MetadataURL); err == nil && c.MetadataURL != "" {
+		out.Body.MetadataHost = u.Host
+	}
 	return out, nil
 }
 

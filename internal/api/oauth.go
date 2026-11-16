@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -169,12 +172,13 @@ func redirectWith(redirectURI string, params url.Values) string {
 type oauthEndpoints struct {
 	gw    storage.Gateway
 	trust clientaddr.Trust
+	eo    egress.Options
 }
 
 // mountOAuth puts the metadata, registration, authorization and token
 // endpoints on the root router.
-func mountOAuth(r chi.Router, gw storage.Gateway, trust clientaddr.Trust) {
-	e := &oauthEndpoints{gw: gw, trust: trust}
+func mountOAuth(r chi.Router, gw storage.Gateway, trust clientaddr.Trust, eo egress.Options) {
+	e := &oauthEndpoints{gw: gw, trust: trust, eo: eo}
 	r.Get("/.well-known/oauth-protected-resource", cors(e.resourceMetadata))
 	r.Get("/.well-known/oauth-protected-resource/mcp", cors(e.resourceMetadata))
 	r.Get("/.well-known/oauth-authorization-server", cors(e.serverMetadata))
@@ -233,47 +237,58 @@ func (e *oauthEndpoints) serverMetadata(w http.ResponseWriter, r *http.Request) 
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
 		"authorization_response_iss_parameter_supported": true,
+		"client_id_metadata_document_supported":          true,
 	})
+}
+
+// clientMetadata is what a client says about itself, posted to register or
+// served from its metadata document URL.
+type clientMetadata struct {
+	ClientID                string   `json:"client_id"`
+	ClientName              string   `json:"client_name"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	GrantTypes              []string `json:"grant_types"`
+	ResponseTypes           []string `json:"response_types"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+}
+
+// check holds a client's metadata to what this server supports, returning
+// the OAuth error code and description of the first fault, or "" for none.
+func (m clientMetadata) check() (string, string) {
+	if len(m.RedirectURIs) == 0 || len(m.RedirectURIs) > oauthMaxRedirects {
+		return "invalid_redirect_uri", "register between 1 and 10 redirect URIs"
+	}
+	for _, u := range m.RedirectURIs {
+		if !validRedirectURI(u) {
+			return "invalid_redirect_uri", "a redirect URI must be https, or http on a loopback host: " + u
+		}
+	}
+	for _, g := range m.GrantTypes {
+		if g != "authorization_code" && g != "refresh_token" {
+			return "invalid_client_metadata", "only the authorization_code and refresh_token grants are supported"
+		}
+	}
+	for _, t := range m.ResponseTypes {
+		if t != "code" {
+			return "invalid_client_metadata", "only the code response type is supported"
+		}
+	}
+	if a := m.TokenEndpointAuthMethod; a != "" && a != "none" {
+		return "invalid_client_metadata", "clients are public: token_endpoint_auth_method is none"
+	}
+	return "", ""
 }
 
 // register is dynamic client registration (RFC 7591). Every client is public
 // (no secret): it proves itself at the exchange with its PKCE verifier.
 func (e *oauthEndpoints) register(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		ClientName              string   `json:"client_name"`
-		RedirectURIs            []string `json:"redirect_uris"`
-		GrantTypes              []string `json:"grant_types"`
-		ResponseTypes           []string `json:"response_types"`
-		TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
-	}
+	var in clientMetadata
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil {
 		oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "the body is not a JSON client registration")
 		return
 	}
-	if len(in.RedirectURIs) == 0 || len(in.RedirectURIs) > oauthMaxRedirects {
-		oauthError(w, http.StatusBadRequest, "invalid_redirect_uri", "register between 1 and 10 redirect URIs")
-		return
-	}
-	for _, u := range in.RedirectURIs {
-		if !validRedirectURI(u) {
-			oauthError(w, http.StatusBadRequest, "invalid_redirect_uri", "a redirect URI must be https, or http on a loopback host: "+u)
-			return
-		}
-	}
-	for _, g := range in.GrantTypes {
-		if g != "authorization_code" && g != "refresh_token" {
-			oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "only the authorization_code and refresh_token grants are supported")
-			return
-		}
-	}
-	for _, t := range in.ResponseTypes {
-		if t != "code" {
-			oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "only the code response type is supported")
-			return
-		}
-	}
-	if m := in.TokenEndpointAuthMethod; m != "" && m != "none" {
-		oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "clients are public: token_endpoint_auth_method is none")
+	if code, desc := in.check(); code != "" {
+		oauthError(w, http.StatusBadRequest, code, desc)
 		return
 	}
 	c, err := e.gw.RegisterOAuthClient(r.Context(), clientAgentName(in.ClientName), in.RedirectURIs)
@@ -292,13 +307,58 @@ func (e *oauthEndpoints) register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// isMetadataClientID reports whether a client_id is a client ID metadata
+// document URL: https, a path past the root, no credentials, no fragment, and
+// no dot segment, so the URL names one document the way it is written.
+func isMetadataClientID(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || strings.Contains(raw, "#") {
+		return false
+	}
+	if u.Path == "" || u.Path == "/" {
+		return false
+	}
+	for _, seg := range strings.Split(u.Path, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// parseClientMetadata reads the document served at clientID: it must name
+// clientID as its own client_id, so a document copied to another URL is not
+// that client, and pass the same checks a registration does.
+func parseClientMetadata(clientID string, body []byte) (clientMetadata, error) {
+	var m clientMetadata
+	if err := json.Unmarshal(body, &m); err != nil {
+		return m, errors.New("the client metadata document is not JSON")
+	}
+	if m.ClientID != clientID {
+		return m, errors.New("the client metadata document names another client_id")
+	}
+	if code, desc := m.check(); code != "" {
+		return m, errors.New(desc)
+	}
+	return m, nil
+}
+
 // authorize checks a request and sends the person to the console to consent.
 // A request with an unknown client or an unregistered redirect URI is never
 // redirected (RFC 6749 section 4.1.2.1): the URI cannot be trusted. Any other
 // fault goes back to the client as an error on its redirect.
 func (e *oauthEndpoints) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	c, found, err := e.gw.GetOAuthClient(r.Context(), q.Get("client_id"))
+	var (
+		c     storage.OAuthClient
+		found bool
+		err   error
+	)
+	if isMetadataClientID(q.Get("client_id")) {
+		c, found, err = e.metadataClient(r.Context(), q.Get("client_id"))
+	} else {
+		c, found, err = e.gw.GetOAuthClient(r.Context(), q.Get("client_id"))
+	}
 	if err != nil {
 		http.Error(w, "authorization failed", http.StatusInternalServerError)
 		return
@@ -344,15 +404,110 @@ func (e *oauthEndpoints) authorize(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, oauthConsentPath+"?"+next.Encode(), http.StatusFound)
 }
 
+// oauthMetadataFresh is how long a client's metadata document is trusted
+// before authorize reads it again.
+const oauthMetadataFresh = 10 * time.Minute
+
+// oauthMetadataLimit bounds a client metadata document.
+const oauthMetadataLimit = 5 << 10
+
+// metadataClient resolves a metadata document client_id at authorize: the
+// stored client while its document is fresh, else the document read again
+// through the egress contract, checked against its URL, and stored. A
+// document that cannot be read or does not hold is no client (false), even
+// when an older read is stored: what the URL serves now is what it says.
+func (e *oauthEndpoints) metadataClient(ctx context.Context, clientID string) (storage.OAuthClient, bool, error) {
+	c, found, err := e.gw.GetOAuthClientByURL(ctx, clientID)
+	if err != nil {
+		return storage.OAuthClient{}, false, err
+	}
+	if found && time.Since(c.FetchedAt) < oauthMetadataFresh {
+		return c, true, nil
+	}
+	pol, err := e.gw.EgressPolicy(ctx)
+	if err != nil {
+		return storage.OAuthClient{}, false, err
+	}
+	body, err := egress.New(pol, e.eo).Fetch(ctx, clientID, oauthMetadataLimit)
+	if err != nil {
+		return storage.OAuthClient{}, false, nil
+	}
+	m, err := parseClientMetadata(clientID, body)
+	if err != nil {
+		return storage.OAuthClient{}, false, nil
+	}
+	name := m.ClientName
+	if name == "" {
+		u, _ := url.Parse(clientID)
+		name = u.Hostname()
+	}
+	c, err = e.gw.UpsertOAuthMetadataClient(ctx, clientID, clientAgentName(name), m.RedirectURIs)
+	if err != nil {
+		return storage.OAuthClient{}, false, err
+	}
+	return c, true, nil
+}
+
+// tokenClientID is the client_id a token request presents: the form's, or
+// the Basic Authorization username a client sends instead (RFC 6749 section
+// 2.3.1, form-encoded). A client here is public, so a password is not read.
+// Both present and differing is no answer (false).
+func tokenClientID(r *http.Request) (string, bool) {
+	form := r.PostForm.Get("client_id")
+	user, _, basic := r.BasicAuth()
+	if !basic {
+		return form, true
+	}
+	header, err := url.QueryUnescape(user)
+	if err != nil {
+		return "", false
+	}
+	if form != "" && form != header {
+		return "", false
+	}
+	return header, true
+}
+
+// clientRowID is the stored id a token request's client_id names: a metadata
+// document URL resolves to the client its authorize stored, never fetching;
+// a registered client's id is its own. An unknown URL resolves to nothing.
+func (e *oauthEndpoints) clientRowID(ctx context.Context, clientID string) (string, error) {
+	if !isMetadataClientID(clientID) {
+		return clientID, nil
+	}
+	c, found, err := e.gw.GetOAuthClientByURL(ctx, clientID)
+	if err != nil || !found {
+		return "", err
+	}
+	return c.ID, nil
+}
+
 // registered reports whether a redirect URI is one the client registered,
-// compared exactly.
+// compared exactly but for the port of an http loopback URI: a native client
+// listens on whichever port is free, so a loopback redirect matches on any
+// port (OAuth 2.1, RFC 8252 section 7.3).
 func registered(c storage.OAuthClient, redirect string) bool {
 	for _, u := range c.RedirectURIs {
-		if u == redirect {
+		if u == redirect || sameLoopbackRedirect(u, redirect) {
 			return true
 		}
 	}
 	return false
+}
+
+// sameLoopbackRedirect reports whether two http loopback URIs differ at most
+// in their port.
+func sameLoopbackRedirect(registered, redirect string) bool {
+	a, err := url.Parse(registered)
+	if err != nil || a.Scheme != "http" || !isLoopbackHost(a.Hostname()) {
+		return false
+	}
+	b, err := url.Parse(redirect)
+	if err != nil || b.Scheme != "http" || b.User != nil || b.Fragment != "" {
+		return false
+	}
+	return a.Hostname() == b.Hostname() && a.EscapedPath() == b.EscapedPath() && a.RawQuery == b.RawQuery &&
+		a.ForceQuery == b.ForceQuery
 }
 
 // token exchanges a code for an agent token. The code is spent by the first
@@ -365,10 +520,20 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := r.PostForm
+	presented, ok := tokenClientID(r)
+	if !ok {
+		oauthError(w, http.StatusBadRequest, "invalid_request", "the client_id in the form and the Authorization header differ")
+		return
+	}
+	clientID, err := e.clientRowID(r.Context(), presented)
+	if err != nil {
+		oauthError(w, http.StatusInternalServerError, "server_error", "exchange failed")
+		return
+	}
 	switch f.Get("grant_type") {
 	case "authorization_code":
 	case "refresh_token":
-		e.refresh(w, r, f)
+		e.refresh(w, r, f, clientID)
 		return
 	default:
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "only the authorization_code and refresh_token grants are supported")
@@ -379,7 +544,7 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusInternalServerError, "server_error", "exchange failed")
 		return
 	}
-	if !found || code.ClientID != f.Get("client_id") || code.RedirectURI != f.Get("redirect_uri") ||
+	if !found || clientID == "" || code.ClientID != clientID || code.RedirectURI != f.Get("redirect_uri") ||
 		!pkceMatches(f.Get("code_verifier"), code.CodeChallenge) ||
 		(f.Get("resource") != "" && f.Get("resource") != code.Resource) {
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "the code is unknown, spent, expired, or does not match this request")
@@ -416,7 +581,7 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 // both. A refresh token is spent by its first use; presenting it again ends
 // the grant, so a leaked one stops working for the thief and the client alike
 // and the person sees the client gone from their sessions.
-func (e *oauthEndpoints) refresh(w http.ResponseWriter, r *http.Request, f url.Values) {
+func (e *oauthEndpoints) refresh(w http.ResponseWriter, r *http.Request, f url.Values, clientID string) {
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "refresh failed")
@@ -429,7 +594,7 @@ func (e *oauthEndpoints) refresh(w http.ResponseWriter, r *http.Request, f url.V
 	}
 	now := time.Now()
 	outcome, err := e.gw.RefreshOAuthToken(r.Context(), storage.OAuthRefresh{
-		TokenHash: hashOAuthCode(f.Get("refresh_token")), ClientID: f.Get("client_id"),
+		TokenHash: hashOAuthCode(f.Get("refresh_token")), ClientID: clientID,
 		SecretHash: hash, Prefix: prefix, ExpiresAt: now.Add(oauthTokenLifetime),
 		RefreshHash: refreshHash, RefreshExpiresAt: now.Add(oauthRefreshLifetime),
 	})
