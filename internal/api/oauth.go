@@ -358,6 +358,9 @@ func (e *oauthEndpoints) authorize(w http.ResponseWriter, r *http.Request) {
 		c, found, err = e.metadataClient(r.Context(), q.Get("client_id"))
 	} else {
 		c, found, err = e.gw.GetOAuthClient(r.Context(), q.Get("client_id"))
+		// A document client is named by its URL alone, so its document is
+		// read again when stale; its stored id would skip that.
+		found = found && c.MetadataURL == ""
 	}
 	if err != nil {
 		http.Error(w, "authorization failed", http.StatusInternalServerError)
@@ -470,9 +473,14 @@ func tokenClientID(r *http.Request) (string, bool) {
 
 // clientRowID is the stored id a token request's client_id names: a metadata
 // document URL resolves to the client its authorize stored, never fetching;
-// a registered client's id is its own. An unknown URL resolves to nothing.
+// a registered client's id is its own. An unknown URL, or the stored id of a
+// document client (named by its URL alone), resolves to nothing.
 func (e *oauthEndpoints) clientRowID(ctx context.Context, clientID string) (string, error) {
 	if !isMetadataClientID(clientID) {
+		c, found, err := e.gw.GetOAuthClient(ctx, clientID)
+		if err != nil || (found && c.MetadataURL != "") {
+			return "", err
+		}
 		return clientID, nil
 	}
 	c, found, err := e.gw.GetOAuthClientByURL(ctx, clientID)

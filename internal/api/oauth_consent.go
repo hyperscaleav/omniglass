@@ -133,6 +133,11 @@ func (a *authenticator) authorizeOAuthClientHandler(ctx context.Context, in *aut
 	if err != nil {
 		return nil, err
 	}
+	// A document client's redirect URIs are what its document said when
+	// authorize last read it; past its ten minutes that is not trusted.
+	if c.MetadataURL != "" && time.Since(c.FetchedAt) >= oauthMetadataFresh {
+		return nil, huma.Error422UnprocessableEntity("the client's metadata document is stale; start the sign-in again from the client")
+	}
 	b := in.Body
 	if !registered(c, b.RedirectURI) {
 		return nil, huma.Error422UnprocessableEntity("the redirect_uri is not one the client registered")

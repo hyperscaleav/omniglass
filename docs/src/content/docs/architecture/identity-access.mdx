@@ -819,7 +819,8 @@ Omniglass is both the resource server and the authorization server:
   loopback address unless the install's allow list names it, 5 KB at most), requires its `client_id` to
   equal the URL it came from, and holds the client to the redirect URIs it lists, under the same rules
   as a registration. The client is kept keyed by its URL and refetched after ten minutes; a refetch
-  that fails refuses the client rather than trusting the stale copy. A document that fails any check is
+  that fails refuses the client rather than trusting the stale copy. The client is named by its URL
+  alone; its stored id is no client to the OAuth endpoints, and consent refuses a stale document. A document that fails any check is
   a 400 with no redirect. The consent page names the host serving the document beside the client's
   self-chosen name, since the host is the part it cannot choose. The token and refresh grants take the
   URL as `client_id` without fetching, and, since a client may send it as an HTTP Basic username

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -174,8 +175,15 @@ func TestMCPClientSignsInByMetadataDocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := s.tokenRequest(t, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok.RefreshToken}, "client_id": {d.url()}}); got.Status != http.StatusOK {
-		t.Errorf("refresh by URL client id = %d %s, want 200", got.Status, got.Error)
+	got := s.tokenRequest(t, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok.RefreshToken}, "client_id": {d.url()}})
+	if got.Status != http.StatusOK {
+		t.Fatalf("refresh by URL client id = %d %s, want 200", got.Status, got.Error)
+	}
+
+	// The stored id the consent page carries is not the client's name: a
+	// refresh under it is refused, so no grant skips the document's URL.
+	if bad := s.tokenRequest(t, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {got.RefreshToken}, "client_id": {page.Query().Get("client_id")}}); bad.Status == http.StatusOK {
+		t.Errorf("refresh by the stored id = 200, want refused")
 	}
 }
 
@@ -204,6 +212,50 @@ func TestMetadataDocumentRefusals(t *testing.T) {
 	// A metadata URL must be https with a path: plain http is not one.
 	if code, _ := s.authorizeStatus(t, strings.Replace(d.url(), "https://", "http://", 1), oauthRedirect); code != http.StatusBadRequest {
 		t.Errorf("an http client id = %d, want 400", code)
+	}
+}
+
+// A document client is known by its URL alone: a document past its ten
+// minutes is read again, and one that no longer holds refuses the client,
+// whether named by its URL or by the stored id the consent page carries.
+func TestMetadataDocumentStaleRefetchFailsClosed(t *testing.T) {
+	t.Parallel()
+	d := newDocServer(t)
+	d.serve(clientDoc(d.url()))
+	s := cimdStack(t, d, true)
+
+	code, loc := s.authorizeStatus(t, d.url(), oauthRedirect)
+	if code != http.StatusFound {
+		t.Fatalf("a well-formed document = %d, want the consent page", code)
+	}
+	page, _ := url.Parse(loc)
+	rowID := page.Query().Get("client_id")
+	if code, loc := s.authorizeStatus(t, rowID, oauthRedirect); code != http.StatusBadRequest || loc != "" {
+		t.Errorf("a document client by its stored id = %d %q, want 400 and no redirect", code, loc)
+	}
+
+	conn, err := pgx.Connect(s.ctx, s.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(s.ctx)
+	if _, err := conn.Exec(s.ctx, `UPDATE oauth_client SET fetched_at = now() - interval '11 minutes' WHERE metadata_url = $1`, d.url()); err != nil {
+		t.Fatal(err)
+	}
+	// Consent straight to the stored id, never through authorize, does not
+	// approve a document past its ten minutes.
+	if code, out := s.c.send(s.owner, http.MethodPost, "/auth/oauth-clients/"+rowID+":authorize", map[string]any{
+		"redirect_uri": oauthRedirect, "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+		"code_challenge_method": "S256", "resource": s.base + "/mcp", "roles": []string{"viewer"}, "approved": true,
+	}); code != http.StatusUnprocessableEntity || !strings.Contains(string(out), "metadata document") {
+		t.Errorf("consent to a stale document client = %d %s, want 422", code, out)
+	}
+	d.serve(clientDoc("https://elsewhere.example/client.json"))
+	if code, loc := s.authorizeStatus(t, d.url(), oauthRedirect); code != http.StatusBadRequest || loc != "" {
+		t.Errorf("a stale document that no longer holds = %d %q, want 400 and no redirect", code, loc)
+	}
+	if got := d.hits.Load(); got != 2 {
+		t.Errorf("the document was fetched %d times, want twice (read again once stale)", got)
 	}
 }
 

@@ -25,7 +25,9 @@ refs: [2074, 2048, 1179]
      page, the credential link and the session list work as for a registered client. After ten
      minutes authorize fetches again; a refetch that fails refuses the client rather than trusting a
      copy its publisher may have withdrawn. The token and refresh grants resolve the URL without
-     fetching.
+     fetching. The client is named by its URL alone: its stored id, which the consent page carries,
+     is no client at authorize, token or refresh, and consent refuses a document past its ten
+     minutes, so no path reaches the stored redirect URIs without the freshness check.
   5. **The host is shown.** The consent page names the host serving the document beside the
      client's name, which the client chooses freely.
   6. **The client id may arrive as a Basic username.** The go-sdk's client sends it that way (RFC
