@@ -72,7 +72,11 @@ const liveWindow = 3 * node.DefaultHeartbeat
 // the drain is polled, and a heartbeat reaches the server outside the lanes,
 // so a backlog does not hide a node, while a node silent for longer is not
 // waited for. A live node that collects but lands nothing holds the drain
-// until its bound, which fails the measure rather than reading it short.
+// until its bound, which fails the measure rather than reading it short. A
+// node whose latest worklist is empty runs no task and so lands no sample: a
+// node refused its first worklist heartbeats and reports a worklist of 0
+// while it waits (ADR-1882), so it is passed over, and the measure goes on to
+// read its pull loss (#2008); a node that never reported one is waited for.
 // Only a node's own samples count: a push or a webhook count the server
 // writes outside the lanes says nothing of them, and a sample stamped past
 // the database's clock is a node's clock running ahead. No live node that
@@ -81,7 +85,12 @@ func drainedQuery(at time.Time, live time.Duration) string {
 	return fmt.Sprintf(`with live as (
 			select n.principal_id from node n
 			where n.last_heartbeat_at > to_timestamp(%[2]s)
-				and exists (select 1 from metric_series s where s.collector_node_id = n.principal_id))
+				and exists (select 1 from metric_series s where s.collector_node_id = n.principal_id)
+				and coalesce((select m.value <> 0 from metric m
+					join metric_series s on s.id = m.series_id
+					join metric_type mt on mt.id = s.metric_type_id
+					where s.component_id = n.platform_component_id and mt.name = 'worklist-task-count'
+					order by m.ts desc limit 1), true))
 		select case when exists (select 1 from live) and not exists (
 			select 1 from live l where not exists (
 				select 1 from metric_series s

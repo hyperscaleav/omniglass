@@ -972,7 +972,9 @@ the window is not a fleet that lost nothing.
 fails with a note giving the share of its pulls that failed: a node refused on every pull reads 1. The
 read starts from every node the lab holds, so a node that reported nothing in the window fails as
 missing rather than dropping out. A run whose worklist read failed, or found no node, fails as
-`worklist_loss` with the reason.
+`worklist_loss` with the reason. A node with no worklist (its latest task count is 0, as a node
+refused its first worklist reports while it waits) runs no task, so the ingest drain does not wait on
+it for a sample, and the run reaches this gate and names it rather than failing as not drained.
 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
