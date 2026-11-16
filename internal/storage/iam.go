@@ -900,16 +900,23 @@ type BearerCredential struct {
 // authenticated this request) is only compared in SQL to compute the Current flag,
 // so the hash bytes never leave the database. Only live credentials are returned (an
 // unexpired or legacy-null expires_at), mirroring AuthenticateBearer's own filter, so
-// a signed-in user never sees a dead row that would authenticate nothing. Backs the
+// a signed-in user never sees a dead row that would authenticate nothing. An OAuth
+// client whose access token lapsed but whose refresh token is live is listed, with
+// the refresh token's expiry, since it can still renew itself (#2073). Backs the
 // self-service session list (issue #172).
 func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
 		select c.id, c.prefix, coalesce(c.purpose, ''), coalesce(c.description, ''), coalesce(c.user_agent, ''), coalesce(c.client_ip, ''),
-			c.created_at, c.last_used_at, c.expires_at, coalesce(c.secret_hash = $2, false) as current,
+			c.created_at, c.last_used_at, coalesce(r.expires_at, c.expires_at), coalesce(c.secret_hash = $2, false) as current,
 			coalesce(c.agent, ''), c.agent_roles, c.agent_channels, coalesce(o.client_name, '')
 		from credential c
 		left join oauth_client o on o.id = c.oauth_client_id
-		where c.principal_id = $1 and c.kind = 'bearer' and (c.expires_at is null or c.expires_at > now())
+		left join lateral (
+			select max(expires_at) as expires_at from oauth_refresh
+			where credential_id = c.id and spent_at is null and expires_at > now()
+		) r on true
+		where c.principal_id = $1 and c.kind = 'bearer'
+			and (c.expires_at is null or c.expires_at > now() or r.expires_at is not null)
 		order by c.created_at desc`, principalID, currentHash)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)

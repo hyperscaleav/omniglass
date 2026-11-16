@@ -187,8 +187,11 @@ func (UnimplementedGateway) ConsumeOAuthCode(context.Context, []byte) (OAuthCode
 	return OAuthCode{}, false, nil
 }
 func (UnimplementedGateway) IssueOAuthToken(context.Context, OAuthTokenIssue) error { return nil }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)                 { return false, nil }
-func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error)              { return nil, nil }
+func (UnimplementedGateway) RefreshOAuthToken(context.Context, OAuthRefresh) (OAuthRefreshOutcome, error) {
+	return OAuthRefreshRefused, nil
+}
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
+func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
 }

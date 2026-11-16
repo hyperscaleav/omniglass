@@ -31,9 +31,12 @@ import (
 const (
 	// oauthCodeLifetime bounds a code between consent and exchange.
 	oauthCodeLifetime = 5 * time.Minute
-	// oauthTokenLifetime bounds an issued token; the client signs in again
-	// after it (refresh is #2073).
-	oauthTokenLifetime = 30 * 24 * time.Hour
+	// oauthTokenLifetime bounds an issued access token; the client renews it
+	// with its refresh token (#2073).
+	oauthTokenLifetime = time.Hour
+	// oauthRefreshLifetime bounds a refresh token. Each refresh issues the next,
+	// so a client in use stays signed in and one idle this long signs in again.
+	oauthRefreshLifetime = 30 * 24 * time.Hour
 	// oauthConsentPath is the console page a person consents on.
 	oauthConsentPath = "/web/oauth/authorize"
 	// oauthMaxRedirects bounds a registration's redirect URIs.
@@ -226,7 +229,7 @@ func (e *oauthEndpoints) serverMetadata(w http.ResponseWriter, r *http.Request) 
 		"token_endpoint":                                 origin + "/oauth/token",
 		"registration_endpoint":                          origin + "/oauth/register",
 		"response_types_supported":                       []string{"code"},
-		"grant_types_supported":                          []string{"authorization_code"},
+		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
 		"authorization_response_iss_parameter_supported": true,
@@ -283,7 +286,7 @@ func (e *oauthEndpoints) register(w http.ResponseWriter, r *http.Request) {
 		"client_id_issued_at":        c.CreatedAt.Unix(),
 		"client_name":                c.Name,
 		"redirect_uris":              c.RedirectURIs,
-		"grant_types":                []string{"authorization_code"},
+		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
 		"token_endpoint_auth_method": "none",
 	})
@@ -362,8 +365,13 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := r.PostForm
-	if f.Get("grant_type") != "authorization_code" {
-		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "only the authorization_code grant is supported")
+	switch f.Get("grant_type") {
+	case "authorization_code":
+	case "refresh_token":
+		e.refresh(w, r, f)
+		return
+	default:
+		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "only the authorization_code and refresh_token grants are supported")
 		return
 	}
 	code, found, err := e.gw.ConsumeOAuthCode(r.Context(), hashOAuthCode(f.Get("code")))
@@ -387,17 +395,62 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusInternalServerError, "server_error", "exchange failed")
 		return
 	}
+	refresh, refreshHash, err := newOAuthCode()
+	if err != nil {
+		oauthError(w, http.StatusInternalServerError, "server_error", "exchange failed")
+		return
+	}
+	now := time.Now()
 	if err := e.gw.IssueOAuthToken(r.Context(), storage.OAuthTokenIssue{
 		PrincipalID: code.PrincipalID, ClientID: c.ID, SecretHash: hash, Prefix: prefix,
-		ExpiresAt: time.Now().Add(oauthTokenLifetime), Agent: c.Name, AgentRoles: code.Roles,
-		UserAgent: r.UserAgent(), ClientIP: clientIP(r, e.trust),
+		ExpiresAt: now.Add(oauthTokenLifetime), RefreshHash: refreshHash, RefreshExpiresAt: now.Add(oauthRefreshLifetime),
+		Agent: c.Name, AgentRoles: code.Roles, UserAgent: r.UserAgent(), ClientIP: clientIP(r, e.trust),
 	}); err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "exchange failed")
 		return
 	}
+	writeTokens(w, tok, refresh)
+}
+
+// refresh renews a client's access token with its refresh token, rotating
+// both. A refresh token is spent by its first use; presenting it again ends
+// the grant, so a leaked one stops working for the thief and the client alike
+// and the person sees the client gone from their sessions.
+func (e *oauthEndpoints) refresh(w http.ResponseWriter, r *http.Request, f url.Values) {
+	tok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		oauthError(w, http.StatusInternalServerError, "server_error", "refresh failed")
+		return
+	}
+	refresh, refreshHash, err := newOAuthCode()
+	if err != nil {
+		oauthError(w, http.StatusInternalServerError, "server_error", "refresh failed")
+		return
+	}
+	now := time.Now()
+	outcome, err := e.gw.RefreshOAuthToken(r.Context(), storage.OAuthRefresh{
+		TokenHash: hashOAuthCode(f.Get("refresh_token")), ClientID: f.Get("client_id"),
+		SecretHash: hash, Prefix: prefix, ExpiresAt: now.Add(oauthTokenLifetime),
+		RefreshHash: refreshHash, RefreshExpiresAt: now.Add(oauthRefreshLifetime),
+	})
+	if err != nil {
+		oauthError(w, http.StatusInternalServerError, "server_error", "refresh failed")
+		return
+	}
+	if outcome != storage.OAuthRefreshed {
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "the refresh token is unknown, spent, expired, or not this client's")
+		return
+	}
+	writeTokens(w, tok, refresh)
+}
+
+// writeTokens is the token endpoint's success answer.
+func writeTokens(w http.ResponseWriter, access, refresh string) {
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"access_token": tok,
-		"token_type":   "Bearer",
-		"expires_in":   int(oauthTokenLifetime.Seconds()),
+		"access_token":  access,
+		"token_type":    "Bearer",
+		"expires_in":    int(oauthTokenLifetime.Seconds()),
+		"refresh_token": refresh,
 	})
 }

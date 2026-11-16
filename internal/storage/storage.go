@@ -210,6 +210,9 @@ type Gateway interface {
 	// IssueOAuthToken mints a client's MCP-only agent token for a person,
 	// replacing the client's earlier token for them; both audited as theirs.
 	IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error
+	// RefreshOAuthToken spends a client's refresh token and rotates its grant
+	// (#2073); a spent token presented again ends the grant.
+	RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRefreshOutcome, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)
