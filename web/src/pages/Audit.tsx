@@ -2,7 +2,7 @@ import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
-import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
+import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
 import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -155,7 +155,8 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
 export default function Audit() {
   const [rows, setRows] = createSignal<AuditEvent[]>([]);
   const [error, setError] = createSignal<unknown>(null);
-  const [loading, setLoading] = createSignal(false);
+  // Starts true: the first read is issued on mount, so the first paint is already the loading state.
+  const [loading, setLoading] = createSignal(true);
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [done, setDone] = createSignal(false);
 
@@ -187,6 +188,7 @@ export default function Audit() {
         entity: { name: "audit", plural: "events" },
         rows,
         loading,
+        loadingRows: AUDIT_LOADING_ROWS,
         error,
         filterKeys: auditFilterKeys,
         filterPlaceholder: "filter by who, action, resource, id",
@@ -204,7 +206,7 @@ export default function Audit() {
               <Show when={filtering}> of {total} loaded</Show> shown
             </span>
             <Button
-              class="text-xs"
+              class="min-w-28 text-xs"
               disabled={done() || loadingOlder() || loading()}
               onClick={() => load(oldest())}
             >

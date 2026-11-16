@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import Audit from "./Audit";
-import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
+import { AUDIT_PAGE, AUDIT_LOADING_ROWS, type AuditEvent } from "../lib/audit";
 import { uuidFor } from "../lib/testids";
 
 // The Audit page renders the trail newest-first (resolving the actor to a name and
@@ -45,6 +45,24 @@ beforeEach(() => {
 });
 
 describe("Audit page", () => {
+  // The first read holds the table's space with skeleton rows (and the footer's
+  // button keeps one label width), so the loaded rows land in place instead of
+  // shifting the page (the probe's layout-shift budget, #1461).
+  it("reserves the list's height with skeleton rows while the first page loads", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await gate;
+      return new Response(JSON.stringify({ events: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    render(() => <Audit />);
+    expect(screen.getAllByTestId("list-loading-row")).toHaveLength(AUDIT_LOADING_ROWS);
+    expect(screen.getByText("Load older")).toBeTruthy();
+    release();
+    expect(await screen.findByText("login")).toBeTruthy();
+    expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
+  });
+
   it("renders events with actor, verb, and resource", async () => {
     const { findByText, getByText } = render(() => <Audit />);
     expect(await findByText("login")).toBeTruthy();

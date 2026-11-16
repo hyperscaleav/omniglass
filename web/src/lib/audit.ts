@@ -27,6 +27,10 @@ export const AUDIT_KEY = ["audit-log"] as const;
 // oldest loaded row via the server `before` cursor. Kept under the server's 500 cap.
 export const AUDIT_PAGE = 100;
 
+// The skeleton rows the table holds while the first page loads: a screenful, so
+// the loaded rows land in place rather than shifting the page (#1461).
+export const AUDIT_LOADING_ROWS = 12;
+
 // listAuditLog fetches one page, newest first. `before` (an RFC3339 timestamp)
 // pages backward for load-older; `limit` bounds the page. `resource`/`verb` are the
 // server-side narrowing the API also supports (the console filters client-side, so
