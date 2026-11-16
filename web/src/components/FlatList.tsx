@@ -81,8 +81,8 @@ export type FlatConfig<T> = {
   onChips?: (chips: Chip[]) => void;
   // Fill mode (optional, forwarded to ListShell): for a page that caps its own
   // height, the table region takes the surplus and scrolls internally under
-  // sticky column headers instead of growing the page. Off (every shipped page
-  // today), the list grows with content exactly as before.
+  // sticky column headers instead of growing the page (the audit trail, whose
+  // first page outgrows its skeleton). Off, the list grows with content.
   fill?: boolean;
 };
 
