@@ -388,13 +388,38 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	defer func() { _ = nudgeSub.Unsubscribe() }()
 
-	wl, ok, err := firstWorklist(ctx, nc, cfg.Name, cfg.Once, logger)
-	if err != nil {
+	// report accumulates each endpoint's collection telemetry over a report
+	// window (#1369), published when the window is due. Both reports close on
+	// one grid the node's name places (#1779), so each window holds one
+	// window's worth however late the housekeep tick takes it.
+	reportStart, reportSeed := time.Now(), phaseSeed(cfg.Name)
+	report := newCollectionReport(cfg.ReportEvery, reportSeed, reportStart)
+	// self is the node's account of itself (#1625): its dispatch, schedule,
+	// spool, sessions and process, sent as platform metrics in the node-self
+	// block of the batch each tick publishes, on the same window. It starts
+	// before the first pull, so a node the server keeps refusing still
+	// reports that loss (#1882).
+	self := newNodeReport(cfg.ReportEvery, reportSeed, reportStart)
+	self.lanes(lanes)
+	self.worklist(0, reportStart)
+
+	// Until the first worklist arrives the node heartbeats and sends its
+	// account of itself each tick, as the run loop does after: a node the
+	// server refuses reads as alive and refused, not silent (#1882).
+	pull := func(ctx context.Context) (collection.WorklistReply, error) { return pullWorklist(ctx, nc, cfg.Name) }
+	wl, ok, err := awaitFirstWorklist(heartbeat, func() (collection.WorklistReply, bool, error) {
+		return firstWorklist(ctx, pull, cfg.Once, logger, self)
+	}, func() {
+		_ = publishHeartbeat(nc, cfg.Name)
+		spool.retry()
+		publishSelf(spool, cfg.Name, sink, self.account(dispatchWindow{}, spool, sessions))
+	})
+	if err != nil || !ok {
+		// Refused on a one-shot run, or stopped before the server answered:
+		// there is nothing to run, but the ticks meanwhile spooled the
+		// node's account of why.
+		drainAtExit(spool, nc, logger)
 		return collection.WorklistReply{}, err
-	}
-	if !ok {
-		// Stopped before the server answered: there is nothing to run.
-		return collection.WorklistReply{}, nil
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
 	// executedCommands remembers each pulled command's outcome across ticks:
@@ -404,16 +429,6 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// It also carries whether the last pull failed, so a failing pull is logged
 	// on the transition only (#1630).
 	executedCommands := newCommandState()
-	// report accumulates each endpoint's collection telemetry over a report
-	// window (#1369), published when the window is due. Both reports close on
-	// one grid the node's name places (#1779), so each window holds one
-	// window's worth however late the housekeep tick takes it.
-	reportStart, reportSeed := time.Now(), phaseSeed(cfg.Name)
-	report := newCollectionReport(cfg.ReportEvery, reportSeed, reportStart)
-	// self is the node's account of itself (#1625): its dispatch, schedule,
-	// spool, sessions and process, sent as platform metrics in the node-self
-	// block of the batch each tick publishes, on the same window.
-	self := newNodeReport(cfg.ReportEvery, reportSeed, reportStart)
 	if cfg.ReportEvery <= 0 {
 		report.setEvery(wl.ReportEvery())
 		self.setEvery(wl.ReportEvery())
@@ -424,7 +439,6 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	self.lanes(lanes)
 	d = newDispatcher(dispatchConfig{workers: lanes, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})
 	coll.every, coll.wake = d.interval, d.kick
@@ -583,17 +597,20 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		settle: arm,
 	}
 	wl = loop.run(ctx, wl)
+	drainAtExit(spool, nc, logger)
+	return wl, nil
+}
 
-	// Ship what the spool still holds, its pending groups flushed first,
-	// before the connection closes, within a bound: the spool is memory, so a
-	// batch left in it at exit is gone.
+// drainAtExit ships what the spool still holds, its pending groups flushed
+// first, before the connection closes, within a bound: the spool is memory,
+// so a batch left in it at exit is gone.
+func drainAtExit(spool *telemetrySpool, nc *nats.Conn, logger *slog.Logger) {
 	dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
 	defer cancel()
 	if err := spool.drain(dctx); err != nil {
 		logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
 	}
 	_ = nc.Flush()
-	return wl, nil
 }
 
 // sessionDials is the node's session-dials bound: the configured one, or
@@ -706,11 +723,14 @@ func jitterInterval(every time.Duration, rnd float64) time.Duration {
 // backoff until one arrives or ctx ends (false, nil), so a server that is
 // still starting, or busy with the rest of the fleet, never ends the node
 // (#1577). once tries one pull and returns its error: a one-shot run reports
-// its failure rather than waiting on it.
-func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, logger *slog.Logger) (collection.WorklistReply, bool, error) {
+// its failure rather than waiting on it. Each pull, served or refused, is
+// tallied on self toward the window's worklist pull loss, as every later pull
+// is (#1868, #1882).
+func firstWorklist(ctx context.Context, pull func(context.Context) (collection.WorklistReply, error), once bool, logger *slog.Logger, self *nodeReport) (collection.WorklistReply, bool, error) {
 	for attempt := 1; ; attempt++ {
-		wl, err := pullWorklist(ctx, nc, name)
+		wl, err := pull(ctx)
 		if err == nil {
+			self.worklistPulled(false)
 			return wl, true, nil
 		}
 		if once {
@@ -719,11 +739,39 @@ func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, l
 		if ctx.Err() != nil {
 			return collection.WorklistReply{}, false, nil
 		}
+		self.worklistPulled(true)
 		wait := pullBackoff(attempt, rand.Float64())
 		logger.Warn("first worklist pull failed, retrying", "facility", "collection",
 			"attempt", attempt, "retry_in", wait.String(), "error", err.Error())
 		if !sleepCtx(ctx, wait) {
 			return collection.WorklistReply{}, false, nil
+		}
+	}
+}
+
+// awaitFirstWorklist runs first on its own goroutine and calls tick every
+// interval until it returns, then returns what it did. first must return once
+// its context ends; tick runs on the caller's goroutine, never beside another
+// tick.
+func awaitFirstWorklist(every time.Duration, first func() (collection.WorklistReply, bool, error), tick func()) (collection.WorklistReply, bool, error) {
+	type result struct {
+		wl  collection.WorklistReply
+		ok  bool
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		wl, ok, err := first()
+		done <- result{wl, ok, err}
+	}()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case r := <-done:
+			return r.wl, r.ok, r.err
+		case <-ticker.C:
+			tick()
 		}
 	}
 }
