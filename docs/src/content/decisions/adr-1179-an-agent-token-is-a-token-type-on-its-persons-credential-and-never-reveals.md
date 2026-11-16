@@ -21,10 +21,10 @@ refs: [1179, 1162, 1175, 1166]
      dispatch sets in-process and no caller can claim or shed. An agent can never decrypt a
      credential for its person; it works through routes that use a credential server-side. Since a
      write that binds a secret to a target makes the node send the plaintext wherever the target
-     points, every such write (an endpoint attach or input edit, a plan, a simulated system or
+     points, every such write (an endpoint attach, input edit or node move, a plan, a simulated system or
      fleet device) resolves its references under `secretBind`, which is the empty scope under the
-     ceiling: until `secret:use` splits from `reveal`, a ceilinged caller binds and repoints no
-     credential, and an unconstrained one binds what it may read, as before.
+     ceiling: until `secret:use` splits from `reveal` (#2047), a ceilinged caller binds, repoints
+     and re-places no credential, and never holds `node:enroll`, while an unconstrained one binds what it may read, as before.
   3. **Refused routes.** An agent-token caller gets a 403 from `authn`, before its body is read, on
      `create-auth-me-token`, `change-auth-me-password` and `impersonate-principal`, on every channel.
      This **amends** the ticket's "impersonation semantics unchanged": an impersonation token is not

@@ -327,8 +327,8 @@ func loginBearer(t *testing.T, c *apiClient, user, password string) string {
 }
 
 // An agent never hands a credential to a target (#1179): binding a secret onto
-// an endpoint, or moving the address of one that carries a secret, sends the
-// plaintext wherever the endpoint points, so until secret:use splits from
+// an endpoint, or moving the address or the node of one that carries a secret,
+// sends the plaintext wherever the endpoint points, so until secret:use splits from
 // reveal the ceiling refuses those writes outright. A write that moves no
 // credential (a label) is still the agent's, and its owner keeps them all.
 func TestAgentTokenCannotSendACredentialToATarget(t *testing.T) {
@@ -357,11 +357,24 @@ func TestAgentTokenCannotSendACredentialToATarget(t *testing.T) {
 	}); code < 400 {
 		t.Errorf("agent rebinding a secret = %d %s, want refused", code, body)
 	}
+	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "relay-2"}, http.StatusCreated)
+	// Nor does an agent mint a node's enrollment token: that token is a node
+	// credential, and the node it enrolls receives the credentials placed on it.
+	c.do(agent.Token, http.MethodPost, "/nodes/relay-2:enroll", nil, http.StatusForbidden)
+	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
+		"node": "relay-2",
+	}); code < 400 {
+		t.Errorf("agent moving a secret-bound endpoint to another node = %d %s, want refused", code, body)
+	}
 	got := string(c.do(ownerTok, http.MethodGet, "/endpoints/"+ep, nil, http.StatusOK))
+	if strings.Contains(got, "relay-2") {
+		t.Errorf("the endpoint moved to the agent's node: %s", got)
+	}
 	if strings.Contains(got, "203.0.113.9") {
 		t.Errorf("the endpoint moved to the agent's address: %s", got)
 	}
 
 	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{"label": "agent-labelled"}, http.StatusOK)
 	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"inputs": map[string]string{"host": "10.20.4.70"}}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"node": "relay-2"}, http.StatusOK)
 }

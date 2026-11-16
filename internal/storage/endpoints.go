@@ -519,10 +519,10 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 	}
 	// A driver-attached endpoint's params are DERIVED from its inputs (its host
 	// and port), and its credential rides the worklist to the placed node. Its
-	// address therefore edits through its inputs (#1061), every attached secret
-	// re-resolved under the editor's own scope, so an edit cannot send a
-	// credential its editor could not use to a new address; a raw target patch
-	// on it refuses.
+	// address therefore edits through its inputs (#1061), and an address edit or
+	// a node move re-resolves every attached secret under the editor's own scope,
+	// so an edit cannot send a credential its editor could not use to a new
+	// address or node; a raw target patch on it refuses.
 	params, inputs, err := p.patchedConnection(ctx, tx, before, patch)
 	if err != nil {
 		return nil, err
@@ -626,7 +626,9 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		}
 		current = extra
 	}
-	if len(patch.Inputs) == 0 && current == nil {
+	// A node move sends the attached credential to a new node, so it re-resolves
+	// every attached secret under the editor's scope as an address edit does.
+	if len(patch.Inputs) == 0 && current == nil && patch.Node == nil {
 		return nil, nil, nil
 	}
 	stored := map[string]string{}

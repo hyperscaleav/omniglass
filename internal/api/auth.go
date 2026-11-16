@@ -262,8 +262,10 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 // to a target, so with both gone an agent can drive a device without ever
 // learning the credential that reaches it. No route is stamped with use yet;
 // the writes that hand a credential to a target resolve it under secretBind,
-// which is the empty scope under the ceiling.
-var agentCeilingActions = []string{"reveal", "use"}
+// which is the empty scope under the ceiling. enroll mints a node's enrollment
+// token, itself a credential, for a node that then receives the credentials
+// placed on it, so an agent never enrolls one.
+var agentCeilingActions = []string{"reveal", "use", "enroll"}
 
 // ceilingChannels are the channels whose every request is an agent's, whatever
 // the credential: a tool call on the MCP server is made by the model the person
