@@ -22,7 +22,7 @@ import { EVENT_RULES_KEY } from "../lib/event_rules";
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-// Owns one place, views the fleet: severity_level:* is in its flattened set,
+// Owns one location, views the fleet: severity_level:* is in its flattened set,
 // but writing a level needs it on an all-scope grant, so the server refuses it.
 const placeOwner: Me = {
   principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
@@ -122,7 +122,7 @@ describe("Severity levels page", () => {
     expect(screen.queryByText("New severity level")).toBeNull();
   });
 
-  it("offers no level write to a caller whose severity_level permissions stop at one place", async () => {
+  it("offers no level write to a caller whose severity_level permissions stop at one location", async () => {
     mount(placeOwner);
     expect(screen.queryByText("New severity level")).toBeNull();
     openLevel("major");

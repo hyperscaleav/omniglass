@@ -36,7 +36,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // The canvas address retired with #826; it redirects to Explore.
   { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
   // Explore (#826, #861): the sidebar's one door into the fleet, the outline
-  // of places; it replaced the Fleet entry and the reserved Explore stub.
+  // of locations; it replaced the Fleet entry and the reserved Explore stub.
   { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
   // The fleet kinds. A bare index address redirects to Explore, whose outline
   // lists every kind (#798, #861). The :id route is the entity's

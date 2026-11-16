@@ -77,9 +77,9 @@ const tapeBody = (recorded: TapeManifest[], failed: string[] = [], unstarted: st
 describe("the demo tag a PR body carries", () => {
   it("is a line of its own, demo: and one or more demo ids, spaces or commas between", () => {
     expect(demoTag("## Demo\n\ndemo: http-logins\n")).toEqual({ ids: ["http-logins"] });
-    expect(demoTag("demo: http-logins, find-a-place monitoring")).toEqual({ ids: ["http-logins", "find-a-place", "monitoring"] });
+    expect(demoTag("demo: http-logins, find-a-location monitoring")).toEqual({ ids: ["http-logins", "find-a-location", "monitoring"] });
     expect(demoTag("- demo: http-logins")).toEqual({ ids: ["http-logins"] });
-    expect(demoTag("  demo:find-a-place  \r\nnext line")).toEqual({ ids: ["find-a-place"] });
+    expect(demoTag("  demo:find-a-location  \r\nnext line")).toEqual({ ids: ["find-a-location"] });
   });
 
   it("gathers every tag line in the body, once each, in order", () => {
@@ -122,7 +122,7 @@ describe("the demo tag a PR body carries", () => {
 
 describe("which demos a PR records", () => {
   const tapes = ["http-logins", "node-enroll"];
-  const walks = ["find-a-place", "monitoring", "sample-simulation"];
+  const walks = ["find-a-location", "monitoring", "sample-simulation"];
   const select = (changed: string[], body = "") => selectDemos(changed, demoTag(body), tapes, walks);
   const ids = (changed: string[], body = "") => select(changed, body).map((d) => d.id);
 
@@ -133,7 +133,7 @@ describe("which demos a PR records", () => {
 
   it("records a tape or walkthrough script the PR adds or changes, tagged or not", () => {
     expect(ids(["scripts/demo/http-logins.tape", "docs/x.md"])).toEqual(["http-logins"]);
-    expect(ids(["web/e2e/walkthroughs/find-a-place.yaml"], "demo: none (docs-only)")).toEqual(["find-a-place"]);
+    expect(ids(["web/e2e/walkthroughs/find-a-location.yaml"], "demo: none (docs-only)")).toEqual(["find-a-location"]);
     expect(ids(["scripts/demo/node-enroll.tape"], "demo: monitoring")).toEqual(["node-enroll", "monitoring"]);
   });
 
@@ -171,12 +171,12 @@ describe("which demos a PR records", () => {
       { id: "http-logins", kind: "tape", why: "tagged, and changed by the PR" },
       { id: "monitoring", kind: "walkthrough", why: "tagged" },
     ]);
-    expect(select(["web/e2e/walkthroughs/find-a-place.yaml"])).toEqual([{ id: "find-a-place", kind: "walkthrough", why: "changed by the PR" }]);
+    expect(select(["web/e2e/walkthroughs/find-a-location.yaml"])).toEqual([{ id: "find-a-location", kind: "walkthrough", why: "changed by the PR" }]);
   });
 
   it("keeps the tree's order, tapes first, and drops duplicates", () => {
-    const changed = ["scripts/demo/node-enroll.tape", "web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-place.yaml", "web/e2e/walkthroughs/find-a-place.yaml"];
-    expect(ids(changed, "demo: http-logins node-enroll")).toEqual(["http-logins", "node-enroll", "find-a-place", "sample-simulation"]);
+    const changed = ["scripts/demo/node-enroll.tape", "web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-location.yaml", "web/e2e/walkthroughs/find-a-location.yaml"];
+    expect(ids(changed, "demo: http-logins node-enroll")).toEqual(["http-logins", "node-enroll", "find-a-location", "sample-simulation"]);
   });
 
   it("refuses a tag naming a demo the tree does not have, naming it and where it would be", () => {

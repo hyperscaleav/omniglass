@@ -169,11 +169,11 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Locations",
-    copy: "A location type classifies a place, says where it may sit, and carries its contract. Campus, building, floor and room ship; any hierarchy of your own works the same way.",
+    copy: "A location type classifies a location, says where it may sit, and carries its contract. Campus, building, floor and room ship; any hierarchy of your own works the same way.",
     entries: [
       // "Types": the Locations header already says where it lives.
       { label: "Types", path: "/location-types", gate: ["location_type", "read"], key: LOCATION_TYPES_KEY, list: listLocationTypes },
-      templatesSlot(["place_template"]),
+      templatesSlot(["location_template"]),
     ],
   },
   {

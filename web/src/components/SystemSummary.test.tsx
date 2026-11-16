@@ -10,7 +10,7 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { uuidFor } from "../lib/testids";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 
-// The brief system card a place holding several systems shows (#872). Its alarm
+// The brief system card a location holding several systems shows (#872). Its alarm
 // lines wear the severity registry's label and color (#921), worst first, so an
 // operator level renders exactly like a shipped one with no console change.
 

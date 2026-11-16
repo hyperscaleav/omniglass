@@ -116,7 +116,7 @@ describe("figureText", () => {
     expect(figureText({ ...node, figures: undefined }, { key: "checkin-age", unit: "s" })).toBe("not reported");
   });
 
-  it("trims a fractional value to two places", () => {
+  it("trims a fractional value to two decimal places", () => {
     const n = { ...node, figures: { "checkin-age": { value: 2.3456, observed_at: readAt } } };
     expect(figureText(n, { key: "checkin-age", unit: "s" })).toBe("2.35 s");
   });

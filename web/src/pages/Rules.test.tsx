@@ -54,9 +54,9 @@ const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
 const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
-// Owns one place, views the fleet: rule:create is in its flattened set, but a
+// Owns one location, views the fleet: rule:create is in its flattened set, but a
 // fleet-wide rule needs it on an all-scope grant, so the server refuses it.
-const placeOwner: Me = {
+const locationOwner: Me = {
   principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: uuidFor("loc-hq") }, { role: "viewer", scope_kind: "all" }],
 };
@@ -336,8 +336,8 @@ describe("Rules page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires rule:update");
   });
 
-  it("offers no rule write to a caller whose rule permissions stop at one place", async () => {
-    mount(placeOwner);
+  it("offers no rule write to a caller whose rule permissions stop at one location", async () => {
+    mount(locationOwner);
     expect(screen.queryByText("New rule")).toBeNull();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
@@ -347,7 +347,7 @@ describe("Rules page", () => {
     expect(editBtn.disabled).toBe(true);
   });
 
-  it("lists every rule to a caller scoped to one place, like a registry, but offers it no write", () => {
+  it("lists every rule to a caller scoped to one location, like a registry, but offers it no write", () => {
     mount(scoped);
     expect(screen.getByText("Too hot")).toBeTruthy();
     expect(screen.queryByText(/fleet-wide config/)).toBeNull();

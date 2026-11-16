@@ -178,7 +178,7 @@ export function validateLevelDraft(d: LevelDraft, levels: SeverityLevel[], editi
   else if (rest.some((l) => l.name === name)) e.name = `A level is already named ${name}.`;
   if (!d.color) e.color = "The hue its alarms wear.";
   const rank = readRank(d.rank);
-  if (d.rank.trim() === "") e.rank = "Its place among the levels.";
+  if (d.rank.trim() === "") e.rank = "Its position among the levels.";
   else if (rank === null) e.rank = "A whole number above zero.";
   else {
     const taken = rest.find((l) => l.rank === rank);

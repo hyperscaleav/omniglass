@@ -57,7 +57,7 @@ export async function platformView(): Promise<PlatformView> {
 }
 
 // The view refuses a node read short of all-scope (403): the platform's rows
-// are every node, so a read held for some places cannot open it. That is an
+// are every node, so a read held for some locations cannot open it. That is an
 // answer the server gives again on every retry, so a 4xx is never retried and
 // the caller hears it at once; a 5xx or a dropped connection is retried like
 // any read, up to the query library's usual three.
@@ -114,7 +114,7 @@ export function figureTinted(n: PlatformNode, col: Pick<PlatformColumn, "key" | 
 }
 
 // valueText is a figure with its unit: an integer as is, anything else trimmed
-// to two places.
+// to two decimal places.
 function valueText(value: number, unit: string): string {
   if (unit === "bytes") return humanSize(value);
   const v = Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);

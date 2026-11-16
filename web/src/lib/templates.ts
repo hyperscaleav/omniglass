@@ -1,12 +1,12 @@
 import { api } from "../api/client";
-import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplatePlaceBody, TemplateRoleBody } from "../api/api.gen";
+import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplateLocationBody, TemplateRoleBody } from "../api/api.gen";
 import type { Chip } from "./predicate";
 import { entityLabel } from "./entities";
 
 // The template catalog's data layer (#827, #1329): the binary's shipped
 // templates, read-only, and the four routes that start something from one. A
 // template is an example an operator clones: creating a standard, a component,
-// a system or a subtree of places from a template writes ordinary rows the
+// a system or a subtree of locations from a template writes ordinary rows the
 // operator owns, and nothing points back at the template (ADR-0071). Shapes are
 // the generated client's; everything below the fetches is pure, so the page's
 // rules (which kinds a URL asks for, what a form posts, where a success lands)
@@ -14,7 +14,7 @@ import { entityLabel } from "./entities";
 
 export type Template = TemplateBody;
 export type TemplateKind = Template["kind"];
-export type TemplatePlace = TemplatePlaceBody;
+export type TemplateLocation = TemplateLocationBody;
 export type TemplateRole = TemplateRoleBody;
 
 export type StandardFromTemplateBody = CreateStandardFromTemplateInputBody;
@@ -31,11 +31,11 @@ export const TEMPLATE_HINT =
   "A template is an example you clone. Starting from one writes ordinary rows that are yours from that moment: nothing points back at the template, so a later release can change it without touching your fleet.";
 
 // The kinds in catalog order, and the one word an operator reads for each.
-export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "place_template", "component_template"];
+export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "location_template", "component_template"];
 export const KIND_WORD: Record<TemplateKind, string> = {
   standard_template: "standard",
   system_template: "system",
-  place_template: "place",
+  location_template: "location",
   component_template: "component",
 };
 
@@ -88,18 +88,18 @@ export function parseKinds(raw: string | string[] | undefined | null): TemplateK
 
 // templatesHref is the address of the Templates page filtered to kinds, with a
 // place to start at carried as the form's default target.
-export function templatesHref(kinds: TemplateKind[], place?: string): string {
+export function templatesHref(kinds: TemplateKind[], location?: string): string {
   const q = new URLSearchParams();
   if (kinds.length) q.set("kind", kinds.join(","));
-  if (place) q.set("place", place);
+  if (location) q.set("location", location);
   const qs = q.toString().replace(/%2C/g, ",");
   return `/templates${qs ? `?${qs}` : ""}`;
 }
 
 // The kind a fleet create flow starts from: a location's create starts from a
-// place template, the others from their own kind.
+// location template, the others from their own kind.
 export const CREATE_KIND: Record<"location" | "system" | "component", TemplateKind> = {
-  location: "place_template",
+  location: "location_template",
   system: "system_template",
   component: "component_template",
 };
@@ -137,7 +137,7 @@ export function ofKinds(rows: Template[], kinds: TemplateKind[]): Template[] {
 export const START_RESOURCE: Record<TemplateKind, "standard" | "system" | "location" | "component"> = {
   standard_template: "standard",
   system_template: "system",
-  place_template: "location",
+  location_template: "location",
   component_template: "component",
 };
 
@@ -160,10 +160,10 @@ export type StartContext = {
 
 const SYSTEM_NEEDS: Perm[] = [["system", "create"], ["system", "read"], ["system", "update"], ["component", "create"], ["component", "update"]];
 
-// The standards a place template's systems are built to.
-function placeStandards(p: TemplatePlace, all: Template[]): string[] {
+// The standards a location template's systems are built to.
+function locationStandards(p: TemplateLocation, all: Template[]): string[] {
   const out: string[] = [];
-  for (const r of placeTreeRows(p)) {
+  for (const r of locationTreeRows(p)) {
     if (r.kind !== "system") continue;
     const st = all.find((x) => x.kind === "system_template" && x.name === r.template)?.system?.standard;
     if (st) out.push(st);
@@ -190,10 +190,10 @@ export function startNeeds(t: Template, ctx: StartContext): Perm[] {
       if (ctx.address) add(["endpoint", "create"]);
       break;
     }
-    case "place_template": {
+    case "location_template": {
       add(["location", "create"]);
-      const stds = t.place ? placeStandards(t.place, ctx.all) : [];
-      const carries = t.place ? placeTreeRows(t.place).some((r) => r.kind === "system") : false;
+      const stds = t.location ? locationStandards(t.location, ctx.all) : [];
+      const carries = t.location ? locationTreeRows(t.location).some((r) => r.kind === "system") : false;
       if (carries) SYSTEM_NEEDS.forEach(add);
       if (stds.some((s) => !ctx.held(s))) add(["standard", "create"]);
       break;
@@ -221,27 +221,27 @@ export function templateSummary(t: Template): string {
     const roles = Object.keys(t.system.roles ?? {}).length;
     return `built to ${t.system.standard}, ${roles} ${roles === 1 ? "component" : "components"}`;
   }
-  if (t.place) {
-    const rows = placeTreeRows(t.place);
-    const places = rows.filter((r) => r.kind === "place").length;
+  if (t.location) {
+    const rows = locationTreeRows(t.location);
+    const locations = rows.filter((r) => r.kind === "location").length;
     const systems = rows.filter((r) => r.kind === "system").length;
-    const p = `${places} ${places === 1 ? "place" : "places"}`;
+    const p = `${locations} ${locations === 1 ? "location" : "locations"}`;
     return systems ? `${p}, ${systems} ${systems === 1 ? "system" : "systems"}` : p;
   }
   if (t.component) return t.component.product;
   return "";
 }
 
-// A place template's subtree, flattened in pre-order for the indented tree: a
-// place row, then the systems that land in it, then the places beneath it.
-export type PlaceTreeRow =
-  | { kind: "place"; depth: number; type: string; name?: string; label?: string }
+// A location template's subtree, flattened in pre-order for the indented tree: a
+// location row, then the systems that land in it, then the locations beneath it.
+export type LocationTreeRow =
+  | { kind: "location"; depth: number; type: string; name?: string; label?: string }
   | { kind: "system"; depth: number; template: string; label?: string };
 
-export function placeTreeRows(p: TemplatePlace, depth = 0): PlaceTreeRow[] {
-  const out: PlaceTreeRow[] = [{ kind: "place", depth, type: p.type, name: p.name, label: p.label }];
+export function locationTreeRows(p: TemplateLocation, depth = 0): LocationTreeRow[] {
+  const out: LocationTreeRow[] = [{ kind: "location", depth, type: p.type, name: p.name, label: p.label }];
   for (const s of p.systems ?? []) out.push({ kind: "system", depth: depth + 1, template: s.template, label: s.label });
-  for (const c of p.places ?? []) out.push(...placeTreeRows(c, depth + 1));
+  for (const c of p.locations ?? []) out.push(...locationTreeRows(c, depth + 1));
   return out;
 }
 
@@ -300,7 +300,7 @@ export function standardBody(template: string, d: StandardDraft): StandardFromTe
 }
 
 export type ComponentDraft = {
-  place: string;
+  location: string;
   name: string;
   label: string;
   node: string;
@@ -318,7 +318,7 @@ export function componentBody(template: string, d: ComponentDraft): ComponentFro
   for (const [k, v] of Object.entries(d.secrets)) if (opt(v)) inputs[k] = v.trim();
   return {
     template,
-    location: opt(d.place),
+    location: opt(d.location),
     name: opt(d.name),
     label: opt(d.label),
     node: opt(d.node),
@@ -327,7 +327,7 @@ export function componentBody(template: string, d: ComponentDraft): ComponentFro
 }
 
 export type SystemDraft = {
-  place: string;
+  location: string;
   name: string;
   label: string;
   standard: string;
@@ -349,7 +349,7 @@ export function systemBody(template: string, d: SystemDraft): SystemFromTemplate
   }
   return {
     template,
-    location: opt(d.place),
+    location: opt(d.location),
     name: opt(d.name),
     label: opt(d.label),
     standard: opt(d.standard),
@@ -358,9 +358,9 @@ export function systemBody(template: string, d: SystemDraft): SystemFromTemplate
   };
 }
 
-export type PlacesDraft = { parent: string; name: string; label: string };
+export type LocationsDraft = { parent: string; name: string; label: string };
 
-export function placesBody(template: string, d: PlacesDraft): LocationsFromTemplateBody {
+export function locationsBody(template: string, d: LocationsDraft): LocationsFromTemplateBody {
   return { template, parent: opt(d.parent), name: opt(d.name), label: opt(d.label) };
 }
 
@@ -385,19 +385,19 @@ export function landingHref(base: string, template: string, extra: Record<string
 
 // --- Which place --------------------------------------------------------------
 
-// A place is offered and posted by its dotted path (hq.west.level-2), which the
+// A location is offered and posted by its dotted path (hq.west.level-2), which the
 // start routes take and which is unique, so the form's choice reads the same in
 // a script as on screen; a row the list has not pathed yet falls back to its
-// uuid. placeRef resolves a carried default (the create flows carry a uuid) to
+// uuid. locationRef resolves a carried default (the create flows carry a uuid) to
 // that value.
-type PlaceRow = { id: string; name: string; path?: string };
+type LocationRow = { id: string; name: string; path?: string };
 
-export function placeValue(l: PlaceRow): string {
+export function locationValue(l: LocationRow): string {
   return l.path || l.id;
 }
 
-export function placeRef(rows: PlaceRow[], ref: string | undefined): string {
+export function locationRef(rows: LocationRow[], ref: string | undefined): string {
   if (!ref) return "";
   const hit = rows.find((l) => l.id === ref || l.path === ref) ?? (rows.filter((l) => l.name === ref).length === 1 ? rows.find((l) => l.name === ref) : undefined);
-  return hit ? placeValue(hit) : ref;
+  return hit ? locationValue(hit) : ref;
 }

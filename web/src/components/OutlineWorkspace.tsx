@@ -18,18 +18,18 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { COMPONENT_TYPES_KEY, listComponentTypes, resolveComponentTypeIcon } from "../lib/component_types";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { canHoldChildren } from "../lib/location_type_graph";
-import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineEntry, type PlaceNode } from "../lib/outline";
+import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineEntry, type LocationNode } from "../lib/outline";
 import { parseChips, tagFilterKeys, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 
-// OutlineWorkspace (#861, extracted in #872): the outline of places with its
+// OutlineWorkspace (#861, extracted in #872): the outline of locations with its
 // counts line, need-attention, New, the chip filter and the matches list.
-// Explore renders it over the whole fleet; a place's detail view renders it
-// rooted at that place, listing what is beneath it.
+// Explore renders it over the whole fleet; a location's detail view renders it
+// rooted at that location, listing what is beneath it.
 //
-// A place wears its system (operators think of a room AS its system), so the
-// tree holds places only and a place's components sit directly beneath it.
+// A location wears its system (operators think of a room AS its system), so the
+// tree holds locations only and a location's components sit directly beneath it.
 // Nothing here reads a location type's name: the hierarchy, folding, counts
 // and what may be created under a row all come from the tree and from the
 // registry's allowed_parent_types (lib/outline, lib/location_type_graph).
@@ -93,7 +93,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
       tags: tags(),
     });
   });
-  // Rooted, the place's own node (unfolded); otherwise the whole fleet.
+  // Rooted, the location's own node (unfolded); otherwise the whole fleet.
   const root = createMemo(() => (props.rootId ? rootAt(outline(), props.rootId) : null));
   const roots = createMemo(() => {
     if (props.rootId) return root()?.children ?? [];
@@ -104,14 +104,14 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   const chips = createMemo<Chip[]>(() => parseChips(param("chips")));
 
   // The alarm text behind a red light, read only for the troubled systems on
-  // screen: those at a place the operator has opened, every place above it
+  // screen: those at a place the operator has opened, every location above it
   // open too, and none while the filter shows results instead of the tree.
   // Each read is shared with the system workspace's cache.
   const troubled = createMemo(() => {
     if (chips().length > 0) return [];
     const o = open();
     const ids: string[] = [];
-    const walk = (n: PlaceNode) => {
+    const walk = (n: LocationNode) => {
       if (!o.has(n.id)) return;
       for (const g of n.groups) if (g.system && (g.system.health === "degraded" || g.system.health === "outage")) ids.push(g.system.id);
       n.children.forEach(walk);
@@ -136,7 +136,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     const rest = chips().filter((c) => c.key !== "verdict");
     setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
   };
-  // Rooted, the counts cover what the list shows: the places beneath the
+  // Rooted, the counts cover what the list shows: the locations beneath the
   // root, never the root's own systems (their cards sit above the outline,
   // and a count the filter cannot narrow to is a broken promise).
   const rootedLights = () => roots().reduce((a, n) => ({
@@ -187,8 +187,8 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   };
   const create = (kind: AddKind, under?: string) => navigate(`/${kind}s/create${under ? `?under=${encodeURIComponent(under)}` : ""}`);
 
-  const subtree = (n: PlaceNode): string[] => [n.id, ...n.children.flatMap(subtree)];
-  const onToggle = (n: PlaceNode, deep: boolean) => {
+  const subtree = (n: LocationNode): string[] => [n.id, ...n.children.flatMap(subtree)];
+  const onToggle = (n: LocationNode, deep: boolean) => {
     const next = new Set(open());
     if (deep) for (const id of subtree(n)) next.add(id);
     else if (next.has(n.id)) next.delete(n.id);
@@ -215,14 +215,14 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     reveal(id);
   };
 
-  // ?node= reveals one row: a place, a system's place, or a component, by
+  // ?node= reveals one row: a location, a system's location, or a component, by
   // uuid or by a name that names exactly one thing (ADR-0062, #759's rule).
   let revealed = "";
   createEffect(() => {
     const raw = param("node");
     if (props.rootId || !raw || raw === revealed || !view.data) return;
     // Everything the address could name, of every kind: a name that names a
-    // place and a system both is ambiguous, and reveals nothing.
+    // location and a system both is ambiguous, and reveals nothing.
     const named = [...(view.data.locations ?? []), ...(view.data.systems ?? []), ...(components.data ?? [])];
     const byId = named.find((x) => x.id === raw)?.id;
     const byName = named.filter((x) => x.name === raw);
@@ -293,7 +293,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
                   rows={entries()}
                   chips={chips}
                   onChips={setChips}
-                  placeholder="Filter by name, place, health, type, standard, product or tag"
+                  placeholder="Filter by name, location, health, type, standard, product or tag"
                 >
                   {(filtered) => (
                     <Show
@@ -331,31 +331,31 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   );
 }
 
-// A filter result opens what its tree row would: a place holding one system
+// A filter result opens what its tree row would: a location holding one system
 // opens that system, any other place the location, a component itself.
-function findPlace(roots: PlaceNode[], id: string): PlaceNode | undefined {
+function findLocation(roots: LocationNode[], id: string): LocationNode | undefined {
   for (const r of roots) {
     if (r.id === id) return r;
-    const hit = findPlace(r.children, id);
+    const hit = findLocation(r.children, id);
     if (hit) return hit;
   }
   return undefined;
 }
-function targetOfEntry(e: OutlineEntry, roots: PlaceNode[]): OpenTarget | null {
+function targetOfEntry(e: OutlineEntry, roots: LocationNode[]): OpenTarget | null {
   if (e.kind === "component") return { kind: "component", id: e.id };
-  // The node of things out of sight is no place; it has no panel to open.
+  // The node of things out of sight is no location; it has no panel to open.
   if (e.id === "unplaced") return null;
-  const n = findPlace(roots, e.id);
+  const n = findLocation(roots, e.id);
   return n && n.systems.length === 1 ? { kind: "system", id: n.systems[0].id } : { kind: "location", id: e.id };
 }
 
-function Results(props: { entries: OutlineEntry[]; outlineRoots: PlaceNode[]; onOpen: (e: OutlineEntry) => void; onReveal: (e: OutlineEntry) => void }) {
+function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[]; onOpen: (e: OutlineEntry) => void; onReveal: (e: OutlineEntry) => void }) {
   return (
     <ul role="list" aria-label="Matches" class={`${OUTLINE_FRAME} py-2`}>
       <For each={props.entries}>
         {(e) => {
-          const place = () => (e.kind === "place" ? findPlace(props.outlineRoots, e.id) : undefined);
-          const Icon = resolveIcon(place()?.icon || (e.kind === "component" ? "box" : "map-pin"));
+          const location = () => (e.kind === "location" ? findLocation(props.outlineRoots, e.id) : undefined);
+          const Icon = resolveIcon(location()?.icon || (e.kind === "component" ? "box" : "map-pin"));
           return (
             <li
               role="listitem"
@@ -376,7 +376,7 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: PlaceNode[]; on
                 </span>
               </span>
               <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{e.kind === "component" ? e.product : e.standard}</span>
-              <span class={`truncate pr-4 text-base-content/55 ${NARROW_HIDDEN}`}>{place()?.contents ?? ""}</span>
+              <span class={`truncate pr-4 text-base-content/55 ${NARROW_HIDDEN}`}>{location()?.contents ?? ""}</span>
               <span>{e.verdict ? <HealthSlots single={e.verdict} /> : null}</span>
               <span />
             </li>

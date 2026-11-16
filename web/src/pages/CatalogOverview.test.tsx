@@ -72,7 +72,7 @@ function mount(me: Me = owner, opts: { skip?: (readonly string[])[] } = {}) {
     { name: "c-0", kind: "component_template" },
     { name: "c-1", kind: "component_template" },
     { name: "sy-0", kind: "system_template" },
-    { name: "p-0", kind: "place_template" },
+    { name: "p-0", kind: "location_template" },
   ]);
   const result = render(() => (
     <QueryClientProvider client={qc}>

@@ -2,12 +2,12 @@ import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { Popover } from "@kobalte/core/popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
-import type { ComponentGroup, ComponentRow, Lights, PlaceNode } from "../lib/outline";
+import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
 import { VERDICT_HUE, type Verdict } from "../lib/health";
 
-// The outline (#867): every place in the fleet as one tree, drawn as aligned
-// columns. A place wears its system (standard and health on its own row) and
-// lists the components beneath it directly; only a place holding several
+// The outline (#867): every location in the fleet as one tree, drawn as aligned
+// columns. A location wears its system (standard and health on its own row) and
+// lists the components beneath it directly; only a location holding several
 // systems shows a header per system. Health is four fixed slots, and only
 // healthy wears a muted green beside the full trouble hues, so a healthy fleet
 // reads calm and the one degraded branch is the loudest colour on the page.
@@ -38,9 +38,9 @@ const CHEV = 16;
 const INDENT_VARS = "[--og-indent:22px] @max-[28rem]:[--og-indent:12px]";
 
 type Row =
-  | { kind: "place"; key: string; depth: number; node: PlaceNode; parent: string | null }
-  | { kind: "group"; key: string; depth: number; group: ComponentGroup; place: PlaceNode; parent: string }
-  | { kind: "component"; key: string; depth: number; row: ComponentRow; place: PlaceNode; parent: string };
+  | { kind: "location"; key: string; depth: number; node: LocationNode; parent: string | null }
+  | { kind: "group"; key: string; depth: number; group: ComponentGroup; location: LocationNode; parent: string }
+  | { kind: "component"; key: string; depth: number; row: ComponentRow; location: LocationNode; parent: string };
 
 const VERDICTS: Verdict[] = ["healthy", "incomplete", "degraded", "outage"];
 const WORDS: Record<Verdict, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
@@ -93,35 +93,35 @@ export function HealthSlots(props: { lights?: Lights; single?: Verdict | null })
 }
 
 export default function Outline(props: {
-  roots: PlaceNode[];
+  roots: LocationNode[];
   expanded: Set<string>;
   selected: string | null;
-  onToggle: (node: PlaceNode, deep: boolean) => void;
+  onToggle: (node: LocationNode, deep: boolean) => void;
   onOpen: (target: OpenTarget, key: string) => void;
-  addOptions: (place: PlaceNode["chain"][number]) => AddKind[];
-  onAdd: (placeId: string, kind: AddKind) => void;
+  addOptions: (location: LocationNode["chain"][number]) => AddKind[];
+  onAdd: (locationId: string, kind: AddKind) => void;
   // The active alarm behind a component's light, when the caller has read one.
   issueOf?: (componentId: string) => string | undefined;
 }) {
   // What the row's + offers: a section per place the row stands for. A folded
-  // row is several places, and the outer ones must stay reachable, or a campus
+  // row is several locations, and the outer ones must stay reachable, or a campus
   // of one building could never gain a second.
-  const addTargets = (n: PlaceNode): AddTarget[] =>
+  const addTargets = (n: LocationNode): AddTarget[] =>
     n.id === "unplaced" ? [] : n.chain.map((c) => ({ id: c.id, label: c.label, kinds: props.addOptions(c) })).filter((t) => t.kinds.length > 0);
-  // A header per system only where a place holds several; the node of
+  // A header per system only where a location holds several; the node of
   // systems placed out of sight exists to list them, so it always heads.
-  const grouped = (n: PlaceNode) => n.id === "unplaced" || n.groups.filter((g) => g.system).length > 1;
+  const grouped = (n: LocationNode) => n.id === "unplaced" || n.groups.filter((g) => g.system).length > 1;
   const rows = createMemo<Row[]>(() => {
     const out: Row[] = [];
-    const walk = (n: PlaceNode, depth: number, parent: string | null) => {
-      out.push({ kind: "place", key: n.id, depth, node: n, parent });
+    const walk = (n: LocationNode, depth: number, parent: string | null) => {
+      out.push({ kind: "location", key: n.id, depth, node: n, parent });
       if (!props.expanded.has(n.id)) return;
       for (const c of n.children) walk(c, depth + 1, n.id);
       for (const g of n.groups) {
         const headed = grouped(n) && g.system !== null;
-        if (headed) out.push({ kind: "group", key: `${n.id}:${g.system!.id}`, depth: depth + 1, group: g, place: n, parent: n.id });
+        if (headed) out.push({ kind: "group", key: `${n.id}:${g.system!.id}`, depth: depth + 1, group: g, location: n, parent: n.id });
         for (const c of g.components) {
-          out.push({ kind: "component", key: `${n.id}:${g.system?.id ?? "-"}:${c.id}`, depth: depth + (headed ? 2 : 1), row: c, place: n, parent: headed ? `${n.id}:${g.system!.id}` : n.id });
+          out.push({ kind: "component", key: `${n.id}:${g.system?.id ?? "-"}:${c.id}`, depth: depth + (headed ? 2 : 1), row: c, location: n, parent: headed ? `${n.id}:${g.system!.id}` : n.id });
         }
       }
     };
@@ -151,14 +151,14 @@ export default function Outline(props: {
     if (r.node.id === "unplaced") return null;
     return r.node.systems.length === 1 ? { kind: "system", id: r.node.systems[0].id } : { kind: "location", id: r.node.id };
   };
-  // Only a row that would open onto something wears a chevron: a place whose
+  // Only a row that would open onto something wears a chevron: a location whose
   // one system holds no components yet has nothing beneath it.
   const expandable = (r: Row) =>
-    r.kind === "place" && (r.node.children.length > 0 || r.node.groups.some((g) => g.components.length > 0 || (grouped(r.node) && g.system !== null)));
-  // What a selection names: a place row answers to every place a fold joined
+    r.kind === "location" && (r.node.children.length > 0 || r.node.groups.some((g) => g.components.length > 0 || (grouped(r.node) && g.system !== null)));
+  // What a selection names: a location row answers to every place a fold joined
   // into it, and to the system it wears; a header or a component to its own.
   const answersTo = (r: Row, id: string) =>
-    r.kind === "place"
+    r.kind === "location"
       ? r.node.chain.some((c) => c.id === id) || (r.node.id !== "unplaced" && r.node.systems.length === 1 && r.node.systems[0].id === id)
       : (r.kind === "component" ? r.row.id : r.group.system!.id) === id;
 
@@ -170,15 +170,15 @@ export default function Outline(props: {
     const list = rows();
     if (e.key === "ArrowDown" && i + 1 < list.length) { e.preventDefault(); focusRow(list[i + 1].key); }
     else if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); focusRow(list[i - 1].key); }
-    else if (e.key === "ArrowRight" && r.kind === "place" && expandable(r)) {
+    else if (e.key === "ArrowRight" && r.kind === "location" && expandable(r)) {
       e.preventDefault();
       if (!props.expanded.has(r.node.id)) props.onToggle(r.node, false);
       else if (list[i + 1]) focusRow(list[i + 1].key);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      if (r.kind === "place" && props.expanded.has(r.node.id)) props.onToggle(r.node, false);
+      if (r.kind === "location" && props.expanded.has(r.node.id)) props.onToggle(r.node, false);
       else if (r.parent) focusRow(r.parent);
-    } else if (e.key === "*" && r.kind === "place") { e.preventDefault(); props.onToggle(r.node, true); }
+    } else if (e.key === "*" && r.kind === "location") { e.preventDefault(); props.onToggle(r.node, true); }
     else if (e.key === "+") {
       const add = (e.currentTarget as HTMLElement).querySelector<HTMLElement>("[data-add]");
       if (add) { e.preventDefault(); add.click(); }
@@ -187,7 +187,7 @@ export default function Outline(props: {
       e.preventDefault();
       const t = targetOf(r);
       if (t) props.onOpen(t, r.key);
-      else if (r.kind === "place" && expandable(r)) props.onToggle(r.node, false);
+      else if (r.kind === "location" && expandable(r)) props.onToggle(r.node, false);
     }
   };
 
@@ -199,7 +199,7 @@ export default function Outline(props: {
   });
 
   return (
-    <div ref={host} role="tree" aria-label="Places" class={`${OUTLINE_FRAME} pb-2`}>
+    <div ref={host} role="tree" aria-label="Locations" class={`${OUTLINE_FRAME} pb-2`}>
       <div class={`grid ${OUTLINE_COLS} h-8 items-center border-b border-base-300 px-4 text-xs font-medium text-base-content/40`} aria-hidden="true">
         <span style={{ "padding-left": `${CHEV + 8 + 16 + 8}px` }}>Name</span>
         <span class={ROOMY_ONLY}>Type</span>
@@ -215,11 +215,11 @@ export default function Outline(props: {
           const at = () => (last = byKey().get(key) ?? last);
           const r = () => at().row;
           const i = () => at().index;
-          const node = () => { const x = r(); return x.kind === "place" ? x.node : undefined; };
+          const node = () => { const x = r(); return x.kind === "location" ? x.node : undefined; };
           const comp = () => { const x = r(); return x.kind === "component" ? x.row : undefined; };
           const grp = () => { const x = r(); return x.kind === "group" ? x.group : undefined; };
           const issue = () => { const x = r(); return x.kind === "component" ? props.issueOf?.(x.row.id) : undefined; };
-          const isOpen = () => r().kind === "place" && props.expanded.has(node()!.id);
+          const isOpen = () => r().kind === "location" && props.expanded.has(node()!.id);
           const isSel = () => props.selected !== null && answersTo(r(), props.selected);
           return (
             <div
@@ -238,31 +238,31 @@ export default function Outline(props: {
                 setFocusKey(key);
                 const t = targetOf(r());
                 if (t) props.onOpen(t, r().key);
-                else if (expandable(r())) props.onToggle((r() as { node: PlaceNode }).node, false);
+                else if (expandable(r())) props.onToggle((r() as { node: LocationNode }).node, false);
               }}
             >
               <span class="flex min-w-0 items-center gap-2 pr-4" style={{ "padding-left": `calc(${r().depth} * var(--og-indent))` }}>
                 <Show
-                  when={r().kind === "place" && expandable(r())}
+                  when={r().kind === "location" && expandable(r())}
                   fallback={<span class="w-4 flex-none" aria-hidden="true" />}
                 >
                   <button
                     type="button"
                     tabindex={-1}
                     class="grid h-4 w-4 flex-none cursor-pointer place-items-center rounded text-base-content/50 hover:text-base-content"
-                    aria-label={`${isOpen() ? "Collapse" : "Expand"} ${r().kind === "place" ? node()!.chain[node()!.chain.length - 1].label : ""}`}
-                    onClick={(e) => { e.stopPropagation(); if (r().kind === "place") props.onToggle(node()!, e.altKey); }}
+                    aria-label={`${isOpen() ? "Collapse" : "Expand"} ${r().kind === "location" ? node()!.chain[node()!.chain.length - 1].label : ""}`}
+                    onClick={(e) => { e.stopPropagation(); if (r().kind === "location") props.onToggle(node()!, e.altKey); }}
                   >
                     <span class="transition-transform" classList={{ "rotate-90": isOpen() }}><ChevronRight size={12} /></span>
                   </button>
                 </Show>
-                <Show when={r().kind === "place"}>
+                <Show when={r().kind === "location"}>
                   {(() => {
-                    const n = () => (r() as { node: PlaceNode }).node;
+                    const n = () => (r() as { node: LocationNode }).node;
                     return (
                       <>
                         <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(n().icon || "map-pin")} size={16} /></span>
-                        {/* A folded row's outer path gives way first: the place's own
+                        {/* A folded row's outer path gives way first: the location's own
                             name is what the row is, so it keeps its width (capped at
                             the cell) and truncates only once the path is down to its
                             ellipsis. At the narrowest the path steps aside entirely,
@@ -301,9 +301,9 @@ export default function Outline(props: {
                   })()}
                 </Show>
               </span>
-              <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().kind === "place" ? node()!.type : ""}</span>
-              <span data-testid={r().kind === "place" && node()!.systems.length === 1 ? "standard" : undefined} class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>
-                {r().kind === "place"
+              <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().kind === "location" ? node()!.type : ""}</span>
+              <span data-testid={r().kind === "location" && node()!.systems.length === 1 ? "standard" : undefined} class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>
+                {r().kind === "location"
                   ? (node()!.systems.length === 1 ? node()!.systems[0].standard : node()!.systems.length > 1 ? `${node()!.systems.length} systems` : "")
                   : r().kind === "component" ? comp()!.product : grp()!.system!.standard}
               </span>
@@ -312,18 +312,18 @@ export default function Outline(props: {
                 classList={{ "text-error": !!issue(), "text-base-content/55": !issue() }}
                 title={issue()}
               >
-                {r().kind === "place" ? node()!.contents : (issue() ?? "")}
+                {r().kind === "location" ? node()!.contents : (issue() ?? "")}
               </span>
               <span>
-                {r().kind === "place"
+                {r().kind === "location"
                   ? (node()!.systems.length === 1 && node()!.children.length === 0 ? <HealthSlots single={node()!.health} /> : <HealthSlots lights={node()!.lights} />)
                   : r().kind === "component" ? <HealthSlots single={comp()!.health} /> : <HealthSlots single={grp()!.system!.health} />}
               </span>
               <span class="grid place-items-center" onClick={(e) => e.stopPropagation()}>
-                <Show when={r().kind === "place" && addTargets(node()!)}>
+                <Show when={r().kind === "location" && addTargets(node()!)}>
                   {(targets) => (
                     <Show when={targets().length > 0}>
-                      <AddMenu name={(r() as { node: PlaceNode }).node.chain.map((c) => c.label).join(" / ")} targets={targets()} onAdd={props.onAdd} />
+                      <AddMenu name={(r() as { node: LocationNode }).node.chain.map((c) => c.label).join(" / ")} targets={targets()} onAdd={props.onAdd} />
                     </Show>
                   )}
                 </Show>
@@ -340,7 +340,7 @@ const KIND_LABEL: Record<AddKind, string> = { location: "Location", system: "Sys
 
 type AddTarget = { id: string; label: string; kinds: AddKind[] };
 
-function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (placeId: string, kind: AddKind) => void }) {
+function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId: string, kind: AddKind) => void }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Popover open={open()} onOpenChange={setOpen} placement="bottom-end" gutter={4}>

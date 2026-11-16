@@ -107,7 +107,7 @@ export default function Templates(): JSX.Element {
       <Show when={starting() ? startRow() : undefined}>
         {(t) => (
           <Drawer open={true} onClose={() => setStarting(null)} title={<span>Start from {entityLabel(t())}</span>}>
-            <StartFromTemplateForm template={t()} all={rows()} place={param(params.place)} onDone={(href) => { setStarting(null); navigate(href); }} />
+            <StartFromTemplateForm template={t()} all={rows()} location={param(params.location)} onDone={(href) => { setStarting(null); navigate(href); }} />
           </Drawer>
         )}
       </Show>

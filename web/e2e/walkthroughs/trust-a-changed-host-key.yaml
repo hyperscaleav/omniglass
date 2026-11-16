@@ -1,4 +1,4 @@
-# Trust a changed host key (#1078): the briefing place's touch panel answers NVP
+# Trust a changed host key (#1078): the briefing location's touch panel answers NVP
 # over its ssh console, and its endpoint pins the host key the panel presented
 # before it was reimaged (internal/devseed/fixtures.yaml, sim_endpoints). The
 # simulated panel mints its own key when the simulator starts, so the node
@@ -10,7 +10,7 @@ title: Trust a changed host key
 description: A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.
 steps:
   - goto: /locations/briefing
-    caption: This place's system. A node collects its touch panel over the panel's ssh console.
+    caption: This location's system. A node collects its touch panel over the panel's ssh console.
   - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'

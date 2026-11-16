@@ -200,7 +200,7 @@ const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screens
 // Typed text that reaches the pacing rule's hooks: the prompt variables, the
 // DEMO_ variables the recorder and the prelude set, the prelude's demo__ names,
 // the shell's history (the prelude reads each line's number from it to pace and
-// to check it, so a line history skips is neither), and, in a command's place
+// to check it, so a line history skips is neither), and, in a command's location
 // (behind env, command, builtin or a path, too), an exec or a trap (either
 // replaces what the prelude installed; an exec that only opens or closes a
 // file descriptor replaces nothing) or an interactive shell (it would run

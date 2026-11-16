@@ -16,7 +16,7 @@ import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
-import PlaceCard from "../components/PlaceCard";
+import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
 import AcknowledgeButton from "../components/AcknowledgeButton";
 import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
@@ -51,7 +51,7 @@ import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
 // The component's detail view (#637, reoriented in #872): a component is a
-// piece of a system. Its place is a card of context (its own, or its system's
+// piece of a system. Its location is a card of context (its own, or its system's
 // standing in for one it does not have, and the card says which); then the
 // component itself: verdict, since-when (what took it down), product, and its
 // three tabs. Overview reads why, what it is, the systems it serves and the
@@ -167,7 +167,7 @@ export default function ComponentLeaf() {
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
   // The component's own verdict rides on its alarms read, polled; the fleet
-  // view's dot (read once, for the place and the path) stands in until then.
+  // view's dot (read once, for the location and the path) stands in until then.
   const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
@@ -216,17 +216,17 @@ export default function ComponentLeaf() {
   };
 
   const primary = createMemo(() => rows().find((r) => r.primary) ?? rows()[0]);
-  // Its own place, or (when it has none) its primary system's standing in.
-  const systemPlace = createMemo(() => {
+  // Its own location, or (when it has none) its primary system's standing in.
+  const systemLocation = createMemo(() => {
     const sid = primary()?.systemId;
     return sid ? (view.data?.systems ?? []).find((s) => s.id === sid)?.location ?? null : null;
   });
-  const placeId = () => component()?.location_id ?? systemPlace();
-  const provenance = () => (component()?.location_id ? "set here" : systemPlace() ? "from its system" : undefined);
+  const locationId = () => component()?.location_id ?? systemLocation();
+  const provenance = () => (component()?.location_id ? "set here" : systemLocation() ? "from its system" : undefined);
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
-    const trail = componentCrumbs(view.data, placeId(), primary()?.systemId);
+    const trail = componentCrumbs(view.data, locationId(), primary()?.systemId);
     return [
       // Back up lands where you were: the outline opened down to this row.
       { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` },
@@ -253,10 +253,10 @@ export default function ComponentLeaf() {
         onRetry={() => { void view.refetch(); void components.refetch(); }}
       >
         <div class="flex flex-col gap-3">
-          {/* In the room a system it serves makes, the place and the system
+          {/* In the room a system it serves makes, the location and the system
               are one thing, named under Systems it serves and in the path. */}
-          <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), rows().map((r) => r.systemId)))}>
-            <PlaceCard placeId={placeId()!} showName provenance={provenance()} />
+          <Show when={locationId() && !(view.data && isRoomOf(view.data, locationId(), rows().map((r) => r.systemId)))}>
+            <LocationCard locationId={locationId()!} showName provenance={provenance()} />
           </Show>
           <section data-testid="component-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             {/* State, age, identity: the header every detail view opens with.

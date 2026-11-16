@@ -4,7 +4,7 @@ import { ROOT_PLACEMENT } from "./location_types";
 //
 // A location type is customer data: one fleet runs campus, building, floor,
 // room; another runs plot, sector, coordinate. So nothing in the console may
-// decide a type's place in the hierarchy from its NAME. The registry already
+// decide a type's position in the hierarchy from its NAME. The registry already
 // says where each type may sit (allowed_parent_types), and that is the only
 // fact these read. Pure, so the answers are testable without a server.
 

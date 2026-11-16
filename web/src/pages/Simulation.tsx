@@ -347,9 +347,9 @@ function SimTable(props: {
     const c = props.byId.get(id);
     return c ? entityLabel(c) : (props.rowBy.get(id)?.sim.component ?? id);
   };
-  const place = (id: string) => props.byId.get(id)?.location ?? "";
+  const location = (id: string) => props.byId.get(id)?.location ?? "";
   const ids = createMemo(
-    () => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || place(a).localeCompare(place(b)) || a.localeCompare(b)),
+    () => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || location(a).localeCompare(location(b)) || a.localeCompare(b)),
     undefined,
     { equals: sameList },
   );
@@ -358,14 +358,14 @@ function SimTable(props: {
   const distinct = (rows: string[], get: (id: string) => string | undefined) => [...new Set(rows.map(get).filter((v): v is string => !!v))].sort();
   const filterKeys = (): FilterKey<string>[] => [
     { key: "name", type: "string", hint: "substring", get: (id) => `${label(id)} ${props.rowBy.get(id)?.sim.component ?? ""}`, values: () => [] },
-    { key: "place", type: "string", hint: "substring", get: place, values: (rows) => distinct(rows, place) },
+    { key: "location", type: "string", hint: "substring", get: location, values: (rows) => distinct(rows, location) },
     { key: "product", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.product, values: (rows) => distinct(rows, (id) => props.rowBy.get(id)?.sim.product) },
     ...(props.showNode ? [{ key: "node", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.node, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.node) }] : []),
     { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.status, values: () => [...SIM_STATES] },
     { key: "impairment", type: "string", hint: "substring", get: (id) => impairmentText(props.rowBy.get(id)?.sim), values: () => ["unplugged", "not applied", "none"] },
   ];
   return (
-    <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, place, product..." trailing={props.trailing}>
+    <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, location, product..." trailing={props.trailing}>
       {(filtered) => (
         <div class="overflow-x-auto">
           <table class="og-rows table table-fixed table-sm" style={{ "min-width": `${minWidth()}px` }} data-testid="sim-table">
@@ -485,11 +485,11 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
 function AddComponentForm(props: { nodes: string[]; close: () => void }) {
   const qc = useQueryClient();
   const me = useMe();
-  // Placing is optional, so a user who cannot read places adds unplaced components
+  // Placing is optional, so a user who cannot read locations adds unplaced components
   // and is never shown (or sent for) a list it would be refused.
-  const canPlace = () => can(me.data, "location", "read");
+  const canReadLocations = () => can(me.data, "location", "read");
   const profiles = useQuery(() => ({ queryKey: SIM_PROFILES_KEY, queryFn: listSimProfiles }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canPlace() }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
   const [draft, setDraft] = createSignal<AddComponentDraft>({ node: props.nodes.length === 1 ? props.nodes[0] : "", product: "", name: "", location: "" });
   const [touched, setTouched] = createSignal<Partial<Record<keyof AddComponentDraft, boolean>>>({});
   const [busy, setBusy] = createSignal(false);
@@ -569,7 +569,7 @@ function AddComponentForm(props: { nodes: string[]; close: () => void }) {
           disabled={busy()}
         />
       </FieldRow>
-      <Show when={canPlace()}>
+      <Show when={canReadLocations()}>
         <FieldRow label="Location" info="Where the component sits. Optional: an unplaced component is still served and collected.">
           <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
             <option value="">(unplaced)</option>

@@ -28,7 +28,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Location types (Catalog > Locations): the place classifier registry (campus, building, floor, room,
+// Location types (Catalog > Locations): the location classifier registry (campus, building, floor, room,
 // and your own) on the FlatList surface. The shipped rows are OFFICIAL and the
 // platform owns them (#703), which is what lets a release withdraw a value it
 // once shipped; editing one is still allowed and FORKS it (#655, ADR-0095), so

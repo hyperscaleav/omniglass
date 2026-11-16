@@ -397,7 +397,7 @@ describe("the component page's Simulation section", () => {
 });
 
 // A principal who may remove a component but not impair one, and one who may add
-// simulated components but not read places.
+// simulated components but not read locations.
 const remover: Me = { principal: { id: "u-rm", kind: "human" }, human: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
 const placeless: Me = {
   principal: { id: "u-np", kind: "human" }, human: { username: "placeless" },
@@ -584,7 +584,7 @@ describe("the Simulation page's writes and stale state", () => {
     expect(calls.some((c) => c.method === "POST")).toBe(false);
   });
 
-  it("offers no Location to a user who cannot read places, and never asks for them", async () => {
+  it("offers no Location to a user who cannot read locations, and never asks for them", async () => {
     stubFetch();
     await openAdd(placeless);
     await screen.findByLabelText("Name");
@@ -764,7 +764,7 @@ describe("adding a simulated system", () => {
     expect(screen.queryByTestId("sim-system-added")).toBeNull();
   });
 
-  it("sends a typed name and a chosen place", async () => {
+  it("sends a typed name and a chosen location", async () => {
     stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), node: "edge-hq", components: [], unstaffed: [] }) });
     const { qc } = await openAddSystem();
     qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
@@ -890,7 +890,7 @@ describe("adding a simulated system", () => {
     await waitFor(() => expect(gets()).toBe(2));
   });
 
-  it("alerts with a retry when the places cannot be read, instead of offering only unplaced", async () => {
+  it("alerts with a retry when the locations cannot be read, instead of offering only unplaced", async () => {
     stubFetch();
     await openAddSystem();
     const alert = await screen.findByTestId("locations-error");
@@ -910,7 +910,7 @@ describe("adding a simulated system", () => {
     expect(screen.getByText(/No system types yet/)).toBeTruthy();
   });
 
-  it("offers no Location to a principal who cannot read places, and never asks for them", async () => {
+  it("offers no Location to a principal who cannot read locations, and never asks for them", async () => {
     stubFetch();
     await openAddSystem(systemMaker);
     await screen.findByLabelText("Standard");

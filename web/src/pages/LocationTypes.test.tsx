@@ -10,7 +10,7 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Location Types page is the place classifier registry alone on the shared
+// The Location Types page is the location classifier registry alone on the shared
 // FlatList: one registry, one query, no secret_type anywhere on its path (#598
 // split the old joint Types page). A shipped row is official and editable, since
 // the edit FORKS it (#703, ADR-0095); a custom row is writable for a caller

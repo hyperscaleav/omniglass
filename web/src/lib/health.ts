@@ -35,7 +35,7 @@ export type FleetHealth = FleetHealthOutputBody;
 
 // One cache namespace per arc, so a system and a location that share a name never
 // collide.
-// The prefixes every system's and place's health share, for a write that moves them all.
+// The prefixes every system's and location's health share, for a write that moves them all.
 export const SYSTEM_HEALTH_PREFIX = ["system-health"] as const;
 export const LOCATION_HEALTH_PREFIX = ["location-health"] as const;
 export const systemHealthKey = (name: string) => [...SYSTEM_HEALTH_PREFIX, name] as const;

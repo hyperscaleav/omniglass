@@ -13,7 +13,7 @@ missions:
   - id: first-ten-minutes
     persona: An integrator who just installed Omniglass and has never seen it.
     user: dev
-    goal: From an empty install, add a place, a device in it, and see that device's reachability.
+    goal: From an empty install, add a location, a device in it, and see that device's reachability.
     scenario: empty
     lenses: [ux, design]
     surfaces: [web/src/pages/Home.tsx, web/src/pages/Locations.tsx, web/src/pages/Components.tsx, internal/api/components.go, internal/api/endpoints.go, web/src/lib/routemanifest.ts]

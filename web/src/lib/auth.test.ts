@@ -10,13 +10,13 @@ const me = (permissions: string[], fleet_permissions: string[]): Me => ({
 
 // canFleet is can() over the permissions an all-scope grant carries: what a
 // caller may do to fleet-wide config (event rules), which a grant bounded to a
-// place reaches in the flattened set but not on the server.
+// location reaches in the flattened set but not on the server.
 describe("canFleet", () => {
   it("judges the all-scope permissions, not the flattened set", () => {
-    const placeOwner = me([">"], ["*:read"]);
-    expect(can(placeOwner, "rule", "create")).toBe(true);
-    expect(canFleet(placeOwner, "rule", "create")).toBe(false);
-    expect(canFleet(placeOwner, "rule", "read")).toBe(true);
+    const locationOwner = me([">"], ["*:read"]);
+    expect(can(locationOwner, "rule", "create")).toBe(true);
+    expect(canFleet(locationOwner, "rule", "create")).toBe(false);
+    expect(canFleet(locationOwner, "rule", "read")).toBe(true);
   });
 
   it("matches like can, read floor included", () => {

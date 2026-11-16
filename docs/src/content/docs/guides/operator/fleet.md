@@ -88,7 +88,7 @@ screenshots:
     # Nothing on a folder's view moves with the clock: no mask.
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
-  - id: fleet-place-systems
+  - id: fleet-location-systems
     path: /web/locations/media-lab
     alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
     # Each card's since line ages with the capture. The mask DECLARES its
@@ -119,7 +119,7 @@ screenshots:
         selector: "role=button[name='Expand Huddle Room']"
     alt: "Explore: the outline of places, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed place says what it holds and counts its systems by health."
 walkthroughs:
-  - id: find-and-fix-a-place
+  - id: find-and-fix-a-location
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every place you
@@ -268,7 +268,7 @@ contents lines, health counts, chip filter, **need attention** and **+** as Expl
 over this subtree. A place holding two or more systems shows a brief card per system first
 (verdict, since when, standard, size, why), each opening that system's view.
 
-::screenshot{#fleet-place-systems}
+::screenshot{#fleet-location-systems}
 
 A place holding one system has no view of its own even to be configured: its place is
 configured on the system's **Configure** tab, in a **Place** section with its own Edit, so the
@@ -365,7 +365,7 @@ properties and their cascade are configuration, and live here.
 Finding a place and fixing its label runs the whole path: Explore down to the place, its system's
 view, the place's own section under Configure, and the new label read everywhere the place appears.
 
-::walkthrough{#find-and-fix-a-place}
+::walkthrough{#find-and-fix-a-location}
 
 ## A component
 

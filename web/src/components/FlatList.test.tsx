@@ -76,7 +76,7 @@ describe("FlatList row order", () => {
 
 // A list that opts in with loadingRows holds its table space while the first read
 // is in flight (skeleton rows of the typical page), so the loaded rows land in
-// place instead of pushing the content below them down (the probe's layout-shift
+// location instead of pushing the content below them down (the probe's layout-shift
 // budget, #1461). Without the opt-in the "Loading…" line is unchanged.
 describe("FlatList loading placeholder", () => {
   const cfg = (loading: boolean, loadingRows?: number) => ({

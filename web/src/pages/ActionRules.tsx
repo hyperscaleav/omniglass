@@ -48,7 +48,7 @@ import {
 
 export const ACTION_RULE_HINTS = {
   on: "Which edges of an alarm send: when it is raised, when it clears, or both. Acknowledging an alarm never sends anything.",
-  when: "A predicate over the alarm's facts (component, place, severity, severity_rank, message, rule and more). Empty always holds: every alarm transition sends. severity_rank >= 40 is high and above.",
+  when: "A predicate over the alarm's facts (component, location, severity, severity_rank, message, rule and more). Empty always holds: every alarm transition sends. severity_rank >= 40 is high and above.",
   targets: "Where it sends: one notification per target, per transition. A disabled target is skipped.",
   type: "What the message says. The official one for the transition (alarm-raised, alarm-cleared) unless you pick your own from Notifications.",
   optOut: "Whether a member of a group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of. Turning it off withdraws every opt-out, and turning it back on does not restore them.",

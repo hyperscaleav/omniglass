@@ -210,7 +210,7 @@ export const Siren: Component<P> = (p) => (
   <Svg size={p.size}><path d="M7 18v-6a5 5 0 0 1 10 0v6" /><path d="M3 21h18" /><path d="M12 2v1M4.5 5.5l.7.7M19.5 5.5l-.7.7" /></Svg>
 );
 
-// Place-type glyphs: the leading icon a location wears in the tree, resolved from
+// Location-type glyphs: the leading icon a location wears in the tree, resolved from
 // its location_type's icon key (see resolveIcon below).
 export const Landmark: Component<P> = (p) => (
   <Svg size={p.size}><path d="M3 22h18" /><path d="m12 2 9 5H3z" /><path d="M6 10v8M10 10v8M14 10v8M18 10v8" /></Svg>

@@ -86,7 +86,7 @@ describe("Home Platform tile", () => {
     expect(screen.queryByText("Collectors")).toBeNull();
   });
 
-  // node:read held only for some places is refused by the view: the tile says
+  // node:read held only for some locations is refused by the view: the tile says
   // which read it needs rather than reading the platform forever.
   it("on a refusal reads that it needs a fleet-wide node read", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {

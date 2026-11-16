@@ -155,20 +155,20 @@ describe("the component leaf", () => {
     expect(within(card).queryByText(/driven by/)).toBeNull();
   });
 
-  // Each fact once (#872 audit): in the room its one system makes, the place
+  // Each fact once (#872 audit): in the room its one system makes, the location
   // and the system are one thing, already named by "Systems it serves" (and
-  // the path), so no place card says it again.
-  it("shows no place card where its place is the room of a system it serves", () => {
+  // the path), so no location card says it again.
+  it("shows no location card where its location is the room of a system it serves", () => {
     mount();
-    expect(screen.queryByTestId("place-card")).toBeNull();
+    expect(screen.queryByTestId("location-card")).toBeNull();
     expect(within(screen.getByTestId("leaf-memberships")).getByText("Boardroom System")).toBeTruthy();
   });
 
-  it("shows a place card, marked as its own, where it sits apart from the systems it serves", () => {
+  it("shows a location card, marked as its own, where it sits apart from the systems it serves", () => {
     mount(undefined, undefined, { ...bar, location: "hq", location_id: uuidFor("cf-hq") } as unknown as Component);
-    const card = screen.getByTestId("place-card");
+    const card = screen.getByTestId("location-card");
     expect(within(card).getByText("Headquarters")).toBeTruthy();
-    expect(within(card).getByTestId("place-provenance").textContent).toBe("set here");
+    expect(within(card).getByTestId("location-provenance").textContent).toBe("set here");
   });
 
   it("names its product once, under what it is, not in the header too", () => {

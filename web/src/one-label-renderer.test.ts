@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// One place renders a label (#683).
+// One component renders a label (#683).
 //
 // `entityLabel` has been the single renderer since #581, and the console went on
 // hand-rolling `label || name` beside it anyway, in three dialects:
@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 // typing "undefined" matched every unlabelled row and typing a label matched
 // nothing on the pages that spelled it `${r.name} ${r.label}`. No page
 // test catches that, because the page nobody wrote a test for is the page that
-// drifts, and a rule written out seventy times drifts in seventy places.
+// drifts, and a rule written out seventy times drifts seventy ways.
 //
 // It matters more now than it did: #682 made a label something a RULE renders,
 // so a second renderer no longer merely looks different, it disagrees about who

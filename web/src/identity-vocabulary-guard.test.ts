@@ -212,7 +212,7 @@ describe("the identity words are written in exactly one place", () => {
       `\nThese label a field or fact with an identity word by hand:\n  ${offenders.join("\n  ")}\n\n` +
         `Say which fact it is bound to instead: bind="name" or bind="label".\n` +
         `The label then comes from IDENTITY_LABELS in lib/entities, which is the only\n` +
-        `place either word is written, so the two cannot be swapped again.\n`,
+        `location either word is written, so the two cannot be swapped again.\n`,
     ).toEqual([]);
   });
 

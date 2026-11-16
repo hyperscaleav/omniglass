@@ -23,14 +23,14 @@ import { treeValue } from "../components/TreeSelect.testkit";
 // The fleet create page's two ways in (#1329): from scratch (the default, the
 // kind's own form) or from a template of the kind, inside the page rather than a
 // trip to the Templates catalog. The template face lists only the kind's
-// templates (a place template for a location), shows what the chosen one
+// templates (a location template for a location), shows what the chosen one
 // creates, asks only what it needs, posts the kind's :createFromTemplate, and
-// lands on the created row's id with the notice. ?under= is the default place.
+// lands on the created row's id with the notice. ?under= is the default location.
 
 const catalog: Template[] = [
   { kind: "standard_template", name: "mr55", label: "Meeting Room 55", standard: { roles: [{ name: "main-display", label: "Main display", quorum: 1 }] } },
   { kind: "system_template", name: "mr55-system", label: "Meeting Room 55, staffed", system: { standard: "mr55", roles: { "main-display": { component: "boreal-edge-55" } } } },
-  { kind: "place_template", name: "meeting-floor", label: "A floor of meeting rooms", place: { type: "floor", label: "Meeting floor" } },
+  { kind: "location_template", name: "meeting-floor", label: "A floor of meeting rooms", location: { type: "floor", label: "Meeting floor" } },
   { kind: "component_template", name: "boreal-edge-55", label: "Boreal Edge 55 display", component: { product: "boreal-edge-55", inputs: { port: "161" } } },
 ];
 
@@ -118,7 +118,7 @@ describe("CreatePage's From a template", () => {
     expect(screen.queryByTestId("template-create")).toBeNull();
   });
 
-  it("creates a system from a template at the carried place and lands on its id", async () => {
+  it("creates a system from a template at the carried location and lands on its id", async () => {
     const posts = api({ "/systems:createFromTemplate": { template: "mr55-system", system: "meeting-1", system_id: uuidFor("sys-1"), standard: "mr55", standards_created: [], components: [], to_attach: [] } });
     mount(`/systems/create?under=${west.id}`, admin, [mr55]);
     const picker = await fromTemplate();
@@ -126,7 +126,7 @@ describe("CreatePage's From a template", () => {
     expect(screen.queryByTestId("entity-create-form")).toBeNull();
     fireEvent.change(picker, { target: { value: "mr55-system" } });
     const form = await screen.findByTestId("start-form-system");
-    expect(treeValue(within(form).getByLabelText("Place"))).toBe("West");
+    expect(treeValue(within(form).getByLabelText("Location"))).toBe("West");
     fireEvent.click(screen.getByRole("button", { name: "Start system" }));
     await waitFor(() => expect(landed).toBe(`/systems/${uuidFor("sys-1")}?from=mr55-system`));
     // The unclassified scratch form asks no name preview (#1548) and the template face mounts
@@ -135,15 +135,15 @@ describe("CreatePage's From a template", () => {
     expect(posts.filter((p) => p.url.includes("FromTemplate"))).toEqual([{ url: expect.stringMatching(/\/systems:createFromTemplate$/), body: { template: "mr55-system", location: "hq.west" } }]);
   });
 
-  it("creates places from a place template under the carried parent", async () => {
-    const posts = api({ "/locations:createFromTemplate": { template: "meeting-floor", places: [{ location: "level-9", location_id: uuidFor("l-9"), type: "floor" }], systems: [], standards_created: [], to_attach: [] } });
+  it("creates locations from a location template under the carried parent", async () => {
+    const posts = api({ "/locations:createFromTemplate": { template: "meeting-floor", locations: [{ location: "level-9", location_id: uuidFor("l-9"), type: "floor" }], systems: [], standards_created: [], to_attach: [] } });
     mount(`/locations/create?under=${west.id}`);
     const picker = await fromTemplate();
     expect(offered(picker)).toEqual(["meeting-floor"]);
     fireEvent.change(picker, { target: { value: "meeting-floor" } });
-    const form = await screen.findByTestId("start-form-place");
+    const form = await screen.findByTestId("start-form-location");
     fireEvent.input(within(form).getByLabelText("Name"), { target: { value: "level-9" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start locations" }));
     await waitFor(() => expect(landed).toBe(`/locations/${uuidFor("l-9")}?from=meeting-floor`));
     expect(posts.find((p) => p.url.includes("FromTemplate"))).toEqual({ url: expect.stringMatching(/\/locations:createFromTemplate$/), body: { template: "meeting-floor", parent: "hq.west", name: "level-9" } });
   });
