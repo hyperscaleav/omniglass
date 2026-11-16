@@ -20,7 +20,10 @@ refs: [1882, 1577, 1868]
 - **Consequences:** A node refused from the start heartbeats, its platform component carries its
   node-self figures, and it reads a pull loss of 1 every window until a worklist lands; the seeded
   `worklist-stale` rule fires on it like any other refused node. A node up with no worklist yet
-  is no longer told apart by its heartbeat; its pull loss and its worklist task count say it.
+  is no longer told apart by its heartbeat; its pull loss and its worklist task count, 0 until a
+  worklist lands, say it. The server's report window rides the worklist, so until then a node
+  started without `--report-every` reports on the default window of one minute. Its lane count
+  and a busy fraction of 0 are reported as for any idle node.
 - **Not chosen:**
   - **Keep the silence and read it as down.** It is the defect: down and refused have different
     fixes, and only the node knows which it is.

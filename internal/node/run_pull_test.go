@@ -441,7 +441,14 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	if got := srv.WorklistCounts().Served; got != 0 {
 		t.Fatalf("%d worklists served while the read was down", got)
 	}
+	// It runs no task while it waits, and says so rather than leaving a
+	// count from some earlier run standing.
+	if m, err := gw.LatestMetric(ctx, component, writerclass.WorklistTaskCount); err != nil || m == nil || m.Value != 0 {
+		t.Errorf("worklist task count while refused: %+v, %v; want 0", m, err)
+	}
 
+	// The first pull's backoff may have reached its 30 s cap by now, so the
+	// served pull can land up to a full step after the flip.
 	down.Store(false)
-	pollUntil(t, 15*time.Second, "a node served at last never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, 45*time.Second, "a node served at last never read 0", func() bool { return loss() == 0 })
 }

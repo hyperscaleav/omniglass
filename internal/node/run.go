@@ -401,6 +401,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// reports that loss (#1882).
 	self := newNodeReport(cfg.ReportEvery, reportSeed, reportStart)
 	self.lanes(lanes)
+	self.worklist(0, reportStart)
 
 	// Until the first worklist arrives the node heartbeats and sends its
 	// account of itself each tick, as the run loop does after: a node the
@@ -413,12 +414,12 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		spool.retry()
 		publishSelf(spool, cfg.Name, sink, self.account(dispatchWindow{}, spool, sessions))
 	})
-	if err != nil {
+	if err != nil || !ok {
+		// Refused on a one-shot run, or stopped before the server answered:
+		// there is nothing to run, but the ticks meanwhile spooled the
+		// node's account of why.
+		drainAtExit(spool, nc, logger)
 		return collection.WorklistReply{}, err
-	}
-	if !ok {
-		// Stopped before the server answered: there is nothing to run.
-		return collection.WorklistReply{}, nil
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
 	// executedCommands remembers each pulled command's outcome across ticks:
@@ -596,17 +597,20 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		settle: arm,
 	}
 	wl = loop.run(ctx, wl)
+	drainAtExit(spool, nc, logger)
+	return wl, nil
+}
 
-	// Ship what the spool still holds, its pending groups flushed first,
-	// before the connection closes, within a bound: the spool is memory, so a
-	// batch left in it at exit is gone.
+// drainAtExit ships what the spool still holds, its pending groups flushed
+// first, before the connection closes, within a bound: the spool is memory,
+// so a batch left in it at exit is gone.
+func drainAtExit(spool *telemetrySpool, nc *nats.Conn, logger *slog.Logger) {
 	dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
 	defer cancel()
 	if err := spool.drain(dctx); err != nil {
 		logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
 	}
 	_ = nc.Flush()
-	return wl, nil
 }
 
 // sessionDials is the node's session-dials bound: the configured one, or
