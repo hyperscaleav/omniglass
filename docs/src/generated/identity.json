@@ -298,6 +298,19 @@
       "labelled": true
     },
     {
+      "table": "oauth_client",
+      "shape": "id only",
+      "reason": "an MCP client that registered itself (#2048), addressed by its client id; the name it declared is shown at consent, is not unique and is no key",
+      "labelled": false
+    },
+    {
+      "table": "oauth_code",
+      "shape": "human identifier, not a name",
+      "reason": "keyed by the hash of a minted authorization code (#2048), not a name: it lives five minutes and is spent by its one exchange",
+      "labelled": false,
+      "no_label": "no operator surface of its own: only the token exchange reads a code"
+    },
+    {
       "table": "platform_server",
       "shape": "human identifier, not a name",
       "reason": "the identity a server boots under (OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a kebab token, and the server's component carries the operator-facing name (#1627)",
