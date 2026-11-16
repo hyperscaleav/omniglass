@@ -1299,6 +1299,13 @@ operation with a credential-shaped body goes unstamped, so the rule does not dep
 The catalog's triage read is `GET /alarms` (`list-alarms`): the fleet's active alarms in the caller's
 component scope, worst first.
 
+Beside the tools, the server serves **skills** as MCP prompts: workflows such as triaging an alarm,
+each one Markdown file embedded in the binary, that tell an agent which tools to call for a whole job
+and to ask before any write. A skill runs nothing itself, so it adds no permission and no path around
+one; the permissions it needs are read from its tools' gates. They are listed in the generated
+[MCP skills reference](/reference/mcp/skills/)
+([ADR-2026](/architecture/decisions/#adr-2026-the-mcp-server-serves-embedded-skills-as-prompts)).
+
 :::design[Views as MCP tools, tracked in #523]
 The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
 :::

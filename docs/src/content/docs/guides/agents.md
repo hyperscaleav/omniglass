@@ -65,6 +65,25 @@ claude mcp add omniglass \
 The relay serves exactly the tools the server lists, sends the token only to the server you named, and
 never follows a redirect elsewhere.
 
+## Skills
+
+Tools are what an agent can do; a skill is how to do a whole job with them. The server serves each
+[skill](/reference/mcp/skills/) as an MCP prompt, so it shows up in your client beside the tools: in
+Claude Code, type `/` and pick `mcp__omniglass__triage-alarm`, then name the component. The agent gets
+the workflow (read the alarm, check reachability, find what changed, check what depends on it,
+recommend a next step) and works through it with your token, asking before anything that changes the
+fleet.
+
+A skill never handles a credential. When a step needs one, such as a fresh poll or a command, the
+server runs it with the credentials bound to the endpoint; the agent only learns they are there.
+
+An agent that reads skill files rather than prompts can take one straight from the binary:
+
+```bash
+omniglass mcp skill                 # the skills, as JSON
+omniglass mcp skill triage-alarm > .claude/skills/triage-alarm/SKILL.md
+```
+
 ## Try it from a terminal
 
 `omniglass mcp tools` and `omniglass mcp call` are a small MCP client over stdio, the same path an agent

@@ -3816,6 +3816,22 @@ Example:
 omniglass mcp call get-component-reachability --args '{"name":"panel-1"}'
 ```
 
+### `omniglass mcp skill`
+
+List the agent skills, or print one as its SKILL.md
+
+```
+omniglass mcp skill [name]
+```
+
+Lists the skills the omniglass MCP server serves as prompts (workflows such as triaging an alarm), or prints one as an Agent Skills SKILL.md, for an agent that reads skill files. The skills ship in the binary, so this needs no server.
+
+Example:
+
+```sh
+omniglass mcp skill triage-alarm > .claude/skills/triage-alarm/SKILL.md
+```
+
 ### `omniglass mcp tools`
 
 List the MCP tools, as an MCP client over stdio sees them

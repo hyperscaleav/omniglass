@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hyperscaleav/omniglass/internal/mcp"
+	"github.com/hyperscaleav/omniglass/internal/mcp/skills"
 )
 
 // newMCPCmd is `omniglass mcp` (#1162): the stdio face of the server's MCP
@@ -21,7 +22,7 @@ import (
 // default from OMNIGLASS_SERVER and OMNIGLASS_TOKEN), so the agent drives the
 // same generated tools, with the same token's permissions, as one connecting
 // over HTTP. `tools` and `call` are a thin stdio client of it, for scripts and
-// demos.
+// demos; `skill` prints the skills it serves as prompts.
 func newMCPCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
@@ -37,7 +38,7 @@ func newMCPCmd(version string) *cobra.Command {
 			return mcp.Relay(cmd.Context(), os.Stdin, os.Stdout, endpointOf(server), token, version)
 		},
 	}
-	cmd.AddCommand(newMCPToolsCmd(version), newMCPCallCmd(version))
+	cmd.AddCommand(newMCPToolsCmd(version), newMCPCallCmd(version), newMCPSkillCmd())
 	return cmd
 }
 
@@ -172,4 +173,44 @@ func printJSON(cmd *cobra.Command, v any) error {
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), string(b))
 	return nil
+}
+
+// newMCPSkillCmd is `omniglass mcp skill [name]` (#2026): the skills the MCP
+// server serves as prompts, read from the binary, for an agent that loads skill
+// files rather than prompts. With no name it lists them; with one it prints that
+// SKILL.md exactly, front matter and all.
+func newMCPSkillCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "skill [name]",
+		Short: "List the agent skills, or print one as its SKILL.md",
+		Long: "Lists the skills the omniglass MCP server serves as prompts (workflows such as triaging an alarm), or " +
+			"prints one as an Agent Skills SKILL.md, for an agent that reads skill files. The skills ship in the " +
+			"binary, so this needs no server.",
+		Example: `  omniglass mcp skill triage-alarm > .claude/skills/triage-alarm/SKILL.md`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, pos []string) error {
+			if len(pos) == 0 {
+				type listed struct {
+					Name        string `json:"name"`
+					Category    string `json:"category"`
+					Description string `json:"description"`
+				}
+				out := []listed{}
+				for _, s := range skills.All() {
+					out = append(out, listed{Name: s.Name, Category: s.Category, Description: s.Description})
+				}
+				return printJSON(cmd, out)
+			}
+			s, ok := skills.Get(pos[0])
+			if !ok {
+				var names []string
+				for _, s := range skills.All() {
+					names = append(names, s.Name)
+				}
+				return fmt.Errorf("no skill %q; the skills are %s", pos[0], strings.Join(names, ", "))
+			}
+			_, err := cmd.OutOrStdout().Write(s.Raw)
+			return err
+		},
+	}
 }

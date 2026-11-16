@@ -44,11 +44,12 @@ func NewHandler(api http.Handler, version string) http.Handler {
 	return requireBearer(api, http.NewCrossOriginProtection().Handler(h))
 }
 
-// newServer builds the MCP server over the catalog.
+// newServer builds the MCP server over the catalog and the skills.
 func newServer(api http.Handler, version string) *sdk.Server {
 	srv := sdk.NewServer(&sdk.Implementation{Name: "omniglass", Title: "Omniglass", Version: version}, &sdk.ServerOptions{
-		Instructions: instructions,
+		Instructions: instructions + skillInstructions(),
 	})
+	addSkills(srv)
 	for _, d := range catalog {
 		d := d
 		srv.AddTool(toolFor(d), func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
