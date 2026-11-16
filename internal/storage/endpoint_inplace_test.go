@@ -54,7 +54,7 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp,
 		Inputs:     map[string]string{"host": "10.20.4.70", "port": "2399", "login": "panel-login"},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 	}
 	before := taskIDs()
 	patch := func(p storage.EndpointPatch) (*storage.Endpoint, error) {
-		p.SecretRead, p.CanAdmin = all, true
+		p.SecretRead, p.SecretBind, p.CanAdmin = all, all, true
 		return gw.UpdateEndpoint(ctx, "", ep.ID, p, all, all)
 	}
 
@@ -135,7 +135,7 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 		{storage.EndpointPatch{Inputs: map[string]string{"host": ""}}, "host", all},
 	}
 	for _, r := range refusals {
-		r.patch.SecretRead, r.patch.CanAdmin = r.read, true
+		r.patch.SecretRead, r.patch.SecretBind, r.patch.CanAdmin = r.read, r.read, true
 		_, err := gw.UpdateEndpoint(ctx, "", ep.ID, r.patch, all, all)
 		if !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), r.want) {
 			t.Errorf("patch %+v = %v, want ErrEndpointPatchInvalid naming %q", r.patch, err, r.want)
@@ -178,14 +178,14 @@ func TestAnInPlaceEditSurvivesADriverDroppingAnInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp,
-		Inputs: map[string]string{"host": "10.0.0.3", "port": "5000", "note": "x"}, SecretRead: all, CanAdmin: true}, all)
+		Inputs: map[string]string{"host": "10.0.0.3", "port": "5000", "note": "x"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.UpdateDriver(ctx, "", d.ID, storage.DriverPatch{Spec: spec("")}); err != nil {
 		t.Fatal(err)
 	}
-	after, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"timeout":"3s"}`), SecretRead: all, CanAdmin: true}, all, all)
+	after, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"timeout":"3s"}`), SecretRead: all, SecretBind: all, CanAdmin: true}, all, all)
 	if err != nil {
 		t.Fatalf("an edit after the driver dropped an input: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestAnInPlaceEditSurvivesADriverDroppingAnInput(t *testing.T) {
 		t.Fatalf("the dropped input survived: %s", after.Inputs)
 	}
 	// An optional input cleared falls back to its default.
-	after, err = gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"port": ""}, SecretRead: all, CanAdmin: true}, all, all)
+	after, err = gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"port": ""}, SecretRead: all, SecretBind: all, CanAdmin: true}, all, all)
 	if err != nil {
 		t.Fatalf("clear the port: %v", err)
 	}

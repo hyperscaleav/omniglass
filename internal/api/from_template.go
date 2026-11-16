@@ -26,15 +26,15 @@ import (
 
 // planScopes are the caller's scopes for every write a plan can make.
 func planScopes(ctx context.Context, a *authenticator) storage.PlanScopes {
-	secretRead, canAdmin := a.secretBind(ctx)
+	use := a.secretBind(ctx)
 	return storage.PlanScopes{
 		LocationCreate: a.scopeFor(ctx, "location", "create"), LocationRead: a.scopeFor(ctx, "location", "read"),
 		SystemCreate: a.scopeFor(ctx, "system", "create"), SystemRead: a.scopeFor(ctx, "system", "read"),
 		SystemUpdate:    a.scopeFor(ctx, "system", "update"),
 		ComponentCreate: a.scopeFor(ctx, "component", "create"), ComponentRead: a.scopeFor(ctx, "component", "read"),
 		ComponentUpdate: a.scopeFor(ctx, "component", "update"),
-		EndpointCreate:  a.scopeFor(ctx, "endpoint", "create"), SecretRead: secretRead,
-		CanAdmin:          canAdmin,
+		EndpointCreate:  a.scopeFor(ctx, "endpoint", "create"), SecretRead: use.Read, SecretBind: use.Bind,
+		CanAdmin:          use.CanAdmin,
 		CanCreateStandard: a.allows(ctx, "standard", "create"),
 	}
 }
@@ -123,7 +123,7 @@ type createComponentFromTemplateInput struct {
 		Name     string            `json:"name,omitempty" doc:"The component's name; minted as an unnamed create mints it when empty"`
 		Label    string            `json:"label,omitempty" doc:"The component's label"`
 		Node     string            `json:"node,omitempty" doc:"The node the endpoint is placed on; needed when inputs carry an address"`
-		Inputs   map[string]string `json:"inputs,omitempty" doc:"Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read"`
+		Inputs   map[string]string `json:"inputs,omitempty" doc:"Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)"`
 	}
 }
 
@@ -203,16 +203,16 @@ func createdStandardNames(made *storage.Planned) []string {
 }
 
 func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage.Gateway, cat *template.Catalog) {
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-component-from-template",
 		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/components:createFromTemplate",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Start a component from a template",
-		Description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. " +
+		Description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. " +
 			"Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
-	}, "component", "create"), func(ctx context.Context, in *createComponentFromTemplateInput) (*createComponentFromTemplateOutput, error) {
+	}, "component", "create"), "secret", "bind"), func(ctx context.Context, in *createComponentFromTemplateInput) (*createComponentFromTemplateOutput, error) {
 		t, err := cat.GetKind(in.Body.Template, template.KindComponent)
 		if err != nil {
 			return nil, mapFromTemplateErr(err)
@@ -248,7 +248,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-system-from-template",
 		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
@@ -257,7 +257,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		Summary:       "Start a whole system from a template",
 		Description: "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. " +
 			"Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
-	}, "system", "create"), func(ctx context.Context, in *createSystemFromTemplateInput) (*createSystemFromTemplateOutput, error) {
+	}, "system", "create"), "secret", "bind"), func(ctx context.Context, in *createSystemFromTemplateInput) (*createSystemFromTemplateOutput, error) {
 		t, err := cat.GetKind(in.Body.Template, template.KindSystem)
 		if err != nil {
 			return nil, mapFromTemplateErr(err)

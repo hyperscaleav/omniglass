@@ -595,8 +595,8 @@ read masks it to its scheme and host, the audit log records it masked (and an ed
 changed), and `:reveal` returns it whole under an audit row of its own. The bound credential is a
 **platform secret** of the `hmac-key` type (the send signs each body) or the `bearer-token` type
 (the send presents it); a secret a target binds cannot be deleted from under it. Binding one
-takes exactly what revealing it takes (`secret:reveal`, and the admin tier for an admin-sensitive
-secret), and so does moving the URL of a target that keeps one, since every send hands it to
+takes `secret:bind` on it (and the admin tier for an admin-sensitive
+secret, [ADR-2047](/architecture/decisions/#adr-2047-an-agent-may-do-what-its-person-may-except-take-a-credential-out-in-plaintext)), and so does moving the URL of a target that keeps one, since every send hands it to
 whatever the URL names: a target permission alone would make
 the platform a confused deputy, delivering a credential its holder cannot read to a URL it chose.
 `POST /notification-targets/{name}:test` sends one synthetic message (transition `test`, about no
@@ -666,7 +666,7 @@ alarm's timeline), so the alarm's history stays whole, but its recipient is name
 and to holders of `principal:read:admin`; everyone else reads it as withheld
 ([identity and access](/architecture/identity-access/#people-as-notification-audiences)). Binding a group or a person to a
 target takes `principal_group:read:admin` or `principal:read:admin` on top of
-`notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
+`notification_target:create`, as binding a secret takes `secret:bind`, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
 
 ### Email: a shared mailbox, and a person's directory email
@@ -679,7 +679,7 @@ webhook is, on the address actually dialed (the session dials through the egress
 dial): an internal relay only when `egress_allow` names it, a metadata address never, and `none` only
 for a relay the allow list names (a lab's mail sim). A credential never crosses an unencrypted session
 to anything but loopback. A settings patch whose **result** binds a `mail_secret` (whichever layer
-binds it, the operator file included) and changes that secret or the relay takes the right to reveal
+binds it, the operator file included) and changes that secret or the relay takes `secret:bind` on
 that secret, judged inside the patch's own transaction, as binding a secret to a target does.
 
 Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a

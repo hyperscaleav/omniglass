@@ -26,8 +26,8 @@ roles:
       catalogs, issue
       commands in scope, preview a driver spec through a node, and impair
       simulated devices.
-      Sees and reveals the device secrets in its scope (never the admin-sensitive
-      platform credentials). Inherits Viewer.
+      Sees, reveals and binds the device secrets in its scope (never the
+      admin-sensitive platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update,rename,move"
@@ -36,9 +36,9 @@ roles:
       # the caller names, storing nothing (#1163). A poll's request is whatever
       # the spec says, so it reaches the component as a command would: it sits
       # with command:issue, and the secrets it hands over must be ones the
-      # caller may reveal.
+      # caller may bind (secret:bind, #2047).
       - "driver:preview"
-      - "secret:read,reveal,create,update"
+      - "secret:read,reveal,bind,create,update"
       - "variable:create,update"
       - "property_type:create,update"
       - "metric_type:create,update"
@@ -97,7 +97,7 @@ roles:
       - "location:create,update,rename,move"
       - "system:create,update,rename,move"
       - "component:create,update,rename,move"
-      - "secret:read,reveal,create,update"
+      - "secret:read,reveal,bind,create,update"
       - "file:create"
   - id: admin
     label: Administrator

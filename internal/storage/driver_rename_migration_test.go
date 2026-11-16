@@ -71,7 +71,7 @@ func TestDriverRenameKeepsAttachedEndpointsCollecting(t *testing.T) {
 	comp, drv, node := "panel-up", "newtron-panel-nvp", "edge-up"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)

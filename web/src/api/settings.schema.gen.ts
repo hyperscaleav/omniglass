@@ -60,7 +60,7 @@ export const settingsSchema = {
       "type": "string"
     },
     "mail_secret": {
-      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret",
+      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
       "type": "string"
     },
     "mail_security": {

@@ -69,7 +69,7 @@ func rederiveFixture(t *testing.T) (context.Context, *storage.PG, *pgx.Conn, *st
 	comp, drv, node := "panel-r", "newtron-panel-nvp", "edge-r"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.60"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.60"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +224,7 @@ func TestDriverUpdateRederivesAttachedEndpoints(t *testing.T) {
 	comp, name, node := "panel-u", "panel-proto", "edge-u"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &name, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -347,7 +347,7 @@ func attachRace(ctx context.Context, gw *storage.PG) (*storage.Endpoint, error) 
 	comp, name, node := "panel-x", "panel-race", "edge-x"
 	return gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &name, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.80"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.80"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 }
 

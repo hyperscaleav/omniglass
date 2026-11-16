@@ -17,7 +17,7 @@
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, the property, metric, event, command and notification catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, the property, metric, event, command and notification catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees, reveals and binds the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
@@ -25,7 +25,7 @@
     "component:create,update,rename,move",
     "endpoint:create,update,retry,run",
     "driver:preview",
-    "secret:read,reveal,create,update",
+    "secret:read,reveal,bind,create,update",
     "variable:create,update",
     "property_type:create,update",
     "metric_type:create,update",
@@ -52,6 +52,7 @@
     "driver:preview",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "variable:create",
@@ -89,7 +90,7 @@
     "location:create,update,rename,move",
     "system:create,update,rename,move",
     "component:create,update,rename,move",
-    "secret:read,reveal,create,update",
+    "secret:read,reveal,bind,create,update",
     "file:create"
    ],
    "effective": [
@@ -107,6 +108,7 @@
     "component:move",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "file:create",
@@ -235,6 +237,7 @@
     "driver:preview",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "variable:create",

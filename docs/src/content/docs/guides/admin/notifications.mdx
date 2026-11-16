@@ -55,7 +55,7 @@ for a destination the list names; anything else is `https`, its certificate veri
 Store the signing key as a **platform** secret of the `hmac-key` type (or a `bearer-token`, for a
 receiver that expects `Authorization: Bearer`) on **Admin, Secrets**. Then, on **Catalog, under
 Actions: Targets**, choose **New target**: kind **Webhook**, a name, the URL, and the secret in
-**Signed with** (or none, to send unsigned). Binding a secret takes the right to reveal it.
+**Signed with** (or none, to send unsigned). Binding a secret takes the right to bind it (`secret:bind`).
 
 ::screenshot{#notification-target-new}
 
@@ -161,7 +161,7 @@ omniglass notification-target test ops-mailbox
 
 Email goes through one relay, set in the `notification` settings namespace. Store its login as a
 **platform** secret of the `basic-auth` type, then point the settings at it (binding the secret takes
-the right to reveal it):
+`secret:bind` on it):
 
 ```bash
 omniglass secret create --name relay-login --owner-kind platform --secret-type basic-auth \

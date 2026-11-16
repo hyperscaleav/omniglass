@@ -86,11 +86,11 @@ type NotificationSettings struct {
 	// host:port, judged by the same egress contract a webhook is. Empty turns
 	// email off: an email row then fails with the reason. MailSecret names a
 	// platform basic-auth secret the session authenticates with; binding it
-	// takes the right to reveal it, as binding a target's secret does.
+	// takes secret:bind on it, as binding a target's secret does.
 	MailRelay    string `json:"mail_relay" default:"" doc:"The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it"`
 	MailSecurity string `json:"mail_security" enum:"starttls,tls,none" default:"starttls" doc:"How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)"`
 	MailFrom     string `json:"mail_from" default:"" doc:"The From address of an email notification (Omniglass <alerts@example.com>)"`
-	MailSecret   string `json:"mail_secret" default:"" doc:"A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret"`
+	MailSecret   string `json:"mail_secret" default:"" doc:"A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret"`
 }
 
 // RetentionSettings is the retention namespace (#417): how long each sample

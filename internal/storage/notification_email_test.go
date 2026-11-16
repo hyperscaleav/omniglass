@@ -247,7 +247,7 @@ func TestTheRelaysSecretIsJudgedOnTheResultingSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	noReveal := storage.SecretUse{Read: all}
-	reveal := storage.SecretUse{Read: all, Reveal: all, CanAdmin: true}
+	reveal := storage.SecretUse{Read: all, Bind: all, CanAdmin: true}
 	if _, err := gw.MergePatchNotificationSettings(ctx, "", map[string]any{"mail_relay": "evil.example.com:587"}, noReveal); !errors.Is(err, storage.ErrSecretForbidden) {
 		t.Fatalf("moving the relay with the file's secret bound = %v, want forbidden", err)
 	}

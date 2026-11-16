@@ -472,7 +472,7 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 	}
 	comp, drv, node := "disp-1", "legacy-bar", "node-a"
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: all, CanAdmin: true}, all)
+		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}

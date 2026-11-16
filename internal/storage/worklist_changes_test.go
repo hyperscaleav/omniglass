@@ -91,7 +91,7 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	comp, drv, a, b := "panel-n", "panel-proto", "edge-a", "edge-b"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &a,
-		Inputs: map[string]string{"host": "10.20.4.70"}, SecretRead: all, CanAdmin: true,
+		Inputs: map[string]string{"host": "10.20.4.70"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)

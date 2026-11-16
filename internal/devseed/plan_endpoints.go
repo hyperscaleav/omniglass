@@ -91,7 +91,7 @@ func seedPlanEndpoints(ctx context.Context, gw storage.Gateway, actorID string, 
 	for _, e := range planned {
 		comp := compIDs[e.Comp]
 		node := opts.nodeOf(rows.Components[e.Comp].Site)
-		spec := storage.EndpointSpec{Component: &comp, Node: node, SecretRead: all, CanAdmin: true}
+		spec := storage.EndpointSpec{Component: &comp, Node: node, SecretRead: all, SecretBind: all, CanAdmin: true}
 		if e.Driver != "" {
 			drv := e.Driver
 			if in != nil && in.done == nil {

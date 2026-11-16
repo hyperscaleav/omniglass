@@ -237,9 +237,9 @@ func (p *PG) MailRelay(ctx context.Context) (*MailRelay, string, error) {
 
 // checkMailSecret judges binding a secret to the mail relay (the notification
 // settings' mail_secret), as binding one to a target is judged: a PLATFORM
-// basic-auth secret, by bare name, that the caller may reveal (SecretUse),
+// basic-auth secret, by bare name, that the caller may bind (SecretUse),
 // since every send hands it to whatever mail_relay names. A secret outside
-// the caller's view is ErrSecretNotFound, one it reads but may not reveal
+// the caller's view is ErrSecretNotFound, one it reads but may not bind
 // ErrSecretForbidden, one of another kind ErrMailSecretInvalid.
 func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use SecretUse) error {
 	if ref == "" {
@@ -248,7 +248,7 @@ func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use Sec
 	if isUUID(ref) || strings.Contains(ref, "/") {
 		return fmt.Errorf("%w: mail_secret names a platform secret by its bare name", ErrMailSecretInvalid)
 	}
-	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Reveal, use.CanAdmin, true)
+	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Bind, use.CanAdmin, true)
 	if err != nil {
 		return err
 	}

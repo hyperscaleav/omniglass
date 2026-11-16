@@ -198,7 +198,7 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(panelPort(t, panel, "tcp"))},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach newtron-panel-nvp: %v", err)

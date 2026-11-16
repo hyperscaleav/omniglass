@@ -68,7 +68,7 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		}
 		drv := "ucc-webhook"
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp,
-			Inputs: map[string]string{"signing-key": "signing-" + name}, SecretRead: all, CanAdmin: true}, all); err != nil {
+			Inputs: map[string]string{"signing-key": "signing-" + name}, SecretRead: all, SecretBind: all, CanAdmin: true}, all); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,

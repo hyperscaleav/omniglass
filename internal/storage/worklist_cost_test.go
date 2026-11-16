@@ -64,7 +64,7 @@ func worklistProbe(t *testing.T, endpoints int) (int, storage.Worklist, map[stri
 			t.Fatal(err)
 		}
 		snmpEp, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-			Inputs: map[string]string{"host": fmt.Sprintf("10.1.%d.%d", i/250, i%250+1), "community": cred}, SecretRead: all, CanAdmin: true}, all)
+			Inputs: map[string]string{"host": fmt.Sprintf("10.1.%d.%d", i/250, i%250+1), "community": cred}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 		if err != nil {
 			t.Fatal(err)
 		}

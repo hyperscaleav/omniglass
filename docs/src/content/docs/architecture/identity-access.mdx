@@ -87,7 +87,7 @@ Where the build differs from the present-tense design below (each logged in the
   admin user surface.
 - **The `agent` principal kind** is reserved in the schema's `kind` CHECK, but no `agent` identity
   is issued: an AI acts through an [agent token](#agent-tokens) on a person's credential. Built: the
-  mint, the intersection, the reveal ceiling, the channel allowlist and the audit `agent` column.
+  mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
   Not built yet: narrowing an agent token to a location, the console's agent fields, OAuth 2.1
   authorization for MCP clients, and omnibot's marking
   ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
@@ -766,19 +766,25 @@ is **required** (an agent token always expires), and two optional fields narrow 
   against the channel the MCP dispatch sets on the request context, which no caller can claim. A
   refused channel is a 403, except `GET /auth/me`, so the agent can still read who it is.
 
-**The reveal ceiling.** An agent token never holds a `reveal` or `use` action, whatever its
+**The plaintext ceiling.** An agent token never holds a `reveal` or `enroll` action, whatever its
 roles: `authn` strips them by construction (`rbac.Set.Without`), so the owner's `>` loses them too,
 and the denied actions are out of reach of any wildcard. The ceiling applies to an agent token on
 every channel **and** to any token used through MCP, so an agent never decrypts a credential on its
 person's behalf; it works with credentials only through routes that use them server-side (an
-endpoint poll, a command issue), knowing a credential is present and never its value. Nor can it
-aim a credential: a write that binds a secret to a target (an endpoint attach or an edit of a
-secret-bound endpoint's inputs or node, a plan applied from a template, a simulated system or fleet device)
-resolves its references under an **empty** secret scope under the ceiling (`secretBind`), so a
-reference reads as one not the caller's to use, and a ceilinged caller cannot repoint a
-credential-bearing endpoint at a host or node it controls. The ceiling also withholds
-`node:enroll`, since an enrollment token is itself a node credential. The
-`/auth/me` permission list is conservative under the ceiling (a held `>` lists nothing), while the
+endpoint poll, a command issue), knowing a credential is present and never its value. The ceiling
+covers exactly the operations whose output is a credential in plaintext (reveal, copy, a minted
+token, an enrollment token, which is itself a node credential); everything else the person may do,
+the agent may do ([ADR-2047](/architecture/decisions/#adr-2047-an-agent-may-do-what-its-person-may-except-take-a-credential-out-in-plaintext)).
+That includes **binding**: a write that hands a secret to a target (an endpoint attach or an edit
+of a secret-bound endpoint's inputs or node, a plan applied from a template, a simulated system or
+fleet device, a notification target, the mail relay) takes **`secret:bind`** on the secret, on top
+of `secret:read` (`secretBind`), whoever the caller is. A secret the caller cannot read is the
+non-disclosing refusal; one it can read but not bind is a 403 naming `secret:bind`. Binding
+chooses where a credential goes, so the person decides per tool in their MCP client whether an
+agent's bind runs always, asks first or never; the platform does not hold an agent's write for
+approval, and every such write is audited as the agent's.
+
+The `/auth/me` permission list is conservative under the ceiling (a held `>` lists nothing), while the
 route check stays exact. An agent token is also refused, with a 403 before its body is read, by the
 routes that would let it escape: minting a token, changing the password, and impersonation (an
 impersonation token is not an agent token and would shed both the ceiling and the attribution).

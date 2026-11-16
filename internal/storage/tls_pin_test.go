@@ -185,7 +185,7 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-tls"
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all}, f.all)
+		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all)
 	if err != nil {
 		t.Fatalf("attach newtron-nvp-tls: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 		t.Fatalf("attached params %s, want the driver's default mode, pin, and its port", ep.Params)
 	}
 	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9", "tls-mode": "trust-me"}, SecretRead: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls-mode") {
+		Inputs: map[string]string{"host": "10.0.0.9", "tls-mode": "trust-me"}, SecretRead: f.all, SecretBind: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls-mode") {
 		t.Fatalf("an attach with an unknown mode = %v, want refused naming tls-mode", err)
 	}
 
@@ -207,10 +207,10 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	if f.task(t, ep.ID).Fingerprint != before {
 		t.Fatal("a label edit moved the fingerprint")
 	}
-	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "maybe"}, SecretRead: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "maybe"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
 		t.Fatalf("an unknown mode edit = %v, want ErrEndpointPatchInvalid naming tls-mode", err)
 	}
-	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "skip"}, SecretRead: f.all}, f.all, f.all)
+	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "skip"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("edit the mode to skip: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 		t.Fatal("editing the mode left the fingerprint")
 	}
 	// Clearing the input falls back to the driver's default.
-	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": ""}, SecretRead: f.all}, f.all, f.all)
+	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": ""}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}

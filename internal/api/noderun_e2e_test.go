@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -378,4 +380,101 @@ func TestOnDemandRunsWithoutABus(t *testing.T) {
 	if code, _ := c.send(bootstrapOwnerTok(t, ctx, gw), http.MethodPost, "/drivers:preview", previewBody); code != http.StatusServiceUnavailable {
 		t.Errorf("preview without a bus = %d, want 503", code)
 	}
+}
+
+// Handing a secret to a node, by a preview or an attach, takes secret:bind
+// over it (#2047): one that may read the secret but not bind it is refused
+// both, and an edit moving the endpoint's address, naming the right; one that
+// may bind it but never reveal it does all three.
+func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	conn, err := pgx.Connect(s.ctx, s.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(s.ctx, `insert into role (name, permissions, inherits) values
+		('bind-less', '{"driver:preview","endpoint:create,update","secret:read"}', '{viewer}'),
+		('binder', '{"driver:preview","endpoint:create,update","secret:read,bind"}', '{viewer}')`); err != nil {
+		t.Fatal(err)
+	}
+	conn.Close(s.ctx)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-bind", "product": "generic-device"}, http.StatusCreated)
+	attach := map[string]any{"component": "display-bind", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}
+
+	reader := principalWithGrants(t, s.ctx, s.dsn, "bind-less", []grant{{role: "bind-less", scopeKind: "all"}})
+	if code, raw := s.c.send(reader, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusForbidden || !strings.Contains(string(raw), "secret:bind") {
+		t.Errorf("a preview without secret:bind = %d %s, want 403 naming it", code, raw)
+	}
+	if code, raw := s.c.send(reader, http.MethodPost, "/endpoints", attach); code != http.StatusForbidden || !strings.Contains(string(raw), "secret:bind") {
+		t.Errorf("an attach without secret:bind = %d %s, want 403 naming it", code, raw)
+	}
+
+	binder := principalWithGrants(t, s.ctx, s.dsn, "binder", []grant{{role: "binder", scopeKind: "all"}})
+	s.c.do(binder, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK)
+	var ep struct {
+		ID     string            `json:"id"`
+		Inputs map[string]string `json:"inputs"`
+	}
+	if err := json.Unmarshal(s.c.do(binder, http.MethodPost, "/endpoints", attach, http.StatusCreated), &ep); err != nil || ep.ID == "" {
+		t.Fatalf("binder attach: %v", err)
+	}
+	s.c.do(binder, http.MethodPost, "/secrets/display-login:reveal", nil, http.StatusForbidden)
+
+	// Moving a bound endpoint's address sends its credential somewhere new, so
+	// it takes secret:bind too: the bind-less edit is refused and the stored
+	// host stays put.
+	move := map[string]any{"inputs": map[string]string{"host": "10.20.4.32"}}
+	if code, raw := s.c.send(reader, http.MethodPatch, "/endpoints/"+ep.ID, move); code != http.StatusForbidden || !strings.Contains(string(raw), "secret:bind") {
+		t.Errorf("an address edit without secret:bind = %d %s, want 403 naming it", code, raw)
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/endpoints/"+ep.ID, nil, http.StatusOK), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if ep.Inputs["host"] != "10.20.4.31" {
+		t.Errorf("the refused edit moved the host to %q", ep.Inputs["host"])
+	}
+	s.c.do(binder, http.MethodPatch, "/endpoints/"+ep.ID, move, http.StatusOK)
+}
+
+// An agent acting for its person binds a credential it never reads (#2047): it
+// previews with it and attaches it, runs the endpoint's poll now, and every
+// answer comes back masked of it; the attach is audited as the agent's, and
+// the plaintext stays out of its reach.
+func TestAnAgentRunsAPollWithACredentialItNeverReads(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	agent := mintAgent(t, s.c, s.owner, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 7})
+
+	if raw := s.c.do(agent.Token, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK); strings.Contains(string(raw), nodeRunSecret) {
+		t.Errorf("the agent's preview carries the secret: %s", raw)
+	}
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-agent", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(agent.Token, http.MethodPost, "/endpoints", map[string]any{"component": "display-agent", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.34", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	raw := s.c.do(agent.Token, http.MethodPost, "/endpoints/display-agent%2F"+ep.Name+"/polls/identity:run", nil, http.StatusOK)
+	if strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+		t.Errorf("the agent's run now carries the secret: %s", raw)
+	}
+
+	var audit struct {
+		Events []struct {
+			Verb  string `json:"verb"`
+			Agent string `json:"agent"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?agent=claude&resource=endpoint", nil, http.StatusOK), &audit); err != nil {
+		t.Fatal(err)
+	}
+	if len(audit.Events) == 0 || audit.Events[0].Agent != "claude" {
+		t.Errorf("the agent's attach is not audited as its own: %+v", audit.Events)
+	}
+	s.c.do(agent.Token, http.MethodPost, "/secrets/display-login:reveal", nil, http.StatusForbidden)
+	s.c.do(agent.Token, http.MethodPost, "/secrets/display-login:copy", nil, http.StatusForbidden)
 }

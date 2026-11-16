@@ -72,13 +72,13 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return out, nil
 	})
 
-	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.platformGated(a.gated(huma.Operation{
 		OperationID: "patch-settings-namespace",
 		Method:      http.MethodPatch,
 		Path:        "/settings/{namespace}",
 		Summary:     "Update a settings namespace",
 		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.",
-	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+	}, "settings", "update"), "update"), "secret", "bind"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		// The notification namespace's mail relay binds a secret, so its patch
 		// is judged on the settings it results in (#1317).
 		if in.Namespace == "notification" {
-			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, secretUse(ctx, a)); err != nil {
+			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
 				return nil, mapMailSecretErr(err)
 			}
 		} else if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
@@ -163,14 +163,14 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 
 // mapMailSecretErr maps a notification settings patch refused for the mail
 // relay's secret (#1317): binding one, or moving the relay while one stays
-// bound, by any layer, takes the right to reveal it, exactly as binding a
-// secret to a notification target does.
+// bound, by any layer, takes the right to bind it (secret:bind), exactly as
+// binding a secret to a notification target does.
 func mapMailSecretErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
-		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to reveal that secret (secret:reveal)")
+		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to bind that secret (secret:bind)")
 	case errors.Is(err, storage.ErrMailSecretInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: the mail relay's secret is invalid: "))
 	}

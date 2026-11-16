@@ -59,17 +59,16 @@ func (p *PG) DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Findi
 // PreviewInput is a preview asked for: the node to run it, the spec (a stored
 // driver by reference, or a spec inline), the inputs an attach would take,
 // and the polls to run (none is every poll). The scopes are the caller's:
-// node read, and secret reveal, since a secret a preview uses leaves for a
-// target the caller names, which is a reveal in effect.
+// node read, and secret read and bind, since a secret a preview uses leaves
+// for a target the caller names, as an attach's does (#2047).
 type PreviewInput struct {
-	Node         string
-	Driver       string
-	Spec         []byte
-	Inputs       map[string]string
-	Polls        []string
-	NodeRead     scope.Set
-	SecretReveal scope.Set
-	CanAdmin     bool
+	Node     string
+	Driver   string
+	Spec     []byte
+	Inputs   map[string]string
+	Polls    []string
+	NodeRead scope.Set
+	Secrets  SecretUse
 }
 
 // PreviewPlan is what a node is sent to run a preview: a task per poll, as a
@@ -145,7 +144,7 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		return nil, err
 	}
 
-	effective, err := p.resolveInputs(ctx, tx, d, sp, in.Inputs, in.SecretReveal, in.CanAdmin)
+	effective, err := p.resolveInputs(ctx, tx, d, sp, in.Inputs, in.Secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -165,11 +164,11 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		if input.Kind != "secret" || !ok {
 			continue
 		}
-		// Resolved under the reveal scope alone, the same candidates the input
-		// check above narrowed to, so the row unsealed is the row it accepted.
-		row, shape, err := p.secretRowForAction(ctx, tx, ref, in.SecretReveal, in.SecretReveal, in.CanAdmin, true)
+		// Resolved under the same read and bind scopes the input check above
+		// accepted it under, so the row unsealed is the row it accepted.
+		row, shape, err := p.secretRowForAction(ctx, tx, ref, in.Secrets.Read, in.Secrets.Bind, in.Secrets.CanAdmin, true)
 		if err != nil {
-			return nil, fmt.Errorf("%w: input %q references a secret you may not reveal, and a preview hands it to the target you name: %v", ErrAttachInvalid, input.Name, err)
+			return nil, fmt.Errorf("%w: input %q references a secret you may not bind, and a preview hands it to the target you name: %v", ErrAttachInvalid, input.Name, err)
 		}
 		fields, sealed, err := p.unsealSecretFields(ctx, row, shape)
 		if err != nil {

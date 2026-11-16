@@ -154,10 +154,11 @@ func TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes(t *testing.T) {
 	}
 }
 
-// TestBindingTheRelaysSecretTakesTheRightToRevealIt: the relay session hands
-// its secret to whatever mail_relay names, so binding one (or moving the relay
-// while one is bound) is judged as binding a secret to a target is.
-func TestBindingTheRelaysSecretTakesTheRightToRevealIt(t *testing.T) {
+// TestBindingTheRelaysSecretTakesSecretBind: the relay session hands its
+// secret to whatever mail_relay names, so binding one (or moving the relay
+// while one is bound) is judged as binding a secret to a target is, under
+// secret:bind (#2047), never the right to reveal it.
+func TestBindingTheRelaysSecretTakesSecretBind(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
 	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "relay-login", "secret_type": "basic-auth", "owner_kind": "platform",
@@ -165,8 +166,10 @@ func TestBindingTheRelaysSecretTakesTheRightToRevealIt(t *testing.T) {
 	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "a-signing-key", "secret_type": "hmac-key", "owner_kind": "platform",
 		"fields": map[string]string{"key": "k"}}, http.StatusCreated)
 	p.human("sam", "settings-admin", "all", "")
-	// sam may write settings and read secrets, but not reveal one.
-	p.c.do(p.toks["sam"], http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "relay-login"}, http.StatusForbidden)
+	// sam may write settings and read secrets, but not bind one.
+	if b := p.c.do(p.toks["sam"], http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "relay-login"}, http.StatusForbidden); !strings.Contains(string(b), "secret:bind") {
+		t.Fatalf("a refused relay bind = %s, want it to name secret:bind", b)
+	}
 	p.c.do(p.toks["sam"], http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "smtp.example.com:587"}, http.StatusOK)
 	p.c.do(p.owner, http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "no-such-secret"}, http.StatusNotFound)
 	p.c.do(p.owner, http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "a-signing-key"}, http.StatusUnprocessableEntity)
@@ -174,4 +177,10 @@ func TestBindingTheRelaysSecretTakesTheRightToRevealIt(t *testing.T) {
 	// With the secret bound, moving the relay takes the same right.
 	p.c.do(p.toks["sam"], http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "elsewhere.example.com:587"}, http.StatusForbidden)
 	p.c.do(p.owner, http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "elsewhere.example.com:587"}, http.StatusOK)
+
+	// bea may bind it but never reveal it: she rebinds and moves the relay.
+	p.human("bea", "settings-binder", "all", "")
+	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "relay-login"}, http.StatusOK)
+	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "smtp.example.com:587"}, http.StatusOK)
+	p.c.do(p.toks["bea"], http.MethodPost, "/secrets/relay-login:reveal", nil, http.StatusForbidden)
 }

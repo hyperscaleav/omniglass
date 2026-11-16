@@ -32,14 +32,15 @@ omniglass auth create-token --description "claude code on my laptop" \
 
 An agent token can never reveal or copy a secret's plaintext, whatever its roles: the agent works
 with credentials only through the routes that use them server-side (polling an endpoint, issuing a
-command), so it knows a credential is present and never what it is. For the same reason it cannot
-point a credential somewhere new: attaching an endpoint with a secret input, editing the address, the
-node or the secret of an endpoint that has one, creating a system from a template that binds a secret, or
-adding a simulated device that needs one is refused as a secret not the agent's to use. Label such an
-endpoint freely; have a person bind, move or re-place the credential. An agent also never enrolls a
-node, since the enrollment token is itself a node credential. The same ceiling holds for any
-token, yours included, while it is used through MCP. An agent token also cannot mint another token,
-change your password or impersonate anyone.
+command), so it knows a credential is present and never what it is. Otherwise it may do what you
+may: with `secret:bind` it can attach an endpoint with a secret input, edit the address, node or
+secret of an endpoint that has one, create a system from a template that binds a secret, or add a
+simulated device that needs one, exactly as you could. Binding chooses where a credential goes, so
+decide in your MCP client whether such a tool runs always, asks first, or never; every write the
+agent makes is audited as the agent's. An agent also never enrolls a node, since the enrollment
+token is itself a node credential. The same ceiling holds for any token, yours included, while it
+is used through MCP. An agent token also cannot mint another token, change your password or
+impersonate anyone.
 
 The token is printed once; keep it in the agent's environment, not in a file you commit. Minting and
 revoking it each write an audit row: `omniglass session list` shows it with its agent name, and

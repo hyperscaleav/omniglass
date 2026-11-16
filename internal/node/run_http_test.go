@@ -140,7 +140,7 @@ func (s *httpStack) secret(name, typ string, fields map[string]string) *storage.
 func (s *httpStack) attachHTTP(comp, drv, nodeName string, inputs map[string]string) *storage.Endpoint {
 	s.t.Helper()
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs,
-		SecretRead: s.all, CanAdmin: true}, s.all)
+		SecretRead: s.all, SecretBind: s.all, CanAdmin: true}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
 	}
@@ -348,7 +348,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	// certificate, so it is refused as certificate, never a timeout; skip,
 	// the operator's explicit choice, connects.
 	for _, m := range []struct{ mode, want string }{{"verify", "responsive certificate "}, {"skip", "none"}} {
-		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": m.mode}, SecretRead: s.all, CanAdmin: true}, s.all, s.all); err != nil {
+		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": m.mode}, SecretRead: s.all, SecretBind: s.all, CanAdmin: true}, s.all, s.all); err != nil {
 			t.Fatalf("edit tls-mode to %s: %v", m.mode, err)
 		}
 		s.waitFor("bar-1", ep.Name, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, m.want) }, m.mode+": "+m.want)

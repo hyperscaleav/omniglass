@@ -50,7 +50,7 @@ func runStack(t *testing.T) (*storage.PG, context.Context) {
 
 func previewOf(driverRef string, inputs map[string]string) storage.PreviewInput {
 	all := scope.Set{All: true}
-	return storage.PreviewInput{Node: "edge-p", Driver: driverRef, Inputs: inputs, NodeRead: all, SecretReveal: all, CanAdmin: true}
+	return storage.PreviewInput{Node: "edge-p", Driver: driverRef, Inputs: inputs, NodeRead: all, Secrets: storage.SecretUse{Read: all, Bind: all, CanAdmin: true}}
 }
 
 func TestDriverSpecFindings(t *testing.T) {
@@ -133,9 +133,15 @@ func TestPlanDriverPreviewRefuses(t *testing.T) {
 	}
 
 	in = previewOf("boreal-edge-web", inputs)
-	in.SecretReveal = scope.Set{}
-	if _, err := gw.PlanDriverPreview(ctx, "", in); !errors.Is(err, storage.ErrAttachInvalid) {
-		t.Errorf("a secret the caller may not reveal = %v, want a refusal", err)
+	in.Secrets.Bind = scope.Set{}
+	if _, err := gw.PlanDriverPreview(ctx, "", in); !errors.Is(err, storage.ErrSecretForbidden) || !strings.Contains(err.Error(), "secret:bind") {
+		t.Errorf("a secret the caller reads but may not bind = %v, want ErrSecretForbidden naming secret:bind", err)
+	}
+
+	in = previewOf("boreal-edge-web", inputs)
+	in.Secrets.Read, in.Secrets.Bind = scope.Set{}, scope.Set{}
+	if _, err := gw.PlanDriverPreview(ctx, "", in); !errors.Is(err, storage.ErrAttachInvalid) || strings.Contains(err.Error(), "secret:bind") {
+		t.Errorf("a secret the caller cannot see = %v, want the non-disclosing ErrAttachInvalid", err)
 	}
 
 	in = previewOf("boreal-edge-web", inputs)
@@ -160,7 +166,7 @@ func TestPlanEndpointRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.31", "login": "display-login"}, SecretRead: all, CanAdmin: true}, all)
+		Inputs: map[string]string{"host": "10.20.4.31", "login": "display-login"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +205,7 @@ func TestPlanEndpointRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep2, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &unplaced,
-		Inputs: map[string]string{"host": "10.20.4.32", "login": "display-login"}, SecretRead: all, CanAdmin: true}, all)
+		Inputs: map[string]string{"host": "10.20.4.32", "login": "display-login"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
