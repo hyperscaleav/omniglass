@@ -1287,7 +1287,10 @@ row are exactly a direct call's, the row marked with the MCP channel. Each tool 
 annotations one rule derives from its method and gate (read-only, destructive, idempotent, open-world),
 so any client can gate the writes behind its user's confirmation, and an error is the route's own
 problem+json. The server runs as the **authenticated `human` or `service` principal's** token, so its
-reach is exactly that principal's grants ([AI](/architecture/ai/)). Connecting one:
+reach is exactly that principal's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
+that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
+own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));
+those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:
 [connect an agent](/guides/agents/).
 
 The catalog is **credential-blind**
