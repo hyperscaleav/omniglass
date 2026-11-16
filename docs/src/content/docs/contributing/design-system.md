@@ -50,7 +50,10 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   the primary create), the tree and flattened body rendering, and the stacked blades. A page that
   opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
   is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
-  this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+  this class is a data layer + a config + a route (see the `add-inventory-view` skill). A list
+  whose loaded page outgrows its first paint (the audit trail) sets the shell's `fill` and sits in
+  a box of definite height, so its rows scroll under sticky headers and its footer stays put; the
+  console scrolls the document, so `fill` with no sized box around it grows like any other list.
 - **Lists render in server order; the SQL rule is the ordering primitive.** A registry list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts

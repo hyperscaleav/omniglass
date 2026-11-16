@@ -36,13 +36,13 @@ Show
 Type "# Over https: --wait blocks until the bar's reply settles it"
 Enter
 Wait
-Type `omniglass component command issue "$web" --command-type set-volume --value 42 --wait | jq -c '{status, endpoint, driver, settled_by, reason, reply}'`
+Type `omniglass component command issue "$web" --command-type set-volume --value 0.42 --wait | jq -c '{status, endpoint, driver, settled_by, reason, reply}'`
 Enter
 Wait
 Type "# Over the control socket: the answer frame carries back the minted id, and the value set"
 Enter
 Wait
-Type `omniglass component command issue "$socket" --command-type set-volume --value 37 --wait | jq -c '{status, endpoint, driver, reason, reply: (.reply | fromjson | {type, value})}'`
+Type `omniglass component command issue "$socket" --command-type set-volume --value 0.37 --wait | jq -c '{status, endpoint, driver, reason, reply: (.reply | fromjson | {type, value})}'`
 Enter
 Wait
 Type "# Each reads back by its id under its component, the whole arc stamped"
@@ -77,7 +77,7 @@ Enter
 Wait
 Show
 
-Type `omniglass component command issue "$dark" --command-type set-volume --value 30 | jq -c '{status, phase, endpoint, node, settle_window_seconds}'`
+Type `omniglass component command issue "$dark" --command-type set-volume --value 0.3 | jq -c '{status, phase, endpoint, node, settle_window_seconds}'`
 Enter
 Wait
 

@@ -37,7 +37,8 @@ denied**), so you can spot a brute-force attempt; attempts on usernames that do 
 The page uses the same faceted search as the inventory lists: filter by **who**, **action**, **resource**, or
 **id** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
 Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
-up short is a cue to load older and look deeper.
+up short is a cue to load older and look deeper. The rows scroll inside the list's card, so the count and
+**Load older** stay at its foot however many pages you have loaded.
 
 The **Id** column shows the resource's **name** (a principal's username), resolved from the row's own
 change images; hovering it reveals the stable uuid the trail actually stores, which is what keeps a row

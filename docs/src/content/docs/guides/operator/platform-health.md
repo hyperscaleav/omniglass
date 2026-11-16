@@ -287,7 +287,8 @@ The columns are the platform keys, grouped:
   running its last worklist, so every other figure can read healthy while no change made since (a new
   task, a rotated credential, a gate) reaches it. 0% is healthy and anything above it turns red; a
   window with no pull carries the last pull's outcome, so a node refused on every pull reads 100%
-  until one is served. Two minutes at 100% raises the seeded **Worklist stale** warning on the node's
+  until one is served, a node never served its first worklist included: it heartbeats and reports
+  while it waits, so it reads refused rather than down. Two minutes at 100% raises the seeded **Worklist stale** warning on the node's
   platform component, cleared by the first pull served.
 - **Loss**: **Node Loss** is the node's own share of [where work is lost](#where-work-is-lost): the
   end to end over the last hour of the hops its own component records (the node hop today), every

@@ -19,7 +19,7 @@ Show
 Type "# The huddle bar is up: edge-hq takes a command, runs it and reports it"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type set-volume --value 30 | jq -c '{command_type, status, node}'`
+Type `omniglass component command issue "$bar" --command-type set-volume --value 0.3 | jq -c '{command_type, status, node}'`
 Enter
 Wait
 Hide
@@ -54,7 +54,7 @@ Wait
 Type "# A command issued now: edge-hq takes it and holds it until the session is up"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type set-volume --value 34 | jq -c '{command_type, status, node}'`
+Type `omniglass component command issue "$bar" --command-type set-volume --value 0.34 | jq -c '{command_type, status, node}'`
 Enter
 Wait
 

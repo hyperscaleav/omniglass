@@ -615,8 +615,8 @@ How to read each row:
   not read, over the window, read from the `worklist-pull-loss-ratio` every node reports on its own
   platform component each report window. The row prints the worst node by name and how many nodes
   were refused, `0 %` when every pull was served, and counts any node that reported nothing as
-  unreported. A node refused here keeps running its last worklist,
-  so the delivery table can read 0 while it misses every change made since. A read that failed, or
+  unreported. A node refused from its start reports 100 % here rather than nothing. A node refused
+  later keeps running its last worklist, so the delivery table can read 0 while it misses every change made since. A read that failed, or
   found no node reporting, prints `not measured` with the reason under the table: every node reports
   the ratio every window, so finding none is no reading, not a clean one.
 
@@ -972,7 +972,9 @@ the window is not a fleet that lost nothing.
 fails with a note giving the share of its pulls that failed: a node refused on every pull reads 1. The
 read starts from every node the lab holds, so a node that reported nothing in the window fails as
 missing rather than dropping out. A run whose worklist read failed, or found no node, fails as
-`worklist_loss` with the reason.
+`worklist_loss` with the reason. A node with no worklist (its latest task count is 0, as a node
+refused its first worklist reports while it waits) runs no task, so the ingest drain does not wait on
+it for a sample, and the run reaches this gate and names it rather than failing as not drained.
 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
