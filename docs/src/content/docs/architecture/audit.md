@@ -12,7 +12,7 @@ The audit log answers "who changed this, and to what?": every mutation is record
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation; the
 secret-decrypt audit (distinct `reveal` and `copy` verbs); the auth-event lane; a token's minting and
-revoking; the channel an MCP tool call arrived through; and the
+revoking; the channel an MCP tool call arrived through; the agent an agent token acts as; and the
 `GET /audit-log` read, rendered by the console Admin > Audit page with a per-row before/after diff
 drawer. See [implementation status](/architecture/status/).
 :::
@@ -60,6 +60,12 @@ drawer. See [implementation status](/architecture/status/).
 - **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
   principal, so the actor is that principal, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
+- **An agent token names its agent.** A row written with an
+  [agent token](/architecture/identity-access/#agent-tokens) carries `agent`, the name fixed when
+  the person minted it, beside that person as the actor, on every channel: MCP, REST and the CLI
+  alike. `authn` sets it on the request context from the credential, so a caller cannot claim or
+  shed it. `GET /audit-log?agent=<name>` lists what one agent did, and the column is indexed for it
+  ([ADR-1179](/architecture/decisions/#adr-1179-an-agent-token-is-a-token-type-on-its-persons-credential-and-never-reveals)).
 - **A token is audited.** Minting one writes a `create` row (the bootstrap token's with no actor)
   and revoking one (singly, in bulk, or by logging out with it) a `revoke` row on
   `resource = 'credential'`, carrying the token's prefix, purpose, description and

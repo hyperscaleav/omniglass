@@ -80,6 +80,11 @@
       "name": "client",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "agent",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
@@ -1533,6 +1538,21 @@
      {
       "name": "client_ip",
       "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "agent",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "agent_roles",
+      "type": "ARRAY",
+      "nullable": true
+     },
+     {
+      "name": "agent_channels",
+      "type": "ARRAY",
       "nullable": true
      }
     ],

@@ -287,7 +287,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:        http.MethodPost,
 		Path:          "/auth/me:changePassword",
 		Summary:       "Change your own password",
-		Description:   "Verifies the current password and sets a new one. Requires authentication; self-scoped.",
+		Description:   "Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.",
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   huma.Middlewares{a.authn},
 	}, a.changePasswordHandler)
@@ -328,7 +328,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Path:          "/auth/me/tokens",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create one of your own API tokens",
-		Description:   "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.",
+		Description:   "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.",
+		Errors:        []int{http.StatusForbidden, http.StatusUnprocessableEntity},
 		Middlewares:   huma.Middlewares{a.authn},
 	}, a.createMeTokenHandler)
 

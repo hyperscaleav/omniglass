@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -128,6 +129,21 @@ type revealSecretOutput struct {
 func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool {
 	perms, ok := permsFrom(ctx)
 	return ok && perms.Allows("secret", action, "admin")
+}
+
+// secretBind is the secret scope and admin tier a write that binds a
+// credential to a target (an endpoint's attach or edit, a plan, a simulated
+// system or fleet) resolves its references under. Every such write makes the
+// node send the plaintext wherever the target points, so it is a use of the
+// credential, not a read of it: under the agent ceiling (#1179), which holds no
+// use, the scope is empty and every reference reads as one not the caller's to
+// use. Until secret:use splits from reveal, an unconstrained caller binds what
+// it may read, as before.
+func (a *authenticator) secretBind(ctx context.Context) (scope.Set, bool) {
+	if constrained(ctx) {
+		return scope.Set{}, false
+	}
+	return a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read")
 }
 
 // resolvedSecretBody is one entry in a component's effective-secrets cascade. Its

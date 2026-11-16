@@ -482,7 +482,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error500InternalServerError("list products")
 		}
 		drivers := simDrivers(products)
-		secretRead, canAdmin := a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read")
+		secretRead, canAdmin := a.secretBind(ctx)
 		attachable := simAttachable(ctx, a, gw)
 		// Planning and creating hold the address lock, so two adds at once
 		// cannot be handed the same address.

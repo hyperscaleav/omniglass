@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -234,8 +235,11 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Path:          "/principal-groups/{group}/members",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Add a member to a group",
-		Description:   "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.",
+		Description:   "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
 	}, "principal_group", "update"), func(ctx context.Context, in *addMemberInput) (*struct{}, error) {
+		if err := a.groupMemberCoverOK(ctx, gw, in.Group); err != nil {
+			return nil, err
+		}
 		if err := gw.AddGroupMember(ctx, actorID(ctx), in.Group, in.Body.PrincipalID, a.scopeFor(ctx, "principal_group", "update")); err != nil {
 			return nil, mapPrincipalErr(err)
 		}
@@ -312,4 +316,35 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		}
 		return nil, nil
 	})
+}
+
+// groupMemberCoverOK refuses a request bounded by an agent token or the agent
+// ceiling (#1179) from adding a member to a group whose grants exceed its own
+// bounded permissions: membership confers the group's grants, so it is a grant
+// by another route. An unconstrained caller is unchanged. A non-nil error is
+// already an HTTP error.
+func (a *authenticator) groupMemberCoverOK(ctx context.Context, gw storage.Gateway, group string) error {
+	if !constrained(ctx) {
+		return nil
+	}
+	actor, ok := principalFrom(ctx)
+	if !ok {
+		return huma.Error401Unauthorized("unauthenticated")
+	}
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("add member failed")
+	}
+	grants, err := gw.ListGroupGrants(ctx, group, scope.Set{All: true})
+	if err != nil {
+		return mapPrincipalErr(err)
+	}
+	roles := make([]string, 0, len(grants))
+	for _, g := range grants {
+		roles = append(roles, g.Role)
+	}
+	if !allScopePerms(ctx, idx, actor).Covers(idx.Flatten(roles)) {
+		return huma.Error403Forbidden("cannot add a member to a group whose grants exceed yours")
+	}
+	return nil
 }

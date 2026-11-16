@@ -420,6 +420,9 @@ components:
           type: string
         actor_name:
           type: string
+        agent:
+          description: The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly
+          type: string
         channel:
           description: "How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"
           type: string
@@ -2527,13 +2530,38 @@ components:
           format: uri
           readOnly: true
           type: string
+        agent:
+          description: "Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate."
+          maxLength: 100
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 ._-]*$
+          type: string
+        channels:
+          description: "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both."
+          items:
+            enum:
+              - api
+              - mcp
+            type: string
+          maxItems: 2
+          type:
+            - array
+            - "null"
+          uniqueItems: true
         description:
           description: What the token is for (required)
           maxLength: 200
           minLength: 1
           type: string
+        roles:
+          description: "An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling."
+          items:
+            type: string
+          maxItems: 20
+          type:
+            - array
+            - "null"
         ttl_days:
-          description: Days until the token expires (default 90, maximum 365)
+          description: Days until the token expires (default 90, maximum 365; required for an agent token)
           format: int64
           maximum: 365
           minimum: 1
@@ -2551,6 +2579,16 @@ components:
           format: uri
           readOnly: true
           type: string
+        agent:
+          description: The agent the token was minted for, when it is an agent token
+          type: string
+        channels:
+          description: The channels the agent token is accepted on, when restricted
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         description:
           description: What the token is for
           type: string
@@ -2560,6 +2598,13 @@ components:
         prefix:
           description: The non-secret ogp locator for the new token
           type: string
+        roles:
+          description: The agent token's own roles, when narrowed
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         token:
           description: "The bearer token, shown once. Store it now: it cannot be retrieved again."
           type: string
@@ -6666,6 +6711,9 @@ components:
           format: uri
           readOnly: true
           type: string
+        agent:
+          description: "Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."
+          type: string
         fleet_permissions:
           description: The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
           items:
@@ -10471,6 +10519,23 @@ components:
     SessionBody:
       additionalProperties: false
       properties:
+        agent:
+          description: "Set on an agent token: the agent acting on the person's behalf"
+          type: string
+        agent_channels:
+          description: The channels an agent token is accepted on
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        agent_roles:
+          description: An agent token's own roles, intersected with its person's on every request
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         client_ip:
           description: The IP address the credential was created from
           type: string
@@ -14039,6 +14104,13 @@ paths:
           schema:
             description: Only events strictly older than this RFC3339 timestamp (paging backward)
             type: string
+        - description: Filter to the events one agent took on its person's behalf (the name its agent token was minted with)
+          explode: false
+          in: query
+          name: agent
+          schema:
+            description: Filter to the events one agent took on its person's behalf (the name its agent token was minted with)
+            type: string
       responses:
         "200":
           content:
@@ -14523,7 +14595,7 @@ paths:
       summary: Revoke all of your own sessions or tokens
   /auth/me/tokens:
     post:
-      description: Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+      description: "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route."
       operationId: create-auth-me-token
       requestBody:
         content:
@@ -14538,17 +14610,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/CreateMeTokenOutputBody"
           description: Created
-        default:
+        "403":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
-          description: Error
+          description: Forbidden
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
       summary: Create one of your own API tokens
       x-omniglass-plaintext: true
   /auth/me:changePassword:
     post:
-      description: Verifies the current password and sets a new one. Requires authentication; self-scoped.
+      description: Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.
       operationId: change-auth-me-password
       requestBody:
         content:
@@ -20098,7 +20182,7 @@ paths:
       summary: List a group's members
       x-omniglass-permission: principal_group:read:admin
     post:
-      description: Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+      description: Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
       operationId: add-group-member
       parameters:
         - description: The group, by name or uuid
@@ -20622,7 +20706,7 @@ paths:
       x-omniglass-permission: principal:update
   /principals/{id}:impersonate:
     post:
-      description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+      description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
       operationId: impersonate-principal
       parameters:
         - description: The principal to impersonate, addressed by its uuid, a human's username, or a service account's name

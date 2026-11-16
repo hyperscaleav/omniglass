@@ -199,6 +199,7 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--agent` | string | (none) | Filter to the events one agent took on its person's behalf (the name its agent token was minted with) |
 | `--before` | string | (none) | Only events strictly older than this RFC3339 timestamp (paging backward) |
 | `--limit` | int | `0` | Max rows to return, newest first (default 100, capped at 500) |
 | `--resource` | string | (none) | Filter to one resource kind (e.g. auth, principal_grant) |
@@ -238,7 +239,7 @@ Change your own password
 omniglass auth change-password [flags]
 ```
 
-Verifies the current password and sets a new one. Requires authentication; self-scoped.
+Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -259,12 +260,15 @@ Create one of your own API tokens
 omniglass auth create-token [flags]
 ```
 
-Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--agent` | string | (none) | Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate. |
+| `--channels` | string | (none) | The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both. |
 | `--description` | string | (none) | What the token is for (required) |
-| `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365) |
+| `--roles` | string | (none) | An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling. |
+| `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365; required for an agent token) |
 
 Example:
 
@@ -4759,7 +4763,7 @@ Impersonate a principal (view-as or act-as)
 omniglass principal impersonate <id> [flags]
 ```
 
-Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5104,7 +5108,7 @@ Add a member to a group
 omniglass principal-group member create <group> [flags]
 ```
 
-Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

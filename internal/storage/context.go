@@ -74,6 +74,30 @@ func auditChannelFrom(ctx context.Context) (channel, client any) {
 	return string(v.channel), nullize(v.client)
 }
 
+// AuditChannelOf returns the channel the context's request arrived through,
+// empty for a direct API call. The API reads it to apply the agent ceiling
+// (#1179) to every request an MCP tool call makes, whatever its credential.
+func AuditChannelOf(ctx context.Context) AuditChannel {
+	v, _ := ctx.Value(auditChannelKey{}).(auditChannelValue)
+	return v.channel
+}
+
+// agentKey carries the agent an agent-token request acts as (#1179).
+type agentKey struct{}
+
+// WithAgent returns a context whose audited writes record that the named agent
+// took them, on the actor's behalf. Set by the API's authn when the request
+// authenticated with an agent token; empty leaves the column null.
+func WithAgent(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, agentKey{}, name)
+}
+
+// agentFrom reads the agent for an audit row: a SQL null when there is none.
+func agentFrom(ctx context.Context) any {
+	name, _ := ctx.Value(agentKey{}).(string)
+	return nullize(name)
+}
+
 // auditClientMax bounds a declared client name, matching the column's check.
 const auditClientMax = 200
 

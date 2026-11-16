@@ -205,8 +205,26 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	for _, g := range pr.Grants {
 		roleIDs = append(roleIDs, g.Role)
 	}
+	opID := ctx.Operation().OperationID
+	channel := storage.AuditChannelOf(ctx.Context())
 	c := huma.WithValue(ctx, principalCtxKey, pr)
-	c = huma.WithValue(c, permsCtxKey, idx.Flatten(roleIDs))
+	if pr.Agent != nil {
+		// An agent token (#1179): the principal is the person who minted it, the
+		// agent acts on their behalf. It is accepted only on the channels it was
+		// minted for (reading who it is stays open, so the MCP server's bearer
+		// probe answers), never reaches the self-service lanes that would let it
+		// outlive or out-reach its bounds, and marks every row it writes.
+		if !agentChannelAccepted(pr.Agent.Channels, channel) && opID != "get-auth-me" {
+			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "this agent token is not accepted on this channel")
+			return
+		}
+		if agentRefusedOps[opID] {
+			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "an agent token cannot do this; its person must")
+			return
+		}
+		c = huma.WithContext(c, storage.WithAgent(c.Context(), pr.Agent.Name))
+	}
+	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))
 	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
 	if impMode != "" {
 		// Impersonated request: mark the mode and session, and set the real actor so
@@ -237,6 +255,81 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 	next(c)
+}
+
+// agentCeilingActions are the actions an agent principal never holds, whatever
+// its roles (#1179): reveal returns a credential's plaintext and use hands one
+// to a target, so with both gone an agent can drive a device without ever
+// learning the credential that reaches it. No route is stamped with use yet;
+// the writes that hand a credential to a target resolve it under secretBind,
+// which is the empty scope under the ceiling. enroll mints a node's enrollment
+// token, itself a credential, for a node that then receives the credentials
+// placed on it, so an agent never enrolls one.
+var agentCeilingActions = []string{"reveal", "use", "enroll"}
+
+// ceilingChannels are the channels whose every request is an agent's, whatever
+// the credential: a tool call on the MCP server is made by the model the person
+// connected, so it is held to the agent ceiling even on a personal token.
+var ceilingChannels = map[storage.AuditChannel]bool{storage.AuditChannelMCP: true}
+
+// agentRefusedOps are the self-service lanes an agent token is refused on: it
+// cannot mint a token (one that would outlive or out-reach it), change its
+// person's password, or impersonate (a session whose grants are another
+// principal's, not bounded by the agent's own).
+var agentRefusedOps = map[string]bool{
+	"create-auth-me-token":    true,
+	"change-auth-me-password": true,
+	"impersonate-principal":   true,
+}
+
+// agentCeiling reports whether a request is held to the agent ceiling: it
+// authenticated with an agent token, or it arrived through an agent channel.
+func agentCeiling(pr *storage.Principal, channel storage.AuditChannel) bool {
+	return pr.Agent != nil || ceilingChannels[channel]
+}
+
+// agentChannelAPI is the channel name an agent token's allowlist uses for a
+// direct API call, which carries no audit channel.
+const agentChannelAPI = "api"
+
+// agentChannelAccepted reports whether an agent token minted for the listed
+// channels is accepted on the request's channel. No list accepts any channel.
+func agentChannelAccepted(allowed []string, channel storage.AuditChannel) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	name := string(channel)
+	if name == "" {
+		name = agentChannelAPI
+	}
+	for _, a := range allowed {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
+// constrainPerms bounds a principal's flattened permissions for the request:
+// an agent token narrowed to roles holds only what those roles AND its person
+// hold, and a request under the agent ceiling never holds reveal or use. The
+// person's own grants are reloaded on every request, so the intersection is
+// re-checked each time: a grant the person loses, the agent loses with it.
+func constrainPerms(perms rbac.Set, idx rbac.RoleIndex, agent *storage.AgentCredential, ceiling bool) rbac.Set {
+	if agent != nil && len(agent.Roles) > 0 {
+		perms = idx.Flatten(agent.Roles).Within(perms)
+	}
+	if ceiling {
+		perms = perms.Without(agentCeilingActions...)
+	}
+	return perms
+}
+
+// constrained reports whether the request's permissions are bounded by an agent
+// token or the agent ceiling, so scopeFor gates the scope on them too.
+func constrained(ctx context.Context) bool {
+	pr, ok := principalFrom(ctx)
+	return ok && agentCeiling(pr, storage.AuditChannelOf(ctx))
 }
 
 // require is Huma operation middleware enforcing a capability. It runs after
@@ -381,6 +474,13 @@ func (a *authenticator) registeredPerms() []string {
 func (a *authenticator) scopeFor(ctx context.Context, resource, action string) scope.Set {
 	pr, ok := principalFrom(ctx)
 	if !ok {
+		return scope.Set{}
+	}
+	// An agent or a request under the agent ceiling (#1179) reaches only what
+	// its bounded permissions allow: a reveal resolves to the empty scope, and
+	// so does any action the agent's roles do not name, whatever its person may.
+	// Within an allowed action the scope is the person's.
+	if constrained(ctx) && !a.allows(ctx, resource, action) {
 		return scope.Set{}
 	}
 	idx, err := a.roleIndex(ctx)
@@ -573,6 +673,7 @@ type meOutput struct {
 		// place or system never reaches.
 		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
 		Grants           []grantBody `json:"grants"`
+		Agent            string      `json:"agent,omitempty" doc:"Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."`
 	}
 }
 
@@ -636,7 +737,10 @@ func (a *authenticator) meHandler(ctx context.Context, _ *struct{}) (*meOutput, 
 			fleetRoles = append(fleetRoles, g.Role)
 		}
 	}
-	out.Body.FleetPermissions = idx.Flatten(fleetRoles).Strings()
+	out.Body.FleetPermissions = constrainPerms(idx.Flatten(fleetRoles), idx, pr.Agent, agentCeiling(pr, storage.AuditChannelOf(ctx))).Strings()
+	if pr.Agent != nil {
+		out.Body.Agent = pr.Agent.Name
+	}
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))
 	for i := range pr.Grants {
 		out.Body.Grants = append(out.Body.Grants, toGrantBody(&pr.Grants[i]))
@@ -736,16 +840,19 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 // whether expires_at is set. Current marks the credential that authenticated this very
 // request, so the console can mark it and read its revoke as a sign-out.
 type sessionBody struct {
-	ID          string  `json:"id"`
-	Kind        string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
-	Prefix      string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
-	Description string  `json:"description,omitempty" doc:"What a token is for (a token carries a description; a session does not)"`
-	UserAgent   string  `json:"user_agent,omitempty" doc:"The User-Agent that created the credential, so the console can show a device label"`
-	ClientIP    string  `json:"client_ip,omitempty" doc:"The IP address the credential was created from"`
-	CreatedAt   string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
-	LastUsedAt  *string `json:"last_used_at,omitempty" doc:"When the credential last authenticated a request (RFC 3339), throttled to the minute"`
-	ExpiresAt   *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
-	Current     bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+	ID            string   `json:"id"`
+	Kind          string   `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
+	Prefix        string   `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
+	Description   string   `json:"description,omitempty" doc:"What a token is for (a token carries a description; a session does not)"`
+	UserAgent     string   `json:"user_agent,omitempty" doc:"The User-Agent that created the credential, so the console can show a device label"`
+	ClientIP      string   `json:"client_ip,omitempty" doc:"The IP address the credential was created from"`
+	CreatedAt     string   `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
+	LastUsedAt    *string  `json:"last_used_at,omitempty" doc:"When the credential last authenticated a request (RFC 3339), throttled to the minute"`
+	ExpiresAt     *string  `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
+	Current       bool     `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+	Agent         string   `json:"agent,omitempty" doc:"Set on an agent token: the agent acting on the person's behalf"`
+	AgentRoles    []string `json:"agent_roles,omitempty" doc:"An agent token's own roles, intersected with its person's on every request"`
+	AgentChannels []string `json:"agent_channels,omitempty" doc:"The channels an agent token is accepted on"`
 }
 
 // listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
@@ -773,14 +880,17 @@ func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 			}
 		}
 		s := sessionBody{
-			ID:          c.ID,
-			Kind:        kind,
-			Prefix:      c.Prefix,
-			Description: c.Description,
-			UserAgent:   c.UserAgent,
-			ClientIP:    c.ClientIP,
-			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
-			Current:     c.Current,
+			ID:            c.ID,
+			Kind:          kind,
+			Prefix:        c.Prefix,
+			Description:   c.Description,
+			UserAgent:     c.UserAgent,
+			ClientIP:      c.ClientIP,
+			CreatedAt:     c.CreatedAt.Format(time.RFC3339),
+			Current:       c.Current,
+			Agent:         c.Agent,
+			AgentRoles:    c.AgentRoles,
+			AgentChannels: c.AgentChannels,
 		}
 		if c.LastUsedAt != nil {
 			lu := c.LastUsedAt.Format(time.RFC3339)
@@ -881,19 +991,59 @@ func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revo
 // optional (default 90 days, hard-capped at 365 by validation).
 type createMeTokenInput struct {
 	Body struct {
-		Description string `json:"description" minLength:"1" maxLength:"200" doc:"What the token is for (required)"`
-		TTLDays     int    `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365)"`
+		Description string   `json:"description" minLength:"1" maxLength:"200" doc:"What the token is for (required)"`
+		TTLDays     int      `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365; required for an agent token)"`
+		Agent       string   `json:"agent,omitempty" maxLength:"100" pattern:"^[A-Za-z0-9][A-Za-z0-9 ._-]*$" doc:"Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate."`
+		Roles       []string `json:"roles,omitempty" maxItems:"20" doc:"An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling."`
+		Channels    []string `json:"channels,omitempty" maxItems:"2" uniqueItems:"true" enum:"api,mcp" doc:"The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both."`
 	}
 }
 
 // createMeTokenOutput returns the newly minted token ONCE, plus its non-secret metadata.
 type createMeTokenOutput struct {
 	Body struct {
-		Token       string `json:"token" doc:"The bearer token, shown once. Store it now: it cannot be retrieved again."`
-		Prefix      string `json:"prefix" doc:"The non-secret ogp locator for the new token"`
-		Description string `json:"description" doc:"What the token is for"`
-		ExpiresAt   string `json:"expires_at" doc:"When the token expires (RFC 3339)"`
+		Token       string   `json:"token" doc:"The bearer token, shown once. Store it now: it cannot be retrieved again."`
+		Prefix      string   `json:"prefix" doc:"The non-secret ogp locator for the new token"`
+		Description string   `json:"description" doc:"What the token is for"`
+		ExpiresAt   string   `json:"expires_at" doc:"When the token expires (RFC 3339)"`
+		Agent       string   `json:"agent,omitempty" doc:"The agent the token was minted for, when it is an agent token"`
+		Roles       []string `json:"roles,omitempty" doc:"The agent token's own roles, when narrowed"`
+		Channels    []string `json:"channels,omitempty" doc:"The channels the agent token is accepted on, when restricted"`
 	}
+}
+
+// validateAgentMint checks an agent token's request before it is minted
+// (#1179): expiry is explicit, roles and channels belong to an agent token only,
+// and every role is one that exists and the minting caller covers, so the
+// token's own roles never name more than its person could grant.
+func (a *authenticator) validateAgentMint(ctx context.Context, in *createMeTokenInput) error {
+	b := in.Body
+	if b.Agent == "" {
+		if len(b.Roles) > 0 || len(b.Channels) > 0 {
+			return huma.Error422UnprocessableEntity("roles and channels bound an agent token; name the agent")
+		}
+		return nil
+	}
+	if b.TTLDays == 0 {
+		return huma.Error422UnprocessableEntity("an agent token needs an explicit ttl_days")
+	}
+	if len(b.Roles) == 0 {
+		return nil
+	}
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("create token")
+	}
+	perms, _ := permsFrom(ctx)
+	for _, r := range b.Roles {
+		if _, ok := idx[r]; !ok {
+			return huma.Error422UnprocessableEntity("unknown role: " + r)
+		}
+		if !perms.Covers(idx.Flatten([]string{r})) {
+			return huma.Error403Forbidden("the agent's role " + r + " grants a capability you do not hold")
+		}
+	}
+	return nil
 }
 
 // createMeTokenHandler mints an API token for the caller and returns its secret once.
@@ -908,6 +1058,9 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	if pr.Human == nil {
 		return nil, huma.Error422UnprocessableEntity("only human principals can mint API tokens")
 	}
+	if err := a.validateAgentMint(ctx, in); err != nil {
+		return nil, err
+	}
 	ttl := auth.DefaultTokenLifetime
 	if in.Body.TTLDays > 0 {
 		ttl = time.Duration(in.Body.TTLDays) * 24 * time.Hour
@@ -921,6 +1074,7 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	issued, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
 		ActorID: actorID(ctx), Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
 		ExpiresAt: &expiresAt, Description: in.Body.Description, UserAgent: ua, ClientIP: ip,
+		Agent: in.Body.Agent, AgentRoles: in.Body.Roles, AgentChannels: in.Body.Channels,
 	})
 	if err != nil || !issued {
 		return nil, huma.Error500InternalServerError("create token")
@@ -930,6 +1084,9 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	out.Body.Prefix = prefix
 	out.Body.Description = in.Body.Description
 	out.Body.ExpiresAt = expiresAt.Format(time.RFC3339)
+	out.Body.Agent = in.Body.Agent
+	out.Body.Roles = in.Body.Roles
+	out.Body.Channels = in.Body.Channels
 	return out, nil
 }
 

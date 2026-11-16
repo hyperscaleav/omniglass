@@ -41,7 +41,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/principals/{id}:impersonate",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Impersonate a principal (view-as or act-as)",
-		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
 		Errors:        []int{http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
 	}, "principal", "impersonate"), func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
 		actor, ok := principalFrom(ctx)
@@ -167,13 +167,7 @@ func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *stora
 	for _, g := range target.Grants {
 		targetRoleIDs = append(targetRoleIDs, g.Role)
 	}
-	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
-	for _, g := range actor.Grants {
-		if g.ScopeKind == "all" {
-			allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
-		}
-	}
-	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten(targetRoleIDs)), nil
+	return allScopePerms(ctx, idx, actor).Covers(idx.Flatten(targetRoleIDs)), nil
 }
 
 func (a *authenticator) checkTakeoverGuard(ctx context.Context, target *storage.Principal) error {

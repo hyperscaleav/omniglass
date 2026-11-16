@@ -279,6 +279,7 @@ func generatedCommands() []*cobra.Command {
 				var qResource string
 				var qVerb string
 				var qBefore string
+				var qAgent string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List audit-trail events",
@@ -300,6 +301,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("before") {
 							q.Set("before", fmt.Sprintf("%v", qBefore))
 						}
+						if cmd.Flags().Changed("agent") {
+							q.Set("agent", fmt.Sprintf("%v", qAgent))
+						}
 						if enc := q.Encode(); enc != "" {
 							path += "?" + enc
 						}
@@ -310,6 +314,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, principal_grant)")
 				cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
 				cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
+				cmd.Flags().StringVar(&qAgent, "agent", "", "Filter to the events one agent took on its person's behalf (the name its agent token was minted with)")
 				return cmd
 			}()
 			return cmd
@@ -345,7 +350,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "change-password",
 					Short:   "Change your own password",
-					Long:    "Verifies the current password and sets a new one. Requires authentication; self-scoped.",
+					Long:    "Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.",
 					Example: "  omniglass auth change-password --current-password current_password --new-password new_password",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -370,19 +375,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAgent string
+				var fChannels string
 				var fDescription string
+				var fRoles string
 				var fTtlDays int
 				cmd := &cobra.Command{
 					Use:     "create-token",
 					Short:   "Create one of your own API tokens",
-					Long:    "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.",
+					Long:    "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.",
 					Example: "  omniglass auth create-token --description description",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/auth/me/tokens")
 						body := map[string]any{}
+						if cmd.Flags().Changed("agent") {
+							body["agent"] = fAgent
+						}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("roles") {
+							body["roles"] = jsonOrString(fRoles)
 						}
 						if cmd.Flags().Changed("ttl-days") {
 							body["ttl_days"] = fTtlDays
@@ -390,9 +407,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fAgent, "agent", "", "Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate.")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both.")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the token is for (required)")
 				_ = cmd.MarkFlagRequired("description")
-				cmd.Flags().IntVar(&fTtlDays, "ttl-days", 0, "Days until the token expires (default 90, maximum 365)")
+				cmd.Flags().StringVar(&fRoles, "roles", "", "An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling.")
+				cmd.Flags().IntVar(&fTtlDays, "ttl-days", 0, "Days until the token expires (default 90, maximum 365; required for an agent token)")
 				return cmd
 			}()
 			return cmd
@@ -6111,7 +6131,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "impersonate <id>",
 					Short:   "Impersonate a principal (view-as or act-as)",
-					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
 					Example: "  omniglass principal impersonate <id> --mode mode",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6545,7 +6565,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <group>",
 						Short:   "Add a member to a group",
-						Long:    "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.",
+						Long:    "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
 						Example: "  omniglass principal-group member create night-shift --principal-id principal_id",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

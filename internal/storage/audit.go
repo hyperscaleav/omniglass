@@ -30,6 +30,10 @@ type AuditEntry struct {
 	// declared about itself, as asserted; empty when there is none.
 	Channel string
 	Client  string
+	// Agent names the agent that took the action on the actor's behalf, with
+	// an agent token the actor minted (#1179); empty when the actor acted
+	// directly.
+	Agent string
 }
 
 // AuditFilter bounds a ListAuditLog read. Limit caps the rows (a sane default is
@@ -40,6 +44,8 @@ type AuditFilter struct {
 	Resource string
 	Verb     string
 	Before   string
+	// Agent, when set, keeps only the rows that agent took (#1179).
+	Agent string
 }
 
 const auditDefaultLimit = 100
@@ -72,13 +78,14 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		       coalesce(a.real_actor_principal_id::text, ''),
 		       `+principalIdentJoinedCols("ra")+`, coalesce(a.real_actor_username, ''),
 		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new,
-		       coalesce(a.channel, ''), coalesce(a.client, '')
+		       coalesce(a.channel, ''), coalesce(a.client, ''), coalesce(a.agent, '')
 		from audit_log a`+
 		principalIdentJoins("ac", "a.actor_principal_id")+
 		principalIdentJoins("ra", "a.real_actor_principal_id")+`
 		where ($2 = '' or a.resource = $2)
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
+		  and ($5 = '' or a.agent = $5)
 		-- seq (the DB-assigned identity) is the true write sequence; ts is a
 		-- display fact, and the uuidv7 id is a clock in disguise. Both stamp
 		-- kinds invert across transactions (a slow tx commits after a later
@@ -87,7 +94,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		-- order flap between two reads of the same trail (#780).
 		order by a.seq desc
 		limit $1`,
-		limit, f.Resource, f.Verb, f.Before)
+		limit, f.Resource, f.Verb, f.Before, f.Agent)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list audit log: %w", err)
 	}
@@ -100,7 +107,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		if err := rows.Scan(&e.ID, &e.TS,
 			&e.ActorID, &actorUser, &actorSvc, &actorNode, &actorSnap,
 			&e.RealActorID, &realUser, &realSvc, &realNode, &realSnap,
-			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New, &e.Channel, &e.Client); err != nil {
+			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New, &e.Channel, &e.Client, &e.Agent); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
 		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc, actorNode), actorSnap)
@@ -138,9 +145,9 @@ func (p *PG) WriteAuthEventFor(ctx context.Context, actorID, verb, resource, res
 	}
 	channel, client := auditChannelFrom(ctx)
 	if _, err := p.pool.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, channel, client)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7)`,
-		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, nullize(resourceID), channel, client); err != nil {
+		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, channel, client, agent)
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, nullize(resourceID), channel, client, agentFrom(ctx)); err != nil {
 		return fmt.Errorf("storage: write auth event: %w", err)
 	}
 	return nil

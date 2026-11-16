@@ -151,6 +151,7 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `agent` | string | no | Filter to the events one agent took on its person's behalf (the name its agent token was minted with) |
 | `before` | string | no | Only events strictly older than this RFC3339 timestamp (paging backward) |
 | `limit` | integer | no | Max rows to return, newest first (default 100, capped at 500) |
 | `resource` | string | no | Filter to one resource kind (e.g. auth, principal_grant) |

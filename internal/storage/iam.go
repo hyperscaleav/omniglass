@@ -159,6 +159,14 @@ type BearerIssue struct {
 	Description string
 	UserAgent   string
 	ClientIP    string
+	// Agent, when set, makes the token an agent token (#1179): the name of the
+	// agent it is for. AgentRoles narrows the agent to these roles (intersected
+	// with the minting person's capability on every request; nil leaves it at the
+	// person's own); AgentChannels lists the entry points it is accepted on (nil:
+	// any). The API validates all three; this lane stores what it is given.
+	Agent         string
+	AgentRoles    []string
+	AgentChannels []string
 }
 
 func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error) {
@@ -177,16 +185,18 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 	defer func() { _ = tx.Rollback(ctx) }()
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip)
-			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''))
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels)
+			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''), nullif($9,''), $10, $11)
 			returning id`,
-		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP).Scan(&credID); err != nil {
+		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP,
+		spec.Agent, emptySliceNil(spec.AgentRoles), emptySliceNil(spec.AgentChannels)).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	// A token is how an agent or a script is given access, so its minting is
 	// audited (#1162). A web-login session is the auth lane's (login, logout).
 	if spec.Purpose == credentialPurposeToken {
-		img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: spec.Purpose, Description: spec.Description, ExpiresAt: spec.ExpiresAt}
+		img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: spec.Purpose, Description: spec.Description, ExpiresAt: spec.ExpiresAt,
+			Agent: spec.Agent, AgentRoles: emptySliceNil(spec.AgentRoles), AgentChannels: emptySliceNil(spec.AgentChannels)}
 		if err := writeAuditRes(ctx, tx, spec.ActorID, "create", "credential", credID, nil, img); err != nil {
 			return false, err
 		}
@@ -210,6 +220,20 @@ type credentialAuditImage struct {
 	Purpose     string     `json:"purpose"`
 	Description string     `json:"description,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// Agent, AgentRoles and AgentChannels describe an agent token (#1179), so
+	// the trail says which agent a token was minted for and how far it reaches.
+	Agent         string   `json:"agent,omitempty"`
+	AgentRoles    []string `json:"agent_roles,omitempty"`
+	AgentChannels []string `json:"agent_channels,omitempty"`
+}
+
+// emptySliceNil maps an empty slice to nil, so an optional text[] column stays
+// null rather than holding an empty array.
+func emptySliceNil(v []string) []string {
+	if len(v) == 0 {
+		return nil
+	}
+	return v
 }
 
 // revokedCredential is one deleted credential's identity and metadata, read
@@ -240,8 +264,9 @@ func scanRevoked(rows pgx.Rows) ([]revokedCredential, error) {
 	var out []revokedCredential
 	for rows.Next() {
 		var r revokedCredential
-		var purpose, description *string
-		if err := rows.Scan(&r.id, &r.img.PrincipalID, &r.img.Prefix, &purpose, &description, &r.img.ExpiresAt); err != nil {
+		var purpose, description, agent *string
+		if err := rows.Scan(&r.id, &r.img.PrincipalID, &r.img.Prefix, &purpose, &description, &r.img.ExpiresAt,
+			&agent, &r.img.AgentRoles, &r.img.AgentChannels); err != nil {
 			return nil, fmt.Errorf("storage: scan revoked credential: %w", err)
 		}
 		if purpose != nil {
@@ -250,13 +275,16 @@ func scanRevoked(rows pgx.Rows) ([]revokedCredential, error) {
 		if description != nil {
 			r.img.Description = *description
 		}
+		if agent != nil {
+			r.img.Agent = *agent
+		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
 
 // revokedCols is what a revoke's delete returns for its audit rows.
-const revokedCols = `returning id, principal_id, prefix, purpose, description, expires_at`
+const revokedCols = `returning id, principal_id, prefix, purpose, description, expires_at, agent, agent_roles, agent_channels`
 
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
@@ -291,10 +319,25 @@ type Principal struct {
 	Service    *ServiceProfile
 	Node       *NodeProfile
 	Grants     []Grant
+	// Agent is set when the request authenticated with an agent token (#1179):
+	// the principal is the person who minted it, and the agent acts on their
+	// behalf, inside the bounds this names. Nil for any other credential.
+	Agent *AgentCredential
 	// Groups are the principal groups this principal belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
 	Groups []PrincipalGroupRef
+}
+
+// AgentCredential is the agent half of an agent token (#1179): which agent it
+// is, the roles it is narrowed to (nil: its person's own), and the entry points
+// it is accepted on (nil: any). It never widens the person: the API intersects
+// the roles with the person's capability on every request.
+type AgentCredential struct {
+	CredentialID string
+	Name         string
+	Roles        []string
+	Channels     []string
 }
 
 // PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
@@ -405,12 +448,15 @@ func (p *PG) ResolveUsername(ctx context.Context, username string) (string, erro
 // absent, so it authenticates nothing).
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
 	var pr Principal
+	var credID string
+	var agent *string
+	var agentRoles, agentChannels []string
 	err := p.pool.QueryRow(ctx, `
-		select pr.id, pr.kind
+		select pr.id, pr.kind, c.id, c.agent, c.agent_roles, c.agent_channels
 		from credential c
 		join principal pr on pr.id = c.principal_id
 		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active
-			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind)
+			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind, &credID, &agent, &agentRoles, &agentChannels)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound
@@ -425,6 +471,9 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 			where secret_hash = $1 and (last_used_at is null or last_used_at < now() - interval '1 minute')`, hash)
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err
+	}
+	if agent != nil {
+		pr.Agent = &AgentCredential{CredentialID: credID, Name: *agent, Roles: agentRoles, Channels: agentChannels}
 	}
 	return &pr, nil
 }
@@ -835,6 +884,11 @@ type BearerCredential struct {
 	LastUsedAt  *time.Time
 	ExpiresAt   *time.Time
 	Current     bool
+	// Agent, AgentRoles and AgentChannels are an agent token's bounds (#1179);
+	// empty for a session or a personal token.
+	Agent         string
+	AgentRoles    []string
+	AgentChannels []string
 }
 
 // ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
@@ -848,7 +902,8 @@ type BearerCredential struct {
 func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, prefix, coalesce(purpose, ''), coalesce(description, ''), coalesce(user_agent, ''), coalesce(client_ip, ''),
-			created_at, last_used_at, expires_at, coalesce(secret_hash = $2, false) as current
+			created_at, last_used_at, expires_at, coalesce(secret_hash = $2, false) as current,
+			coalesce(agent, ''), agent_roles, agent_channels
 		from credential
 		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
 		order by created_at desc`, principalID, currentHash)
@@ -860,7 +915,7 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 	for rows.Next() {
 		var c BearerCredential
 		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.Description, &c.UserAgent, &c.ClientIP,
-			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current); err != nil {
+			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current, &c.Agent, &c.AgentRoles, &c.AgentChannels); err != nil {
 			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
 		}
 		out = append(out, c)

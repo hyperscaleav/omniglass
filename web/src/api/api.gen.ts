@@ -280,6 +280,8 @@ export type AlarmTimelineOutputBody = {
 export type AuditEventBody = {
   actor?: string;
   actor_name?: string;
+  /** The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly */
+  agent?: string;
   /** How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller */
   channel?: string;
   /** The name and version the MCP client declared about itself, recorded as asserted; absent when there is none */
@@ -1995,9 +1997,29 @@ export type CreateLocationsFromTemplateOutputBody = {
   to_attach: string[] | null;
 };
 
+export type CreateMeTokenInputBodyChannelsItem = typeof CreateMeTokenInputBodyChannelsItem[keyof typeof CreateMeTokenInputBodyChannelsItem];
+
+
+export const CreateMeTokenInputBodyChannelsItem = {
+  api: 'api',
+  mcp: 'mcp',
+} as const;
+
 export type CreateMeTokenInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /**
+     * Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate.
+     * @maxLength 100
+     * @pattern ^[A-Za-z0-9][A-Za-z0-9 ._-]*$
+     */
+  agent?: string;
+  /**
+     * The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both.
+     * @maxItems 2
+     * @nullable
+     */
+  channels?: CreateMeTokenInputBodyChannelsItem[] | null;
   /**
      * What the token is for (required)
      * @minLength 1
@@ -2005,7 +2027,13 @@ export type CreateMeTokenInputBody = {
      */
   description: string;
   /**
-     * Days until the token expires (default 90, maximum 365)
+     * An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling.
+     * @maxItems 20
+     * @nullable
+     */
+  roles?: string[] | null;
+  /**
+     * Days until the token expires (default 90, maximum 365; required for an agent token)
      * @minimum 1
      * @maximum 365
      */
@@ -2015,12 +2043,24 @@ export type CreateMeTokenInputBody = {
 export type CreateMeTokenOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The agent the token was minted for, when it is an agent token */
+  agent?: string;
+  /**
+     * The channels the agent token is accepted on, when restricted
+     * @nullable
+     */
+  channels?: string[] | null;
   /** What the token is for */
   description: string;
   /** When the token expires (RFC 3339) */
   expires_at: string;
   /** The non-secret ogp locator for the new token */
   prefix: string;
+  /**
+     * The agent token's own roles, when narrowed
+     * @nullable
+     */
+  roles?: string[] | null;
   /** The bearer token, shown once. Store it now: it cannot be retrieved again. */
   token: string;
 };
@@ -4131,6 +4171,18 @@ export const SessionBodyKind = {
 } as const;
 
 export type SessionBody = {
+  /** Set on an agent token: the agent acting on the person's behalf */
+  agent?: string;
+  /**
+     * The channels an agent token is accepted on
+     * @nullable
+     */
+  agent_channels?: string[] | null;
+  /**
+     * An agent token's own roles, intersected with its person's on every request
+     * @nullable
+     */
+  agent_roles?: string[] | null;
   /** The IP address the credential was created from */
   client_ip?: string;
   /** When the credential was issued (RFC 3339) */
@@ -5338,6 +5390,8 @@ export type PrincipalStruct = {
 export type MeOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling. */
+  agent?: string;
   /**
      * The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
      * @nullable
@@ -8175,6 +8229,8 @@ export type ListAuditLogParams = {
   verb?: string;
   /** Only events strictly older than this RFC3339 timestamp (paging backward) */
   before?: string;
+  /** Filter to the events one agent took on its person's behalf (the name its agent token was minted with) */
+  agent?: string;
 };
 
 export type ListAuthMeNotificationsParams = {
@@ -9830,15 +9886,25 @@ export type createAuthMeTokenResponse201 = {
   status: 201
 }
 
-export type createAuthMeTokenResponseDefault = {
+export type createAuthMeTokenResponse403 = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
+  status: 403
+}
+
+export type createAuthMeTokenResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type createAuthMeTokenResponse500 = {
+  data: ErrorModel
+  status: 500
 }
 
 export type createAuthMeTokenResponseSuccess = (createAuthMeTokenResponse201) & {
   headers: Headers;
 };
-export type createAuthMeTokenResponseError = (createAuthMeTokenResponseDefault) & {
+export type createAuthMeTokenResponseError = (createAuthMeTokenResponse403 | createAuthMeTokenResponse422 | createAuthMeTokenResponse500) & {
   headers: Headers;
 };
 
@@ -9853,7 +9919,7 @@ export const getCreateAuthMeTokenUrl = () => {
 }
 
 /**
- * Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+ * Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.
  * @summary Create one of your own API tokens
  */
 export const createAuthMeToken = async (createMeTokenInputBody: NonReadonly<CreateMeTokenInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAuthMeTokenResponse> => {
@@ -9911,7 +9977,7 @@ export const getChangeAuthMePasswordUrl = () => {
 }
 
 /**
- * Verifies the current password and sets a new one. Requires authentication; self-scoped.
+ * Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.
  * @summary Change your own password
  */
 export const changeAuthMePassword = async (changePasswordInputBody: NonReadonly<ChangePasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<changeAuthMePasswordResponse> => {
@@ -19503,7 +19569,7 @@ export const getAddGroupMemberUrl = (group: string,) => {
 }
 
 /**
- * Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
+ * Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
  * @summary Add a member to a group
  */
 export const addGroupMember = async (group: string,
@@ -20369,7 +20435,7 @@ export const getImpersonatePrincipalUrl = (id: string,) => {
 }
 
 /**
- * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+ * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
  * @summary Impersonate a principal (view-as or act-as)
  */
 export const impersonatePrincipal = async (id: string,
