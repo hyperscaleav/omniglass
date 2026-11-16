@@ -1290,6 +1290,15 @@ problem+json. The server runs as the **authenticated `human` or `service` princi
 reach is exactly that principal's grants ([AI](/architecture/ai/)). Connecting one:
 [connect an agent](/guides/agents/).
 
+The catalog is **credential-blind**
+([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).
+An operation whose request or answer carries a credential in plaintext (a secret's values, a minted
+token, a password, a reveal) carries a second stamp, `x-omniglass-plaintext`, and the generator refuses
+to make a tool of it, or of any operation gated on a `reveal` action. A spec test fails when an
+operation with a credential-shaped body goes unstamped, so the rule does not depend on remembering it.
+The catalog's triage read is `GET /alarms` (`list-alarms`): the fleet's active alarms in the caller's
+component scope, worst first.
+
 :::design[Views as MCP tools, tracked in #523]
 The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
 :::

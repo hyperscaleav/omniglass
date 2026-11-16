@@ -262,6 +262,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",

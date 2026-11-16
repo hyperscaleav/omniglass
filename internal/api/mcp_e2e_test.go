@@ -114,14 +114,18 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 		t.Fatalf("listed %d tools, want the whole generated catalog (about forty)", len(tools))
 	}
 	for name, want := range map[string]struct{ readOnly, destructive, openWorld bool }{
-		"list-components":            {true, false, false},
-		"get-component-reachability": {true, false, false},
-		"create-secret":              {false, false, false},
-		"create-endpoint":            {false, false, true},
-		"update-endpoint":            {false, true, true},
-		"retry-endpoint":             {false, true, true},
-		"delete-endpoint":            {false, true, false},
-		"issue-component-command":    {false, true, true},
+		"list-components":             {true, false, false},
+		"get-component-reachability":  {true, false, false},
+		"list-alarms":                 {true, false, false},
+		"acknowledge-component-alarm": {false, false, false},
+		"update-component":            {false, true, false},
+		"remove-component-tag":        {false, true, false},
+		"list-audit-log":              {true, false, false},
+		"create-endpoint":             {false, false, true},
+		"update-endpoint":             {false, true, true},
+		"retry-endpoint":              {false, true, true},
+		"delete-endpoint":             {false, true, false},
+		"issue-component-command":     {false, true, true},
 	} {
 		tool, ok := tools[name]
 		if !ok {
@@ -138,6 +142,14 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 	}
 	if _, ok := tools["delete-component"]; ok {
 		t.Error("an unstamped operation is served as a tool")
+	}
+	// Credential-blind (#2025): a write that takes a secret's value, or a read
+	// that reveals one, is never a tool, so plaintext never enters an agent's
+	// context.
+	for _, name := range []string{"create-secret", "update-secret", "reveal-secret", "copy-secret", "create-auth-me-token", "impersonate-principal"} {
+		if _, ok := tools[name]; ok {
+			t.Errorf("%s carries a credential in plaintext but is served as a tool", name)
+		}
 	}
 }
 
@@ -175,18 +187,11 @@ func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
 	t.Parallel()
 	s := newMCPStack(t)
 	cs := s.session(t, s.owner, "audit-agent")
-	res, text := callTool(t, cs, "create-secret", map[string]any{
-		"name": "mcp-audit-key", "secret_type": "api-key", "owner_kind": "platform", "fields": map[string]any{"key": "k-123"},
-	})
+	res, text := callTool(t, cs, "create-component", map[string]any{"name": "mcp-audit-comp", "product": "generic-device"})
 	if res.IsError {
-		t.Fatalf("create-secret errored: %s", text)
+		t.Fatalf("create-component errored: %s", text)
 	}
-	if strings.Contains(text, "k-123") {
-		t.Errorf("the write's result echoes the secret value: %s", text)
-	}
-	s.c.do(s.owner, http.MethodPost, "/secrets", map[string]any{
-		"name": "direct-key", "secret_type": "api-key", "owner_kind": "platform", "fields": map[string]any{"key": "k-456"},
-	}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "direct-comp", "product": "generic-device"}, http.StatusCreated)
 
 	var out struct {
 		Events []struct {
@@ -196,7 +201,7 @@ func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
 			New       map[string]any `json:"new"`
 		} `json:"events"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?resource=secret&verb=create", nil, http.StatusOK), &out); err != nil {
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?resource=component&verb=create", nil, http.StatusOK), &out); err != nil {
 		t.Fatalf("audit-log: %v", err)
 	}
 	byName := map[string]int{}
@@ -208,10 +213,10 @@ func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
 			byName[n] = i
 		}
 	}
-	mi, ok1 := byName["mcp-audit-key"]
-	di, ok2 := byName["direct-key"]
+	mi, ok1 := byName["mcp-audit-comp"]
+	di, ok2 := byName["direct-comp"]
 	if !ok1 || !ok2 {
-		t.Fatalf("secret create rows = %+v, want one for each secret", out.Events)
+		t.Fatalf("component create rows = %+v, want one for each component", out.Events)
 	}
 	if e := out.Events[mi]; e.ActorName != "root" || e.Channel != "mcp" || e.Client != "audit-agent/1.0" {
 		t.Errorf("MCP row = %+v, want actor root, channel mcp, client audit-agent/1.0", e)
@@ -230,13 +235,11 @@ func TestMCPAuthorizationIsTheRoutes(t *testing.T) {
 	s := newMCPStack(t)
 	viewer := principalWithGrants(t, s.ctx, s.dsn, "mcp-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	cs := s.session(t, viewer, "viewer-agent")
-	res, text := callTool(t, cs, "create-secret", map[string]any{
-		"name": "viewer-key", "secret_type": "api-key", "owner_kind": "platform", "fields": map[string]any{"key": "v"},
-	})
+	res, text := callTool(t, cs, "create-component", map[string]any{"name": "viewer-comp", "product": "generic-device"})
 	if !res.IsError || !strings.Contains(text, "403") && !strings.Contains(strings.ToLower(text), "forbidden") {
-		t.Errorf("viewer create-secret = %v %q, want the route's 403", res.IsError, text)
+		t.Errorf("viewer create-component = %v %q, want the route's 403", res.IsError, text)
 	}
-	if code, _ := s.c.send(s.owner, http.MethodGet, "/secrets/viewer-key", nil); code == http.StatusOK {
+	if code, _ := s.c.send(s.owner, http.MethodGet, "/components/viewer-comp", nil); code == http.StatusOK {
 		t.Error("the refused write landed anyway")
 	}
 
@@ -355,6 +358,97 @@ func TestMCPTokenLifecycleAndImpersonation(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no audit row for the act-as write: %+v", out.Events)
+	}
+}
+
+// An agent triages the fleet over MCP (#2025): one read lists what is alarming
+// across every component it may see, worst first; it acknowledges one through
+// the route, which the audit trail records as arriving over MCP; and a caller
+// whose role lacks alarm:acknowledge gets the route's 403 as a tool error.
+func TestMCPTriagesTheFleetsAlarms(t *testing.T) {
+	t.Parallel()
+	s := newMCPStack(t)
+	for _, name := range []string{"triage-dsp", "triage-cam"} {
+		s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": name, "product": "generic-device"}, http.StatusCreated)
+	}
+	warn := raiseFor(t, s.c, s.owner, "triage-dsp", "warning", "fan", "fan slow")
+	worst := raiseFor(t, s.c, s.owner, "triage-cam", "disaster", "video", "no video")
+
+	cs := s.session(t, s.owner, "triage-agent")
+	res, text := callTool(t, cs, "list-alarms", nil)
+	if res.IsError {
+		t.Fatalf("list-alarms errored: %s", text)
+	}
+	var listed struct {
+		Alarms []struct {
+			ID        string `json:"id"`
+			Component string `json:"component"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal([]byte(text), &listed); err != nil {
+		t.Fatalf("list-alarms is not the route's JSON: %v (%s)", err, text)
+	}
+	if len(listed.Alarms) < 2 || listed.Alarms[0].ID != worst || listed.Alarms[0].Component != "triage-cam" {
+		t.Fatalf("list-alarms = %s, want the fleet's open alarms, the disaster on triage-cam first", text)
+	}
+	seen := false
+	for _, a := range listed.Alarms {
+		seen = seen || a.ID == warn
+	}
+	if !seen {
+		t.Fatalf("list-alarms = %s, want the warning on triage-dsp too", text)
+	}
+
+	res, text = callTool(t, cs, "acknowledge-component-alarm", map[string]any{"name": "triage-cam", "id": worst})
+	if res.IsError || !strings.Contains(text, `"acknowledged":true`) {
+		t.Fatalf("acknowledge-component-alarm = %v %s, want the acknowledged alarm", res.IsError, text)
+	}
+	var out struct {
+		Events []struct {
+			ResourceID string `json:"resource_id"`
+			ActorName  string `json:"actor_name"`
+			Channel    string `json:"channel"`
+			Client     string `json:"client"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?resource=alarm&verb=acknowledge", nil, http.StatusOK), &out); err != nil {
+		t.Fatalf("audit-log: %v", err)
+	}
+	found := false
+	for _, e := range out.Events {
+		if e.ResourceID == worst {
+			found = true
+			if e.ActorName != "root" || e.Channel != "mcp" || e.Client != "triage-agent/1.0" {
+				t.Errorf("acknowledge row = %+v, want actor root, channel mcp, client triage-agent/1.0", e)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no audit row for the MCP acknowledgement: %+v", out.Events)
+	}
+
+	viewer := principalWithGrants(t, s.ctx, s.dsn, "triage-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	vcs := s.session(t, viewer, "viewer-agent")
+	if res, text := callTool(t, vcs, "list-alarms", nil); res.IsError || !strings.Contains(text, warn) {
+		t.Errorf("a viewer's list-alarms = %v %s, want the fleet's alarms (component:read is enough to see them)", res.IsError, text)
+	}
+	res, text = callTool(t, vcs, "acknowledge-component-alarm", map[string]any{"name": "triage-dsp", "id": warn})
+	if !res.IsError || !strings.Contains(text, "403") && !strings.Contains(strings.ToLower(text), "forbidden") {
+		t.Errorf("a viewer's acknowledge = %v %q, want the route's 403 as a tool error", res.IsError, text)
+	}
+	var after struct {
+		Alarms []struct {
+			ID           string `json:"id"`
+			Acknowledged bool   `json:"acknowledged"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/components/triage-dsp/alarms", nil, http.StatusOK), &after); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	for _, a := range after.Alarms {
+		if a.ID == warn && a.Acknowledged {
+			t.Error("the refused acknowledgement landed anyway")
+		}
 	}
 }
 

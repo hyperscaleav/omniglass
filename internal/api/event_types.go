@@ -73,6 +73,7 @@ type updateEventTypeInput struct {
 func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-type",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-types",
 		Summary:     "List event types",

@@ -7362,6 +7362,33 @@
         ],
         "type": "object"
       },
+      "ListFleetAlarmsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListFleetAlarmsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "alarms": {
+            "items": {
+              "$ref": "#/components/schemas/AlarmBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "alarms"
+        ],
+        "type": "object"
+      },
       "ListGroupGrantsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -18842,6 +18869,62 @@
         "x-omniglass-permission": "notification:subscribe"
       }
     },
+    "/alarms": {
+      "get": {
+        "description": "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+        "operationId": "list-alarms",
+        "parameters": [
+          {
+            "description": "Only the alarms nobody has looked at: the queue an operator, or an agent, works",
+            "explode": false,
+            "in": "query",
+            "name": "unacknowledged",
+            "schema": {
+              "description": "Only the alarms nobody has looked at: the queue an operator, or an agent, works",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "At most this many, the worst first; 0 or absent means 200",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "At most this many, the worst first; 0 or absent means 200",
+              "format": "int64",
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFleetAlarmsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the fleet's active alarms",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:read"
+      }
+    },
     "/audit-log": {
       "get": {
         "description": "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
@@ -18912,6 +18995,7 @@
           }
         },
         "summary": "List audit-trail events",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "audit:read:admin"
       }
     },
@@ -19866,6 +19950,7 @@
           }
         },
         "summary": "List calc rules",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       },
       "post": {
@@ -19979,6 +20064,7 @@
           }
         },
         "summary": "Get a calc rule",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       },
       "patch": {
@@ -20085,6 +20171,7 @@
           }
         },
         "summary": "Get a calc rule's live state",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       }
     },
@@ -20177,6 +20264,7 @@
           }
         },
         "summary": "Preview a calc rule",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       }
     },
@@ -20772,6 +20860,7 @@
           }
         },
         "summary": "Update a component",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:update"
       }
     },
@@ -20982,6 +21071,7 @@
           }
         },
         "summary": "Acknowledge an alarm",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "alarm:acknowledge"
       }
     },
@@ -21044,6 +21134,7 @@
           }
         },
         "summary": "Snooze an alarm's condition",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "alarm:snooze"
       }
     },
@@ -21096,6 +21187,7 @@
           }
         },
         "summary": "Read an alarm's timeline",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "alarm:read"
       }
     },
@@ -21148,6 +21240,7 @@
           }
         },
         "summary": "End an alarm's condition's snooze",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "alarm:snooze"
       }
     },
@@ -21648,6 +21741,7 @@
           }
         },
         "summary": "Effective tags for a component",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -22758,6 +22852,7 @@
           }
         },
         "summary": "List tags on a component",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -22855,6 +22950,9 @@
           }
         },
         "summary": "Remove a tag value from a component",
+        "x-omniglass-mcp": {
+          "destructive": true
+        },
         "x-omniglass-permission": "component:update"
       }
     },
@@ -23001,6 +23099,7 @@
           }
         },
         "summary": "Set a tag value on a component",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:update"
       }
     },
@@ -23947,6 +24046,7 @@
           }
         },
         "summary": "List event rules",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       },
       "post": {
@@ -24060,6 +24160,7 @@
           }
         },
         "summary": "Get an event rule",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       },
       "patch": {
@@ -24152,6 +24253,7 @@
           }
         },
         "summary": "Get an event rule's live state",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       }
     },
@@ -24244,6 +24346,7 @@
           }
         },
         "summary": "Preview an event rule",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       }
     },
@@ -24274,6 +24377,7 @@
           }
         },
         "summary": "List event types",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "event_type:read"
       },
       "post": {
@@ -24477,6 +24581,7 @@
           }
         },
         "summary": "Validate an expression",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "rule:read"
       }
     },
@@ -25337,6 +25442,7 @@
           }
         },
         "summary": "Create a location",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:create"
       }
     },
@@ -25463,6 +25569,7 @@
           }
         },
         "summary": "Update a location",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:update"
       }
     },
@@ -25548,6 +25655,7 @@
           }
         },
         "summary": "List a location's effective metrics",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       }
     },
@@ -25590,6 +25698,7 @@
           }
         },
         "summary": "List a location's effective properties",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       }
     },
@@ -32028,6 +32137,7 @@
           }
         },
         "summary": "Update a system",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:update"
       }
     },
@@ -32070,6 +32180,7 @@
           }
         },
         "summary": "List a system's members' alarms",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -32112,6 +32223,7 @@
           }
         },
         "summary": "List a system's recent events, members included",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -32228,6 +32340,7 @@
           }
         },
         "summary": "List a system's members' recent log lines",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -32270,6 +32383,7 @@
           }
         },
         "summary": "List the components in a system",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -32360,6 +32474,7 @@
         },
         "summary": "Put a component in a system",
         "x-omniglass-conditional-permission": "component:update",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:update"
       }
     },
@@ -32448,6 +32563,7 @@
           }
         },
         "summary": "List a system's effective metrics",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -32592,6 +32708,7 @@
           }
         },
         "summary": "List a system's properties and where each stands",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },

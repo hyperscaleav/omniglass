@@ -66,6 +66,16 @@ export interface paths {
       error: og.optOutActionRuleResponseError["data"];
     };
   };
+  "/alarms": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.listAlarms>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.listAlarmsResponseSuccess["data"];
+      error: og.listAlarmsResponseError["data"];
+    };
+  };
   "/audit-log": {
     get: {
       path: never;

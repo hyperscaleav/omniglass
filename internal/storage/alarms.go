@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // The alarm write side. An alarm is component-local and impairs it wholesale
@@ -454,6 +457,48 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 		a, err := scanAlarm(rows)
 		if err != nil {
 			return nil, fmt.Errorf("storage: scan system alarm: %w", err)
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
+// ListFleetAlarms returns the active alarms across every component the caller
+// may read, in one query (#2025): the worst severity first (by the level's
+// rank), newest first within a level, capped at limit. The caller's component
+// scope is injected here through scopedListSQL, the same rooted walk every
+// scoped component list takes, so an out-of-scope alarm is never read at all.
+// An empty or wholly malformed scope is an empty list, not an error.
+func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error) {
+	if read.Empty() {
+		return []Alarm{}, nil
+	}
+	args, ok := scopedListArgs(componentTable, read)
+	if !ok {
+		return []Alarm{}, nil
+	}
+	args = append(args, filter.Unacknowledged, limit)
+	unack, lim := "$"+strconv.Itoa(len(args)-1), "$"+strconv.Itoa(len(args))
+	rows, err := p.pool.Query(ctx, `
+		with comp as (`+scopedListSQL(componentTable, "id", read)+`)
+		select `+alarmCols+`
+		from alarm a
+		left join severity_level l on l.name = a.severity
+		where a.cleared_at is null
+		  and a.component_id in (select id from comp)
+		  and (not `+unack+` or a.acknowledged_at is null)
+		order by coalesce(l.rank, 0) desc, a.raised_at desc, a.id desc
+		limit `+lim, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list fleet alarms: %w", err)
+	}
+	defer rows.Close()
+
+	out := []Alarm{}
+	for rows.Next() {
+		a, err := scanAlarm(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan fleet alarm: %w", err)
 		}
 		out = append(out, *a)
 	}

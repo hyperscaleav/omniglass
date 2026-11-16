@@ -114,7 +114,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 	}
 
 	out, code := cli("mcp", "tools")
-	if code != 0 || !strings.Contains(out, `"name": "get-component-reachability"`) || !strings.Contains(out, `"name": "create-secret"`) {
+	if code != 0 || !strings.Contains(out, `"name": "get-component-reachability"`) || !strings.Contains(out, `"name": "create-component"`) || strings.Contains(out, `"name": "create-secret"`) {
 		t.Fatalf("mcp tools exit %d:\n%s", code, out)
 	}
 	if strings.Contains(out, ownerTok) {
@@ -133,16 +133,16 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		return code == 0 && strings.Contains(out, "mcp-panel-tcp") && strings.Contains(out, `"value": "up"`)
 	})
 
-	out, code = cli("mcp", "call", "create-secret", "--args", `{"name":"mcp-e2e-key","secret_type":"api-key","owner_kind":"platform","fields":{"key":"k-1"}}`)
+	out, code = cli("mcp", "call", "create-component", "--args", `{"name":"mcp-e2e-comp","product":"generic-device"}`)
 	if code != 0 {
-		t.Fatalf("mcp call create-secret exit %d:\n%s", code, out)
+		t.Fatalf("mcp call create-component exit %d:\n%s", code, out)
 	}
 	out, code = cli("mcp", "call", "get-component", "--args", `{"name":"no-such-component"}`)
 	if code == 0 || !strings.Contains(out, "404") {
 		t.Fatalf("a tool error should exit non-zero with the route's refusal, got exit %d:\n%s", code, out)
 	}
 
-	out, code = cli("audit-log", "list", "--resource", "secret", "--verb", "create")
+	out, code = cli("audit-log", "list", "--resource", "component", "--verb", "create")
 	if code != 0 {
 		t.Fatalf("audit-log list exit %d:\n%s", code, out)
 	}
@@ -158,7 +158,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		t.Fatalf("decode audit-log: %v\n%s", err, out)
 	}
 	for _, e := range trail.Events {
-		if e.New["name"] == "mcp-e2e-key" {
+		if e.New["name"] == "mcp-e2e-comp" {
 			if e.ActorName != "root" || e.Channel != "mcp" || !strings.HasPrefix(e.Client, "omniglass-cli") {
 				t.Fatalf("audit row = %+v, want actor root, channel mcp, client omniglass-cli", e)
 			}

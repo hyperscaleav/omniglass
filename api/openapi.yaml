@@ -5512,6 +5512,25 @@ components:
       required:
         - files
       type: object
+    ListFleetAlarmsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListFleetAlarmsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarms:
+          items:
+            $ref: "#/components/schemas/AlarmBody"
+          type:
+            - array
+            - "null"
+      required:
+        - alarms
+      type: object
     ListGroupGrantsOutputBody:
       additionalProperties: false
       properties:
@@ -13948,6 +13967,44 @@ paths:
           description: Error
       summary: Opt yourself out of a group notification
       x-omniglass-permission: notification:subscribe
+  /alarms:
+    get:
+      description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named."
+      operationId: list-alarms
+      parameters:
+        - description: "Only the alarms nobody has looked at: the queue an operator, or an agent, works"
+          explode: false
+          in: query
+          name: unacknowledged
+          schema:
+            description: "Only the alarms nobody has looked at: the queue an operator, or an agent, works"
+            type: boolean
+        - description: At most this many, the worst first; 0 or absent means 200
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: At most this many, the worst first; 0 or absent means 200
+            format: int64
+            maximum: 1000
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFleetAlarmsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the fleet's active alarms
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:read
   /audit-log:
     get:
       description: Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
@@ -13996,6 +14053,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List audit-trail events
+      x-omniglass-mcp: {}
       x-omniglass-permission: audit:read:admin
   /auth/login:
     post:
@@ -14598,6 +14656,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List calc rules
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     post:
       description: Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its aliased inputs, reduced by an expression over the aliases, each bound as the list of its current values (one per instance on a component, every member's on a system, with members records beside it). Every input key must be registered (by name or uuid; the rule holds it by uuid) and health may not be one; each alias is an identifier of at most 64, not a keyword, a builtin or list function's name, or a site binding (component, has, members, system, value), and unique; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column, and the name when it is one no alias binds); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
@@ -14671,6 +14730,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a calc rule
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     patch:
       description: "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant."
@@ -14741,6 +14801,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a calc rule's live state
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
   /calc-rules/{name}:rename:
     post:
@@ -14799,6 +14860,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Preview a calc rule
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
   /command-types:
     get:
@@ -15183,6 +15245,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
@@ -15321,6 +15384,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Acknowledge an alarm
+      x-omniglass-mcp: {}
       x-omniglass-permission: alarm:acknowledge
   /components/{name}/alarms/{id}:snooze:
     post:
@@ -15361,6 +15425,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Snooze an alarm's condition
+      x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/alarms/{id}:timeline:
     get:
@@ -15395,6 +15460,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read an alarm's timeline
+      x-omniglass-mcp: {}
       x-omniglass-permission: alarm:read
   /components/{name}/alarms/{id}:unsnooze:
     post:
@@ -15429,6 +15495,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: End an alarm's condition's snooze
+      x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/commands:
     get:
@@ -15764,6 +15831,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Effective tags for a component
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/effective-variables:
     get:
@@ -16504,6 +16572,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tags on a component
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}:move:
     post:
@@ -16566,6 +16635,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Remove a tag value from a component
+      x-omniglass-mcp:
+        destructive: true
       x-omniglass-permission: component:update
   /components/{name}:rename:
     post:
@@ -16659,6 +16730,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Set a tag value on a component
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:update
   /components:checkName:
     post:
@@ -17269,6 +17341,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List event rules
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     post:
       description: Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
@@ -17342,6 +17415,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get an event rule
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     patch:
       description: Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
@@ -17401,6 +17475,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get an event rule's live state
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
   /event-rules/{name}:rename:
     post:
@@ -17459,6 +17534,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Preview an event rule
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
   /event-types:
     get:
@@ -17478,6 +17554,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List event types
+      x-omniglass-mcp: {}
       x-omniglass-permission: event_type:read
     post:
       description: Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.
@@ -17608,6 +17685,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Validate an expression
+      x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
   /files:
     get:
@@ -18163,6 +18241,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a location
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:create
   /locations/{name}:
     delete:
@@ -18245,6 +18324,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
@@ -18300,6 +18380,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a location's effective metrics
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:read
   /locations/{name}/properties:
     get:
@@ -18327,6 +18408,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a location's effective properties
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:read
   /locations/{name}/properties/{property}:
     delete:
@@ -22480,6 +22562,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a system
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:update
   /systems/{name}/alarms:
     get:
@@ -22507,6 +22590,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a system's members' alarms
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/events:
     get:
@@ -22534,6 +22618,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a system's recent events, members included
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
@@ -22613,6 +22698,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a system's members' recent log lines
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/members:
     get:
@@ -22640,6 +22726,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List the components in a system
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/members/{component}:
     delete:
@@ -22701,6 +22788,7 @@ paths:
           description: Error
       summary: Put a component in a system
       x-omniglass-conditional-permission: component:update
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:update
   /systems/{name}/members/{component}:setPrimary:
     post:
@@ -22759,6 +22847,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a system's effective metrics
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/metrics/{metric}/samples:
     get:
@@ -22858,6 +22947,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a system's properties and where each stands
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/properties/{property}:
     delete:

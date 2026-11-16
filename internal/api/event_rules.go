@@ -198,6 +198,7 @@ type updateEventRuleInput struct {
 func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules",
 		Summary:     "List event rules",
@@ -217,6 +218,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}",
 		Summary:     "Get an event rule",
@@ -385,6 +387,7 @@ type eventRuleStateOutput struct {
 func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-event-rule-state",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}/state",
 		Summary:     "Get an event rule's live state",

@@ -3865,6 +3865,13 @@ export type ListFilesOutputBody = {
   files: FileBody[] | null;
 };
 
+export type ListFleetAlarmsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  alarms: AlarmBody[] | null;
+};
+
 export type ListGroupGrantsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8148,6 +8155,17 @@ export type ValidateExpressionOutputBody = {
   value_type: ValidateExpressionOutputBodyValueType;
 };
 
+export type ListAlarmsParams = {
+  /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
+  unacknowledged?: boolean;
+  /**
+   * At most this many, the worst first; 0 or absent means 200
+   * @minimum 0
+   * @maximum 1000
+   */
+  limit?: number;
+};
+
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
   limit?: number;
@@ -8774,6 +8792,57 @@ export const optOutActionRule = async (name: string, options?: Parameters<typeof
   {
     ...options,
     method: 'POST'
+
+
+  }
+);}
+
+
+
+export type listAlarmsResponse200 = {
+  data: ListFleetAlarmsOutputBody
+  status: 200
+}
+
+export type listAlarmsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAlarmsResponseSuccess = (listAlarmsResponse200) & {
+  headers: Headers;
+};
+export type listAlarmsResponseError = (listAlarmsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAlarmsResponse = (listAlarmsResponseSuccess | listAlarmsResponseError)
+
+export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/alarms?${stringifiedParams}` : `/alarms`
+}
+
+/**
+ * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's active alarms
+ */
+export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
+
+  return ogFetch<listAlarmsResponse>(getListAlarmsUrl(params),
+  {
+    ...options,
+    method: 'GET'
 
 
   }

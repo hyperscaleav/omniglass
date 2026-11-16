@@ -3,8 +3,10 @@
 # omniglass mcp serves the API's MCP tools over stdio for a local agent, relaying
 # to the server's /mcp with the user's token. A stdio MCP client (omniglass mcp
 # tools and call) lists the generated tools, reads a simulated panel's
-# reachability, writes a secret, and the audit row shows the write as the
-# user's own, arrived over MCP. No uuid is typed (#1162).
+# reachability, finds the fleet's worst alarm in one read and acknowledges it,
+# and the audit row shows the acknowledgement as the user's own, arrived over
+# MCP. No tool carries a credential in plaintext. No uuid is typed (#1162,
+# #2025).
 
 Type "# The tools, generated from the API, each saying what a client may assume of it"
 Enter
@@ -12,7 +14,7 @@ Wait
 Type `omniglass mcp tools | jq length`
 Enter
 Wait
-Type `omniglass mcp tools | jq -c '.[] | select(.name | test("^(get-component-reachability|create-secret|update-endpoint|issue-component-command)$")) | {name, read_only, destructive}'`
+Type `omniglass mcp tools | jq -c '.[] | select(.name | test("^(get-component-reachability|list-alarms|acknowledge-component-alarm|update-endpoint|issue-component-command)$")) | {name, read_only, destructive}'`
 Enter
 Wait
 
@@ -42,22 +44,34 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# A write tool: a secret, created through the stdio client with the user's token"
+Type "# Something goes wrong on the panel"
 Enter
 Wait
-Type `omniglass mcp call create-secret --args '{"name":"mcp-server-tape-key","secret_type":"api-key","owner_kind":"platform","fields":{"key":"demo-value"}}' | jq -c '{name, owner_kind, fields}'`
+Type `a=$(omniglass component alarm create "$panel" --severity disaster --message 'no video' --dedup-key mcp-demo | jq -r .id)`
 Enter
 Wait
-Type "# The same kind of write, made directly with the CLI"
+Type "# The agent's one read: every active alarm it may see, worst first, without walking the fleet"
 Enter
 Wait
-Type `omniglass secret create --name mcp-server-tape-direct --owner-kind platform --secret-type api-key --fields '{"key":"demo-value"}' | jq -c '{name, owner_kind}'`
+Type `omniglass mcp call list-alarms --args '{"unacknowledged":true}' | jq -c --arg a "$a" '.alarms[] | select(.id == $a) | {component, severity, message, acknowledged}'`
+Enter
+Wait
+Type "# A write tool: it acknowledges the alarm through the route, with the user's token"
+Enter
+Wait
+Type `omniglass mcp call acknowledge-component-alarm --args "{\"name\":\"$panel\",\"id\":\"$a\"}" | jq -c '{message, acknowledged, acknowledged_by}'`
 Enter
 Wait
 
-Type "# The audit trail: both writes are the user's; the MCP one says how it arrived"
+Type "# The audit trail: the acknowledgement is the user's, and says how it arrived"
 Enter
 Wait
-Type `omniglass audit-log list --resource secret --verb create --limit 2 | jq -c '.events[] | {secret: .new.name, actor_name, channel, client: (.client // "" | split("/")[0])}'`
+Type `omniglass audit-log list --resource alarm --verb acknowledge --limit 1 | jq -c '.events[] | {verb, actor_name, channel, client: (.client // "" | split("/")[0])}'`
+Enter
+Wait
+Type "# A tool never carries a credential in plaintext: creating or revealing a secret is not one"
+Enter
+Wait
+Type `omniglass mcp tools | jq -c '[.[].name] | {create_secret: index("create-secret"), reveal_secret: index("reveal-secret")}'`
 Enter
 Wait

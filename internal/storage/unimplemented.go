@@ -1017,6 +1017,10 @@ func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Durat
 	return nil, nil
 }
 
+func (UnimplementedGateway) ListFleetAlarms(context.Context, scope.Set, AlarmFilter, int) ([]Alarm, error) {
+	return nil, nil
+}
+
 func (UnimplementedGateway) ListSystemLogSources(context.Context, string, time.Duration) ([]string, error) {
 	return nil, nil
 }

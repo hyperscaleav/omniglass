@@ -79,6 +79,7 @@ type validateExpressionOutput struct {
 func registerExpressionRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "validate-expression",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/expressions:validate",
 		Summary:     "Validate an expression",

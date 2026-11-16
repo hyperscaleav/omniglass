@@ -115,6 +115,7 @@ type calcPreviewOutput struct {
 func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-calc-rule-state",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/calc-rules/{name}/state",
 		Summary:     "Get a calc rule's live state",
@@ -142,6 +143,7 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "preview-calc-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/calc-rules:preview",
 		Summary:     "Preview a calc rule",

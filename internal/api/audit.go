@@ -66,6 +66,7 @@ func auditImage(raw []byte) any {
 func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-audit-log",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/audit-log",
 		Summary:     "List audit-trail events",

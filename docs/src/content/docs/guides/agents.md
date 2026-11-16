@@ -86,6 +86,36 @@ is one), and the rest add something. A well-behaved client runs the read-only to
 anything else for your confirmation; most clients do this by default, and you can tighten it in the
 client's own permission settings.
 
+## Tools the agent can call
+
+The catalog is curated: an operation is a tool only when it is stamped for MCP at its route, and the
+[MCP tools reference](/reference/mcp/) is generated from those stamps. Beyond reading components, their
+endpoints, metrics and logs, it covers the triage loop:
+
+- **Find what is red.** `list-alarms` lists the active alarms across every component you can read,
+  worst severity first (`unacknowledged` for the queue nobody has looked at, `limit` to cap it), so an
+  agent does not walk the fleet one component at a time. `list-component-alarms`,
+  `list-system-alarms` and `get-component-alarm-timeline` narrow it to one component or system, and
+  `list-system-events` reads what the event rules decided.
+- **Act on an alarm.** `acknowledge-component-alarm`, `snooze-component-alarm` and
+  `unsnooze-component-alarm`, each gated by its own `alarm:` permission.
+- **Read the rules behind it.** `list-event-rule`, `get-event-rule`, `get-event-rule-state`,
+  `preview-event-rule`, the same four for calc rules, `validate-expression` and `list-event-type`.
+  Writing a rule is not a tool.
+- **Fix the component, its tags or its place.** `update-component`, `list-component-tags`,
+  `set-component-tag`, `remove-component-tag` and `effective-tags`; `create-location`,
+  `update-location`, `list-location-metrics` and `list-location-properties`; `update-system`,
+  `list-system-members`, `add-system-member`, `list-system-metrics`, `list-system-properties` and
+  `list-system-logs`. No delete is a tool.
+- **See who did what.** `list-audit-log`, which still needs the admin permission it needs anywhere.
+
+Some operations are never tools: any route that takes or returns a credential in plaintext (creating,
+updating, copying or revealing a secret, minting a token, logging in, setting a password, enrolling or
+claiming a node, a notification target's URL). A credential a person must see goes to that person in the
+console or the CLI, never into an agent's context, and the build fails if one of those routes is stamped.
+A tool that answers with a collected sample, such as running an endpoint's poll now, returns any secret
+field masked.
+
 ## Seeing what it did
 
 An agent's writes are yours in the [audit trail](/guides/admin/audit/), with how they arrived beside

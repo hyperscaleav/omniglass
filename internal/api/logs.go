@@ -187,6 +187,7 @@ type systemLogsOutput struct {
 func registerSystemLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-logs",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/logs",
 		Summary:     "List a system's members' recent log lines",
