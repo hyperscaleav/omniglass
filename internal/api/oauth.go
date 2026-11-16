@@ -173,12 +173,15 @@ type oauthEndpoints struct {
 	gw    storage.Gateway
 	trust clientaddr.Trust
 	eo    egress.Options
+	// mp is the allow list metadata document fetches run under, never the
+	// install's: see options.metadataPolicy.
+	mp egress.Policy
 }
 
 // mountOAuth puts the metadata, registration, authorization and token
 // endpoints on the root router.
-func mountOAuth(r chi.Router, gw storage.Gateway, trust clientaddr.Trust, eo egress.Options) {
-	e := &oauthEndpoints{gw: gw, trust: trust, eo: eo}
+func mountOAuth(r chi.Router, gw storage.Gateway, trust clientaddr.Trust, eo egress.Options, mp egress.Policy) {
+	e := &oauthEndpoints{gw: gw, trust: trust, eo: eo, mp: mp}
 	r.Get("/.well-known/oauth-protected-resource", cors(e.resourceMetadata))
 	r.Get("/.well-known/oauth-protected-resource/mcp", cors(e.resourceMetadata))
 	r.Get("/.well-known/oauth-authorization-server", cors(e.serverMetadata))
@@ -416,7 +419,7 @@ const oauthMetadataLimit = 5 << 10
 
 // metadataClient resolves a metadata document client_id at authorize: the
 // stored client while its document is fresh, else the document read again
-// through the egress contract, checked against its URL, and stored. A
+// through the egress contract with no allow list, checked against its URL, and stored. A
 // document that cannot be read or does not hold is no client (false), even
 // when an older read is stored: what the URL serves now is what it says.
 func (e *oauthEndpoints) metadataClient(ctx context.Context, clientID string) (storage.OAuthClient, bool, error) {
@@ -427,11 +430,7 @@ func (e *oauthEndpoints) metadataClient(ctx context.Context, clientID string) (s
 	if found && time.Since(c.FetchedAt) < oauthMetadataFresh {
 		return c, true, nil
 	}
-	pol, err := e.gw.EgressPolicy(ctx)
-	if err != nil {
-		return storage.OAuthClient{}, false, err
-	}
-	body, err := egress.New(pol, e.eo).Fetch(ctx, clientID, oauthMetadataLimit)
+	body, err := egress.New(e.mp, e.eo).Fetch(ctx, clientID, oauthMetadataLimit)
 	if err != nil {
 		return storage.OAuthClient{}, false, nil
 	}

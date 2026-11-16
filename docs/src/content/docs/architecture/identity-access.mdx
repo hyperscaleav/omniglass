@@ -815,8 +815,8 @@ Omniglass is both the resource server and the authorization server:
 - **Client metadata documents.** A client may skip registration and use an https URL as its
   `client_id`, the URL serving its metadata (the MCP spec's client ID metadata document); the
   authorization server metadata says so with `client_id_metadata_document_supported`. At authorize the
-  server fetches the document through the [egress contract](/architecture/alarms-actions/#durability-and-egress) a webhook sends through (no private or
-  loopback address unless the install's allow list names it, 5 KB at most), requires its `client_id` to
+  server fetches the document through the [egress contract](/architecture/alarms-actions/#durability-and-egress) a webhook sends through (never a private or
+  loopback address, whatever the install's allow list names, 5 KB at most), requires its `client_id` to
   equal the URL it came from, and holds the client to the redirect URIs it lists, under the same rules
   as a registration. The client is kept keyed by its URL and refetched after ten minutes; a refetch
   that fails refuses the client rather than trusting the stale copy. The client is named by its URL

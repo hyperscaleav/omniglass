@@ -23,9 +23,9 @@ import (
 // client_id is an https URL serving its metadata, so it never registers. The
 // server fetches the document through the egress contract, holds it to the
 // URL it was fetched from, and sends codes only to the redirect URIs it lists.
-// The document server here is a TLS test server on loopback, which the egress
-// contract refuses unless the install's allow list names it. Skipped under
-// -short.
+// The document server here is a TLS test server on loopback, which the
+// metadata fetch refuses whatever the install's egress allow list says; the
+// tests name it with a test-only fetch policy. Skipped under -short.
 
 // docServer serves a client metadata document at /client.json and counts the
 // requests that reach it.
@@ -77,16 +77,20 @@ func clientDoc(clientID string, redirects ...string) map[string]any {
 }
 
 // cimdStack is an MCP stack whose egress trusts the document server's
-// certificate; allow adds loopback to the install's egress allow list.
+// certificate; allow lets the metadata fetch reach loopback.
 func cimdStack(t *testing.T, d *docServer, allow bool) *mcpStack {
 	t.Helper()
 	roots := x509.NewCertPool()
 	roots.AddCert(d.srv.Certificate())
-	s := newMCPStack(t, api.WithEgressOptions(egress.Options{RootCAs: roots}))
+	opts := []api.Option{api.WithEgressOptions(egress.Options{RootCAs: roots})}
 	if allow {
-		s.c.do(s.owner, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"127.0.0.1"}}, http.StatusOK)
+		p, err := egress.ParsePolicy([]string{"127.0.0.1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts = append(opts, api.WithMetadataFetchPolicy(p))
 	}
-	return s
+	return newMCPStack(t, opts...)
 }
 
 // authorizeStatus sends a browser to /oauth/authorize as clientID asking for
@@ -261,11 +265,14 @@ func TestMetadataDocumentStaleRefetchFailsClosed(t *testing.T) {
 
 // A client id resolving to a private address is refused without a request
 // to it: the egress contract judges the dialed address before connecting.
+// The install's egress allow list naming the address changes nothing: it is
+// for the admin's own notification sends, not an unauthenticated authorize.
 func TestMetadataDocumentPrivateAddressNeverFetched(t *testing.T) {
 	t.Parallel()
 	d := newDocServer(t)
 	d.serve(clientDoc(d.url()))
 	s := cimdStack(t, d, false)
+	s.c.do(s.owner, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"127.0.0.1"}}, http.StatusOK)
 
 	if code, loc := s.authorizeStatus(t, d.url(), oauthRedirect); code != http.StatusBadRequest || loc != "" {
 		t.Errorf("a loopback client id = %d %q, want 400 and no redirect", code, loc)

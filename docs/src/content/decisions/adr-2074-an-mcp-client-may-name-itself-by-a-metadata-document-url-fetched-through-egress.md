@@ -13,8 +13,9 @@ refs: [2074, 2048, 1179]
      authorize; the authorization server metadata advertises `client_id_metadata_document_supported`.
      Dynamic registration stays for clients that do not publish a document.
   2. **The fetch is the egress contract's.** It goes through the same outbound primitive a webhook
-     does: private and loopback addresses are refused at dial time unless the install's allow list
-     names them, and the body is capped at 5 KB. The document is never reflected to the caller; a
+     does, with no allow list of its own: private and loopback addresses are always refused at dial
+     time (the install's allow list governs only its own notification sends, never this fetch), and
+     the body is capped at 5 KB. The document is never reflected to the caller; a
      failure is a 400 with no redirect.
   3. **The document must name itself.** Its `client_id` must equal the URL it was fetched from, and
      its redirect URIs obey the registration rules (https, or http on loopback), compared exactly
