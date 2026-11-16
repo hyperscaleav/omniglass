@@ -62,6 +62,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/profile", shell: "protected", page: "Profile", smoke: "/profile" },
   // A person's own alarm subscriptions (#1355), in the profile area like the
   // account they belong to; the page gates its writes on notification:subscribe.
+  // OAuth consent for MCP clients (#2048): /oauth/authorize sends the person
+  // here with the client's request; it smokes its incomplete-request face.
+  { path: "/oauth/authorize", shell: "protected", page: "OAuthConsent", smoke: "/oauth/authorize" },
   { path: "/profile/subscriptions", shell: "protected", page: "Subscriptions", smoke: "/profile/subscriptions" },
   // The console inbox (#1355): the bell in the top bar opens it.
   { path: "/inbox", shell: "protected", page: "Inbox", smoke: "/inbox" },
