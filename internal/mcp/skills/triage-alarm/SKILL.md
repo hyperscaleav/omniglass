@@ -54,7 +54,10 @@ Report: the alarm, whether it is still true, the most likely cause with the
 evidence for it, and what is affected. Then propose one next step:
 
 - a fresh poll, to confirm a fix took, with `tool:run-endpoint-poll`;
-- a command the component's driver offers, from `tool:list-component-commands`;
+- a command the component's driver offers: `tool:get-endpoint` names the driver
+  the endpoint is attached through, and `tool:get-driver` reads its spec, whose
+  command bindings are the commands it takes (`tool:list-component-commands` is
+  what was already issued and how each settled, worth reading first);
 - acknowledging or snoozing the alarm in the console, when the cause is known
   and someone owns it;
 - or handing it to a person, saying what they need to look at.
@@ -63,4 +66,7 @@ Ask before any of these. A poll and a command change what the component does;
 issue a command with `tool:issue-component-command` only after the operator
 says yes to that exact command. Never ask for, read, or repeat a credential:
 the poll and the command run on the server with the credentials bound to the
-endpoint, and you only need to know they are there.
+endpoint, so you never need one. If a tool's answer quotes something that looks
+like a credential (a password, a key, a token in a sample or an error), do not
+repeat it; say a result held one and that the operator should look in the
+console.

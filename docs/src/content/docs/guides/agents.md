@@ -74,10 +74,14 @@ the workflow (read the alarm, check reachability, find what changed, check what 
 recommend a next step) and works through it with your token, asking before anything that changes the
 fleet.
 
-A skill never handles a credential. When a step needs one, such as a fresh poll or a command, the
-server runs it with the credentials bound to the endpoint; the agent only learns they are there.
+A skill never asks for a credential. When a step needs one, such as a fresh poll or a command, the
+server runs it with the credentials bound to the endpoint, so the agent never needs one; and if a
+tool's answer quotes something that looks like a credential, the skill tells the agent not to repeat
+it. That is the skill's discipline, not a filter: what a tool answers is what your token may read.
 
-An agent that reads skill files rather than prompts can take one straight from the binary:
+An agent that reads skill files rather than prompts can take one straight from the binary. The file
+is the front matter (name, description, arguments) and then the workflow; the prompt is that same
+workflow, after the front matter, with the arguments you gave listed under `## Given`:
 
 ```bash
 omniglass mcp skill                 # the skills, as JSON

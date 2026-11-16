@@ -171,6 +171,9 @@ Three buckets, never conflated:
 Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 `/skill-name` (ported and refined as the corresponding subsystems land):
 
+- **`/contribute`** - the router for "I want to add a feature, request one, or report a bug": picks
+  the path (`/file-bug`, `/define-work`, `/scope-protocol`, `/run-feature-loop`, or a single slice) and
+  holds the gates between them (approved issue before a branch, dedupe first, never merge).
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
   em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.

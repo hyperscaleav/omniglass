@@ -18,7 +18,11 @@ refs: [2026, 1162, 1161, 1165, 2025]
      server registers every skill as an MCP prompt and names them in its instructions; the stdio relay
      mirrors the server's prompts as it mirrors its tools; `omniglass mcp skill` lists them and
      `omniglass mcp skill <name>` prints the file's bytes exactly, for an agent that loads skill
-     files. #1165's driver builder ships through this, not its own mechanism.
+     files. The issue asked that the CLI and a prompt get print the same bytes; they share the
+     workflow instead: the file is the front matter and then the workflow, a prompt get is that
+     workflow with the arguments given appended (point 3), and a test holds the two to it. A skill
+     file without its front matter is not a skill a loader can read, and a prompt with it would hand
+     the agent YAML meant for the loader. #1165's driver builder ships through this, not its own mechanism.
   2. **Tools and permissions are derived, never declared.** A skill names a tool in its body as
      `` `tool:<name>` ``, and nothing else lists them: there is no `tools` or `permissions` key to
      drift. The set is parsed from the body, a test fails any reference the catalog does not hold, and
@@ -30,9 +34,11 @@ refs: [2026, 1162, 1161, 1165, 2025]
      given (`- component: panel-1`), in declared order; a missing required argument or an undeclared
      one is refused, since the SDK does not check them. The body then reads the same in a prompt, in a
      skill file and on the docs page, with no placeholder syntax for a skill-file loader to show raw.
-  4. **Skills never handle a credential.** A step that needs one (a fresh poll, a command) calls a tool
-     the server runs with the credentials bound to the endpoint; a skill only says they are there and
-     never asks for, reads or repeats one.
+  4. **Skills never ask for a credential.** A step that needs one (a fresh poll, a command) calls a
+     tool the server runs with the credentials bound to the endpoint, so a skill never asks for, reads
+     or repeats one, and tells the agent not to repeat anything in a tool's answer that looks like
+     one. This is the skill's discipline, not a filter: a tool answers what the caller's token may
+     read, and masking credentials out of an answer is the route's job.
 - **Context:** The server registered tools only, and #1165 planned its first prompt as a one-off. A
   bag of tools leaves an agent to invent the order of a job each time; a skill carries the house way
   (read before you change, find the root before the symptom, ask before each write), and putting it in

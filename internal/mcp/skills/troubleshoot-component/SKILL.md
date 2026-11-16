@@ -27,9 +27,10 @@ component may be one symptom of a wider fault.
 
 Read `tool:get-component-reachability`. If it is unreachable:
 
-- read the endpoints with `tool:list-endpoints` and the one this component uses
-  with `tool:get-endpoint`: its last poll result says whether the poll failed
-  to connect, was refused, or got an answer it could not read;
+- the reachability answer is per endpoint: its verdict and the probe layers
+  under it say whether the path failed (no answer to a ping or a port) or the
+  endpoint answered and was refused. Read that endpoint with `tool:get-endpoint`
+  for the node it is placed on and the driver it is attached through;
 - read the node that polls it with `tool:get-node`, and that node's logs with
   `tool:list-node-logs`: a node that is down or cannot route to the component
   makes every component behind it unreachable.
@@ -53,8 +54,12 @@ that depends on a faulted one inherits its fault; fix the one it depends on.
 
 Say what you found, layer by layer, and which layer the fault is in. Propose
 the smallest next step: a fresh poll with `tool:run-endpoint-poll` to check
-the fault is still there, or a command from `tool:list-component-commands`
-(a reboot, an input change) issued with `tool:issue-component-command`. Ask
-before each one, naming exactly what it will do. Never ask for, read, or
+the fault is still there, or a command the driver offers (a reboot, an input
+change) issued with `tool:issue-component-command`. The commands a driver
+offers are the command bindings in its spec, read with `tool:get-driver` (the
+endpoint names its driver); `tool:list-component-commands` is the history of
+what was already issued and how each settled, so read it before repeating one.
+Ask before each step, naming exactly what it will do. Never ask for, read, or
 repeat a credential: the server polls and commands with the credentials bound
-to the endpoint, and you only need to know they are there.
+to the endpoint, so you never need one. If a tool's answer quotes something
+that looks like a credential, do not repeat it; say a result held one.

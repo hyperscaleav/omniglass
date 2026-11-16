@@ -107,3 +107,46 @@ func assertServesSkills(t *testing.T, cs *sdk.ClientSession) {
 		t.Error("an unknown prompt was served")
 	}
 }
+
+// `omniglass mcp skill <name>` prints the SKILL.md (its test holds it to Raw),
+// and a prompt get answers the workflow: the file is exactly its front matter
+// and then the prompt's text, the arguments given listed after it under
+// `## Given` (#2026, ADR point 1). A skill file and its prompt can never carry
+// two different workflows.
+func TestTheSkillFileIsItsFrontMatterThenThePrompt(t *testing.T) {
+	srv := httptest.NewServer(NewHandler(&fakeAPI{}, "test"))
+	t.Cleanup(srv.Close)
+	ctx := context.Background()
+	cs, err := Dial(ctx, srv.URL+"/mcp", goodToken, &sdk.Implementation{Name: "t", Version: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+	for _, s := range skills.All() {
+		args := map[string]string{}
+		var given []string
+		for _, a := range s.Arguments {
+			if a.Required {
+				args[a.Name] = "v-" + a.Name
+				given = append(given, "- "+a.Name+": v-"+a.Name)
+			}
+		}
+		res, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: s.Name, Arguments: args})
+		if err != nil {
+			t.Fatalf("%s: get prompt: %v", s.Name, err)
+		}
+		text := res.Messages[0].Content.(*sdk.TextContent).Text
+		workflow, tail, ok := strings.Cut(text, "\n\n## Given\n\n")
+		if len(given) > 0 && (!ok || tail != strings.Join(given, "\n")+"\n") {
+			t.Errorf("%s: the prompt does not end with the arguments given: %q", s.Name, tail)
+		}
+		raw := string(s.Raw)
+		front, rest, ok := strings.Cut(strings.TrimPrefix(raw, "---\n"), "\n---\n")
+		if !strings.HasPrefix(raw, "---\n") || !ok || front == "" {
+			t.Fatalf("%s: the file does not open with its front matter", s.Name)
+		}
+		if strings.TrimRight(strings.TrimLeft(rest, "\n"), "\n") != workflow {
+			t.Errorf("%s: the file after its front matter is not the prompt's workflow", s.Name)
+		}
+	}
+}

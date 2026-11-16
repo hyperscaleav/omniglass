@@ -28,8 +28,8 @@ Work out whether a component's alarm is real, what caused it, and what the opera
 - Arguments:
   - `component` (required): The component carrying the alarm, by name
   - `alarm` (optional): The alarm to triage, by its rule or message, when the component has more than one
-- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`list-endpoints`](/reference/mcp/#list-endpoints) (`endpoint:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`)
-- Permissions: `component:read`, `endpoint:read`, `node:read`, `endpoint:run`, `command:read`, `command:issue`
+- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`list-endpoints`](/reference/mcp/#list-endpoints) (`endpoint:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`)
+- Permissions: `component:read`, `endpoint:read`, `node:read`, `endpoint:run`, `driver:read`, `command:read`, `command:issue`
 
 ### Triage an alarm
 
@@ -75,7 +75,10 @@ Report: the alarm, whether it is still true, the most likely cause with the
 evidence for it, and what is affected. Then propose one next step:
 
 - a fresh poll, to confirm a fix took, with [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll);
-- a command the component's driver offers, from [`list-component-commands`](/reference/mcp/#list-component-commands);
+- a command the component's driver offers: [`get-endpoint`](/reference/mcp/#get-endpoint) names the driver
+  the endpoint is attached through, and [`get-driver`](/reference/mcp/#get-driver) reads its spec, whose
+  command bindings are the commands it takes ([`list-component-commands`](/reference/mcp/#list-component-commands) is
+  what was already issued and how each settled, worth reading first);
 - acknowledging or snoozing the alarm in the console, when the cause is known
   and someone owns it;
 - or handing it to a person, saying what they need to look at.
@@ -84,7 +87,10 @@ Ask before any of these. A poll and a command change what the component does;
 issue a command with [`issue-component-command`](/reference/mcp/#issue-component-command) only after the operator
 says yes to that exact command. Never ask for, read, or repeat a credential:
 the poll and the command run on the server with the credentials bound to the
-endpoint, and you only need to know they are there.
+endpoint, so you never need one. If a tool's answer quotes something that looks
+like a credential (a password, a key, a token in a sample or an error), do not
+repeat it; say a result held one and that the operator should look in the
+console.
 
 ## `troubleshoot-component`
 
@@ -94,8 +100,8 @@ Diagnose a component that is misbehaving, from whether omniglass can reach it to
 - Arguments:
   - `component` (required): The component to troubleshoot, by name
   - `symptom` (optional): What the operator saw, in their words
-- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`get-system-health`](/reference/mcp/#get-system-health) (`system:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`list-endpoints`](/reference/mcp/#list-endpoints) (`endpoint:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-node-logs`](/reference/mcp/#list-node-logs) (`node:read`), [`list-component-properties`](/reference/mcp/#list-component-properties) (`component:read`), [`list-component-metrics`](/reference/mcp/#list-component-metrics) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`)
-- Permissions: `component:read`, `system:read`, `endpoint:read`, `node:read`, `endpoint:run`, `command:read`, `command:issue`
+- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`get-system-health`](/reference/mcp/#get-system-health) (`system:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-node-logs`](/reference/mcp/#list-node-logs) (`node:read`), [`list-component-properties`](/reference/mcp/#list-component-properties) (`component:read`), [`list-component-metrics`](/reference/mcp/#list-component-metrics) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`)
+- Permissions: `component:read`, `system:read`, `endpoint:read`, `node:read`, `endpoint:run`, `command:issue`, `driver:read`, `command:read`
 
 ### Troubleshoot a component
 
@@ -114,9 +120,10 @@ component may be one symptom of a wider fault.
 
 Read [`get-component-reachability`](/reference/mcp/#get-component-reachability). If it is unreachable:
 
-- read the endpoints with [`list-endpoints`](/reference/mcp/#list-endpoints) and the one this component uses
-  with [`get-endpoint`](/reference/mcp/#get-endpoint): its last poll result says whether the poll failed
-  to connect, was refused, or got an answer it could not read;
+- the reachability answer is per endpoint: its verdict and the probe layers
+  under it say whether the path failed (no answer to a ping or a port) or the
+  endpoint answered and was refused. Read that endpoint with [`get-endpoint`](/reference/mcp/#get-endpoint)
+  for the node it is placed on and the driver it is attached through;
 - read the node that polls it with [`get-node`](/reference/mcp/#get-node), and that node's logs with
   [`list-node-logs`](/reference/mcp/#list-node-logs): a node that is down or cannot route to the component
   makes every component behind it unreachable.
@@ -140,8 +147,12 @@ that depends on a faulted one inherits its fault; fix the one it depends on.
 
 Say what you found, layer by layer, and which layer the fault is in. Propose
 the smallest next step: a fresh poll with [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) to check
-the fault is still there, or a command from [`list-component-commands`](/reference/mcp/#list-component-commands)
-(a reboot, an input change) issued with [`issue-component-command`](/reference/mcp/#issue-component-command). Ask
-before each one, naming exactly what it will do. Never ask for, read, or
+the fault is still there, or a command the driver offers (a reboot, an input
+change) issued with [`issue-component-command`](/reference/mcp/#issue-component-command). The commands a driver
+offers are the command bindings in its spec, read with [`get-driver`](/reference/mcp/#get-driver) (the
+endpoint names its driver); [`list-component-commands`](/reference/mcp/#list-component-commands) is the history of
+what was already issued and how each settled, so read it before repeating one.
+Ask before each step, naming exactly what it will do. Never ask for, read, or
 repeat a credential: the server polls and commands with the credentials bound
-to the endpoint, and you only need to know they are there.
+to the endpoint, so you never need one. If a tool's answer quotes something
+that looks like a credential, do not repeat it; say a result held one.
