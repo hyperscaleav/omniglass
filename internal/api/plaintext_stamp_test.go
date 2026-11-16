@@ -124,6 +124,10 @@ func credentialProp(s schemaShape, resolve func(schemaShape) schemaShape, reques
 			return name
 		case name == "fields" && p.Type == "object":
 			return "fields as values"
+		// an OAuth consent sends the browser back with a fresh code in its
+		// query (#2048), the credential the client exchanges for a token
+		case name == "redirect_to" && !request:
+			return "a redirect carrying a code"
 		}
 	}
 	return ""

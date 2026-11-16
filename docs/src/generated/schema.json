@@ -1642,6 +1642,88 @@
      }
     ]
    },
+   "oauth_client": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "client_name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "redirect_uris",
+      "type": "ARRAY",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
+   "oauth_code": {
+    "columns": [
+     {
+      "name": "code_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "client_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "oauth_client.id"
+     },
+     {
+      "name": "principal_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "redirect_uri",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "code_challenge",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "resource",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "roles",
+      "type": "ARRAY",
+      "nullable": false
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "secret": {
     "columns": [
      {
@@ -6376,90 +6458,6 @@
       "name": "node_loss",
       "type": "jsonb",
       "nullable": true
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "oauth_client": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "gen_random_uuid()",
-      "pk": true
-     },
-     {
-      "name": "client_name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "redirect_uris",
-      "type": "ARRAY",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ]
-   },
-   "oauth_code": {
-    "columns": [
-     {
-      "name": "code_hash",
-      "type": "bytea",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "client_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "oauth_client.id"
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "redirect_uri",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "code_challenge",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "resource",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "roles",
-      "type": "ARRAY",
-      "nullable": false
-     },
-     {
-      "name": "expires_at",
-      "type": "timestamp with time zone",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
      }
     ]
    }

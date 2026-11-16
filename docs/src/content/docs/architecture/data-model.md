@@ -528,6 +528,16 @@ config: {
     shape: sql_table
     entity_kind: text {constraint: primary_key}
   }
+  oauth_client: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  oauth_code: {
+    shape: sql_table
+    code_hash: bytea {constraint: primary_key}
+    client_id: uuid {constraint: foreign_key}
+    principal_id: uuid {constraint: foreign_key}
+  }
   secret: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -591,19 +601,6 @@ audit: {
   }
 }
 
-unclustered: {
-  oauth_client: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-  }
-  oauth_code: {
-    shape: sql_table
-    code_hash: bytea {constraint: primary_key}
-    client_id: uuid {constraint: foreign_key}
-    principal_id: uuid {constraint: foreign_key}
-  }
-}
-
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -636,8 +633,10 @@ collection.unbound_identity.conduit_id -> fleet.component.id
 collection.unbound_identity.property_type_id -> telemetry.property_type.id
 collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
-config.credential.oauth_client_id -> unclustered.oauth_client.id
+config.credential.oauth_client_id -> config.oauth_client.id
 config.credential.principal_id -> identity.principal.id
+config.oauth_code.client_id -> config.oauth_client.id
+config.oauth_code.principal_id -> identity.principal.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id
@@ -776,8 +775,6 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
-unclustered.oauth_code.client_id -> unclustered.oauth_client.id
-unclustered.oauth_code.principal_id -> identity.principal.id
 ```
 
 <!-- erd:end -->
