@@ -41,6 +41,7 @@ const privilege = (c: (typeof facts.containers)[number]) => {
           <th>Runs as</th>
           <th>Added privilege</th>
           <th>Published</th>
+          <th>Limits</th>
           <th>What it is</th>
         </tr>
       </thead>
@@ -71,6 +72,7 @@ const privilege = (c: (typeof facts.containers)[number]) => {
                 : 'none'}
             </td>
             <td>{c.publish ? <code>{c.publish}</code> : 'nothing'}</td>
+            <td>{c.limits || 'none'}</td>
             <td>{c.role}</td>
           </tr>
         ))}
