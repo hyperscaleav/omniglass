@@ -2,7 +2,7 @@
 title: "An MCP client signs in with OAuth 2.1 for an agent token linked to it"
 date: 2026-11-16
 status: "Accepted"
-summary: "Omniglass is its own OAuth 2.1 authorization server for MCP clients: discovery from the /mcp challenge (RFC 9728, RFC 8414), open dynamic client registration for public clients (RFC 7591), the code grant with S256 PKCE and the resource indicator, consent on a console page, and an exchange that mints an opaque agent token linked to the client. Refresh tokens and client metadata documents are deferred"
+summary: "Omniglass is its own OAuth 2.1 authorization server for MCP clients: discovery from the /mcp challenge (RFC 9728, RFC 8414), open dynamic client registration for public clients (RFC 7591), the code grant with S256 PKCE and the resource indicator, consent on a console page, and an exchange that mints an opaque agent token linked to the client. Refresh tokens followed in ADR-2073; client metadata documents are deferred"
 refs: [2048, 1179, 2047, 2073, 2074]
 ---
 
@@ -24,7 +24,7 @@ refs: [2048, 1179, 2047, 2073, 2074]
      person holds. The approval route refuses an agent token and an impersonation, so no agent
      consents for a client.
   5. **The token is an opaque agent token.** The exchange mints a credential row like any agent
-     token (named after the client, `mcp` channel only, the approved roles, 30 days), linked to its
+     token (named after the client, `mcp` channel only, the approved roles, 30 days, an hour since ADR-2073), linked to its
      client. A client holds one token per person; signing in again replaces it in one transaction.
      Everything ADR-1179 and ADR-2047 say of an agent token holds unchanged: the intersection, the
      plaintext ceiling, the audit name, revocation.
@@ -32,7 +32,8 @@ refs: [2048, 1179, 2047, 2073, 2074]
   agent. MCP clients now speak the MCP authorization spec, which is OAuth 2.1, so the person can
   connect one from the client with a browser approval and never handle the token.
 - **Limits:**
-  - No refresh token: after 30 days the client signs the person in again (#2073).
+  - No refresh token at first: after 30 days the client signed the person in again. Refresh shipped in
+    [ADR-2073](#adr-2073-an-oauth-client-refreshes-a-one-hour-token-with-a-rotating-refresh-token).
   - No client ID metadata documents; a client registers dynamically (#2074).
   - Registration is open, so anyone reaching the server can create a client row; it grants nothing
     until a signed-in person approves it, and the row is pruned if nobody does.

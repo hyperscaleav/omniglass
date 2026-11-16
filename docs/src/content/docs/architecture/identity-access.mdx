@@ -88,8 +88,8 @@ Where the build differs from the present-tense design below (each logged in the
 - **The `agent` principal kind** is reserved in the schema's `kind` CHECK, but no `agent` identity
   is issued: an AI acts through an [agent token](#agent-tokens) on a person's credential. Built: the
   mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
-  OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built without refresh
-  tokens ([#2073](https://github.com/hyperscaleav/omniglass/issues/2073)) or client metadata documents
+  OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built, refresh tokens
+  included, without client metadata documents
   ([#2074](https://github.com/hyperscaleav/omniglass/issues/2074)).
   Not built yet: narrowing an agent token to a location, the console's agent fields, and omnibot's marking
   ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
@@ -811,7 +811,7 @@ Omniglass is both the resource server and the authorization server:
   `/.well-known/oauth-authorization-server` (RFC 8414). The origin in every URL is the request's,
   with an `X-Forwarded-Proto` believed only from a trusted proxy.
 - **Registration.** `POST /oauth/register` is open dynamic client registration (RFC 7591): a public
-  client (no secret, `token_endpoint_auth_method` `none`), the code grant only, and redirect URIs that
+  client (no secret, `token_endpoint_auth_method` `none`), the code and refresh grants, and redirect URIs that
   are https or http on a loopback host. A registration nobody consented to within a day is pruned.
 - **Authorization.** `GET /oauth/authorize` takes the code response type, S256 PKCE and the `resource`
   (this server's `/mcp`); an unknown client or a redirect URI it did not register is a 400 with no
@@ -823,10 +823,18 @@ Omniglass is both the resource server and the authorization server:
   content on the Approve button.
 - **Exchange.** `POST /oauth/token` spends the code on any attempt (it lives five minutes, stored as
   a hash), checks the client, redirect, resource and PKCE verifier, and mints an agent token named
-  after the client, on the `mcp` channel only, with the approved roles and a 30-day lifetime. The
-  credential row links the client, and a client holds one token per person: a new sign-in replaces
-  the old token in the same transaction. There is no implicit or password grant and no refresh token
-  yet.
+  after the client, on the `mcp` channel only, with the approved roles and a one-hour lifetime, plus a
+  refresh token good for 30 days (`Cache-Control: no-store`). The credential row links the client, and
+  a client holds one token per person: a new sign-in replaces the old token in the same transaction.
+  There is no implicit or password grant.
+- **Refresh.** The refresh grant spends the refresh token (stored as a hash) and rotates the same
+  credential row in place: a new access token for an hour and a new refresh token for another 30 days,
+  so a client in use stays connected and one left idle for 30 days signs its person in again. The
+  rotation is audited as the person's, taken by the client. A spent refresh token presented again
+  means it leaked: the grant ends (the credential and its refresh chain are deleted, audited as a
+  revoke). A token from another client, an expired one, or one whose person is disabled is refused
+  without being spent ([ADR-2073](/architecture/decisions/#adr-2073-an-oauth-client-refreshes-a-one-hour-token-with-a-rotating-refresh-token)).
+  The session list keeps the client while its refresh token is good, showing that expiry.
 
 The token is an ordinary agent token from then on: the intersection with the person's grants, the
 plaintext ceiling, the audit `agent` name and revocation from the session list all apply unchanged.
