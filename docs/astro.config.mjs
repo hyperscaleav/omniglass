@@ -231,9 +231,10 @@ export default defineConfig({
           label: 'Reference',
           items: [
             // All generated: the CLI page by cmd/docsgen, the MCP tools page by
-            // cmd/mcpgen, the API groups by starlight-openapi. None is hand-maintained.
+            // cmd/mcpgen (and its skills page from the embedded skills), the API groups by starlight-openapi. None is hand-maintained.
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'MCP tools', slug: 'reference/mcp' },
+            { label: 'MCP skills', slug: 'reference/mcp/skills' },
             ...openAPISidebarGroups,
           ],
         },
