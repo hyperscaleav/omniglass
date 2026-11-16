@@ -98,6 +98,25 @@ func (s *mcpStack) expireAccess(t *testing.T, client string) {
 	}
 }
 
+// mcpStatus is the status /mcp answers a bare initialize carrying the bearer.
+func (s *mcpStack) mcpStatus(t *testing.T, token string) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodPost, s.base+"/mcp",
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
 func (s *mcpStack) mcpAccepts(t *testing.T, token string) bool {
 	t.Helper()
 	cs, err := s.connect(t, token, "probe")
@@ -141,8 +160,8 @@ func TestOAuthRefreshRotates(t *testing.T) {
 	// An hour on, the access token is refused, and the client stays in its
 	// person's session list because its refresh token is still good.
 	s.expireAccess(t, client)
-	if s.mcpAccepts(t, first.AccessToken) {
-		t.Fatal("an expired access token still connects")
+	if code := s.mcpStatus(t, first.AccessToken); code != http.StatusUnauthorized {
+		t.Fatalf("an expired access token at /mcp = %d, want 401", code)
 	}
 	if got := s.oauthSessionID(t, "Refresher"); got != row {
 		t.Fatalf("the session row after expiry = %q, want %q still listed", got, row)
@@ -243,9 +262,26 @@ func TestOAuthRevokeEndsRefresh(t *testing.T) {
 	s := newMCPStack(t)
 
 	client, first := s.oauthSignIn(t, "Revoked")
-	s.c.do(s.owner, http.MethodPost, "/auth/me/sessions/"+s.oauthSessionID(t, "Revoked")+":revoke", nil, http.StatusNoContent)
+	row := s.oauthSessionID(t, "Revoked")
+	s.c.do(s.owner, http.MethodPost, "/auth/me/sessions/"+row+":revoke", nil, http.StatusNoContent)
 	if r := s.refresh(t, client, first.RefreshToken); r.Status != http.StatusBadRequest || r.Error != "invalid_grant" {
 		t.Errorf("refresh after revoke = %+v, want 400 invalid_grant", r)
+	}
+
+	// The person took the revoke, and the row's image names the client it ended.
+	var trail struct {
+		Events []struct {
+			ResourceID string         `json:"resource_id"`
+			Agent      string         `json:"agent"`
+			Old        map[string]any `json:"old"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?resource=credential&verb=revoke", nil, http.StatusOK), &trail); err != nil {
+		t.Fatal(err)
+	}
+	if len(trail.Events) != 1 || trail.Events[0].ResourceID != row || trail.Events[0].Agent != "" ||
+		trail.Events[0].Old["agent"] != "Revoked" || trail.Events[0].Old["description"] != "OAuth: Revoked" {
+		t.Errorf("revoke rows = %+v, want one, taken by the person, naming the client Revoked", trail.Events)
 	}
 }
 
