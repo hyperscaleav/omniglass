@@ -65,6 +65,7 @@ type setSystemPropertyInput struct {
 func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-properties",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/properties",
 		Summary:     "List a system's properties and where each stands",

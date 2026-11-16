@@ -36,6 +36,7 @@ type impersonateOutput struct {
 func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "impersonate-principal",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:impersonate",
 		DefaultStatus: http.StatusCreated,

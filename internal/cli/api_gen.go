@@ -232,6 +232,44 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "alarm",
+			Short: "Commands for the alarm resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qUnacknowledged bool
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List the fleet's active alarms",
+					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+					Example: "  omniglass alarm list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/alarms")
+						q := url.Values{}
+						if cmd.Flags().Changed("unacknowledged") {
+							q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at: the queue an operator, or an agent, works")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, the worst first; 0 or absent means 200")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "audit-log",
 			Short: "Commands for the audit-log resource",
 		}

@@ -178,6 +178,9 @@ func TestPlanEndpointRun(t *testing.T) {
 			found = true
 		}
 	}
+	if len(run.Sealed) != 1 || run.Sealed[0] != previewPassword {
+		t.Errorf("run sealed = %v, want the endpoint's password alone to mask the answer of", run.Sealed)
+	}
 	if !found || run.NodeName != node || run.Poll != "identity" || run.Component != comp {
 		t.Errorf("run = %+v (task found %v)", run, found)
 	}

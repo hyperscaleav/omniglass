@@ -17,6 +17,28 @@ import (
 // generator. Its value is the operation's Hints.
 const Extension = "x-omniglass-mcp"
 
+// PlaintextExtension is the OpenAPI extension an operation carries when its
+// request or response holds a credential in plaintext (a minted token, a
+// revealed secret's fields, a secret's value on its way in), stamped in Go at
+// registration (internal/api). Such an operation is never a tool: a credential
+// a human must see goes to the human through the console, not through an
+// agent's context (CredentialBlind, #2025).
+const PlaintextExtension = "x-omniglass-plaintext"
+
+// CredentialBlind is the rule that keeps a plaintext credential out of an
+// agent's context (#2025): an operation gated on a reveal action, or stamped
+// plaintext, cannot be a tool. The generator refuses such a stamp, so the
+// catalog cannot carry one however the stamps drift.
+func CredentialBlind(permission string, plaintext bool) error {
+	if gateAction(permission) == "reveal" {
+		return fmt.Errorf("tooldef: an operation gated on %s reveals a credential, so it cannot be a tool", permission)
+	}
+	if plaintext {
+		return fmt.Errorf("tooldef: an operation stamped %s carries a credential in plaintext, so it cannot be a tool", PlaintextExtension)
+	}
+	return nil
+}
+
 // Hints is what an operation's stamp may declare beyond what its method and gate
 // already say. Each hint only adds caution: there is no read-only hint, so a stamp
 // can never present a write as a read.

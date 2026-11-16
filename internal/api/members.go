@@ -101,6 +101,7 @@ func requireComponentEndPermission(ctx context.Context, a *authenticator) error 
 func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-members",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/members",
 		Summary:     "List the components in a system",
@@ -135,6 +136,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "add-system-member",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodPut,
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,

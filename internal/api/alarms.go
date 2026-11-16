@@ -157,10 +157,53 @@ type systemAlarmsOutput struct {
 	}
 }
 
+// The fleet's alarm list (#2025) caps at fleetAlarmDefault unless the caller
+// asks for more, up to fleetAlarmMax.
+const (
+	fleetAlarmDefault = 200
+	fleetAlarmMax     = 1000
+)
+
+type listFleetAlarmsInput struct {
+	Unacknowledged bool `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
+	Limit          int  `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+}
+
+type listFleetAlarmsOutput struct {
+	Body struct {
+		Alarms []alarmBody `json:"alarms"`
+	}
+}
+
 // registerAlarmRoutes wires the component alarm surface.
 func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-alarms",
+		Extensions:  mcpExposed(),
+		Method:      http.MethodGet,
+		Path:        "/alarms",
+		Summary:     "List the fleet's active alarms",
+		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
+		limit := in.Limit
+		if limit <= 0 {
+			limit = fleetAlarmDefault
+		}
+		alarms, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), storage.AlarmFilter{Unacknowledged: in.Unacknowledged}, min(limit, fleetAlarmMax))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read fleet alarms")
+		}
+		out := &listFleetAlarmsOutput{}
+		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
+		for i := range alarms {
+			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-alarms",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/alarms",
 		Summary:     "List a system's members' alarms",
@@ -259,6 +302,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "acknowledge-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:acknowledge",
 		Summary:     "Acknowledge an alarm",
@@ -292,6 +336,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	// between the non-disclosing 404 and the truthful 403.
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "snooze-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:snooze",
 		Summary:     "Snooze an alarm's condition",
@@ -315,6 +360,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "unsnooze-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:unsnooze",
 		Summary:     "End an alarm's condition's snooze",
@@ -368,6 +414,7 @@ type alarmTimelineOutput struct {
 func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-alarm-timeline",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",

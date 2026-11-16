@@ -55,6 +55,7 @@ type previewEventRuleOutput struct {
 func registerEventRulePreviewRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "preview-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/event-rules:preview",
 		Summary:     "Preview an event rule",

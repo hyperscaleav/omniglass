@@ -65,7 +65,13 @@ func (r *recordingRunner) RunTaskNow(_ context.Context, node, taskID string, _ t
 	if held != nil {
 		return *held, nil
 	}
-	return collection.RunReply{Results: []collection.RunResult{{TaskID: taskID, Function: "identity", Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}}}}}, nil
+	// The device echoes its credential back (a misconfigured page, a banner):
+	// the answer must come back masked of it, as a preview's does.
+	return collection.RunReply{Results: []collection.RunResult{{TaskID: taskID, Function: "identity",
+		Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}, {Name: "serial-number", Text: "echo " + nodeRunSecret, Labels: map[string]string{"echo": nodeRunSecret},
+			Identity: &collection.RunIdentity{Key: "serial-number", Value: "echo " + nodeRunSecret}}},
+		Faults:  []string{"emit firmware-version did not locate in " + nodeRunSecret},
+		Excerpt: `{"echo":"` + nodeRunSecret + `"}`}}}, nil
 }
 
 type nodeRunStack struct {
@@ -129,6 +135,58 @@ func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
 	}
 	if len(s.runner.previews) != 1 || s.runner.previews[0][0].Secrets["login"]["password"] != nodeRunSecret {
 		t.Errorf("the node was asked %+v", s.runner.previews)
+	}
+}
+
+// A run now of an attached endpoint's poll comes back masked of the
+// endpoint's own secrets wherever the device could echo them: the samples'
+// text, labels and identity, and the faults (#2025).
+func TestARunNowComesBackMasked(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-echo", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-echo", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.33", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	raw := s.c.do(s.owner, http.MethodPost, "/endpoints/display-echo%2F"+ep.Name+"/polls/identity:run", nil, http.StatusOK)
+	if strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+		t.Errorf("the run now answer carries the endpoint's secret: %s", raw)
+	}
+}
+
+// A node's refusal of a run now can quote what the device said, so the
+// refusal comes back masked of the endpoint's secrets too, whichever answer
+// carries it (#2025).
+func TestARunNowRefusalComesBackMasked(t *testing.T) {
+	t.Parallel()
+	s := newNodeRunStack(t)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-refused", "product": "generic-device"}, http.StatusCreated)
+	var ep struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-refused", "driver": "boreal-edge-web", "node": "edge-api",
+		"inputs": map[string]string{"host": "10.20.4.34", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
+		t.Fatal(err)
+	}
+	quote := "login refused: banner echoed " + nodeRunSecret
+	for name, reply := range map[string]collection.RunReply{
+		"gated":   {Gated: true, GateReason: "refused", Error: quote},
+		"held":    {Gated: true, GateReason: "unreachable", Error: quote},
+		"pending": {Pending: true, Error: quote},
+		"full":    {Full: true, Error: quote},
+		"failed":  {Error: quote},
+	} {
+		s.runner.mu.Lock()
+		s.runner.held = &reply
+		s.runner.mu.Unlock()
+		code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-refused%2F"+ep.Name+"/polls/identity:run", nil)
+		if code == http.StatusOK || strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+			t.Errorf("a %s run now = %d %s, want the refusal masked of the endpoint's secret", name, code, raw)
+		}
 	}
 }
 

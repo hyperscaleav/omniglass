@@ -158,6 +158,31 @@ Example:
 omniglass action-rule update <name>
 ```
 
+## `omniglass alarm`
+
+Commands for the alarm resource
+
+### `omniglass alarm list`
+
+List the fleet's active alarms
+
+```
+omniglass alarm list [flags]
+```
+
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | At most this many, the worst first; 0 or absent means 200 |
+| `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+
+Example:
+
+```sh
+omniglass alarm list
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource

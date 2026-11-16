@@ -698,6 +698,11 @@ type Gateway interface {
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
 	// whatever their age and those cleared inside window, newest first, capped.
 	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
+	// ListFleetAlarms is the active alarms across every component in read, the
+	// Gateway injecting the scope (#2025): worst severity first, then newest,
+	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
+	// IncludeCleared is ignored, since the fleet read is what is wrong now.
+	ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error)
 	// ListMetricSeries returns one metric series' raw samples newest first,
 	// windowed and capped: the rows behind the effective read (#794).
 	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)

@@ -383,6 +383,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-location",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/locations",
 		DefaultStatus: http.StatusCreated,
@@ -404,6 +405,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-location",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",

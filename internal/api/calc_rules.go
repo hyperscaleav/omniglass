@@ -168,6 +168,7 @@ type renameCalcRuleInput struct {
 func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-calc-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/calc-rules",
 		Summary:     "List calc rules",
@@ -194,6 +195,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-calc-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/calc-rules/{name}",
 		Summary:     "Get a calc rule",

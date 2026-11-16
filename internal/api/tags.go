@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -265,6 +266,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "effective-tags",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
@@ -322,9 +324,18 @@ type entityNameInput struct {
 // the operator already holds on the entity.
 func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway, kind string) {
 	base := "/" + kind + "s/{name}"
+	// A component's tag bindings are MCP tools (#2025), so an agent fixing a
+	// component can tag it; the other kinds' are not in the curated catalog.
+	exposed := func(hints ...tooldef.Hints) map[string]any {
+		if kind != "component" {
+			return nil
+		}
+		return mcpExposed(hints...)
+	}
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-" + kind + "-tags",
+		Extensions:  exposed(),
 		Method:      http.MethodGet,
 		Path:        base + ":listTags",
 		Summary:     "List tags on a " + kind,
@@ -344,6 +355,7 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-" + kind + "-tag",
+		Extensions:  exposed(),
 		Method:      http.MethodPost,
 		Path:        base + ":setTag",
 		Summary:     "Set a tag value on a " + kind,
@@ -359,6 +371,7 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "remove-" + kind + "-tag",
+		Extensions:    exposed(tooldef.Hints{Destructive: true}),
 		Method:        http.MethodPost,
 		Path:          base + ":removeTag",
 		DefaultStatus: http.StatusNoContent,

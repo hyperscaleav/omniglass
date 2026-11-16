@@ -141,6 +141,15 @@ func TestBuildRefusesWhatItCannotServe(t *testing.T) {
 		"a reference that resolves to nothing": func(s string) string {
 			return strings.Replace(s, `"#/components/schemas/Dims"`, `"#/components/schemas/Missing"`, 1)
 		},
+		// The credential-blind rule (#2025): no tool hands an agent plaintext a
+		// human must see, so a reveal-gated or plaintext-stamped operation that
+		// is also stamped as a tool fails generation.
+		"a reveal-gated operation stamped as a tool": func(s string) string {
+			return strings.Replace(s, `"x-omniglass-permission": "widget:update", "x-omniglass-mcp": {}`, `"x-omniglass-permission": "widget:reveal", "x-omniglass-mcp": {}`, 1)
+		},
+		"a plaintext-stamped operation stamped as a tool": func(s string) string {
+			return strings.Replace(s, `"x-omniglass-permission": "widget:read", "x-omniglass-mcp": {}`, `"x-omniglass-permission": "widget:read", "x-omniglass-plaintext": true, "x-omniglass-mcp": {}`, 1)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := mcpgen.Build([]byte(mutate(specDoc))); err == nil {

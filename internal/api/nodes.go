@@ -199,6 +199,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "enroll-node",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/nodes/{name}:enroll",
 		Summary:     "Mint a node's enrollment token",
@@ -219,6 +220,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 
 	huma.Register(api, huma.Operation{
 		OperationID: "claim-node",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/nodes:claim",
 		Summary:     "Claim a node identity in exchange for its NATS credential",

@@ -65,6 +65,7 @@ type setLocationPropertyInput struct {
 func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-properties",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/properties",
 		Summary:     "List a location's effective properties",

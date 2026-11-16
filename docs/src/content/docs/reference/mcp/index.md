@@ -21,23 +21,35 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-66 tools.
+98 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
+| [`list-alarms`](#list-alarms) | List the fleet's active alarms | `component:read` | read-only, idempotent |
+| [`list-audit-log`](#list-audit-log) | List audit-trail events | `audit:read:admin` | read-only, idempotent |
 | [`get-auth-me`](#get-auth-me) | The authenticated principal, its permissions, and grants | authn only | read-only, idempotent |
 | [`list-auth-me-notifications`](#list-auth-me-notifications) | List your inbox | `notification:read` | read-only, idempotent |
+| [`list-calc-rule`](#list-calc-rule) | List calc rules | `rule:read` | read-only, idempotent |
+| [`get-calc-rule`](#get-calc-rule) | Get a calc rule | `rule:read` | read-only, idempotent |
+| [`get-calc-rule-state`](#get-calc-rule-state) | Get a calc rule's live state | `rule:read` | read-only, idempotent |
+| [`preview-calc-rule`](#preview-calc-rule) | Preview a calc rule | `rule:read` | read-only, idempotent |
 | [`list-component-types`](#list-component-types) | List component types | `component_type:read` | read-only, idempotent |
 | [`list-components`](#list-components) | List components in scope | `component:read` | read-only, idempotent |
 | [`create-component`](#create-component) | Create a component | `component:create` | adds |
 | [`get-component`](#get-component) | Get a component | `component:read` | read-only, idempotent |
+| [`update-component`](#update-component) | Update a component | `component:update` | destructive |
 | [`list-component-alarms`](#list-component-alarms) | List a component's alarms | `component:read` | read-only, idempotent |
+| [`acknowledge-component-alarm`](#acknowledge-component-alarm) | Acknowledge an alarm | `alarm:acknowledge` | adds |
+| [`snooze-component-alarm`](#snooze-component-alarm) | Snooze an alarm's condition | `alarm:snooze` | adds |
+| [`get-component-alarm-timeline`](#get-component-alarm-timeline) | Read an alarm's timeline | `alarm:read` | read-only, idempotent |
+| [`unsnooze-component-alarm`](#unsnooze-component-alarm) | End an alarm's condition's snooze | `alarm:snooze` | adds |
 | [`list-component-commands`](#list-component-commands) | List a component's commands | `command:read` | read-only, idempotent |
 | [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
 | [`list-component-dependencies`](#list-component-dependencies) | List what a component depends on and what depends on it | `component:read` | read-only, idempotent |
 | [`create-component-dependency`](#create-component-dependency) | Record that a component depends on another | `component:update` | adds |
 | [`delete-component-dependency`](#delete-component-dependency) | Remove a component's dependency on another | `component:update` | destructive, idempotent |
+| [`effective-tags`](#effective-tags) | Effective tags for a component | `component:read` | read-only, idempotent |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
 | [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
 | [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
@@ -49,6 +61,9 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
 | [`list-unbound-identities`](#list-unbound-identities) | List the identities a conduit reported that no binding places | `component:read` | read-only, idempotent |
+| [`list-component-tags`](#list-component-tags) | List tags on a component | `component:read` | read-only, idempotent |
+| [`remove-component-tag`](#remove-component-tag) | Remove a tag value from a component | `component:update` | destructive |
+| [`set-component-tag`](#set-component-tag) | Set a tag value on a component | `component:update` | adds |
 | [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
@@ -64,9 +79,19 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`run-endpoint-poll`](#run-endpoint-poll) | Run an endpoint's poll now | `endpoint:run` | open-world |
 | [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | destructive, open-world |
 | [`rotate-endpoint-token`](#rotate-endpoint-token) | Rotate a webhook endpoint's token | `endpoint:update` | destructive |
+| [`list-event-rule`](#list-event-rule) | List event rules | `rule:read` | read-only, idempotent |
+| [`get-event-rule`](#get-event-rule) | Get an event rule | `rule:read` | read-only, idempotent |
+| [`get-event-rule-state`](#get-event-rule-state) | Get an event rule's live state | `rule:read` | read-only, idempotent |
+| [`preview-event-rule`](#preview-event-rule) | Preview an event rule | `rule:read` | read-only, idempotent |
+| [`list-event-type`](#list-event-type) | List event types | `event_type:read` | read-only, idempotent |
+| [`validate-expression`](#validate-expression) | Validate an expression | `rule:read` | read-only, idempotent |
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
+| [`create-location`](#create-location) | Create a location | `location:create` | adds |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
+| [`update-location`](#update-location) | Update a location | `location:update` | destructive |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
+| [`list-location-metrics`](#list-location-metrics) | List a location's effective metrics | `location:read` | read-only, idempotent |
+| [`list-location-properties`](#list-location-properties) | List a location's effective properties | `location:read` | read-only, idempotent |
 | [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of places from a template | `location:create` | adds |
 | [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
 | [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
@@ -77,12 +102,19 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
 | [`list-secrets`](#list-secrets) | List secrets | `secret:read` | read-only, idempotent |
-| [`create-secret`](#create-secret) | Create a secret | `secret:create` | adds |
 | [`create-standard-from-template`](#create-standard-from-template) | Create a standard from a template | `standard:create` | adds |
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
+| [`update-system`](#update-system) | Update a system | `system:update` | destructive |
+| [`list-system-alarms`](#list-system-alarms) | List a system's members' alarms | `system:read` | read-only, idempotent |
+| [`list-system-events`](#list-system-events) | List a system's recent events, members included | `system:read` | read-only, idempotent |
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
+| [`list-system-logs`](#list-system-logs) | List a system's members' recent log lines | `system:read` | read-only, idempotent |
+| [`list-system-members`](#list-system-members) | List the components in a system | `system:read` | read-only, idempotent |
+| [`add-system-member`](#add-system-member) | Put a component in a system | `system:update` | destructive, idempotent |
+| [`list-system-metrics`](#list-system-metrics) | List a system's effective metrics | `system:read` | read-only, idempotent |
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' samples | `system:read` | read-only, idempotent |
+| [`list-system-properties`](#list-system-properties) | List a system's properties and where each stands | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
 | [`create-system-from-template`](#create-system-from-template) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
@@ -91,6 +123,38 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
 | [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
+
+## `list-alarms`
+
+List the fleet's active alarms
+
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+
+- Route: `GET /api/v1/alarms`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | At most this many, the worst first; 0 or absent means 200 |
+| `unacknowledged` | boolean | no | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+
+## `list-audit-log`
+
+List audit-trail events
+
+Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
+
+- Route: `GET /api/v1/audit-log`
+- Gate: `audit:read:admin`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `before` | string | no | Only events strictly older than this RFC3339 timestamp (paging backward) |
+| `limit` | integer | no | Max rows to return, newest first (default 100, capped at 500) |
+| `resource` | string | no | Filter to one resource kind (e.g. auth, principal_grant) |
+| `verb` | string | no | Filter to one verb (e.g. login, create) |
 
 ## `get-auth-me`
 
@@ -117,6 +181,65 @@ The caller's own console inbox: the notifications addressed to them on the inbox
 |---|---|---|---|
 | `limit` | integer | no | At most this many, newest first (default 100) |
 | `unread` | boolean | no | Only the entries not yet read |
+
+## `list-calc-rule`
+
+List calc rules
+
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Arguments: none
+
+## `get-calc-rule`
+
+Get a calc rule
+
+Returns one calc rule by name (or uuid). Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules/{name}`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name (its uuid is accepted too) |
+
+## `get-calc-rule-state`
+
+Get a calc rule's live state
+
+What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules/{name}/state`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | The most owners to list, in state order: failing, pending, missing an input (or with no members), valued, each by name |
+| `name` | string | yes | The rule's name (its uuid is accepted too) |
+
+## `preview-calc-rule`
+
+Preview a calc rule
+
+Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. The owners holding a current value of the output are computed first, so the cap never hides one, and the answer lists the owners holding a value or that the rule would write one on first, each by name. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
+
+- Route: `POST /api/v1/calc-rules:preview`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `inputs` | array | yes | The keys the rule reads, each by a unique alias its reduce uses |
+| `name` | string | no | A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule |
+| `output_key` | string | yes | The property or metric the rule would write |
+| `owner_kind` | string | yes | What the rule derives a value on |
+| `reduce` | object | yes |  |
+| `selector` | object | no |  |
 
 ## `list-component-types`
 
@@ -174,6 +297,22 @@ Fetches a component by name within the caller's read scope. Out of scope is a no
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
+## `update-component`
+
+Update a component
+
+Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/components/{name}`
+- Gate: `component:update`
+- Assume: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `product` | string | no | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
+
 ## `list-component-alarms`
 
 List a component's alarms
@@ -189,6 +328,67 @@ What is currently wrong with this component, newest first, with the component's 
 | `include_cleared` | boolean | no | Include cleared alarms, so the list is the history rather than what is wrong now |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
+
+## `acknowledge-component-alarm`
+
+Acknowledge an alarm
+
+Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:acknowledge`
+- Gate: `alarm:acknowledge`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `snooze-component-alarm`
+
+Snooze an alarm's condition
+
+Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:snooze`
+- Gate: `alarm:snooze`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `duration` | string | yes | How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer |
+| `id` | string | yes | The alarm id: any alarm of the condition to snooze |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `get-component-alarm-timeline`
+
+Read an alarm's timeline
+
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/alarms/{id}:timeline`
+- Gate: `alarm:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `unsnooze-component-alarm`
+
+End an alarm's condition's snooze
+
+Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:unsnooze`
+- Gate: `alarm:snooze`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
 ## `list-component-commands`
 
@@ -289,6 +489,21 @@ Removes this component's edge of the kind to the upstream. Gated by component:up
 | `kind` | string | yes | The edge's kind |
 | `name` | string | yes | Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `upstream` | string | yes | Name or uuid of the upstream component, or a dotted address |
+
+## `effective-tags`
+
+Effective tags for a component
+
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+
+- Route: `GET /api/v1/components/{name}/effective-tags`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `system` | string | no | Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
 
 ## `list-component-events`
 
@@ -461,6 +676,51 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform) |
+
+## `list-component-tags`
+
+List tags on a component
+
+Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+
+- Route: `GET /api/v1/components/{name}:listTags`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+
+## `remove-component-tag`
+
+Remove a tag value from a component
+
+Removes a key's value from a component. Gated by component:update.
+
+- Route: `POST /api/v1/components/{name}:removeTag`
+- Gate: `component:update`
+- Assume: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The tag key to remove |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+
+## `set-component-tag`
+
+Set a tag value on a component
+
+Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+
+- Route: `POST /api/v1/components/{name}:setTag`
+- Gate: `component:update`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The tag key (must exist and apply to this kind) |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+| `value` | string | yes | The bound value |
 
 ## `create-component-from-template`
 
@@ -699,6 +959,93 @@ Mints a webhook endpoint's token anew (#1024): a post bearing the old one answer
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
 
+## `list-event-rule`
+
+List event rules
+
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Arguments: none
+
+## `get-event-rule`
+
+Get an event rule
+
+Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules/{name}`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name |
+
+## `get-event-rule-state`
+
+Get an event rule's live state
+
+What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules/{name}/state`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name |
+
+## `preview-event-rule`
+
+Preview an event rule
+
+Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+
+- Route: `POST /api/v1/event-rules:preview`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `clear_criteria` | object | no |  |
+| `clear_sustain` | string | no | Accepted and ignored, like fire_sustain |
+| `fire_criteria` | object | yes |  |
+| `fire_sustain` | string | no | Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone |
+| `sample_key` | string | yes | The property or metric the candidate rule reads |
+| `selector` | object | no |  |
+
+## `list-event-type`
+
+List event types
+
+Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
+
+- Route: `GET /api/v1/event-types`
+- Gate: `event_type:read`
+- Assume: read-only, idempotent
+- Arguments: none
+
+## `validate-expression`
+
+Validate an expression
+
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's alias bound to the list of its key's type (a system also binds members, one record per member); an input that is unknown, or an alias that is not an identifier, is reserved or repeats, is a 422; a name the expression uses that no alias binds is a diagnostic carrying that name (unbound); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+
+- Route: `POST /api/v1/expressions:validate`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `inputs` | array | no | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
+| `key` | string | no | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
+| `owner_kind` | string | no | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
+| `site` | string | yes | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
+| `source` | string | yes | The expression |
+
 ## `list-locations`
 
 List locations in scope
@@ -709,6 +1056,24 @@ Lists the locations the caller may read, each filtered to its scope subtree. Gat
 - Gate: `location:read`
 - Assume: read-only, idempotent
 - Arguments: none
+
+## `create-location`
+
+Create a location
+
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+
+- Route: `POST /api/v1/locations`
+- Gate: `location:create`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `expected_name` | string | no | The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. |
+| `label` | string | no | What an operator reads; the name is the address |
+| `location_type` | string | yes | The location_type, by name or uuid (campus, building, ...) |
+| `name` | string | no | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. |
+| `parent` | string | no | Parent location name; omit for a root location |
 
 ## `get-location`
 
@@ -724,6 +1089,22 @@ Fetches a location by name within the caller's read scope. Out of scope is a non
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
 
+## `update-location`
+
+Update a location
+
+Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/locations/{name}`
+- Gate: `location:update`
+- Assume: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `location_type` | string | no | Re-types the location: a location_type, by name or uuid |
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
 ## `get-location-health`
 
 Read a location's health
@@ -731,6 +1112,34 @@ Read a location's health
 The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/health`
+- Gate: `location:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `list-location-metrics`
+
+List a location's effective metrics
+
+Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+- Route: `GET /api/v1/locations/{name}/metrics`
+- Gate: `location:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `list-location-properties`
+
+List a location's effective properties
+
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+- Route: `GET /api/v1/locations/{name}/properties`
 - Gate: `location:read`
 - Assume: read-only, idempotent
 
@@ -877,26 +1286,6 @@ Lists the secrets the caller may see, with masked fields, filtered to the read s
 - Assume: read-only, idempotent
 - Arguments: none
 
-## `create-secret`
-
-Create a secret
-
-Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
-
-- Route: `POST /api/v1/secrets`
-- Gate: `secret:create`
-- Assume: adds
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `admin_sensitive` | boolean | no | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
-| `fields` | object | yes | The operator field map, validated against the type shape |
-| `label` | string | no | What an operator reads in lists and pickers (Polling community); omit to fall back to the name |
-| `name` | string | yes | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
-| `owner` | string | no | The owning entity's name; omit for a platform secret |
-| `owner_kind` | string | yes | Which tier owns this secret (the system band is retired, ADR-0052) |
-| `secret_type` | string | yes | A secret_type id |
-
 ## `create-standard-from-template`
 
 Create a standard from a template
@@ -939,6 +1328,51 @@ Fetches a system by name within the caller's read scope. Out of scope is a non-d
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
 
+## `update-system`
+
+Update a system
+
+Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/systems/{name}`
+- Gate: `system:update`
+- Assume: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `standard_id` | string | no | A new standard, by handle or uuid; "" clears it (a one-off system) |
+| `system_type_id` | string | no | A new system_type, by name or uuid; "" clears it (an unclassified system) |
+
+## `list-system-alarms`
+
+List a system's members' alarms
+
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/alarms`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-events`
+
+List a system's recent events, members included
+
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/events`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
 ## `get-system-health`
 
 Read a system's health
@@ -946,6 +1380,65 @@ Read a system's health
 The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-logs`
+
+List a system's members' recent log lines
+
+Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/logs`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `source` | string | no | Only lines that arrived on this channel |
+
+## `list-system-members`
+
+List the components in a system
+
+The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/members`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Name of the system, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `add-system-member`
+
+Put a component in a system
+
+Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+
+- Route: `PUT /api/v1/systems/{name}/members/{component}`
+- Gate: `system:update`
+- Assume: destructive, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `component` | string | yes | Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `name` | string | yes | Name of the system, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-metrics`
+
+List a system's effective metrics
+
+Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/metrics`
 - Gate: `system:read`
 - Assume: read-only, idempotent
 
@@ -971,6 +1464,20 @@ The samples behind the effective read's latest value for one series, newest firs
 | `metric` | string | yes | The metric_type name of the series |
 | `name` | string | yes | The owner's name or uuid |
 | `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+
+## `list-system-properties`
+
+List a system's properties and where each stands
+
+Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/properties`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
 
 ## `list-system-property-series`
 
