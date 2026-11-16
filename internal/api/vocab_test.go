@@ -14,6 +14,7 @@ import (
 // a term or a listed not_term, each term's entity schema carries its
 // definition, and each term's permission noun is one a route enforces.
 func TestAPISpeaksTheVocabulary(t *testing.T) {
+	t.Parallel()
 	doc := specAPI(storage.UnimplementedGateway{}).OpenAPI()
 	v := vocab.MustLoad()
 
