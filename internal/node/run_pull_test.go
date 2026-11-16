@@ -367,3 +367,81 @@ func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	down.Store(false)
 	pollUntil(t, 15*time.Second, "a node served again never read 0", func() bool { return loss() == 0 })
 }
+
+// A node the server refuses its first worklist is not silent while it
+// retries (#1882): it heartbeats, so it reads as alive, and its account of
+// itself reports every refused pull as worklist pull loss, 1 while nothing is
+// served. Once a pull is served it takes the worklist and the loss reads 0.
+func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	token := enrolledNode(t, ctx, gw, "edge-f")
+
+	var down atomic.Bool
+	var failFirst atomic.Int64
+	down.Store(true)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, failingWorklist{gw, &down, &failFirst})
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
+	defer apiSrv.Close()
+
+	runCtx, stop := context.WithCancel(ctx)
+	ran := make(chan error, 1)
+	go func() {
+		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-f", Token: token,
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 200 * time.Millisecond,
+			WorklistEvery: 200 * time.Millisecond, ReportEvery: 500 * time.Millisecond})
+		ran <- err
+	}()
+	defer func() {
+		stop()
+		if err := <-ran; err != nil {
+			t.Errorf("node run: %v", err)
+		}
+	}()
+
+	var component string
+	pollUntil(t, 10*time.Second, "edge-f never got a platform component", func() bool {
+		n, err := gw.GetNode(ctx, "edge-f", scope.Set{All: true})
+		if err != nil || n.PlatformComponentID == nil {
+			return false
+		}
+		component = *n.PlatformComponentID
+		return true
+	})
+	pollUntil(t, 10*time.Second, "a node refused its first worklist never heartbeat", func() bool {
+		n, err := gw.GetNode(ctx, "edge-f", scope.Set{All: true})
+		return err == nil && n.LastHeartbeatAt != nil
+	})
+	loss := func() float64 {
+		m, err := gw.LatestMetric(ctx, component, writerclass.WorklistPullLossRatio)
+		if err != nil {
+			t.Fatalf("latest %s: %v", writerclass.WorklistPullLossRatio, err)
+		}
+		if m == nil {
+			return -1
+		}
+		return m.Value
+	}
+	pollUntil(t, 10*time.Second, "a node refused every first pull never read 1", func() bool { return loss() == 1 })
+	if got := srv.WorklistCounts().Served; got != 0 {
+		t.Fatalf("%d worklists served while the read was down", got)
+	}
+
+	down.Store(false)
+	pollUntil(t, 15*time.Second, "a node served at last never read 0", func() bool { return loss() == 0 })
+}

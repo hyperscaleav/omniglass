@@ -615,8 +615,8 @@ How to read each row:
   not read, over the window, read from the `worklist-pull-loss-ratio` every node reports on its own
   platform component each report window. The row prints the worst node by name and how many nodes
   were refused, `0 %` when every pull was served, and counts any node that reported nothing as
-  unreported. A node refused here keeps running its last worklist,
-  so the delivery table can read 0 while it misses every change made since. A read that failed, or
+  unreported. A node refused from its start reports 100 % here rather than nothing. A node refused
+  later keeps running its last worklist, so the delivery table can read 0 while it misses every change made since. A read that failed, or
   found no node reporting, prints `not measured` with the reason under the table: every node reports
   the ratio every window, so finding none is no reading, not a clean one.
 
