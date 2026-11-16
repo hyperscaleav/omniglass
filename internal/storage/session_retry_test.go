@@ -117,6 +117,11 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if first.Secrets["login"]["password"] != "newtron" {
 		t.Fatalf("the login's credential was not delivered: %v", first.Secrets)
 	}
+	// The node masks a task's secret-marked fields out of what it collects; a
+	// field its type does not mark secret (the username) is not masked.
+	if len(first.Mask) != 1 || first.Mask[0] != "newtron" {
+		t.Fatalf("the task's mask = %q, want the password alone", first.Mask)
+	}
 	if first.SessionRetry != 0 {
 		t.Fatalf("a fresh endpoint's retry count = %d, want 0", first.SessionRetry)
 	}

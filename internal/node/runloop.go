@@ -35,6 +35,9 @@ type runLoop struct {
 	reconcile <-chan time.Time
 	housekeep <-chan time.Time
 	sessions  *sessionManager
+	// spool masks each task's secrets out of what it publishes; it takes a
+	// new worklist's masks before anything runs under it.
+	spool *telemetrySpool
 
 	onWorklist  func(collection.WorklistReply)
 	onDue       func()
@@ -52,6 +55,9 @@ func (l *runLoop) run(ctx context.Context, wl collection.WorklistReply) collecti
 		case next := <-l.worklists:
 			// A failed pull sends nothing, so the last good worklist stays.
 			wl = next
+			if l.spool != nil {
+				l.spool.setMasks(wl.Tasks)
+			}
 			l.reconcileSessions(wl)
 			if l.onWorklist != nil {
 				l.onWorklist(wl)

@@ -445,6 +445,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// Shutdown waits for the runs in flight before the sessions close
 	// (deferred calls run last first).
 	defer d.settle()
+	spool.setMasks(wl.Tasks)
 	sessions.reconcile(wl.Tasks)
 	d.sync(wl, time.Now())
 	d.pass(ctx, time.Now())
@@ -541,6 +542,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		reconcile: reconciler.C,
 		housekeep: housekeeper.C,
 		sessions:  sessions,
+		spool:     spool,
 		onWorklist: func(wl collection.WorklistReply) {
 			// The loop has reconciled the sessions; the dispatcher takes the
 			// new worklist at once: a new task runs now, one gone stops, the
