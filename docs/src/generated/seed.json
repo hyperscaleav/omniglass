@@ -81,7 +81,7 @@
   {
    "id": "deploy",
    "label": "Deploy",
-   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. A grant of it reaches ONE tier, the tier it is scoped at. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own; it reaches no system and no component there, not even to read one. Building those out inside a building takes a system-scoped and a component-scoped grant of this role beside the location one, until a grant's scope can span tiers. Inherits Viewer, whose read floor is scoped the same way.",
+   "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own. The same grant reads the systems and components placed in that location and creates new ones there, but does not edit, rename, or move them: that takes a system-scoped or component-scoped grant of this role, until a location grant's scope spans the modify actions too. Inherits Viewer, whose read floor is scoped the same way.",
    "inherits": [
     "viewer"
    ],
@@ -679,6 +679,12 @@
    "precision": 3,
    "label": "Worker Busy",
    "description": "Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
+  },
+  {
+   "name": "lane-worker-count",
+   "data_type": "int",
+   "label": "Lane Workers",
+   "description": "How many endpoint lanes the node runs at once, each one request in flight to its endpoint; sized at boot from the CPU and memory the node may use unless an operator set it. Reported every window."
   },
   {
    "name": "spool-batch-count",
@@ -3673,8 +3679,8 @@
    "commands": 2
   },
   {
-   "id": "newtron-nvp",
-   "label": "Newtron NVP",
+   "id": "newtron-panel-nvp",
+   "label": "Newtron Panel NVP",
    "version": "1.0.0",
    "transport": "tcp",
    "polls": 2,
@@ -3735,8 +3741,8 @@
    "commands": 1
   },
   {
-   "id": "http-json",
-   "label": "HTTP JSON",
+   "id": "tessellate-census-http",
+   "label": "Tessellate Census HTTP",
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
@@ -3982,7 +3988,7 @@
    "id": "newtron-panel-7",
    "label": "Newtron Panel 7",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-panel-nvp",
    "component_type": "touch-panel",
    "kind": "device"
   },
@@ -4037,7 +4043,7 @@
    "id": "tessellate-census-c1",
    "label": "Tessellate Census C1",
    "vendor_id": "tessellate",
-   "driver_id": "http-json",
+   "driver_id": "tessellate-census-http",
    "component_type": "occupancy-sensor",
    "kind": "device"
   },
@@ -4224,6 +4230,206 @@
    "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
+  }
+ ],
+ "platform_figures": [
+  {
+   "key": "checkin-age",
+   "group": "Checkin",
+   "rules": [
+    "node-silent"
+   ]
+  },
+  {
+   "key": "schedule-lateness",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "tick-overrun-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "schedule-skip-count",
+   "group": "Schedule",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-pending-age",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-stuck-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "command-expired-count",
+   "group": "Commands",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "worklist-pull-loss-ratio",
+   "group": "Worklist",
+   "rules": [
+    "worklist-stale"
+   ]
+  },
+  {
+   "key": "http-request-duration-max",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "http-request-count",
+   "group": "Requests",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "db-slow-query-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-request-failure-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "db-pool-acquired",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-pool-wait-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "ingest-lag",
+   "group": "Ingest",
+   "exemption": "read beside ingest-lag-max, which the ingest-lag-high rule watches"
+  },
+  {
+   "key": "ingest-lag-max",
+   "group": "Ingest",
+   "rules": [
+    "ingest-lag-high"
+   ]
+  },
+  {
+   "key": "ingest-batch-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "ingest-sample-count",
+   "group": "Ingest",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "push-lane-refusal-count",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-p99",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "push-lane-turn-wait-max",
+   "group": "Ingest",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "bus-consumer-ack-pending",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "bus-consumer-ack-floor",
+   "group": "Queues",
+   "exemption": "a stream position, read against the stream's head by the lab's measure, not a health figure"
+  },
+  {
+   "key": "bus-telemetry-ack-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "calc-pending-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-queued-depth",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "outbox-due-age",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "ingest-lane-busy",
+   "group": "Queues",
+   "exemption": "no rule yet, #1977"
+  },
+  {
+   "key": "sweep-failure-count",
+   "group": "Queues",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "retention-behind",
+   "group": "Retention",
+   "rules": [
+    "retention-behind"
+   ]
+  },
+  {
+   "key": "retention-deleted-count",
+   "group": "Retention",
+   "exemption": "a throughput count: its rate is load, not health"
+  },
+  {
+   "key": "retention-pass-failure-count",
+   "group": "Retention",
+   "exemption": "read beside retention-behind, which flags a failing pass too"
+  },
+  {
+   "key": "metric-oldest-day-age",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "database-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "table-bytes",
+   "group": "Retention",
+   "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "delivery-loss-ratio",
+   "group": "Pipeline",
+   "exemption": "no rule yet, #1977"
   }
  ]
 }

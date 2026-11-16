@@ -270,6 +270,10 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	if err != nil {
 		return nil, mapSecretWriteErr(err)
 	}
+	// A new secret can win an endpoint's input from the one it resolved before.
+	if err := announceNodesOf(ctx, tx, secretUserNodesSQL, s.ID); err != nil {
+		return nil, err
+	}
 	// The audit records the metadata only; the sealed value is never logged.
 	if err := writeAuditRes(ctx, tx, actorID, "create", "secret", s.ID, nil, auditSecret(s)); err != nil {
 		return nil, err
@@ -349,6 +353,10 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, ref string, read, action
 	if err != nil {
 		return err
 	}
+	// Announced before the row goes, while the endpoints it served still match.
+	if err := announceNodesOf(ctx, tx, secretUserNodesSQL, before.ID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `delete from secret where id = $1`, before.ID); err != nil {
 		if isForeignKeyViolation(err) {
 			return ErrSecretInUse
@@ -421,6 +429,13 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	}
 	if s.OwnerName, err = arcOwnerName(ctx, tx, s.OwnerKind, s.OwnerID); err != nil {
 		return nil, err
+	}
+	// A rotation reseals the value, which the task's secret version hashes; a
+	// label edit leaves the worklist as it was.
+	if len(patch.Fields) > 0 {
+		if err := announceNodesOf(ctx, tx, secretUserNodesSQL, s.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, nil, auditSecret(s)); err != nil {
 		return nil, err

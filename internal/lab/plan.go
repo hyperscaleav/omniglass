@@ -181,9 +181,10 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		// A change in the console reaches the node at its next pull, so the
-		// lab pulls every 5s: within seconds, without a 1,000-system lab
-		// rebuilding every site's worklist every 2s (#1577).
+		// A console change nudges its node to pull at once (#1945, #1997);
+		// the lab still pulls every 5s, so a lost nudge costs seconds,
+		// without a 1,000-system lab rebuilding every site's worklist
+		// every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes every 2s, so
@@ -397,6 +398,9 @@ type Service struct {
 	Sysctls map[string]string
 	Mounts  []Mount
 	Publish *Publish
+	// NetworkOf is the container whose network namespace this one shares,
+	// loopback included; empty joins the lab network under Name.
+	NetworkOf string
 	// Health is a container healthcheck command (exec form), if any.
 	Health []string
 	// Restart is the restart policy: the node restarts if it crashes.
@@ -407,6 +411,9 @@ type Service struct {
 	// Role says what the container is for, in a learner's words: the lab
 	// guide's topology table reads it.
 	Role string
+	// CPUs and MemoryBytes cap the container (#1892); zero is no cap.
+	CPUs        float64
+	MemoryBytes int64
 }
 
 // Volume is a named volume the project keeps across runs.
@@ -653,7 +660,8 @@ func Plan(o Options) (Spec, error) {
 	}
 	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
-	nodeService := func(service, name, token, role string) Service {
+	nodeService := func(service, name, token string, components int, role string) Service {
+		memory := NodeMemoryLimit(components)
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,
 			Cmd: nodeCmd,
@@ -662,6 +670,7 @@ func Plan(o Options) (Spec, error) {
 				"OMNIGLASS_NODE_NAME=" + name,
 				"OMNIGLASS_NODE_TOKEN=" + token,
 				simnode.PushersEnv + "=" + simnode.FormatPushers(nodePushers(o.Pushers, name)),
+				GoMemLimitEnv(memory),
 			},
 			// Distroless grants an added capability to root only, so the node
 			// runs as root inside its own container, to hold NET_ADMIN for the
@@ -673,6 +682,9 @@ func Plan(o Options) (Spec, error) {
 			Restart: "on-failure",
 			Labels:  svc(service, false),
 			Role:    role,
+			// An edge box's CPU, and memory for the site it serves.
+			CPUs:        NodeCPUs,
+			MemoryBytes: memory,
 		}
 	}
 	services := []*Service{&spec.DB, &spec.Seed, &spec.Server}
@@ -681,13 +693,13 @@ func Plan(o Options) (Spec, error) {
 		// where its simulator serves that site's components.
 		spec.Nodes = make([]Service, len(o.SiteNodes))
 		for i, n := range o.SiteNodes {
-			spec.Nodes[i] = nodeService(n.Name, n.Name, n.Token, fmt.Sprintf(
+			spec.Nodes[i] = nodeService(n.Name, n.Name, n.Token, n.Components, fmt.Sprintf(
 				"The edge node %s with the simulator in its own process, serving its site's %d simulated components on its loopback.",
 				n.Name, n.Components))
 			services = append(services, &spec.Nodes[i])
 		}
 	} else {
-		spec.Node = nodeService("node", NodeName, o.NodeToken,
+		spec.Node = nodeService("node", NodeName, o.NodeToken, 0,
 			"The edge node "+NodeName+" with the simulator in its own process: the simulated components "+
 				"sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, "+
 				"reaches only this container's network.")
@@ -816,13 +828,17 @@ func ParsePusherTokens(s string) (map[string]PusherToken, error) {
 }
 
 // configHash is a service's compose config hash: the sha256 of what it runs
-// (its image, command, user, capabilities and sysctls; never its env, which
-// carries the node's token).
+// (its image, command, user, capabilities, sysctls and caps; never its env,
+// which carries the node's token). An uncapped service hashes as it did
+// before caps existed.
 func configHash(s Service) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\x00%q\x00%s\x00%q", s.Image, s.Cmd, s.User, s.CapAdd)
 	for _, k := range SortedKeys(s.Sysctls) {
 		fmt.Fprintf(h, "\x00%s=%s", k, s.Sysctls[k])
+	}
+	if s.CPUs != 0 || s.MemoryBytes != 0 {
+		fmt.Fprintf(h, "\x00cpus=%g\x00memory=%d", s.CPUs, s.MemoryBytes)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

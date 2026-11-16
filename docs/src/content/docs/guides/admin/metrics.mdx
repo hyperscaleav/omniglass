@@ -36,6 +36,9 @@ every reader; the write gates decide who may change it.
 - The unit is **canonical**: stored values are always in it, so every threshold and calculation
   compares like with like. A genuinely different measurement is a different metric; the unit names
   the scale, it never rides along per sample.
+  Wherever a metric's value is read back, the unit travels with it: the effective-metrics reads
+  (`GET /components/{name}/metrics`, and the system and location twins) carry each metric's `unit`
+  (omitted when the type names none), and a component's Vitals card shows it after the value.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `metric_type:update`)
   edits the label, description, unit, and precision; the name and data type are fixed at
   creation, since changing a series' value type under the rows that already use it is unsafe and a

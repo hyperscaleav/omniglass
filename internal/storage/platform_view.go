@@ -182,6 +182,107 @@ func PlatformPageKeys() []string {
 	return append(out, writerclass.ServerVersion, writerclass.ServerStartedAt)
 }
 
+// PlatformHealthKey is one figure the page reads as health: a key and the
+// panel it sits in.
+type PlatformHealthKey struct {
+	Key   string
+	Group string
+}
+
+// PlatformHealthKeys is every figure the page reads as health, in page order
+// (#1983): each node column, each server panel key, and the pipeline's loss
+// ratio. A key a panel reads only as another's denominator (Of), and the
+// pipeline's in and out counts, are operands of a figure and not figures: the
+// pair is watched through its numerator, a rule on the ratio's key where one
+// exists and on the numerator otherwise. TestEveryPlatformHealthFigureHasARuleOrAnExemption
+// holds each to a shipped event rule or to PlatformRuleExemptions.
+func PlatformHealthKeys() []PlatformHealthKey {
+	var out []PlatformHealthKey
+	for _, g := range PlatformViewGroups {
+		for _, k := range g.Keys {
+			out = append(out, PlatformHealthKey{Key: k, Group: g.Label})
+		}
+	}
+	for _, g := range PlatformServerGroups {
+		operand := map[string]bool{}
+		for _, k := range g.Keys {
+			if k.Of != "" {
+				operand[k.Of] = true
+			}
+		}
+		for _, k := range g.Keys {
+			if !operand[k.Name] {
+				out = append(out, PlatformHealthKey{Key: k.Name, Group: g.Label})
+			}
+		}
+	}
+	return append(out, PlatformHealthKey{Key: writerclass.DeliveryLossRatio, Group: "Pipeline"})
+}
+
+// The reasons a health figure has no event rule of its own.
+const (
+	exThroughput   = "a throughput count: its rate is load, not health"
+	exBesideLag    = "read beside ingest-lag-max, which the ingest-lag-high rule watches"
+	exBesideBehind = "read beside retention-behind, which flags a failing pass too"
+	exPosition     = "a stream position, read against the stream's head by the lab's measure, not a health figure"
+	exNoRule       = "no rule yet, #1982"
+)
+
+// PlatformRuleExemptions is every health figure with no shipped event rule,
+// each with a one-line reason (#1983): a throughput count, a figure only read
+// beside one that is watched, or a figure whose rule is still to come, which
+// names the issue that adds it. A figure leaves this list in the change that
+// ships its rule, and the test fails if it does not. The collection page
+// renders it beside the rules, so an operator sees which figures alarm and
+// which do not.
+var PlatformRuleExemptions = map[string]string{
+	// The node table.
+	writerclass.ScheduleLateness:    exNoRule,
+	writerclass.TickOverrunCount:    exNoRule,
+	writerclass.ScheduleSkipCount:   exNoRule,
+	writerclass.CommandPendingCount: exNoRule,
+	writerclass.CommandPendingAge:   exNoRule,
+	writerclass.CommandStuckCount:   exNoRule,
+	writerclass.CommandExpiredCount: exNoRule,
+
+	// The server's requests panel.
+	writerclass.HTTPRequestDurationMax: exNoRule,
+	writerclass.HTTPRequestCount:       exThroughput,
+	writerclass.DBSlowQueryCount:       exNoRule,
+	writerclass.BusRequestFailureCount: exNoRule,
+	writerclass.DBPoolAcquired:         "no rule yet, #1984",
+	writerclass.DBPoolWaitCount:        "no rule yet, #1984",
+
+	// Ingest.
+	writerclass.IngestLag:            exBesideLag,
+	writerclass.IngestBatchCount:     exThroughput,
+	writerclass.IngestSampleCount:    exThroughput,
+	writerclass.PushLaneRefusalCount: exNoRule,
+	writerclass.PushLaneTurnWaitP99:  exNoRule,
+	writerclass.PushLaneTurnWaitMax:  exNoRule,
+
+	// Queues.
+	writerclass.BusConsumerPending:          "no rule yet, #1977",
+	writerclass.BusConsumerAckPending:       exNoRule,
+	writerclass.BusConsumerAckFloor:         exPosition,
+	writerclass.BusTelemetryAckFailureCount: exNoRule,
+	writerclass.CalcPendingDepth:            exNoRule,
+	writerclass.OutboxQueuedDepth:           exNoRule,
+	writerclass.OutboxDueAge:                exNoRule,
+	writerclass.IngestLaneBusy:              "no rule yet, #1977",
+	writerclass.SweepFailureCount:           exNoRule,
+
+	// Retention.
+	writerclass.RetentionDeletedCount:     exThroughput,
+	writerclass.RetentionPassFailureCount: exBesideBehind,
+	writerclass.MetricOldestDayAge:        exNoRule,
+	writerclass.DatabaseBytes:             exNoRule,
+	writerclass.TableBytes:                exNoRule,
+
+	// The pipeline.
+	writerclass.DeliveryLossRatio: "no rule yet, #1977",
+}
+
 // PlatformKey is one column's catalog facts: its metric type's label, unit
 // and description, the tooltip the page shows (ADR-0127). Read from the
 // catalog so no prose about a key is written twice.

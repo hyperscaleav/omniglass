@@ -354,7 +354,8 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 
 // CreateComponent inserts a component under an optional parent, bound to an
 // optional system and location, writing the audit row in the same transaction.
-// A root component requires an all create scope; a child requires the parent in
+// A root component requires an all create scope, or a location in the create
+// scope's cross-tier roots (#1498, placeAdmits); a child requires the parent in
 // the create scope. spec.Name empty is not an error: it is the operator
 // handing the pen to the platform (#627 Task 14), which mints
 // "<resolved-stem>-<n>" from the classified product's component_type once
@@ -410,7 +411,10 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 
 	var parentID *string
 	if spec.ParentName == nil {
-		if !create.All {
+		// A root is placed by its location alone: with neither an all scope
+		// nor a location named under a location grant there is nothing that
+		// could admit it, so it is refused before any reference resolves.
+		if !create.All && (spec.LocationName == nil || len(create.LocationIDs) == 0) {
 			return nil, ErrComponentForbidden
 		}
 	} else {
@@ -468,6 +472,13 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *spec.LocationName, locationRead)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> 422
+		}
+		if spec.ParentName == nil {
+			if ok, err := placeAdmits(ctx, tx, loc.ID, create); err != nil {
+				return nil, err
+			} else if !ok {
+				return nil, ErrComponentForbidden
+			}
 		}
 		locationID = &loc.ID
 	}
@@ -729,6 +740,11 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
+	if namePatch != nil {
+		if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -927,6 +943,25 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
+	// A reparent changes the ancestor chain the whole subtree resolves its
+	// component secrets along; a relocation changes only this component's
+	// location chain, since a child does not inherit its parent's location.
+	// A re-minted name reaches its path dependents.
+	switch {
+	case !sameOptional(before.ParentID, after.ParentID):
+		if err := announceNodesOf(ctx, tx, subtreeComponentNodesSQL, after.ID); err != nil {
+			return nil, err
+		}
+	case !sameOptional(before.LocationID, after.LocationID):
+		if err := announceNodesOf(ctx, tx, componentNodesSQL, after.ID); err != nil {
+			return nil, err
+		}
+	}
+	if namePatch != nil {
+		if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -996,6 +1031,10 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
+	// A path dependent's task carries this component's name as its upstream.
+	if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -1051,6 +1090,10 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 	// Same pair as a rename, in the other direction: a fresh name and a freshly
 	// allocated ordinal, so a platform-owned label follows (#682).
 	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
+	// A path dependent's task carries this component's name as its upstream.
+	if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {

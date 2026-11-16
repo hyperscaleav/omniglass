@@ -56,14 +56,15 @@ roles:
       # illustrative vocabulary, and a permission string is operator-facing (the
       # Roles view, the grant builder, /auth/me). Deliberately NOT on deploy: an
       # alarm resolves scope on the COMPONENT tier, and a location-scoped deploy
-      # grant reaches no component at all (#714), so granting it there would ship
-      # a capability that acknowledges nothing in the shape the role is granted in.
+      # grant reaches the components placed in it for read and create only, never
+      # their alarms (#714, #1498), so granting it there would ship a capability
+      # that acknowledges nothing in the shape the role is granted in.
       - "alarm:acknowledge"
       # alarm:snooze silences an alarm's condition's notifications for a
       # bounded time (#1318, ADR-1318). The role that acknowledges is the role
       # that snoozes, and for the same reason it is NOT on deploy: it resolves
-      # on the component tier, which a location-scoped deploy grant never
-      # reaches (#714).
+      # on the component tier's alarm scope, which a location-scoped deploy
+      # grant never reaches (#714, #1498).
       - "alarm:snooze"
       # notification:retry re-queues a notification that failed (#618): the
       # role that acknowledges an alarm is the role that re-sends its page. It
@@ -83,14 +84,14 @@ roles:
     label: Deploy
     description: >-
       Integrator or field tech: create, update, rename, and move on locations,
-      systems, and components, and no delete. A grant of it reaches ONE tier, the
-      tier it is scoped at. Granted at a location with the "under only" operator,
-      it builds out and edits the rooms under that location, never the location
-      itself, plus the secrets those locations own; it reaches no system and no
-      component there, not even to read one. Building those out inside a building
-      takes a system-scoped and a component-scoped grant of this role beside the
-      location one, until a grant's scope can span tiers. Inherits Viewer, whose
-      read floor is scoped the same way.
+      systems, and components, and no delete. Granted at a location with the
+      "under only" operator, it builds out and edits the rooms under that
+      location, never the location itself, plus the secrets those locations own.
+      The same grant reads the systems and components placed in that location and
+      creates new ones there, but does not edit, rename, or move them: that takes
+      a system-scoped or component-scoped grant of this role, until a location
+      grant's scope spans the modify actions too. Inherits Viewer, whose read
+      floor is scoped the same way.
     inherits: ["viewer"]
     permissions:
       - "location:create,update,rename,move"

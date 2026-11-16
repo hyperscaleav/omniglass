@@ -166,6 +166,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
+            { label: 'Visualization inventory', slug: 'contributing/visualization-inventory' },
             { label: 'Demos', slug: 'contributing/demos' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },

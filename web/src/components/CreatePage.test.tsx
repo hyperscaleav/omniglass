@@ -129,7 +129,9 @@ describe("CreatePage's From a template", () => {
     expect(treeValue(within(form).getByLabelText("Place"))).toBe("West");
     fireEvent.click(screen.getByRole("button", { name: "Start system" }));
     await waitFor(() => expect(landed).toBe(`/systems/${uuidFor("sys-1")}?from=mr55-system`));
-    // The scratch form's name preview may have posted before the switch; the one write is the create.
+    // The unclassified scratch form asks no name preview (#1548) and the template face mounts
+    // none, so the one write is the create.
+    expect(posts.filter((p) => p.url.includes(":renderLabel"))).toEqual([]);
     expect(posts.filter((p) => p.url.includes("FromTemplate"))).toEqual([{ url: expect.stringMatching(/\/systems:createFromTemplate$/), body: { template: "mr55-system", location: "hq.west" } }]);
   });
 

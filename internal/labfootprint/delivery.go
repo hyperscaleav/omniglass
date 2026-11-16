@@ -559,8 +559,9 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 }
 
 // simGap says what the sim rows leave out: the whole hop when the closed
-// loop was not read, or the nodes that restarted in the window, whose
-// requests no sim row counts (the rows sum the other nodes).
+// loop was not read, or the nodes that restarted in the window or whose sim's
+// served fleet changed in it, whose requests no sim row counts (the rows sum
+// the other nodes).
 func (r ScaleReport) simGap(b *strings.Builder) {
 	if r.EndpointsGap != "" {
 		fmt.Fprintf(b, "%-12s%s\n", "sim", "not measured: "+r.EndpointsGap)
@@ -576,7 +577,7 @@ func (r ScaleReport) simGap(b *strings.Builder) {
 		}
 	}
 	if len(restarted) > 0 {
-		fmt.Fprintf(b, "%-12snot counted: %s restarted in the window\n", "sim", strings.Join(restarted, ", "))
+		fmt.Fprintf(b, "%-12snot counted: %s restarted or changed fleet in the window\n", "sim", strings.Join(restarted, ", "))
 	}
 }
 

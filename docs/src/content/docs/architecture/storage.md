@@ -172,19 +172,20 @@ the two in one migration. Three buckets, never conflated:
 - **Boot seed phase** (idempotent upsert on every server start, `internal/seed/*.yaml`): ship-with
   reference data, authoritative via `ON CONFLICT DO UPDATE` for a canonical catalog (a release can
   correct it, and can **withdraw** a value it once shipped, which is the half insert-if-absent cannot
-  do at all). It lands every shipped row in the `og` namespace and upserts on `(namespace, name)`, so it never writes an operator's row: a shipped name an operator already holds lands beside theirs, and the search path (`<table>_in_effect()`, #1432) has a bare name reach the operator's. A shipped row's own references (a product's vendor, a child type's parent) resolve inside `og`. `location_type` seeds this way since
+  do at all). It lands every shipped row in the `og` namespace and upserts on `(namespace, name)`, so it never writes an operator's row: a shipped name an operator already holds lands beside theirs, and the search path (`<table>_in_effect()`, #1432) has a bare name reach the operator's. A reserved key (a node-probe, platform or command-lifecycle key `writerclass` declares) is never shadowed: held by both tiers in any of the three signal catalogs, it reaches neither, as the ingest registry's `ResolveNameLane` resolves it (#1447). The signal catalogs' search path reads the reserved names from `reserved_key`, a table the boot seed reconciles to `writerclass.ReservedNames()` on every start, so the list stays generated from code. A shipped row's own references (a product's vendor, a child type's parent) resolve inside `og`. `location_type` seeds this way since
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask),
   which is what an authoritative seed COSTS: the rows have to be platform-owned, so an operator's
   version of one lives in `registry_shadow` and resolves over it. **Narrow carve-out:** a seeded table can additionally
-  reconcile its child rows to the declared set every boot, deleting one that dropped out (refusing
+  reconcile its rows to the declared set every boot, deleting one that dropped out (refusing
   instead if something still points at it) rather than leaving it in place, but only where BOTH hold:
-  the table has **no operator write path** (nothing but the seed ever writes a row there) and its rows
-  carry a **packed positional ordering** where a leftover orphan does not sit inert, it collides with
-  the position a renamed or reordered entry now wants. `choice_alternate` is the only table this
-  applies to today
+  the table has **no operator write path** (nothing but the seed ever writes a row there) and a
+  leftover row **does not sit inert**. Two tables meet both today. `choice_alternate`'s rows carry a
+  packed positional ordering, so an orphan collides with the position a renamed or reordered entry
+  now wants
   ([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)).
-  Absent both preconditions, an operator-writable or unordered table keeps the ordinary
-  insert-if-absent rule above.
+  `reserved_key` mirrors a list in code (#1447), so a name the code no longer reserves would still
+  hide an operator's row of that name from every reader. Absent both preconditions, an
+  operator-writable or inert table keeps the ordinary insert-if-absent rule above.
 
   **A row that is both shipped and operator-owned splits into two columns.** The global label rules
   (`label_rule`, one row per labelled entity kind) carry `default_template` and `template`: the seed

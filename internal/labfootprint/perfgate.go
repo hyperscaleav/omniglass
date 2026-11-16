@@ -546,7 +546,7 @@ func invalidRuns(in PerfInputs, runs []ScaleReport) []string {
 		}
 		for _, n := range r.Endpoints.Nodes {
 			if n.Restarted {
-				add(i, fmt.Sprintf("node %s restarted during the window", n.Node))
+				add(i, fmt.Sprintf("node %s restarted or changed fleet during the window", n.Node))
 			}
 			if n.Impaired {
 				add(i, fmt.Sprintf("node %s carried an impairment: a gated lab is never impaired, so a fault was left on", n.Node))

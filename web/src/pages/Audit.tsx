@@ -2,7 +2,7 @@ import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
-import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
+import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
 import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -155,7 +155,8 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
 export default function Audit() {
   const [rows, setRows] = createSignal<AuditEvent[]>([]);
   const [error, setError] = createSignal<unknown>(null);
-  const [loading, setLoading] = createSignal(false);
+  // Starts true: the first read is issued on mount, so the first paint is already the loading state.
+  const [loading, setLoading] = createSignal(true);
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [done, setDone] = createSignal(false);
 
@@ -181,38 +182,47 @@ export default function Audit() {
     return r.length ? r[r.length - 1].ts : undefined;
   };
 
+  // The document scrolls, so the list fills a box of definite height: the top
+  // bar, the main padding and room for the lab banner come off the viewport,
+  // and the rows scroll inside it (#1461).
   return (
-    <FlatList<AuditEvent>
-      config={{
-        entity: { name: "audit", plural: "events" },
-        rows,
-        loading,
-        error,
-        filterKeys: auditFilterKeys,
-        filterPlaceholder: "filter by who, action, resource, id",
-        columns,
-        empty: "No events yet.",
-        detail: (e) => ({
-          title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
-          body: <AuditDetail e={e} />,
-          wide: true,
-        }),
-        footer: ({ shown, total, filtering }) => (
-          <>
-            <span>
-              {shown}
-              <Show when={filtering}> of {total} loaded</Show> shown
-            </span>
-            <Button
-              class="text-xs"
-              disabled={done() || loadingOlder() || loading()}
-              onClick={() => load(oldest())}
-            >
-              {loadingOlder() ? "Loading…" : done() ? "No older events" : "Load older"}
-            </Button>
-          </>
-        ),
-      }}
-    />
+    <div class="h-[calc(100dvh-9rem)] min-h-96">
+      <FlatList<AuditEvent>
+        config={{
+          entity: { name: "audit", plural: "events" },
+          rows,
+          loading,
+          loadingRows: AUDIT_LOADING_ROWS,
+          // A page of 100 is taller than the skeleton: scrolling the rows inside
+          // the card keeps the footer where the first paint put it (#1461).
+          fill: true,
+          error,
+          filterKeys: auditFilterKeys,
+          filterPlaceholder: "filter by who, action, resource, id",
+          columns,
+          empty: "No events yet.",
+          detail: (e) => ({
+            title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
+            body: <AuditDetail e={e} />,
+            wide: true,
+          }),
+          footer: ({ shown, total, filtering }) => (
+            <>
+              <span>
+                {shown}
+                <Show when={filtering}> of {total} loaded</Show> shown
+              </span>
+              <Button
+                class="min-w-28 text-xs"
+                disabled={done() || loadingOlder() || loading()}
+                onClick={() => load(oldest())}
+              >
+                {loadingOlder() ? "Loading…" : done() ? "No older events" : "Load older"}
+              </Button>
+            </>
+          ),
+        }}
+      />
+    </div>
   );
 }

@@ -174,3 +174,21 @@ func InEffect[T any](rows []T, key func(T) (namespace, name string)) []T {
 	}
 	return out
 }
+
+// ReconcileReservedKeys makes reserved_key exactly names (#1447), the list
+// writerclass.ReservedNames() generates: the boot seed's write on every start.
+// The table has no operator write path, so a name the code no longer reserves
+// is deleted rather than left to refuse a key the registry would resolve.
+// <table>_in_effect() for the three signal catalogs reads it, so a reserved key
+// both tiers hold reaches no reader, as ResolveNameLane resolves it.
+func (p *PG) ReconcileReservedKeys(ctx context.Context, names []string) error {
+	if names == nil {
+		names = []string{}
+	}
+	if _, err := p.pool.Exec(ctx, `
+		with gone as (delete from reserved_key where name <> all($1::text[]))
+		insert into reserved_key (name) select unnest($1::text[]) on conflict do nothing`, names); err != nil {
+		return fmt.Errorf("storage: reconcile the reserved keys: %w", err)
+	}
+	return nil
+}

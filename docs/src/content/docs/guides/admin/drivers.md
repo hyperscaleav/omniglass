@@ -82,7 +82,7 @@ to the whole line, and a severity or attribute that does not is left out, each a
 and a `layout`: `rfc3339`, `rfc3164` with an optional `zone`, `unix`, `unix-ms`, or `go:` a Go
 reference layout); a time more than five minutes ahead lands at arrival. On a plain poll an event or
 a log line lands when its content changes, not every run. `unmatched: log` lands each line no
-listener claims as a log line, whole. The shipped `newtron-nvp` lands an input push as the
+listener claims as a log line, whole. The shipped `newtron-panel-nvp` lands an input push as the
 `video-input` property and an `input-changed` event, the panel's diagnostics lines as log lines
 with their severity, and anything else it pushes as raw log lines:
 

@@ -34,14 +34,12 @@ import (
 // write against. wing-b is the one it must never be able to read, and its label
 // is the string that must never appear in an answer it receives.
 //
-// The narrow principal carries THREE grants, one per tier, because the
-// cross-tier scope expansion is not built (internal/scope/scope.go's
-// applicableKinds, tracked in #10): a location-scoped grant confers no component
-// scope, so a principal that can create a component and can also read one wing
-// has to be granted at each tier explicitly. That is the shape a real grant set
-// takes today, and it is what makes the two halves of every assertion below
-// independent: the write scope says which rows it may write, the read scope says
-// which placements those writes may name.
+// The narrow principal carries ONE grant, deploy at wing-a, the shape a field
+// tech's grant takes (#1498). A location-scoped grant reaches the systems and
+// components placed in its subtree for read and create, so that one grant is
+// both halves of every assertion below: its create scope says which rows it may
+// write (the rack and av-a, both placed in wing-a, and roots at wing-a), its
+// location read scope says which placements those writes may name.
 type placementFixture struct {
 	c        *apiClient
 	dsn      string
@@ -87,9 +85,9 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 		"name": "wing-b", "location_type": "building", "parent": "hq", "label": "Secret Wing",
 	}, http.StatusCreated)
 
-	// A root component and a root system both need an all-scoped grant, so the
-	// owner builds the two rows the narrow principal then writes under. The rack
-	// sits in wing-a, which is what puts it inside that principal's own scope.
+	// The owner builds the two rows the narrow principal then writes under. The
+	// rack and av-a sit in wing-a, which is what puts them inside that
+	// principal's own scope.
 	rack := c.do(owner, http.MethodPost, "/components", map[string]any{
 		"name": "rack", "product": product.Name, "location": "wing-a",
 	}, http.StatusCreated)
@@ -111,8 +109,6 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 
 	sysAID := entityID(t, c, owner, "/systems", "av-a")
 	narrow := principalWithGrants(t, ctx, dsn, "wing-a-deploy", []grant{
-		{role: "deploy", scopeKind: "component", scopeID: rackBody.ID},
-		{role: "deploy", scopeKind: "system", scopeID: sysAID},
 		{role: "deploy", scopeKind: "location", scopeID: entityID(t, c, owner, "/locations", "wing-a")},
 	})
 	return &placementFixture{
@@ -213,6 +209,13 @@ func TestASystemCreateRefusesALocationTheCallerCannotRead(t *testing.T) {
 // TestAMoveRefusesALocationTheCallerCannotRead is the same shape on the other
 // verb. A move restamps the label from the DESTINATION, so a relocate into an
 // unreadable wing hands its label back exactly as a create into it would.
+//
+// A location-scoped grant reaches a system or a component for read and create
+// only (#1498); the modify half of the cross-tier expansion is #10. So the move
+// is driven by a mover that holds the narrow principal's location grant plus
+// deploy on the tier of each row it moves: the tier grants are what admit the
+// move, the location grant is still the only read scope over wing-a, and the
+// 422 is the placement bind refusing wing-b.
 func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 	t.Parallel()
 	f := newPlacementFixture(t)
@@ -224,9 +227,18 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 		"name": "sub-a", "system_type_id": "board", "parent": "av-a", "location": "wing-a",
 	}, http.StatusCreated)
 
+	// The location grant alone carries no move scope.
 	f.c.do(f.narrow, http.MethodPost, "/components/panel-a:move",
+		map[string]any{"location": "wing-a"}, http.StatusForbidden)
+
+	mover := principalWithGrants(t, f.c.ctx, f.dsn, "wing-a-mover", []grant{
+		{role: "deploy", scopeKind: "location", scopeID: entityID(t, f.c, f.owner, "/locations", "wing-a")},
+		{role: "deploy", scopeKind: "component", scopeID: f.rackID},
+		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
+	})
+	f.c.do(mover, http.MethodPost, "/components/panel-a:move",
 		map[string]any{"location": "wing-b"}, http.StatusUnprocessableEntity)
-	f.c.do(f.narrow, http.MethodPost, "/systems/sub-a:move",
+	f.c.do(mover, http.MethodPost, "/systems/sub-a:move",
 		map[string]any{"location": "wing-b"}, http.StatusUnprocessableEntity)
 
 	moved := f.c.do(f.owner, http.MethodPost, "/components/panel-a:move",
@@ -252,8 +264,9 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 //
 // scope.Resolve keeps a grant only when its scope_kind is one of
 // applicableKinds(resource), and applicableKinds("location") is {"location"}
-// alone (internal/scope/scope.go). The cross-tier cascade is unbuilt (#10) and
-// it does not run in this direction either: a grant scoped to a COMPONENT or a
+// alone (internal/scope/scope.go). The cross-tier reach runs one way only (a
+// location grant reaches the systems and components placed in it, #1498), never
+// this way: a grant scoped to a COMPONENT or a
 // SYSTEM contributes nothing to a location-tier resolve, so a principal holding
 // exactly one such grant resolves location:read to the empty set. Since #700
 // binds a placement within that set, it can create only what it places nowhere,

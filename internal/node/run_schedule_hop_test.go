@@ -20,7 +20,7 @@ import (
 )
 
 // TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss drives #1693
-// over the real wire: the shipped http-json driver re-authored to poll every
+// over the real wire: the shipped tessellate-census-http driver re-authored to poll every
 // second, against a device that accepts and never answers, so each poll
 // waits out its timeout and the dues behind it pass over. The lab's own
 // read of the window, the same queries the scale run makes, shows the loss
@@ -33,9 +33,9 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 	}
 	const nodeName = "edge-schedule-hop"
 	s := newHTTPStack(t, nodeName, nil, func(store *profile.Store) []string {
-		return []string{driverProfile(t, store, "http-json")}
+		return []string{driverProfile(t, store, "tessellate-census-http")}
 	})
-	s.everyDriver("http-json", "sensor-1s", "1s")
+	s.everyDriver("tessellate-census-http", "sensor-1s", "1s")
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	s.component("sensor-dead")
 	dead, accepted := silentListener(t)

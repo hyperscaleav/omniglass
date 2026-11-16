@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -219,6 +220,7 @@ type seedFactsDoc struct {
 	LabelRules        []factsLabelRule        `json:"label_rules"`
 	SeverityLevels    []factsSeverityLevel    `json:"severity_levels"`
 	EventRules        []factsEventRule        `json:"event_rules"`
+	PlatformFigures   []factsPlatformFigure   `json:"platform_figures"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -441,6 +443,12 @@ func FactsJSON() ([]byte, error) {
 			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		doc.EventRules = append(doc.EventRules, fr)
 	}
+
+	ruleKeys := map[string][]string{}
+	for _, r := range ers.Rules {
+		ruleKeys[r.SampleKey] = append(ruleKeys[r.SampleKey], r.Name)
+	}
+	doc.PlatformFigures, _ = platformCoverage(storage.PlatformHealthKeys(), ruleKeys, storage.PlatformRuleExemptions)
 
 	out, err := json.MarshalIndent(doc, "", " ")
 	if err != nil {

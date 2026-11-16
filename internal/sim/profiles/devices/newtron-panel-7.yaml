@@ -176,7 +176,7 @@ interfaces:
         doc: { summary: "Factory reset panel" }
         mutations: *newtron_factory_reset_mutations
 
-  # NVP: the newtron-nvp driver's line protocol (TCP 51325, CRLF lines, no
+  # NVP: the newtron-panel-nvp driver's line protocol (TCP 51325, CRLF lines, no
   # banner).
   - name: nvp
     protocol: tcp

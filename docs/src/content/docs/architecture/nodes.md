@@ -109,10 +109,12 @@ materialized, resolved task and command instances.
 
 ### Config propagation (declared change to running node)
 
-:::note[Built: a declared change reaches a running node on its next pull]
+:::note[Built: a declared change reaches a running node at once, and on its next pull at worst]
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
-carried, so a change the server has written is running within one pull interval (the pull
+carried, and the commit of any write that changes its worklist nudges it to pull now ([the change
+nudge](#the-change-nudge), #1945, #1997), so a change the server has written is running within a second,
+or within one pull interval if the nudge is lost (the pull
 carries it, and the node reconciles its held sessions the moment it lands, #1636, and hands the
 new worklist to its dispatcher at once, a new or moved task running then,
 [below](#scheduling-concurrency-and-self-observability)), with no restart and nothing to apply.
@@ -144,6 +146,9 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
   not up rather than as up with nothing to do. After it, a failed pull keeps the last good
   worklist, every task and every session of it.
+- **A change nudge pulls now (#1945).** The node subscribes to `og.v1.worklist-changed.<node>`
+  before its first pull and answers a nudge with a pull at once, so a change does not wait for the
+  next scheduled one ([the change nudge](#the-change-nudge)).
 - **A failed pull is counted, so a stale worklist reads as loss (#1868).** Keeping the last
   worklist hides the failure: the node's tasks still match the database until the first change for
   it, so every delivery hop reads 0 while the node misses every change. The node reports
@@ -230,6 +235,54 @@ about 100 KB, and the manifest itself reaches 1 MB at about 16,800 endpoints on 
 answers any request, so a second server needs no handover; a key-value cache, if one comes, is keyed
 per endpoint and is what waits on secrets decrypted on use (#1250).
 :::
+### The change nudge
+
+:::note[Built (#1945, #1997): a commit nudges the node it changed]
+A scheduled pull alone leaves an edit waiting up to one interval plus its jitter, about 33 s at the
+30 s default. The commit of a write that changes a node's worklist nudges that node instead, and
+the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-change-nudges-its-node-through-a-postgres-notify-on-commit)).
+
+- **The write announces, in its transaction.** Each write that changes a worklist issues a Postgres
+  `NOTIFY` naming each node the write touched. Postgres delivers it only when the transaction
+  commits, once per node however many rows it touched, so a refused or rolled-back write nudges
+  nothing. The writes, and the nodes each names:
+  - an endpoint create, edit, session retry or delete: the endpoint's node (an edit that moves an
+    endpoint names both). A retry that trusts a replaced key is also the only writer of a key pin
+    (`ssh-host-key`, `tls-certificate`): the plain property route refuses those keys;
+  - a driver edit or upsert that changes its spec: the nodes of every endpoint attached through it.
+    A task carries its driver's session block and ladder off the live spec, so an edit to either
+    alone changes the worklist though it re-derives no task; a label-only edit, or the same spec
+    written again, nudges nothing;
+  - a secret create, delete, or edit of its fields: the nodes of every endpoint whose inputs name
+    it and whose component it covers (the platform's, the component's or an ancestor's, or one in
+    the component's location chain). A label-only edit changes no worklist and nudges nothing;
+  - a path dependency added or removed: the nodes holding an in-band endpoint on both ends;
+  - a component rename (or a name reset): the nodes carrying it as a path upstream by name. A move
+    to a new parent names the nodes of every endpoint below it, whose component secrets now resolve
+    along another chain; a move to a new place names its own endpoints' nodes;
+  - a location moved to a new parent: the nodes of every endpoint on a component placed in it or
+    below it;
+  - a platform settings write that moves `collection.report_seconds`, which every worklist carries:
+    every node. Only a write to the `collection` namespace (or a reset of every override) reads the
+    window before and after; a write elsewhere cannot move it.
+
+  Writes that change no worklist nudge nothing: a component delete is refused while it owns
+  endpoints or children, a location delete while a component sits in it or it has children, and a
+  webhook token rotation reaches no node (a push endpoint has none).
+  A node's own observed pin (trust on first use) is the node's own write, already in force there.
+- **The server forwards it.** The bus holds one listening connection to the database, outside the
+  pool, and publishes each named node an empty message on `og.v1.worklist-changed.<node>`. A dropped
+  connection is re-opened on a backoff (100 ms, doubling to 5 s) and logged at WARN; a change
+  committed while it is down is not replayed, and reaches its node on the next scheduled pull.
+- **The node coalesces.** It subscribes before its first pull, so no change between the two is
+  missed. A nudge that lands while a pull runs, or several in a burst, become one more pull, and
+  the node pulls at most once every 200 ms, so a burst of 100 edits costs a handful of pulls, not
+  100. While a failed pull backs off, a nudge does not cut the backoff short.
+- **The nudge carries nothing.** A lost nudge costs only the wait until the next scheduled pull,
+  which stays the backstop: `--worklist-every` is still how stale a node can be at worst, and the
+  nudge is how fresh it is when nothing is lost.
+:::
+
 ## The node-server protocol
 
 The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:
@@ -499,8 +552,9 @@ pins keep today's cascade.
 **The worklist pull carries one more request header**, the generation the node is running (the
 two-phase confirmation above); under the endpoint-by-endpoint sync it rides the manifest request
 beside the set digest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). A move reaches both nodes on their next worklist pull
-(30 s, jittered); a change nudge on `og.v1.worklist-changed.<node>` shortens that later (#1945,
-[ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)). The worklist
+(30 s, jittered); the move's endpoint write nudges both nodes on `og.v1.worklist-changed.<node>`
+where it commits through an endpoint edit ([the change nudge](#the-change-nudge)); the
+rebalancer's own moves are endpoint moves and must announce both nodes the same way. The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 
@@ -696,9 +750,10 @@ Built (#1634, #1249,
 [ADR-1249](/architecture/decisions/#adr-1249-the-endpoint-lane-runs-one-request-at-a-time-operator-work-first),
 under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)):
 every discrete request the node makes rides **its endpoint's lane** on the node's bounded worker
-pool (`--lane-workers`, default 16, or `OMNIGLASS_LANE_WORKERS`). A lane is the unit of exclusion:
-one request in flight per endpoint, while two endpoints of one component, or of fifty, run side by
-side, so a slow device holds only its own lane. The node's work splits by shape:
+pool (`--lane-workers`, or `OMNIGLASS_LANE_WORKERS`, default `auto`, [below](#sizing-the-pool)). A
+lane is the unit of exclusion: one request in flight per endpoint, while two endpoints of one
+component, or of fifty, run side by side, so a slow device holds only its own lane. The node's work
+splits by shape:
 
 - **discrete work** rides the lane: scheduled polls and probes from the
   [dispatcher](#scheduling-concurrency-and-self-observability), and an operator's commands, run nows
@@ -746,6 +801,40 @@ component-wide exclusion, which keys that component's lane on the component, not
 flight to one endpoint comes only from a held session's declared pool size (#1254, default 1), since
 connection and order semantics differ per protocol.
 ::::
+
+
+### Sizing the pool
+
+Built (#1869, [ADR-1869](/architecture/decisions/#adr-1869-a-node-sizes-its-lane-pool-from-its-cpu-and-memory)):
+with `--lane-workers auto`, the default, a node sizes its pool from the CPU and memory it may use,
+not from a fixed count. The CPU count alone is the wrong measure, because a lane spends most of a
+run waiting on its device: a poll that costs a few milliseconds of CPU waits a couple of hundred on
+the answer, so one CPU keeps dozens of runs in flight. The node reads its limits from its cgroup
+(`cpu.max` and `memory.max`, the tightest of its own and every parent's, so a container's quota
+binds) and its host (the CPUs the Go runtime schedules on, `GOMAXPROCS`, which also carries a cgroup
+v1 CPU limit, and `MemTotal`), taking the tighter of the two for each, so a limit the cgroup leaves
+open or sets above the host is the host's. It then takes the tighter of two bounds:
+
+- **CPU:** half the CPUs (the rest is the node's reports, worklist and sends) times a run's whole
+  time over its CPU time. At a run of 4.4 ms of CPU waiting 200 ms, about 23 lanes a CPU.
+- **Memory:** a quarter of the memory, at 1 MiB a lane.
+
+The result is clamped to 4 to 256: a node on a sliver of a CPU still runs a few endpoints at once,
+and one on a large host does not open more connections than a fleet's devices welcome. A number
+sets the pool outright. The node logs the count it took and why at boot, before it claims (`lane
+workers`, with the limits it read and where it read each), and reports it as `lane-worker-count` under the instance
+`lane`, once per report window beside `worker-busy-fraction`, so the pool's size and how busy it is
+read side by side. A cgroup v1 memory limit is not read: on v1 the node sizes from the host's
+`MemTotal` (ADR-1869).
+
+The [lab](/guides/lab/) runs every node it starts as a container capped at one CPU (#1892), an
+edge box's share, so on a cgroup v2 host (Docker's default) auto sizes each node's pool to the same
+23 lanes on a laptop and on a large host, and a scale run's parallelism is one known figure rather
+than the host's. (On cgroup v1 the node falls back to `GOMAXPROCS`, which Go holds to at least 2, so
+it takes 46.) Its memory cap is twice what the [cost model](/guides/lab/#how-big-a-lab-your-machine-can-run)
+says a node of its site's size holds, never under 512 MiB, with the Go runtime's soft limit
+(`GOMEMLIMIT`) a tenth under it, since the runtime reads the cgroup's CPU limit but not its memory
+limit and would otherwise let the heap grow until the kernel kills it.
 
 ## Implicit reachability
 
@@ -948,6 +1037,8 @@ The [lane pool](#the-endpoint-lane)'s busy share, `worker-busy-fraction` (#1686)
 per report window: the worker time spent running polls, probes, commands and runs, over the worker
 time the pool had (each dispatch window's length times its workers, summed), from 0 (idle) to 1
 (every worker busy all window). It is the node's headroom: near 1, dues start to wait for a worker.
+The pool's size lands beside it, `lane-worker-count` under the same instance, once per window
+([above](#sizing-the-pool)).
 The node runs one pool for every kind of discrete work, so the figure carries the single instance
 `lane` rather than one per kind
 ([ADR-1686](/architecture/decisions/#adr-1686-a-node-reads-one-busy-fraction-for-its-one-lane-pool)).
@@ -997,11 +1088,12 @@ reads, writes and decryption while the run waits on its answer), the HTTP client
 goroutines, a helper a driver starts, and the collector's background workers, which no task is charged
 for. So read it as a floor on a poll's cost, with the node's process CPU as the ceiling, and compare
 drivers on it only within one transport: a poll over a held session reads cheaper than a direct SNMP
-or bare TCP poll that does its own I/O. The comparison across transports is the cgroup sweep of #1871.
+or bare TCP poll that does its own I/O. The comparison across transports is the driver cost sweep,
+which reads each driver against its node's cgroup ([what a driver costs a node](/architecture/scaling/#what-a-driver-costs-a-node)).
 Reachability probes are not measured; the figure is a driver poll's. A thread locked through a run
 that blocks is parked for that run, so the node holds at most one extra thread per lane worker. A platform with no per-thread clock lands no
-`poll-cpu-time` rather than a false zero; every release platform but Windows has one. The per-driver
-cost table that reads it against the process's own cgroup is #1871
+`poll-cpu-time` rather than a false zero; every release platform but Windows has one. The sweep's
+table carries each driver's thread share, the clock's figure over the cgroup's
 ([ADR-1870](/architecture/decisions/#adr-1870-a-polls-cpu-cost-is-its-threads-kernel-clock-cross-checked-by-the-cgroup)).
 
 ## Scheduling, concurrency, and self-observability
@@ -1009,7 +1101,7 @@ cost table that reads it against the process's own cgroup is #1871
 Built (#1634, under [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)): each poll and probe runs on **its own interval**, from a dispatcher with a timer of
 its own, not on the heartbeat. Every task sits once in a due-time heap; the dispatcher sleeps until
 the earliest due, hands each due task to its endpoint's lane on the bounded worker pool
-(`--lane-workers`, default 16, [above](#the-endpoint-lane)), and books the task's next due.
+(`--lane-workers`, sized to the node by default, [above](#sizing-the-pool)), and books the task's next due.
 The heartbeat publishes liveness, pulls commands, ships the spool and takes the dispatcher's window;
 it sets no task's cadence
 ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own),

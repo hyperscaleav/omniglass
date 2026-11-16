@@ -63,7 +63,7 @@ func TestSampleFromEmittedKeepsEveryLane(t *testing.T) {
 
 func unmatchedLogTask(id string) collection.TaskSpec {
 	task := listenTask(id, "ep-1", "10.0.0.5:51325")
-	task.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+	task.Spec = json.RawMessage(`{"driver":"newtron-panel-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
 		"match":{"prefix":"EVT INPUT "}, "unmatched":"log",
 		"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\S+)$"}}]}`)
 	return task

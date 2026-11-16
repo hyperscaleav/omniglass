@@ -39,6 +39,9 @@ var Subsystems = []Cluster{
 		// ADR-0311), held to a horizon: what makes a redelivered batch land
 		// once.
 		"telemetry_receipt",
+		// reserved_key mirrors the keys writerclass reserves (#1447), which
+		// the signal catalogs' search path reads.
+		"reserved_key",
 	}},
 	{Name: "collection", Tables: []string{
 		"node", "task", "node_log",

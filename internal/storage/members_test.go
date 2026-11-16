@@ -386,8 +386,8 @@ func TestMembershipIsScoped(t *testing.T) {
 
 // A system's members read carries each member's own recorded verdict (#940),
 // the value a fleet view dot reads: a system's view polls its members' health
-// here rather than the whole fleet. A member nothing was ever recorded for
-// reads healthy.
+// here rather than the whole fleet. A member nothing has ever observed reads
+// unknown (#1454), not healthy: there is nothing to call it healthy on.
 func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -408,8 +408,8 @@ func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	for _, m := range members {
 		got[m.ComponentID] = m.ComponentVerdict
 	}
-	if got["dsp"] != "outage" || got["mic-a"] != "healthy" {
-		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a healthy", got)
+	if got["dsp"] != "outage" || got["mic-a"] != "unknown" {
+		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a unknown (never observed)", got)
 	}
 }
 

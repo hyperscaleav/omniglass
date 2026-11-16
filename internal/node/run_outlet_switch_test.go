@@ -33,7 +33,7 @@ func TestSwitchingAnOutletOffHoldsWhatItFeeds(t *testing.T) {
 	var pduProfile, sensorProfile string
 	s := newHTTPStack(t, "edge-outlet", nil, func(store *profile.Store) []string {
 		pduProfile = driverProfile(t, store, "ferrite-pdu-snmp")
-		sensorProfile = driverProfile(t, store, "http-json")
+		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{pduProfile, sensorProfile}
 	})
 	owner := s.ownerToken()
@@ -50,7 +50,7 @@ func TestSwitchingAnOutletOffHoldsWhatItFeeds(t *testing.T) {
 	switcher := s.attachHTTP("power-1", "ferrite-pdu-api", "edge-outlet", map[string]string{
 		"host": s.ips[pduProfile], "port": fmt.Sprint(s.httpPort(pduProfile)), "login": "pdu-login"})
 
-	s.fastDriver("http-json", "sensor-fast")
+	s.fastDriver("tessellate-census-http", "sensor-fast")
 	s.component("sensor-1")
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	web := s.attachHTTP("sensor-1", "sensor-fast", "edge-outlet", map[string]string{

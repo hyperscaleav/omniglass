@@ -120,6 +120,7 @@ const (
 	ScheduleGapExcess     = "schedule-gap-excess"
 	ScheduleSkipCount     = "schedule-skip-count"
 	WorkerBusyFraction    = "worker-busy-fraction"
+	LaneWorkerCount       = "lane-worker-count"
 	SpoolBatchCount       = "spool-batch-count"
 	SessionHeldCount      = "session-held-count"
 	ProcessGoroutineCount = "process-goroutine-count"
@@ -314,6 +315,7 @@ var platform = map[string]string{
 	ScheduleGapExcess:     nodeSelfWriter,
 	ScheduleSkipCount:     nodeSelfWriter,
 	WorkerBusyFraction:    nodeSelfWriter,
+	LaneWorkerCount:       nodeSelfWriter,
 	SpoolBatchCount:       nodeSelfWriter,
 	SessionHeldCount:      nodeSelfWriter,
 	ProcessGoroutineCount: processSelfWriter,

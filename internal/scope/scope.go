@@ -45,6 +45,14 @@ type Grant struct {
 // a self grant re-adds after an exclusion stripped it. All false with every list
 // empty means nothing is in scope.
 //
+// LocationIDs are cross-tier roots (#1498): location ids whose subtree places a
+// system or component in scope. They are populated only for the system and
+// component resources, only for read and create, and only from subtree-op
+// location grants, so a field tech holding a location grant can build out and
+// see the systems and components placed in it while every modify action keeps
+// its own tier (#10). They are location-table ids, never compared against the
+// target's own ancestor chain: the gateway matches a row by its placement.
+//
 // Resource is the resource Resolve resolved the set for, so the gateway can ask
 // Covers whether the set may be checked against the table in front of it (#754):
 // an empty set resolved for a resource the table's tier cannot contain is a
@@ -56,11 +64,15 @@ type Set struct {
 	IDs            []string
 	ExcludeRootIDs []string
 	SelfIDs        []string
+	LocationIDs    []string
 	Resource       string
 }
 
-// Empty reports whether the set admits nothing (no all flag, no roots of any op).
-func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 && len(s.SelfIDs) == 0 }
+// Empty reports whether the set admits nothing (no all flag, no roots of any op,
+// no cross-tier location roots).
+func (s Set) Empty() bool {
+	return !s.All && len(s.IDs) == 0 && len(s.SelfIDs) == 0 && len(s.LocationIDs) == 0
+}
 
 // AdmitsChain reports whether one row is inside s, judged from its ancestry:
 // chain is the row's own id first, then its ancestors in any order (an empty
@@ -68,7 +80,10 @@ func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 && len(s.SelfIDs) =
 // already done, so a caller judging many principals against one row walks
 // the tree once and resolves each principal here, purely (#1341, the
 // queue-time recipient filter): the row is a self root, or it or an ancestor
-// is an inclusive subtree root, or a strict ancestor is an excluded root.
+// is an inclusive subtree root, or a strict ancestor is an excluded root. It
+// ignores LocationIDs: a chain is one tier's ancestry and carries no placement,
+// so a set admitted only across tiers admits nothing here (fail closed).
+// TODO(#1981): admit a component by its placement for the recipient filter.
 func (s Set) AdmitsChain(chain []string) bool {
 	if s.All {
 		return true
@@ -104,7 +119,9 @@ func (s Set) AdmitsChain(chain []string) bool {
 // floor) and its scope_kind can contain the resource. A scope_kind of "all"
 // yields Set{All: true}; a kind naming the resource's own tier or an ancestor
 // tier yields that scope id. A grant scoped to a tier below the resource (a
-// system scope does not confer location access) does not apply.
+// system scope does not confer location access) does not apply. A location
+// grant also reaches across tiers for system and component read and create
+// (crossTierLocation): its root lands in LocationIDs.
 func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	kinds := applicableKinds(resource)
 	// subtree_excl_root narrows only the modify actions; read and create-placement
@@ -119,12 +136,24 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	inclusive := map[string]bool{} // a root a subtree op admits in full for this action
 	excluded := map[string]bool{}  // a root a subtree_excl_root op strips for this action
 	self := map[string]bool{}      // a root a self op admits as its own row only
+	crossTier := crossTierLocation(resource, action)
+	locSeen := map[string]bool{}
 	for _, g := range grants {
 		if !idx.Flatten([]string{g.Role}).Allows(resource, action) {
 			continue // the role does not carry this action: the over-permit fix
 		}
 		if g.ScopeKind == "all" {
 			set.All = true
+			continue
+		}
+		if crossTier && g.ScopeKind == "location" && g.ScopeID != "" && g.ScopeOp != OpSelf {
+			// Both subtree ops keep the root for read and create, so either
+			// places beneath the location itself. self grows nothing on any
+			// tier, so it reaches no system or component.
+			if !locSeen[g.ScopeID] {
+				locSeen[g.ScopeID] = true
+				set.LocationIDs = append(set.LocationIDs, g.ScopeID)
+			}
 			continue
 		}
 		if !kinds[g.ScopeKind] || g.ScopeID == "" {
@@ -174,6 +203,15 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	return set
 }
 
+// crossTierLocation reports whether a location grant reaches resource for
+// action across tiers (#1498): the systems and components placed under the
+// location, for read and create only. The modify actions, the resources that
+// hang off a component, and the group scope kind stay on their own tier until
+// the rest of the cross-tier expansion lands (#10).
+func crossTierLocation(resource, action string) bool {
+	return (resource == "system" || resource == "component") && (action == "read" || action == "create")
+}
+
 // Covers reports whether a scope RESOLVED for resource (Resolve's own
 // resource argument, e.g. what a.scopeFor(ctx, "component", "read") was
 // called with) can be checked against a target tree tier (a storage
@@ -211,9 +249,11 @@ func Covers(resource, target string) bool {
 // resource gets the empty map, and Registered says no for it: every gated
 // resource must land in one of the cases below, which
 // TestEveryGatedResourceRegistersItsScope (internal/api) enforces over the live
-// route set. The cross-tier cascade (a location scope
-// also covering its systems and components) is a later slice; today each fleet
-// tree entity is scoped by its own kind. interface and task are the exception:
+// route set. Each fleet tree entity is scoped by its own kind here; the one
+// cross-tier reach (a location grant reading and creating the systems and
+// components placed beneath it, #1498) rides in Set.LocationIDs instead, so
+// these same-tier ids are never compared against another tier's chain.
+// interface and task are the exception:
 // they are not tree entities of their own, they hang off a component (an
 // interface owns a component, a task owns an interface), so they cascade through
 // the COMPONENT tier. A component-scoped grant that carries endpoint:<action> /

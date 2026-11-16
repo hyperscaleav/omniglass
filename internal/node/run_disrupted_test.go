@@ -37,11 +37,11 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 	}
 	var sensorProfile string
 	s := newHTTPStack(t, "edge-reboot", nil, func(store *profile.Store) []string {
-		sensorProfile = driverProfile(t, store, "http-json")
+		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile}
 	})
 	owner := s.ownerToken()
-	s.rebootingDriver("http-json", "sensor-reboot")
+	s.rebootingDriver("tessellate-census-http", "sensor-reboot")
 	s.component("sensor-1")
 	s.secret("census-key", "api-key", map[string]string{"key": "census-lab-key"})
 	web := s.attachHTTP("sensor-1", "sensor-reboot", "edge-reboot", map[string]string{

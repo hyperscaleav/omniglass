@@ -224,8 +224,9 @@ impairments and truthful ping, and they reach only that container's own network 
 your machine's. The `server` and `db` containers carry no added capability.
 
 How often the node checks in, pulls its worklist and probes is its **cadence profile**. Your lab
-runs at `lab`: it checks in often and pulls its worklist every few seconds (`--worklist-every`), so
-a change you make in the console reaches it within seconds, and probes reachability less often
+runs at `lab`: it checks in often and pulls its worklist every few seconds (`--worklist-every`),
+though a change you make in the console nudges it to pull at once and reaches it within a second
+([the change nudge](/architecture/nodes/#the-change-nudge)), and probes reachability less often
 (`--probe-every`), because a lab may run for days and a probe every 2s wrote most of its rows.
 Each probe and each poll runs on its own interval, on the node's own timer, not on the check-in.
 The throwaway lab each walkthrough is recorded on runs at
@@ -390,7 +391,7 @@ with a corporate fleet, and it is never a measurement basis.
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
 | `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the rung (`300` or `1000` systems) its baseline states | refuses a run of another scenario, size or device set as invalid |
-| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
+| the soak ([a soak run](#a-soak-run)) | corporate, 3,000 systems | the goal size, held for days, then judged by the platform's own alarms |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
 16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
@@ -448,6 +449,14 @@ sizes them only when it is less than the host has. The preflight counts buffers 
 on top of the estimate, since they fill as the lab reads. Checkpoints spread to 15 minutes and 8 GB
 of WAL, compressed, so leave that much disk free for the lab's volume beside its data. A `dev` lab runs the image's stock Postgres, which is plenty for
 the fleet it simulates.
+
+**Each node runs capped** (#1892), like the dev lab's single node in the [topology table](#what-runs-with-which-privilege):
+one CPU, an edge box's share, so on a cgroup v2 host (Docker's default) every node sizes its
+[lane pool](/architecture/nodes/#sizing-the-pool) to the same 23 lanes, and a run on a large machine
+measures the same parallelism as one on a laptop. Its memory cap is twice the model's figure for its
+site, never under 512 MiB, so a branch sits at the floor and a large hq gets a few GiB. A
+node that outgrows twice the model is killed and restarted by its `on-failure` policy rather than
+crowding its neighbors, and the polls it missed while down read as loss. The server and Postgres run uncapped.
 
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
 the seed included. Past it the lab removes everything it started and names what was not up: each
@@ -652,7 +661,8 @@ A loss is named per node under the totals, with the protocol and, for an unhit e
 component. An icmp target reads `not observed by the sim`, since the kernel answers a ping. A node
 whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
 impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
-simulator that restarted inside the window reads `restarted`, since none of its figures compare.
+simulator that restarted inside the window, or a simulator whose served fleet changed in it (a device
+added or removed), reads `restarted`, since none of its figures compare.
 The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
 the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
 than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
@@ -711,8 +721,8 @@ push lane's follow, its publish row ahead of its ingest rows:
   `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
   reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
   node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
-  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
-  the window`, so a row never reads as every node's when it is not.
+  (or whose simulator's served fleet changed in it) has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted or
+  changed fleet in the window`, so a row never reads as every node's when it is not.
   Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
   of a `kind`, with these four outcomes.
 - The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
@@ -967,7 +977,7 @@ missing rather than dropping out. A run whose worklist read failed, or found no 
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
-baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted or its simulator's served fleet changed inside the window, or a device carried an impairment. A gated lab is never
 impaired, so an impaired gap can only mean a fault left on.
 
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
@@ -984,6 +994,68 @@ The gate never runs in CI and is never a required check: a run takes a scale lab
 an hour, and its times and usage gate only on the baseline's host class, which a GitHub runner is not
 ([ADR-1787](/architecture/decisions/#adr-1787-the-perf-gate-runs-on-a-test-vm-not-in-ci)). Run it by hand
 on a test VM before a change that could move a figure. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
+
+#### Measuring each driver's cost
+
+A scale lab measures whole nodes, and each of its nodes runs the simulator in its own process
+(`node run --simulate`), so a node's memory and CPU there include the devices it polls. What one task
+of a driver costs a node is a separate measurement, and `omniglass lab perf drivers` makes it:
+
+```bash
+omniglass lab perf drivers --image omniglass:dev
+```
+
+It brings up a throwaway lab with no fleet and no node of its own, then measures each shipped driver
+in turn on a node that runs only the node:
+
+- **A node of its own.** The driver's node runs in one container and the simulator beside it in
+  another, sharing the node's network namespace, so the node polls the simulated devices on its own
+  loopback while the simulator's work lands in a different cgroup. The node runs the product's own
+  cadence (the heartbeat, probe and worklist pull a deployed node runs, not the lab's quicker clock),
+  so its background work weighs on the figures as it would in the field.
+- **Four steps.** The node is measured holding none of the driver's components, then N, 2N and 3N,
+  where N components bring about `--step-tasks` tasks (each component brings one task per poll the
+  driver declares). Each step warms up, then reads the node container's cgroup across a window long
+  enough for the driver's slowest poll to run: CPU between the window's ends, and the working set
+  (memory less file cache) as the median of reads spread across it.
+- **A line, or a refusal.** Millicores per task is the slope across all four steps. Memory per task
+  is the slope across the three loaded steps alone: a node's memory jumps when its first tasks land
+  (its lanes start and its heap grows to its working size) and then rises by a slope, so the idle
+  step sits apart, and the loaded line's value at zero tasks over the idle node is the **warm cost**,
+  paid once. A step off its line by more than a tenth of the rise in memory, or a quarter in CPU,
+  refuses that figure, which is listed as not measured with why, never written down as a cost; the
+  other figure still stands, and only a driver with neither is left out. A loaded line that starts
+  below the idle node has no warm cost to show (the first tasks filled heap the idle node already
+  held), so the warm figure is left empty with that reason rather than written as zero.
+- **A bigger step when memory hides.** A cheap driver costs a node a few KiB a task, and at a small
+  step that rise is inside the heap's own swing, so its memory does not fit. Such a driver is swept
+  again on a fresh node at four times the step, up to `--max-step-tasks`, and the attempt that
+  measured the most figures is kept (the bigger step on a tie). A figure that still does not fit is
+  listed with why. Each row records the step it was measured at.
+- **A step the node actually runs.** Before a step is measured, the sweep waits until the node's
+  installed worklist (its `worklist-task-count`) holds every task the server holds for it. The server
+  sends a node's worklist as one bus reply, and a reply still over the bus's maximum payload once
+  compressed is refused, so the node keeps its last worklist (#1586); at the default 1 MiB payload that
+  ceiling is about 18,000 tasks a node. A step past it would measure a node running the previous
+  step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
+  and caps any later growth there.
+- **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
+  node's own [`poll-cpu-time`](/architecture/nodes/#self-monitoring-the-node-reports-itself), the
+  polling thread's kernel clock, averaged over the reports wholly inside each step's window and read
+  once the last has landed, after two of the lab's live report windows. Thread share is the one over
+  the other: the part of a run's cost the thread clock sees. A low share is work the run hands
+  to other goroutines, such as a held session's reader, which is why thread CPU compares drivers only
+  within one transport and the cgroup slope compares them across.
+
+The run writes its table to `internal/labfootprint/drivercost/shipped.json`, relative to the working
+directory, so run it from the repository's root. The table is stamped with the date and the build, and
+with the host's cores and memory when the lab's Docker daemon is local. A sweep stopped part way (an
+interrupt, a lab that failed) still writes the drivers it had measured. Commit it after `make gen`, which renders it on the
+[scaling page](/architecture/scaling/#what-a-driver-costs-a-node), each driver on its own and rolled
+up by its kind and poll interval; a shipped driver the table lacks reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
+measures named drivers. A full sweep takes several hours, most of it in the windows of drivers that
+poll every five minutes; run it on the host class the figures should describe. Every flag is in the
+[CLI reference](/reference/cli/#omniglass-lab-perf-drivers).
 
 ### Sampling a scale lab over time
 
@@ -1120,6 +1192,27 @@ machine through a tunnel, then open `http://127.0.0.1:8080/web`:
 ```sh
 ssh -L 8080:127.0.0.1:8080 <soak-host>
 ```
+
+**The verdict.** A week of the series says how the platform grew; whether it failed silently is the
+platform's own to say, and `lab soak verdict` reads exactly that, through the API alone: the platform
+system's alarm history and every loss ratio on the Platform health page. It judges the window from
+`--since` to now (or `--until`), prints pass or fail with every reason, and exits 1 on a fail:
+
+```sh
+omniglass lab soak verdict --since 2026-11-20T08:00:00Z --record-dir docs/src/content/soak-records
+```
+
+It passes when the soak ran at least 7 days, no platform alarm is open, none raised in the window was
+open longer than `--tolerance` (30 minutes by default), and every loss ratio on the page reads 0. A
+reading that cannot answer fails instead of passing: no build, two builds, no loss ratio to read, a
+token that cannot read the whole page (it needs node, system and component read over everything,
+which the lab's token has), or an alarm history cut at the API's 500-alarm cap. The alarm history
+reaches back 30 days, so `--since` may be no older than that. The thresholds are named in
+`internal/lab/soak.go` (`SoakMinWindow`, `SoakAlarmTolerance`, `SoakLossCeiling`).
+
+`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A release needs a
+passing record for its build: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the
+record format and the rule.
 
 ### The manifest format
 

@@ -1066,6 +1066,8 @@ export type EffectiveMetricBody = {
   source_rule?: string;
   /** That calc rule's uuid, the stable form of source_rule */
   source_rule_id?: string;
+  /** The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none */
+  unit?: string;
   /** The effective value: the latest sample, or the contract default until one arrives */
   value?: unknown;
 };
@@ -2962,6 +2964,8 @@ export type SimObservation = {
   /** @nullable */
   faces?: SimFaceOverlap[] | null;
   faces_overlapped?: number;
+  fleet_changing?: boolean;
+  fleet_generation: number;
   impaired: number;
   node: string;
   /** @nullable */
@@ -3746,7 +3750,7 @@ export type ListAlarmsOutputBody = {
   /** @nullable */
   alarms: AlarmBody[] | null;
   component: string;
-  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
+  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   verdict: string;
 };
 
@@ -5812,7 +5816,7 @@ export type PlatformSimulationDevice = {
 };
 
 /**
- * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.
+ * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful.
  */
 export type PlatformSimulationGapReading = typeof PlatformSimulationGapReading[keyof typeof PlatformSimulationGapReading];
 
@@ -5844,12 +5848,12 @@ export type PlatformSimulationGap = {
      * @nullable
      */
   ratio: number | null;
-  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful. */
+  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful. */
   reading: PlatformSimulationGapReading;
 };
 
 /**
- * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+ * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves.
  */
 export type PlatformSimulationNodeState = typeof PlatformSimulationNodeState[keyof typeof PlatformSimulationNodeState];
 
@@ -5932,7 +5936,7 @@ export type PlatformSimulationNode = {
      * @nullable
      */
   start: string | null;
-  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart. */
+  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves. */
   state: PlatformSimulationNodeState;
 };
 
@@ -6241,7 +6245,12 @@ export type PropertyBucketBody = {
   /** Changes in the bucket */
   count: number;
   /**
-     * The value in force at the bucket's end, from the newest change in it; null for a bucket with no change
+     * The value in force at the bucket's end: last, else the value held at the end of the bucket before it, else carried_in; null before any value is known (#1488)
+     * @nullable
+     */
+  held: string | null;
+  /**
+     * The value the bucket's own changes end on, from the newest change in it; null for a bucket with no change
      * @nullable
      */
   last: string | null;
@@ -6268,6 +6277,8 @@ export type PropertySeriesOutputBody = {
      * @nullable
      */
   buckets?: PropertyBucketBody[] | null;
+  /** The value in force when the window opens: the newest measured row (observed or calculated) of the instance from before it, no older than the type's retention; absent when none. A step chart draws it from the window's left edge to the first change */
+  carried_in?: string;
   /** The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later */
   covered_from?: string;
   /** The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read */
@@ -8294,7 +8305,7 @@ export type ListComponentPropertySeriesParams = {
    * @maximum 2592000
    */
   resolution?: number;
-  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it */
   instance?: string;
 };
 
@@ -8419,7 +8430,7 @@ export type ListSystemPropertySeriesParams = {
    * @maximum 2592000
    */
   resolution?: number;
-  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it */
   instance?: string;
 };
 
@@ -11057,7 +11068,7 @@ export const getCreateComponentUrl = () => {
 }
 
 /**
- * Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+ * Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
  * @summary Create a component
  */
 export const createComponent = async (createComponentInputBody: NonReadonly<CreateComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentResponse> => {
@@ -12736,7 +12747,7 @@ export const getListComponentPropertySeriesUrl = (name: string,
 }
 
 /**
- * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+ * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one property series' change history
  */
 export const listComponentPropertySeries = async (name: string,
@@ -13017,7 +13028,7 @@ export const getMoveComponentUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a component
  */
 export const moveComponent = async (name: string,
@@ -23593,7 +23604,7 @@ export const getCreateSystemUrl = () => {
 }
 
 /**
- * Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
+ * Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
  * @summary Create a system
  */
 export const createSystem = async (createSystemInputBody: NonReadonly<CreateSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemResponse> => {
@@ -24424,7 +24435,7 @@ export const getListSystemPropertySeriesUrl = (name: string,
 }
 
 /**
- * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+ * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one property series' change history
  */
 export const listSystemPropertySeries = async (name: string,
@@ -24822,7 +24833,7 @@ export const getMoveSystemUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a system
  */
 export const moveSystem = async (name: string,
@@ -26690,7 +26701,7 @@ export const getGetPlatformSimulationViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+ * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
  * @summary Read what each simulator saw against what the platform collected
  */
 export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {

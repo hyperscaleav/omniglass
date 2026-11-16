@@ -1,0 +1,1023 @@
+{
+  "host": {
+    "cpu": "QEMU Virtual CPU version 2.5+",
+    "cores": 8,
+    "memory_gib": 8,
+    "go": "go1.26.11"
+  },
+  "date": "2026-11-14",
+  "build": "86d74adec",
+  "step_tasks": 1600,
+  "max_step_tasks": 6400,
+  "rows": [
+    {
+      "driver": "boreal-beam-snmp",
+      "build": "3284c96e8",
+      "product": "boreal-beam-340",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 9600,
+      "step_tasks": 3200,
+      "memory_per_task_bytes": 5991.04,
+      "memory_warm_bytes": 8306688,
+      "millicores_per_task": 0.04298505050282776,
+      "cpu_per_run_ms": 2.3446391183360595,
+      "thread_cpu_per_run_ms": 0.37259723056857486,
+      "thread_share": 0.1589145330105211,
+      "memory_residual": 0.002457002457002457,
+      "cpu_residual": 0.028617462558789795,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 9256960,
+          "millicores": 0.5403512403085986,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 36687872,
+          "millicores": 160.72858590775812,
+          "poll_cpu_ms": 0.4037509464322903
+        },
+        {
+          "components": 3200,
+          "tasks": 6400,
+          "working_set_bytes": 56000512,
+          "millicores": 295.33387766691277,
+          "poll_cpu_ms": 0.38191520084635394
+        },
+        {
+          "components": 4800,
+          "tasks": 9600,
+          "working_set_bytes": 75030528,
+          "millicores": 414.17912601741983,
+          "poll_cpu_ms": 0.35600067842881694
+        }
+      ]
+    },
+    {
+      "driver": "boreal-cast-api",
+      "product": "boreal-cast-m1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 6112,
+      "memory_warm_bytes": 9117696,
+      "millicores_per_task": 0.05721873704258571,
+      "cpu_per_run_ms": 3.1210220205046753,
+      "thread_cpu_per_run_ms": 0.3369400539496531,
+      "thread_share": 0.10795824308063333,
+      "memory_residual": 0.03706806282722513,
+      "cpu_residual": 0.028284688775729566,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 16658432,
+          "millicores": 0.48889187323034045,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 35917824,
+          "millicores": 105.67967607467153,
+          "poll_cpu_ms": 0.3554410181770837
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 44609536,
+          "millicores": 191.54174206429332,
+          "poll_cpu_ms": 0.3305566438802089
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 55476224,
+          "millicores": 277.0348007704802,
+          "poll_cpu_ms": 0.33502867258680574
+        }
+      ]
+    },
+    {
+      "driver": "boreal-edge-snmp",
+      "product": "boreal-edge-55",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 4981.76,
+      "memory_warm_bytes": 6598656,
+      "millicores_per_task": 0.04251187896629939,
+      "cpu_per_run_ms": 2.3188297617981486,
+      "thread_cpu_per_run_ms": 0.3447886945659723,
+      "thread_share": 0.14869081820763078,
+      "memory_residual": 0.0035971223021582736,
+      "cpu_residual": 0.03127820738544001,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 17432576,
+          "millicores": 0.46528253332855074,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 31973376,
+          "millicores": 79.00344219168888,
+          "poll_cpu_ms": 0.367380706666666
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 40030208,
+          "millicores": 140.28468191501585,
+          "poll_cpu_ms": 0.3386215085677077
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 47915008,
+          "millicores": 206.76822377914965,
+          "poll_cpu_ms": 0.3413694811979175
+        }
+      ]
+    },
+    {
+      "driver": "ferrite-pdu-snmp",
+      "product": "ferrite-pdu-4c",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 5072.64,
+      "memory_warm_bytes": 9991509.333333336,
+      "millicores_per_task": 0.05163674341233344,
+      "cpu_per_run_ms": 2.816549640672733,
+      "thread_cpu_per_run_ms": 0.45310638649305457,
+      "thread_share": 0.16087285661502848,
+      "memory_residual": 0.08284969299352357,
+      "cpu_residual": 0.11904337864685732,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 14458880,
+          "millicores": 0.5565342888116657,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 33239040,
+          "millicores": 95.86206439909924,
+          "poll_cpu_ms": 0.4674496382812496
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 39337984,
+          "millicores": 206.27560088170046,
+          "poll_cpu_ms": 0.5228886676822909
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 49471488,
+          "millicores": 239.1479869937229,
+          "poll_cpu_ms": 0.4018037817708319
+        }
+      ]
+    },
+    {
+      "driver": "tessellate-census-http",
+      "product": "tessellate-census-c1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 6142.72,
+      "memory_warm_bytes": 9562794.666666664,
+      "millicores_per_task": 0.0744592368472029,
+      "cpu_per_run_ms": 4.06141291893834,
+      "thread_cpu_per_run_ms": 0.4069566457638892,
+      "thread_share": 0.10020075621128134,
+      "memory_residual": 0.01465583107591872,
+      "cpu_residual": 0.031180696925664306,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 15810560,
+          "millicores": 0.4650830327678177,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 35057664,
+          "millicores": 113.10988626817434,
+          "poll_cpu_ms": 0.3656038671354168
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 45318144,
+          "millicores": 222.76571108646425,
+          "poll_cpu_ms": 0.3878196181510421
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 54714368,
+          "millicores": 361.02907127842,
+          "poll_cpu_ms": 0.433498923715278
+        }
+      ]
+    },
+    {
+      "driver": "kestrel-api",
+      "product": "kestrel-vroom",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s"
+      ],
+      "tasks": 4806,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 42269.0836454432,
+      "memory_warm_bytes": 5610154.666666657,
+      "millicores_per_task": 0.13422926546105685,
+      "cpu_per_run_ms": 5.752682805473865,
+      "thread_cpu_per_run_ms": 0.5075498524266534,
+      "thread_share": 0.08822837441057992,
+      "memory_residual": 0.004214049520122664,
+      "cpu_residual": 0.03153972700783382,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 16166912,
+          "millicores": 0.4680823388219957,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 534,
+          "tasks": 1602,
+          "working_set_bytes": 89206784,
+          "millicores": 198.9929892906233,
+          "poll_cpu_ms": 0.4575909720739699
+        },
+        {
+          "components": 1068,
+          "tasks": 3204,
+          "working_set_bytes": 157777920,
+          "millicores": 399.5187434764841,
+          "poll_cpu_ms": 0.4766812506671343
+        },
+        {
+          "components": 1602,
+          "tasks": 4806,
+          "working_set_bytes": 224636928,
+          "millicores": 650.4104418389119,
+          "poll_cpu_ms": 0.5447818803838941
+        }
+      ]
+    },
+    {
+      "driver": "kestrel-gaze-api",
+      "product": "kestrel-gaze-p2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 6745.6,
+      "memory_warm_bytes": 16647509.333333336,
+      "millicores_per_task": 0.1279843500804416,
+      "cpu_per_run_ms": 6.980964549842269,
+      "thread_cpu_per_run_ms": 0.6084199894965298,
+      "thread_share": 0.08715414398004309,
+      "memory_residual": 0.09955724225173929,
+      "cpu_residual": 0.1287790913399083,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 12988416,
+          "millicores": 0.616690938024733,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 39354368,
+          "millicores": 244.95043679560914,
+          "poll_cpu_ms": 0.6061652320312514
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 53370880,
+          "millicores": 520.9247653473358,
+          "poll_cpu_ms": 0.7129599167968766
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 60940288,
+          "millicores": 591.208448516471,
+          "poll_cpu_ms": 0.5394782904513912
+        }
+      ]
+    },
+    {
+      "driver": "kestrel-relay-api",
+      "build": "3284c96e8",
+      "product": "kestrel-relay-c1",
+      "polls": [
+        "5m0s",
+        "30s",
+        "30s",
+        "5m0s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 3557.12,
+      "memory_warm_bytes": 11777365.333333336,
+      "millicores_per_task": 0.09302952518215583,
+      "cpu_per_run_ms": 5.0743377372085,
+      "thread_cpu_per_run_ms": 0.4847921661857645,
+      "thread_share": 0.09553801723344864,
+      "memory_residual": 0.0044380472592061675,
+      "cpu_residual": 0.045703068079854255,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 17260544,
+          "millicores": 0.5078031758210073,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 400,
+          "tasks": 1600,
+          "working_set_bytes": 34754560,
+          "millicores": 182.73676947942576,
+          "poll_cpu_ms": 0.5397350453645833
+        },
+        {
+          "components": 800,
+          "tasks": 3200,
+          "working_set_bytes": 40370176,
+          "millicores": 309.2792277896476,
+          "poll_cpu_ms": 0.4720806438749999
+        },
+        {
+          "components": 1200,
+          "tasks": 4800,
+          "working_set_bytes": 46137344,
+          "millicores": 454.48445137724485,
+          "poll_cpu_ms": 0.4749522213333346
+        }
+      ]
+    },
+    {
+      "driver": "lyra-arc-snmp",
+      "product": "lyra-arc-a2",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 5896.96,
+      "memory_warm_bytes": 7152981.333333336,
+      "millicores_per_task": 0.05166387206848197,
+      "cpu_per_run_ms": 2.818029385553562,
+      "thread_cpu_per_run_ms": 0.3997052385416658,
+      "thread_share": 0.1418385630010559,
+      "memory_residual": 0.03870921062151811,
+      "cpu_residual": 0.0421543549914101,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 12570624,
+          "millicores": 0.4976309375163277,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 29523968,
+          "millicores": 80.44104458022524,
+          "poll_cpu_ms": 0.37434874651041694
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 37863424,
+          "millicores": 152.19005139829756,
+          "poll_cpu_ms": 0.3735176526302068
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 48394240,
+          "millicores": 252.12194636339606,
+          "poll_cpu_ms": 0.42561579315972137
+        }
+      ]
+    },
+    {
+      "driver": "lyra-hx-snmp",
+      "product": "lyra-hx-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 19200,
+      "step_tasks": 6400,
+      "memory_per_task_bytes": 0,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.02842376350193632,
+      "cpu_per_run_ms": 1.5503871001056175,
+      "thread_cpu_per_run_ms": 0.39338812220426594,
+      "thread_share": 0.2537354201266684,
+      "memory_residual": 0,
+      "cpu_residual": 0.17645001606600377,
+      "memory_not_measured": "lyra-hx-snmp memory: the sweep is not a line: a step sits 33% of its rise off the fit (residual 0.333, bound 0.100)",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 16048128,
+          "millicores": 0.548885657297319,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 3200,
+          "tasks": 6400,
+          "working_set_bytes": 56557568,
+          "millicores": 286.7936714427877,
+          "poll_cpu_ms": 0.36770572809895863
+        },
+        {
+          "components": 6400,
+          "tasks": 12800,
+          "working_set_bytes": 90587136,
+          "millicores": 521.6603442835623,
+          "poll_cpu_ms": 0.3887578769888141
+        },
+        {
+          "components": 9600,
+          "tasks": 19200,
+          "working_set_bytes": 90628096,
+          "millicores": 528.633616085014,
+          "poll_cpu_ms": 0.4050357503830029
+        }
+      ]
+    },
+    {
+      "driver": "meridian-mx-snmp",
+      "product": "meridian-mx-84",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 6744.32,
+      "memory_warm_bytes": 1105920,
+      "millicores_per_task": 0.05013722335396845,
+      "cpu_per_run_ms": 2.734757637489188,
+      "thread_cpu_per_run_ms": 0.38196722842881914,
+      "thread_share": 0.13967132706483912,
+      "memory_residual": 0.04232302144619472,
+      "cpu_residual": 0.008410585210875737,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 14090240,
+          "millicores": 0.5994960141364547,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 26443776,
+          "millicores": 82.99009184593667,
+          "poll_cpu_ms": 0.39164231359375073
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 35864576,
+          "millicores": 159.47812981090547,
+          "poll_cpu_ms": 0.3870527271875007
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 48025600,
+          "millicores": 242.5020079136453,
+          "poll_cpu_ms": 0.3753518675347208
+        }
+      ]
+    },
+    {
+      "driver": "meridian-xl-snmp",
+      "product": "meridian-xl-1",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 6547.2,
+      "memory_warm_bytes": 3599018.666666664,
+      "millicores_per_task": 0.06105237532455252,
+      "cpu_per_run_ms": 3.3301295631574104,
+      "thread_cpu_per_run_ms": 0.4846469984548611,
+      "thread_share": 0.1455339767607572,
+      "memory_residual": 0.07044639947865766,
+      "cpu_residual": 0.04320448375876302,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 13111296,
+          "millicores": 0.5261629580544115,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 26447872,
+          "millicores": 84.2807412677244,
+          "poll_cpu_ms": 0.39903260031250004
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 39137280,
+          "millicores": 175.12871368987012,
+          "poll_cpu_ms": 0.4344687498697919
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 47398912,
+          "millicores": 295.8561738816193,
+          "poll_cpu_ms": 0.546637296892361
+        }
+      ]
+    },
+    {
+      "driver": "newtron-core-nvp",
+      "product": "newtron-core-3",
+      "polls": [
+        "30s",
+        "30s",
+        "30s"
+      ],
+      "tasks": 4806,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 60883.895131086145,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.06034754377861569,
+      "cpu_per_run_ms": 1.8104263133584706,
+      "thread_cpu_per_run_ms": 0.14369666406575113,
+      "thread_share": 0.07937172753481665,
+      "memory_residual": 0.04425546806649164,
+      "cpu_residual": 0.03465312034695096,
+      "warm_not_measured": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 30466048,
+          "millicores": 0.6032422230856795,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 534,
+          "tasks": 1602,
+          "working_set_bytes": 114405376,
+          "millicores": 94.93321570621818,
+          "poll_cpu_ms": 0.12695102871410732
+        },
+        {
+          "components": 1068,
+          "tasks": 3204,
+          "working_set_bytes": 224890880,
+          "millicores": 180.95751015277574,
+          "poll_cpu_ms": 0.13695553214731582
+        },
+        {
+          "components": 1602,
+          "tasks": 4806,
+          "working_set_bytes": 309477376,
+          "millicores": 294.18436118537426,
+          "poll_cpu_ms": 0.15377263046192263
+        }
+      ]
+    },
+    {
+      "driver": "newtron-panel-nvp",
+      "product": "newtron-panel-7",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 93525.76,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.05539313508431951,
+      "cpu_per_run_ms": 1.6617940525295853,
+      "thread_cpu_per_run_ms": 0.12078262858333327,
+      "thread_share": 0.07268206815367872,
+      "memory_residual": 0.018033676853664055,
+      "cpu_residual": 0.033793952127477364,
+      "warm_not_measured": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 32874496,
+          "millicores": 0.4898602908915663,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 163532800,
+          "millicores": 99.9338583244446,
+          "poll_cpu_ms": 0.12173628906250017
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 305078272,
+          "millicores": 171.29143629804375,
+          "poll_cpu_ms": 0.11262679390624987
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 462815232,
+          "millicores": 272.1340547493959,
+          "poll_cpu_ms": 0.1259019648749999
+        }
+      ]
+    },
+    {
+      "driver": "newtron-slate-nvp",
+      "product": "newtron-slate-5",
+      "polls": [
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 171856.64,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.06686577590728313,
+      "cpu_per_run_ms": 2.005973277218494,
+      "thread_cpu_per_run_ms": 0.11126806335069432,
+      "thread_share": 0.05546836770676224,
+      "memory_residual": 0.008597553557818185,
+      "cpu_residual": 0.050595174961038505,
+      "warm_not_measured": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 32948224,
+          "millicores": 0.5192264891043836,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 1600,
+          "tasks": 1600,
+          "working_set_bytes": 285061120,
+          "millicores": 134.51751065289898,
+          "poll_cpu_ms": 0.12059243531250002
+        },
+        {
+          "components": 3200,
+          "tasks": 3200,
+          "working_set_bytes": 552939520,
+          "millicores": 225.10901407006082,
+          "poll_cpu_ms": 0.10626525989583344
+        },
+        {
+          "components": 4800,
+          "tasks": 4800,
+          "working_set_bytes": 835002368,
+          "millicores": 326.9395301888938,
+          "poll_cpu_ms": 0.11149514166666631
+        }
+      ]
+    },
+    {
+      "driver": "polaris-amp-snmp",
+      "product": "polaris-amp-4100",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 19200,
+      "step_tasks": 6400,
+      "memory_per_task_bytes": 0,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.028314380199144742,
+      "cpu_per_run_ms": 1.5444207381351678,
+      "thread_cpu_per_run_ms": 0.3959368054740885,
+      "thread_share": 0.25636589544385935,
+      "memory_residual": 0,
+      "cpu_residual": 0.19670136781659014,
+      "memory_not_measured": "polaris-amp-snmp memory: the sweep is not a line: a step sits 32% of its rise off the fit (residual 0.315, bound 0.100)",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 11423744,
+          "millicores": 0.559116673171803,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 3200,
+          "tasks": 6400,
+          "working_set_bytes": 55037952,
+          "millicores": 306.4507270270669,
+          "poll_cpu_ms": 0.4014344854492174
+        },
+        {
+          "components": 6400,
+          "tasks": 12800,
+          "working_set_bytes": 89432064,
+          "millicores": 541.1757713697012,
+          "poll_cpu_ms": 0.4051827882394484
+        },
+        {
+          "components": 9600,
+          "tasks": 19200,
+          "working_set_bytes": 90394624,
+          "millicores": 526.3575461407148,
+          "poll_cpu_ms": 0.3879402569721389
+        }
+      ]
+    },
+    {
+      "driver": "polaris-dsp-snmp",
+      "product": "polaris-dsp-16",
+      "polls": [
+        "5m0s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 5899.52,
+      "memory_warm_bytes": 6515370.666666664,
+      "millicores_per_task": 0.048052733084631254,
+      "cpu_per_run_ms": 2.6210581682526137,
+      "thread_cpu_per_run_ms": 0.4068201409027783,
+      "thread_share": 0.15521217568933005,
+      "memory_residual": 0.0606783828740868,
+      "cpu_residual": 0.09692888433460413,
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 13221888,
+          "millicores": 0.500372843767663,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 29749248,
+          "millicores": 90.9867263056391,
+          "poll_cpu_ms": 0.40953056130208315
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 37470208,
+          "millicores": 186.53825029419397,
+          "poll_cpu_ms": 0.451671626510418
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 48627712,
+          "millicores": 224.93110796561606,
+          "poll_cpu_ms": 0.37601567703125016
+        }
+      ]
+    },
+    {
+      "driver": "recording-service-api",
+      "product": "recording-service",
+      "polls": [
+        "30s",
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 49580.8,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.182803268295925,
+      "cpu_per_run_ms": 5.48409804887775,
+      "thread_cpu_per_run_ms": 0.4779903481249993,
+      "thread_share": 0.08715933666116962,
+      "memory_residual": 0.0028828363667655673,
+      "cpu_residual": 0.026131800445725942,
+      "warm_not_measured": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 32743424,
+          "millicores": 0.6407105840705902,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 800,
+          "tasks": 1600,
+          "working_set_bytes": 97673216,
+          "millicores": 275.3781948610293,
+          "poll_cpu_ms": 0.40988952156250025
+        },
+        {
+          "components": 1600,
+          "tasks": 3200,
+          "working_set_bytes": 177688576,
+          "millicores": 550.9966748115129,
+          "poll_cpu_ms": 0.4383337306249988
+        },
+        {
+          "components": 2400,
+          "tasks": 4800,
+          "working_set_bytes": 256331776,
+          "millicores": 883.7186481788427,
+          "poll_cpu_ms": 0.5271283686458327
+        }
+      ]
+    },
+    {
+      "driver": "snmp-generic",
+      "product": "generic-device",
+      "polls": [
+        "1m0s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 10539.52,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.06643351110891497,
+      "cpu_per_run_ms": 3.9860106665348987,
+      "thread_cpu_per_run_ms": 0.3583686765946816,
+      "thread_share": 0.08990660250947524,
+      "memory_residual": 0.0066391385312929395,
+      "cpu_residual": 0.0244977726551972,
+      "warm_not_measured": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 31567872,
+          "millicores": 0.5220414391718403,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 1600,
+          "tasks": 1600,
+          "working_set_bytes": 28418048,
+          "millicores": 119.00901114448114,
+          "poll_cpu_ms": 0.37982185812500047
+        },
+        {
+          "components": 3200,
+          "tasks": 3200,
+          "working_set_bytes": 44945408,
+          "millicores": 215.01146081909894,
+          "poll_cpu_ms": 0.34907194625000054
+        },
+        {
+          "components": 4800,
+          "tasks": 4800,
+          "working_set_bytes": 62144512,
+          "millicores": 322.8332841285124,
+          "poll_cpu_ms": 0.3574154363143627
+        }
+      ]
+    },
+    {
+      "driver": "ucc-rooms",
+      "product": "ucc-platform",
+      "polls": [
+        "30s"
+      ],
+      "tasks": 4800,
+      "step_tasks": 1600,
+      "memory_per_task_bytes": 13996.8,
+      "memory_warm_bytes": 0,
+      "millicores_per_task": 0.240660884566832,
+      "cpu_per_run_ms": 7.21982653700496,
+      "thread_cpu_per_run_ms": 0.6972145544097208,
+      "thread_share": 0.09656943291312788,
+      "memory_residual": 0.0008840115836000055,
+      "cpu_residual": 0.06485356071348179,
+      "warm_not_measured": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "steps": [
+        {
+          "components": 0,
+          "tasks": 0,
+          "working_set_bytes": 33210368,
+          "millicores": 0.5351328506778043,
+          "poll_cpu_ms": 0
+        },
+        {
+          "components": 1600,
+          "tasks": 1600,
+          "working_set_bytes": 39198720,
+          "millicores": 384.24081671548873,
+          "poll_cpu_ms": 0.637788540937498
+        },
+        {
+          "components": 3200,
+          "tasks": 3200,
+          "working_set_bytes": 61534208,
+          "millicores": 860.0097109501161,
+          "poll_cpu_ms": 0.7683539052604168
+        },
+        {
+          "components": 4800,
+          "tasks": 4800,
+          "working_set_bytes": 83988480,
+          "millicores": 1125.470219128906,
+          "poll_cpu_ms": 0.6695969916666643
+        }
+      ]
+    }
+  ],
+  "not_measured": [
+    {
+      "driver": "boreal-edge-web",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "ferrite-pdu-api",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "kestrel-ws",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-ssh",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-telnet",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-tls",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-nvp-udp",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "newtron-panel-web",
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
+      "driver": "ucc-webhook",
+      "reason": "no polls: the driver only listens, so it runs no task to cost"
+    }
+  ]
+}

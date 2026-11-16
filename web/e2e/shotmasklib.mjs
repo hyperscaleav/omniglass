@@ -140,6 +140,52 @@ export function describeMask(m) {
   );
 }
 
+// Chromium can drop one capture under runner load ("Protocol error
+// (Page.captureScreenshot): Unable to capture screenshot", #1177, seen once in CI
+// with a green re-run). The cause is in the browser, not the page: Chromium
+// returns that error only when its copy of the compositor surface comes back
+// empty, after it has already forced the renderer to redraw and retried the copy
+// five times back to back (RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived).
+// Playwright always passes a clip, which resizes the view for the shot and so
+// asks for a new surface; a starved, GPU-less compositor that has not produced it
+// by the last copy attempt drops the capture. The forced redraw already waits for
+// the page to commit a frame, so waiting on the page (load state, a
+// requestAnimationFrame) cannot reach this, and a loaded or CPU-throttled host
+// did not induce it from page state either. So the capture is retried ONCE, on
+// exactly that protocol error, which reruns the whole redraw-and-copy, and each
+// retry logs the failing call and the page's state so a recurrence is visible.
+// Any other error, and a second failure, propagate. This is deliberately not
+// Playwright's `retries`, which would also mask a real assertion flake.
+export const CAPTURE_DROPPED = /Protocol error \(Page\.captureScreenshot\): Unable to capture screenshot/;
+
+export async function withCaptureRetry(page, capture, { log = console.warn } = {}) {
+  try {
+    return await capture();
+  } catch (e) {
+    if (!CAPTURE_DROPPED.test(String(e?.message ?? e))) throw e;
+    const state = await pageState(page);
+    log(`shotmask: capture dropped, retrying once: ${String(e.message).split('\n')[0]} | page ${JSON.stringify(state)}`);
+    return await capture();
+  }
+}
+
+// What the page looked like when a capture failed: enough to tell a page
+// mid-navigation from one that never committed a frame. Never throws, since it
+// runs on the failure path.
+async function pageState(page) {
+  try {
+    return await page.evaluate(() => ({
+      url: location.href,
+      readyState: document.readyState,
+      visibility: document.visibilityState,
+      viewport: `${innerWidth}x${innerHeight}`,
+      scroll: `${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`,
+    }));
+  } catch (err) {
+    return { unreadable: String(err?.message ?? err).split('\n')[0] };
+  }
+}
+
 // The masked BASELINE render of the settled page: each declared box is measured
 // again and laid over its value as a fixed element (no layout moves), every mask
 // is painted through Playwright's own mask in MASK_COLOR, and the declared boxes
@@ -148,7 +194,7 @@ export function describeMask(m) {
 // taken between planning and this render, and a page can reflow in between: a
 // selector mask re-resolves through its locator at the screenshot, and a declared
 // box planted where the value used to be would leave the value's tail live.
-export async function shootBaseline(page, plan, { path } = {}) {
+export async function shootBaseline(page, plan, { path, log } = {}) {
   const boxes = [];
   for (const m of plan.filter((m) => m.width !== undefined)) {
     boxes.push({ ...m, rects: await measure(m, m.locator) });
@@ -176,7 +222,11 @@ export async function shootBaseline(page, plan, { path } = {}) {
   try {
     const mask = plan.filter((m) => m.width === undefined).map((m) => m.locator);
     if (boxes.length > 0) mask.push(page.locator(`[${DECLARED_BOX}]`));
-    return await page.screenshot({ path, animations: 'disabled', caret: 'hide', mask, maskColor: MASK_COLOR });
+    return await withCaptureRetry(
+      page,
+      () => page.screenshot({ path, animations: 'disabled', caret: 'hide', mask, maskColor: MASK_COLOR }),
+      log ? { log } : {},
+    );
   } finally {
     await page.evaluate((attr) => document.querySelectorAll(`[${attr}]`).forEach((el) => el.remove()), DECLARED_BOX);
   }

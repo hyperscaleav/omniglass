@@ -66,7 +66,8 @@ type Config struct {
 	ProbeEvery time.Duration
 	// LaneWorkers is how many endpoint lanes run at once (#1634, #1249):
 	// each runs one request to its endpoint at a time, an operator's ahead
-	// of the scheduled. Zero is DefaultLaneWorkers.
+	// of the scheduled. Zero sizes them from the CPU and memory the node may
+	// use (#1869, AutoLaneWorkers).
 	LaneWorkers int
 	// WorklistEvery is how often the node pulls its worklist, on a goroutine
 	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
@@ -156,6 +157,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	prior := slog.Default()
 	defer slog.SetDefault(prior)
 	slog.SetDefault(logger)
+
+	// The lane pool is sized first, from the node's own limits, so the boot
+	// log states it even when the server is not there to claim from.
+	lanes, lanesFrom := resolveLaneWorkers(cfg.LaneWorkers, AutoLaneWorkers)
+	logger.Info("lane workers", "facility", "collection", "workers", lanes, "source", lanesFrom)
 
 	creds, err := Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
 	if err != nil {
@@ -371,6 +377,17 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// retry backoff, a refusal, the fingerprint it runs under (#822, #1634).
 	sched := newPollSchedule()
 
+	// The server nudges the node the moment a committed write changes its
+	// worklist (#1945). Subscribed before the first pull, so no change slips
+	// between that pull and the subscription: the pull's request rides the
+	// same connection, behind the subscribe.
+	nudges := make(chan struct{}, 1)
+	nudgeSub, err := nc.Subscribe(collection.WorklistChangedSubject(cfg.Name), func(*nats.Msg) { nudge(nudges) })
+	if err != nil {
+		return collection.WorklistReply{}, fmt.Errorf("node: subscribe worklist nudges: %w", err)
+	}
+	defer func() { _ = nudgeSub.Unsubscribe() }()
+
 	wl, ok, err := firstWorklist(ctx, nc, cfg.Name, cfg.Once, logger)
 	if err != nil {
 		return collection.WorklistReply{}, err
@@ -407,7 +424,8 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// endpoint, on its own timer; the heartbeat below keeps the node's
 	// housekeeping and sets no task's cadence.
 	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
-	d = newDispatcher(dispatchConfig{workers: cfg.LaneWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
+	self.lanes(lanes)
+	d = newDispatcher(dispatchConfig{workers: lanes, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
 		sched: sched, sessions: sessions, report: report, work: coll.run})
 	coll.every, coll.wake = d.interval, d.kick
 	// Shutdown waits for the runs in flight before the sessions close
@@ -464,7 +482,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	worklists := make(chan collection.WorklistReply, 1)
 	pctx, stopPulls := context.WithCancel(ctx)
 	var pulls sync.WaitGroup
-	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, self, worklists) })
+	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, nudges, logger, self, worklists) })
 	defer func() { stopPulls(); pulls.Wait() }()
 
 	// Commands are pulled each heartbeat on a goroutine of their own, one
@@ -712,12 +730,24 @@ func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, l
 
 // pullWorklists pulls the node's worklist every interval, jittered, until ctx
 // ends, handing each one to out in place of any the loop has not taken. A
-// failed pull is logged with the running count and retried on backoff; the
-// node runs the worklist it has meanwhile (#1577). Each pull, served or
-// refused, is tallied on self toward the window's worklist pull loss (#1868).
-func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, self *nodeReport, out chan collection.WorklistReply) {
+// nudge (#1945) pulls at once, but never sooner than nudgeGap after the last
+// pull, so a burst of changes costs at most one pull per gap. A failed pull
+// is logged with the running count and retried on backoff, which a nudge does
+// not cut short; the node runs the worklist it has meanwhile (#1577). Each
+// pull, served or refused, is tallied on self toward the window's worklist
+// pull loss (#1868).
+func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, nudges <-chan struct{}, logger *slog.Logger, self *nodeReport, out chan collection.WorklistReply) {
 	attempt, failures := 0, 0
-	for wait := jitterInterval(every, rand.Float64()); sleepCtx(ctx, wait); {
+	var earliest time.Time
+	for wait := jitterInterval(every, rand.Float64()); ; {
+		woken := nudges
+		if attempt > 0 {
+			woken = nil
+		}
+		if !waitPull(ctx, wait, woken, earliest) {
+			return
+		}
+		earliest = time.Now().Add(nudgeGap)
 		next, err := pullWorklist(ctx, nc, name)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -758,6 +788,40 @@ func resendAfterOverflow(spool *telemetrySpool, coll *collector, sched *pollSche
 	coll.forgetTransitions()
 	sched.forgetOccurrences()
 	sessions.resync()
+}
+
+// nudgeGap is the least time between two worklist pulls a nudge starts
+// (#1945): a burst of changes is answered by one pull per gap, the last
+// change in it never later than a gap behind.
+const nudgeGap = 200 * time.Millisecond
+
+// nudge records that the worklist changed, without blocking: nudges is
+// buffered to one, so any number arriving before the pull loop looks leave
+// one pending.
+func nudge(nudges chan<- struct{}) {
+	select {
+	case nudges <- struct{}{}:
+	default:
+	}
+}
+
+// waitPull waits for the next worklist pull: d elapsing, or a nudge, which
+// then waits until earliest if that is still ahead. A nil nudges waits out d.
+// It reports false when ctx ends first.
+func waitPull(ctx context.Context, d time.Duration, nudges <-chan struct{}, earliest time.Time) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	case <-nudges:
+		if gap := time.Until(earliest); gap > 0 {
+			return sleepCtx(ctx, gap)
+		}
+		return ctx.Err() == nil
+	}
 }
 
 // sleepCtx waits d, or until ctx ends, and reports whether d elapsed.
