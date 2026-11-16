@@ -384,7 +384,8 @@ func TestOnDemandRunsWithoutABus(t *testing.T) {
 
 // Handing a secret to a node, by a preview or an attach, takes secret:bind
 // over it (#2047): one that may read the secret but not bind it is refused
-// both, naming the right; one that may bind it but never reveal it does both.
+// both, and an edit moving the endpoint's address, naming the right; one that
+// may bind it but never reveal it does all three.
 func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
 	t.Parallel()
 	s := newNodeRunStack(t)
@@ -412,8 +413,29 @@ func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
 
 	binder := principalWithGrants(t, s.ctx, s.dsn, "binder", []grant{{role: "binder", scopeKind: "all"}})
 	s.c.do(binder, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK)
-	s.c.do(binder, http.MethodPost, "/endpoints", attach, http.StatusCreated)
+	var ep struct {
+		ID     string            `json:"id"`
+		Inputs map[string]string `json:"inputs"`
+	}
+	if err := json.Unmarshal(s.c.do(binder, http.MethodPost, "/endpoints", attach, http.StatusCreated), &ep); err != nil || ep.ID == "" {
+		t.Fatalf("binder attach: %v", err)
+	}
 	s.c.do(binder, http.MethodPost, "/secrets/display-login:reveal", nil, http.StatusForbidden)
+
+	// Moving a bound endpoint's address sends its credential somewhere new, so
+	// it takes secret:bind too: the bind-less edit is refused and the stored
+	// host stays put.
+	move := map[string]any{"inputs": map[string]string{"host": "10.20.4.32"}}
+	if code, raw := s.c.send(reader, http.MethodPatch, "/endpoints/"+ep.ID, move); code != http.StatusForbidden || !strings.Contains(string(raw), "secret:bind") {
+		t.Errorf("an address edit without secret:bind = %d %s, want 403 naming it", code, raw)
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/endpoints/"+ep.ID, nil, http.StatusOK), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if ep.Inputs["host"] != "10.20.4.31" {
+		t.Errorf("the refused edit moved the host to %q", ep.Inputs["host"])
+	}
+	s.c.do(binder, http.MethodPatch, "/endpoints/"+ep.ID, move, http.StatusOK)
 }
 
 // An agent acting for its person binds a credential it never reads (#2047): it

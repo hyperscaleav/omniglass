@@ -783,9 +783,8 @@ non-disclosing refusal; one it can read but not bind is a 403 naming `secret:bin
 chooses where a credential goes, so the person decides per tool in their MCP client whether an
 agent's bind runs always, asks first or never; the platform does not hold an agent's write for
 approval, and every such write is audited as the agent's.
-The
 
-`/auth/me` permission list is conservative under the ceiling (a held `>` lists nothing), while the
+The `/auth/me` permission list is conservative under the ceiling (a held `>` lists nothing), while the
 route check stays exact. An agent token is also refused, with a 403 before its body is read, by the
 routes that would let it escape: minting a token, changing the password, and impersonation (an
 impersonation token is not an agent token and would shed both the ceiling and the attribution).
