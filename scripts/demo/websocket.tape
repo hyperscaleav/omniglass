@@ -71,7 +71,7 @@ Type `omniglass component simulation fire "$bar" --surface http-api --method POS
 Enter
 Wait
 Hide
-Type `demo_until 5 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 37"'`
+Type `demo_until 5 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 0.37"'`
 Enter
 Wait@10s
 Show
@@ -84,11 +84,11 @@ Wait
 Type "# A command rides the same socket: its set frame carries a fresh id, and the bar's answer carries it back"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type set-volume --value 42 | jq -c '{command_type, settlement}'`
+Type `omniglass component command issue "$bar" --command-type set-volume --value 0.42 | jq -c '{command_type, settlement}'`
 Enter
 Wait
 Hide
-Type `demo_until 20 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 42"'`
+Type `demo_until 20 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 0.42"'`
 Enter
 Wait@30s
 Show
@@ -156,7 +156,7 @@ Type `omniglass component simulation fire "$bar" --surface http-api --method POS
 Enter
 Wait
 Hide
-Type `demo_until 10 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 44"'`
+Type `demo_until 10 'omniglass component metric sample list "$bar" volume --limit 5 | jq -e "[.samples[] | select(.instance == \"wss\")][0].value == 0.44"'`
 Enter
 Wait@20s
 Show
