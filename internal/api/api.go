@@ -26,6 +26,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
+	"github.com/hyperscaleav/omniglass/internal/vocab"
 	"github.com/hyperscaleav/omniglass/internal/webui"
 )
 
@@ -459,6 +460,21 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
 	registerSettingsRoutes(api, a, gw, svc)
+	describeEntitySchemas(api)
+}
+
+// describeEntitySchemas stamps each vocabulary term's definition on the OpenAPI
+// entity schema it names (#2029), after every route has registered its types.
+// Huma derives schemas from Go structs and has no struct-level description tag,
+// so the registry is edited in place (ADR-2029); a term naming a schema no route
+// registered is caught by TestAPISpeaksTheVocabulary.
+func describeEntitySchemas(api huma.API) {
+	schemas := api.OpenAPI().Components.Schemas.Map()
+	for name, def := range vocab.MustLoad().SchemaDescriptions() {
+		if s, ok := schemas[name]; ok {
+			s.Description = def
+		}
+	}
 }
 
 // apiConfig is the shared Huma config for the live server and the spec dump. It

@@ -392,7 +392,7 @@ not connected is an answer (the API's 503), and one that does not answer within 
 another (504). Both kinds are operator work on the [endpoint lanes](#the-endpoint-lane): the operator
 queue is capped, and a run past the cap answers at once that the lanes are full (the API's 429),
 never queued without bound. A **preview** touches no held session and publishes nothing, its excerpt
-scrubbed of the credential before it is cut; it takes the lane of the inventoried endpoint its
+scrubbed of the credential before it is cut; it takes the lane of the declared endpoint its
 transport and target name, so it never talks to a device beside that endpoint's own work, and runs
 off-lane when it names none. A **run now** takes its endpoint's lane ahead of the scheduled work
 queued there, so the poll borrows the endpoint's session and honors its gate exactly as a scheduled
@@ -777,7 +777,7 @@ not a lane at all: it is the gate's `disrupted` reason (#1651, [below](#implicit
 the lane stays free while the endpoint is held.
 
 **A preview resolves to its endpoint.** The node indexes its worklist by transport and target; a
-preview whose polls all name one inventoried endpoint's transport and target takes that endpoint's
+preview whose polls all name one declared endpoint's transport and target takes that endpoint's
 lane and answers at once, 409 naming the reason, when that endpoint's gate is closed, a refusal
 included, since a preview sends its own request. A preview that names no endpoint (a device not yet
 attached) runs off-lane, gated only by its host: a host another endpoint's probe reads unreachable

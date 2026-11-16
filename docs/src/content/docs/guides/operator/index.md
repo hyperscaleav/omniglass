@@ -3,7 +3,7 @@ title: Operator guide
 description: "Operating an Omniglass fleet day to day: signing in, finding things, working with entities, and the scope that decides what you see."
 ---
 
-This is the how-to for **operating the fleet**: reading and running the inventory of locations,
+This is the how-to for **operating the fleet**: reading and running the locations,
 systems, and components you are responsible for. It is a different job from **administering the
 platform** (managing who can sign in and what they can do), which is the [admin
 guide](/guides/admin/), and from **standing the platform up**, which is

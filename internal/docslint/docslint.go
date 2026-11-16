@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/vocab"
 )
 
 // DocsRoot is the content root the lints scan, relative to this package.
@@ -35,20 +37,24 @@ type BannedTerm struct {
 	Origin string
 }
 
-// Banned is the denylist. Order is presentation only.
-var Banned = []BannedTerm{
-	{
-		// The entity an API is reached through renamed to endpoint (#811,
-		// #603's naming ruling): interface_type retired outright with its
-		// table (transports are the internal/transport code registry), and
-		// the entity noun's own spellings retire with it. The noun is banned
-		// in its entity phrasings rather than as a bare word, because
-		// "network interface" legitimately survives as the teaching contrast
-		// on the collection page and "user interface" is ordinary English.
-		Pattern:     regexp.MustCompile("\\binterface_type\\b|\\binterface-reachable\\b|\\ban interface\\b|\\bthe interface\\b|\\binterfaces\\b"),
-		Replacement: "endpoint (the entity), transport (the wire registry), endpoint-reachable (the datapoint)",
-		Origin:      "ADR-0134",
-	},
+// Banned is the denylist: the identifiers retired here, then every retired
+// word in the product vocabulary (internal/vocab/terms.yaml, #2029), which is
+// where a retired operator noun goes. Order is presentation only.
+var Banned = append(retiredIdentifiers, vocabularyRetired()...)
+
+// vocabularyRetired is the product vocabulary's retired words in the
+// denylist's shape.
+func vocabularyRetired() []BannedTerm {
+	var out []BannedTerm
+	for _, b := range vocab.MustLoad().Banned() {
+		out = append(out, BannedTerm{Pattern: b.Pattern, Replacement: b.Replacement, Origin: b.Origin})
+	}
+	return out
+}
+
+// retiredIdentifiers are the retired identifiers, routes, flags and phrasings
+// that are not a product noun.
+var retiredIdentifiers = []BannedTerm{
 	{
 		// The create form's precondition field, retired by ADR-0104's #702-review
 		// amendment: it binds the drafted NAME, because a name carries the stem
@@ -123,30 +129,6 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
 		Replacement: "service.name, a service account's identifier",
 		Origin:      "ADR-0111",
-	},
-	{
-		// The other end of that sweep, and the reason ADR-0111 ran first: the
-		// friendly string an operator reads is `label` on all twenty-three tables
-		// that carry one, and the pen beside it is `label_generated` (ADR-0118).
-		// Three spellings are banned together because a page can reach for any of
-		// them: the column, the CLI flag, and the two-word noun the docs used for
-		// the concept. The noun matters most, since it is the one nothing else
-		// catches: a symbol lint sees `display_name` in a code fence, and no
-		// compiler sees "the display name" in a sentence.
-		Pattern:     regexp.MustCompile(`\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b`),
-		Replacement: "label (the friendly string), or label_generated (the pen that says the platform rendered it)",
-		Origin:      "ADR-0118",
-	},
-	{
-		// The totality-of-managed-things noun, renamed by ADR-0123: the word an
-		// operator's whole managed environment goes by is FLEET (a fleet of
-		// systems, stationed across locations), and estate is retired with it.
-		// The word boundary keeps the restate family (restate, restated,
-		// restatement) out of reach, which is the only English family that
-		// carries the old noun as a substring.
-		Pattern:     regexp.MustCompile(`(?i)\bestates?\b|\bestate-wide\b`),
-		Replacement: "fleet (the systems an operator runs, stationed across locations), or fleet-wide",
-		Origin:      "ADR-0123",
 	},
 	{
 		// The stored function that resolved a principal to its identifier, dropped
@@ -403,6 +385,10 @@ var vocabularyAllowedFiles = map[string]bool{
 	filepath.Join("architecture", "decisions.md"): true,
 	filepath.Join("architecture", "build-log.md"): true,
 	filepath.Join("reference", "cli", "index.md"): true,
+	// Generated from internal/vocab, whose Formerly column names each retired word.
+	filepath.Join("reference", "glossary.md"): true,
+	// The frozen internal reference (#2029), superseded by reference/glossary.md.
+	filepath.Join("architecture", "glossary.md"): true,
 }
 
 // vocabularyAllowed reports whether rel is exempt from the vocabulary lint and

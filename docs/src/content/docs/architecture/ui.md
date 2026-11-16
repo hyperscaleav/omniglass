@@ -10,9 +10,9 @@ sidebar:
 The console is one renderer over the same views the rest of the platform reads. This page is the renderer / page / dashboard model and the information architecture; the stack and the concrete primitives are the [design system](/contributing/design-system/).
 
 :::note[What shipped vs the model below]
-Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
+Roughly 22 live pages (fleet, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
-`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
+`ViewResult` renderer described next: a fleet list page is CRUD over a scoped resource. The
 **Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
 surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
 the CRUD lists, and the detail views it opens. Its core is one pure model,
@@ -193,7 +193,7 @@ Coded pages with rich interaction, all reading through views:
   A resolve control is **not** part of this: it was refused, with a reason, in
   [ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve).
   Snooze, refused there until there was a notification to suppress, is its own feature (#1318).
-- **Inventory and topology**: navigable location / system / component trees,
+- **Fleet and topology**: navigable location / system / component trees,
   [health](/architecture/health/) (`status-grid`) at each level.
 - **Event exploration**: the event log by entity / time / category, with the audit trail.
 :::
@@ -233,7 +233,7 @@ resolution. Every URL-reachable state is also a state the
 [docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
 what retired the one-shot handoffs.
 
-**A blade or workspace edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
+**A blade or detail view edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
 blade stack and by the Configure face) is the one place that knows an editor is open, so three rules
 hang off it (#854):
 
@@ -284,7 +284,7 @@ interpolated values, no observed side); the full split is
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
 outline of places. **Nodes**, the collection daemons, are infrastructure rather than fleet
-inventory, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
+entities, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
 `node:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 

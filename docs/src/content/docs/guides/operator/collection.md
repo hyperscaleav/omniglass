@@ -20,7 +20,7 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 **Nodes** under Admin in the sidebar (with `node:read`, which must be **all-scope**, since a node is
 fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
-inventory. Each row reads the way every list in the console reads: the node's **label** on the
+list. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
 down, or never, derived from its last heartbeat against the server's down window), the relative
 last-heartbeat time, and its tags. A row opens the node's detail.
@@ -373,7 +373,7 @@ where the time the line states differs from when it arrived, the row says when i
 panel orders and windows the lines by their arrival, so a component whose clock reset still shows
 what it logged today. Two
 filters narrow the read: **At least** a severity (that level and every more severe one) and
-**From** a source, its choices the sources the window carries. The system workspace's Logs section
+**From** a source, its choices the sources the window carries. The system detail view's Logs section
 takes the same filters. Most log lines never become events.
 
 Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
