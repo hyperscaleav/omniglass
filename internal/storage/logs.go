@@ -1,13 +1,16 @@
 package storage
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/logline"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -166,15 +169,52 @@ func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite)
 		sevs[i], facs[i], corrs[i], attrs[i], labels[i] = textOrNull(sev), textOrNull(fac), textOrNull(corr), textOrNull(attr), textOrNull(label)
 		instances[i], sources[i], messages[i] = logline.Clean(l.Instance), logline.Clean(l.Source), message
 	}
-	if _, err := tx.Exec(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
+	rows, err := tx.Query(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
 		select u.ts, u.arc::uuid, u.instance, u.source, u.severity, u.facility, u.message, u.attributes::jsonb, u.labels::jsonb, u.correlation_id
 		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
 			with ordinality as u(ts, arc, instance, source, severity, facility, message, attributes, labels, correlation_id, ord)
-		order by u.ord`,
-		ts, arcs, instances, sources, sevs, facs, messages, attrs, labels, corrs); err != nil {
+		order by u.ord
+		returning id, received_at`,
+		ts, arcs, instances, sources, sevs, facs, messages, attrs, labels, corrs)
+	type landedLine struct {
+		id       int64
+		received time.Time
+	}
+	var landed []landedLine
+	if err == nil {
+		landed, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (landedLine, error) {
+			var l landedLine
+			return l, r.Scan(&l.id, &l.received)
+		})
+	}
+	if err != nil {
 		return fmt.Errorf("storage: insert log lines %s: %w", logOwners(lines), err)
 	}
+	// The rows took ids in the lines' order (order by u.ord); returning
+	// carries no order of its own, so the ids are sorted back onto it.
+	slices.SortFunc(landed, func(a, b landedLine) int { return cmp.Compare(a.id, b.id) })
+	for i, l := range landed {
+		landedRows(ctx, tail.Row{Lane: tail.LaneLog, OwnerKind: "component", OwnerID: arcs[i], Instance: instances[i], TS: ts[i],
+			ID: l.id, ReceivedAt: l.received, Message: messages[i], Severity: nullText(sevs[i]), Facility: nullText(facs[i]), Channel: sources[i],
+			Attributes: nullJSON(attrs[i])})
+	}
 	return nil
+}
+
+// nullText is a nullable text column's value, "" for NULL.
+func nullText(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// nullJSON is a nullable jsonb column's value, nil for NULL.
+func nullJSON(s *string) []byte {
+	if s == nil {
+		return nil
+	}
+	return []byte(*s)
 }
 
 // logOwners names the distinct owners of lines, in their order, for an

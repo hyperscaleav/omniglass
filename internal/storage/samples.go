@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 )
 
 // MetricSampleWrite is one observed metric to persist. OwnerKind picks the
@@ -129,7 +130,7 @@ func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(contex
 	if err := write(context.WithValue(ctx, commitHooksKey{}, hooks), tx); err != nil {
 		return err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := p.tail.Commit(func() error { return tx.Commit(ctx) }, hooks.landed); err != nil {
 		return fmt.Errorf("storage: commit %s: %w", what, err)
 	}
 	for _, fn := range hooks.fns {
@@ -142,7 +143,13 @@ func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(contex
 // (#1567): a log line about what the attempt wrote or dropped. An attempt a
 // deadlock or a missing partition aborts is run again whole, and a line it
 // logged before the abort would be logged again by the attempt that lands.
-type commitHooks struct{ fns []func() }
+//
+// landed is the rows the attempt kept, published to the tail as its commit
+// (ADR-1830): an attempt that rolls back publishes none of them.
+type commitHooks struct {
+	fns    []func()
+	landed []tail.Row
+}
 
 type commitHooksKey struct{}
 
@@ -154,6 +161,19 @@ func onCommit(ctx context.Context, fn func()) {
 		return
 	}
 	fn()
+}
+
+// landedRows records rows the sample-write attempt ctx belongs to kept, for
+// the tail to publish once it commits. Outside a sampleWrite nothing is
+// recorded: only a commit the tail fences can publish without a seam.
+func landedRows(ctx context.Context, rows ...tail.Row) {
+	if h, ok := ctx.Value(commitHooksKey{}).(*commitHooks); ok {
+		for _, r := range rows {
+			// The row as a read finds it: Postgres keeps microseconds.
+			r.TS, r.ReceivedAt = r.TS.Truncate(time.Microsecond), r.ReceivedAt.Truncate(time.Microsecond)
+			h.landed = append(h.landed, r)
+		}
+	}
 }
 
 // isDeadlock reports a transaction Postgres aborted to break a deadlock.
@@ -436,6 +456,7 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
 		}
+		landedRows(ctx, tail.Row{Lane: tail.LaneMetric, OwnerKind: ev.OwnerKind, OwnerID: arcs[i], Key: ev.Key, Instance: ev.Instance, TS: ts, Number: ev.Value})
 	}
 	if len(late.series) > 0 {
 		days, err := laneDays()

@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/tail"
 )
 
 // EventWrite is one occurrence to persist. It shares the owner-arc shape of a
@@ -159,7 +162,7 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 		}
 		kinds[i], keys[i], instances[i], messages[i], sources[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source
 	}
-	if _, err := tx.Exec(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, node_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
+	rows, err := tx.Query(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, node_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
 		select u.ts, u.kind,
 			case when u.kind = 'component' then u.owner::uuid end,
 			case when u.kind = 'system' then u.owner::uuid end,
@@ -169,13 +172,30 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
 			with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)
 		left join event_type_in_effect() et on et.name = u.key
-		order by u.ord`,
-		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit()); err != nil {
+		order by u.ord
+		returning id`,
+		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit())
+	var ids []int64
+	if err == nil {
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[int64])
+	}
+	if err != nil {
 		named := make([]string, 0, len(evs))
 		for _, ev := range evs {
 			named = append(named, ev.OwnerID+"/"+ev.Key)
 		}
 		return fmt.Errorf("storage: insert events %s: %w", strings.Join(named, ", "), err)
+	}
+	// The rows took ids in the batch's order (order by u.ord); returning
+	// carries no order of its own, so the ids are sorted back onto it.
+	slices.Sort(ids)
+	for i, id := range ids {
+		var attributes []byte
+		if attrs[i] != nil {
+			attributes = []byte(*attrs[i])
+		}
+		landedRows(ctx, tail.Row{Lane: tail.LaneEvent, OwnerKind: kinds[i], OwnerID: arcs[i], Key: keys[i], Instance: instances[i],
+			TS: ts[i], ID: id, Origin: origins[i], Message: messages[i], Attributes: attributes})
 	}
 	return nil
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -1237,6 +1238,10 @@ type PG struct {
 	// strippedEmits remembers each (task, key) emit the worklist dropped for
 	// the writer ruling, so the drop is logged once, not on every pull.
 	strippedEmits sync.Map
+	// tail is the rows each sample-write commit landed, the live edge a view
+	// binding reads after its history (ADR-1830); nil in a PG built without
+	// NewPG, which publishes nothing.
+	tail *tail.Hub
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -1302,7 +1307,7 @@ func WithQueryTracer(tracer pgx.QueryTracer) Option {
 // the pool-derived default (the pgblobs store) is filled in afterwards only
 // where WithBlobStore left none.
 func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
-	p := &PG{}
+	p := &PG{tail: tail.New(tailCommits)}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -1438,3 +1443,7 @@ func pgParseReason(err error) string {
 	}
 	return "the parse error is withheld, since it can quote the DSN"
 }
+
+// tailCommits is how many sample-write commits the tail keeps for a view
+// watch to resume through; a cursor older than that re-reads history.
+const tailCommits = 4096

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -309,6 +310,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, stamps[i], ev.Value); err != nil {
 			return 0, err
 		}
+		landedRows(ctx, tail.Row{Lane: tail.LaneProperty, OwnerKind: ev.OwnerKind, OwnerID: arcs[i], Key: ev.Key, Instance: ev.Instance, TS: stamps[i], Text: ev.Value})
 	}
 	return coalesced, eval.stampJudged(ctx, tx)
 }
