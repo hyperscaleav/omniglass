@@ -261,8 +261,8 @@ func (e *oauthEndpoints) register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, g := range in.GrantTypes {
-		if g != "authorization_code" {
-			oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "only the authorization_code grant is supported")
+		if g != "authorization_code" && g != "refresh_token" {
+			oauthError(w, http.StatusBadRequest, "invalid_client_metadata", "only the authorization_code and refresh_token grants are supported")
 			return
 		}
 	}

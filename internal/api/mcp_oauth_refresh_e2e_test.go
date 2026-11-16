@@ -47,7 +47,8 @@ func (s *mcpStack) tokenRequest(t *testing.T, form url.Values) oauthTokens {
 // exchanges the code, returning the client id and what the exchange issued.
 func (s *mcpStack) oauthSignIn(t *testing.T, name string) (string, oauthTokens) {
 	t.Helper()
-	b, _ := json.Marshal(map[string]any{"client_name": name, "redirect_uris": []string{oauthRedirect}})
+	b, _ := json.Marshal(map[string]any{"client_name": name, "redirect_uris": []string{oauthRedirect},
+		"grant_types": []string{"authorization_code", "refresh_token"}})
 	resp, err := http.Post(s.base+"/oauth/register", "application/json", strings.NewReader(string(b)))
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +58,9 @@ func (s *mcpStack) oauthSignIn(t *testing.T, name string) (string, oauthTokens) 
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&reg)
 	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("registering with the refresh grant = %d, want 201", resp.StatusCode)
+	}
 	verifier := "a-verifier-long-enough-to-be-valid-under-rfc-7636-" + name
 	sum := sha256.Sum256([]byte(verifier))
 	q := url.Values{"response_type": {"code"}, "client_id": {reg.ClientID}, "redirect_uri": {oauthRedirect},
