@@ -80,7 +80,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it for themselves (default false)")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
 				_ = cmd.MarkFlagRequired("targets")
-				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
+				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
 				return cmd
 			}()
 			return cmd
@@ -545,7 +545,7 @@ func generatedCommands() []*cobra.Command {
 						cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both")
 						_ = cmd.MarkFlagRequired("on")
 						cmd.Flags().StringVar(&fTargets, "targets", "", "Refused when set (a 422): a personal rule tells you alone and names no target")
-						cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read")
+						cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read")
 						return cmd
 					}()
 					return cmd
@@ -1863,7 +1863,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Start a component from a template",
-					Long:    "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
+					Long:    "Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
 					Example: "  omniglass component createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1892,7 +1892,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)")
 				cmd.Flags().StringVar(&fLabel, "label", "", "The component's label")
-				cmd.Flags().StringVar(&fLocation, "location", "", "The place the component sits in, by name or dotted path")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location the component sits in, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The component's name; minted as an unnamed create mints it when empty")
 				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoint is placed on; needed when inputs carry an address")
 				cmd.Flags().StringVar(&fTemplate, "template", "", "The component template, by name")
@@ -2162,7 +2162,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <key> <value>",
 						Short:   "Bind an identity a conduit reports to its owner",
-						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2179,7 +2179,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fOwner, "owner", "", "Name or uuid of the owner the identity's values land on, or a dotted address")
 					_ = cmd.MarkFlagRequired("owner")
-					cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here")
+					cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here")
 					_ = cmd.MarkFlagRequired("owner-kind")
 					return cmd
 				}()
@@ -4270,8 +4270,8 @@ func generatedCommands() []*cobra.Command {
 				var fTemplate string
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
-					Short:   "Start a subtree of places from a template",
-					Long:    "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.",
+					Short:   "Start a subtree of locations from a template",
+					Long:    "Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.",
 					Example: "  omniglass location createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4294,8 +4294,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "The subtree root's label")
 				cmd.Flags().StringVar(&fName, "name", "", "The subtree root's name; omitted takes the template's, else its type's name rule mints one")
-				cmd.Flags().StringVar(&fParent, "parent", "", "The place the subtree sits under, by name or dotted path; omitted makes it a new top")
-				cmd.Flags().StringVar(&fTemplate, "template", "", "The place template, by name")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The location the subtree sits under, by name or dotted path; omitted makes it a new top")
+				cmd.Flags().StringVar(&fTemplate, "template", "", "The location template, by name")
 				_ = cmd.MarkFlagRequired("template")
 				return cmd
 			}()
@@ -4484,7 +4484,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a location's effective properties",
-						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -5811,7 +5811,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification type",
-					Long:    "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+					Long:    "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
 					Example: "  omniglass notification-type create --name name --subject subject --text text",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5975,7 +5975,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a notification type",
-					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 					Example: "  omniglass notification-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7684,7 +7684,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels: higher is more severe; unique")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels: higher is more severe; unique")
 				_ = cmd.MarkFlagRequired("rank")
 				return cmd
 			}()
@@ -7774,7 +7774,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
-				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels; unique")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels; unique")
 				return cmd
 			}()
 			return cmd
@@ -7830,7 +7830,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-system <name>",
 					Short:   "Add a simulated system",
-					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8473,7 +8473,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Start a whole system from a template",
-					Long:    "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
+					Long:    "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
 					Example: "  omniglass system createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8505,7 +8505,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached")
 				cmd.Flags().StringVar(&fLabel, "label", "", "The system's label")
-				cmd.Flags().StringVar(&fLocation, "location", "", "The place the system and its components sit in, by name or dotted path")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location the system and its components sit in, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
 				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoints are placed on; needed when any component attaches")
 				cmd.Flags().StringVar(&fStandard, "standard", "", "A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name")
