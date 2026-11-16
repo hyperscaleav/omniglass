@@ -41,7 +41,7 @@ In operator terms:
 
 - **Set once, override where it matters.** HQ's devices need a different credential, so it is set
   at the HQ location and overrides the product's binding for everything there, no product edit; a
-  place three levels down inherits the nearest setting. *(deployment beats classifier bindings;
+  location three levels down inherits the nearest setting. *(deployment beats classifier bindings;
   deepest location wins)*
 - **Composition tightens the part.** "Standard Huddle Room" polls codecs every 30s, tighter than
   the codec's own product's 60s, and every codec placed in a huddle room picks that up. *(the
@@ -269,7 +269,7 @@ the false-firing `high_memory` alarm).
 
 ## Resolution, in one line
 
-Build the entity's ordered layer path, place matching groups on it by weight, fold
+Build the entity's ordered layer path, location matching groups on it by weight, fold
 variables (override) / tags (union + override) / rules (additive + suppress) down the
 combined specificity order, fall through to the type's declaration where the fold is
 empty, and emit effective values with provenance.

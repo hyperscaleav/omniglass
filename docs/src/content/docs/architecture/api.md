@@ -399,7 +399,7 @@ a system refuses a caller holding none with a 403 naming it before anything reso
 resolves in its own tier's read scope and must be inside its update scope (out of read the
 non-disclosing 404, readable but not writable a 403); a put naming a different owner moves the
 binding and needs update on the owner it leaves as well, a re-put to the same owner changes nothing,
-an unregistered key, an owner that is a place or a node, or the conduit itself as owner is a 422,
+an unregistered key, an owner that is a location or a node, or the conduit itself as owner is a 422,
 the value rides the path as one percent-encoded segment (`room%2F1` round-trips), and every change is audited in
 its transaction, naming both ends.
 `GET /components/{name}/unbound-identities` (gated `component:read`, scope-injected on the conduit)
@@ -450,7 +450,7 @@ simulates a 422. A whole simulated system is built to a standard: `GET /simulati
 (gated `simulation:read`) previews each of the standard's roles staffed with a simulated product that fits
 (or left short, with why), and `POST /nodes/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
-`node:read`, plus `location:read` when it names a place) creates the system, a
+`node:read`, plus `location:read` when it names a location) creates the system, a
 simulated component per staffed role at its own free address with its endpoint on the node, and each
 role assignment, in one transaction: it lands whole or not at all.
 
@@ -804,13 +804,13 @@ telemetry name and the remaining type registries do not rename yet
 The **template catalog** is read beside them but is not a registry: a
 [template](/architecture/templates/) is never a row, so it has no uuid, no create and no write of any
 kind. `GET /templates` lists what this binary ships, ordered by kind then name, and takes an optional
-`kind` (`standard_template`, `system_template`, `place_template` or `component_template`; any other
+`kind` (`standard_template`, `system_template`, `location_template` or `component_template`; any other
 value is a 422); `GET /templates/{template}` reads one whole by name, a 404 when the catalog does not
 hold it. Both are gated `template:read`, which the viewer's `*:read` floor carries, with no scope to
 inject since a template has no owner. The body is the template's own: a kind, a name, a label, a
 description, and the one body its kind names (a standard template's roles, choices, contract lines and
 map; a component template's product, attach preset and declared values; a system template's standard
-and role fills; a place template's subtree).
+and role fills; a location template's subtree).
 
 One custom method, **`:createFromTemplate`**, creates from a template on each of the four
 collections a template creates in: a custom method names what differs from Create, and here the
@@ -838,7 +838,7 @@ permissions its pieces need checked up front (a 403 naming the one missing):
 
 Each lands in one transaction, every piece the ordinary create in the caller's own scope with its own
 audit row, each a create whose detail carries `from_template`, and a refused piece is answered as its
-own route answers it with nothing landed. A target place outside the caller's location read scope is a
+own route answers it with nothing landed. A target location outside the caller's location read scope is a
 non-disclosing 404, an unknown template (or named standard) a 404, and a request the template cannot
 satisfy a 422 naming why. The answer names what was created, by name and id, the standards it created
 from their templates (`standards_created`), and `to_attach`, the components that landed without an
@@ -949,7 +949,7 @@ frozen reading left out, and named by `is_instance`), all
 [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row), with
 **drift** (any observed instance disagreeing with want, so `false` with nothing declared) computed on
 read ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
-A place owns no observed sample, so a location's rows never carry `is`. An instance with **no
+A location owns no observed sample, so a location's rows never carry `is`. An instance with **no
 classifier** returns only its off-contract, calculated, observed and told rows. `PUT .../{property}` sets the instance's value from `{value}`, idempotently; the
 property need **not** be on the contract, but must exist in the catalog (422 otherwise).
 `DELETE .../{property}` clears it (204), falling back to the contract default or leaving the effective
@@ -1216,10 +1216,10 @@ Two properties are worth stating because they are easy to lose:
 
 - **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
   says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
-  what lets a grouping (by place, by standard, by vendor, by tag) be a mapper rather than a second
-  endpoint. Explore's outline of places is one such mapper (ADR-0137).
+  what lets a grouping (by location, by standard, by vendor, by tag) be a mapper rather than a second
+  endpoint. Explore's outline of locations is one such mapper (ADR-0137).
 - **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
-  place tree but not its components gets the shape of their fleet with no contents, and one with no
+  location tree but not its components gets the shape of their fleet with no contents, and one with no
   fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
   theirs to draw.
 

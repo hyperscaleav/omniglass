@@ -77,7 +77,7 @@ passive speaker, an analog microphone) have nothing to collect from and are not 
 `coverage.yaml` lists them as `passive`, each with how the fleet watches it instead (an amplifier
 channel's load, a DSP input's level), and a test refuses a passive product that has a driver. A service
 can be on the network with no driver, so the converse does not hold. A second test holds the lab's own
-fleet to the same accounting: every component the dev seed places (its simulator-only ones included) is
+fleet to the same accounting: every component the dev seed lands (its simulator-only ones included) is
 simulated, listed with its issue, or passive; a component with no product is refused, since nothing
 could simulate it (#1359, #1368).
 The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
@@ -423,7 +423,7 @@ Beside those, the fixture's simulated endpoints wire the rest:
   seeded 5% of them each way).
 - **The webhooks**: the UCC platform's webhook endpoint (`ucc-webhook`),
   which the simulator subscribes the platform to ([below](#a-simulated-service-posts-from-the-start)).
-- **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
+- **Every collection method healthy on one location** (#1370): the HQ boardroom runs the three drivers
   the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
   9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
   behind its sign-in form (`newtron-panel-web`); the healthy twins of the ssh and telnet faults (the
@@ -653,7 +653,7 @@ piece is the ordinary create with the caller's own scope and audit row. The simu
 components from its next pull. The plan and the write are the **planned-system primitive** a
 [system template](/architecture/templates/) also builds on: the pure planner
 (`internal/systemplan`) takes each role's candidate products as an input (here the products the
-simulator serves), and the planned create (`storage.CreatePlan`) lands places, systems, their
+simulator serves), and the planned create (`storage.CreatePlan`) lands locations, systems, their
 components, endpoints, declared values and role assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
 fleet manifests are retired (#914), and a scale lab scenario is the same standards-plus-counts
 ([fleets](#fleets)). The standard is the archetype

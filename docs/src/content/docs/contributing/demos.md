@@ -148,7 +148,7 @@ Write it the way an operator would work:
   the console shows in answer (the drawer open, the tooltip shown, the row added, the status changed). That wait is
   the assertion that makes the walkthrough a test.
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
-  (component, place, system), short enough to read in the caption bar.
+  (component, location, system), short enough to read in the caption bar.
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
   poster, the still that stands for the whole flow (the docs video's poster frame, and the PR
   comment's still below its animated preview); without it the last step is the poster.

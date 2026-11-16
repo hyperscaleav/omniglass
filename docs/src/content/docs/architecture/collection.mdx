@@ -779,7 +779,7 @@ read it.
 **Auth is the session block's scheme.** `session.credential` names the secret input and
 `session.scheme` says how it rides every request: `basic` (a `basic-auth` username and password),
 `bearer` (a `bearer-token`), `api-key` (an `api-key`, in a header or a query parameter as the
-driver's `session.api_key` places and names it), or `digest` (a `basic-auth` username and
+driver's `session.api_key` puts and names it), or `digest` (a `basic-auth` username and
 password, [below](#logging-in-over-http)). The credential is written only into the outgoing
 request: no error, reason, label or log line carries it, a query key is masked in every URL the node
 names, and a component's text is scrubbed of it before it reaches a reason.
@@ -1504,7 +1504,7 @@ component per described entity
   there are; an identity is held to the engine's bounds again on the server (non-empty, at most 256
   bytes, no control character) before it reaches a read or the inbox.
 
-The design's cascade-scoped index (an identity declared at a place or a system binding every member
+The design's cascade-scoped index (an identity declared at a location or a system binding every member
 below it) and its fallback to an observed identity sample are not built: each would widen who can
 place a value on an owner without the conduit end's consent (ADR-1282, point 8). An event rule over a
 fanned key judges it on its owner like any of the owner's samples; a system owner's rule waits on
@@ -1529,7 +1529,7 @@ one owner, a system or a component
 ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 The match key is a registered property type (`ucc-room-id`), so every driver reporting that kind of
 identity shares one name, and the value is what the conduit reports (`R-415A`). One identity on one
-conduit has one owner; the same value on another conduit is another binding. A place or a node is no
+conduit has one owner; the same value on another conduit is another binding. A location or a node is no
 owner: neither owns an observed sample
 ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 The conduit is never its own identity's owner: a value it reports with no identity already lands on

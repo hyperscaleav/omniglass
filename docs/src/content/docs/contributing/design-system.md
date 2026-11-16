@@ -71,16 +71,16 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   container queries rather than the window's, since the sidebar and the blade take their share
   first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
   where healthy wears a muted green beside the full trouble hues (ADR-0154).
-- **A detail view is one per system, its place as context.** Systems are the unit; places are
+- **A detail view is one per system, its location as context.** Systems are the unit; locations are
   folders and metadata; components are pieces of systems (#872). A system's view
-  (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
+  (`pages/SystemZoom.tsx`) is a `LocationCard` (the location's type, tags and its own panel, never its
   name when the view is already titled by it) above the subject card (an eyebrow, the verdict, the
-  facts said once) with its `TabRail` inside. A place holding exactly one system lands on it
-  (`lib/detail.ts` `landingFor`), and its place configures in a second `ConfigureFace` on the
-system's Configure tab, answering its own edit intent (`useEditParam`'s `value`, `edit=place`);
-a place holding none or several renders its own subject card,
+  facts said once) with its `TabRail` inside. A location holding exactly one system lands on it
+  (`lib/detail.ts` `landingFor`), and its location configures in a second `ConfigureFace` on the
+system's Configure tab, answering its own edit intent (`useEditParam`'s `value`, `edit=location`);
+a location holding none or several renders its own subject card,
   with a `SystemSummary` per system and `OutlineWorkspace` rooted at it. A component's view wears
-  the `PlaceCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
+  the `LocationCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
   states for all three. A system's components render as `MemberRows`, the outline's row idiom on
   its own grid, a role grouped only where it says something a column cannot. There is no counts
   line above a detail view: the subject card's header carries its facts. A list whose items hold
@@ -90,12 +90,12 @@ a place holding none or several renders its own subject card,
   with verdict, since and why (severity first), then the context the operator came for, then the
   form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
   title and the form drops its Label row; a room holding one system is that system
-  (`lib/detail.ts` `isRoomOf`), so its `PlaceCard` names no place and offers no second panel, and a
-  component in such a room shows no place card beside the system it serves. A blade has no
-  breadcrumb, so its `PlaceCard` takes `path` and says where the place sits. `EntityForm` with `host="blade"` leaves out the
+  (`lib/detail.ts` `isRoomOf`), so its `LocationCard` names no location and offers no second panel, and a
+  component in such a room shows no location card beside the system it serves. A blade has no
+  breadcrumb, so its `LocationCard` takes `path` and says where the location sits. `EntityForm` with `host="blade"` leaves out the
   kind's configuration panels (roles, properties, reconciliation, endpoints), which the detail
   view's Configure tab carries, and a system's or component's placement, which the panel's
-  place card already says.
+  location card already says.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
   is what lets the identifier grow into a wide screen. It also made Name the first column to give up

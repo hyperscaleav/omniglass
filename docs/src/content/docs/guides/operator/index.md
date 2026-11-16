@@ -20,9 +20,9 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - **[Sign in and your profile](/guides/operator/sign-in/)**: getting in with a password or a
   bearer token, and managing your own label, picture, and password.
-- **[Explore your fleet](/guides/operator/fleet/)**: the outline of every place, the systems
+- **[Explore your fleet](/guides/operator/fleet/)**: the outline of every location, the systems
   that sit there and what is in them; finding one thing with the chip filter; and the
-  detail view each system opens, with its place as context.
+  detail view each system opens, with its location as context.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
 - **[Your inbox and alarm subscriptions](/guides/operator/notifications/)**: the alarms you are

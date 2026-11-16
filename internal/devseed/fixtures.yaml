@@ -43,7 +43,7 @@
 # root. There is no root location and no "bind this to every location", so a
 # binding at hq covers hq and nothing else, and a fourth site added next year
 # starts uncovered. The install-wide `platform` tier is the only rung that reaches
-# all of them, which is why the seed places devices under two different tops (see
+# all of them, which is why the seed puts devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
 # like it covered the fleet.
 #
@@ -64,13 +64,13 @@ locations:
     label: Headquarters
     type: campus
   # Pinned: the name is a bearing, the label is the building. `west` renders
-  # "West", which is a direction rather than a place.
+  # "West", which is a direction rather than a location.
   - key: west
     name: west
     label: West Building
     type: building
     parent: hq
-  # A floor is named by the operator, like every other place here. It carried
+  # A floor is named by the operator, like every other location here. It carried
   # the fleet's one generated location name for two slices, `1`, under a
   # positional `floor` rule; ADR-0103 reversed that, because a floor's
   # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
@@ -123,7 +123,7 @@ locations:
 
   # East Campus: a second site.
   #
-  # Pinned for the reason `west` is: a bearing is not a place.
+  # Pinned for the reason `west` is: a bearing is not a location.
   - key: east
     name: east
     label: East Campus
@@ -2193,7 +2193,7 @@ sim_endpoints:
   - component: huddle-touch
     driver: newtron-nvp-udp
     label: Panel over UDP
-  # A changed host key worth showing (#1078). The briefing place's touch panel
+  # A changed host key worth showing (#1078). The briefing location's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it
   # was reimaged. The simulated panel's own key never matches it: a live node refuses the connection before
@@ -2222,7 +2222,7 @@ sim_endpoints:
     planted_fault: the endpoint names a community the panel's agent refuses
 
 
-  # Every collection method healthy on one place (#1370): the HQ boardroom
+  # Every collection method healthy on one location (#1370): the HQ boardroom
   # runs each driver and transport the planted faults above break, and the
   # three drivers the rest of the fleet never attaches, beside the defaults
   # its components already carry (the bar's https API, the panel's NVP over
@@ -2295,8 +2295,8 @@ sim_identity_bindings:
 # The fleet's outside actors (#1370, #1743), declared as a scale scenario
 # declares its pushers: each an emulator device of a profile with a push
 # face. The booking service is a scheduling platform's integration that
-# posts a place's bookings (booking-count, booking-state) to POST
-# /telemetry:push, owned by the place's system. Its principal holds
+# posts a location's bookings (booking-count, booking-state) to POST
+# /telemetry:push, owned by the location's system. Its principal holds
 # telemetry:push alone, scoped to its systems, so it can push nowhere else
 # and read nothing. The lab mints its token on every run, as it does the
 # node's, and the emulator beside the node pushes with it. A push has no

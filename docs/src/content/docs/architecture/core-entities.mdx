@@ -87,7 +87,7 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   `component.product_id`. Operators add components **to a system**: membership is how a component
   belongs ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing)).
 - A **location** is the **physical** grouping: where things sit, in the customer's own tree, and
-  how support and asset tracking go and find a box on site. It ties systems and components to a place, classified by `location_type`, its
+  how support and asset tracking go and find a box on site. It ties systems and components to a location, classified by `location_type`, its
   only shape-definer (no template). A starter type set ships seeded and platform-owned, an
   operator's change to one held as a fork over it
   ([the seed model](#the-seed-model-templates-versus-canonical-catalogs)), read at
@@ -101,27 +101,27 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   endpoints, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner** of its own self-health telemetry and node-owned alarms.
 
-Where a place holds exactly one system, the two groupings coincide and the console shows them as
+Where a location holds exactly one system, the two groupings coincide and the console shows them as
 one thing (ADR-0139): Conference Room 123 is its system, and its components are a drill-down inside
-it. A place holding several systems, or none, remains a place of its own.
+it. A location holding several systems, or none, remains a location of its own.
 
-::::design[Target design: systems and places (ADR-0140), tracked in #876, #877, #878, #879]
+::::design[Target design: systems and locations (ADR-0140), tracked in #876, #877, #878, #879]
 Built today: a system's location is optional, a component's location is only what was explicitly
 set (nothing defaults it, and moving a system leaves its components behind), and system nesting
 exists in storage with no console surface. ADR-0140 settles the model:
 
-- **Every system has a place** ([#876](https://github.com/hyperscaleav/omniglass/issues/876)): the
-  deepest place that spans everything it needs. Existing placeless systems backfill to the deepest
-  place containing their members, else the root.
-- **A system's place bounds its components and subsystems**
-  ([#877](https://github.com/hyperscaleav/omniglass/issues/877)): a component's own place must be at
-  or below its **primary** system's place (a secondary membership, such as a shared head-end serving
-  a subsystem, does not constrain it), and a subsystem's place at or below its parent's. A system
+- **Every system has a location** ([#876](https://github.com/hyperscaleav/omniglass/issues/876)): the
+  deepest location that spans everything it needs. Existing placeless systems backfill to the deepest
+  location containing their members, else the root.
+- **A system's location bounds its components and subsystems**
+  ([#877](https://github.com/hyperscaleav/omniglass/issues/877)): a component's own location must be at
+  or below its **primary** system's location (a secondary membership, such as a shared head-end serving
+  a subsystem, does not constrain it), and a subsystem's location at or below its parent's. A system
   move that would strand an explicitly placed primary member is refused, naming it.
-- **A component's place is inherited from its primary system unless set**
-  ([#878](https://github.com/hyperscaleav/omniglass/issues/878)): its effective place is derived at
+- **A component's location is inherited from its primary system unless set**
+  ([#878](https://github.com/hyperscaleav/omniglass/issues/878)): its effective location is derived at
   read time, never copied, so moving a system carries its inherited components with it. Every reader
-  that means "where is this component" reads the effective place.
+  that means "where is this component" reads the effective location.
 - **Systems group into systems** ([#879](https://github.com/hyperscaleav/omniglass/issues/879)): a
   divisible hall is one system holding the shared head-end, with a subsystem per room it splits into.
 
@@ -156,7 +156,7 @@ least-specific tier, **`platform`**
 |---|---|
 | `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape, required |
 | `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
-| `location` | a place tree; no template (the `location_type` is the only shape-definer) |
+| `location` | a location tree; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
 
 The column mechanics render from the generated schema facts:
@@ -182,7 +182,7 @@ The column mechanics render from the generated schema facts:
 <SchemaTable
   table="location"
   notes={{
-    parent_id: 'The self-referencing place tree; the forest has N unparented tops',
+    parent_id: 'The self-referencing location tree; the forest has N unparented tops',
     type: 'The location_type, the only shape-definer a location has',
   }}
 />
@@ -531,7 +531,7 @@ Shipped content is two kinds, never conflated:
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
   `product`) ride that path today, and `location_type` joined them in
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
-  a fleet still shapes its own place vocabulary, through the
+  a fleet still shapes its own location vocabulary, through the
   [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
   rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
@@ -662,7 +662,7 @@ This makes **system- and node-level samples first-class** (`health` is a `proper
 beside what a system calc rule derives and what a push reports for the system as a whole; a node's
 self-health is owned by the node); fleet-wide samples owned by `global` are the designed extension. A
 location owns its declared properties and calculated health and no observed sample: nothing collects or pushes telemetry for a
-place ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). The **owner** gives a recorded [health](/architecture/health/) verdict its level:
+location ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). The **owner** gives a recorded [health](/architecture/health/) verdict its level:
 component, system, and location each own a transition series under the same `health` property name. The same
 arc owns the `event` rows a sample produces, and is the design for `alarm` (component-local today),
 so a system-owned sample will yield a system-owned alarm. The full pattern and DDL are on
@@ -996,7 +996,7 @@ at a `component_type` chain, one hop further still, so two products under one ty
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
 `location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names
 every location of that type, and there is no boolean beside it for the two to disagree about. **No
-shipped place type carries one**, so a shipped fleet names every location by hand: a campus, a
+shipped location type carries one**, so a shipped fleet names every location by hand: a campus, a
 building, a floor and a room each have a real-world name an operator holds, and `17c` is ground truth
 rather than a default.
 
@@ -1138,17 +1138,17 @@ how many of a thing there are. The cost is that a rule cannot render "Boardroom 
 `boardroom`; the [decision log](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
 records why that is a feature.
 
-That key is what the **shipped global rule for systems** reads, after the place and whether the
-place is shared:
+That key is what the **shipped global rule for systems** reads, after the location and whether the
+location is shared:
 `{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}`.
-A system is the logical group of components that makes a place work, and nearly every room holds
-exactly one, so it reads as the place it monitors: "Briefing Room", not its kind of space read back
-under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context)). The kind and the standard are attributes
-beside the label. A place holding **several** systems names each one's kind after the place
+A system is the logical group of components that makes a location work, and nearly every room holds
+exactly one, so it reads as the location it monitors: "Briefing Room", not its kind of space read back
+under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-location-a-card-of-context)). The kind and the standard are attributes
+beside the label. A location holding **several** systems names each one's kind after the location
 (`SharesLocation`): "Media Lab Meeting Room" beside "Media Lab Signage", an unclassified one naming
 itself ("Media Lab Lobby Wall"), and two of one kind told apart by the ordinal their names carry
 ("Room A Boardroom", "Room A Boardroom 2"). The siblings restamp in the write that changes the
-count: a create, a move (both places), a delete. A system with no place reads its kind and ordinal,
+count: a create, a move (both locations), a delete. A system with no location reads its kind and ordinal,
 as every system did before. The same restamps-nothing rule applies as for locations: a fleet that already exists keeps
 its labels until an operator runs `:previewLabels` and `:recomputeLabels` on systems.
 

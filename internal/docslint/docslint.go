@@ -384,15 +384,15 @@ var retiredIdentifiers = []BannedTerm{
 		// as the bare word, the wire names it carried (place_template, the
 		// rule fact, ?edit=place) with it, because the noun has too many
 		// phrasings to list. Allow carries the English that keeps the word:
-		// the idioms (in place, the one place, earns its place, decimal
-		// places), the verb before its object or after a modal, and "no
-		// binding places", where the identity verb is the collection term.
-		// Placed and placement never match: the boundary sits after place.
+		// the idioms (in place, in its place, in-place, the one place, earns
+		// its place, decimal places), the verb before its object or after a
+		// modal, and "no binding places", where the identity verb is the
+		// collection term. Placed and placement never match: the boundary sits after place.
 		Pattern:     regexp.MustCompile(`(?i)\bplace_templates?\b|\bplaces?\b`),
 		Replacement: "location (the entity: a location, the location card, a subtree of locations, location_template)",
 		Origin:      "ADR-2030",
 		Allow: regexp.MustCompile(`(?i)` +
-			`\bin (?:the first |one |two |both |several |many |N |the same |the right |the wrong )?places?\b|` +
+			`\bin (?:the first |one |two |both |several |many |N |the same |the right |the wrong |its |their )?places?\b|\bin-place\b|` +
 			`\bthe (?:one|only|same|first|last|right|wrong|second) place\b|` +
 			`\b(?:earns?|earned|keeps?|kept|takes?|took|taking) (?:its |your |their |a |the )?place\b|` +
 			`\bdecimal places?\b|\bN[- ]places?\b|\bre-places?\b|\bplaces? (?:to|for) [a-z]|` +

@@ -395,6 +395,8 @@ func TestADR2030PlaceAsANounFires(t *testing.T) {
 		"is not a number in the first place",
 		"both end up in the same place",
 		"an identity no binding places lands in the inbox",
+		"something in the middle answering in its place",
+		"the fix-an-endpoint-in-place walkthrough",
 	} {
 		if fires(line) {
 			t.Errorf("legitimate English fired: %q", line)

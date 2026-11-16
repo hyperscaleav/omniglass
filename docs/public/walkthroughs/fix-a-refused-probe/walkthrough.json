@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This place's system. Its touch panel fills the touch-control role, and a node collects it.",
+      "caption": "This location's system. Its touch panel fills the touch-control role, and a node collects it.",
       "still": "step-01.png"
     },
     {
@@ -73,8 +73,8 @@
   "poster": "step-11.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 36.1,
-    "bytes": 647584,
-    "previewBytes": 458098
+    "seconds": 39.3,
+    "bytes": 695643,
+    "previewBytes": 484684
   }
 }

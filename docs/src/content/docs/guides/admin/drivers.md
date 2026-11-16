@@ -147,7 +147,7 @@ key offered is trusted, any other refused) or `skip` (nothing is checked). The d
 default, as the official `newtron-nvp-tls` declares `pin` for gear that signs its own certificate; a
 driver that declares no `tls-mode` input verifies; and a spec that defaults it to `skip` refuses at
 write, since skipping verification is only ever an operator's choice. An operator edits the mode in
-place on the endpoint like any input, which moves its connection fingerprint, so a session a
+location on the endpoint like any input, which moves its connection fingerprint, so a session a
 certificate refused tries again under the new mode with no retry. A refused certificate reads
 `rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
 both keys and `omniglass endpoint retry <component>/tls --certificate <the offered key>` trusts the new one.

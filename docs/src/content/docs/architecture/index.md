@@ -23,7 +23,7 @@ badge is the page's floor. The per-capability breakdown lives on
 [decision log](/architecture/decisions/); the epics and the arc ahead are indexed on the
 [roadmap](/architecture/roadmap/). Unbuilt prose inside a page sits in a marked **design fence**,
 and the pages that are *entirely* unbuilt live in the sidebar's own **Design sketches** group, a
-working queue that empties as subsystems land, so a page's place in the nav tells you whether any
+working queue that empties as subsystems land, so a page's position in the nav tells you whether any
 of it exists. Every prose architecture page is also published machine-readable at
 [/llms-full.txt](/llms-full.txt) (curated index: [/llms.txt](/llms.txt)); the interactive `.mdx`
 pages are not included.
@@ -38,7 +38,7 @@ Three nouns describe what you operate.
 - A **system** is a set of components that work together to do one job: a meeting room, a
   classroom, a broadcast chain. The word is deliberately universal: a system is the unit you
   actually care about, whatever shape it takes.
-- A **location** ties systems and components to a physical place (campus, building, floor, room).
+- A **location** ties systems and components to a physical location (campus, building, floor, room).
 
 ```d2
 direction: down

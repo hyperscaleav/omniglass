@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This place's system. Its touch panel fills no role, but a node collects it.",
+      "caption": "This location's system. Its touch panel fills no role, but a node collects it.",
       "still": "step-01.png"
     },
     {
@@ -61,8 +61,8 @@
   "poster": "step-09.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 35,
-    "bytes": 588737,
-    "previewBytes": 429392
+    "seconds": 35.1,
+    "bytes": 660894,
+    "previewBytes": 475188
   }
 }

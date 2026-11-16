@@ -162,7 +162,7 @@ describe("folding", () => {
     expect(hq.children.map((c) => c.chain[0].label)).toEqual(["Level 2", "Level 3"]);
   });
 
-  it("counts a folded child by the place it starts at, which is what its parent holds", () => {
+  it("counts a folded child by the location it starts at, which is what its parent holds", () => {
     // Level 2 holds one room and nothing else, so it folds into "Level 2 / Huddle".
     // West still holds two FLOORS, not a floor and a room.
     const o = buildOutline(input({

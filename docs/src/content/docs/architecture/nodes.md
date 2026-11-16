@@ -261,7 +261,7 @@ the node pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-worklist-
   - a path dependency added or removed: the nodes holding an in-band endpoint on both ends;
   - a component rename (or a name reset): the nodes carrying it as a path upstream by name. A move
     to a new parent names the nodes of every endpoint below it, whose component secrets now resolve
-    along another chain; a move to a new place names its own endpoints' nodes;
+    along another chain; a move to a new location names its own endpoints' nodes;
   - a location moved to a new parent: the nodes of every endpoint on a component placed in it or
     below it;
   - a platform settings write that moves `collection.report_seconds`, which every worklist carries:

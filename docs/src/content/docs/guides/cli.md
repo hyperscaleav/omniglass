@@ -615,7 +615,7 @@ create from first. Nothing points back at the template, so the standard is yours
 
 ### Create fleet entities from a template
 
-A component, a whole system, or a subtree of places is created from a template the same way, with the
+A component, a whole system, or a subtree of locations is created from a template the same way, with the
 same `createFromTemplate` command: name the
 template and where it lands. Everything lands in one write or not at all, and nothing points back at the
 template. `inputs` and `attach` take JSON:
