@@ -584,17 +584,6 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
-		Name:        "create-secret",
-		Title:       "Create a secret",
-		Description: "Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).",
-		Method:      "POST",
-		Path:        "/secrets",
-		Permission:  "secret:create",
-		BodyParams:  []string{"admin_sensitive", "fields", "label", "name", "owner", "owner_kind", "secret_type"},
-		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"admin_sensitive\":{\"description\":\"Admin-only visibility; omit to use the type default. Setting true requires the admin tier\",\"type\":\"boolean\"},\"fields\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"The operator field map, validated against the type shape\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists and pickers (Polling community); omit to fall back to the name\",\"maxLength\":200,\"type\":\"string\"},\"name\":{\"description\":\"The cascade name (lowercase letters, digits, and hyphens); unique per owner\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"owner\":{\"description\":\"The owning entity's name; omit for a platform secret\",\"type\":\"string\"},\"owner_kind\":{\"description\":\"Which tier owns this secret (the system band is retired, ADR-0052)\",\"enum\":[\"platform\",\"location\",\"component\"],\"type\":\"string\"},\"secret_type\":{\"description\":\"A secret_type id\",\"minLength\":1,\"type\":\"string\"}},\"required\":[\"fields\",\"name\",\"owner_kind\",\"secret_type\"],\"type\":\"object\"}",
-	},
-	{
 		Name:        "create-standard-from-template",
 		Title:       "Create a standard from a template",
 		Description: "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.",

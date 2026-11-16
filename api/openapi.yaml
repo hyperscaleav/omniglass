@@ -14039,6 +14039,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Log in with a username and password
+      x-omniglass-plaintext: true
   /auth/logout:
     post:
       description: Revokes the session token and clears the cookie. Public.
@@ -14486,6 +14487,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create one of your own API tokens
+      x-omniglass-plaintext: true
   /auth/me:changePassword:
     post:
       description: Verifies the current password and sets a new one. Requires authentication; self-scoped.
@@ -19148,6 +19150,7 @@ paths:
           description: Error
       summary: Mint a node's enrollment token
       x-omniglass-permission: node:enroll
+      x-omniglass-plaintext: true
   /nodes/{name}:listTags:
     get:
       description: Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
@@ -19273,6 +19276,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Claim a node identity in exchange for its NATS credential
+      x-omniglass-plaintext: true
   /notification-targets:
     get:
       description: "Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential."
@@ -19316,6 +19320,7 @@ paths:
           description: Error
       summary: Create a notification target
       x-omniglass-permission: notification_target:create
+      x-omniglass-plaintext: true
   /notification-targets/{name}:
     delete:
       description: Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
@@ -19397,6 +19402,7 @@ paths:
           description: Error
       summary: Update a notification target
       x-omniglass-permission: notification_target:update
+      x-omniglass-plaintext: true
   /notification-targets/{name}:reveal:
     post:
       description: Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
@@ -19424,6 +19430,7 @@ paths:
           description: Error
       summary: Reveal a notification target's URL
       x-omniglass-permission: notification_target:reveal
+      x-omniglass-plaintext: true
   /notification-targets/{name}:test:
     post:
       description: Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
@@ -20168,6 +20175,7 @@ paths:
           description: Error
       summary: Create a human principal
       x-omniglass-permission: principal:create
+      x-omniglass-plaintext: true
   /principals/{id}:
     get:
       description: Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
@@ -20581,6 +20589,7 @@ paths:
           description: Internal Server Error
       summary: Impersonate a principal (view-as or act-as)
       x-omniglass-permission: principal:impersonate
+      x-omniglass-plaintext: true
   /principals/{id}:purge:
     post:
       description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
@@ -20656,6 +20665,7 @@ paths:
           description: Error
       summary: Reset a principal's password
       x-omniglass-permission: principal:reset-password
+      x-omniglass-plaintext: true
   /principals/{id}:restore:
     post:
       description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
@@ -21317,8 +21327,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a secret
-      x-omniglass-mcp: {}
       x-omniglass-permission: secret:create
+      x-omniglass-plaintext: true
       x-omniglass-platform-permission: platform:create
   /secrets/{secret}:
     delete:
@@ -21380,6 +21390,7 @@ paths:
           description: Error
       summary: Update a secret
       x-omniglass-permission: secret:update
+      x-omniglass-plaintext: true
       x-omniglass-platform-permission: platform:update
   /secrets/{secret}:copy:
     post:
@@ -21410,6 +21421,7 @@ paths:
           description: Error
       summary: Decrypt a secret for clipboard copy
       x-omniglass-permission: secret:reveal
+      x-omniglass-plaintext: true
   /secrets/{secret}:reveal:
     post:
       description: Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
@@ -21439,6 +21451,7 @@ paths:
           description: Error
       summary: Reveal a secret's plaintext
       x-omniglass-permission: secret:reveal
+      x-omniglass-plaintext: true
   /settings:
     get:
       description: The effective settings document plus per-key provenance (which level won) and lock state. Gated by settings:read (admin).

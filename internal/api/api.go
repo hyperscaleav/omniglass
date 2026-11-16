@@ -245,6 +245,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 
 	huma.Register(api, huma.Operation{
 		OperationID:   "login",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/auth/login",
 		Summary:       "Log in with a username and password",
@@ -322,6 +323,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-auth-me-token",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/auth/me/tokens",
 		DefaultStatus: http.StatusCreated,

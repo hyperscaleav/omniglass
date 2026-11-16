@@ -213,6 +213,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-principal",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/principals",
 		DefaultStatus: http.StatusCreated,
@@ -409,6 +410,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "reset-principal-password",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/principals/{id}:resetPassword",
 		DefaultStatus: http.StatusNoContent,

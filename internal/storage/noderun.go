@@ -246,7 +246,9 @@ func choosePolls(sp *driver.Spec, names []string) ([]driver.Poll, error) {
 }
 
 // EndpointPoll is an attached endpoint's poll, resolved for a run now: the
-// endpoint, the node that holds it, and the poll's task.
+// endpoint, the node that holds it, and the poll's task. Sealed lists the
+// plaintext of every secret field the endpoint's worklist carries, which the
+// answer is masked of (the device may echo a credential back).
 type EndpointPoll struct {
 	EndpointID string
 	Endpoint   string
@@ -254,6 +256,7 @@ type EndpointPoll struct {
 	NodeName   string
 	TaskID     string
 	Poll       string
+	Sealed     []string
 }
 
 // PlanEndpointRun resolves the poll an operator asked to run now: the
@@ -317,5 +320,68 @@ func (p *PG) PlanEndpointRun(ctx context.Context, actorID, ref, poll string, rea
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit endpoint run: %w", err)
 	}
+	if run.Sealed, err = p.endpointSealed(ctx, ep); err != nil {
+		return nil, err
+	}
 	return run, nil
+}
+
+// endpointSealed is the plaintext of every secret field the endpoint's tasks
+// carry to its node: each secret input of its driver, resolved as the
+// worklist resolves it (cascading onto the endpoint's own component), and of
+// each, the fields its type marks secret. A reference that resolves to
+// nothing is absent here as it is on the worklist; a real failure (no key
+// provider, a DB error, an envelope that will not open) refuses the run,
+// since an answer that could not be masked must not be sent.
+func (p *PG) endpointSealed(ctx context.Context, ep *Endpoint) ([]string, error) {
+	if ep.DriverID == nil {
+		return nil, nil
+	}
+	var raw []byte
+	if err := p.pool.QueryRow(ctx, `select spec from driver where id = $1`, *ep.DriverID).Scan(&raw); err != nil {
+		return nil, fmt.Errorf("storage: endpoint %q driver spec: %w", ep.Name, err)
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	sp, err := driver.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint %q driver spec does not parse: %w", ep.Name, err)
+	}
+	refs, err := secretRefsFrom(sp, ep.Inputs)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint %q: %w", ep.Name, err)
+	}
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	cid := ""
+	if ep.ComponentID != nil {
+		cid = *ep.ComponentID
+	}
+	names := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		names = append(names, ref)
+	}
+	sort.Strings(names)
+	asks := make([]nodeSecretRef, len(names))
+	for i, name := range names {
+		asks[i] = nodeSecretRef{name, cid}
+	}
+	got, err := p.nodeSecrets(ctx, asks)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint %q unseal: %w", ep.Name, err)
+	}
+	var sealed []string
+	for _, g := range got {
+		if g.err != nil {
+			continue
+		}
+		for _, f := range g.shape.Fields {
+			if v := g.fields[f.Name]; f.Secret && v != "" {
+				sealed = append(sealed, v)
+			}
+		}
+	}
+	return sealed, nil
 }

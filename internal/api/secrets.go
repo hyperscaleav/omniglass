@@ -238,7 +238,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-secret",
-		Extensions:    mcpExposed(),
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,
@@ -268,6 +268,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPatch,
 		Path:        "/secrets/{secret}",
 		Summary:     "Update a secret",
@@ -302,6 +303,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "reveal-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/secrets/{secret}:reveal",
 		Summary:     "Reveal a secret's plaintext",
@@ -319,6 +321,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "copy-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/secrets/{secret}:copy",
 		Summary:     "Decrypt a secret for clipboard copy",

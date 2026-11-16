@@ -225,6 +225,8 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		if err != nil {
 			return nil, mapNodeRunErr(err)
 		}
+		// The node's refusal text can quote what the device said.
+		reply.Error = redact.Secrets(reply.Error, run.Sealed...)
 		switch {
 		case reply.Full:
 			return nil, huma.NewError(http.StatusTooManyRequests, reply.Error)
@@ -243,7 +245,7 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		}
 		out := &runEndpointPollOutput{}
 		out.Body.Endpoint, out.Body.Component, out.Body.Node, out.Body.Stored = run.Endpoint, run.Component, run.NodeName, true
-		res := pollRunOf(reply.Results[0], nil)
+		res := pollRunOf(reply.Results[0], run.Sealed)
 		out.Body.Poll, out.Body.Samples, out.Body.Faults, out.Body.TookMs = res.Poll, res.Samples, res.Faults, res.TookMs
 		return out, nil
 	})

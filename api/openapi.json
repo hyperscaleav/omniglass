@@ -18981,7 +18981,8 @@
             "description": "Internal Server Error"
           }
         },
-        "summary": "Log in with a username and password"
+        "summary": "Log in with a username and password",
+        "x-omniglass-plaintext": true
       }
     },
     "/auth/logout": {
@@ -19687,7 +19688,8 @@
             "description": "Error"
           }
         },
-        "summary": "Create one of your own API tokens"
+        "summary": "Create one of your own API tokens",
+        "x-omniglass-plaintext": true
       }
     },
     "/auth/me:changePassword": {
@@ -26871,7 +26873,8 @@
           }
         },
         "summary": "Mint a node's enrollment token",
-        "x-omniglass-permission": "node:enroll"
+        "x-omniglass-permission": "node:enroll",
+        "x-omniglass-plaintext": true
       }
     },
     "/nodes/{name}:listTags": {
@@ -27069,7 +27072,8 @@
             "description": "Internal Server Error"
           }
         },
-        "summary": "Claim a node identity in exchange for its NATS credential"
+        "summary": "Claim a node identity in exchange for its NATS credential",
+        "x-omniglass-plaintext": true
       }
     },
     "/notification-targets": {
@@ -27137,7 +27141,8 @@
           }
         },
         "summary": "Create a notification target",
-        "x-omniglass-permission": "notification_target:create"
+        "x-omniglass-permission": "notification_target:create",
+        "x-omniglass-plaintext": true
       }
     },
     "/notification-targets/{name}": {
@@ -27262,7 +27267,8 @@
           }
         },
         "summary": "Update a notification target",
-        "x-omniglass-permission": "notification_target:update"
+        "x-omniglass-permission": "notification_target:update",
+        "x-omniglass-plaintext": true
       }
     },
     "/notification-targets/{name}:reveal": {
@@ -27304,7 +27310,8 @@
           }
         },
         "summary": "Reveal a notification target's URL",
-        "x-omniglass-permission": "notification_target:reveal"
+        "x-omniglass-permission": "notification_target:reveal",
+        "x-omniglass-plaintext": true
       }
     },
     "/notification-targets/{name}:test": {
@@ -28450,7 +28457,8 @@
           }
         },
         "summary": "Create a human principal",
-        "x-omniglass-permission": "principal:create"
+        "x-omniglass-permission": "principal:create",
+        "x-omniglass-plaintext": true
       }
     },
     "/principals/{id}": {
@@ -29097,7 +29105,8 @@
           }
         },
         "summary": "Impersonate a principal (view-as or act-as)",
-        "x-omniglass-permission": "principal:impersonate"
+        "x-omniglass-permission": "principal:impersonate",
+        "x-omniglass-plaintext": true
       }
     },
     "/principals/{id}:purge": {
@@ -29212,7 +29221,8 @@
           }
         },
         "summary": "Reset a principal's password",
-        "x-omniglass-permission": "principal:reset-password"
+        "x-omniglass-permission": "principal:reset-password",
+        "x-omniglass-plaintext": true
       }
     },
     "/principals/{id}:restore": {
@@ -30236,8 +30246,8 @@
           }
         },
         "summary": "Create a secret",
-        "x-omniglass-mcp": {},
         "x-omniglass-permission": "secret:create",
+        "x-omniglass-plaintext": true,
         "x-omniglass-platform-permission": "platform:create"
       }
     },
@@ -30331,6 +30341,7 @@
         },
         "summary": "Update a secret",
         "x-omniglass-permission": "secret:update",
+        "x-omniglass-plaintext": true,
         "x-omniglass-platform-permission": "platform:update"
       }
     },
@@ -30376,7 +30387,8 @@
           }
         },
         "summary": "Decrypt a secret for clipboard copy",
-        "x-omniglass-permission": "secret:reveal"
+        "x-omniglass-permission": "secret:reveal",
+        "x-omniglass-plaintext": true
       }
     },
     "/secrets/{secret}:reveal": {
@@ -30421,7 +30433,8 @@
           }
         },
         "summary": "Reveal a secret's plaintext",
-        "x-omniglass-permission": "secret:reveal"
+        "x-omniglass-permission": "secret:reveal",
+        "x-omniglass-plaintext": true
       }
     },
     "/settings": {

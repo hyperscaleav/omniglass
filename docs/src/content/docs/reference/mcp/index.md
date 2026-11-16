@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-66 tools.
+65 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -77,7 +77,6 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
 | [`list-secrets`](#list-secrets) | List secrets | `secret:read` | read-only, idempotent |
-| [`create-secret`](#create-secret) | Create a secret | `secret:create` | adds |
 | [`create-standard-from-template`](#create-standard-from-template) | Create a standard from a template | `standard:create` | adds |
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
@@ -876,26 +875,6 @@ Lists the secrets the caller may see, with masked fields, filtered to the read s
 - Gate: `secret:read`
 - Assume: read-only, idempotent
 - Arguments: none
-
-## `create-secret`
-
-Create a secret
-
-Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
-
-- Route: `POST /api/v1/secrets`
-- Gate: `secret:create`
-- Assume: adds
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `admin_sensitive` | boolean | no | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
-| `fields` | object | yes | The operator field map, validated against the type shape |
-| `label` | string | no | What an operator reads in lists and pickers (Polling community); omit to fall back to the name |
-| `name` | string | yes | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
-| `owner` | string | no | The owning entity's name; omit for a platform secret |
-| `owner_kind` | string | yes | Which tier owns this secret (the system band is retired, ADR-0052) |
-| `secret_type` | string | yes | A secret_type id |
 
 ## `create-standard-from-template`
 

@@ -57,6 +57,29 @@ func TestAnnotateRefusesAContradiction(t *testing.T) {
 	}
 }
 
+// The credential-blind rule (#2025): a tool never hands its caller plaintext a
+// human must see. A reveal gate, at any tier, or the plaintext stamp is refused;
+// a read, a write and an authn-only route pass.
+func TestCredentialBlind(t *testing.T) {
+	for _, c := range []struct {
+		permission string
+		plaintext  bool
+		ok         bool
+	}{
+		{"alarm:read", false, true},
+		{"alarm:acknowledge", false, true},
+		{"", false, true},
+		{"secret:reveal", false, false},
+		{"notification_target:reveal:admin", false, false},
+		{"node:enroll", true, false},
+		{"", true, false},
+	} {
+		if err := tooldef.CredentialBlind(c.permission, c.plaintext); (err == nil) != c.ok {
+			t.Errorf("CredentialBlind(%q, %v) = %v, want ok %v", c.permission, c.plaintext, err, c.ok)
+		}
+	}
+}
+
 // A stamp is parsed strictly: the only keys are the caution hints, so a stamp
 // cannot declare a mutating operation read-only, or anything else the rule does
 // not know.

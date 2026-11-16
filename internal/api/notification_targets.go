@@ -163,6 +163,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-notification-target",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/notification-targets",
 		DefaultStatus: http.StatusCreated,
@@ -181,6 +182,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-notification-target",
+		Extensions:  plaintext(),
 		Method:      http.MethodPatch,
 		Path:        "/notification-targets/{name}",
 		Summary:     "Update a notification target",
@@ -211,6 +213,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "reveal-notification-target",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/notification-targets/{name}:reveal",
 		Summary:     "Reveal a notification target's URL",
