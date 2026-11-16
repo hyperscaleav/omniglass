@@ -22,7 +22,7 @@ func TestObservedUDPDatagramAnsweredAndWithheld(t *testing.T) {
 	if got := c.recv(2 * time.Second); got != "INPUT hdmi1" {
 		t.Fatalf("GET INPUT = %q", got)
 	}
-	got := observedEventually(t, d, "udp", func(c ObservationCounters) bool { return c.Settled() == 1 })
+	got := observedEventually(t, d, "udp", func(c ObservationCounters) bool { return c.Settled() == 1 && c.InFlight == 0 })
 	if got.Received != 1 || got.Answered != 1 || got.InFlight != 0 {
 		t.Fatalf("one answered datagram = %+v", got)
 	}

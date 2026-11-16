@@ -216,7 +216,11 @@ func (d *deviceObservation) begin(p obsProtocol, f *faceObservation) obsToken {
 	return obsToken{row: row, eng: eng, face: f, start: now}
 }
 
-// end settles the request with its outcome.
+// end settles the request with its outcome. The outcome is counted before in
+// flight is lowered, as the collector's request tally does: a read between the
+// two sees the request in both, which the closed loop's unsettled residual
+// (received - settled - in flight) reads as masked, never as lost. A reader
+// that needs it settled and gone waits for both.
 func (t obsToken) end(out Outcome) {
 	if t.row == nil {
 		return
