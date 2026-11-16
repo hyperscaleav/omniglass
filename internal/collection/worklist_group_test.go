@@ -112,7 +112,7 @@ func TestATaskNamingAMissingEntryDoesNotDecode(t *testing.T) {
 func TestEveryTaskFieldRoundTripsThroughTheGroupedWire(t *testing.T) {
 	task := TaskSpec{ID: "a", Mode: "poll", EndpointID: "e", EndpointName: "ssh", Transport: "ssh",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.1:22"}`), Spec: json.RawMessage(`{"get":"show"}`),
-		Secrets: map[string]map[string]string{"login": {"user": "admin"}}, Session: &driver.SessionSpec{Credential: "login"},
+		Secrets: map[string]map[string]string{"login": {"user": "admin"}}, Mask: []string{"pw"}, Session: &driver.SessionSpec{Credential: "login"},
 		SessionRetry: 2, HostKey: "ssh-ed25519 AAAA", CertificatePin: "SHA256:pin", Fingerprint: "fp",
 		Rejection: "credential-rejected", Ladder: &driver.EffectiveLadder{Ping: true}, ComponentID: "c",
 		PathUpstreams: []PathUpstream{{ComponentID: "u", ComponentName: "switch", EndpointIDs: []string{"e-u"}}}}

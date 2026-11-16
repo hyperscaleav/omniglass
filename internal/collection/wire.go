@@ -93,6 +93,11 @@ type TaskSpec struct {
 	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
 	Spec           json.RawMessage              `json:"spec,omitempty"`
 	Secrets        map[string]map[string]string `json:"secrets,omitempty"`
+	// Mask is the plaintext of each field of Secrets its secret type marks
+	// secret: what the node masks out of everything the task collects
+	// before it publishes, so a component echoing its credential back never
+	// puts it on the stream.
+	Mask []string `json:"mask,omitempty"`
 	// Session is the endpoint's driver's session block (#1049): its auth
 	// step, terminal replies and re-probe, read off the live driver spec.
 	Session *driver.SessionSpec `json:"session,omitempty"`

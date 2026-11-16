@@ -159,7 +159,8 @@ type telemetrySpool struct {
 	tally      *collection.RequestTally            // counts each batch acknowledged or dropped (#1639); nil counts nothing
 
 	mu         sync.Mutex
-	queue      []spooledBatch // queue[:sent] are with the stream: never dropped
+	masks      map[string][]string // each task's secrets, masked out of its groups (setMasks)
+	queue      []spooledBatch      // queue[:sent] are with the stream: never dropped
 	sent       int
 	bytes      int
 	shipping   bool                  // a shipper goroutine is running
@@ -197,6 +198,10 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	if groupEmpty(g) {
 		return nil
 	}
+	s.mu.Lock()
+	mask := s.masks[g.GetTaskId()]
+	s.mu.Unlock()
+	maskGroup(g, mask)
 	stampGroupMillis(g)
 	b, err := proto.Marshal(g)
 	if err != nil {
@@ -668,4 +673,19 @@ func (s *telemetrySpool) takeOverflow() bool {
 	o := s.overflowed
 	s.overflowed = false
 	return o
+}
+
+// setMasks takes the worklist's tasks: from here on a group of each is masked
+// of the task's secrets (taskMask) before it is queued. A task the worklist
+// no longer carries is masked of nothing, as it collects nothing.
+func (s *telemetrySpool) setMasks(tasks []collection.TaskSpec) {
+	masks := make(map[string][]string, len(tasks))
+	for _, t := range tasks {
+		if m := taskMask(t); len(m) > 0 {
+			masks[t.ID] = m
+		}
+	}
+	s.mu.Lock()
+	s.masks = masks
+	s.mu.Unlock()
 }

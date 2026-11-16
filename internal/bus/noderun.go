@@ -103,6 +103,7 @@ func taskSpecOf(t storage.WorklistTask) collection.TaskSpec {
 		EndpointParams: t.EndpointParams,
 		Spec:           t.Spec,
 		Secrets:        t.Secrets,
+		Mask:           t.Mask,
 		Session:        t.Session,
 		SessionRetry:   t.SessionRetry,
 		HostKey:        t.HostKey,

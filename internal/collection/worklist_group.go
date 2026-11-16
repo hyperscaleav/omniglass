@@ -21,6 +21,7 @@ type worklistWire struct {
 	Specs            []json.RawMessage              `json:"specs,omitempty"`
 	Sessions         []*driver.SessionSpec          `json:"sessions,omitempty"`
 	Secrets          []map[string]map[string]string `json:"secrets,omitempty"`
+	Masks            [][]string                     `json:"masks,omitempty"`
 	ConfigGeneration int64                          `json:"config_generation"`
 	ReportSeconds    int                            `json:"report_seconds,omitempty"`
 }
@@ -49,7 +50,7 @@ type endpointFields struct {
 	PathUpstreams  []PathUpstream          `json:"path_upstreams,omitempty"`
 }
 
-// taskWire is one task of a group. Spec, Session and Secrets name an entry of
+// taskWire is one task of a group. Spec, Session, Secrets and Mask name an entry of
 // the reply's dictionary of that name, counted from 1, so 0 (left off the
 // wire) is none: a probe carries no session block.
 type taskWire struct {
@@ -58,6 +59,7 @@ type taskWire struct {
 	Spec    int    `json:"spec,omitempty"`
 	Session int    `json:"session,omitempty"`
 	Secrets int    `json:"secrets,omitempty"`
+	Mask    int    `json:"mask,omitempty"`
 }
 
 // endpointFieldsOf is a task's endpoint fields, an empty list or params read
@@ -112,6 +114,7 @@ func groupWorklist(w WorklistReply) (worklistWire, error) {
 	var specs dictionary[json.RawMessage]
 	var sessions dictionary[*driver.SessionSpec]
 	var secrets dictionary[map[string]map[string]string]
+	var masks dictionary[[]string]
 	groupsOf := map[string][]int{} // endpoint id -> its groups' indexes
 	for _, t := range w.Tasks {
 		f := endpointFieldsOf(t)
@@ -142,9 +145,14 @@ func groupWorklist(w WorklistReply) (worklistWire, error) {
 				return worklistWire{}, fmt.Errorf("collection: task %s secrets: %w", t.ID, err)
 			}
 		}
+		if len(t.Mask) > 0 {
+			if tw.Mask, err = refEncoded(&masks, t.Mask); err != nil {
+				return worklistWire{}, fmt.Errorf("collection: task %s mask: %w", t.ID, err)
+			}
+		}
 		out.Endpoints[g].Tasks = append(out.Endpoints[g].Tasks, tw)
 	}
-	out.Specs, out.Sessions, out.Secrets = specs.values, sessions.values, secrets.values
+	out.Specs, out.Sessions, out.Secrets, out.Masks = specs.values, sessions.values, secrets.values, masks.values
 	return out, nil
 }
 
@@ -187,6 +195,9 @@ func ungroupWorklist(in worklistWire) (WorklistReply, error) {
 				return WorklistReply{}, err
 			}
 			if t.Secrets, err = entry(in.Secrets, tw.Secrets, "secrets", tw.ID); err != nil {
+				return WorklistReply{}, err
+			}
+			if t.Mask, err = entry(in.Masks, tw.Mask, "mask", tw.ID); err != nil {
 				return WorklistReply{}, err
 			}
 			out.Tasks = append(out.Tasks, t)

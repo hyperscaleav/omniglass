@@ -90,6 +90,9 @@ type WorklistTask struct {
 	EndpointParams []byte
 	Spec           []byte
 	Secrets        map[string]map[string]string
+	// Mask is the plaintext of each secret-marked field of Secrets, which the
+	// node masks out of what the task collects before it publishes.
+	Mask []string
 	// Session is the driver's session block (#1049), read off the live
 	// spec: the auth step, terminal replies and re-probe a held session
 	// runs. Nil for a driver that declares none and for non-driver tasks.
@@ -651,6 +654,11 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 				wl.Tasks[idx].Secrets = map[string]map[string]string{}
 			}
 			wl.Tasks[idx].Secrets[r.input] = got.fields
+			for _, f := range got.shape.Fields {
+				if v := got.fields[f.Name]; f.Secret && v != "" {
+					wl.Tasks[idx].Mask = append(wl.Tasks[idx].Mask, v)
+				}
+			}
 		}
 	}
 	// An ssh task's host key pin (#1032), and a tls task's public key pin

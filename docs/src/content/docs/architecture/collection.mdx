@@ -1671,7 +1671,14 @@ still lands; a failed fetch lands nothing; every fault is a `collection-failed` 
 task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
 reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions and the
+delivered as absence, which the node reports as the missing credential. The reply also names
+each task's **mask**: the values of the fields its secrets' types mark secret (a password, a
+community, never a username). Before a collected group is queued, the node masks those values,
+and the forms an http credential takes on the wire (a basic authorization's base64), out of every
+string the group carries on every lane: a property's value, a label, an identity, an event's
+message and payload, a log line's text and attributes. A JSON payload is masked string by string,
+so it stays the JSON it was. A component that echoes its credential back never puts it on the
+stream, in storage, or on a read. Sessions and the
 listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
