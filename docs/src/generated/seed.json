@@ -4395,6 +4395,13 @@
    "exemption": "no rule yet, #1982"
   },
   {
+   "key": "rule-sweep-age",
+   "group": "Queues",
+   "rules": [
+    "rule-sweep-stalled"
+   ]
+  },
+  {
    "key": "retention-behind",
    "group": "Retention",
    "rules": [
