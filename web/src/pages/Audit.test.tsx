@@ -63,6 +63,20 @@ describe("Audit page", () => {
     expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
   });
 
+  // A first page longer than the skeleton must not push the footer down the
+  // page (#1461): the rows scroll inside the card, the footer stays below them.
+  it("scrolls the rows inside the list, the footer pinned outside that region", async () => {
+    render(() => <Audit />);
+    const table = (await screen.findByText("login")).closest("table")!;
+    const region = table.parentElement!;
+    expect(region.classList.contains("overflow-y-auto")).toBe(true);
+    expect(region.contains(screen.getByText("No older events"))).toBe(false);
+    // The document scrolls, not the shell, so the list only fills a box with a
+    // definite height: without one it grows with its rows and the footer moves.
+    const shell = table.closest(".og-stack")!;
+    expect(shell.parentElement!.className).toMatch(/\bh-\[calc\(100dvh/);
+  });
+
   it("renders events with actor, verb, and resource", async () => {
     const { findByText, getByText } = render(() => <Audit />);
     expect(await findByText("login")).toBeTruthy();
