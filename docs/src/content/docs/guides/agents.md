@@ -170,7 +170,7 @@ endpoints, metrics and logs, it covers the triage loop:
 - **Read the rules behind it.** `list-event-rule`, `get-event-rule`, `get-event-rule-state`,
   `preview-event-rule`, the same four for calc rules, `validate-expression` and `list-event-type`.
   Writing a rule is not a tool.
-- **Fix the component, its tags or its place.** `update-component`, `list-component-tags`,
+- **Fix the component, its tags or its location.** `update-component`, `list-component-tags`,
   `set-component-tag`, `remove-component-tag` and `effective-tags`; `create-location`,
   `update-location`, `list-location-metrics` and `list-location-properties`; `update-system`,
   `list-system-members`, `add-system-member`, `list-system-metrics`, `list-system-properties` and
