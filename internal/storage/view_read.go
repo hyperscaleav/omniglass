@@ -183,6 +183,21 @@ func (p *PG) ResolveViewEntities(ctx context.Context, b ViewBinding) ([]ViewEnti
 	return p.resolveViewEntities(ctx, p.pool, b)
 }
 
+// viewOpenEnd is the upper bound an open-ended range's raw rows read to: an
+// open range (no to) has none in history, as it has none on the tail, so a
+// row stamped ahead of the server's clock that landed before the cursor is in
+// the history rather than in neither (ADR-1830). A bucket grid still ends at
+// now, its last bucket the one holding it.
+var viewOpenEnd = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+
+// rawEnd is the upper bound a binding's raw rows read to.
+func rawEnd(b ViewBinding, r *ViewResult) time.Time {
+	if b.To.IsZero() {
+		return viewOpenEnd
+	}
+	return r.To
+}
+
 // ViewRange is a binding's range at now: the absolute bounds as given, else
 // the window before now.
 func ViewRange(b ViewBinding, now time.Time) (from, to time.Time) {
@@ -300,10 +315,10 @@ func (p *PG) listViewEntities(ctx context.Context, q querier, b ViewBinding) ([]
 			where s.name = $%[1]d or s.id::text = $%[1]d)`, b.Filter.System)
 	}
 	if b.Filter.Product != "" {
-		add(`v.product_id in (select pd.id from product pd where pd.name = $%[1]d or pd.id::text = $%[1]d)`, b.Filter.Product)
+		add(`v.product_id in (select pd.id from product_in_effect() pd where pd.name = $%[1]d or pd.id::text = $%[1]d)`, b.Filter.Product)
 	}
 	if b.Filter.SystemType != "" {
-		add(`v.system_type_id in (select st.id from system_type st where st.name = $%[1]d or st.id::text = $%[1]d)`, b.Filter.SystemType)
+		add(`v.system_type_id in (select st.id from system_type_in_effect() st where st.name = $%[1]d or st.id::text = $%[1]d)`, b.Filter.SystemType)
 	}
 	where := ""
 	if len(conds) > 0 {
@@ -535,7 +550,7 @@ func (p *PG) viewMetric(ctx context.Context, q querier, b ViewBinding, ids []str
 				where s.metric_type_id = $1::uuid and s.owner_kind = $6 and s.owner_id = any($2::uuid[])
 				  and s.provenance in `+measuredProvenance+`
 				order by s.owner_id, s.instance, `+metricSampleOrder("m", false)+`, s.id
-				limit $7`, t.id, ids, split.rawFrom, r.To, laneDays, b.Kind, ViewMaxPoints-points+1)
+				limit $7`, t.id, ids, split.rawFrom, rawEnd(b, r), laneDays, b.Kind, ViewMaxPoints-points+1)
 			if err != nil {
 				return fmt.Errorf("storage: read view metric %s: %w", key, err)
 			}
@@ -679,7 +694,7 @@ func (p *PG) viewProperty(ctx context.Context, q querier, b ViewBinding, ids []s
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		to := r.To
+		to := rawEnd(b, r)
 		if b.Step > 0 {
 			to = g.hi
 		}
@@ -795,11 +810,11 @@ func (p *PG) viewEvents(ctx context.Context, q querier, b ViewBinding, ids []str
 	if err != nil {
 		return err
 	}
-	args := []any{ids, r.From, r.To}
+	args := []any{ids, r.From, rawEnd(b, r)}
 	keys := ""
 	if len(b.Keys) > 0 {
 		args = append(args, b.Keys)
-		keys = fmt.Sprintf(" and event.event_type_id in (select et.id from event_type et where et.name = any($%d::text[]))", len(args))
+		keys = fmt.Sprintf(" and event.event_type_id in (select et.id from event_type_in_effect() et where et.name = any($%d::text[]))", len(args))
 	}
 	page, args, limit, err := viewPageArgs(b, "ts", args)
 	if err != nil {
@@ -851,7 +866,7 @@ func (p *PG) viewLogs(ctx context.Context, q querier, b ViewBinding, ids []strin
 	if b.Kind != "component" {
 		return fmt.Errorf("%w: log lines belong to components", ErrUnknownOwnerKind)
 	}
-	args := []any{ids, r.From, r.To}
+	args := []any{ids, r.From, rawEnd(b, r)}
 	cond, args, err := b.Logs.where(args)
 	if err != nil {
 		return err

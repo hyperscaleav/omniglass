@@ -21,6 +21,8 @@ import { nodeStatus, type Node, type NodeStatus } from "./nodes";
 import { durationText } from "./timeline";
 import { describeError } from "./format";
 import { humanSize } from "./files";
+import { foldMetricBuckets, type ViewBinding, type ViewResult, type ViewTail } from "./binding";
+import type { ChartBucket } from "./chart";
 
 // The Platform health data layer (#1644): the one read behind the page, and the
 // pure derivations it renders. Every figure is a sample on a platform component
@@ -378,27 +380,52 @@ export function panelRowText(row: PanelRow): string {
   return unit ? `${a} / ${b} ${unit}` : `${a} / ${b}`;
 }
 
-export type PanelSeriesRequest = {
-  kind: "components";
-  owner: string;
-  metric: string;
-  hours: number;
-  resolutionSeconds: number;
-  instance: string;
-};
-
-// panelSeriesRequest is a row's sparkline read: its key's series on the
-// server's platform component. The instance is always named, the empty one
-// included: left unset, the read answers 422 for a key with several series.
-export function panelSeriesRequest(server: PlatformServer, row: PanelRow): PanelSeriesRequest {
+// panelBinding is a panel's sparklines as one view binding (#1830): every
+// key of it that has been sampled, on the server's platform component, so a
+// panel is one read and one place on the page's stream, not a read per row.
+// Undefined when no key has been sampled: a row not reported asks for nothing.
+export function panelBinding(server: PlatformServer, panel: PlatformPanel): ViewBinding | undefined {
+  const keys = panelSections(panel)
+    .filter((sec) => sec.rows.some((r) => r.value !== null))
+    .map((sec) => sec.key.name);
+  if (keys.length === 0) return undefined;
   return {
-    kind: "components",
-    owner: server.component,
-    metric: row.key,
-    hours: PANEL_SERIES_HOURS,
-    resolutionSeconds: PANEL_SERIES_RESOLUTION_S,
-    instance: row.instance,
+    primitive: "metric",
+    kind: "component",
+    refs: [server.component],
+    keys,
+    window_seconds: PANEL_SERIES_HOURS * 3600,
+    step_seconds: PANEL_SERIES_RESOLUTION_S,
   };
+}
+
+// PanelSeries is a panel's bucketed series, by key and instance.
+export type PanelSeries = ReadonlyMap<string, ChartBucket[]>;
+
+const seriesId = (key: string, instance: string) => `${key}\u0000${instance}`;
+
+export function panelSeriesInit(r: ViewResult): PanelSeries {
+  return new Map((r.metric ?? []).map((m) => [seriesId(m.key, m.instance), m.buckets ?? []]));
+}
+
+// panelSeriesFold lands a binding's live samples in their series, as the
+// server would have bucketed them; a series no sample touched is kept as is.
+export function panelSeriesFold(series: PanelSeries, t: ViewTail, now: number): PanelSeries {
+  const rows = new Map<string, { ts: string; value: number }[]>();
+  for (const m of t.metric ?? []) {
+    const id = seriesId(m.key, m.instance);
+    rows.set(id, [...(rows.get(id) ?? []), m]);
+  }
+  if (rows.size === 0) return series;
+  const out = new Map(series);
+  for (const [id, landed] of rows) {
+    out.set(id, foldMetricBuckets(series.get(id) ?? [], landed, PANEL_SERIES_RESOLUTION_S * 1000, PANEL_SERIES_HOURS * 3600_000, now));
+  }
+  return out;
+}
+
+export function panelRowBuckets(series: PanelSeries | undefined, row: Pick<PanelRow, "key" | "instance">): ChartBucket[] {
+  return series?.get(seriesId(row.key, row.instance)) ?? [];
 }
 
 // panelAlarms are the server's open alarms raised on one of the panel's keys

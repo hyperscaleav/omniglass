@@ -7014,6 +7014,285 @@ export type RunEndpointPollOutputBody = {
   took_ms: number;
 };
 
+export type ViewFilterBody = {
+  /**
+     * Components of this product (name or uuid). Component bindings only
+     * @maxLength 200
+     */
+  product?: string;
+  /**
+     * Components that are members of this system (name or uuid). Component bindings only
+     * @maxLength 200
+     */
+  system?: string;
+  /**
+     * Systems of this system type (name or uuid). System bindings only
+     * @maxLength 200
+     */
+  system_type?: string;
+};
+
+/**
+ * The entity kind the selector names. The binding needs <kind>:read on top of view:read, and resolves only inside that read's scope. Log lines belong to components
+ */
+export type ViewBindingBodyKind = typeof ViewBindingBodyKind[keyof typeof ViewBindingBodyKind];
+
+
+export const ViewBindingBodyKind = {
+  component: 'component',
+  system: 'system',
+} as const;
+
+/**
+ * The primitive read: metric and property answer one series per entity, key and instance; event and log answer rows, newest first, a page at a time
+ */
+export type ViewBindingBodyPrimitive = typeof ViewBindingBodyPrimitive[keyof typeof ViewBindingBodyPrimitive];
+
+
+export const ViewBindingBodyPrimitive = {
+  metric: 'metric',
+  property: 'property',
+  event: 'event',
+  log: 'log',
+} as const;
+
+/**
+ * Log bindings: only lines at this severity or more severe
+ */
+export type ViewBindingBodySeverity = typeof ViewBindingBodySeverity[keyof typeof ViewBindingBodySeverity];
+
+
+export const ViewBindingBodySeverity = {
+  emergency: 'emergency',
+  alert: 'alert',
+  critical: 'critical',
+  error: 'error',
+  warning: 'warning',
+  notice: 'notice',
+  info: 'info',
+  debug: 'debug',
+} as const;
+
+export type ViewBindingBody = {
+  /** Narrows a kind selector; refused beside refs */
+  filter?: ViewFilterBody;
+  /** An absolute range's start. Give from (and optionally to), or window_seconds */
+  from?: string;
+  /**
+     * The metric, property or event type names read. Required for metric and property; unset on an event binding reads every type; refused on a log binding
+     * @maxItems 50
+     * @nullable
+     */
+  keys?: string[] | null;
+  /** The entity kind the selector names. The binding needs <kind>:read on top of view:read, and resolves only inside that read's scope. Log lines belong to components */
+  kind: ViewBindingBodyKind;
+  /**
+     * An event or log page's size; 100 when unset
+     * @minimum 1
+     * @maximum 1000
+     */
+  limit?: number;
+  /**
+     * An event or log read's next_page, to read further back
+     * @maxLength 64
+     */
+  page?: string;
+  /** The primitive read: metric and property answer one series per entity, key and instance; event and log answer rows, newest first, a page at a time */
+  primitive: ViewBindingBodyPrimitive;
+  /**
+     * Literal entities, by name, uuid or dotted address. One outside the caller's scope is the same 404 as one that does not exist. Unset, the binding selects every visible entity of the kind that filter keeps
+     * @maxItems 200
+     * @nullable
+     */
+  refs?: string[] | null;
+  /** Log bindings: only lines at this severity or more severe */
+  severity?: ViewBindingBodySeverity;
+  /**
+     * Log bindings: only lines that arrived on this channel
+     * @maxLength 100
+     */
+  source?: string;
+  /**
+     * Buckets a metric or property read on an epoch-aligned grid of this width (at most 5000 buckets). An hour-multiple step reaching past the raw retention answers the older hours from the hourly trends. Unset, the raw points
+     * @minimum 1
+     * @maximum 2592000
+     */
+  step_seconds?: number;
+  /** An absolute range's end, exclusive; unset is now. Needs from */
+  to?: string;
+  /**
+     * A relative range: this many seconds back from now
+     * @minimum 1
+     * @maximum 63072000
+     */
+  window_seconds?: number;
+};
+
+export type RunViewsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The bindings read, all from one snapshot
+     * @minItems 1
+     * @maxItems 32
+     * @nullable
+     */
+  bindings: ViewBindingBody[] | null;
+};
+
+export type ViewEntityBody = {
+  /** The entity's uuid, the id its series and rows carry */
+  id: string;
+  /** component or system */
+  kind: string;
+  name: string;
+};
+
+export type ViewEventBody = {
+  /** The alarm a rule's event opened or resolved; history rows only */
+  alarm_id?: string;
+  attributes?: unknown;
+  /** The deriving event rule's name; history rows only */
+  derived_by_rule?: string;
+  /** The owning entity's uuid */
+  entity: string;
+  /** The row's id, the page order's tiebreak */
+  id: number;
+  instance?: string;
+  /** The event type's name */
+  key: string;
+  message: string;
+  /** caught, caused, derived or scheduled */
+  origin: string;
+  /** The occurrence's lineage; history rows only */
+  provenance?: string;
+  /** The transport that produced it; history rows only */
+  source?: string;
+  ts: string;
+};
+
+export type ViewLogBody = {
+  attributes?: unknown;
+  /** History rows only */
+  correlation_id?: string;
+  /** The writing component's uuid */
+  entity: string;
+  facility?: string;
+  id: number;
+  instance?: string;
+  /** History rows only */
+  labels?: unknown;
+  message: string;
+  /** When the server received the line, the order the read pages in */
+  received_at?: string;
+  severity?: string;
+  /** The channel it arrived on */
+  source?: string;
+  /** The time the line carried, else its arrival */
+  ts: string;
+};
+
+export type ViewPointBody = {
+  ts: string;
+  value: number;
+};
+
+export type ViewMetricSeriesBody = {
+  /**
+     * Every bucket of the grid, oldest first; on a read with a step
+     * @nullable
+     */
+  buckets?: MetricBucketBody[] | null;
+  /** The entity's uuid */
+  entity: string;
+  /** The series discriminator; empty for the owner-level series */
+  instance: string;
+  /** The metric type's name */
+  key: string;
+  /**
+     * The raw samples, oldest first; on a read without a step
+     * @nullable
+     */
+  points?: ViewPointBody[] | null;
+};
+
+export type ViewPropertyPointBody = {
+  ts: string;
+  value: string;
+};
+
+export type ViewPropertySeriesBody = {
+  /**
+     * Every bucket of the grid, oldest first; on a read with a step
+     * @nullable
+     */
+  buckets?: PropertyBucketBody[] | null;
+  /** The value in force when the range opens; absent when none */
+  carried_in?: string;
+  /** The entity's uuid */
+  entity: string;
+  /** The series discriminator; empty for the owner-level series */
+  instance: string;
+  /** The property type's name */
+  key: string;
+  /**
+     * The changes, oldest first; on a read without a step
+     * @nullable
+     */
+  points?: ViewPropertyPointBody[] | null;
+};
+
+export type ViewResultBody = {
+  /** The earliest instant the read could hold data for: the raw retention's floor, or the trend floor when hourly trends answered the older hours */
+  covered_from: string;
+  /** The tail cursor this history was read at: /views:watch from it carries exactly what the history does not */
+  cursor: string;
+  /**
+     * The entities the selector resolved to, in scope
+     * @nullable
+     */
+  entities: ViewEntityBody[] | null;
+  /**
+     * An event binding's page, newest first
+     * @nullable
+     */
+  events?: ViewEventBody[] | null;
+  /** The range read */
+  from: string;
+  /**
+     * A log binding's page, newest arrival first
+     * @nullable
+     */
+  logs?: ViewLogBody[] | null;
+  /**
+     * A metric binding's series
+     * @nullable
+     */
+  metric?: ViewMetricSeriesBody[] | null;
+  /** Pages an event or log read further back; absent at the end */
+  next_page?: string;
+  /**
+     * A property binding's series
+     * @nullable
+     */
+  property?: ViewPropertySeriesBody[] | null;
+  to: string;
+};
+
+export type RunViewsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The tail cursor every result was read at */
+  cursor: string;
+  /** The snapshot's clock, the end of every relative range */
+  now: string;
+  /**
+     * One result per binding, in order
+     * @nullable
+     */
+  results: ViewResultBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8148,6 +8427,58 @@ export type ValidateExpressionOutputBody = {
   value_type: ValidateExpressionOutputBodyValueType;
 };
 
+export type ViewMarkEvent = {
+  /** The stream's position: every binding has every row up to it */
+  cursor: string;
+};
+
+export type ViewResetEvent = {
+  /**
+     * The bindings whose cursor the tail no longer holds; re-run their history
+     * @nullable
+     */
+  bindings: number[] | null;
+};
+
+export type ViewTailMetricBody = {
+  entity: string;
+  instance: string;
+  key: string;
+  ts: string;
+  value: number;
+};
+
+export type ViewTailPropertyBody = {
+  entity: string;
+  instance: string;
+  key: string;
+  ts: string;
+  value: string;
+};
+
+export type ViewTailBindingBody = {
+  /** The binding's index in the watch's bindings */
+  binding: number;
+  /** @nullable */
+  events?: ViewEventBody[] | null;
+  /** @nullable */
+  logs?: ViewLogBody[] | null;
+  /** @nullable */
+  metric?: ViewTailMetricBody[] | null;
+  /** @nullable */
+  property?: ViewTailPropertyBody[] | null;
+};
+
+export type ViewRowsEvent = {
+  /**
+     * Each binding with rows in these commits
+     * @nullable
+     */
+  bindings: ViewTailBindingBody[] | null;
+  /** The cursor after these rows; also the event's id */
+  cursor: string;
+};
+
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
   limit?: number;
@@ -8436,6 +8767,40 @@ export const ListTemplatesKind = {
   place_template: 'place_template',
   component_template: 'component_template',
 } as const;
+
+export type WatchViewsParams = {
+  /**
+   * The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)
+   * @maxLength 32768
+   */
+  bindings: string;
+  /**
+   * Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail
+   * @minimum 1
+   * @maximum 3600
+   */
+  duration_seconds?: number;
+};
+
+export type WatchViews200Item = {
+  data: ViewMarkEvent;
+  /** The event name */
+  event: 'mark';
+  /** The cursor after the event, the resume point; absent on reset */
+  id?: string;
+} | {
+  data: ViewResetEvent;
+  /** The event name */
+  event: 'reset';
+  /** The cursor after the event, the resume point; absent on reset */
+  id?: string;
+} | {
+  data: ViewRowsEvent;
+  /** The event name */
+  event: 'rows';
+  /** The cursor after the event, the resume point; absent on reset */
+  id?: string;
+};
 
 export type HTTPStatusCode1xx = 100 | 101 | 102 | 103;
 export type HTTPStatusCode2xx = 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207;
@@ -26695,6 +27060,115 @@ export const getGetPlatformSimulationViewUrl = () => {
 export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {
 
   return ogFetch<getPlatformSimulationViewResponse>(getGetPlatformSimulationViewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type runViewsResponse200 = {
+  data: RunViewsOutputBody
+  status: 200
+}
+
+export type runViewsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type runViewsResponseSuccess = (runViewsResponse200) & {
+  headers: Headers;
+};
+export type runViewsResponseError = (runViewsResponseDefault) & {
+  headers: Headers;
+};
+
+export type runViewsResponse = (runViewsResponseSuccess | runViewsResponseError)
+
+export const getRunViewsUrl = () => {
+
+
+
+
+  return `/views:run`
+}
+
+/**
+ * Reads each binding's history from one snapshot and answers the tail cursor it was taken at (ADR-1830). A binding names a primitive (metric, property, event or log), an entity selector (literal refs, or a kind and a filter), the keys, and a range (from and to, or window_seconds back from now). A metric or property binding answers one series per resolved entity, key and instance: its raw points, or with step_seconds every bucket of an epoch-aligned grid (metric buckets carry count, min, max, avg and last; property buckets count, last and held), the older hours from the hourly trends when an hour-multiple step reaches past the raw retention. An event or log binding answers a page of rows, newest first, and a next_page. /views:watch from the cursor carries exactly the rows the history does not. Gated by view:read; each binding also needs <kind>:read (component:read or system:read) and resolves only inside that read's scope: a filter selector resolves to the visible entities, and a literal ref out of scope is the same 404 as one that does not exist. A selector past 200 entities, a raw read past 20000 points or a grid past 5000 buckets is a 422, never a truncated answer.
+ * @summary Read the history of one or more view bindings
+ */
+export const runViews = async (runViewsInputBody: NonReadonly<RunViewsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<runViewsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<runViewsResponse>(getRunViewsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(runViewsInputBody)
+  }
+);}
+
+
+
+export type watchViewsResponse200 = {
+  data: WatchViews200Item[]
+  status: 200
+}
+
+export type watchViewsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type watchViewsResponseSuccess = (watchViewsResponse200) & {
+  headers: Headers;
+};
+export type watchViewsResponseError = (watchViewsResponseDefault) & {
+  headers: Headers;
+};
+
+export type watchViewsResponse = (watchViewsResponseSuccess | watchViewsResponseError)
+
+export const getWatchViewsUrl = (params: WatchViewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/views:watch?${stringifiedParams}` : `/views:watch`
+}
+
+/**
+ * Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to.
+ * @summary Follow view bindings live over one SSE stream
+ */
+export const watchViews = async (params: WatchViewsParams, options?: Parameters<typeof ogFetch>[1]): Promise<watchViewsResponse> => {
+
+  return ogFetch<watchViewsResponse>(getWatchViewsUrl(params),
   {
     ...options,
     method: 'GET'

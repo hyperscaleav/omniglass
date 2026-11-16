@@ -7901,6 +7901,47 @@ Example:
 omniglass view platform simulation list
 ```
 
+### `omniglass view run`
+
+Read the history of one or more view bindings
+
+```
+omniglass view run [flags]
+```
+
+Reads each binding's history from one snapshot and answers the tail cursor it was taken at (ADR-1830). A binding names a primitive (metric, property, event or log), an entity selector (literal refs, or a kind and a filter), the keys, and a range (from and to, or window_seconds back from now). A metric or property binding answers one series per resolved entity, key and instance: its raw points, or with step_seconds every bucket of an epoch-aligned grid (metric buckets carry count, min, max, avg and last; property buckets count, last and held), the older hours from the hourly trends when an hour-multiple step reaches past the raw retention. An event or log binding answers a page of rows, newest first, and a next_page. /views:watch from the cursor carries exactly the rows the history does not. Gated by view:read; each binding also needs <kind>:read (component:read or system:read) and resolves only inside that read's scope: a filter selector resolves to the visible entities, and a literal ref out of scope is the same 404 as one that does not exist. A selector past 200 entities, a raw read past 20000 points or a grid past 5000 buckets is a 422, never a truncated answer.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--bindings` | string | (none) | The bindings read, all from one snapshot |
+
+Example:
+
+```sh
+omniglass view run --bindings <json>
+```
+
+### `omniglass view watch`
+
+Follow view bindings live over one SSE stream
+
+```
+omniglass view watch [flags]
+```
+
+Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--bindings` | string | (none) | The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now) |
+| `--duration-seconds` | int | `0` | Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail |
+
+Example:
+
+```sh
+omniglass view watch
+```
+
 ## `omniglass webhook`
 
 Commands for the webhook resource

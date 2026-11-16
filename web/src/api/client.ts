@@ -56,6 +56,14 @@ async function send(url: string, init: RequestInit): Promise<{ request: Request;
   return { request, response };
 }
 
+// openStream opens a long-lived response (a Server-Sent Events stream, the
+// views watch) on the one transport, so a stored bearer token rides it as it
+// rides a call: an EventSource cannot set a header.
+export async function openStream(url: string, signal: AbortSignal): Promise<Response> {
+  const { response } = await send(url, { signal, headers: { Accept: "text/event-stream" } });
+  return response;
+}
+
 // ogFetch is the mutator orval's generated operations call (orval.config.mjs), so
 // each of them goes through send and returns orval's { data, status, headers }.
 export async function ogFetch<T>(url: string, init: RequestInit): Promise<T> {

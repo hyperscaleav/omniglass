@@ -17,6 +17,7 @@ func at(s string) time.Time {
 // The grid is aligned to the epoch: it opens on the bucket holding from and
 // closes after the bucket holding the instant before to.
 func TestViewGridAlignsToTheEpoch(t *testing.T) {
+	t.Parallel()
 	g, err := newViewGrid(at("2026-01-01T10:07:00Z"), at("2026-01-01T11:00:00Z"), 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +34,7 @@ func TestViewGridAlignsToTheEpoch(t *testing.T) {
 // A grid past ViewMaxBuckets, or a step that is not whole seconds, is
 // refused rather than truncated.
 func TestViewGridRefusesTooManyBuckets(t *testing.T) {
+	t.Parallel()
 	if _, err := newViewGrid(at("2026-01-01T00:00:00Z"), at("2026-02-01T00:00:00Z"), time.Second); !errors.Is(err, ErrViewTooLarge) {
 		t.Fatalf("a month of seconds: %v", err)
 	}
@@ -45,6 +47,7 @@ func TestViewGridRefusesTooManyBuckets(t *testing.T) {
 // past it takes the whole hours before the raw floor's next hour from the
 // trends, back to the trend floor; a sub-hour step never does.
 func TestSplitMetricReadPicksRawOrTrends(t *testing.T) {
+	t.Parallel()
 	now := at("2026-03-31T12:30:00Z")
 	inside := splitMetricRead(at("2026-03-30T00:00:00Z"), now, time.Hour, 30, 730)
 	if inside.trends || !inside.rawFrom.Equal(at("2026-03-30T00:00:00Z")) || !inside.covered.Equal(inside.rawFrom) {
@@ -67,6 +70,7 @@ func TestSplitMetricReadPicksRawOrTrends(t *testing.T) {
 // Parts of one bucket merge: counts and sums add, min and max fold, and the
 // later part's last wins; a bucket with no part stays empty.
 func TestMergeMetricPartsStitchesTrendAndRaw(t *testing.T) {
+	t.Parallel()
 	g, _ := newViewGrid(at("2026-01-01T00:00:00Z"), at("2026-01-01T06:00:00Z"), 2*time.Hour)
 	parts := []metricPart{
 		{owner: "c1", b: at("2026-01-01T02:00:00Z"), count: 2, min: 1, max: 5, sum: 6, last: 5},
@@ -90,6 +94,7 @@ func TestMergeMetricPartsStitchesTrendAndRaw(t *testing.T) {
 // A property grid counts each bucket's changes, keeps the value its own
 // changes end on, and holds the value in force across empty buckets.
 func TestPropertyGridHoldsAcrossEmptyBuckets(t *testing.T) {
+	t.Parallel()
 	g, _ := newViewGrid(at("2026-01-01T00:00:00Z"), at("2026-01-01T03:00:00Z"), time.Hour)
 	on := "on"
 	out := propertyGrid(g, []ViewPropertyPoint{
@@ -106,6 +111,7 @@ func TestPropertyGridHoldsAcrossEmptyBuckets(t *testing.T) {
 
 // A page cursor round-trips, and one that does not parse is refused.
 func TestViewPageRoundTrips(t *testing.T) {
+	t.Parallel()
 	ts := at("2026-01-01T00:00:00Z").Add(123 * time.Microsecond)
 	got, id, err := parseViewPage(viewPage(ts, 42))
 	if err != nil || !got.Equal(ts) || id != 42 {

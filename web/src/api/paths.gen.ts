@@ -3412,6 +3412,26 @@ export interface paths {
       error: og.getPlatformSimulationViewResponseError["data"];
     };
   };
+  "/views:run": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.runViews>[0]>;
+      bodyRequired: true;
+      data: og.runViewsResponseSuccess["data"];
+      error: og.runViewsResponseError["data"];
+    };
+  };
+  "/views:watch": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.watchViews>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.watchViewsResponseSuccess["data"];
+      error: og.watchViewsResponseError["data"];
+    };
+  };
   "/webhooks/{token}": {
     get: {
       path: { "token": string };

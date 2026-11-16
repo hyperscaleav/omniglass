@@ -31,7 +31,10 @@ import {
   panelFlagged,
   panelRowText,
   panelSections,
-  panelSeriesRequest,
+  panelBinding,
+  panelRowBuckets,
+  panelSeriesFold,
+  panelSeriesInit,
   type PlatformServer,
   notUpCount,
   PLATFORM_REFUSED,
@@ -44,6 +47,7 @@ import {
   type PlatformView,
 } from "./platformhealth";
 import { NODE_DOWN_AFTER_MS } from "./nodes";
+import type { ViewResult } from "./binding";
 
 // The Platform health page's pure core (#1644): the columns, the uptime, a
 // figure's text and the liveness pill, all derived from one view body and
@@ -474,24 +478,65 @@ describe("panelRowText", () => {
   });
 });
 
-describe("panelSeriesRequest", () => {
-  it("asks for a ranked row's own instance on the server's platform component, over the last hour", () => {
+describe("panelBinding", () => {
+  it("binds the panel's sampled keys on the server's platform component, over the last hour at its bucket width", () => {
     const s = server();
-    const row = panelSections(s.groups![0])[0].rows[1];
-    expect(panelSeriesRequest(s, row)).toEqual({
-      kind: "components",
-      owner: s.component,
-      metric: "http-request-duration-max",
-      hours: PANEL_SERIES_HOURS,
-      resolutionSeconds: PANEL_SERIES_RESOLUTION_S,
-      instance: "GET /api/v1/fast 2xx",
+    expect(panelBinding(s, s.groups![0])).toEqual({
+      primitive: "metric",
+      kind: "component",
+      refs: [s.component],
+      keys: ["http-request-duration-max", "db-pool-acquired"],
+      window_seconds: PANEL_SERIES_HOURS * 3600,
+      step_seconds: PANEL_SERIES_RESOLUTION_S,
     });
     expect(PANEL_SERIES_HOURS).toBe(1);
   });
 
-  it("names the owner-level series (the empty instance) for an unsplit key, never leaving it to the server to pick", () => {
+  it("binds nothing for a panel none of whose keys has been sampled", () => {
     const s = server();
-    expect(panelSeriesRequest(s, panelSections(s.groups![0])[1].rows[0]).instance).toBe("");
+    expect(panelBinding(s, { ...s.groups![0], figures: [] })).toBeUndefined();
+  });
+});
+
+describe("panelSeries", () => {
+  const at = (min: number) => new Date(readMs - 3600_000 + min * 60_000).toISOString();
+  const empty = (min: number) => ({ ts: at(min), count: 0, min: null, max: null, avg: null, last: null });
+  const result = (): ViewResult => ({
+    cursor: "boot.1",
+    covered_from: at(0),
+    from: at(0),
+    to: readAt,
+    entities: [],
+    metric: [
+      { entity: "e", key: "http-request-duration-max", instance: "GET /api/v1/fast 2xx", buckets: [empty(58), { ts: at(59), count: 1, min: 3, max: 3, avg: 3, last: 3 }] },
+      { entity: "e", key: "db-pool-acquired", instance: "", buckets: [empty(58), empty(59)] },
+    ],
+  });
+
+  it("hands each row its own key and instance's buckets, and an unread row none", () => {
+    const series = panelSeriesInit(result());
+    expect(panelRowBuckets(series, { key: "http-request-duration-max", instance: "GET /api/v1/fast 2xx" })[1].last).toBe(3);
+    expect(panelRowBuckets(series, { key: "db-pool-acquired", instance: "" })).toHaveLength(2);
+    expect(panelRowBuckets(series, { key: "http-request-duration-max", instance: "GET /other 2xx" })).toEqual([]);
+  });
+
+  it("folds a live sample into its own series only, opening a series the history did not hold", () => {
+    const before = panelSeriesInit(result());
+    const after = panelSeriesFold(
+      before,
+      {
+        binding: 0,
+        metric: [
+          { entity: "e", key: "db-pool-acquired", instance: "", ts: at(59.5), value: 6 },
+          { entity: "e", key: "http-request-duration-max", instance: "GET /new 5xx", ts: at(59.5), value: 40 },
+        ],
+      },
+      readMs,
+    );
+    expect(panelRowBuckets(after, { key: "db-pool-acquired", instance: "" })[1]).toEqual({ ts: at(59), count: 1, min: 6, max: 6, avg: 6, last: 6 });
+    expect(panelRowBuckets(after, { key: "http-request-duration-max", instance: "GET /new 5xx" })).toEqual([{ ts: at(59), count: 1, min: 40, max: 40, avg: 40, last: 40 }]);
+    expect(panelRowBuckets(after, { key: "http-request-duration-max", instance: "GET /api/v1/fast 2xx" })).toBe(panelRowBuckets(before, { key: "http-request-duration-max", instance: "GET /api/v1/fast 2xx" }));
+    expect(panelRowBuckets(before, { key: "db-pool-acquired", instance: "" })[1].count).toBe(0);
   });
 });
 

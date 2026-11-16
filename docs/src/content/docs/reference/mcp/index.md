@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-66 tools.
+67 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -91,6 +91,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
 | [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
+| [`run-views`](#run-views) | Read the history of one or more view bindings | `view:read` | read-only, idempotent |
 
 ## `get-auth-me`
 
@@ -1082,3 +1083,17 @@ Lists the vendor registry, ordered alphabetically by label. Populates the vendor
 - Gate: `vendor:read`
 - Assume: read-only, idempotent
 - Arguments: none
+
+## `run-views`
+
+Read the history of one or more view bindings
+
+Reads each binding's history from one snapshot and answers the tail cursor it was taken at (ADR-1830). A binding names a primitive (metric, property, event or log), an entity selector (literal refs, or a kind and a filter), the keys, and a range (from and to, or window_seconds back from now). A metric or property binding answers one series per resolved entity, key and instance: its raw points, or with step_seconds every bucket of an epoch-aligned grid (metric buckets carry count, min, max, avg and last; property buckets count, last and held), the older hours from the hourly trends when an hour-multiple step reaches past the raw retention. An event or log binding answers a page of rows, newest first, and a next_page. /views:watch from the cursor carries exactly the rows the history does not. Gated by view:read; each binding also needs <kind>:read (component:read or system:read) and resolves only inside that read's scope: a filter selector resolves to the visible entities, and a literal ref out of scope is the same 404 as one that does not exist. A selector past 200 entities, a raw read past 20000 points or a grid past 5000 buckets is a 422, never a truncated answer.
+
+- Route: `POST /api/v1/views:run`
+- Gate: `view:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `bindings` | array | yes | The bindings read, all from one snapshot |

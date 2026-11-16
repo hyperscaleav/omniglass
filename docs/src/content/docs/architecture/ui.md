@@ -141,7 +141,10 @@ composable dashboards are the customization layer over the complete coded consol
 
 ## Live updates: polling by default
 
-Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
+Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time),
+except where a surface reads samples through a [view binding](/architecture/views/#bindings-the-scoped-read-of-the-sample-store):
+`createViewBinding` reads its history once and folds in the rows the page's one `/views:watch` stream
+carries, which Platform health's sparklines do (#1830).
 
 ::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
 A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out

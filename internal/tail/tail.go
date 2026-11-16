@@ -175,6 +175,22 @@ func (h *Hub) Read(cursor string, max int) ([]Commit, string, error) {
 	return out, h.cursor(after + n), nil
 }
 
+// Seq is a cursor's position on this hub, for ordering cursors; a cursor
+// from another boot, ahead of the hub, or malformed is expired. A cursor the
+// ring has dropped still orders: Read is what refuses it.
+func (h *Hub) Seq(cursor string) (uint64, error) {
+	if h == nil {
+		return 0, ErrExpired
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n, ok := h.parse(cursor)
+	if !ok || n > h.seq {
+		return 0, ErrExpired
+	}
+	return n, nil
+}
+
 func (h *Hub) cursor(seq uint64) string {
 	return h.boot + "." + strconv.FormatUint(seq, 10)
 }

@@ -3,15 +3,76 @@ title: Views
 description: "The read side: a view is a named, parameterized, scope-checked query returning a uniform ViewResult, the backend-for-frontend every read goes through."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Partial]
+Built today: the **view binding** ([below](#bindings-the-scoped-read-of-the-sample-store)), the one scoped
+read of metric, property, event and log samples, with its history at `POST /views:run` and its live rows at
+`GET /views:watch`, every binding of a page over one SSE stream (#1830,
+[ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
+Platform health's sparklines read through it. Not built: the named, saved view and its `ViewResult`
+contract, in the design block that follows the binding.
+:::
+
+## Bindings: the scoped read of the sample store
+
+A **binding** is what a chart, a feed, an agent or a script reads the samples through. It names:
+
+- a **primitive**: `metric` or `property` (a series per entity, key and instance), `event` or `log`
+  (rows, newest first, a page at a time);
+- an **entity selector**: literal `refs` (names, uuids or dotted addresses), or a `kind` and a `filter`
+  (a system's members, a product's components, a system type's systems);
+- the **keys** (metric, property or event type names) and a **range**, `from` and `to` or a
+  `window_seconds` back from now;
+- an optional **step**, which answers a metric or property as an epoch-aligned bucket grid instead of
+  raw points. A metric bucket carries `count`, `min`, `max`, `avg` and `last`, so the renderer picks the
+  aggregate. A step that is a whole number of hours and reaches past raw retention answers the older
+  hours from the [hourly trends](/architecture/storage/), and `covered_from` says where the data can begin.
+
+A read too large to answer whole (past 200 entities, 20,000 raw points or 5,000 buckets) is a 422 naming
+the limit, never a silently truncated answer: widen the step or narrow the selector.
+
+### History and live meet at a cursor
+
+Every sample the server lands is also committed, in the same write, to an in-memory **tail**, an ordered
+log of recent commits with a cursor. `/views:run` reads every binding from one snapshot and answers the
+cursor that snapshot was taken at; `/views:watch` takes each binding with its cursor and streams only the
+rows after it. So a sample is either in the history or on the stream, never both and never neither, which
+is the property a live chart needs to stay correct without a reload. Up to 32 bindings share one stream:
+
+- a `rows` event carries each binding's new rows, its id the cursor after them;
+- a `mark` event advances an idle stream's position every 15 seconds;
+- a reconnect that sends the last id back (`Last-Event-ID`) resumes every binding with nothing repeated;
+- a `reset` names a binding whose cursor the tail no longer holds (too old, or from before a restart),
+  and its reader re-runs the history.
+
+The tail is the server's own ingest landing, so a value a [calc](/architecture/calculations/) or a rule derives
+is not on it, and a second server would not see the first's commits.
+
+### Scope
+
+Both routes need `view:read`, and each binding also needs its kind's read (`component:read`,
+`system:read`) and resolves inside that read's [scope](/architecture/identity-access/). A kind selector
+resolves to the entities the caller can see; a literal ref outside the scope is the same 404 as one that
+does not exist, so a binding never confirms what it may not show. The stream resolves its selectors once,
+when it connects, and carries rows of those entities only.
+
+### In the console
+
+`createViewBinding` (`web/src/lib/binding.ts`) is the console's primitive over it: it reads a binding's
+history through the query cache, then subscribes it to the page's one hub, which holds a single
+`/views:watch` for every binding on the page and folds each live row into the state the history began.
+On [Platform health](/guides/operator/platform-health/) each server panel is one binding over its
+sampled keys, and its sparklines move as the server records rather than on a poll.
 
 ::::design[Target design: the ViewResult contract, tracked in #523]
 
 :::caution[Design: the ViewResult contract is entirely unbuilt]
-The framework on this page is not built: there is no `view` table, no `ViewResult` shape, no
-`/views/{id}:run` route, and no renderer library. Today's read side is typed CRUD `GET`s plus six
+The named-view framework below is not built: there is no `view` table, no `ViewResult` shape, no
+`/views/{id}:run` route, and no renderer library. The binding above is the built read of samples a
+named view can later bind. Today's read side is typed CRUD `GET`s plus six
 hand-written composed reads (reachability, events, the component and node log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
@@ -85,7 +146,7 @@ One read contract, three consumers:
 
 A view read is **query-polling by default** (slow-changing config uses a long stale time); a view
 may **stream** over a server-side [SSE](/architecture/messaging/) relay where latency or fan-out
-earns it ([UI](/architecture/ui/), [time](/architecture/time/)).
+earns it, as a [binding](#history-and-live-meet-at-a-cursor) already does ([UI](/architecture/ui/), [time](/architecture/time/)).
 
 ## Versioning
 

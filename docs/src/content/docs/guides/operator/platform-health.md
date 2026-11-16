@@ -200,8 +200,10 @@ A panel turns amber, and names the alarm, only while an alarm is open on one of 
 rules on the server's keys raise those alarms; the page adds no threshold of its own, so an amber
 panel is the same open alarm the console shows everywhere else.
 
-A closed panel set reads no series: its figures are already on the page, and its sparklines load
-when you open it.
+Each open panel's sparklines are one [view binding](/architecture/views/#bindings-the-scoped-read-of-the-sample-store):
+the panel reads its keys' last hour once, then follows the server's new samples live over the page's one
+stream, so a line moves as the server records instead of on a poll. A closed panel set reads no series:
+its figures are already on the page, and its sparklines load when you open it.
 
 ### Requests
 

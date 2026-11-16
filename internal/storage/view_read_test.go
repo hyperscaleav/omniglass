@@ -215,3 +215,37 @@ func TestReadViewsSeamHasNoGapOrDuplicate(t *testing.T) {
 		}
 	}
 }
+
+// An open-ended range has no upper bound in history, as it has none on the
+// tail: a sample stamped ahead of the server's clock (a collector whose clock
+// runs fast) that landed before the cursor is in the history, not lost
+// between the two.
+func TestReadViewsOpenRangeKeepsAheadOfClockRows(t *testing.T) {
+	t.Parallel()
+	ctx, gw, _, _ := viewGateway(t)
+	ahead := time.Now().UTC().Add(2 * time.Minute)
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "view-a", Key: "icmp-rtt-avg", Instance: "icmp", Value: 7, Source: "t", TS: ahead},
+	}); err != nil {
+		t.Fatalf("insert metric: %v", err)
+	}
+	if err := insertEvents(ctx, gw, []storage.EventWrite{
+		{OwnerKind: "component", OwnerID: "view-a", Key: "call-started", Origin: "caught", Message: "ahead", Source: "t", TS: ahead},
+	}); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	all := scope.Set{All: true}
+	snap, err := gw.ReadViews(ctx, []storage.ViewBinding{
+		{Primitive: tail.LaneMetric, Kind: "component", Refs: []string{"view-a"}, Keys: []string{"icmp-rtt-avg"}, Window: time.Hour, Read: all},
+		{Primitive: tail.LaneEvent, Kind: "component", Refs: []string{"view-a"}, Window: time.Hour, Read: all},
+	})
+	if err != nil {
+		t.Fatalf("read views: %v", err)
+	}
+	if m := snap.Results[0].Metric; len(m) != 1 || len(m[0].Points) != 1 || m[0].Points[0].Value != 7 {
+		t.Fatalf("an ahead-of-clock sample is missing from an open range's history: %+v", m)
+	}
+	if e := snap.Results[1].Events; len(e) != 1 || e[0].Message != "ahead" {
+		t.Fatalf("an ahead-of-clock event is missing from an open range's history: %+v", e)
+	}
+}

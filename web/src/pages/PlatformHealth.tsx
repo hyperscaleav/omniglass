@@ -15,7 +15,7 @@ import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { verdictOf } from "../lib/health";
 import type { NodeStatus } from "../lib/nodes";
-import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
+import { createViewBinding } from "../lib/binding";
 import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
@@ -30,7 +30,10 @@ import {
   panelAlarms,
   panelRowText,
   panelSections,
-  panelSeriesRequest,
+  panelBinding,
+  panelRowBuckets,
+  panelSeriesFold,
+  panelSeriesInit,
   platformColumns,
   platformRefusal,
   platformView,
@@ -38,6 +41,7 @@ import {
   serverUptime,
   type PanelRow,
   type PanelSection,
+  type PanelSeries,
   type PlatformNode,
   type PlatformPanel,
   type PlatformPanelKey,
@@ -313,8 +317,16 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
   );
 }
 
+// A panel is one view binding (#1830): its rows' history in one read, then
+// their live samples off the page's one stream, so a sparkline moves as the
+// server records rather than on a poll. A closed set binds nothing.
 function Panel(props: { panel: PlatformPanel; server: PlatformServer; view: PlatformView; live: boolean }) {
   const alarms = () => panelAlarms(props.server, props.panel);
+  const series = createViewBinding({
+    binding: () => (props.live ? panelBinding(props.server, props.panel) : undefined),
+    init: panelSeriesInit,
+    fold: panelSeriesFold,
+  });
   return (
     <section
       class="card border bg-base-200"
@@ -337,7 +349,7 @@ function Panel(props: { panel: PlatformPanel; server: PlatformServer; view: Plat
           <table class="table table-xs">
             <tbody>
               <KeyedFor each={panelSections(props.panel)} by={(sec) => sec.key.name}>
-                {(sec) => <Section section={sec()} server={props.server} view={props.view} live={props.live} />}
+                {(sec) => <Section section={sec()} server={props.server} view={props.view} live={props.live} series={series.state()} />}
               </KeyedFor>
             </tbody>
           </table>
@@ -369,7 +381,7 @@ function KeyTip(props: { k: PlatformPanelKey; server: PlatformServer }) {
 // A section is one key. An unsplit key is a single row named by the key; a
 // split or ranked key is a heading row over one row per instance. A ranked key
 // with no window yet has nothing to rank, so it too is one not-reported row.
-function Section(props: { section: PanelSection; server: PlatformServer; view: PlatformView; live: boolean }) {
+function Section(props: { section: PanelSection; server: PlatformServer; view: PlatformView; live: boolean; series?: PanelSeries }) {
   const single = () => {
     const rows = props.section.rows;
     return rows.length === 1 && rows[0].instance === "" && (!props.section.ranked || rows[0].value === null);
@@ -378,7 +390,7 @@ function Section(props: { section: PanelSection; server: PlatformServer; view: P
     <Show
       when={!single()}
       fallback={
-        <Row row={props.section.rows[0]} server={props.server} view={props.view} live={props.live}>
+        <Row row={props.section.rows[0]} server={props.server} view={props.view} live={props.live} series={props.series}>
           <KeyTip k={props.section.key} server={props.server} />
         </Row>
       }
@@ -393,7 +405,7 @@ function Section(props: { section: PanelSection; server: PlatformServer; view: P
       </tr>
       <KeyedFor each={props.section.rows} by={(r) => r.instance}>
         {(r) => (
-          <Row row={r()} server={props.server} view={props.view} live={props.live} indent>
+          <Row row={r()} server={props.server} view={props.view} live={props.live} series={props.series} indent>
             <span class="font-mono text-[11px] [overflow-wrap:anywhere]" title={r().instance}>
               <Show when={r().instance} fallback="owner-level">
                 <PathBreaks text={r().instance} />
@@ -422,25 +434,18 @@ function PathBreaks(props: { text: string }) {
   );
 }
 
-// A row is one series: its name, its last hour as a sparkline, its latest
-// figure. Clicking it opens the full chart beneath. A key never sampled reads
-// not reported and asks for no series.
-function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView; live: boolean; indent?: boolean; children: JSX.Element }) {
+// A row is one series: its name, its last hour as a sparkline (its own key
+// and instance of the panel's binding), its latest figure. Clicking it opens
+// the full chart beneath. A key never sampled reads not reported.
+function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView; live: boolean; series?: PanelSeries; indent?: boolean; children: JSX.Element }) {
   const [expanded, setExpanded] = createSignal(false);
   const reported = () => props.row.value !== null;
-  const req = () => panelSeriesRequest(props.server, props.row);
-  const series = useQuery(() => ({
-    queryKey: metricBucketsKey(req().kind, req().owner, req().metric, req().hours, req().resolutionSeconds, req().instance),
-    queryFn: () => metricBuckets(req().kind, req().owner, req().metric, req().hours, req().resolutionSeconds, req().instance),
-    enabled: props.live && reported(),
-    refetchInterval: SERIES_POLL_MS,
-  }));
   const text = () => panelRowText(props.row);
   const now = () => Date.parse(props.view.read_at);
   const chart = (spark: boolean) => (
     <TimeseriesChart
       spark={spark}
-      buckets={series.data?.buckets ?? []}
+      buckets={panelRowBuckets(props.series, props.row)}
       resolutionMs={PANEL_SERIES_RESOLUTION_S * 1000}
       now={now()}
       windowMs={PANEL_SERIES_HOURS * 3600_000}

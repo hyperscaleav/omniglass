@@ -89,13 +89,20 @@ const twoServers = (): PlatformView => ({
   ],
 });
 
-// emptySeries answers every sparkline read with an empty window, so a mounted
-// page's series queries resolve without a server.
+// emptySeries answers every panel's view binding with an empty history, and
+// holds its watch open with nothing on it, so a mounted page's sparklines
+// resolve without a server.
 function emptySeries() {
-  const fetchSpy = vi.fn((_req: Request) => Promise.resolve(new Response(
-    JSON.stringify({ owner: "lab-server", metric: "x", samples: [], buckets: [], covered_from: readAt }),
-    { status: 200, headers: { "content-type": "application/json" } },
-  )));
+  const fetchSpy = vi.fn((req: Request) => {
+    if (new URL(req.url).pathname.endsWith("/views:watch")) {
+      return Promise.resolve(new Response(new ReadableStream(), { status: 200, headers: { "content-type": "text/event-stream" } }));
+    }
+    const result = { cursor: "boot.1", covered_from: ago(3600_000), from: ago(3600_000), to: readAt, entities: [], metric: [] };
+    return Promise.resolve(new Response(
+      JSON.stringify({ cursor: "boot.1", now: readAt, results: [result] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ));
+  });
   vi.stubGlobal("fetch", fetchSpy);
   return fetchSpy;
 }
@@ -342,15 +349,26 @@ describe("PlatformHealth page", () => {
     expect(within(set).getByTestId("server-panel-requests")).toHaveAttribute("data-flagged", "false");
   });
 
-  it("asks each sparkline for its own row's instance, over the last hour", async () => {
+  it("binds each open panel's sampled keys once, over the last hour, and streams every binding on one connection", async () => {
     const fetchSpy = emptySeries();
     mount(twoServers());
-    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    // Read the query as the server does: the client form-encodes it (a space is "+").
-    const reads = fetchSpy.mock.calls.map(([req]) => new URL(req.url));
-    expect(reads.some((u) => u.pathname.endsWith(`/components/${uuidFor("server")}/metrics/http-request-duration-max/samples`) && u.searchParams.get("instance") === FAST && u.searchParams.get("hours") === "1")).toBe(true);
-    // Only the open set reads its series: the second server's are closed.
-    expect(reads.some((u) => u.pathname.includes(uuidFor("server-b")))).toBe(false);
+    const requests = () => fetchSpy.mock.calls.map(([req]) => req);
+    await vi.waitFor(() => expect(requests().some((r) => new URL(r.url).pathname.endsWith("/views:watch"))).toBe(true));
+    const runs = await Promise.all(
+      requests()
+        .filter((r) => new URL(r.url).pathname.endsWith("/views:run"))
+        .map(async (r) => ((await r.clone().json()) as { bindings: { refs: string[]; keys: string[]; window_seconds: number; step_seconds: number }[] }).bindings),
+    );
+    // One read per panel of the open set, each a single binding.
+    expect(runs).toHaveLength(4);
+    const requestsPanel = runs.find((b) => b[0].keys.includes("http-request-duration-max"))![0];
+    expect(requestsPanel).toMatchObject({ refs: [uuidFor("server")], keys: ["http-request-duration-max", "db-pool-acquired"], window_seconds: 3600, step_seconds: 60 });
+    // Only the open set binds: the second server's is closed.
+    expect(runs.flat().some((b) => b.refs.includes(uuidFor("server-b")))).toBe(false);
+    // Every panel rides one stream.
+    const watches = requests().filter((r) => new URL(r.url).pathname.endsWith("/views:watch"));
+    expect(watches).toHaveLength(1);
+    expect(JSON.parse(new URL(watches[0].url).searchParams.get("bindings")!)).toHaveLength(4);
   });
 
   // The view polls, and every poll is a new body: an operator's place on the

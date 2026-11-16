@@ -10320,6 +10320,57 @@ components:
         - name
         - ts
       type: object
+    RunViewsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RunViewsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        bindings:
+          description: The bindings read, all from one snapshot
+          items:
+            $ref: "#/components/schemas/ViewBindingBody"
+          maxItems: 32
+          minItems: 1
+          type:
+            - array
+            - "null"
+      required:
+        - bindings
+      type: object
+    RunViewsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RunViewsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        cursor:
+          description: The tail cursor every result was read at
+          type: string
+        now:
+          description: The snapshot's clock, the end of every relative range
+          format: date-time
+          type: string
+        results:
+          description: One result per binding, in order
+          items:
+            $ref: "#/components/schemas/ViewResultBody"
+          type:
+            - array
+            - "null"
+      required:
+        - cursor
+        - now
+        - results
+      type: object
     SecretBody:
       additionalProperties: false
       properties:
@@ -13741,6 +13792,477 @@ components:
         - label
         - kind
         - official
+      type: object
+    ViewBindingBody:
+      additionalProperties: false
+      properties:
+        filter:
+          $ref: "#/components/schemas/ViewFilterBody"
+          description: Narrows a kind selector; refused beside refs
+        from:
+          description: An absolute range's start. Give from (and optionally to), or window_seconds
+          format: date-time
+          type: string
+        keys:
+          description: The metric, property or event type names read. Required for metric and property; unset on an event binding reads every type; refused on a log binding
+          items:
+            type: string
+          maxItems: 50
+          type:
+            - array
+            - "null"
+        kind:
+          description: The entity kind the selector names. The binding needs <kind>:read on top of view:read, and resolves only inside that read's scope. Log lines belong to components
+          enum:
+            - component
+            - system
+          type: string
+        limit:
+          description: An event or log page's size; 100 when unset
+          format: int64
+          maximum: 1000
+          minimum: 1
+          type: integer
+        page:
+          description: An event or log read's next_page, to read further back
+          maxLength: 64
+          type: string
+        primitive:
+          description: "The primitive read: metric and property answer one series per entity, key and instance; event and log answer rows, newest first, a page at a time"
+          enum:
+            - metric
+            - property
+            - event
+            - log
+          type: string
+        refs:
+          description: Literal entities, by name, uuid or dotted address. One outside the caller's scope is the same 404 as one that does not exist. Unset, the binding selects every visible entity of the kind that filter keeps
+          items:
+            type: string
+          maxItems: 200
+          type:
+            - array
+            - "null"
+        severity:
+          description: "Log bindings: only lines at this severity or more severe"
+          enum:
+            - emergency
+            - alert
+            - critical
+            - error
+            - warning
+            - notice
+            - info
+            - debug
+          type: string
+        source:
+          description: "Log bindings: only lines that arrived on this channel"
+          maxLength: 100
+          type: string
+        step_seconds:
+          description: Buckets a metric or property read on an epoch-aligned grid of this width (at most 5000 buckets). An hour-multiple step reaching past the raw retention answers the older hours from the hourly trends. Unset, the raw points
+          format: int64
+          maximum: 2592000
+          minimum: 1
+          type: integer
+        to:
+          description: An absolute range's end, exclusive; unset is now. Needs from
+          format: date-time
+          type: string
+        window_seconds:
+          description: "A relative range: this many seconds back from now"
+          format: int64
+          maximum: 63072000
+          minimum: 1
+          type: integer
+      required:
+        - primitive
+        - kind
+      type: object
+    ViewEntityBody:
+      additionalProperties: false
+      properties:
+        id:
+          description: The entity's uuid, the id its series and rows carry
+          type: string
+        kind:
+          description: component or system
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - kind
+      type: object
+    ViewEventBody:
+      additionalProperties: false
+      properties:
+        alarm_id:
+          description: The alarm a rule's event opened or resolved; history rows only
+          type: string
+        attributes: {}
+        derived_by_rule:
+          description: The deriving event rule's name; history rows only
+          type: string
+        entity:
+          description: The owning entity's uuid
+          type: string
+        id:
+          description: The row's id, the page order's tiebreak
+          format: int64
+          type: integer
+        instance:
+          type: string
+        key:
+          description: The event type's name
+          type: string
+        message:
+          type: string
+        origin:
+          description: caught, caused, derived or scheduled
+          type: string
+        provenance:
+          description: The occurrence's lineage; history rows only
+          type: string
+        source:
+          description: The transport that produced it; history rows only
+          type: string
+        ts:
+          format: date-time
+          type: string
+      required:
+        - entity
+        - id
+        - ts
+        - key
+        - origin
+        - message
+      type: object
+    ViewFilterBody:
+      additionalProperties: false
+      properties:
+        product:
+          description: Components of this product (name or uuid). Component bindings only
+          maxLength: 200
+          type: string
+        system:
+          description: Components that are members of this system (name or uuid). Component bindings only
+          maxLength: 200
+          type: string
+        system_type:
+          description: Systems of this system type (name or uuid). System bindings only
+          maxLength: 200
+          type: string
+      type: object
+    ViewLogBody:
+      additionalProperties: false
+      properties:
+        attributes: {}
+        correlation_id:
+          description: History rows only
+          type: string
+        entity:
+          description: The writing component's uuid
+          type: string
+        facility:
+          type: string
+        id:
+          format: int64
+          type: integer
+        instance:
+          type: string
+        labels:
+          description: History rows only
+        message:
+          type: string
+        received_at:
+          description: When the server received the line, the order the read pages in
+          format: date-time
+          type: string
+        severity:
+          type: string
+        source:
+          description: The channel it arrived on
+          type: string
+        ts:
+          description: The time the line carried, else its arrival
+          format: date-time
+          type: string
+      required:
+        - entity
+        - id
+        - ts
+        - message
+      type: object
+    ViewMarkEvent:
+      additionalProperties: false
+      properties:
+        cursor:
+          description: "The stream's position: every binding has every row up to it"
+          type: string
+      required:
+        - cursor
+      type: object
+    ViewMetricSeriesBody:
+      additionalProperties: false
+      properties:
+        buckets:
+          description: Every bucket of the grid, oldest first; on a read with a step
+          items:
+            $ref: "#/components/schemas/MetricBucketBody"
+          type:
+            - array
+            - "null"
+        entity:
+          description: The entity's uuid
+          type: string
+        instance:
+          description: The series discriminator; empty for the owner-level series
+          type: string
+        key:
+          description: The metric type's name
+          type: string
+        points:
+          description: The raw samples, oldest first; on a read without a step
+          items:
+            $ref: "#/components/schemas/ViewPointBody"
+          type:
+            - array
+            - "null"
+      required:
+        - entity
+        - key
+        - instance
+      type: object
+    ViewPointBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        value:
+          format: double
+          type: number
+      required:
+        - ts
+        - value
+      type: object
+    ViewPropertyPointBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - ts
+        - value
+      type: object
+    ViewPropertySeriesBody:
+      additionalProperties: false
+      properties:
+        buckets:
+          description: Every bucket of the grid, oldest first; on a read with a step
+          items:
+            $ref: "#/components/schemas/PropertyBucketBody"
+          type:
+            - array
+            - "null"
+        carried_in:
+          description: The value in force when the range opens; absent when none
+          type: string
+        entity:
+          description: The entity's uuid
+          type: string
+        instance:
+          description: The series discriminator; empty for the owner-level series
+          type: string
+        key:
+          description: The property type's name
+          type: string
+        points:
+          description: The changes, oldest first; on a read without a step
+          items:
+            $ref: "#/components/schemas/ViewPropertyPointBody"
+          type:
+            - array
+            - "null"
+      required:
+        - entity
+        - key
+        - instance
+      type: object
+    ViewResetEvent:
+      additionalProperties: false
+      properties:
+        bindings:
+          description: The bindings whose cursor the tail no longer holds; re-run their history
+          items:
+            format: int64
+            type: integer
+          type:
+            - array
+            - "null"
+      required:
+        - bindings
+      type: object
+    ViewResultBody:
+      additionalProperties: false
+      properties:
+        covered_from:
+          description: "The earliest instant the read could hold data for: the raw retention's floor, or the trend floor when hourly trends answered the older hours"
+          format: date-time
+          type: string
+        cursor:
+          description: "The tail cursor this history was read at: /views:watch from it carries exactly what the history does not"
+          type: string
+        entities:
+          description: The entities the selector resolved to, in scope
+          items:
+            $ref: "#/components/schemas/ViewEntityBody"
+          type:
+            - array
+            - "null"
+        events:
+          description: An event binding's page, newest first
+          items:
+            $ref: "#/components/schemas/ViewEventBody"
+          type:
+            - array
+            - "null"
+        from:
+          description: The range read
+          format: date-time
+          type: string
+        logs:
+          description: A log binding's page, newest arrival first
+          items:
+            $ref: "#/components/schemas/ViewLogBody"
+          type:
+            - array
+            - "null"
+        metric:
+          description: A metric binding's series
+          items:
+            $ref: "#/components/schemas/ViewMetricSeriesBody"
+          type:
+            - array
+            - "null"
+        next_page:
+          description: Pages an event or log read further back; absent at the end
+          type: string
+        property:
+          description: A property binding's series
+          items:
+            $ref: "#/components/schemas/ViewPropertySeriesBody"
+          type:
+            - array
+            - "null"
+        to:
+          format: date-time
+          type: string
+      required:
+        - cursor
+        - entities
+        - from
+        - to
+        - covered_from
+      type: object
+    ViewRowsEvent:
+      additionalProperties: false
+      properties:
+        bindings:
+          description: Each binding with rows in these commits
+          items:
+            $ref: "#/components/schemas/ViewTailBindingBody"
+          type:
+            - array
+            - "null"
+        cursor:
+          description: The cursor after these rows; also the event's id
+          type: string
+      required:
+        - cursor
+        - bindings
+      type: object
+    ViewTailBindingBody:
+      additionalProperties: false
+      properties:
+        binding:
+          description: The binding's index in the watch's bindings
+          format: int64
+          type: integer
+        events:
+          items:
+            $ref: "#/components/schemas/ViewEventBody"
+          type:
+            - array
+            - "null"
+        logs:
+          items:
+            $ref: "#/components/schemas/ViewLogBody"
+          type:
+            - array
+            - "null"
+        metric:
+          items:
+            $ref: "#/components/schemas/ViewTailMetricBody"
+          type:
+            - array
+            - "null"
+        property:
+          items:
+            $ref: "#/components/schemas/ViewTailPropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - binding
+      type: object
+    ViewTailMetricBody:
+      additionalProperties: false
+      properties:
+        entity:
+          type: string
+        instance:
+          type: string
+        key:
+          type: string
+        ts:
+          format: date-time
+          type: string
+        value:
+          format: double
+          type: number
+      required:
+        - entity
+        - key
+        - instance
+        - ts
+        - value
+      type: object
+    ViewTailPropertyBody:
+      additionalProperties: false
+      properties:
+        entity:
+          type: string
+        instance:
+          type: string
+        key:
+          type: string
+        ts:
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - entity
+        - key
+        - instance
+        - ts
+        - value
       type: object
     WebhookRefusedBody:
       additionalProperties: false
@@ -24193,6 +24715,127 @@ paths:
           description: Error
       summary: Read what each simulator saw against what the platform collected
       x-omniglass-permission: simulation:read
+  /views:run:
+    post:
+      description: "Reads each binding's history from one snapshot and answers the tail cursor it was taken at (ADR-1830). A binding names a primitive (metric, property, event or log), an entity selector (literal refs, or a kind and a filter), the keys, and a range (from and to, or window_seconds back from now). A metric or property binding answers one series per resolved entity, key and instance: its raw points, or with step_seconds every bucket of an epoch-aligned grid (metric buckets carry count, min, max, avg and last; property buckets count, last and held), the older hours from the hourly trends when an hour-multiple step reaches past the raw retention. An event or log binding answers a page of rows, newest first, and a next_page. /views:watch from the cursor carries exactly the rows the history does not. Gated by view:read; each binding also needs <kind>:read (component:read or system:read) and resolves only inside that read's scope: a filter selector resolves to the visible entities, and a literal ref out of scope is the same 404 as one that does not exist. A selector past 200 entities, a raw read past 20000 points or a grid past 5000 buckets is a 422, never a truncated answer."
+      operationId: run-views
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunViewsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunViewsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read the history of one or more view bindings
+      x-omniglass-mcp: {}
+      x-omniglass-permission: view:read
+  /views:watch:
+    get:
+      description: "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to."
+      operationId: watch-views
+      parameters:
+        - description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"
+          explode: false
+          in: query
+          name: bindings
+          required: true
+          schema:
+            description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"
+            maxLength: 32768
+            type: string
+        - description: Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail
+          explode: false
+          in: query
+          name: duration_seconds
+          schema:
+            description: Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail
+            format: int64
+            maximum: 3600
+            minimum: 1
+            type: integer
+        - description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"
+          in: header
+          name: Last-Event-ID
+          schema:
+            description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"
+            maxLength: 64
+            type: string
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                description: Each oneOf object is one possible event, serialized as UTF-8 text per the Server-Sent Events specification.
+                items:
+                  oneOf:
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/ViewMarkEvent"
+                        event:
+                          const: mark
+                          description: The event name
+                          type: string
+                        id:
+                          description: The cursor after the event, the resume point; absent on reset
+                          type: string
+                      required:
+                        - event
+                        - data
+                      title: Event mark
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/ViewResetEvent"
+                        event:
+                          const: reset
+                          description: The event name
+                          type: string
+                        id:
+                          description: The cursor after the event, the resume point; absent on reset
+                          type: string
+                      required:
+                        - event
+                        - data
+                      title: Event reset
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/ViewRowsEvent"
+                        event:
+                          const: rows
+                          description: The event name
+                          type: string
+                        id:
+                          description: The cursor after the event, the resume point; absent on reset
+                          type: string
+                      required:
+                        - event
+                        - data
+                      title: Event rows
+                      type: object
+                title: Server Sent Events
+                type: array
+          description: The event stream
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Follow view bindings live over one SSE stream
+      x-omniglass-permission: view:read
   /webhooks/{token}:
     get:
       description: "A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is."

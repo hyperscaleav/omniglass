@@ -315,6 +315,13 @@ func applicableKinds(resource string) map[string]bool {
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
 		return map[string]bool{"location": true, "system": true, "component": true}
+	case "view":
+		// view:read is the views binding's door (ADR-1830), never its fence: a
+		// binding reads through its own kind's read scope (component:read,
+		// system:read), so a view scope is never resolved, and registering it
+		// fleet-wide records that decision. Any grant carrying it opens the
+		// door; what lies behind is the kind's scope.
+		return map[string]bool{"all": true}
 	case "audit", "command_type", "component_type", "driver", "event_type", "file",
 		"location_type", "metric_type", "node", "notification_target",
 		"notification_type", "platform", "principal", "principal_grant",

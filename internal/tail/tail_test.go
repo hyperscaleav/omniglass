@@ -174,3 +174,24 @@ func TestNilHubCommitsThrough(t *testing.T) {
 		t.Fatalf("nil hub mark: %q %v", c, err)
 	}
 }
+
+// Seq orders this hub's cursors, so a reader following several bindings from
+// different cursors knows which commits each one has already seen; a cursor
+// it cannot read is expired.
+func TestSeqOrdersCursors(t *testing.T) {
+	h := tail.New(8)
+	c0, _ := h.Mark(func() error { return nil })
+	_ = h.Commit(func() error { return nil }, []tail.Row{metric("k", 1)})
+	c1 := h.Cursor()
+	s0, err0 := h.Seq(c0)
+	s1, err1 := h.Seq(c1)
+	if err0 != nil || err1 != nil || s1 != s0+1 {
+		t.Fatalf("seq %d %v, %d %v", s0, err0, s1, err1)
+	}
+	if _, err := tail.New(8).Seq(c1); !errors.Is(err, tail.ErrExpired) {
+		t.Fatalf("another boot's cursor: %v", err)
+	}
+	if _, err := h.Seq(c1[:len(c1)-1] + "9"); !errors.Is(err, tail.ErrExpired) {
+		t.Fatalf("a cursor ahead of the hub: %v", err)
+	}
+}
