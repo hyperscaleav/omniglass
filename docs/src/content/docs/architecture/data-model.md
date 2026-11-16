@@ -538,6 +538,11 @@ config: {
     client_id: uuid {constraint: foreign_key}
     principal_id: uuid {constraint: foreign_key}
   }
+  oauth_refresh: {
+    shape: sql_table
+    token_hash: bytea {constraint: primary_key}
+    credential_id: uuid {constraint: foreign_key}
+  }
   secret: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -637,6 +642,7 @@ config.credential.oauth_client_id -> config.oauth_client.id
 config.credential.principal_id -> identity.principal.id
 config.oauth_code.client_id -> config.oauth_client.id
 config.oauth_code.principal_id -> identity.principal.id
+config.oauth_refresh.credential_id -> config.credential.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id

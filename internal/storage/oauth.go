@@ -38,18 +38,47 @@ type OAuthCode struct {
 }
 
 // OAuthTokenIssue is the agent token an exchange mints: its person, its
-// client, its secret's hash and prefix, its expiry, and the agent's bounds.
+// client, its secret's hash and prefix, its expiry, and the agent's bounds,
+// with the refresh token that renews it (#2073).
 type OAuthTokenIssue struct {
-	PrincipalID string
-	ClientID    string
-	SecretHash  []byte
-	Prefix      string
-	ExpiresAt   time.Time
-	Agent       string
-	AgentRoles  []string
-	UserAgent   string
-	ClientIP    string
+	PrincipalID      string
+	ClientID         string
+	SecretHash       []byte
+	Prefix           string
+	ExpiresAt        time.Time
+	RefreshHash      []byte
+	RefreshExpiresAt time.Time
+	Agent            string
+	AgentRoles       []string
+	UserAgent        string
+	ClientIP         string
 }
+
+// OAuthRefresh is a refresh-token grant: the presented token's hash, the
+// client presenting it, and the access and refresh token that replace it.
+type OAuthRefresh struct {
+	TokenHash        []byte
+	ClientID         string
+	SecretHash       []byte
+	Prefix           string
+	ExpiresAt        time.Time
+	RefreshHash      []byte
+	RefreshExpiresAt time.Time
+}
+
+// OAuthRefreshOutcome is how a refresh-token grant ended.
+type OAuthRefreshOutcome int
+
+const (
+	// OAuthRefreshed rotated the grant's tokens.
+	OAuthRefreshed OAuthRefreshOutcome = iota
+	// OAuthRefreshRefused matched no live refresh token for the client, and
+	// changed nothing.
+	OAuthRefreshRefused
+	// OAuthRefreshReplayed matched a token the client already spent, so it
+	// leaked: the grant was ended.
+	OAuthRefreshReplayed
+)
 
 // oauthClientStale is how long a registered client that never reached a
 // token is kept. Registration is open (RFC 7591), so each one prunes the
@@ -169,6 +198,10 @@ func (p *PG) IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error {
 		spec.UserAgent, spec.ClientIP, spec.Agent, emptySliceNil(spec.AgentRoles), channels, spec.ClientID).Scan(&credID); err != nil {
 		return fmt.Errorf("storage: issue oauth token: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `insert into oauth_refresh (token_hash, credential_id, expires_at) values ($1, $2, $3)`,
+		spec.RefreshHash, credID, spec.RefreshExpiresAt); err != nil {
+		return fmt.Errorf("storage: issue oauth refresh token: %w", err)
+	}
 	exp := spec.ExpiresAt
 	img := credentialAuditImage{PrincipalID: spec.PrincipalID, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "OAuth: " + spec.Agent,
 		ExpiresAt: &exp, Agent: spec.Agent, AgentRoles: emptySliceNil(spec.AgentRoles), AgentChannels: channels}
@@ -179,6 +212,112 @@ func (p *PG) IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error {
 		return fmt.Errorf("storage: commit issue oauth token: %w", err)
 	}
 	return nil
+}
+
+// RefreshOAuthToken spends a client's refresh token and rotates its grant in
+// place: the same credential row takes the new access token's hash, prefix and
+// expiry, and the new refresh token replaces the spent one. The spent token is
+// kept until it would have expired, so presenting it again is recognized as a
+// leak and ends the grant (OAuth 2.1 refresh-token rotation). A token another
+// client presents, an expired one, or one whose person is disabled is refused
+// without being spent. The rotation and a replay's revoke are audited as the
+// person's, taken by the client as their agent.
+func (p *PG) RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRefreshOutcome, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: begin refresh oauth token: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var credID, clientName string
+	err = tx.QueryRow(ctx, `
+		update oauth_refresh r set spent_at = now()
+		from credential c
+		join principal pr on pr.id = c.principal_id
+		join oauth_client o on o.id = c.oauth_client_id
+		where r.token_hash = $1 and r.spent_at is null and r.expires_at > now()
+			and c.id = r.credential_id and c.oauth_client_id::text = $2 and pr.active
+		returning c.id, o.client_name`, spec.TokenHash, spec.ClientID).Scan(&credID, &clientName)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return p.refuseOrEndGrant(ctx, tx, spec)
+	case err != nil:
+		return OAuthRefreshRefused, fmt.Errorf("storage: spend oauth refresh token: %w", err)
+	}
+	ctx = WithAgent(ctx, clientName)
+	var old, img credentialAuditImage
+	var oldExp *time.Time
+	var description, agent *string
+	if err := tx.QueryRow(ctx, `
+		select principal_id, prefix, expires_at, description, agent, agent_roles, agent_channels
+		from credential where id = $1 for update`, credID).
+		Scan(&old.PrincipalID, &old.Prefix, &oldExp, &description, &agent, &old.AgentRoles, &old.AgentChannels); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: read oauth credential: %w", err)
+	}
+	old.Purpose, old.ExpiresAt = credentialPurposeToken, oldExp
+	if description != nil {
+		old.Description = *description
+	}
+	if agent != nil {
+		old.Agent = *agent
+	}
+	if _, err := tx.Exec(ctx, `update credential set secret_hash = $2, prefix = $3, expires_at = $4 where id = $1`,
+		credID, spec.SecretHash, spec.Prefix, spec.ExpiresAt); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: rotate oauth token: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `delete from oauth_refresh where credential_id = $1 and expires_at <= now()`, credID); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: prune oauth refresh tokens: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `insert into oauth_refresh (token_hash, credential_id, expires_at) values ($1, $2, $3)`,
+		spec.RefreshHash, credID, spec.RefreshExpiresAt); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: issue oauth refresh token: %w", err)
+	}
+	img = old
+	exp := spec.ExpiresAt
+	img.Prefix, img.ExpiresAt = spec.Prefix, &exp
+	if err := writeAuditRes(ctx, tx, old.PrincipalID, "update", "credential", credID, old, img); err != nil {
+		return OAuthRefreshRefused, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: commit refresh oauth token: %w", err)
+	}
+	return OAuthRefreshed, nil
+}
+
+// refuseOrEndGrant settles a refresh that spent nothing: a token this client
+// already spent ends its grant (the credential and, by cascade, its refresh
+// chain), anything else is refused unchanged.
+func (p *PG) refuseOrEndGrant(ctx context.Context, tx pgx.Tx, spec OAuthRefresh) (OAuthRefreshOutcome, error) {
+	var credID, clientName string
+	err := tx.QueryRow(ctx, `
+		select c.id, o.client_name
+		from oauth_refresh r
+		join credential c on c.id = r.credential_id
+		join oauth_client o on o.id = c.oauth_client_id
+		where r.token_hash = $1 and r.spent_at is not null and c.oauth_client_id::text = $2`,
+		spec.TokenHash, spec.ClientID).Scan(&credID, &clientName)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return OAuthRefreshRefused, nil
+	case err != nil:
+		return OAuthRefreshRefused, fmt.Errorf("storage: look up spent oauth refresh token: %w", err)
+	}
+	rows, err := tx.Query(ctx, `delete from credential where id = $1 `+revokedCols, credID)
+	if err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: end oauth grant: %w", err)
+	}
+	revoked, err := scanRevoked(rows)
+	if err != nil {
+		return OAuthRefreshRefused, err
+	}
+	for _, r := range revoked {
+		if err := auditRevokedTokens(WithAgent(ctx, clientName), tx, r.img.PrincipalID, []revokedCredential{r}); err != nil {
+			return OAuthRefreshRefused, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return OAuthRefreshRefused, fmt.Errorf("storage: commit end oauth grant: %w", err)
+	}
+	return OAuthRefreshReplayed, nil
 }
 
 // isInvalidText reports a malformed uuid, which matches no row.

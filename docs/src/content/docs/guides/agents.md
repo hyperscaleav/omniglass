@@ -24,13 +24,14 @@ The first call is refused with a pointer to the server's OAuth metadata. The cli
 itself, opens your browser on the console's **Connect** page, and you choose the roles it may act
 under (only roles whose capabilities you hold are offered). Approving hands the client a one-time
 code it exchanges, with its PKCE proof, for an **agent token** named after the client: accepted on
-MCP only, holding what the chosen roles **and** you hold, with the plaintext ceiling below, for 30
-days. Denying sends the client a refusal and mints nothing. Signing the same client in again
+MCP only, holding what the chosen roles **and** you hold, with the plaintext ceiling below. The
+token lasts an hour and the client renews it on its own with a refresh token, so you are not asked
+again while the client is in use. Denying sends the client a refusal and mints nothing. Signing the same client in again
 replaces its token rather than adding one.
 
 The token shows in your profile's API tokens as `OAuth: <client name>`; revoking it there refuses
-the client's next call, and everything it did is in the audit log under its name. When the 30 days
-run out, the client signs you in again.
+the client's next call and ends its refreshes, and everything it did is in the audit log under its
+name. A client left unused for 30 days signs you in again.
 
 ## Give the agent a token of its own
 

@@ -311,6 +311,13 @@
       "no_label": "no operator surface of its own: only the token exchange reads a code"
     },
     {
+      "table": "oauth_refresh",
+      "shape": "human identifier, not a name",
+      "reason": "keyed by the hash of a minted refresh token (#2073), not a name: it is spent by its one refresh and pruned when its credential rotates",
+      "labelled": false,
+      "no_label": "no operator surface of its own: only the refresh grant reads a refresh token"
+    },
+    {
       "table": "platform_server",
       "shape": "human identifier, not a name",
       "reason": "the identity a server boots under (OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a kebab token, and the server's component carries the operator-facing name (#1627)",

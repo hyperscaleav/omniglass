@@ -171,6 +171,9 @@ var IdentityShapes = map[string]TableIdentity{
 	"oauth_code": {Shape: ShapeHumanNotAKey, Reason: "keyed by the hash of a minted authorization code (#2048), " +
 		"not a name: it lives five minutes and is spent by its one exchange",
 		NoLabel: "no operator surface of its own: only the token exchange reads a code"},
+	"oauth_refresh": {Shape: ShapeHumanNotAKey, Reason: "keyed by the hash of a minted refresh token (#2073), " +
+		"not a name: it is spent by its one refresh and pruned when its credential rotates",
+		NoLabel: "no operator surface of its own: only the refresh grant reads a refresh token"},
 	"platform_server": {Shape: ShapeHumanNotAKey, Reason: "the identity a server boots under " +
 		"(OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a " +
 		"kebab token, and the server's component carries the operator-facing name (#1627)",

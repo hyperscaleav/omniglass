@@ -1724,6 +1724,39 @@
      }
     ]
    },
+   "oauth_refresh": {
+    "columns": [
+     {
+      "name": "token_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "credential_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "credential.id"
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "spent_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "secret": {
     "columns": [
      {
