@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 )
 
 // UnimplementedGateway is a no-op Gateway for tests and codegen stubs that must
@@ -1004,6 +1005,16 @@ func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Se
 func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) ReadViews(context.Context, []ViewBinding) (ViewSnapshot, error) {
+	return ViewSnapshot{}, nil
+}
+
+func (UnimplementedGateway) ResolveViewEntities(context.Context, ViewBinding) ([]ViewEntity, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ViewTail() *tail.Hub { return nil }
 
 func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string, time.Time) error {
 	return nil

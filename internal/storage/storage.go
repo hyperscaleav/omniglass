@@ -1093,6 +1093,17 @@ type Gateway interface {
 	// system:read for the platform verdict, component:read for the figures,
 	// verdicts and server identity; short of all-scope, each is omitted.
 	PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	// ReadViews reads view bindings (#1830, ADR-1830) inside one snapshot
+	// taken under the tail's mark: each binding's selector resolved in its
+	// Read scope (a literal ref outside it is ErrViewEntityNotFound), its
+	// history typed by primitive, and the tail cursor the snapshot was taken
+	// at.
+	ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapshot, error)
+	// ResolveViewEntities resolves one binding's selector alone, in scope.
+	ResolveViewEntities(ctx context.Context, b ViewBinding) ([]ViewEntity, error)
+	// ViewTail is the published tail of landed rows a views watch follows;
+	// nil when the store keeps none.
+	ViewTail() *tail.Hub
 	// RecordServerIdentity writes the server's version and boot start time on
 	// its platform component (#1644).
 	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
