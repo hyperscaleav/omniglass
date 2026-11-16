@@ -823,11 +823,11 @@
    "description": "On-disk bytes of one stored table with its indexes and toast; the metric table's is the sum of its day partitions."
   },
   {
-   "name": "database-bytes",
+   "name": "db-size",
    "data_type": "int",
    "unit": "bytes",
    "label": "Database Size",
-   "description": "On-disk bytes of the whole Omniglass database."
+   "description": "On-disk bytes of the whole Omniglass database, as pg_database_size reads it, sampled each report window."
   },
   {
    "name": "data-dir-disk-used-ratio",
@@ -4212,6 +4212,45 @@
    "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "process-heap-growing",
+   "label": "Process heap growing",
+   "description": "An Omniglass process's heap has grown steadily by more than a quarter over six hours.",
+   "sample_key": "process-heap-size",
+   "fire": "span(window) \u003e= 18000 \u0026\u0026 growth(window) \u003e 0.25",
+   "clear": "growth(window) \u003c= 0.1",
+   "fire_sustain": "1h",
+   "sample_window": "6h",
+   "severity": "average",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "process-goroutines-growing",
+   "label": "Process goroutines growing",
+   "description": "An Omniglass process's goroutine count has grown steadily by more than a quarter over six hours.",
+   "sample_key": "process-goroutine-count",
+   "fire": "span(window) \u003e= 18000 \u0026\u0026 growth(window) \u003e 0.25",
+   "clear": "growth(window) \u003c= 0.1",
+   "fire_sustain": "1h",
+   "sample_window": "6h",
+   "severity": "average",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "db-size-growing",
+   "label": "Database size growing",
+   "description": "The Omniglass database has grown by more than a quarter over a day, past what retention trims.",
+   "sample_key": "db-size",
+   "fire": "span(window) \u003e= 72000 \u0026\u0026 growth(window) \u003e 0.25",
+   "clear": "growth(window) \u003c= 0.1",
+   "fire_sustain": "6h",
+   "sample_window": "24h",
+   "severity": "average",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
   }
  ],
  "platform_figures": [
@@ -4399,9 +4438,11 @@
    "exemption": "no rule yet, #1982"
   },
   {
-   "key": "database-bytes",
+   "key": "db-size",
    "group": "Retention",
-   "exemption": "no rule yet, #1982"
+   "rules": [
+    "db-size-growing"
+   ]
   },
   {
    "key": "table-bytes",

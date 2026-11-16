@@ -373,6 +373,9 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 		if spec.ClearSustain, err = parseSeedDuration(r.ClearSustain); err != nil {
 			return fmt.Errorf("seed: event rule %s clear_sustain: %w", r.Name, err)
 		}
+		if spec.SampleWindow, err = parseSeedDuration(r.SampleWindow); err != nil {
+			return fmt.Errorf("seed: event rule %s sample_window: %w", r.Name, err)
+		}
 		if err := gw.UpsertEventRule(ctx, spec); err != nil {
 			return err
 		}
@@ -391,6 +394,7 @@ type eventRulesDoc struct {
 		Clear          string `yaml:"clear"`
 		FireSustain    string `yaml:"fire_sustain"`
 		ClearSustain   string `yaml:"clear_sustain"`
+		SampleWindow   string `yaml:"sample_window"`
 		Severity       string `yaml:"severity"`
 		Message        string `yaml:"message"`
 		FireEventType  string `yaml:"fire_event_type"`

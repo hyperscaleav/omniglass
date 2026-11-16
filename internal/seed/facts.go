@@ -185,6 +185,7 @@ type factsEventRule struct {
 	Clear          string `json:"clear,omitempty"`
 	FireSustain    string `json:"fire_sustain,omitempty"`
 	ClearSustain   string `json:"clear_sustain,omitempty"`
+	SampleWindow   string `json:"sample_window,omitempty"`
 	Severity       string `json:"severity,omitempty"`
 	FireEventType  string `json:"fire_event_type"`
 	ClearEventType string `json:"clear_event_type,omitempty"`
@@ -439,7 +440,7 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, r := range ers.Rules {
 		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity,
+			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, SampleWindow: r.SampleWindow, Severity: r.Severity,
 			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		doc.EventRules = append(doc.EventRules, fr)
 	}

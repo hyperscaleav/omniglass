@@ -663,7 +663,7 @@ code). One pass writes one sample per key and instance, at the pass's end:
 - From one status read after the prunes: **`metric-partition-count`**, **`metric-oldest-day-age`**
   (days from the oldest partition's start to now, to read against `retention-window-days`),
   **`table-bytes`** per stored table (`metric` summed over its day partitions, `metric_trend`,
-  `metric_block`, `property`, `log_line`, `node_log`) and **`database-bytes`**. A failed status read
+  `metric_block`, `property`, `log_line`, `node_log`). A failed status read
   loses only these; the pass's own figures still land. The log tables' oldest row is not read: with no
   index leading on `ts` it is a full scan, so the behind flags and deleted counts stand in until #1417
   partitions them.

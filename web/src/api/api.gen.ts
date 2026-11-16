@@ -1718,6 +1718,8 @@ export type CreateEventRuleInputBody = {
      * @minLength 1
      */
   sample_key: string;
+  /** A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window */
+  sample_window?: string;
   /** The components the rule watches (component types and components); absent is every component */
   selector?: SelectorBody;
   /** The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm */
@@ -3143,6 +3145,8 @@ export type EventRuleBody = {
   sample_key: string;
   /** Which lane the key reads, derived from the registries */
   sample_lane: EventRuleBodySampleLane;
+  /** How far back the criteria's window reads the metric's series, a Go duration; 0s binds no window */
+  sample_window: string;
   /** The components the rule watches; both lists empty is every component */
   selector: SelectorBody;
   /** The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm */
@@ -7690,6 +7694,8 @@ export type UpdateEventRuleInputBody = {
   message?: string;
   /** The property or metric the rule reads */
   sample_key?: string;
+  /** How far back the criteria's window reads the metric's series, a Go duration up to 168h; empty is 0s, no window */
+  sample_window?: string;
   /** Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
   selector?: SelectorBody;
   /** The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) */
@@ -14433,7 +14439,7 @@ export const getCreateEventRuleUrl = () => {
 }
 
 /**
- * Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+ * Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a metric rule with a sample_window also reads window, the series' points over that span, oldest first, so slope, growth and span can fire it on a sustained trend (criteria that read window need a sample_window, and a sample_window needs criteria that read it); a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
  * @summary Create an event rule
  */
 export const createEventRule = async (createEventRuleInputBody: NonReadonly<CreateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventRuleResponse> => {
@@ -14741,7 +14747,7 @@ export const getPreviewEventRuleUrl = () => {
 }
 
 /**
- * Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+ * Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column, and criteria that read window (a trend rule's) are a 422, since each sample is judged alone. Gated by rule:read.
  * @summary Preview an event rule
  */
 export const previewEventRule = async (previewEventRuleInputBody: NonReadonly<PreviewEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewEventRuleResponse> => {

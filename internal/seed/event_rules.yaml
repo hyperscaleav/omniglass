@@ -4,7 +4,9 @@
 # (fire_event_type, required) and ends (clear_event_type, optional), and the
 # severity its alarm is raised at (absent: informational, no alarm) (#948).
 # Criteria are expressions over the sample (#957): value, key, instance,
-# component.name and component.type; an absent clear is !(fire).
+# component.name and component.type; an absent clear is !(fire). A rule with
+# a sample_window also reads window, the series' points over that span, oldest
+# first, so its criteria can judge a trend with slope, growth and span (#1985).
 rules:
   # An endpoint that stops answering opens an alarm on its component: one
   # alarm per endpoint, at a level that puts the component in outage, after
@@ -96,5 +98,57 @@ rules:
     fire_sustain: 5m
     clear: 'value == 0'
     severity: warning
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
+  # A process whose heap climbs steadily for six hours (#1985), the shape of a
+  # leak: the least-squares line through the window rises by more than a
+  # quarter of the heap's mean, and the window holds at least five hours of
+  # samples, so a process just started (its warm-up) does not judge on a short
+  # series. The garbage collector's sawtooth averages out of a six-hour fit;
+  # the hour's sustain absorbs a load step. Raised on the platform component
+  # of the process that reports it, a node's or the server's; it clears once
+  # the fitted rise is back under a tenth.
+  - name: process-heap-growing
+    label: Process heap growing
+    description: An Omniglass process's heap has grown steadily by more than a quarter over six hours.
+    sample_key: process-heap-size
+    sample_window: 6h
+    fire: 'span(window) >= 18000 && growth(window) > 0.25'
+    fire_sustain: 1h
+    clear: 'growth(window) <= 0.1'
+    severity: average
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
+  # A process whose goroutine count climbs steadily for six hours (#1985): a
+  # goroutine started per request or per session and never returned. The same
+  # shape and thresholds as process-heap-growing.
+  - name: process-goroutines-growing
+    label: Process goroutines growing
+    description: An Omniglass process's goroutine count has grown steadily by more than a quarter over six hours.
+    sample_key: process-goroutine-count
+    sample_window: 6h
+    fire: 'span(window) >= 18000 && growth(window) > 0.25'
+    fire_sustain: 1h
+    clear: 'growth(window) <= 0.1'
+    severity: average
+    fire_event_type: condition-started
+    clear_event_type: condition-ended
+  # A database that keeps growing past what retention trims (#1985): over a
+  # day, db-size's fitted rise is more than a quarter of its size, held for
+  # six hours. A database at its retention window holds level across a day
+  # (a day's metric partition dropped as the next fills), so a quarter is
+  # bloat or a lane retention does not reach. A fresh database grows while
+  # its windows fill, a day's data on a few days' is past a quarter, so it
+  # raises this alarm in its first days. Raised on the server's platform
+  # component; it clears once the day's rise is back under a tenth.
+  - name: db-size-growing
+    label: Database size growing
+    description: The Omniglass database has grown by more than a quarter over a day, past what retention trims.
+    sample_key: db-size
+    sample_window: 24h
+    fire: 'span(window) >= 72000 && growth(window) > 0.25'
+    fire_sustain: 6h
+    clear: 'growth(window) <= 0.1'
+    severity: average
     fire_event_type: condition-started
     clear_event_type: condition-ended

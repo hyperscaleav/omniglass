@@ -115,6 +115,11 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
 	}
+	if judge.ReadsWindow() {
+		// A preview judges each sample alone, so a window would always be
+		// empty and a trend never move: refused, not answered wrong (#1985).
+		return nil, invalidRule("a preview judges each sample alone, so criteria that read window cannot be previewed")
+	}
 	ids, err := previewSelectorIDs(ctx, tx, spec.Selector, visible)
 	if err != nil {
 		return nil, err

@@ -33,17 +33,20 @@ type EventRuleSelector struct {
 // by name; "" is an informational rule, which raises no alarm. Version bumps
 // on every update. Official rules ship with the boot seed and are read-only.
 type EventRule struct {
-	ID             string
-	Name           string
-	Label          string
-	Description    string
-	Selector       EventRuleSelector
-	SampleKey      string
-	SampleLane     rules.Lane
-	FireCriteria   rules.Criteria
-	ClearCriteria  *rules.Criteria
-	FireSustain    time.Duration
-	ClearSustain   time.Duration
+	ID            string
+	Name          string
+	Label         string
+	Description   string
+	Selector      EventRuleSelector
+	SampleKey     string
+	SampleLane    rules.Lane
+	FireCriteria  rules.Criteria
+	ClearCriteria *rules.Criteria
+	FireSustain   time.Duration
+	ClearSustain  time.Duration
+	// SampleWindow, when set (a metric rule only), binds window in its
+	// criteria: the series' points over that span, oldest first (#1985).
+	SampleWindow   time.Duration
 	Severity       string
 	FireEventType  string
 	ClearEventType string
@@ -109,6 +112,7 @@ type EventRuleSpec struct {
 	Clear        *rules.Criteria
 	FireSustain  time.Duration
 	ClearSustain time.Duration
+	SampleWindow time.Duration
 	Severity     string
 	Message      string
 	Enabled      *bool
@@ -130,6 +134,7 @@ type EventRulePatch struct {
 	ClearNegates bool
 	FireSustain  *time.Duration
 	ClearSustain *time.Duration
+	SampleWindow *time.Duration
 	Severity     *string
 	Message      *string
 	Enabled      *bool
@@ -152,6 +157,7 @@ func ruleCols(a string) string {
 	return fmt.Sprintf(`%[1]sid, %[1]sname, coalesce(%[1]slabel, ''), %[1]sdescription, %[1]sselector, %[1]ssample_key, %[1]ssample_lane,
 	%[1]sfire_criteria, %[1]sclear_criteria,
 	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
+	(extract(epoch from %[1]ssample_window) * 1000000)::bigint,
 	coalesce(%[1]sseverity, ''), (select name from event_type where id = %[1]sfire_event_type_id),
 	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at,
 	coalesce((select data_type from property_type_in_effect() property_type where name = %[1]ssample_key and %[1]ssample_lane = 'property'), '')`, a)
@@ -181,9 +187,9 @@ func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	var r EventRule
 	var sel, fire, clear []byte
 	var lane string
-	var fireUs, clearUs int64
+	var fireUs, clearUs, windowUs int64
 	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
-		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.dataType)
+		&fireUs, &clearUs, &windowUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.dataType)
 	dest = append(dest, trail...)
 	err := row.Scan(dest...)
 	if err != nil {
@@ -191,6 +197,7 @@ func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	}
 	r.SampleLane = rules.Lane(lane)
 	r.FireSustain, r.ClearSustain = time.Duration(fireUs)*time.Microsecond, time.Duration(clearUs)*time.Microsecond
+	r.SampleWindow = time.Duration(windowUs) * time.Microsecond
 	if err := json.Unmarshal(sel, &r.Selector); err != nil {
 		return r, fmt.Errorf("storage: event rule %q selector: %w", r.Name, err)
 	}
@@ -243,6 +250,12 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 			return invalidRule("a sustain is kept to the microsecond; %s is finer", d)
 		}
 	}
+	if r.SampleWindow < 0 || r.SampleWindow > rules.MaxSampleWindow {
+		return invalidRule("a sample window must be between 0s and %s", rules.MaxSampleWindow)
+	}
+	if r.SampleWindow%time.Microsecond != 0 {
+		return invalidRule("a sample window is kept to the microsecond; %s is finer", r.SampleWindow)
+	}
 	if check.key {
 		if err := resolveRuleLane(ctx, q, r); err != nil {
 			return err
@@ -258,6 +271,9 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 			return fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
 		}
 		r.FireCriteria, r.ClearCriteria = j.Fire(), j.Clear()
+		if err := checkSampleWindow(*r, j); err != nil {
+			return err
+		}
 	} else {
 		lowerStored(r)
 	}
@@ -266,6 +282,23 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 	}
 	if check.selector {
 		return resolveRuleSelector(ctx, q, r, check.kept)
+	}
+	return nil
+}
+
+// checkSampleWindow refuses a sample window the criteria cannot use (#1985):
+// only a metric has a series to read back, criteria that read window need one
+// to read (without it the list is always empty, so a trend never moves), and
+// a window no criterion reads would be fetched for nothing.
+func checkSampleWindow(r EventRule, j *rules.Judge) error {
+	reads := j.ReadsWindow()
+	switch {
+	case r.SampleWindow > 0 && r.SampleLane != rules.LaneMetric:
+		return invalidRule("a sample window reads a metric's history; %q is a property", r.SampleKey)
+	case reads && r.SampleWindow == 0:
+		return invalidRule("the criteria read window, so the rule needs a sample_window to fill it")
+	case !reads && r.SampleWindow > 0:
+		return invalidRule("a sample_window is set but no criterion reads window")
 	}
 	return nil
 }
@@ -570,7 +603,7 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	}
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
-		ClearSustain: spec.ClearSustain, Severity: spec.Severity, FireEventType: spec.FireEventType,
+		ClearSustain: spec.ClearSustain, SampleWindow: spec.SampleWindow, Severity: spec.Severity, FireEventType: spec.FireEventType,
 		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true}
 	if spec.Enabled != nil {
 		r.Enabled = *spec.Enabled
@@ -589,13 +622,13 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	}
 	created, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector,
 		sample_key, sample_lane, fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
-		fire_event_type_id, clear_event_type_id)
+		fire_event_type_id, clear_event_type_id, sample_window)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, $13, false,
-		$14::uuid, $15::uuid)
+		$14::uuid, $15::uuid, make_interval(secs => $16::float8 / 1000000))
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
 		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message, r.Enabled,
-		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
+		r.fireTypeID, nullIfEmpty(r.clearTypeID), r.SampleWindow.Microseconds()))
 	if err != nil {
 		return nil, mapRuleWriteErr(err, r.Name)
 	}
@@ -676,6 +709,9 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if patch.ClearSustain != nil {
 		r.ClearSustain = *patch.ClearSustain
 	}
+	if patch.SampleWindow != nil {
+		r.SampleWindow = *patch.SampleWindow
+	}
 	if patch.Severity != nil {
 		r.Severity = *patch.Severity
 	}
@@ -696,8 +732,9 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	// on it, and a selector entry the rule already held is kept as stored.
 	keyChanged := r.SampleKey != old.SampleKey
 	check := ruleChecks{
-		key:      keyChanged,
-		criteria: keyChanged || !sameRuleJSON(r.FireCriteria, old.FireCriteria) || !sameRuleJSON(r.ClearCriteria, old.ClearCriteria),
+		key: keyChanged,
+		criteria: keyChanged || r.SampleWindow != old.SampleWindow ||
+			!sameRuleJSON(r.FireCriteria, old.FireCriteria) || !sameRuleJSON(r.ClearCriteria, old.ClearCriteria),
 		selector: patch.Selector != nil,
 		kept:     old.Selector,
 	}
@@ -719,11 +756,11 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 		sample_key = $5, sample_lane = $6, fire_criteria = $7, clear_criteria = $8,
 		fire_sustain = make_interval(secs => $9::float8 / 1000000), clear_sustain = make_interval(secs => $10::float8 / 1000000),
 		severity = $11, message = $12, enabled = $13, fire_event_type_id = $14::uuid, clear_event_type_id = $15::uuid,
-		version = version + 1, updated_at = now()
+		sample_window = make_interval(secs => $16::float8 / 1000000), version = version + 1, updated_at = now()
 		where id = $1 returning `+eventRuleCols,
 		old.ID, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
 		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message, r.Enabled,
-		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
+		r.fireTypeID, nullIfEmpty(r.clearTypeID), r.SampleWindow.Microseconds()))
 	if err != nil {
 		return nil, mapRuleWriteErr(err, name)
 	}
@@ -894,9 +931,10 @@ func materialRuleChange(a, b EventRule) bool {
 		Fire                      rules.Criteria
 		Clear                     *rules.Criteria
 		FireSustain, ClearSustain time.Duration
+		SampleWindow              time.Duration
 	}
 	pick := func(r EventRule) judgment {
-		return judgment{r.SampleKey, r.SampleLane, r.Selector, r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain}
+		return judgment{r.SampleKey, r.SampleLane, r.Selector, r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain, r.SampleWindow}
 	}
 	return !sameRuleJSON(pick(a), pick(b))
 }
@@ -915,12 +953,12 @@ func sameAuthoredRule(a, b EventRule) bool {
 		Selector                                         EventRuleSelector
 		Fire                                             rules.Criteria
 		Clear                                            *rules.Criteria
-		FireSustain, ClearSustain                        time.Duration
+		FireSustain, ClearSustain, SampleWindow          time.Duration
 		Enabled                                          bool
 	}
 	pick := func(r EventRule) string {
 		j, _ := json.Marshal(authored{r.Label, r.Description, r.SampleKey, r.Severity, r.Message, r.FireEventType, r.ClearEventType, r.Selector,
-			r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain, r.Enabled})
+			r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain, r.SampleWindow, r.Enabled})
 		return string(j)
 	}
 	return pick(a) == pick(b)
@@ -935,7 +973,7 @@ func sameAuthoredRule(a, b EventRule) bool {
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
-		ClearSustain: spec.ClearSustain, Severity: spec.Severity, FireEventType: spec.FireEventType,
+		ClearSustain: spec.ClearSustain, SampleWindow: spec.SampleWindow, Severity: spec.Severity, FireEventType: spec.FireEventType,
 		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true, resolveIn: NamespaceOG}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -965,18 +1003,19 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	}
 	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (namespace, name, label, description, selector, sample_key, sample_lane,
 		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
-		fire_event_type_id, clear_event_type_id)
+		fire_event_type_id, clear_event_type_id, sample_window)
 		values ('og', $1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
-		$13::uuid, $14::uuid)
+		$13::uuid, $14::uuid, make_interval(secs => $15::float8 / 1000000))
 		on conflict (namespace, name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
 			severity = excluded.severity, message = excluded.message, fire_event_type_id = excluded.fire_event_type_id,
-			clear_event_type_id = excluded.clear_event_type_id, version = event_rule.version + 1, updated_at = now()
+			clear_event_type_id = excluded.clear_event_type_id, sample_window = excluded.sample_window,
+			version = event_rule.version + 1, updated_at = now()
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
 		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message,
-		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
+		r.fireTypeID, nullIfEmpty(r.clearTypeID), r.SampleWindow.Microseconds()))
 	if err != nil {
 		return mapRuleWriteErr(err, r.Name)
 	}

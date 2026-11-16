@@ -49,7 +49,16 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   over a list, one value out), and admitted by name where a site binds lists: `max` and `min` over one
   list of numbers (or over numbers), `avg`, `sum` (with or without a predicate), `majority` (the most
   common text or bool, its strings charged their bytes, a tie to the value that sorts first), and the
-  one-list `any` and `all` over bools beside their predicate forms. A list function given anything but
+  one-list `any` and `all` over bools beside their predicate forms. The **trend functions** (#1985)
+  read a list of timestamped points, each a record or map with a number `value` and its `at` in unix
+  seconds: **`slope`** is the least-squares rise per second through them, **`span`** the seconds from
+  the oldest to the newest, and **`growth`** the fitted rise across that span as a share of the
+  points' mean (`slope * span / |mean|`), so `growth(window) > 0.25` reads "rose by more than a
+  quarter of its level" whatever the key's unit. Each is one pass, and a list with fewer than two
+  points, or no time between them, has no trend: 0. A fit, not the newest point less the oldest, so a
+  noisy flat series reads near 0 and one outlier at either end does not read as a rise. They are
+  admitted where a site binds such a list: an [event rule's `window`](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)
+  and a calc rule's windowed input. A list function given anything but
   its list is refused at compile time on the argument. Their names, like every builtin's, can never be
   bound, so admitting one later never changes what a stored expression means. Expr parses `any`, `all`
   and `sum` as predicate builtins only, so a call of one with a single argument is told apart before

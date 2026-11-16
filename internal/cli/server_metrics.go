@@ -23,6 +23,7 @@ type serverMetricsStore interface {
 	DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error)
 	PoolStat() storage.PoolStat
 	OutboxStatus(ctx context.Context) (storage.OutboxStatus, error)
+	DatabaseSize(ctx context.Context) (int64, error)
 }
 
 // serverMetrics is the server's measure of itself (#1627): the recorder the
@@ -68,8 +69,8 @@ func serverReportWindow(ctx context.Context, gw serverMetricsStore) time.Duratio
 }
 
 // reporter lands the recorder's windows on the server's component: each
-// window it gauges the pool, the outbox, the process's runtime and the disk
-// holding dataDir (#1707), runs the samplers it is handed (the bus's, #1628),
+// window it gauges the pool, the outbox, the database's size (#1985), the
+// process's runtime and the disk holding dataDir (#1707), runs the samplers it is handed (the bus's, #1628),
 // and re-reads the slow-query setting, so a change to it takes within a
 // window without a restart.
 func (m *serverMetrics) reporter(gw serverMetricsStore, componentID, dataDir string, log *slog.Logger, samplers ...platformmetric.Sampler) *platformmetric.Reporter {
@@ -78,6 +79,7 @@ func (m *serverMetrics) reporter(gw serverMetricsStore, componentID, dataDir str
 		platformmetric.RuntimeSampler(platformmetric.ReadProcess),
 		platformmetric.DiskSampler(dataDir, platformmetric.ReadDisk, log),
 		outboxSampler(gw),
+		dbSizeSampler(gw),
 		func(ctx context.Context, _ *platformmetric.Recorder) { m.applySlowQuery(ctx, gw) },
 	}, samplers...)
 	return platformmetric.NewReporter(m.rec, gw, componentID,
@@ -98,5 +100,20 @@ func outboxSampler(gw serverMetricsStore) platformmetric.Sampler {
 		}
 		r.Gauge(writerclass.OutboxQueuedDepth, "", float64(st.Queued))
 		r.Gauge(writerclass.OutboxDueAge, "", st.DueAge.Seconds())
+	}
+}
+
+// dbSizeSampler gauges the database's on-disk bytes each window (#1985), so
+// a trend rule reads its growth at the report window's grain. A read that
+// fails says nothing that window.
+func dbSizeSampler(gw serverMetricsStore) platformmetric.Sampler {
+	return func(ctx context.Context, r *platformmetric.Recorder) {
+		ctx, cancel := context.WithTimeout(ctx, settingsReadTimeout)
+		defer cancel()
+		n, err := gw.DatabaseSize(ctx)
+		if err != nil {
+			return
+		}
+		r.Gauge(writerclass.DBSize, "", float64(n))
 	}
 }

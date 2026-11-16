@@ -221,11 +221,14 @@ metric_types:
     unit: bytes
     label: Table Size
     description: On-disk bytes of one stored table with its indexes and toast; the metric table's is the sum of its day partitions.
-  - name: database-bytes
+  # The database's size (#1985), landed by the server on its own component
+  # every report window, not by the hourly retention pass: db-size-growing
+  # reads its growth over a day.
+  - name: db-size
     data_type: int
     unit: bytes
     label: Database Size
-    description: On-disk bytes of the whole Omniglass database.
+    description: On-disk bytes of the whole Omniglass database, as pg_database_size reads it, sampled each report window.
   # The server's data directory disk (#1707): how full the filesystem holding
   # the server's data directory is, landed on the server's own component every
   # report window. disk-nearly-full reads it.

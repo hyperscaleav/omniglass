@@ -406,3 +406,108 @@ func TestListFunctionRefusalsRead(t *testing.T) {
 		}
 	}
 }
+
+// The trend functions (#1985): slope, growth and span read a list of
+// samples (records with a value and an at) as a series over time, so a
+// criterion can fire on a sustained rise rather than on one value.
+func TestTrendFunctions(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want float64
+	}{
+		// samples: 4 at 1, 8 at 2, 3 at 3. The least-squares line falls half
+		// a unit a second, across two seconds, from a mean of five.
+		{"slope(samples)", -0.5},
+		{"span(samples)", 2},
+		{"growth(samples)", -0.2},
+		{"slope(filter(samples, .at > 1))", -5},
+		{"span(filter(samples, .at > 1))", 1},
+		// Fewer than two samples, or none, have no trend.
+		{"slope(filter(samples, .at > 2))", 0},
+		{"growth(filter(samples, .at > 2))", 0},
+		{"span(filter(samples, .at > 2))", 0},
+		{"slope(filter(samples, .at > 9))", 0},
+		// Records written as literals read the same way.
+		{"slope([{value: 1, at: 0}, {value: 3, at: 2}])", 1},
+		{"growth([{value: 1, at: 0}, {value: 3, at: 2}])", 1},
+		// A level series has no slope; a series with no mean has no growth.
+		{"slope([{value: 5, at: 0}, {value: 5, at: 60}])", 0},
+		{"growth([{value: -1, at: 0}, {value: 1, at: 60}])", 0},
+	} {
+		p, err := Compile(tc.src, listSite(t, Float, true))
+		if err != nil {
+			t.Errorf("%q: %v", tc.src, err)
+			continue
+		}
+		got, err := p.Run(listIn)
+		f, ok := got.(float64)
+		if err != nil || !ok || math.Abs(f-tc.want) > 1e-9 {
+			t.Errorf("%q = %v (%T), %v; want %v", tc.src, got, got, err, tc.want)
+		}
+	}
+}
+
+// The acceptance shape (#1985): a steady rise over six hours fires a growth
+// criterion; a flat series with noise around its level does not, however
+// the noise falls.
+func TestTrendFunctionsRiseVersusNoise(t *testing.T) {
+	p, err := Compile("span(samples) >= 18000 && growth(samples) > 0.25", listSite(t, Bool, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rising, noisy []listSample
+	for i := range 721 { // every 30s for six hours
+		at := float64(1_700_000_000 + 30*i)
+		rising = append(rising, listSample{Value: 50e6 + 35e3*float64(i), At: at}) // 50MB to 75MB
+		noise := float64((i*7919)%201-100) / 100                                   // a fixed jitter in [-1, 1]
+		noisy = append(noisy, listSample{Value: 50e6 * (1 + 0.1*noise), At: at})
+	}
+	if got, err := p.Run(listEnv{Samples: rising}); err != nil || got != true {
+		t.Errorf("a steady rise = %v, %v; want it to fire", got, err)
+	}
+	if got, err := p.Run(listEnv{Samples: noisy}); err != nil || got != false {
+		t.Errorf("a flat noisy series = %v, %v; want it not to fire", got, err)
+	}
+}
+
+// A trend function takes a list of samples, each with a numeric value and
+// at; anything else is refused at compile time, on the argument.
+func TestTrendFunctionsRefuseMistyped(t *testing.T) {
+	for _, tc := range []struct {
+		src       string
+		line, col int
+		says      string
+	}{
+		{"slope(nums)", 1, 7, "samples"},
+		{"growth(tags)", 1, 8, "samples"},
+		{"span(pts)", 1, 6, "samples"},
+		{"slope(one)", 1, 7, "samples"},
+		{"slope(samples, samples)", 1, 1, "one list"},
+	} {
+		_, err := Compile(tc.src, listSite(t, Float, true))
+		e := asError(t, err)
+		if e.Phase != PhaseType || e.Line != tc.line || e.Column != tc.col || !strings.Contains(e.Message, tc.says) {
+			t.Errorf("%q: got %s %d:%d %q, want a type error at %d:%d saying %q", tc.src, e.Phase, e.Line, e.Column, e.Message, tc.line, tc.col, tc.says)
+		}
+	}
+	p, err := Compile("slope([1, 2])", listSite(t, Float, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Run(listIn); err == nil {
+		t.Error("slope over numbers, not samples, ran")
+	}
+}
+
+// A trend function walks its list once, charged like the other folds.
+func TestTrendFunctionsCharged(t *testing.T) {
+	long := make([]listSample, CriteriaBudget().Iterations+1)
+	for _, src := range []string{"slope(samples)", "growth(samples)", "span(samples)"} {
+		p, err := Compile(src, listSite(t, Float, true))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = p.Run(listEnv{Samples: long})
+		budgetErr(t, src, err)
+	}
+}

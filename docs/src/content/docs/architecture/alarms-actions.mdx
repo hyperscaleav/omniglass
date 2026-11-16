@@ -29,7 +29,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `node-silent` on a node's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
+sustains held by a durable streak and a sweep, the official rules (`reachability-lost`; `node-silent` on a node's own component; `ingest-lag-high`, `disk-nearly-full`, `retention-behind` and `db-size-growing` on the server's own component; the trend rules `process-heap-growing` and `process-goroutines-growing` on a process's own), a rule that judges a [trend over a window](#a-trend-rule-reads-a-window-not-a-sample), each rule's
 live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
@@ -305,6 +305,7 @@ event_rule:
   fire_criteria: { expr: 'value == "down"' }
   clear_criteria: { expr: 'value == "up"' } # optional: absent, the negation of fire, !(fire)
   fire_sustain: 30s                     # how long fire must hold
+  sample_window: 0s                     # a metric's trend rule: the history its criteria read as window
   clear_sustain: 0s
   severity: high                        # optional: absent, informational (no alarm)
   fire_event_type: condition-started    # the event written when the condition starts
@@ -378,7 +379,7 @@ The marks stay the newest committed id rather than a bound on time, so a sample 
 stamped late is judged by the pass that reads past it. A restarted server's first pass
 reads back a bounded number of recent samples, not the whole history, since the race it could have lost
 was in flight around its own start; a series whose correction fails is retried on its own for a few
-passes and then dropped with an error logged, while the pass moves on. The platform ships five official rules, rendered here from the seed itself:
+passes and then dropped with an error logged, while the pass moves on. The platform ships its official rules, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
@@ -399,7 +400,13 @@ age is one; the node's next heartbeat brings the age back under and clears it
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a `warning` alarm on the server's component when a retention lane or
 compaction stays behind its window for 5 minutes, and clears on the first pass that catches up
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+([storage](/architecture/storage/#what-a-retention-pass-reports)). Three are
+[trend rules](#a-trend-rule-reads-a-window-not-a-sample), each an `average` alarm on the platform
+component of what it measures: `process-heap-growing` and `process-goroutines-growing` fire when a
+process's `process-heap-size` or `process-goroutine-count` has risen by more than a quarter of its
+level across six hours, held for an hour (a leak's shape), and `db-size-growing` when the server's
+`db-size` has risen by more than a quarter across a day, held for six hours (growth past what
+retention trims). Each clears once the rise is back under a tenth.
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
@@ -433,7 +440,9 @@ compile until an operator rewrites them. Criteria that compile with a warning (`
 measured number seldom equals exactly) carry it in **`criteria_warnings`**: a note on the rule's blade
 that never holds the rule or refuses its save.
 
-Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959):
+Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959;
+criteria that read a [window](#a-trend-rule-reads-a-window-not-a-sample) are refused, a 422, since a
+preview judges each sample alone):
 the candidate (its key, selector and criteria) is judged over the last 24 hours of its key's samples,
 on the components the caller may read, as the ingest would have judged them with no sustains (the
 answer says so): each series starts from the state its newest deciding sample in the week before set,
@@ -479,6 +488,41 @@ row every batch holds. Only the judging of an arriving sample counts: a disabled
 rule does not watch, a sample older than its series' newest, or one the rule cannot evaluate stamps
 nothing. It names no component, so it is not fenced by the read scope.
 
+### A trend rule reads a window, not a sample
+
+A rule on a metric can judge where its series is heading rather than where it is (#1985). Its
+**`sample_window`** (up to a week; a property has none) names how much of the series' history its
+criteria read, bound as **`window`**: the series' points over that window, oldest first, each a record
+of `value` and `at` (unix seconds). The [trend functions](/architecture/expressions/#safety) fold it:
+`slope(window)` is the least-squares rise per second, `span(window)` the seconds the points cover, and
+`growth(window)` the fitted rise across that span as a share of the series' mean. A leak reads:
+
+```yaml
+event_rule:
+  name: process-heap-growing
+  sample_key: process-heap-size
+  sample_window: 6h
+  fire_criteria: { expr: 'span(window) >= 18000 && growth(window) > 0.25' }
+  clear_criteria: { expr: 'growth(window) <= 0.1' }
+  fire_sustain: 1h
+```
+
+That is a heap whose fitted line rose by more than a quarter of its level over six hours, judged only once
+five hours of samples are there (a process just started has a short, steep warm-up, not a trend). A
+fit, not the newest point less the oldest: the noise of a flat series averages to near zero, and one
+outlier at either end does not read as a rise. The gap between fire and clear keeps a series on the
+line from flapping, and the sustain absorbs a load step that a fit reads as a slope for a while.
+
+The window is read by the store, not by the expression: the evaluator stays a pure function of what
+it is handed, so a trend is unit-testable on a fixed series. A rule whose criteria read `window` gets
+it on every judgement (the ingest, the sustain sweep, the reconcile scan), read through the series'
+index and averaged into at most 360 even buckets, so a run costs the same whether the key is written
+every second or every minute. A rule with a `sample_window` its criteria never read, or criteria that
+read `window` with no `sample_window`, is refused when written (a 422). A trend can move with no
+sample arriving to move it, so the reconcile scan rejudges a windowed rule's series rather than
+trusting the state it last wrote. The shape, a window field on the rule and generic list functions
+shared with calc rules rather than a trend operator, is [ADR-1985](/architecture/decisions/#adr-1985-a-trend-rule-reads-its-series-window-through-list-functions).
+
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
 occupying the [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
@@ -488,7 +532,9 @@ that matters is the role's **impact** ([health](/architecture/health/)).
 :::design[The rest of the event rule (ADR-0050)]
 Still design: an **expression selector** (`scope:
 'component.template == "polaris-dsp-16"'`, fan-out, one alarm per match) once the engine lands (#524);
-a **window** (`window: { reduce: avg, over: 10m }`) aggregating the input before the criteria; a rule
+a **reduced window** (`window: { reduce: avg, over: 10m }`) aggregating the input into one value before
+the criteria (the [trend rule's](#a-trend-rule-reads-a-window-not-a-sample) `window` already binds the
+points; an `avg(window)` in the criteria reads the same); a rule
 **suppressible by name through the cascade** ([cascade](/architecture/cascade/)), so a high-weight group
 removes a false-firing rule without editing it; and a rule scoped to whichever arc owns its sample,
 yielding **system-level** alarms with the same machinery (a system-scoped rule reads member data and

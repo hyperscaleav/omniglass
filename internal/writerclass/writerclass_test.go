@@ -313,12 +313,12 @@ func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 // a key a node reports of itself.
 func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 	keys := RetentionKeys()
-	want := []string{DatabaseBytes, MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
+	want := []string{MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
 		MetricPartitionCreatedCount, MetricPartitionDroppedCount, MetricTrendMarkLag, RetentionBehind,
 		RetentionDeletedCount, RetentionPassDuration, RetentionPassFailureCount, RetentionWindowDays, TableBytes}
 	slices.Sort(want)
 	if !slices.Equal(keys, want) {
-		t.Fatalf("retention keys %v, want the 13 the pass reports %v", keys, want)
+		t.Fatalf("retention keys %v, want the 12 the pass reports %v", keys, want)
 	}
 	for _, key := range keys {
 		if c, ok := Reserved(key); !ok || c != Platform {
@@ -338,7 +338,7 @@ func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 // its node-self lane is refused like any key not its own.
 func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
-		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration}
+		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration, DBSize}
 	for _, key := range keys {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)

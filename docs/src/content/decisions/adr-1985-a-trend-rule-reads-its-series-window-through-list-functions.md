@@ -1,0 +1,57 @@
+---
+title: "A trend rule reads its series window through list functions"
+date: 2026-11-16
+status: Accepted
+summary: "An event rule on a metric may name a sample_window (up to a week); its criteria then bind the series' points over it as window, oldest first and averaged into at most 360 buckets, and the generic list functions slope, span and growth fold it. The store reads the window, so the evaluator stays pure. Preview refuses windowed criteria, and the reconcile scan rejudges a windowed rule's series. Settles the trend half of ADR-0050's design window."
+refs: [1985, 1623, 957, 1142]
+---
+
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample), [expressions](/architecture/expressions/)
+- **Decision:** (#1985, under the self-alarming epic #1623.)
+  1. **The window is a rule field, the trend is an expression.** An `event_rule` on a metric may set
+     `sample_window`, an interval up to a week. Its criteria (fire and clear alike) then bind
+     **`window`**: the series' points over that window, oldest first, each a record of `value` and
+     `at` (unix seconds). A rule on a property has no window, a `sample_window` the criteria never read
+     is refused, and criteria that read `window` with no `sample_window` are refused.
+  2. **The trend is three generic list functions.** `slope` (the least-squares rise per second),
+     `span` (the seconds the points cover) and `growth` (the fitted rise across the span as a share of
+     the points' mean) join the engine's list functions, admitted at every site that binds a list of
+     timestamped points: the criteria's `window` and a calc rule's windowed input (#1142). A list of
+     fewer than two points, or with no time between them, has no trend: 0.
+  3. **The store reads the window; the evaluator stays pure.** The ingest, the sustain sweep, a rule
+     write's prime and the reconcile scan read the window through the series' index for a rule whose
+     compiled criteria read it, and hand it to the judge with the sample. A long window is averaged
+     into at most 360 even buckets, so a run's cost is bounded by the site's budget, not by the key's
+     cadence.
+  4. **A trend moves without a sample.** The reconcile scan rejudges a windowed rule's touched series
+     rather than trusting the state it last wrote, and a preview, which judges each sample alone,
+     refuses criteria that read `window` (a 422) rather than answer that a trend never fires.
+  5. **The shipped thresholds.** `process-heap-growing` and `process-goroutines-growing` read 6 hours,
+     fire on `span(window) >= 18000 && growth(window) > 0.25` held 1 hour, and clear at
+     `growth(window) <= 0.1`; `db-size-growing` reads 24 hours, needs 20 hours of span, holds 6 hours.
+     All three raise `average`, the seed's middle level.
+- **Context:** the self-alarming epic needs alarms on a slow leak (a heap or goroutine count, the
+  database's size) that no level threshold catches without either firing on a healthy large install
+  or missing a leak on a small one. A trend is relative to the series' own level. ADR-0050 left a
+  `window: { reduce, over }` in design, which reduces a window to one value before the criteria and so
+  cannot express a slope without a reducer per shape.
+- **Consequences:**
+  - A trend rule is unit-testable on a fixed series: the shipped rules' test judges a steady rise
+    (fires), a flat noisy series (clears), a process's warm-up (holds) and a database at its retention
+    window dropping a day's partition at any point (clears).
+  - A trend fires on a sustained relative rise, not a step: a load step of over a quarter of the level
+    reads as a slope for a while, which the sustain absorbs only partly.
+  - A fresh database grows as its retention windows fill, so `db-size-growing` fires in its first days.
+    That is reported, not gated, in this decision.
+  - The console's rule drawer does not yet edit `sample_window`, and a windowed rule has no preview.
+  - `slope`, `growth` and `span` are now reserved, so a calc rule input may not take one as its alias; a
+    one-time backfill disables a rule that did, as the first reserving backfill did, until it is renamed.
+- **Not chosen:**
+  - **A trend operator or a `trend: { over, rise }` rule field:** one shape baked in, and a second
+    trend (a fall, a rate, a share above a line) would need another field. The list functions compose.
+  - **A function that reads history itself** (`history(key, 6h)` inside the criteria): the evaluator
+    would do I/O, lose its purity and its budget's meaning, and each run would cost a query.
+  - **`fire_window`** binding only fire: a clear needs the same series to say the trend has stopped,
+    and the field names the sample's history, head noun last.
+  - **A raw, unbucketed window:** a key written every second would bind 21,600 points over six hours
+    and blow the criteria's budget; the fit over bucket means is the same line within noise.

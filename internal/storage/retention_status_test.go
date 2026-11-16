@@ -61,6 +61,42 @@ func TestRetentionStatusReadsThePartitionsAndTheSizes(t *testing.T) {
 	}
 }
 
+// TestDatabaseSizeReadsTheDatabase (#1985): the db-size read is the
+// database's own bytes, more than any one table's, and grows as rows land.
+func TestDatabaseSizeReadsTheDatabase(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	gw, ctx, dsn := platformGatewayDSN(t)
+	before, err := gw.DatabaseSize(ctx)
+	if err != nil {
+		t.Fatalf("read the database size: %v", err)
+	}
+	st, err := gw.RetentionStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before <= st.TableBytes["metric"] || before <= st.TableBytes["property"] {
+		t.Errorf("database sized %d bytes, want more than any table's %v", before, st.TableBytes)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `create table db_size_ballast as select repeat('x', 1000) as pad from generate_series(1, 4000)`); err != nil {
+		t.Fatal(err)
+	}
+	after, err := gw.DatabaseSize(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after <= before {
+		t.Errorf("database sized %d bytes after 4 MB landed, want more than %d", after, before)
+	}
+}
+
 // TestRetentionKeysAreTheProcesssAlone (#1629): the retention pass's figures
 // are platform keys, so the process lands them on a platform component and a
 // node, a push or an operator writing one is refused.

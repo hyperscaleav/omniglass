@@ -316,7 +316,7 @@ func TestPlatformViewReadsEachRetentionLane(t *testing.T) {
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric", Value: 0, TS: newer},
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "event", Value: 1, TS: newer},
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric_trend compaction", Value: 0, TS: older},
-		{ComponentID: f.server, Key: writerclass.DatabaseBytes, Value: 4096, TS: newer},
+		{ComponentID: f.server, Key: writerclass.DBSize, Value: 4096, TS: newer},
 	}); err != nil {
 		t.Fatalf("record platform metrics: %v", err)
 	}
@@ -341,8 +341,8 @@ func TestPlatformViewReadsEachRetentionLane(t *testing.T) {
 			t.Errorf("retention-behind %q = %v (present %v), want %v", lane, got, ok, val)
 		}
 	}
-	if got := figuresOf(p, writerclass.DatabaseBytes); len(got) != 1 || got[0].Value != 4096 || got[0].Instance != "" {
-		t.Errorf("database-bytes = %+v, want one unsplit 4096", got)
+	if got := figuresOf(p, writerclass.DBSize); len(got) != 1 || got[0].Value != 4096 || got[0].Instance != "" {
+		t.Errorf("db-size = %+v, want one unsplit 4096", got)
 	}
 	if got := figuresOf(serverPanel(t, v, "queues"), writerclass.OutboxQueuedDepth); len(got) != 0 {
 		t.Errorf("outbox-queued-depth = %+v, want none: the server never sampled it", got)

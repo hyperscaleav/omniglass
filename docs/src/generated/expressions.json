@@ -135,6 +135,7 @@
     "count",
     "filter",
     "floor",
+    "growth",
     "len",
     "lower",
     "majority",
@@ -143,6 +144,8 @@
     "none",
     "one",
     "round",
+    "slope",
+    "span",
     "sum",
     "trim",
     "trimPrefix",
@@ -163,6 +166,10 @@
      "cost": "one list of numbers: one pass over the charged list, output a number"
     },
     {
+     "name": "growth",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
      "name": "majority",
      "cost": "one list of text or bools: one pass over the charged list, its strings charged their bytes, counting into a map no larger than the list, output one of its values"
     },
@@ -173,6 +180,14 @@
     {
      "name": "min",
      "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "slope",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "span",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
     },
     {
      "name": "sum",
@@ -217,6 +232,7 @@
     "fromPairs",
     "get",
     "groupBy",
+    "growth",
     "has",
     "hasPrefix",
     "hasSuffix",
@@ -250,8 +266,10 @@
     "replace",
     "reverse",
     "round",
+    "slope",
     "sort",
     "sortBy",
+    "span",
     "split",
     "splitAfter",
     "startsWith",
@@ -312,6 +330,21 @@
        "name": "component.type",
        "type": "string",
        "doc": "The component's type, by name; empty when its product names none"
+      },
+      {
+       "name": "window",
+       "type": "[]record",
+       "doc": "The series' samples over the rule's sample_window, oldest first, each a record of value and at (unix seconds), averaged into at most 360 even buckets; empty for a rule with no sample_window. Read it with slope, growth and span"
+      },
+      {
+       "name": "window[].value",
+       "type": "float64",
+       "doc": "The sample's value (a bucket's mean, over a long window)"
+      },
+      {
+       "name": "window[].at",
+       "type": "float64",
+       "doc": "When the sample was taken, in unix seconds (a bucket's mean time, over a long window)"
       }
      ]
     },
@@ -382,21 +415,69 @@
     "abs",
     "all",
     "any",
+    "avg",
     "ceil",
     "count",
     "filter",
     "floor",
+    "growth",
     "len",
     "lower",
+    "majority",
     "max",
     "min",
     "none",
     "one",
     "round",
+    "slope",
+    "span",
+    "sum",
     "trim",
     "trimPrefix",
     "trimSuffix",
     "upper"
+   ],
+   "functions": [
+    {
+     "name": "all",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "any",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "avg",
+     "cost": "one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "growth",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "majority",
+     "cost": "one list of text or bools: one pass over the charged list, its strings charged their bytes, counting into a map no larger than the list, output one of its values"
+    },
+    {
+     "name": "max",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "min",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "slope",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "span",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "sum",
+     "cost": "one list of numbers, or a list and a predicate yielding one: one pass over the charged list, output a number; a predicate may not nest another"
+    }
    ],
    "budget": {
     "iterations": 10000,

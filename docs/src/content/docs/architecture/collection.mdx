@@ -529,8 +529,11 @@ its claim, before its first). It keeps growing while a node is silent, which is 
 seeded `node-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
 the node's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
-`metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+`metric-*` and `table-bytes` figures are the retention pass's
+([storage](/architecture/storage/#what-a-retention-pass-reports)). The database's whole size,
+`db-size`, is not: the server reads `pg_database_size` every report window beside its pool and
+outbox figures, so a trend rule reads its growth at the window's grain rather than the pass's hour
+(#1985), and the seeded `db-size-growing` rule watches it.
 
 **How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
@@ -593,11 +596,19 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   **`db-pool-wait-count`** and **`db-pool-wait-duration`** are the window's acquires that found the
   pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
   healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+- **`db-size`**: the whole database's on-disk bytes, as `pg_database_size(current_database())`
+  reads it at the window's close (#1985). A healthy database grows while retention fills its window
+  and then holds level, a day's partition dropped as the next one fills; the seeded
+  `db-size-growing` rule raises an `average` alarm when it keeps growing across a day past that
+  ([alarms and actions](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)). A
+  window whose read fails carries no value.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
   files of the server process, read by the one runtime sampler a node reports its own through. The
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
   estimates it rather than the kernel's account, so over the window's length it is the cores the
-  server kept busy.
+  server kept busy. The seeded `process-heap-growing` and `process-goroutines-growing` rules raise an
+  `average` alarm on a heap or goroutine count that climbs steadily for six hours, the shape of a
+  leak.
 - **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog, the server hop's
   `delivery-in-count`, `delivery-out-count` and `delivery-loss-ratio` per item kind, the bus
   request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and

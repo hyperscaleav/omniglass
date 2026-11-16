@@ -135,7 +135,7 @@ var platformHistory = func() map[string][]historySeries {
 // next pass writes and draws no cliff into it.
 var platformHistoryMeasured = map[string]bool{
 	writerclass.MetricOldestDayAge: true,
-	writerclass.DatabaseBytes:      true,
+	writerclass.DBSize:             true,
 	writerclass.TableBytes:         true,
 }
 
@@ -175,7 +175,7 @@ var platformHistoryExempt = map[string]string{
 // the age is read off the oldest partition at each minute.
 func measuredHistory(status storage.RetentionStatus, end time.Time) map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DatabaseBytes: {{base: float64(status.DatabaseBytes), climb: 0.1, whole: true}},
+		writerclass.DBSize: {{base: float64(status.DatabaseBytes), climb: 0.1, whole: true}},
 	}
 	for _, table := range slices.Sorted(maps.Keys(status.TableBytes)) {
 		h[writerclass.TableBytes] = append(h[writerclass.TableBytes],

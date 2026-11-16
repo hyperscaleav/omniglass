@@ -135,7 +135,8 @@ const (
 // keyed by the lane's name as the instance); per pass, its duration, its
 // failed steps and its partition roll; the trend and block compactions' lag
 // behind now; and the storage read after it, the partitions held, the oldest
-// day's age and each stored table's and the database's bytes.
+// day's age and each stored table's bytes. The database's own size is the
+// server's figure of every window (DBSize), not the pass's.
 const (
 	RetentionDeletedCount       = "retention-deleted-count"
 	RetentionBehind             = "retention-behind"
@@ -149,7 +150,6 @@ const (
 	MetricTrendMarkLag          = "metric-trend-mark-lag"
 	MetricBlockMarkLag          = "metric-block-mark-lag"
 	TableBytes                  = "table-bytes"
-	DatabaseBytes               = "database-bytes"
 )
 
 // retentionWriter is what writes the retention figures.
@@ -159,7 +159,8 @@ const retentionWriter = "the server's retention pass"
 // surface served and how its database pool held up, over a report window,
 // landed by the server on its own platform component. An http-request-* key
 // is per instance, the request's method, route template and status class; the
-// db-* keys have no instance.
+// db-* keys have no instance. DBSize is the database's on-disk bytes, as
+// pg_database_size reads it (#1985).
 const (
 	HTTPRequestCount       = "http-request-count"
 	HTTPRequestDuration    = "http-request-duration"
@@ -171,6 +172,7 @@ const (
 	DBPoolMax              = "db-pool-max"
 	DBPoolWaitCount        = "db-pool-wait-count"
 	DBPoolWaitDuration     = "db-pool-wait-duration"
+	DBSize                 = "db-size"
 )
 
 // The server's pipeline keys (#1628): how far behind ingest is, how deep the
@@ -337,7 +339,6 @@ var platform = map[string]string{
 	MetricTrendMarkLag:          retentionWriter,
 	MetricBlockMarkLag:          retentionWriter,
 	TableBytes:                  retentionWriter,
-	DatabaseBytes:               retentionWriter,
 
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
@@ -350,6 +351,7 @@ var platform = map[string]string{
 	DBPoolMax:              serverSelfWriter,
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
+	DBSize:                 serverSelfWriter,
 
 	// The server's pipeline (#1628).
 	IngestLag:                   serverPipelineWriter,

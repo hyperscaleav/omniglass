@@ -70,14 +70,14 @@ func TestPlatformHistoryReadsHealthy(t *testing.T) {
 // draw the same line, and a size that climbs ends the hour at its base.
 func TestPlatformHistoryIsDeterministic(t *testing.T) {
 	t.Parallel()
-	s := measuredHistory(storage.RetentionStatus{DatabaseBytes: 1000}, time.Now())[writerclass.DatabaseBytes][0]
-	if a, b := historyValue(writerclass.DatabaseBytes, s, 7, 60), historyValue(writerclass.DatabaseBytes, s, 7, 60); a != b {
+	s := measuredHistory(storage.RetentionStatus{DatabaseBytes: 1000}, time.Now())[writerclass.DBSize][0]
+	if a, b := historyValue(writerclass.DBSize, s, 7, 60), historyValue(writerclass.DBSize, s, 7, 60); a != b {
 		t.Fatalf("minute 7 read %v then %v", a, b)
 	}
-	if end := historyValue(writerclass.DatabaseBytes, s, 59, 60); end != s.base {
+	if end := historyValue(writerclass.DBSize, s, 59, 60); end != s.base {
 		t.Fatalf("the newest minute reads %v, want the base %v", end, s.base)
 	}
-	if start := historyValue(writerclass.DatabaseBytes, s, 0, 60); start >= s.base {
+	if start := historyValue(writerclass.DBSize, s, 0, 60); start >= s.base {
 		t.Fatalf("the oldest minute reads %v, want under the base %v as the size climbs", start, s.base)
 	}
 }
@@ -106,7 +106,7 @@ func TestPlatformHistoryEndsOnTheMeasuredSizes(t *testing.T) {
 		Partitions:    []storage.MetricPartition{{From: end.Add(-48*time.Hour - time.Minute)}},
 	}
 	h := measuredHistory(status, end)
-	if got, _ := newestOldest(t, h, writerclass.DatabaseBytes, ""); got != 17_000_000 {
+	if got, _ := newestOldest(t, h, writerclass.DBSize, ""); got != 17_000_000 {
 		t.Errorf("the database size ends the hour at %v, want the measured 17000000", got)
 	}
 	var tables []string

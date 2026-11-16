@@ -216,7 +216,8 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		names = append(names, r.Name)
 		rules[r.Name] = r
 	}
-	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "worklist-stale", "disk-nearly-full", "retention-behind"}
+	want := []string{"reachability-lost", "ingest-lag-high", "node-silent", "worklist-stale", "disk-nearly-full", "retention-behind",
+		"process-heap-growing", "process-goroutines-growing", "db-size-growing"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("event_rules = %v, want the official rules %v in file order", names, want)
 	}
@@ -234,6 +235,14 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		{Name: "disk-nearly-full", SampleKey: "data-dir-disk-used-ratio", Fire: "value > 0.9", Clear: "value <= 0.85", FireSustain: "2m", Severity: "warning"},
 		// The retention pass's lane behind past its catch-up passes (#1629).
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
+		// A process's heap or goroutines, or the database, growing steadily
+		// across a window (#1985).
+		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "span(window) >= 18000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
+		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "span(window) >= 18000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
+		{Name: "db-size-growing", SampleKey: "db-size", SampleWindow: "24h", Fire: "span(window) >= 72000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "6h", Severity: "average"},
 	} {
 		w.FireEventType, w.ClearEventType = "condition-started", "condition-ended"
 		r := rules[w.Name]

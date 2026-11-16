@@ -396,7 +396,11 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		if !picked {
 			continue
 		}
-		action, ok := e.p.decide(r, o, instance, value)
+		window, err := e.p.ruleWindow(ctx, tx, r, ownerID, instance)
+		if err != nil {
+			return nil, err
+		}
+		action, ok := e.p.decide(r, o, instance, value, window)
 		if ok {
 			judged = append(judged, r.ID)
 		}
@@ -600,7 +604,11 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 		if !picked {
 			continue
 		}
-		action, ok := p.decide(r, o, s.instance, s.value)
+		window, err := p.ruleWindow(ctx, tx, r, s.component, s.instance)
+		if err != nil {
+			return err
+		}
+		action, ok := p.decide(r, o, s.instance, s.value, window)
 		if !ok {
 			continue
 		}
@@ -891,7 +899,11 @@ func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d due
 	if err != nil || len(newest) == 0 {
 		return nil, nil, nil, err
 	}
-	action, ok := p.decide(r, o, d.instance, newest[0].value)
+	window, err := p.ruleWindow(ctx, tx, r, d.component, d.instance)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	action, ok := p.decide(r, o, d.instance, newest[0].value, window)
 	if !ok || action != d.streak.Pending {
 		return nil, nil, nil, nil
 	}
@@ -1210,8 +1222,14 @@ type ruleCandidate struct {
 // one shape: the streak pending is the newest sample's decision, unless that
 // decision is already in force (or decides nothing), and then no streak at
 // all. No query, so the scan pays nothing for a series that agrees; the
-// rule's compiled criteria come from the gateway's per-version cache.
+// rule's compiled criteria come from the gateway's per-version cache. A
+// windowed rule's decision rests on its window, which only a query reads, so
+// its touched series always rejudge (#1985): rejudgeSeries reads the window
+// and leaves an agreeing series as it found it.
 func (p *PG) drifted(c ruleCandidate) bool {
+	if c.rule.SampleWindow > 0 {
+		return true
+	}
 	action, err := p.decideSample(c.rule, rules.Sample{Value: c.value, Key: c.rule.SampleKey, Instance: c.instance,
 		Component: rules.Component{Name: c.componentName, Type: c.componentType}})
 	if err != nil {
@@ -1541,7 +1559,11 @@ func (p *PG) rejudgeSeries(ctx context.Context, c ruleCandidate, releaseEmpty bo
 		}
 		return tx.Commit(ctx)
 	}
-	action, _ := p.decide(r, o, c.instance, newest[0].value)
+	window, err := p.ruleWindow(ctx, tx, r, c.component, c.instance)
+	if err != nil {
+		return err
+	}
+	action, _ := p.decide(r, o, c.instance, newest[0].value, window)
 	now, err := dbNow(ctx, tx)
 	if err != nil {
 		return err

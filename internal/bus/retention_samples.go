@@ -63,7 +63,6 @@ func retentionSamples(component string, rep retentionReport, status *storage.Ret
 		for _, table := range slices.Sorted(maps.Keys(status.TableBytes)) {
 			add(writerclass.TableBytes, table, float64(status.TableBytes[table]))
 		}
-		add(writerclass.DatabaseBytes, "", float64(status.DatabaseBytes))
 	}
 	return rows
 }

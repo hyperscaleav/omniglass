@@ -115,10 +115,11 @@ func (j *ruleJudges) firstFault(r EventRule) bool {
 // decide is what one sample means for a rule on its owner, by the rule's
 // compiled criteria. An error (the rule cannot judge the sample) is logged
 // once per rule version and decides Hold, which breaks any streak the
-// series held; the sample itself always lands.
-func (p *PG) decide(r EventRule, o *ruleOwner, instance string, value any) (rules.Action, bool) {
+// series held; the sample itself always lands. window is the series' window
+// (ruleWindow), nil for a rule that reads none.
+func (p *PG) decide(r EventRule, o *ruleOwner, instance string, value any, window []rules.Point) (rules.Action, bool) {
 	s := rules.Sample{Value: value, Key: r.SampleKey, Instance: instance,
-		Component: rules.Component{Name: o.comp.Name, Type: o.typeName}}
+		Component: rules.Component{Name: o.comp.Name, Type: o.typeName}, Window: window}
 	action, err := p.decideSample(r, s)
 	if err != nil {
 		if p.judges.firstFault(r) {

@@ -47,6 +47,7 @@ type eventRuleBody struct {
 	ClearCriteria     *criteriaBody       `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
 	FireSustain       string              `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
 	ClearSustain      string              `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
+	SampleWindow      string              `json:"sample_window" doc:"How far back the criteria's window reads the metric's series, a Go duration; 0s binds no window"`
 	Severity          string              `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
 	FireEventType     string              `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
 	ClearEventType    string              `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
@@ -106,7 +107,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 	b := eventRuleBody{ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description,
 		Selector:  selectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components},
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
-		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
+		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), SampleWindow: r.SampleWindow.String(), Severity: r.Severity,
 		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, ConditionsInForce: r.ConditionsInForce, LastJudgedAt: r.LastJudgedAt,
 		CriteriaError: toCriteriaErrorBody(r.CriteriaError), CriteriaWarnings: toCriteriaWarnings(r.CriteriaWarnings)}
@@ -151,6 +152,7 @@ type createEventRuleInput struct {
 		ClearCriteria  *criteriaInput `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)"`
 		FireSustain    string         `json:"fire_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
 		ClearSustain   string         `json:"clear_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
+		SampleWindow   string         `json:"sample_window,omitempty" required:"false" doc:"A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window"`
 		Severity       string         `json:"severity,omitempty" required:"false" doc:"The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm"`
 		FireEventType  string         `json:"fire_event_type" minLength:"1" doc:"The event type the rule writes when its condition starts, by name (condition-started is the generic one)"`
 		ClearEventType string         `json:"clear_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none"`
@@ -181,6 +183,7 @@ type updateEventRuleInput struct {
 		ClearNegates   bool           `json:"clear_negates,omitempty" required:"false" doc:"Drop the clear criteria, so the rule clears on the negation of its fire criteria"`
 		FireSustain    *string        `json:"fire_sustain,omitempty" required:"false" doc:"How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s"`
 		ClearSustain   *string        `json:"clear_sustain,omitempty" required:"false" doc:"How long the clear criteria must hold, a Go duration; empty is 0s"`
+		SampleWindow   *string        `json:"sample_window,omitempty" required:"false" doc:"How far back the criteria's window reads the metric's series, a Go duration up to 168h; empty is 0s, no window"`
 		Severity       *string        `json:"severity,omitempty" required:"false" doc:"The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm)"`
 		FireEventType  *string        `json:"fire_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition starts, by name; it cannot be emptied"`
 		ClearEventType *string        `json:"clear_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition ends, by name; empty writes none"`
@@ -235,7 +238,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/event-rules",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an event rule",
-		Description:   "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+		Description:   "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a metric rule with a sample_window also reads window, the series' points over that span, oldest first, so slope, growth and span can fire it on a sustained trend (criteria that read window need a sample_window, and a sample_window needs criteria that read it); a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
 	}, "rule", "create"), func(ctx context.Context, in *createEventRuleInput) (*eventRuleOutput, error) {
 		b := in.Body
 		fire, err := fromCriteriaBody(b.FireCriteria)
@@ -259,6 +262,9 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, err
 		}
 		if spec.ClearSustain, err = parseSustain("clear_sustain", b.ClearSustain); err != nil {
+			return nil, err
+		}
+		if spec.SampleWindow, err = parseSustain("sample_window", b.SampleWindow); err != nil {
 			return nil, err
 		}
 		r, err := gw.CreateEventRule(ctx, actorID(ctx), spec, a.scopeFor(ctx, "rule", "create"))
@@ -309,6 +315,13 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 				return nil, err
 			}
 			patch.ClearSustain = &d
+		}
+		if b.SampleWindow != nil {
+			d, err := parseSustain("sample_window", *b.SampleWindow)
+			if err != nil {
+				return nil, err
+			}
+			patch.SampleWindow = &d
 		}
 		r, err := gw.UpdateEventRule(ctx, actorID(ctx), in.Name, patch, a.scopeFor(ctx, "rule", "update"))
 		if err != nil {
