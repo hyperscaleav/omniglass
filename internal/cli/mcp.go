@@ -187,7 +187,7 @@ func newMCPSkillCmd() *cobra.Command {
 			"prints one as an Agent Skills SKILL.md, for an agent that reads skill files. The skills ship in the " +
 			"binary, so this needs no server.",
 		Example: `  omniglass mcp skill triage-alarm > .claude/skills/triage-alarm/SKILL.md`,
-		Args: cobra.MaximumNArgs(1),
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			if len(pos) == 0 {
 				type listed struct {
