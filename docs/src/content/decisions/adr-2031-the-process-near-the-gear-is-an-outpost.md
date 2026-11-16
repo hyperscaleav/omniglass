@@ -2,7 +2,7 @@
 title: "The process near the gear is an `outpost`"
 date: 2026-11-16
 status: "Accepted"
-summary: "The edge process that polls, listens, carries commands and holds sessions near the gear is an outpost on every surface. Node retires as its name; edge and central stay as placement values, not part of the noun"
+summary: "The edge process that polls, listens, carries commands and holds sessions near the gear is an outpost on every surface. Node retires as its name; edge and central stay as placement values, not part of the noun. An outpost is a run mode of the one binary, used only to reach into a private network; the server does the same work centrally and scales by replicas"
 refs: [2031, 2028, 2059]
 ---
 
@@ -30,3 +30,12 @@ refs: [2031, 2028, 2059]
   as pass-through; **satellite**, the Icinga word, which is also a Red Hat product; and an **edge**
   qualifier on any of them, which head-noun-last naming leaves as a kind of the same genus (an edge
   worker is still a worker beside the lane workers), and which is wrong for central placement.
+- **An outpost is a run mode, not a second product.** `omniglass outpost run` is the same binary
+  as `omniglass server` with the same collection roles: poll, receive webhooks and udp pushes, run
+  commands, hold sessions. The server performs every one of them itself for central placement, so
+  gear the server can reach (a cloud API, a SaaS poller, a webhook sender, a device on a routed
+  network) needs no outpost, and Omniglass never deploys an outpost in the cloud. An outpost exists
+  for one reason: to carry that work into a private network the server cannot reach. Load is not a
+  reason: the answer to more work is more server replicas, scaled horizontally, not outposts
+  beside the server. Built today, the server hosts webhooks and the outpost hosts the rest; the
+  server running central polls and listeners is the cascaded-placement target (#1157, #1158).
