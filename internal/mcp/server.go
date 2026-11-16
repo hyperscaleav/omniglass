@@ -36,12 +36,30 @@ const sessionTimeout = 30 * time.Minute
 // every request authenticated by its bearer token against api (the server's own
 // HTTP handler, which every tool call is dispatched through). version is the
 // server's build version, reported to clients.
-func NewHandler(api http.Handler, version string) http.Handler {
+func NewHandler(api http.Handler, version string, opts ...Option) http.Handler {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	srv := newServer(api, version)
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{
 		SessionTimeout: sessionTimeout,
 	})
-	return requireBearer(api, http.NewCrossOriginProtection().Handler(h))
+	return requireBearer(api, o.resourceMetadata, http.NewCrossOriginProtection().Handler(h))
+}
+
+// Option configures the handler.
+type Option func(*options)
+
+type options struct {
+	resourceMetadata func(*http.Request) string
+}
+
+// WithResourceMetadata names, on every 401, the protected-resource metadata
+// (RFC 9728) a client finds the authorization server from (#2048), as the URL
+// fn returns for the request.
+func WithResourceMetadata(fn func(*http.Request) string) Option {
+	return func(o *options) { o.resourceMetadata = fn }
 }
 
 // newServer builds the MCP server over the catalog and the skills.
@@ -150,8 +168,13 @@ func clientName(req *sdk.CallToolRequest) string {
 // (expiry, revocation, impersonation) without a second path. A session cookie is
 // never consulted: the endpoint answers to tokens, so a browser's ambient
 // credentials cannot drive it.
-func requireBearer(api http.Handler, next http.Handler) http.Handler {
+func requireBearer(api http.Handler, resourceMetadata func(*http.Request) string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		challenge := `Bearer realm="omniglass"`
+		if resourceMetadata != nil {
+			challenge += `, resource_metadata="` + resourceMetadata(r) + `"`
+		}
+		unauthorized := func(w http.ResponseWriter, status int, msg string) { refuse(w, challenge, status, msg) }
 		authz := r.Header.Get("Authorization")
 		scheme, tok, ok := strings.Cut(authz, " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tok) == "" {
@@ -181,9 +204,11 @@ func requireBearer(api http.Handler, next http.Handler) http.Handler {
 	})
 }
 
-func unauthorized(w http.ResponseWriter, status int, msg string) {
+// refuse answers a request the endpoint will not serve, with the bearer
+// challenge on a 401.
+func refuse(w http.ResponseWriter, challenge string, status int, msg string) {
 	if status == http.StatusUnauthorized {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="omniglass"`)
+		w.Header().Set("WWW-Authenticate", challenge)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)

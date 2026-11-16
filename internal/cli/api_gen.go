@@ -797,6 +797,88 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "oauth-client",
+				Short: "Commands for the oauth-client resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fApproved bool
+					var fCodeChallenge string
+					var fCodeChallengeMethod string
+					var fRedirectUri string
+					var fResource string
+					var fRoles string
+					var fState string
+					cmd := &cobra.Command{
+						Use:     "authorize <id>",
+						Short:   "Approve or deny an OAuth client",
+						Long:    "Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.",
+						Example: "  omniglass auth oauth-client authorize <id> --approved <bool> --code-challenge code_challenge --code-challenge-method code_challenge_method --redirect-uri redirect_uri --resource resource",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/auth/oauth-clients/%s:authorize", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("approved") {
+								body["approved"] = fApproved
+							}
+							if cmd.Flags().Changed("code-challenge") {
+								body["code_challenge"] = fCodeChallenge
+							}
+							if cmd.Flags().Changed("code-challenge-method") {
+								body["code_challenge_method"] = fCodeChallengeMethod
+							}
+							if cmd.Flags().Changed("redirect-uri") {
+								body["redirect_uri"] = fRedirectUri
+							}
+							if cmd.Flags().Changed("resource") {
+								body["resource"] = fResource
+							}
+							if cmd.Flags().Changed("roles") {
+								body["roles"] = jsonOrString(fRoles)
+							}
+							if cmd.Flags().Changed("state") {
+								body["state"] = fState
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().BoolVar(&fApproved, "approved", false, "Whether you approve the client; false sends it back with access_denied")
+					_ = cmd.MarkFlagRequired("approved")
+					cmd.Flags().StringVar(&fCodeChallenge, "code-challenge", "", "The PKCE challenge from the authorization request")
+					_ = cmd.MarkFlagRequired("code-challenge")
+					cmd.Flags().StringVar(&fCodeChallengeMethod, "code-challenge-method", "", "The PKCE method; S256 only")
+					_ = cmd.MarkFlagRequired("code-challenge-method")
+					cmd.Flags().StringVar(&fRedirectUri, "redirect-uri", "", "The redirect URI from the authorization request; one the client registered")
+					_ = cmd.MarkFlagRequired("redirect-uri")
+					cmd.Flags().StringVar(&fResource, "resource", "", "The resource the token is for: this server's MCP endpoint")
+					_ = cmd.MarkFlagRequired("resource")
+					cmd.Flags().StringVar(&fRoles, "roles", "", "The roles to approve; each must be one whose capabilities you hold. Required when approved")
+					cmd.Flags().StringVar(&fState, "state", "", "The client's state, echoed back")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <id>",
+						Short:   "Read an OAuth client asking for your consent",
+						Long:    "Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.",
+						Example: "  omniglass auth oauth-client get <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/auth/oauth-clients/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "remove-avatar",

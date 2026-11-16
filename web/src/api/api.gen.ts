@@ -314,6 +314,45 @@ export type AuthStatusOutputBody = {
   lab: boolean;
 };
 
+/**
+ * The PKCE method; S256 only
+ */
+export type AuthorizeOAuthClientInputBodyCodeChallengeMethod = typeof AuthorizeOAuthClientInputBodyCodeChallengeMethod[keyof typeof AuthorizeOAuthClientInputBodyCodeChallengeMethod];
+
+
+export const AuthorizeOAuthClientInputBodyCodeChallengeMethod = {
+  S256: 'S256',
+} as const;
+
+export type AuthorizeOAuthClientInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Whether you approve the client; false sends it back with access_denied */
+  approved: boolean;
+  /** The PKCE challenge from the authorization request */
+  code_challenge: string;
+  /** The PKCE method; S256 only */
+  code_challenge_method: AuthorizeOAuthClientInputBodyCodeChallengeMethod;
+  /** The redirect URI from the authorization request; one the client registered */
+  redirect_uri: string;
+  /** The resource the token is for: this server's MCP endpoint */
+  resource: string;
+  /**
+     * The roles to approve; each must be one whose capabilities you hold. Required when approved
+     * @nullable
+     */
+  roles?: string[] | null;
+  /** The client's state, echoed back */
+  state?: string;
+};
+
+export type AuthorizeOAuthClientOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Where to send the browser back to: the client's redirect with a code, or with access_denied */
+  redirect_to: string;
+};
+
 export type AvatarOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4198,6 +4237,8 @@ export type SessionBody = {
   kind: SessionBodyKind;
   /** When the credential last authenticated a request (RFC 3339), throttled to the minute */
   last_used_at?: string;
+  /** Set on a token an OAuth client signed in for: the client's registered name */
+  oauth_client?: string;
   /** The non-secret ogp locator, so a credential is recognizable without exposing the token */
   prefix: string;
   /** The User-Agent that created the credential, so the console can show a device label */
@@ -5518,6 +5559,24 @@ export type NotificationSettings = {
   mail_secret: string;
   /** How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim) */
   mail_security: NotificationSettingsMailSecurity;
+};
+
+export type OauthClientOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The name the client registered under; its token acts as this agent */
+  client_name: string;
+  id: string;
+  /**
+     * The exact URIs a code may be sent back to
+     * @nullable
+     */
+  redirect_uris: string[] | null;
+  /**
+     * The roles you may approve for the client: every role whose capabilities you hold
+     * @nullable
+     */
+  roles: string[] | null;
 };
 
 export type OptOutOutputBody = {
@@ -10153,6 +10212,134 @@ export const stopImpersonation = async ( options?: Parameters<typeof ogFetch>[1]
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export type getOauthClientResponse200 = {
+  data: OauthClientOutputBody
+  status: 200
+}
+
+export type getOauthClientResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type getOauthClientResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type getOauthClientResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type getOauthClientResponseSuccess = (getOauthClientResponse200) & {
+  headers: Headers;
+};
+export type getOauthClientResponseError = (getOauthClientResponse404 | getOauthClientResponse422 | getOauthClientResponse500) & {
+  headers: Headers;
+};
+
+export type getOauthClientResponse = (getOauthClientResponseSuccess | getOauthClientResponseError)
+
+export const getGetOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/auth/oauth-clients/${id}`
+}
+
+/**
+ * Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.
+ * @summary Read an OAuth client asking for your consent
+ */
+export const getOauthClient = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOauthClientResponse> => {
+
+  return ogFetch<getOauthClientResponse>(getGetOauthClientUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type authorizeOauthClientResponse200 = {
+  data: AuthorizeOAuthClientOutputBody
+  status: 200
+}
+
+export type authorizeOauthClientResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type authorizeOauthClientResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type authorizeOauthClientResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type authorizeOauthClientResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type authorizeOauthClientResponseSuccess = (authorizeOauthClientResponse200) & {
+  headers: Headers;
+};
+export type authorizeOauthClientResponseError = (authorizeOauthClientResponse403 | authorizeOauthClientResponse404 | authorizeOauthClientResponse422 | authorizeOauthClientResponse500) & {
+  headers: Headers;
+};
+
+export type authorizeOauthClientResponse = (authorizeOauthClientResponseSuccess | authorizeOauthClientResponseError)
+
+export const getAuthorizeOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/auth/oauth-clients/${id}:authorize`
+}
+
+/**
+ * Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.
+ * @summary Approve or deny an OAuth client
+ */
+export const authorizeOauthClient = async (id: string,
+    authorizeOAuthClientInputBody: NonReadonly<AuthorizeOAuthClientInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<authorizeOauthClientResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<authorizeOauthClientResponse>(getAuthorizeOauthClientUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(authorizeOAuthClientInputBody)
   }
 );}
 

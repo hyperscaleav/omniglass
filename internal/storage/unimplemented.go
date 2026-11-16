@@ -176,8 +176,19 @@ func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, stri
 func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, string, [][]byte) (int, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
-func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
+func (UnimplementedGateway) RegisterOAuthClient(context.Context, string, []string) (OAuthClient, error) {
+	return OAuthClient{}, nil
+}
+func (UnimplementedGateway) GetOAuthClient(context.Context, string) (OAuthClient, bool, error) {
+	return OAuthClient{}, false, nil
+}
+func (UnimplementedGateway) CreateOAuthCode(context.Context, OAuthCode) error { return nil }
+func (UnimplementedGateway) ConsumeOAuthCode(context.Context, []byte) (OAuthCode, bool, error) {
+	return OAuthCode{}, false, nil
+}
+func (UnimplementedGateway) IssueOAuthToken(context.Context, OAuthTokenIssue) error { return nil }
+func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)                 { return false, nil }
+func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error)              { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
 }

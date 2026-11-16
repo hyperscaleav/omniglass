@@ -96,6 +96,17 @@ func (t Trust) trusts(a netip.Addr) bool {
 	return false
 }
 
+// Proxied reports whether the connection's peer (host:port, or a bare host)
+// is a trusted proxy, so the forwarded headers it sets may be believed.
+func (t Trust) Proxied(remoteAddr string) bool {
+	host := remoteAddr
+	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		host = h
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && t.trusts(addr.Unmap())
+}
+
 // JoinForwarded joins every X-Forwarded-For line of a request in order, so a
 // proxy that appends its own line (rather than extending the client's) is read
 // from the right like one that extends it.

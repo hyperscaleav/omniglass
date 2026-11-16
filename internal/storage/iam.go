@@ -889,6 +889,9 @@ type BearerCredential struct {
 	Agent         string
 	AgentRoles    []string
 	AgentChannels []string
+	// OAuthClient is the name of the OAuth client a token was issued to by
+	// sign-in (#2048); empty for any other credential.
+	OAuthClient string
 }
 
 // ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
@@ -901,12 +904,13 @@ type BearerCredential struct {
 // self-service session list (issue #172).
 func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, prefix, coalesce(purpose, ''), coalesce(description, ''), coalesce(user_agent, ''), coalesce(client_ip, ''),
-			created_at, last_used_at, expires_at, coalesce(secret_hash = $2, false) as current,
-			coalesce(agent, ''), agent_roles, agent_channels
-		from credential
-		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
-		order by created_at desc`, principalID, currentHash)
+		select c.id, c.prefix, coalesce(c.purpose, ''), coalesce(c.description, ''), coalesce(c.user_agent, ''), coalesce(c.client_ip, ''),
+			c.created_at, c.last_used_at, c.expires_at, coalesce(c.secret_hash = $2, false) as current,
+			coalesce(c.agent, ''), c.agent_roles, c.agent_channels, coalesce(o.client_name, '')
+		from credential c
+		left join oauth_client o on o.id = c.oauth_client_id
+		where c.principal_id = $1 and c.kind = 'bearer' and (c.expires_at is null or c.expires_at > now())
+		order by c.created_at desc`, principalID, currentHash)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)
 	}
@@ -915,7 +919,7 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 	for rows.Next() {
 		var c BearerCredential
 		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.Description, &c.UserAgent, &c.ClientIP,
-			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current, &c.Agent, &c.AgentRoles, &c.AgentChannels); err != nil {
+			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current, &c.Agent, &c.AgentRoles, &c.AgentChannels, &c.OAuthClient); err != nil {
 			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
 		}
 		out = append(out, c)

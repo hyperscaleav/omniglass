@@ -206,7 +206,11 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	if version == "" {
 		version = "dev"
 	}
-	r.Handle("/mcp", mcpserver.NewHandler(r, version))
+	r.Handle("/mcp", mcpserver.NewHandler(r, version, mcpserver.WithResourceMetadata(MCPResourceMetadata(o.trustedProxies))))
+
+	// OAuth 2.1 sign-in for MCP clients (#2048, ADR-2048): the metadata,
+	// registration, authorization and token endpoints, at the root beside /mcp.
+	mountOAuth(r, gw, o.trustedProxies)
 
 	return r
 }
@@ -332,6 +336,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Errors:        []int{http.StatusForbidden, http.StatusUnprocessableEntity},
 		Middlewares:   huma.Middlewares{a.authn},
 	}, a.createMeTokenHandler)
+
+	a.registerOAuthConsent(api)
 
 	huma.Register(api, huma.Operation{
 		OperationID:   "set-auth-me-avatar",

@@ -50,7 +50,8 @@ func sessionHashFrom(ctx context.Context) ([]byte, bool) {
 }
 
 // clientMeta is the request's User-Agent and client IP, for stamping a new credential.
-type clientMeta struct{ userAgent, clientIP string }
+// origin is the scheme and host the caller reached the server at.
+type clientMeta struct{ userAgent, clientIP, origin string }
 
 // clientMetaFrom returns the captured User-Agent and client IP, empty when none.
 func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
@@ -60,6 +61,12 @@ func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
 	return "", ""
 }
 
+// originFrom returns the captured origin (scheme and host), empty when none.
+func originFrom(ctx context.Context) string {
+	m, _ := ctx.Value(clientMetaCtxKey).(clientMeta)
+	return m.origin
+}
+
 // captureClientMeta stashes the request's User-Agent and client IP in the context so
 // handlers can stamp a new credential with the device and address that created it. Runs
 // on every API request, before Huma, so both the public login and the authn-only token
@@ -67,7 +74,7 @@ func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
 func captureClientMeta(trust clientaddr.Trust) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust)}
+			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust), origin: requestOrigin(r, trust)}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
 		})
 	}
@@ -280,6 +287,7 @@ var agentRefusedOps = map[string]bool{
 	"create-auth-me-token":    true,
 	"change-auth-me-password": true,
 	"impersonate-principal":   true,
+	"authorize-oauth-client":  true,
 }
 
 // agentCeiling reports whether a request is held to the agent ceiling: it
@@ -853,6 +861,7 @@ type sessionBody struct {
 	Agent         string   `json:"agent,omitempty" doc:"Set on an agent token: the agent acting on the person's behalf"`
 	AgentRoles    []string `json:"agent_roles,omitempty" doc:"An agent token's own roles, intersected with its person's on every request"`
 	AgentChannels []string `json:"agent_channels,omitempty" doc:"The channels an agent token is accepted on"`
+	OAuthClient   string   `json:"oauth_client,omitempty" doc:"Set on a token an OAuth client signed in for: the client's registered name"`
 }
 
 // listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
@@ -891,6 +900,7 @@ func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 			Agent:         c.Agent,
 			AgentRoles:    c.AgentRoles,
 			AgentChannels: c.AgentChannels,
+			OAuthClient:   c.OAuthClient,
 		}
 		if c.LastUsedAt != nil {
 			lu := c.LastUsedAt.Format(time.RFC3339)

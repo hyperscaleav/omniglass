@@ -536,6 +536,52 @@ Example:
 omniglass auth me notification markRead <id>
 ```
 
+### `omniglass auth oauth-client`
+
+Commands for the oauth-client resource
+
+#### `omniglass auth oauth-client authorize`
+
+Approve or deny an OAuth client
+
+```
+omniglass auth oauth-client authorize <id> [flags]
+```
+
+Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--approved` | bool | `false` | Whether you approve the client; false sends it back with access_denied |
+| `--code-challenge` | string | (none) | The PKCE challenge from the authorization request |
+| `--code-challenge-method` | string | (none) | The PKCE method; S256 only |
+| `--redirect-uri` | string | (none) | The redirect URI from the authorization request; one the client registered |
+| `--resource` | string | (none) | The resource the token is for: this server's MCP endpoint |
+| `--roles` | string | (none) | The roles to approve; each must be one whose capabilities you hold. Required when approved |
+| `--state` | string | (none) | The client's state, echoed back |
+
+Example:
+
+```sh
+omniglass auth oauth-client authorize <id> --approved <bool> --code-challenge code_challenge --code-challenge-method code_challenge_method --redirect-uri redirect_uri --resource resource
+```
+
+#### `omniglass auth oauth-client get`
+
+Read an OAuth client asking for your consent
+
+```
+omniglass auth oauth-client get <id>
+```
+
+Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.
+
+Example:
+
+```sh
+omniglass auth oauth-client get <id>
+```
+
 ### `omniglass auth remove-avatar`
 
 Remove your own profile picture
