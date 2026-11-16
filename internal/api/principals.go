@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/avatar"
+	"github.com/hyperscaleav/omniglass/internal/rbac"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -791,13 +792,26 @@ func (a *authenticator) grantCoverOK(ctx context.Context, role string) (bool, er
 	if err != nil {
 		return false, huma.Error500InternalServerError("grant failed")
 	}
-	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
+	return allScopePerms(ctx, idx, actor).Covers(idx.Flatten([]string{role})), nil
+}
+
+// allScopePerms flattens the caller's ALL-SCOPE grants into the permission set
+// every escalation guard measures against. A request bounded by an agent token
+// or the agent ceiling (#1179) is measured by its bounded set, so an agent can
+// never hand a principal it controls a capability it is itself denied (a
+// credential reveal above all) and so escape its ceiling.
+func allScopePerms(ctx context.Context, idx rbac.RoleIndex, actor *storage.Principal) rbac.Set {
+	ids := make([]string, 0, len(actor.Grants))
 	for _, gr := range actor.Grants {
 		if gr.ScopeKind == "all" {
-			allScopeRoleIDs = append(allScopeRoleIDs, gr.Role)
+			ids = append(ids, gr.Role)
 		}
 	}
-	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten([]string{role})), nil
+	perms := idx.Flatten(ids)
+	if constrained(ctx) {
+		perms = constrainPerms(perms, idx, actor.Agent, true)
+	}
+	return perms
 }
 
 // toGrantBody renders a stored grant as the API body (the scope id is inlined only

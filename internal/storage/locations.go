@@ -1592,7 +1592,8 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	}
 	newJSON = withTemplateDetail(ctx, newJSON)
 	// channel and client say how the action arrived (#1162): set on the context by
-	// the MCP dispatch, null for a direct API call.
+	// the MCP dispatch, null for a direct API call. agent names the agent an
+	// agent token acts as (#1179), on the actor's behalf; null otherwise.
 	channel, client := auditChannelFrom(ctx)
 	// actor_username / real_actor_username denormalize the actor's IDENTIFIER at
 	// write time, so the row still names its actor after that principal is purged
@@ -1607,9 +1608,9 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	// counts this insert. principal_ident_test.go holds the two shapes to the same
 	// answer.
 	if _, err := tx.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9)`,
-		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON, channel, client); err != nil {
+		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client, agent)
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON, channel, client, agentFrom(ctx)); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}
 	return nil

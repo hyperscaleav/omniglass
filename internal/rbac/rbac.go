@@ -76,9 +76,66 @@ func (idx RoleIndex) Flatten(roleIDs []string) Set {
 // the tail wildcard `>` and any token may be the single-token wildcard `*`.
 type pattern []string
 
-// Set is a parsed, queryable permission set: a list of grant patterns.
+// Set is a parsed, queryable permission set: a list of grant patterns, optionally
+// constrained. A constrained set is an agent token's capability (#1179): within
+// lists the sets it must ALSO be allowed by (the minting person's capability, so
+// an agent never exceeds the person it acts for), and denied lists the actions it
+// is refused whatever pattern names them (the agent ceiling: reveal and use, so
+// an agent principal can never decrypt a credential). A plain set has neither.
 type Set struct {
 	patterns []pattern
+	within   []Set
+	denied   map[string]bool
+}
+
+// Within returns the set constrained to what other also allows: the
+// intersection of the two capabilities. The receiver is not modified.
+func (s Set) Within(other Set) Set {
+	out := s.clone()
+	out.within = append(out.within, other)
+	return out
+}
+
+// Without returns the set with the named actions refused on every resource and
+// tier, whatever pattern would grant them (the owner's `>` included). The
+// receiver is not modified.
+func (s Set) Without(actions ...string) Set {
+	out := s.clone()
+	out.denied = make(map[string]bool, len(s.denied)+len(actions))
+	for a := range s.denied {
+		out.denied[a] = true
+	}
+	for _, a := range actions {
+		out.denied[a] = true
+	}
+	return out
+}
+
+// clone copies the set's slices so a derived set never aliases its source.
+func (s Set) clone() Set {
+	return Set{
+		patterns: append([]pattern(nil), s.patterns...),
+		within:   append([]Set(nil), s.within...),
+		denied:   s.denied,
+	}
+}
+
+// deniesAction reports whether a required permission's action is refused.
+func (s Set) deniesAction(tokens []string) bool {
+	return len(tokens) >= 2 && s.denied[tokens[1]]
+}
+
+// deniesPattern reports whether a grant pattern reaches a refused action: its
+// action is a refused literal, or a wildcard (which spans the refused ones), or
+// the pattern is the bare tail `>`.
+func (s Set) deniesPattern(p pattern) bool {
+	if len(s.denied) == 0 {
+		return false
+	}
+	if len(p) < 2 {
+		return true
+	}
+	return s.denied[p[1]] || p[1] == "*" || p[1] == ">" || p[0] == ">"
 }
 
 // NewSet parses permission strings into a Set, skipping any that do not parse (a
@@ -201,6 +258,19 @@ func match(pat pattern, path []string) bool {
 // that resource (the two-token `<resource>:read`), so a verb-only role can read
 // what it acts on. The floor never reaches a `:admin` (three-token) read.
 func (s Set) Allows(tokens ...string) bool {
+	if s.deniesAction(tokens) {
+		return false
+	}
+	for _, w := range s.within {
+		if !w.Allows(tokens...) {
+			return false
+		}
+	}
+	return s.allowsOwn(tokens)
+}
+
+// allowsOwn is Allows over the set's own patterns, ignoring its constraints.
+func (s Set) allowsOwn(tokens []string) bool {
 	for _, p := range s.patterns {
 		if match(p, tokens) {
 			return true
@@ -241,6 +311,20 @@ func (s Set) Covers(other Set) bool {
 // `[R, read]` is covered when this set holds a permission on R (or, when R is the
 // `*` resource wildcard, a permission on every resource).
 func (s Set) coversPattern(p pattern) bool {
+	if s.deniesPattern(p) {
+		return false
+	}
+	for _, w := range s.within {
+		if !w.coversPattern(p) {
+			return false
+		}
+	}
+	return s.coversOwn(p)
+}
+
+// coversOwn is coversPattern over the set's own patterns, ignoring its
+// constraints.
+func (s Set) coversOwn(p pattern) bool {
 	for _, q := range s.patterns {
 		if subsumes(q, p) {
 			return true
@@ -294,11 +378,43 @@ func subsumes(q, p pattern) bool {
 }
 
 // Strings returns the permission strings, one per pattern, for the /auth/me hint
-// list and the roles view. Order is insertion order.
+// list and the roles view. Order is insertion order. A constrained set lists the
+// patterns it fully holds: its own patterns its constraints cover, then each
+// constraint's patterns the rest of the set covers, never one reaching a refused
+// action. It is a hint, so it may understate an intersection; Allows is the rule.
 func (s Set) Strings() []string {
-	out := make([]string, 0, len(s.patterns))
+	if len(s.within) == 0 && len(s.denied) == 0 {
+		out := make([]string, 0, len(s.patterns))
+		for _, p := range s.patterns {
+			out = append(out, strings.Join(p, ":"))
+		}
+		return out
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(p pattern) {
+		if k := strings.Join(p, ":"); !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
 	for _, p := range s.patterns {
-		out = append(out, strings.Join(p, ":"))
+		if s.coversPattern(p) {
+			add(p)
+		}
+	}
+	for _, w := range s.within {
+		for _, p := range w.Strings() {
+			pats, err := parse(p)
+			if err != nil {
+				continue
+			}
+			for _, q := range pats {
+				if s.coversPattern(q) {
+					add(q)
+				}
+			}
+		}
 	}
 	return out
 }

@@ -187,6 +187,9 @@ omniglass token ops --description 'nightly backup' --ttl 720h   # a 30-day token
 
 # A signed-in user can mint its own token over the API (the console Create token action), which
 # returns the secret once: omniglass auth create-token --description 'my laptop cli'.
+# An AGENT token (--agent NAME, --ttl-days required, optional --roles and --channels as JSON
+# arrays) acts on your behalf and can never reveal a credential; see /guides/agents/. The
+# owner-lane `omniglass token` above does not mint agent tokens.
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
 # A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API

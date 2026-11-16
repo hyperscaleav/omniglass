@@ -13,16 +13,32 @@ The design is on the [API page](/architecture/api/#also-an-mcp-surface).
 
 ## Give the agent a token of its own
 
-Mint a token for the agent rather than lending it yours, so you can revoke it alone:
+Mint an **agent token** for the agent rather than lending it yours. It acts on your behalf, so every
+change it makes is recorded as yours, taken through that agent:
 
 ```bash
-omniglass auth create-token --description "claude code on my laptop" --ttl-days 30
+omniglass auth create-token --description "claude code on my laptop" \
+  --agent claude-code --ttl-days 30 --roles '["viewer"]' --channels '["mcp"]'
 ```
 
-The token is printed once. It carries your whole authority (there is no narrower token yet), so treat it
-like your password: keep it in the agent's environment, not in a file you commit. Minting it writes an
-audit row, and so does revoking it later: `omniglass session list` shows it, and
-`omniglass session revoke <id>` ends it.
+- `--agent` names the agent, fixed at issue. The audit log carries it beside you as the actor, and
+  `omniglass audit-log list --agent claude-code` lists what it did.
+- `--ttl-days` is required for an agent token: it always expires (365 days at most).
+- `--roles` narrows it (optional). It holds what those roles grant **and** what you hold, checked on
+  every request, so narrowing or removing your own access narrows or stops the agent at its next
+  call. You cannot name a role wider than your own.
+- `--channels` limits where it is accepted, `api` (direct REST and the CLI) or `mcp` (optional; both
+  when omitted).
+
+An agent token can never reveal or copy a secret's plaintext, whatever its roles: the agent works
+with credentials only through the routes that use them server-side (polling an endpoint, issuing a
+command), so it knows a credential is present and never what it is. The same ceiling holds for any
+token, yours included, while it is used through MCP. An agent token also cannot mint another token,
+change your password or impersonate anyone.
+
+The token is printed once; keep it in the agent's environment, not in a file you commit. Minting and
+revoking it each write an audit row: `omniglass session list` shows it with its agent name, and
+`omniglass session revoke <id>` ends it without touching your own sessions.
 
 ## Over HTTP
 

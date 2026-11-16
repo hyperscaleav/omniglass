@@ -19,6 +19,7 @@ type auditListInput struct {
 	Resource string `query:"resource" doc:"Filter to one resource kind (e.g. auth, principal_grant)"`
 	Verb     string `query:"verb" doc:"Filter to one verb (e.g. login, create)"`
 	Before   string `query:"before" doc:"Only events strictly older than this RFC3339 timestamp (paging backward)"`
+	Agent    string `query:"agent" doc:"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)"`
 }
 
 type auditEventBody struct {
@@ -40,6 +41,9 @@ type auditEventBody struct {
 	// How the action arrived (#1162): set by the server, never by a caller.
 	Channel string `json:"channel,omitempty" doc:"How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"`
 	Client  string `json:"client,omitempty" doc:"The name and version the MCP client declared about itself, recorded as asserted; absent when there is none"`
+	// Who acted on the actor's behalf (#1179): set from the agent token that
+	// authenticated the write, never by a caller.
+	Agent string `json:"agent,omitempty" doc:"The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly"`
 }
 
 type auditListOutput struct {
@@ -72,7 +76,7 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "List audit-trail events",
 		Description: "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
 	}, "audit", "read", "admin"), func(ctx context.Context, in *auditListInput) (*auditListOutput, error) {
-		entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: in.Limit, Resource: in.Resource, Verb: in.Verb, Before: in.Before})
+		entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: in.Limit, Resource: in.Resource, Verb: in.Verb, Before: in.Before, Agent: in.Agent})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list audit log")
 		}
@@ -85,7 +89,7 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				RealActor: e.RealActorID, RealActorName: e.RealActorName,
 				Verb: e.Verb, Resource: e.Resource, ResourceID: e.ResourceID,
 				Old: auditImage(e.Old), New: auditImage(e.New),
-				Channel: e.Channel, Client: e.Client,
+				Channel: e.Channel, Client: e.Client, Agent: e.Agent,
 			})
 		}
 		return out, nil
