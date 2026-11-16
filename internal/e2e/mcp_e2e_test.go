@@ -158,7 +158,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		t.Fatalf("decode audit-log: %v\n%s", err, out)
 	}
 	for _, e := range trail.Events {
-		if e.New["name"] == "mcp-e2e-comp" {
+		if e.New["Name"] == "mcp-e2e-comp" {
 			if e.ActorName != "root" || e.Channel != "mcp" || !strings.HasPrefix(e.Client, "omniglass-cli") {
 				t.Fatalf("audit row = %+v, want actor root, channel mcp, client omniglass-cli", e)
 			}
