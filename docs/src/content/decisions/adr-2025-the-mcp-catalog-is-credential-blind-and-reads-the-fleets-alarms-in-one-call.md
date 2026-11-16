@@ -21,8 +21,9 @@ refs: [2025, 1162, 2026]
      `token`, `password` or `secret` property, when its response has a `token` or `password`, or when
      either has `fields` as an object of values. Every credential-shaped operation must carry the stamp,
      and every stamped operation must be credential-shaped.
-  3. **A sample an agent reads is masked.** `run-endpoint-poll` answers with the samples it collected,
-     with secret fields sealed as on every other sample read, so the tool may stay in the catalog.
+  3. **A poll an agent runs comes back masked.** `run-endpoint-poll` answers with the samples it collected,
+     masked of the endpoint's own secrets wherever the device could echo them (a sample's text, labels and
+     identity, the faults, a refusal's text), so the tool may stay in the catalog.
   4. **The fleet's alarms are one scoped read.** `GET /alarms` (`list-alarms`, gated by
      `component:read`) returns the active alarms across the caller's component scope, injected by the
      Storage Gateway. It orders them worst severity first, then newest, takes `unacknowledged`, and caps
@@ -30,8 +31,8 @@ refs: [2025, 1162, 2026]
   5. **The triage catalog.** The alarm actions and timeline, the system's alarms, events, metrics,
      properties, logs and members (`add-system-member` included), the event and calc rule reads and
      previews, `validate-expression`, `list-event-type`, the component writes and its tag bindings, the
-     location create and update and reads, `update-system`, and `list-audit-log`. No delete and no rule
-     write is a tool.
+     location create and update and reads, `update-system`, and `list-audit-log`. It adds no delete of
+     a component, location, system or rule, and no rule write.
 - **Context:** The catalog had no alarm action, rule, tag, audit read, or location or component write,
   so an agent that found a problem could not act on it. Widening it put more routes in reach, and some
   routes on the way in (`create-secret`) or on the way out (a reveal, a minted token) would place a

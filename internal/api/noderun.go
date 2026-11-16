@@ -284,6 +284,9 @@ func pollRunOf(r collection.RunResult, sealed []string) pollRunBody {
 		for k, v := range b.Samples[i].Labels {
 			b.Samples[i].Labels[k] = redact.Secrets(v, sealed...)
 		}
+		if id := b.Samples[i].Identity; id != nil {
+			b.Samples[i].Identity = &collection.RunIdentity{Key: id.Key, Value: redact.Secrets(id.Value, sealed...)}
+		}
 	}
 	for _, f := range r.Faults {
 		b.Faults = append(b.Faults, redact.Secrets(f, sealed...))

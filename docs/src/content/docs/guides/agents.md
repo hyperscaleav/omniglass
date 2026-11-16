@@ -106,15 +106,16 @@ endpoints, metrics and logs, it covers the triage loop:
   `set-component-tag`, `remove-component-tag` and `effective-tags`; `create-location`,
   `update-location`, `list-location-metrics` and `list-location-properties`; `update-system`,
   `list-system-members`, `add-system-member`, `list-system-metrics`, `list-system-properties` and
-  `list-system-logs`. No delete is a tool.
+  `list-system-logs`. This set adds no delete of a component, location, system or rule; the
+  [MCP tools reference](/reference/mcp/) marks every destructive tool the catalog serves.
 - **See who did what.** `list-audit-log`, which still needs the admin permission it needs anywhere.
 
 Some operations are never tools: any route that takes or returns a credential in plaintext (creating,
 updating, copying or revealing a secret, minting a token, logging in, setting a password, enrolling or
 claiming a node, a notification target's URL). A credential a person must see goes to that person in the
 console or the CLI, never into an agent's context, and the build fails if one of those routes is stamped.
-A tool that answers with a collected sample, such as running an endpoint's poll now, returns any secret
-field masked.
+Running an endpoint's poll now masks the endpoint's own secrets wherever the device echoes them in the
+answer: a sample's text, labels and identity, the faults, and a refusal's text.
 
 ## Seeing what it did
 
