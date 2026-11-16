@@ -31,6 +31,7 @@
       },
       "ActionRuleBody": {
         "additionalProperties": false,
+        "description": "A rule that decides when a notification about an alarm is sent, and to which targets.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -325,6 +326,7 @@
       },
       "AlarmBody": {
         "additionalProperties": false,
+        "description": "A raised problem on a component, with a severity, from the moment it raises until it clears.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -556,6 +558,7 @@
       },
       "AuditEventBody": {
         "additionalProperties": false,
+        "description": "One recorded privileged action or sign-in, with who did it, when and to what.",
         "properties": {
           "actor": {
             "type": "string"
@@ -1208,6 +1211,7 @@
       },
       "CalcRuleBody": {
         "additionalProperties": false,
+        "description": "A rule that derives a new value from other signals on each owner it applies to.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -1653,6 +1657,7 @@
       },
       "CommandBody": {
         "additionalProperties": false,
+        "description": "One instruction sent to a component, typed by a command type, and its outcome.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -1880,6 +1885,7 @@
       },
       "CommandTypeBody": {
         "additionalProperties": false,
+        "description": "Something a component can be told to do in the catalog, with its target and how long it takes to settle.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -1954,6 +1960,7 @@
       },
       "ComponentBody": {
         "additionalProperties": false,
+        "description": "One managed device or service, an instance of a product, placed at a location and usually a member of a system.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -2293,6 +2300,7 @@
       },
       "ComponentTypeBody": {
         "additionalProperties": false,
+        "description": "The device class a product belongs to, such as display, projector or microphone.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -4820,6 +4828,7 @@
       },
       "DriverBody": {
         "additionalProperties": false,
+        "description": "The declared recipe that collects from a product, what to fetch, how to read it and what it can set.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -5201,6 +5210,7 @@
       },
       "EndpointBody": {
         "additionalProperties": false,
+        "description": "A connection to a component over one transport, the API Omniglass reaches it through.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -5545,6 +5555,7 @@
       },
       "EventBody": {
         "additionalProperties": false,
+        "description": "One point-in-time occurrence on a component, typed by an event type.",
         "properties": {
           "alarm_id": {
             "description": "The alarm a rule's fire event opened or its clear event resolved; absent for most events",
@@ -5607,6 +5618,7 @@
       },
       "EventRuleBody": {
         "additionalProperties": false,
+        "description": "A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -5805,6 +5817,7 @@
       },
       "EventTypeBody": {
         "additionalProperties": false,
+        "description": "A kind of discrete occurrence in the catalog, what an event is typed by.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -6033,6 +6046,7 @@
       },
       "FileBody": {
         "additionalProperties": false,
+        "description": "Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -6449,6 +6463,7 @@
       },
       "GroupBody": {
         "additionalProperties": false,
+        "description": "A set of users granted roles together, each member inheriting the group's grants.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -8640,6 +8655,7 @@
       },
       "LocationBody": {
         "additionalProperties": false,
+        "description": "A place the fleet occupies, from a campus down to a room, nested under the location it sits in.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -8832,6 +8848,7 @@
       },
       "LocationTypeBody": {
         "additionalProperties": false,
+        "description": "What kind of location a location is, and which kinds it may sit under.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -9367,6 +9384,7 @@
       },
       "MetricTypeBody": {
         "additionalProperties": false,
+        "description": "A numeric signal in the catalog, the series a sample measures, with its unit and precision.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -9548,6 +9566,7 @@
       },
       "NodeBody": {
         "additionalProperties": false,
+        "description": "A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -9644,6 +9663,7 @@
       },
       "NotificationBody": {
         "additionalProperties": false,
+        "description": "One message about an alarm sent on one channel, such as a webhook, an email or the inbox.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -9826,6 +9846,7 @@
       },
       "NotificationTargetBody": {
         "additionalProperties": false,
+        "description": "Where a notification goes, a webhook, a mailbox, a group or a person.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -9939,6 +9960,7 @@
       },
       "NotificationTypeBody": {
         "additionalProperties": false,
+        "description": "What a notification about an alarm says, as a subject and a text.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -11677,6 +11699,7 @@
       },
       "PrincipalBody": {
         "additionalProperties": false,
+        "description": "A user, a person or a machine, that roles are granted to.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -11769,6 +11792,7 @@
       },
       "ProductBody": {
         "additionalProperties": false,
+        "description": "A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -11925,6 +11949,7 @@
       },
       "PropertyBody": {
         "additionalProperties": false,
+        "description": "A categorical signal in the catalog, a value a component reports or is declared to have.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -13629,6 +13654,7 @@
       },
       "RoleBody": {
         "additionalProperties": false,
+        "description": "A named bundle of permissions granted to users, which may inherit another role's.",
         "properties": {
           "description": {
             "type": "string"
@@ -14094,6 +14120,7 @@
       },
       "SecretBody": {
         "additionalProperties": false,
+        "description": "An encrypted credential set at one level of the fleet and inherited below it.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -14180,6 +14207,7 @@
       },
       "SecretTypeBody": {
         "additionalProperties": false,
+        "description": "A shape a secret can take, such as a password or an API key, built into Omniglass.",
         "properties": {
           "default_admin_sensitive": {
             "description": "The admin_sensitive value the create form seeds for this type",
@@ -14717,6 +14745,7 @@
       },
       "SeverityLevelBody": {
         "additionalProperties": false,
+        "description": "How bad an alarm is, ranked, with its color and whether it takes its component out.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -15560,6 +15589,7 @@
       },
       "StandardBody": {
         "additionalProperties": false,
+        "description": "A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -15751,6 +15781,7 @@
       },
       "SystemBody": {
         "additionalProperties": false,
+        "description": "The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -16292,6 +16323,7 @@
       },
       "SystemTypeBody": {
         "additionalProperties": false,
+        "description": "What kind of space a system is, such as a boardroom, a classroom or a video wall.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -16461,6 +16493,7 @@
       },
       "TagBody": {
         "additionalProperties": false,
+        "description": "An operator's key and value on a location, system or component, its key governed install-wide.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -16591,6 +16624,7 @@
       },
       "TaskBody": {
         "additionalProperties": false,
+        "description": "A node's unit of collection, a poll it runs or a listener it holds on one endpoint.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -16657,6 +16691,7 @@
       },
       "TemplateBody": {
         "additionalProperties": false,
+        "description": "An example you clone to start a standard, a component, a system or a set of locations, then own what you get.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -17337,6 +17372,7 @@
       },
       "UnclaimedSourceBody": {
         "additionalProperties": false,
+        "description": "A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored.",
         "properties": {
           "count": {
             "description": "How many messages it sent that nothing claimed",
@@ -18677,6 +18713,7 @@
       },
       "VariableBody": {
         "additionalProperties": false,
+        "description": "A named value set at one level of the fleet and inherited below it, written into text as $var.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -18725,6 +18762,7 @@
       },
       "VendorBody": {
         "additionalProperties": false,
+        "description": "An organization behind products, a manufacturer, an integrator or a developer.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
