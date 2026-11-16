@@ -68,7 +68,7 @@ Type `omniglass component simulation fire "$bar" --surface http-api --method POS
 Enter
 Wait
 Hide
-Type `demo_until 3 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 37 ]'`
+Type `demo_until 3 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 0.37 ]'`
 Enter
 Wait@10s
 Show
@@ -91,7 +91,7 @@ Type `for v in 38 39; do omniglass component simulation fire "$bar" --surface ht
 Enter
 Wait
 Hide
-Type `demo_until 30 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 39 ]'`
+Type `demo_until 30 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 0.39 ]'`
 Enter
 Wait@40s
 Show
@@ -146,7 +146,7 @@ Type `omniglass component simulation fire "$bar" --surface http-api --method POS
 Enter
 Wait
 Hide
-Type `demo_until 10 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 40 ]'`
+Type `demo_until 10 '[ "$(omniglass component metric sample list "$bar" volume --limit 1 | jq -r ".samples[0].value")" = 0.4 ]'`
 Enter
 Wait@20s
 Show
