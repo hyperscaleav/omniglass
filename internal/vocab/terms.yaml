@@ -28,6 +28,7 @@ terms:
     definition: Everything an install manages, the locations, the systems in them and the components that make them up.
     audience: operator
     retired:
+      # The word boundary keeps restate, restated and restatement out of reach.
       - word: estate
         pattern: '(?i)\bestates?\b|\bestate-wide\b'
         origin: ADR-0123
@@ -124,6 +125,8 @@ terms:
     schema: EndpointBody
     permission: endpoint
     retired:
+      # Banned in its entity phrasings, not as a bare word: "network interface" survives as the
+      # teaching contrast on the collection page, and "user interface" is ordinary English.
       - word: interface
         pattern: '\binterface_type\b|\binterface-reachable\b|\ban interface\b|\bthe interface\b|\binterfaces\b'
         origin: ADR-0134
@@ -330,6 +333,7 @@ terms:
     definition: The optional friendly string a person reads in place of a name.
     audience: operator
     retired:
+      # The column, the CLI flag and the two-word noun, since a page can reach for any of them.
       - word: display name
         pattern: '\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b'
         origin: ADR-0118
