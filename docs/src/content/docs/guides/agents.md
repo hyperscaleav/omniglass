@@ -11,9 +11,31 @@ scope allow and every change it makes is audited as yours, marked as having arri
 [MCP tools reference](/reference/mcp/) lists every tool, its gate, and what a client may assume of it.
 The design is on the [API page](/architecture/api/#also-an-mcp-surface).
 
+## Sign in from the client
+
+The quickest way to connect an MCP client that speaks OAuth (Claude Code does) is to add the server
+with no token and let the client sign you in:
+
+```bash
+claude mcp add --transport http omniglass https://omniglass.example.com/mcp
+```
+
+The first call is refused with a pointer to the server's OAuth metadata. The client registers
+itself, opens your browser on the console's **Connect** page, and you choose the roles it may act
+under (only roles whose capabilities you hold are offered). Approving hands the client a one-time
+code it exchanges, with its PKCE proof, for an **agent token** named after the client: accepted on
+MCP only, holding what the chosen roles **and** you hold, with the plaintext ceiling below, for 30
+days. Denying sends the client a refusal and mints nothing. Signing the same client in again
+replaces its token rather than adding one.
+
+The token shows in your profile's API tokens as `OAuth: <client name>`; revoking it there refuses
+the client's next call, and everything it did is in the audit log under its name. When the 30 days
+run out, the client signs you in again.
+
 ## Give the agent a token of its own
 
-Mint an **agent token** for the agent rather than lending it yours. It acts on your behalf, so every
+Where a client does not speak OAuth, or you want to choose the lifetime and channels yourself, mint an
+**agent token** for the agent rather than lending it yours. It acts on your behalf, so every
 change it makes is recorded as yours, taken through that agent:
 
 ```bash
@@ -48,8 +70,8 @@ revoking it each write an audit row: `omniglass session list` shows it with its 
 
 ## Over HTTP
 
-A remote agent connects to `/mcp` on your server over streamable HTTP, sending the token as a bearer
-header. The endpoint answers to a token and nothing else (a browser's signed-in session does not open
+A remote agent connects to `/mcp` on your server over streamable HTTP, sending a token as a bearer
+header (one it got by [signing in](#sign-in-from-the-client), or one you minted). The endpoint answers to a token and nothing else (a browser's signed-in session does not open
 it). With Claude Code:
 
 ```bash

@@ -88,8 +88,10 @@ Where the build differs from the present-tense design below (each logged in the
 - **The `agent` principal kind** is reserved in the schema's `kind` CHECK, but no `agent` identity
   is issued: an AI acts through an [agent token](#agent-tokens) on a person's credential. Built: the
   mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
-  Not built yet: narrowing an agent token to a location, the console's agent fields, OAuth 2.1
-  authorization for MCP clients, and omnibot's marking
+  OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built without refresh
+  tokens ([#2073](https://github.com/hyperscaleav/omniglass/issues/2073)) or client metadata documents
+  ([#2074](https://github.com/hyperscaleav/omniglass/issues/2074)).
+  Not built yet: narrowing an agent token to a location, the console's agent fields, and omnibot's marking
   ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
 - **The required permission is published per route in the OpenAPI spec**
   ([below](#the-permission-universe-published-per-route)), the **Roles view** reporting the
@@ -795,6 +797,37 @@ controls a capability it is itself denied.
 Every write it makes records the person as `actor` and the agent's name in `audit_log.agent`
 ([audit](/architecture/audit/)); the session list returns `agent`, `agent_roles` and
 `agent_channels` per credential, and revoking it alone leaves the person's sessions untouched.
+
+#### MCP clients sign in with OAuth 2.1
+
+An MCP client gets an agent token without the person minting one, through the OAuth 2.1
+authorization code flow the MCP authorization spec names
+([ADR-2048](/architecture/decisions/#adr-2048-an-mcp-client-signs-in-with-oauth-21-for-an-agent-token-linked-to-it)).
+Omniglass is both the resource server and the authorization server:
+
+- **Discovery.** `/mcp` refuses a request with no token with a `WWW-Authenticate` challenge whose
+  `resource_metadata` names `/.well-known/oauth-protected-resource/mcp` (RFC 9728); that document
+  names the server as its own authorization server, whose metadata is
+  `/.well-known/oauth-authorization-server` (RFC 8414). The origin in every URL is the request's,
+  with an `X-Forwarded-Proto` believed only from a trusted proxy.
+- **Registration.** `POST /oauth/register` is open dynamic client registration (RFC 7591): a public
+  client (no secret, `token_endpoint_auth_method` `none`), the code grant only, and redirect URIs that
+  are https or http on a loopback host. A registration nobody consented to within a day is pruned.
+- **Authorization.** `GET /oauth/authorize` takes the code response type, S256 PKCE and the `resource`
+  (this server's `/mcp`); an unknown client or a redirect URI it did not register is a 400 with no
+  redirect, and the redirect is compared exactly. A valid request goes to the console's consent
+  page, where the signed-in person approves roles or denies. The approval
+  (`authorize-oauth-client`) is a human's alone: an agent token is refused it, like minting a token,
+  so an agent cannot consent for another client. Each approved role must be one the person covers.
+- **Exchange.** `POST /oauth/token` spends the code on any attempt (it lives five minutes, stored as
+  a hash), checks the client, redirect, resource and PKCE verifier, and mints an agent token named
+  after the client, on the `mcp` channel only, with the approved roles and a 30-day lifetime. The
+  credential row links the client, and a client holds one token per person: a new sign-in replaces
+  the old token in the same transaction. There is no implicit or password grant and no refresh token
+  yet.
+
+The token is an ordinary agent token from then on: the intersection with the person's grants, the
+plaintext ceiling, the audit `agent` name and revocation from the session list all apply unchanged.
 
 The **admin** counterpart ends **another** principal's sessions, so a lost laptop or a leaked API token can be cut off without resetting the account. `GET /api/v1/principals/{id}/sessions` lists the target's active bearer credentials in the same non-secret shape, with `current` **always false** (a nil `currentHash`); `POST /api/v1/principals/{id}/sessions/{sid}:revoke` ends one (204). Both gate on **`principal:revoke-session`**, a normal two-token permission held by `admin` and `owner` through `principal:*` / `>`, kept separable for a future help-desk role. The revoke reuses the same principal-scoped delete as the self-service one (a `sid` that is not the target's is a non-disclosing 404) and sits behind the same **takeover guard** as impersonation and the password reset: an **owner's sessions cannot be revoked by anyone**, nor can a caller revoke a principal whose capabilities exceed its own. It is **audited with the acting admin as the actor and the target principal** (`verb = revoke_session`; the real actor rides context when impersonating). The list is read-only and carries no takeover guard, so an admin can *see* an owner's sessions even where it cannot end them. The **bulk** `POST /api/v1/principals/{id}/sessions:revokeAll` (`{ purpose }`) ends **all** of one kind (a purpose-filtered `RevokeBearersByPurpose`, so revoking sessions never touches tokens) and returns the count, with the same gate, guard, and audit.
 
