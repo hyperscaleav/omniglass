@@ -511,7 +511,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			})
 			// The component stands only with its endpoints: a plan or endpoint
 			// that fails takes the new component back out. Both address it by
-			// id, since a name may repeat in another place. A component that
+			// id, since a name may repeat in another location. A component that
 			// owns endpoints is refused its delete (#138), so the endpoints
 			// made so far go first.
 			var made []string

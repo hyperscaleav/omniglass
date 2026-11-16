@@ -678,8 +678,8 @@ type meOutput struct {
 		// FleetPermissions narrows Permissions to the grants over the whole
 		// fleet: what the caller may write to fleet-wide config (an event rule,
 		// whose selector reaches every component), which a grant bounded to a
-		// place or system never reaches.
-		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
+		// location or system never reaches.
+		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority."`
 		Grants           []grantBody `json:"grants"`
 		Agent            string      `json:"agent,omitempty" doc:"Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."`
 	}

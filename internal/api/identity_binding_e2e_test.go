@@ -170,7 +170,7 @@ func TestIdentityBindingNeedsTheConduitEnd(t *testing.T) {
 	}
 }
 
-// A place or a node is no owner (422), and the match key must be registered
+// A location or a node is no owner (422), and the match key must be registered
 // (422).
 func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
 	t.Parallel()

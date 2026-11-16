@@ -157,7 +157,7 @@ func TestEventRuleAPI(t *testing.T) {
 
 	// Rules read like a registry: a viewer scoped to one place lists and gets
 	// every rule. The live state names components, so it carries only the
-	// streaks on components the caller's component scope admits: a place
+	// streaks on components the caller's component scope admits: a location
 	// scope reaches none today, a component scope reaches its own.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rule-other"}, all, all, all, all); err != nil {
 		t.Fatal(err)

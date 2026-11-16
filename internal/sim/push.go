@@ -51,7 +51,7 @@ type pushFace struct {
 	done   chan struct{}
 }
 
-// booking is a booked place's reading at one instant: booked while a meeting
+// booking is a booked location's reading at one instant: booked while a meeting
 // runs and free between, and the meetings left in its day, the one in
 // progress included.
 type booking struct {

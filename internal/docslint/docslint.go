@@ -35,6 +35,11 @@ type BannedTerm struct {
 	Replacement string
 	// Origin is the decision that retired the term.
 	Origin string
+	// Allow, when set, matches the phrasings that keep the word: a Pattern
+	// match lying wholly inside an Allow match is ordinary English, not the
+	// retired term. For a word whose retired sense shares its spelling with
+	// live ones (place the noun, against place the verb and "in place").
+	Allow *regexp.Regexp
 }
 
 // Banned is the denylist: the identifiers retired here, then every retired
@@ -373,6 +378,26 @@ var retiredIdentifiers = []BannedTerm{
 		Pattern:     regexp.MustCompile(`/reconciliation\b|\breconciliation list\b`),
 		Replacement: "the properties read (GET /components/{name}/properties, omniglass component property list), whose rows carry reconciliation",
 		Origin:      "ADR-1297",
+	}, {
+		// Where things sit is a location (ADR-2030): the console and the docs
+		// had drifted into place as a second noun for the same entity. Banned
+		// as the bare word, the wire names it carried (place_template, the
+		// rule fact, ?edit=place) with it, because the noun has too many
+		// phrasings to list. Allow carries the English that keeps the word:
+		// the idioms (in place, the one place, earns its place, decimal
+		// places), the verb before its object or after a modal, and "no
+		// binding places", where the identity verb is the collection term.
+		// Placed and placement never match: the boundary sits after place.
+		Pattern:     regexp.MustCompile(`(?i)\bplace_templates?\b|\bplaces?\b`),
+		Replacement: "location (the entity: a location, the location card, a subtree of locations, location_template)",
+		Origin:      "ADR-2030",
+		Allow: regexp.MustCompile(`(?i)` +
+			`\bin (?:the first |one |two |both |several |many |N |the same |the right |the wrong )?places?\b|` +
+			`\bthe (?:one|only|same|first|last|right|wrong|second) place\b|` +
+			`\b(?:earns?|earned|keeps?|kept|takes?|took|taking) (?:its |your |their |a |the )?place\b|` +
+			`\bdecimal places?\b|\bN[- ]places?\b|\bre-places?\b|\bplaces? (?:to|for) [a-z]|` +
+			`\b(?:to|can|may|will|must|would|should|you|we|they|who|which) place\b|` +
+			`\bplaces? (?:a|an|one|its|it|them|the|each|every)\b|\bbindings? places\b`),
 	},
 }
 
@@ -576,16 +601,44 @@ func nearRetirementMarker(prose string, start, end int) bool {
 func scanLine(line string) []string {
 	prose := linkTarget.ReplaceAllString(line, "")
 	for _, term := range Banned {
-		loc := term.Pattern.FindStringIndex(prose)
-		if loc == nil {
-			continue
+		for _, loc := range term.Pattern.FindAllStringIndex(prose, -1) {
+			if allowed(term.Allow, prose, loc) {
+				continue // the English that keeps the word
+			}
+			if nearRetirementMarker(prose, loc[0], loc[1]) {
+				continue // named in order to retire it
+			}
+			return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
 		}
-		if nearRetirementMarker(prose, loc[0], loc[1]) {
-			continue // named in order to retire it
-		}
-		return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
 	}
 	return nil
+}
+
+// Matches reports whether text uses the term the way the docs lint would
+// flag it: a match outside the entry's Allow phrasings. Callers outside the
+// docs (an operator surface linted by its own test) use this rather than
+// Pattern directly, so the English the entry keeps stays kept everywhere.
+func (b BannedTerm) Matches(text string) bool {
+	for _, loc := range b.Pattern.FindAllStringIndex(text, -1) {
+		if !allowed(b.Allow, text, loc) {
+			return true
+		}
+	}
+	return false
+}
+
+// allowed reports whether the match at loc lies wholly inside a match of
+// allow, the entry's phrasings that keep the word. A nil allow keeps nothing.
+func allowed(allow *regexp.Regexp, prose string, loc []int) bool {
+	if allow == nil {
+		return false
+	}
+	for _, a := range allow.FindAllStringIndex(prose, -1) {
+		if a[0] <= loc[0] && loc[1] <= a[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func atoi(s string) int {

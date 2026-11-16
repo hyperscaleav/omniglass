@@ -68,10 +68,10 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
     name: odd-fill
     label: Odd
     system: { standard: display-only, roles: { panel: { product: boreal-cast-m1 } } }
-  - kind: place_template
+  - kind: location_template
     name: odd-places
     label: Odd
-    place: { type: floor, places: [{ type: campus, name: c }, { type: annex, name: x }] }
+    location: { type: floor, locations: [{ type: campus, name: c }, { type: annex, name: x }] }
 `)})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -86,12 +86,12 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
 		`component_template odd-preset: presets input "baud", which driver "boreal-edge-snmp" does not declare`,
 		`standard_template odd-standard: role a accepts component type "hologram"`,
 		`standard_template odd-standard: declares metric "no-such-metric"`,
-		`place_template odd-places: places a campus under a floor`,
+		`location_template odd-places: places a campus under a floor`,
 		`component_template odd-values: presets input "port" as "four-four-three", which is not a number`,
 		`component_template odd-values: presets input tls-mode`,
 		`component_template odd-values: declares 42 for property "power-state"`,
 		`system_template odd-fill: role panel fills with product "boreal-cast-m1": a media-player`,
-		`place_template odd-places: names location type "annex"`,
+		`location_template odd-places: names location type "annex"`,
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("dry run missed %q; got:\n%s", want, all)

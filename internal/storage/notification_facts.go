@@ -37,7 +37,7 @@ const (
 // console base.
 type alarmFactRow struct {
 	alarmID, componentID, component, componentLabel string
-	typeName, place                                 string
+	typeName, location                              string
 	severity, severityLabel, message                string
 	raisedAt                                        time.Time
 	clearedAt                                       *time.Time
@@ -62,7 +62,7 @@ var alarmFactKeys = []labelKey[alarmFactRow]{
 		return f.component
 	}},
 	{Name: "ComponentType", Summary: "The label of the component type its product classifies it as; empty for a component with no product.", value: func(f alarmFactRow) string { return f.typeName }},
-	{Name: "Place", Summary: "How the location the component sits at reads (its label, else its name); empty when it sits at none of its own.", value: func(f alarmFactRow) string { return f.place }},
+	{Name: "Location", Summary: "How the location the component sits at reads (its label, else its name); empty when it sits at none of its own.", value: func(f alarmFactRow) string { return f.location }},
 	{Name: "Severity", Summary: "The severity level the alarm was raised at, by name.", value: func(f alarmFactRow) string { return f.severity }},
 	{Name: "SeverityLabel", Summary: "That level's label, else its name.", value: func(f alarmFactRow) string {
 		if f.severityLabel != "" {
@@ -133,7 +133,7 @@ func (p *PG) alarmFacts(ctx context.Context, q querier, componentID, alarmID, tr
 	if err != nil {
 		return nil, "", err
 	}
-	f.place = places[componentID].locationLabel
+	f.location = places[componentID].locationLabel
 	s, err := p.platformSettings(ctx, q)
 	if err != nil {
 		return nil, "", err

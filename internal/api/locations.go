@@ -19,7 +19,7 @@ type locationBody struct {
 	Label string `json:"label,omitempty"`
 	// The NAME's pen (#686); see systemBody for why it is read-only. True only
 	// where the location's type carries a name rule (#687), which no shipped
-	// place type does (ADR-0103): an operator declares a positional type to
+	// location type does (ADR-0103): an operator declares a positional type to
 	// reach it.
 	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it."`
 	// The LABEL's pen (#682); see componentBody for why it is read-only.
@@ -184,7 +184,7 @@ type createLocationInput struct {
 		// omit it and the platform mints one from the location_type's name
 		// rule, and marks name_generated. Supplied, it is validated exactly as
 		// before. Omitting it for a type carrying no rule is a 422: only some
-		// kinds of place have a name the platform can know.
+		// kinds of location have a name the platform can know.
 		Name         string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule."`
 		Label        string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`

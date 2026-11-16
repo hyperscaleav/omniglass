@@ -43,7 +43,7 @@ type createSeverityLevelInput struct {
 		Name  string `json:"name" minLength:"1" doc:"The level's name (lowercase kebab)"`
 		Label string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Color string `json:"color" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  int    `json:"rank" doc:"Its place among the levels: higher is more severe; unique"`
+		Rank  int    `json:"rank" doc:"Its position among the levels: higher is more severe; unique"`
 	}
 }
 
@@ -53,7 +53,7 @@ type updateSeverityLevelInput struct {
 		Name  *string `json:"name,omitempty" required:"false" doc:"A new name; every alarm at this level follows"`
 		Label *string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Color *string `json:"color,omitempty" required:"false" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  *int    `json:"rank,omitempty" required:"false" doc:"Its place among the levels; unique"`
+		Rank  *int    `json:"rank,omitempty" required:"false" doc:"Its position among the levels; unique"`
 	}
 }
 

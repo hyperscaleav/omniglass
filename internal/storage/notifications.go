@@ -497,7 +497,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 // snake_case, and the severity's rank.
 func actionInput(ctx context.Context, q querier, f sandbox.Data) (rules.ActionInput, error) {
 	in := rules.ActionInput{
-		Component: f["Component"], ComponentLabel: f["ComponentLabel"], ComponentType: f["ComponentType"], Place: f["Place"],
+		Component: f["Component"], ComponentLabel: f["ComponentLabel"], ComponentType: f["ComponentType"], Location: f["Location"],
 		Severity: f["Severity"], SeverityLabel: f["SeverityLabel"], Message: f["Message"], Transition: f["Transition"],
 		RaisedAt: f["RaisedAt"], ClearedAt: f["ClearedAt"], Rule: f["Rule"], Link: f["Link"],
 	}

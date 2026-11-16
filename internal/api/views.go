@@ -56,7 +56,7 @@ type fleetLocationBody struct {
 
 type fleetViewOutput struct {
 	Body struct {
-		Locations  []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read"`
+		Locations  []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than location without a second read"`
 		Systems    []fleetSystemBody   `json:"systems" doc:"Every system the caller may read, each carrying its dots"`
 		OpenAlarms *int                `json:"open_alarms,omitempty" doc:"How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero"`
 	}

@@ -9,7 +9,7 @@
 // Four kinds ship: a standard_template (a standard's attributes, roles,
 // choices and contract lines), a component_template (a product, its driver's
 // attach preset and declared values), a system_template (a standard and a
-// component per role) and a place_template (a subtree of places and the
+// component per role) and a location_template (a subtree of locations and the
 // systems that land in them). Every template is validated at load against
 // the shape below; a template naming a catalog row a release withdrew is
 // caught by the dry-run test against the seeded catalogs, not here, since
@@ -41,11 +41,11 @@ const (
 	KindStandard  Kind = "standard_template"
 	KindComponent Kind = "component_template"
 	KindSystem    Kind = "system_template"
-	KindPlace     Kind = "place_template"
+	KindLocation  Kind = "location_template"
 )
 
 // Kinds is every kind, in the order the catalog lists them.
-var Kinds = []Kind{KindStandard, KindSystem, KindPlace, KindComponent}
+var Kinds = []Kind{KindStandard, KindSystem, KindLocation, KindComponent}
 
 // Valid reports whether k is one of the four kinds.
 func (k Kind) Valid() bool {
@@ -73,7 +73,7 @@ type Template struct {
 	Standard  *Standard  `yaml:"standard,omitempty" json:"standard,omitempty"`
 	Component *Component `yaml:"component,omitempty" json:"component,omitempty"`
 	System    *System    `yaml:"system,omitempty" json:"system,omitempty"`
-	Place     *Place     `yaml:"place,omitempty" json:"place,omitempty"`
+	Location  *Location  `yaml:"location,omitempty" json:"location,omitempty"`
 }
 
 // Standard is a standard_template's body: what creating a standard from it writes.
@@ -200,17 +200,17 @@ type RoleFill struct {
 	Product   string `yaml:"product,omitempty" json:"product,omitempty"`
 }
 
-// Place is a place_template's body, and each place within it.
-type Place struct {
-	Type    string        `yaml:"type" json:"type"`
-	Name    string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Label   string        `yaml:"label,omitempty" json:"label,omitempty"`
-	Systems []PlaceSystem `yaml:"systems,omitempty" json:"systems,omitempty"`
-	Places  []Place       `yaml:"places,omitempty" json:"places,omitempty"`
+// Location is a location_template's body, and each location within it.
+type Location struct {
+	Type      string           `yaml:"type" json:"type"`
+	Name      string           `yaml:"name,omitempty" json:"name,omitempty"`
+	Label     string           `yaml:"label,omitempty" json:"label,omitempty"`
+	Systems   []LocationSystem `yaml:"systems,omitempty" json:"systems,omitempty"`
+	Locations []Location       `yaml:"locations,omitempty" json:"locations,omitempty"`
 }
 
-// PlaceSystem is a system template landing in a place.
-type PlaceSystem struct {
+// LocationSystem is a system template landing in a location.
+type LocationSystem struct {
 	Template string `yaml:"template" json:"template"`
 	Label    string `yaml:"label,omitempty" json:"label,omitempty"`
 }
@@ -429,7 +429,7 @@ func (t *Template) Validate() error {
 	}
 	bodies := map[Kind]bool{
 		KindStandard: t.Standard != nil, KindComponent: t.Component != nil,
-		KindSystem: t.System != nil, KindPlace: t.Place != nil,
+		KindSystem: t.System != nil, KindLocation: t.Location != nil,
 	}
 	for k, set := range bodies {
 		if set != (k == t.Kind) {
@@ -447,8 +447,8 @@ func (t *Template) Validate() error {
 		err = t.Component.validate()
 	case KindSystem:
 		err = t.System.validate()
-	case KindPlace:
-		err = t.Place.validate(true)
+	case KindLocation:
+		err = t.Location.validate(true)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", t.Name, err)
@@ -590,21 +590,21 @@ func fillWords(f RoleFill) string {
 	return "both"
 }
 
-func (p *Place) validate(root bool) error {
-	if err := checkName("a place's location type", p.Type); err != nil {
+func (p *Location) validate(root bool) error {
+	if err := checkName("a location's location type", p.Type); err != nil {
 		return err
 	}
 	if p.Name != "" {
-		if err := checkName("a place", p.Name); err != nil {
+		if err := checkName("a location", p.Name); err != nil {
 			return err
 		}
 	}
 	names := map[string]bool{}
-	for i := range p.Places {
-		child := &p.Places[i]
+	for i := range p.Locations {
+		child := &p.Locations[i]
 		if child.Name != "" {
 			if names[child.Name] {
-				return fmt.Errorf("place %q holds two places named %q", p.Type, child.Name)
+				return fmt.Errorf("location %q holds two locations named %q", p.Type, child.Name)
 			}
 			names[child.Name] = true
 		}
@@ -624,7 +624,7 @@ func (p *Place) validate(root bool) error {
 // is a standard template, a system's role fills name component templates, a
 // system template built on a standard template fills exactly the roles a
 // conforming system needs (every unconditional role, and one alternate's
-// roles in full for each choice), and a place's systems name system
+// roles in full for each choice), and a location's systems name system
 // templates.
 func (c *Catalog) validateRefs() error {
 	for i := range c.list {
@@ -640,8 +640,8 @@ func (c *Catalog) validateRefs() error {
 			}
 		case KindSystem:
 			err = c.validateSystemRefs(t.System)
-		case KindPlace:
-			err = c.validatePlaceRefs(t.Place)
+		case KindLocation:
+			err = c.validateLocationRefs(t.Location)
 		}
 		if err != nil {
 			return fmt.Errorf("template: %s: %w", t.Name, err)
@@ -722,14 +722,14 @@ func StaffedRoles(st *Standard, sys *System) ([]Role, error) {
 
 func sysStandardName(s *System) string { return s.Standard }
 
-func (c *Catalog) validatePlaceRefs(p *Place) error {
+func (c *Catalog) validateLocationRefs(p *Location) error {
 	for _, s := range p.Systems {
 		if _, err := c.GetKind(s.Template, KindSystem); err != nil {
 			return err
 		}
 	}
-	for i := range p.Places {
-		if err := c.validatePlaceRefs(&p.Places[i]); err != nil {
+	for i := range p.Locations {
+		if err := c.validateLocationRefs(&p.Locations[i]); err != nil {
 			return err
 		}
 	}
