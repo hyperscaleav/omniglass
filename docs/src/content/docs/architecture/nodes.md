@@ -143,9 +143,10 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
 - **A missed pull is retried, never fatal.** The first pull and every later one retry with
   jittered exponential backoff (each wait in the upper half of a step that doubles from 1 s to a
   30 s cap: 0.5 to 1 s first, 15 to 30 s at most), each logged at WARN with its attempt,
-  its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
-  not up rather than as up with nothing to do. After it, a failed pull keeps the last good
-  worklist, every task and every session of it.
+  its wait and the error. While it waits for its first worklist the node heartbeats and sends its
+  node-self account each tick, so a node refused from the start reads as up with its pulls refused
+  rather than as down (#1882, [ADR-1882](/architecture/decisions/#adr-1882-a-node-heartbeats-and-counts-its-pulls-before-its-first-worklist)).
+  After it, a failed pull keeps the last good worklist, every task and every session of it.
 - **A change nudge pulls now (#1945).** The node subscribes to `og.v1.worklist-changed.<node>`
   before its first pull and answers a nudge with a pull at once, so a change does not wait for the
   next scheduled one ([the change nudge](#the-change-nudge)).
@@ -154,7 +155,8 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   it, so every delivery hop reads 0 while the node misses every change. The node reports
   `worklist-pull-loss-ratio` on its node-self lane every report window, the pulls refused or
   unreadable over the pulls made; a window with no pull carries the last outcome, so a node refused
-  on every pull reads 1. The seeded `worklist-stale` rule opens a warning after two minutes at 1,
+  on every pull reads 1. The first worklist's pulls count the same way, so a node never served
+  one reads 1 too (#1882). The seeded `worklist-stale` rule opens a warning after two minutes at 1,
   [Platform health](/guides/operator/platform-health/#the-node-table) shows it as the node's
   Worklist column, and `omniglass lab measure` fails its `worklist_loss` gate on any node above 0
   ([the lab guide](/guides/lab/#measuring-a-scale-lab)).
