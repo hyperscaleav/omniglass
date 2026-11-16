@@ -67,6 +67,10 @@ var Subsystems = []Cluster{
 		// tunes, not a row any entity points at.
 		"label_rule",
 		"secret", "secret_type", "credential",
+		// oauth_client is an MCP client that registered itself and
+		// oauth_code its code between consent and exchange (#2048); a
+		// token it earns is a credential row linked to the client.
+		"oauth_client", "oauth_code",
 		// lab_mark is the one row omniglass lab writes into its own database
 		// (#1195), so a lab and a real deployment refuse each other's.
 		"lab_mark",

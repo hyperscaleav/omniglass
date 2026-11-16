@@ -491,6 +491,66 @@ components:
         - bootstrapped
         - lab
       type: object
+    AuthorizeOAuthClientInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AuthorizeOAuthClientInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        approved:
+          description: Whether you approve the client; false sends it back with access_denied
+          type: boolean
+        code_challenge:
+          description: The PKCE challenge from the authorization request
+          type: string
+        code_challenge_method:
+          description: The PKCE method; S256 only
+          enum:
+            - S256
+          type: string
+        redirect_uri:
+          description: The redirect URI from the authorization request; one the client registered
+          type: string
+        resource:
+          description: "The resource the token is for: this server's MCP endpoint"
+          type: string
+        roles:
+          description: The roles to approve; each must be one whose capabilities you hold. Required when approved
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        state:
+          description: The client's state, echoed back
+          type: string
+      required:
+        - redirect_uri
+        - code_challenge
+        - code_challenge_method
+        - resource
+        - approved
+      type: object
+    AuthorizeOAuthClientOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AuthorizeOAuthClientOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        redirect_to:
+          description: "Where to send the browser back to: the client's redirect with a code, or with access_denied"
+          type: string
+      required:
+        - redirect_to
+      type: object
     AvatarOutputBody:
       additionalProperties: false
       properties:
@@ -7366,6 +7426,41 @@ components:
         - created_at
         - updated_at
       type: object
+    OauthClientOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/OauthClientOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        client_name:
+          description: The name the client registered under; its token acts as this agent
+          type: string
+        id:
+          type: string
+        redirect_uris:
+          description: The exact URIs a code may be sent back to
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        roles:
+          description: "The roles you may approve for the client: every role whose capabilities you hold"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - client_name
+        - redirect_uris
+        - roles
+      type: object
     OptOutOutputBody:
       additionalProperties: false
       properties:
@@ -10561,6 +10656,9 @@ components:
           type: string
         last_used_at:
           description: When the credential last authenticated a request (RFC 3339), throttled to the minute
+          type: string
+        oauth_client:
+          description: "Set on a token an OAuth client signed in for: the client's registered name"
           type: string
         prefix:
           description: The non-secret ogp locator, so a credential is recognizable without exposing the token
@@ -14704,6 +14802,95 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Stop the current impersonation session
+  /auth/oauth-clients/{id}:
+    get:
+      description: Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.
+      operationId: get-oauth-client
+      parameters:
+        - description: The client id, from the authorization request
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The client id, from the authorization request
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OauthClientOutputBody"
+          description: OK
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Read an OAuth client asking for your consent
+  /auth/oauth-clients/{id}:authorize:
+    post:
+      description: Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.
+      operationId: authorize-oauth-client
+      parameters:
+        - description: The client id, from the authorization request
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The client id, from the authorization request
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeOAuthClientInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizeOAuthClientOutputBody"
+          description: OK
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Approve or deny an OAuth client
+      x-omniglass-plaintext: true
   /auth/status:
     get:
       description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in."

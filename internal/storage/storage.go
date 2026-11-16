@@ -198,6 +198,18 @@ type Gateway interface {
 	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
 	// sessions" that keeps the session the caller is on, tokens untouched.
 	RevokeBearersByPurposeExcept(ctx context.Context, actorID, principalID, purpose string, keep [][]byte) (int, error)
+	// RegisterOAuthClient stores a self-registered OAuth client (#2048) and
+	// prunes the ones that never reached a token.
+	RegisterOAuthClient(ctx context.Context, name string, redirectURIs []string) (OAuthClient, error)
+	// GetOAuthClient returns a registered OAuth client, false when there is none.
+	GetOAuthClient(ctx context.Context, id string) (OAuthClient, bool, error)
+	// CreateOAuthCode stores the authorization code a person's consent produced.
+	CreateOAuthCode(ctx context.Context, c OAuthCode) error
+	// ConsumeOAuthCode deletes and returns a live code, false when there is none.
+	ConsumeOAuthCode(ctx context.Context, hash []byte) (OAuthCode, bool, error)
+	// IssueOAuthToken mints a client's MCP-only agent token for a person,
+	// replacing the client's earlier token for them; both audited as theirs.
+	IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

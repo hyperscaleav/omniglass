@@ -168,6 +168,9 @@ var IdentityShapes = map[string]TableIdentity{
 		"long as its horizon keeps it",
 		NoLabel: "no operator surface of its own: only the ingest's conflict check reads a receipt, and " +
 			"nothing renders a receipt row for a label to appear on"},
+	"oauth_code": {Shape: ShapeHumanNotAKey, Reason: "keyed by the hash of a minted authorization code (#2048), " +
+		"not a name: it lives five minutes and is spent by its one exchange",
+		NoLabel: "no operator surface of its own: only the token exchange reads a code"},
 	"platform_server": {Shape: ShapeHumanNotAKey, Reason: "the identity a server boots under " +
 		"(OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a " +
 		"kebab token, and the server's component carries the operator-facing name (#1627)",
@@ -180,7 +183,9 @@ var IdentityShapes = map[string]TableIdentity{
 	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"component_dependency": {Shape: ShapeIDOnly, Reason: "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named"},
 	"credential":           {Shape: ShapeIDOnly},
-	"event":                {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
+	"oauth_client": {Shape: ShapeIDOnly, Reason: "an MCP client that registered itself (#2048), addressed by its client id; " +
+		"the name it declared is shown at consent, is not unique and is no key"},
+	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
 	"metric_series":      {Shape: ShapeIDOnly, Reason: "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting node; nothing addresses it by name"},

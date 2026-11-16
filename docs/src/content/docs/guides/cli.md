@@ -190,6 +190,9 @@ omniglass token ops --description 'nightly backup' --ttl 720h   # a 30-day token
 # An AGENT token (--agent NAME, --ttl-days required, optional --roles and --channels as JSON
 # arrays) acts on your behalf and can never reveal a credential; see /guides/agents/. The
 # owner-lane `omniglass token` above does not mint agent tokens.
+# An MCP client that signs you in with OAuth gets one too: `omniglass auth oauth-client get <id>`
+# reads its request and `authorize <id> --approved --roles '["viewer"]' ...` answers it from the
+# terminal, the same route the console's Connect page calls.
 
 # Set or rotate a user's password (direct-DB, owner lane; also policy-exempt as the recovery path).
 # A break-glass reset also revokes the user's live SESSIONS, so a stolen login stops at once; API

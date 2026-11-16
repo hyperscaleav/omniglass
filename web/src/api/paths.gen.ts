@@ -308,6 +308,26 @@ export interface paths {
       error: og.stopImpersonationResponseError["data"];
     };
   };
+  "/auth/oauth-clients/{id}": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getOauthClientResponseSuccess["data"];
+      error: og.getOauthClientResponseError["data"];
+    };
+  };
+  "/auth/oauth-clients/{id}:authorize": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.authorizeOauthClient>[1]>;
+      bodyRequired: true;
+      data: og.authorizeOauthClientResponseSuccess["data"];
+      error: og.authorizeOauthClientResponseError["data"];
+    };
+  };
   "/auth/status": {
     get: {
       path: never;

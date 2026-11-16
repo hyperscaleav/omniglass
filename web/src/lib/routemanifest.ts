@@ -60,6 +60,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/files", shell: "protected", page: "Files", smoke: "/files" },
   { path: "/files/:id", shell: "protected", page: "Files", smoke: `/files/${UNKNOWN_UUID}` },
   { path: "/profile", shell: "protected", page: "Profile", smoke: "/profile" },
+  // OAuth consent for MCP clients (#2048): /oauth/authorize sends the person
+  // here with the client's request; it smokes its incomplete-request face.
+  { path: "/oauth/authorize", shell: "protected", page: "OAuthConsent", smoke: "/oauth/authorize" },
   // A person's own alarm subscriptions (#1355), in the profile area like the
   // account they belong to; the page gates its writes on notification:subscribe.
   { path: "/profile/subscriptions", shell: "protected", page: "Subscriptions", smoke: "/profile/subscriptions" },

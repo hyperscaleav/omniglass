@@ -41,6 +41,7 @@ import Products from "./pages/Products";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import Settings from "./pages/Settings";
+import OAuthConsent from "./pages/OAuthConsent";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
@@ -58,6 +59,7 @@ export const PAGES: Record<string, Component> = {
   Systems,
   Components,
   Profile,
+  OAuthConsent,
   Subscriptions,
   Inbox,
   Nodes,
