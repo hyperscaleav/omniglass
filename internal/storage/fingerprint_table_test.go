@@ -35,6 +35,7 @@ var taskFieldFingerprint = map[string]string{
 	"Rejection":     "-", // the gate the digest is compared against
 	"ComponentID":   "-", // whose endpoint it is: the key a path upstream names (#1652)
 	"PathUpstreams": "-", // what the endpoint is reached through: a gate input, not a dial input
+	"Mask":          "-", // the plaintext of Secrets' secret fields, masked out of what is collected; Secrets covers it
 }
 
 func TestEveryTaskFieldIsAFingerprintInputOrDeclaredNotOne(t *testing.T) {
