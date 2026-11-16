@@ -819,6 +819,8 @@ Omniglass is both the resource server and the authorization server:
   page, where the signed-in person approves roles or denies. The approval
   (`authorize-oauth-client`) is a human's alone: an agent token is refused it, like minting a token,
   so an agent cannot consent for another client. Each approved role must be one the person covers.
+  No other site may frame a console page (`frame-ancestors 'none'`), so none can overlay its own
+  content on the Approve button.
 - **Exchange.** `POST /oauth/token` spends the code on any attempt (it lives five minutes, stored as
   a hash), checks the client, redirect, resource and PKCE verifier, and mints an agent token named
   after the client, on the `mcp` channel only, with the approved roles and a 30-day lifetime. The
