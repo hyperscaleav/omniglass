@@ -307,11 +307,12 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				}
 				spec.Components = append(spec.Components, storage.SimSystemComponent{Role: s.role, Product: s.product, Endpoints: simEndpointSpecs(addrs[i].Endpoints)})
 			}
+			secretRead, canAdmin := a.secretBind(ctx)
 			made, err := gw.CreateSimSystem(ctx, actorID(ctx), spec, storage.SimSystemScopes{
 				SystemCreate: a.scopeFor(ctx, "system", "create"), LocationRead: a.scopeFor(ctx, "location", "read"),
 				ComponentCreate: a.scopeFor(ctx, "component", "create"), SystemRead: a.scopeFor(ctx, "system", "read"),
 				SystemUpdate: a.scopeFor(ctx, "system", "update"), EndpointCreate: a.scopeFor(ctx, "endpoint", "create"),
-				SecretRead: a.scopeFor(ctx, "secret", "read"), CanAdmin: a.canSecretAdmin(ctx, "read"),
+				SecretRead: secretRead, CanAdmin: canAdmin,
 				ComponentRead: a.scopeFor(ctx, "component", "read"), ComponentUpdate: a.scopeFor(ctx, "component", "update"),
 			})
 			if err != nil {

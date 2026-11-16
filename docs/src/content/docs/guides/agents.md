@@ -32,7 +32,11 @@ omniglass auth create-token --description "claude code on my laptop" \
 
 An agent token can never reveal or copy a secret's plaintext, whatever its roles: the agent works
 with credentials only through the routes that use them server-side (polling an endpoint, issuing a
-command), so it knows a credential is present and never what it is. The same ceiling holds for any
+command), so it knows a credential is present and never what it is. For the same reason it cannot
+point a credential somewhere new: attaching an endpoint with a secret input, editing the address or
+the secret of an endpoint that has one, creating a system from a template that binds a secret, or
+adding a simulated device that needs one is refused as a secret not the agent's to use. Label and
+re-place such an endpoint freely; have a person bind or move the credential. The same ceiling holds for any
 token, yours included, while it is used through MCP. An agent token also cannot mint another token,
 change your password or impersonate anyone.
 

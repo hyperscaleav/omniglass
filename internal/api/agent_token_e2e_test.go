@@ -325,3 +325,43 @@ func loginBearer(t *testing.T, c *apiClient, user, password string) string {
 	t.Fatalf("login %s: no session cookie", user)
 	return ""
 }
+
+// An agent never hands a credential to a target (#1179): binding a secret onto
+// an endpoint, or moving the address of one that carries a secret, sends the
+// plaintext wherever the endpoint points, so until secret:use splits from
+// reveal the ceiling refuses those writes outright. A write that moves no
+// credential (a label) is still the agent's, and its owner keeps them all.
+func TestAgentTokenCannotSendACredentialToATarget(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	c, ownerTok := auditImagesStack(t)
+	agent := mintAgent(t, c, ownerTok, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 7})
+
+	if code, body := c.send(agent.Token, http.MethodPost, "/endpoints", map[string]any{
+		"driver": "snmp-generic", "component": "amp-9",
+		"inputs": map[string]string{"host": "203.0.113.9", "community": "lab-community"},
+	}); code < 400 {
+		t.Errorf("agent attach binding a secret = %d %s, want refused", code, body)
+	}
+
+	ep := attachAuditedEndpoint(t, c, ownerTok)
+	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
+		"inputs": map[string]string{"host": "203.0.113.9"},
+	}); code < 400 {
+		t.Errorf("agent repointing a secret-bound endpoint = %d %s, want refused", code, body)
+	}
+	if code, body := c.send(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{
+		"inputs": map[string]string{"community": "lab-community"},
+	}); code < 400 {
+		t.Errorf("agent rebinding a secret = %d %s, want refused", code, body)
+	}
+	got := string(c.do(ownerTok, http.MethodGet, "/endpoints/"+ep, nil, http.StatusOK))
+	if strings.Contains(got, "203.0.113.9") {
+		t.Errorf("the endpoint moved to the agent's address: %s", got)
+	}
+
+	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep, map[string]any{"label": "agent-labelled"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"inputs": map[string]string{"host": "10.20.4.70"}}, http.StatusOK)
+}

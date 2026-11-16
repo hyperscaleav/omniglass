@@ -260,7 +260,9 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 // agentCeilingActions are the actions an agent principal never holds, whatever
 // its roles (#1179): reveal returns a credential's plaintext and use hands one
 // to a target, so with both gone an agent can drive a device without ever
-// learning the credential that reaches it.
+// learning the credential that reaches it. No route is stamped with use yet;
+// the writes that hand a credential to a target resolve it under secretBind,
+// which is the empty scope under the ceiling.
 var agentCeilingActions = []string{"reveal", "use"}
 
 // ceilingChannels are the channels whose every request is an agent's, whatever

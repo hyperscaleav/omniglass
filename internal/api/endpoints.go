@@ -236,6 +236,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		if in.Body.Transport == "" && in.Body.Driver == nil {
 			return nil, huma.Error422UnprocessableEntity("set a transport (a bare probe endpoint) or a driver (an attach)")
 		}
+		secretRead, canAdmin := a.secretBind(ctx)
 		it, err := gw.CreateEndpoint(ctx, actorID(ctx), storage.EndpointSpec{
 			Transport: in.Body.Transport,
 			Label:     in.Body.Label,
@@ -248,9 +249,10 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			// An attach resolves its secret references under the caller's own
 			// secret read scope and admin tier, so it can only bind a secret the
 			// operator could themselves read (never another tenant's, never an
-			// admin-sensitive one without the tier).
-			SecretRead: a.scopeFor(ctx, "secret", "read"),
-			CanAdmin:   a.canSecretAdmin(ctx, "read"),
+			// admin-sensitive one without the tier), and never under the agent
+			// ceiling (#1179).
+			SecretRead: secretRead,
+			CanAdmin:   canAdmin,
 		}, a.scopeFor(ctx, "endpoint", "create"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -266,6 +268,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Summary:     "Update an endpoint",
 		Description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "update"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
+		secretRead, canAdmin := a.secretBind(ctx)
 		it, err := gw.UpdateEndpoint(ctx, actorID(ctx), in.Endpoint, storage.EndpointPatch{
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
@@ -274,9 +277,10 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Transport: in.Body.Transport,
 			OutOfBand: in.Body.OutOfBand,
 			// An edit re-resolves every attached secret under the caller's own
-			// secret scope and admin tier, as an attach does.
-			SecretRead: a.scopeFor(ctx, "secret", "read"),
-			CanAdmin:   a.canSecretAdmin(ctx, "read"),
+			// secret scope and admin tier, as an attach does, so under the agent
+			// ceiling an edit cannot move a secret-bound endpoint's address.
+			SecretRead: secretRead,
+			CanAdmin:   canAdmin,
 		}, a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "update"))
 		if err != nil {
 			return nil, mapEndpointErr(err)

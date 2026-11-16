@@ -26,14 +26,15 @@ import (
 
 // planScopes are the caller's scopes for every write a plan can make.
 func planScopes(ctx context.Context, a *authenticator) storage.PlanScopes {
+	secretRead, canAdmin := a.secretBind(ctx)
 	return storage.PlanScopes{
 		LocationCreate: a.scopeFor(ctx, "location", "create"), LocationRead: a.scopeFor(ctx, "location", "read"),
 		SystemCreate: a.scopeFor(ctx, "system", "create"), SystemRead: a.scopeFor(ctx, "system", "read"),
 		SystemUpdate:    a.scopeFor(ctx, "system", "update"),
 		ComponentCreate: a.scopeFor(ctx, "component", "create"), ComponentRead: a.scopeFor(ctx, "component", "read"),
 		ComponentUpdate: a.scopeFor(ctx, "component", "update"),
-		EndpointCreate:  a.scopeFor(ctx, "endpoint", "create"), SecretRead: a.scopeFor(ctx, "secret", "read"),
-		CanAdmin:          a.canSecretAdmin(ctx, "read"),
+		EndpointCreate:  a.scopeFor(ctx, "endpoint", "create"), SecretRead: secretRead,
+		CanAdmin:          canAdmin,
 		CanCreateStandard: a.allows(ctx, "standard", "create"),
 	}
 }
