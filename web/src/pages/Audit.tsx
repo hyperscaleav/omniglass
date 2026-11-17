@@ -44,7 +44,7 @@ const CHANNEL_HINT =
 // beside an impersonator: the person is accountable, the agent is who acted.
 const AgentTag = (p: { agent?: string }) => (
   <Show when={p.agent}>
-    <span class="ml-1.5 badge badge-soft badge-secondary badge-xs" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
+    <span class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
   </Show>
 );
 
@@ -59,10 +59,10 @@ const columns: FlatColumn<AuditEvent>[] = [
   { key: "when", label: "When", width: "190px", cell: (e) => <span class="whitespace-nowrap tnum text-xs text-base-content/60">{when(e.ts)}</span> },
   {
     key: "who", label: "Who", cell: (e) => (
-      <span class="text-sm">
+      <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="ml-1.5 badge badge-soft badge-warning badge-xs" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
+          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
         </Show>
         <AgentTag agent={e.agent} />
       </span>
@@ -80,7 +80,7 @@ const columns: FlatColumn<AuditEvent>[] = [
       </Show>
     ),
   },
-  { key: "action", label: "Action", width: "150px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
+  { key: "action", label: "Action", width: "120px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
   { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
 ];
@@ -118,10 +118,10 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
         <KVStacked
           label="Who"
           value={
-            <span class="text-sm">
+            <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
               <span class="font-data">{accountableLabel(e)}</span>
               <Show when={e.real_actor}>
-                <span class="ml-1.5 badge badge-soft badge-warning badge-xs">as {actorLabel(e)}</span>
+                <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap">as {actorLabel(e)}</span>
               </Show>
               <AgentTag agent={e.agent} />
             </span>
