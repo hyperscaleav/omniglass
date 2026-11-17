@@ -41,6 +41,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **action rule** | A rule that decides when a notification about an alarm is sent, and to which targets. | `/action-rules` | `rule` |  |
 | **audit event** | One recorded privileged action or sign-in, with who did it, when and to what. | `/audit-log` | `audit` |  |
 | **calc rule** | A rule that derives a new value from other signals on each owner it applies to. | `/calc-rules` | `rule` |  |
+| **catalog** | The rows the fleet is typed by, the types, products, vendors and drivers an install ships and an admin extends. |  |  | registry |
 | **command type** | Something a component can be told to do in the catalog, with its target and how long it takes to settle. | `/command-types` | `command_type` |  |
 | **component type** | The device class a product belongs to, such as display, projector or microphone. | `/component-types` | `component_type` |  |
 | **driver** | The declared recipe that collects from a product, what to fetch, how to read it and what it can set. | `/drivers` | `driver` |  |

@@ -170,6 +170,23 @@ terms:
     collection: tasks
     schema: TaskBody
     permission: task
+  - word: catalog
+    plural: catalogs
+    definition: The rows the fleet is typed by, the types, products, vendors and drivers an install ships and an admin extends.
+    audience: admin
+    nav: /catalog
+    nav_label: Catalog
+    retired:
+      # Banned where it names those rows (ADR-2035). Allow carries the lookups compiled
+      # into the binary, which keep registry: the transport registry and its entries, the
+      # expression diagnostics, the declarative env and settings namespace registries, the
+      # simulator, the console's blade and page registries, the agent skills, and a
+      # container or package registry an image is pushed to or pulled from.
+      - word: registry
+        pattern: '(?i)\bregistr(?:y|ies)\b'
+        origin: ADR-2035
+        replacement: catalog (the rows the fleet is typed by)
+        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}'
   - word: metric type
     plural: metric types
     definition: A numeric signal in the catalog, the series a sample measures, with its unit and precision.
@@ -233,7 +250,6 @@ terms:
     schema: SeverityLevelBody
     permission: severity_level
     nav: /severity-levels
-    nav_label: Severity
   - word: event rule
     plural: event rules
     definition: A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity.
@@ -241,8 +257,7 @@ terms:
     collection: event-rules
     schema: EventRuleBody
     permission: rule
-    nav: /rules
-    nav_label: Rules
+    nav: /event-rules
   - word: calc rule
     plural: calc rules
     definition: A rule that derives a new value from other signals on each owner it applies to.
@@ -282,7 +297,6 @@ terms:
     schema: NotificationTargetBody
     permission: notification_target
     nav: /notification-targets
-    nav_label: Targets
   - word: notification type
     plural: notification types
     definition: What a notification about an alarm says, as a subject and a text.
@@ -437,8 +451,6 @@ not_terms:
     reason: Explore, the fleet's outline
   - nav: /dashboards
     reason: Dashboards, not yet built
-  - nav: /catalog
-    reason: the catalog's landing page
   - nav: /learn
     reason: Learn, the teaching surface
   - nav: /simulation

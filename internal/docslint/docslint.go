@@ -74,11 +74,11 @@ var retiredIdentifiers = []BannedTerm{
 		Origin:      "ADR-0104",
 	},
 	{
-		// The registry blade's destructive slot, renamed by ADR-0115: it named
+		// The catalog blade's destructive slot, renamed by ADR-0115: it named
 		// the thing being restored FROM rather than the thing being restored TO,
 		// and the console's other restore (Settings, the pen) already said
 		// default. Not a symbol, so nothing else catches it, and it is live
-		// operator copy on two registries. The decision log and the build log
+		// operator copy on two catalogs. The decision log and the build log
 		// keep it, as vocabularyAllowed historical records.
 		Pattern:     regexp.MustCompile(`(?i)\bRestore shipped\b`),
 		Replacement: "Restore default, the one restore vocabulary the console uses",
@@ -169,8 +169,8 @@ var retiredIdentifiers = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`\bUpsertOfficial\b`),
-		Replacement: "the per-registry upserts (UpsertPropertyType and siblings)",
-		Origin:      "internal/storage/registries.go",
+		Replacement: "the per-catalog upserts (UpsertPropertyType and siblings)",
+		Origin:      "internal/storage/catalogs.go",
 	},
 
 	// The fleet-model wave. Each of these was retired by an ADR that shipped
@@ -179,7 +179,7 @@ var retiredIdentifiers = []BannedTerm{
 	//
 	// component_type is NOT here. ADR-0047 retired it (a flat classifier beside
 	// component); ADR-0085 partially reverses that, returning it as a nested
-	// registry above product, so the identifier is current vocabulary again,
+	// catalog above product, so the identifier is current vocabulary again,
 	// deliberately in a different shape. A denylist entry cannot express
 	// "banned, except in its own reintroduced meaning", so the fix is removal,
 	// not an exemption; the term's dead sense (component.component_type, the
@@ -192,7 +192,7 @@ var retiredIdentifiers = []BannedTerm{
 	// coarse space taxonomy, with a system.system_type_id pointing at it. The
 	// two are different objects and the live one is current vocabulary, so the
 	// entry had to go rather than gain an exemption every sentence about the
-	// registry would need. The dead sense survives in the historical ADR-0048
+	// catalog would need. The dead sense survives in the historical ADR-0048
 	// prose, under the same retirement-marker exemption.
 	{
 		Pattern:     regexp.MustCompile(`\bfield_definition\b`),
@@ -318,7 +318,7 @@ var retiredIdentifiers = []BannedTerm{
 		// form is dead, and the verb suffix keeps "Issue Type" and its cousins
 		// out of reach.
 		Pattern:     regexp.MustCompile("`?\\btype:(?:read|create|update|delete)\\b`?"),
-		Replacement: "location_type:<action>, the registry's own resource",
+		Replacement: "location_type:<action>, the catalog's own resource",
 		Origin:      "ADR-0082",
 	},
 	{
@@ -334,11 +334,11 @@ var retiredIdentifiers = []BannedTerm{
 
 	// The capability retirement (#626). "Capability" alone is NOT bannable: the
 	// word is ordinary English throughout the corpus in senses that have nothing
-	// to do with the registry (a governed AI capability, a capability-checked
+	// to do with the catalog (a governed AI capability, a capability-checked
 	// route meaning permission-gated, the capability-wrapping test-tier carve-out
 	// for raw sockets and ICMP, a template's capability manifest, a page's
 	// Design/Partial/Built status per documented capability). Only the retired
-	// registry's own identifiers are named: the five dropped tables, the Go
+	// catalog's own identifiers are named: the five dropped tables, the Go
 	// symbols the health rollup and role assignment used to call, the routes,
 	// and the permission stamp. capability-gated staffing retires with them: an
 	// occupant now satisfies its slot when its component's own verdict is
@@ -350,7 +350,7 @@ var retiredIdentifiers = []BannedTerm{
 		Origin: "#626",
 	},
 	{
-		// The registry table itself and its CRUD surface, scoped to the
+		// The catalog table itself and its CRUD surface, scoped to the
 		// code-formatted token so the sentence "a governed capability" stays
 		// legal: only a backticked `capability`/`capabilities`, the registry
 		// phrase, the retired Go symbols, and the permission stamp are named.
@@ -359,7 +359,7 @@ var retiredIdentifiers = []BannedTerm{
 			"\\b(?:EffectiveCapabilities|ComponentCapabilities|CreateCapability|UpdateCapability|DeleteCapability|" +
 			"ListCapabilities|GetCapability|UpsertCapability|CapabilityPatch|SetComponentCapability|ClearComponentCapability)\\b"),
 		Replacement: "the component_type taxonomy (product classification) and the typed-slot guard " +
-			"(system_role_type, system_role_product) for assignment; nothing replaces the registry itself",
+			"(system_role_type, system_role_product) for assignment; nothing replaces the catalog itself",
 		Origin: "#626",
 	},
 	{
@@ -424,7 +424,7 @@ func vocabularyAllowed(rel string) bool {
 }
 
 // operatorStrings are the non-docs files whose text reaches an OPERATOR: seed
-// descriptions are upserted into registries at every boot and render verbatim
+// descriptions are upserted into catalogs at every boot and render verbatim
 // on catalog pages and in API payloads, the console nav labels and hints are
 // read on every page, and the README is the first thing a reader of the public
 // repo sees. The docs lint cannot see any of them (DocsRoot is the content
