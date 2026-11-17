@@ -799,6 +799,240 @@
         ],
         "type": "object"
       },
+      "AppendAssistantConversationInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/AppendAssistantConversationInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "after": {
+            "description": "The seq of the last message you saw (0 for an empty conversation); anything else is a 409",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "messages": {
+            "description": "The new messages, in order",
+            "items": {
+              "$ref": "#/components/schemas/AppendAssistantMessageInput"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pending": {
+            "description": "The write the run paused on, waiting on you; absent clears it"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AssistantUsage",
+            "description": "The tokens this turn spent, added to the total"
+          }
+        },
+        "required": [
+          "after",
+          "messages"
+        ],
+        "type": "object"
+      },
+      "AppendAssistantMessageInput": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "The message as your loop carries it on"
+          },
+          "role": {
+            "description": "Who said it",
+            "enum": [
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "body"
+        ],
+        "type": "object"
+      },
+      "AssistantConversation": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/AssistantConversation.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pending": {},
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AssistantUsage"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "usage",
+          "message_count",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "AssistantConversationOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/AssistantConversationOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "messages": {
+            "description": "The transcript, in order",
+            "items": {
+              "$ref": "#/components/schemas/AssistantMessageBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "pending": {},
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AssistantUsage"
+          }
+        },
+        "required": [
+          "messages",
+          "id",
+          "name",
+          "usage",
+          "message_count",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "AssistantMessageBody": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "The message as the client's loop carries it on, kept as given"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "role": {
+            "description": "Who said it",
+            "enum": [
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "seq": {
+            "description": "The message's position in the conversation, from 1",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "role",
+          "body",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "AssistantSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_days": {
+            "default": 30,
+            "description": "Days a stored omnibot conversation is kept after it last changed",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_days"
+        ],
+        "type": "object"
+      },
+      "AssistantUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "input_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_tokens",
+          "output_tokens"
+        ],
+        "type": "object"
+      },
       "AuditEventBody": {
         "additionalProperties": false,
         "description": "One recorded privileged action or sign-in, with who did it, when and to what.",
@@ -2715,6 +2949,25 @@
           "on",
           "targets"
         ],
+        "type": "object"
+      },
+      "CreateAssistantConversationInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateAssistantConversationInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "A name (lowercase kebab), unique among your own conversations; absent names it for you",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "CreateCalcRuleInputBody": {
@@ -7367,6 +7620,33 @@
           "component",
           "alarms",
           "verdict"
+        ],
+        "type": "object"
+      },
+      "ListAssistantConversationsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListAssistantConversationsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantConversation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "conversations"
         ],
         "type": "object"
       },
@@ -14739,6 +15019,9 @@
           "agent": {
             "$ref": "#/components/schemas/AgentSettings"
           },
+          "assistant": {
+            "$ref": "#/components/schemas/AssistantSettings"
+          },
           "collection": {
             "$ref": "#/components/schemas/CollectionSettings"
           },
@@ -14769,7 +15052,8 @@
           "collection",
           "notification",
           "database",
-          "agent"
+          "agent",
+          "assistant"
         ],
         "type": "object"
       },
@@ -19435,6 +19719,200 @@
         "summary": "List the fleet's active alarms",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
+      }
+    },
+    "/assistant/conversations": {
+      "get": {
+        "description": "Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.",
+        "operationId": "list-assistant-conversations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAssistantConversationsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your omnibot conversations",
+        "x-omniglass-permission": "assistant:use"
+      },
+      "post": {
+        "description": "Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.",
+        "operationId": "create-assistant-conversation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssistantConversationInputBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConversation"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Start an omnibot conversation",
+        "x-omniglass-permission": "assistant:use"
+      }
+    },
+    "/assistant/conversations/{name}": {
+      "delete": {
+        "description": "Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.",
+        "operationId": "delete-assistant-conversation",
+        "parameters": [
+          {
+            "description": "Your conversation's name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your conversation's name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete one of your omnibot conversations",
+        "x-omniglass-permission": "assistant:use"
+      },
+      "get": {
+        "description": "One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.",
+        "operationId": "get-assistant-conversation",
+        "parameters": [
+          {
+            "description": "Your conversation's name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your conversation's name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConversationOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get one of your omnibot conversations",
+        "x-omniglass-permission": "assistant:use"
+      }
+    },
+    "/assistant/conversations/{name}:append": {
+      "post": {
+        "description": "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
+        "operationId": "append-assistant-conversation",
+        "parameters": [
+          {
+            "description": "Your conversation's name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your conversation's name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendAssistantConversationInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantConversation"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Append a turn to one of your omnibot conversations",
+        "x-omniglass-permission": "assistant:use"
       }
     },
     "/audit-log": {

@@ -149,6 +149,12 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			}, all)
 			return err
 		},
+		// The owner need not exist: the name is refused before any row is
+		// written.
+		"assistant_conversation": func(s string) error {
+			_, err := gw.CreateAssistantConversation(ctx, "", "00000000-0000-4000-8000-000000000001", s)
+			return err
+		},
 		"secret": func(s string) error {
 			_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 				Name: s, SecretType: "password", OwnerKind: "platform",

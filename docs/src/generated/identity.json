@@ -31,6 +31,18 @@
       "labelled": false
     },
     {
+      "table": "assistant_conversation",
+      "shape": "key-bearing",
+      "labelled": false,
+      "no_label": "a private working name its owner picks to resume by; nobody else reads it, so there is no audience a friendlier string would be for"
+    },
+    {
+      "table": "assistant_message",
+      "shape": "id only",
+      "reason": "one message of a conversation (#2113), keyed by its conversation and place in it; read as the transcript, never named",
+      "labelled": false
+    },
+    {
       "table": "audit_log",
       "shape": "id only",
       "labelled": false

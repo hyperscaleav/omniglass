@@ -7,11 +7,13 @@
    "description": "Read-only access to everything, and subscribing yourself to the alarms you can see. The floor every other role inherits.",
    "declared": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ],
    "effective": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -76,7 +78,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -113,7 +116,8 @@
     "secret:update",
     "file:create",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -261,7 +265,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {

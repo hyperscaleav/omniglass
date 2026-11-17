@@ -76,6 +76,52 @@ export interface paths {
       error: og.listAlarmsResponseError["data"];
     };
   };
+  "/assistant/conversations": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listAssistantConversationsResponseSuccess["data"];
+      error: og.listAssistantConversationsResponseError["data"];
+    };
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.createAssistantConversation>[0]>;
+      bodyRequired: false;
+      data: og.createAssistantConversationResponseSuccess["data"];
+      error: og.createAssistantConversationResponseError["data"];
+    };
+  };
+  "/assistant/conversations/{name}": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getAssistantConversationResponseSuccess["data"];
+      error: og.getAssistantConversationResponseError["data"];
+    };
+    delete: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteAssistantConversationResponseSuccess["data"];
+      error: og.deleteAssistantConversationResponseError["data"];
+    };
+  };
+  "/assistant/conversations/{name}:append": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.appendAssistantConversation>[1]>;
+      bodyRequired: true;
+      data: og.appendAssistantConversationResponseSuccess["data"];
+      error: og.appendAssistantConversationResponseError["data"];
+    };
+  };
   "/audit-log": {
     get: {
       path: never;

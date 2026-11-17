@@ -72,6 +72,10 @@ var Subsystems = []Cluster{
 		// token it earns is a credential row linked to the client, which
 		// oauth_refresh renews (#2073).
 		"oauth_client", "oauth_code", "oauth_refresh",
+		// assistant_conversation is a person's stored omnibot conversation
+		// and assistant_message its transcript (#2113), read by their owner
+		// alone.
+		"assistant_conversation", "assistant_message",
 		// lab_mark is the one row omniglass lab writes into its own database
 		// (#1195), so a lab and a real deployment refuse each other's.
 		"lab_mark",

@@ -46,6 +46,15 @@ export const settingsSchema = {
       ]
     }
   },
+  "assistant": {
+    "conversation_days": {
+      "description": "Days a stored omnibot conversation is kept after it last changed",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    }
+  },
   "collection": {
     "report_seconds": {
       "description": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",

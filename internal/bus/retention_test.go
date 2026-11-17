@@ -36,6 +36,19 @@ type backlogStore struct {
 	blocks   storage.BlockCompaction
 	blockErr error
 	folds    []storage.BlockFold
+	// The assistant namespace and the error its read answers with.
+	assistant    settings.AssistantSettings
+	assistantErr error
+}
+
+func (b *backlogStore) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return b.assistant, b.assistantErr
+}
+
+// PruneAssistantConversations is the conversation lane of the same store,
+// keyed "assistant_conversation".
+func (b *backlogStore) PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error) {
+	return b.PruneSamples(ctx, "assistant_conversation", before, limit)
 }
 
 // CompactMetricBlocks records itself as a call on the lane "block", beside the
@@ -491,5 +504,35 @@ func TestRetentionPassFoldsBlocksAfterTrends(t *testing.T) {
 	if err == nil || rep.Deleted["metric"] != 1 || nextRetentionWait(rep) != sampleRetentionCatchUp {
 		t.Errorf("a failed fold: err %v, metric deleted %d, wait %v; want reported, pruned, and a pass in a minute",
 			err, rep.Deleted["metric"], nextRetentionWait(rep))
+	}
+}
+
+// Stored omnibot conversations are pruned by assistant.conversation_days
+// (#2113), and a failed read of that namespace loses only their lane.
+func TestARetentionPassPrunesConversationsToTheirOwnWindow(t *testing.T) {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), assistant: settings.AssistantSettings{ConversationDays: 30},
+		backlog: map[string]int64{"assistant_conversation": 3}}
+	rep, err := retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Deleted["assistant_conversation"] != 3 {
+		t.Fatalf("deleted %v, want the three idle conversations", rep.Deleted)
+	}
+	for _, c := range store.calls {
+		if c.lane == "assistant_conversation" && !c.before.Equal(now.AddDate(0, 0, -30)) {
+			t.Fatalf("conversation cutoff %v, want 30 days back", c.before)
+		}
+	}
+
+	store = &backlogStore{windows: defaultWindows(), assistantErr: errors.New("boom"),
+		backlog: map[string]int64{"assistant_conversation": 3, "log_line/debug": 2}}
+	rep, err = retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err == nil || !strings.Contains(err.Error(), "assistant") {
+		t.Fatalf("a failed assistant read = %v, want it reported", err)
+	}
+	if rep.Deleted["assistant_conversation"] != 0 || rep.Deleted["log_line/debug"] != 2 {
+		t.Fatalf("deleted %v, want the conversations skipped and the other lanes pruned", rep.Deleted)
 	}
 }

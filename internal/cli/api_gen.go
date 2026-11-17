@@ -270,6 +270,134 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "assistant",
+			Short: "Commands for the assistant resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "conversation",
+				Short: "Commands for the conversation resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fAfter int
+					var fMessages string
+					var fPending string
+					var fUsage string
+					cmd := &cobra.Command{
+						Use:     "append <name>",
+						Short:   "Append a turn to one of your omnibot conversations",
+						Long:    "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation append <name> --after <int> --messages <json>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s:append", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("after") {
+								body["after"] = fAfter
+							}
+							if cmd.Flags().Changed("messages") {
+								body["messages"] = jsonOrString(fMessages)
+							}
+							if cmd.Flags().Changed("pending") {
+								body["pending"] = jsonOrString(fPending)
+							}
+							if cmd.Flags().Changed("usage") {
+								body["usage"] = jsonOrString(fUsage)
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().IntVar(&fAfter, "after", 0, "The seq of the last message you saw (0 for an empty conversation); anything else is a 409")
+					_ = cmd.MarkFlagRequired("after")
+					cmd.Flags().StringVar(&fMessages, "messages", "", "The new messages, in order")
+					_ = cmd.MarkFlagRequired("messages")
+					cmd.Flags().StringVar(&fPending, "pending", "", "The write the run paused on, waiting on you; absent clears it")
+					cmd.Flags().StringVar(&fUsage, "usage", "", "The tokens this turn spent, added to the total")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fName string
+					cmd := &cobra.Command{
+						Use:     "create",
+						Short:   "Start an omnibot conversation",
+						Long:    "Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation create",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations")
+							body := map[string]any{}
+							if cmd.Flags().Changed("name") {
+								body["name"] = fName
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fName, "name", "", "A name (lowercase kebab), unique among your own conversations; absent names it for you")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <name>",
+						Short:   "Delete one of your omnibot conversations",
+						Long:    "Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation delete <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name>",
+						Short:   "Get one of your omnibot conversations",
+						Long:    "One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation get <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list",
+						Short:   "List your omnibot conversations",
+						Long:    "Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation list",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations")
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "audit-log",
 			Short: "Commands for the audit-log resource",
 		}

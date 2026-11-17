@@ -99,6 +99,12 @@ func (f fakeStore) CompactMetricTrends(context.Context, int, int) (storage.Trend
 	return storage.TrendCompaction{}, nil
 }
 func (f fakeStore) PruneMetricTrends(context.Context, time.Time, int) (int64, error) { return 0, nil }
+func (f fakeStore) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return settings.AssistantSettings{}, nil
+}
+func (f fakeStore) PruneAssistantConversations(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (f fakeStore) CompactMetricBlocks(context.Context, storage.BlockFold) (storage.BlockCompaction, error) {
 	return storage.BlockCompaction{}, nil
 }

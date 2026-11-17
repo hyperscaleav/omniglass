@@ -295,6 +295,12 @@ func applicableKinds(resource string) map[string]bool {
 		// (#618): notification:retry resolves on the component tier from the
 		// grants carrying it.
 		return map[string]bool{"component": true}
+	case "assistant":
+		// A person's own omnibot conversations (#2113): owned by a user,
+		// not placed on any tier, and fenced by the owner predicate every query
+		// carries, never by a scope set. No route resolves a scope for it, so
+		// it records as fleet-wide: a decision, not an omission.
+		return map[string]bool{"all": true}
 	case "telemetry":
 		// Pushed telemetry resolves on the component and system tiers, the two
 		// owner kinds the push route accepts (ADR-0752, widened by ADR-0422):
