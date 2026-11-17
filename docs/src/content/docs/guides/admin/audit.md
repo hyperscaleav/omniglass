@@ -4,7 +4,7 @@ description: "The read-only record of every privileged action and every sign-in,
 screenshots:
   - id: audit
     path: /web/audit
-    alt: "The audit trail: every privileged action and sign-in, newest first, with who, what, and the resource. Each When cell is a flat panel because the seed-time timestamps are masked at capture."
+    alt: "The audit trail: every privileged action and sign-in, newest first, with who, what, and the resource; the newest row, an agent's tag set over MCP, carries an mcp pill and an agent tag. Each When cell is a flat panel because the seed-time timestamps are masked at capture."
     # Mask the timestamp and id columns: both regenerate every seed (a v7 uuid
     # embeds the seed time), so masking keeps the image byte-stable for the gate.
     #
@@ -21,6 +21,10 @@ screenshots:
     mask:
       - "text=/\\d+\\/\\d+\\/\\d{4}/ >> xpath=ancestor::td[1]"
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
+      # The capture's MCP row declares its client as the CLI at this build's
+      # version, whose length changes with the build. The client line stretches
+      # to the Channel column's pinned 170px, so its box, and the mask, do not.
+      - "text=/^omniglass-cli\\//"
 ---
 
 **Admin > Audit** (with `audit:read:admin`, so **administrators and owners** only) is the read-only audit trail:

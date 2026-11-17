@@ -74,7 +74,7 @@ const columns: FlatColumn<AuditEvent>[] = [
         <span class="flex flex-col items-start gap-0.5">
           <span data-testid="audit-channel" class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
           <Show when={e.client}>
-            <span class="font-data text-[11px] text-base-content/50 truncate max-w-full" title={e.client}>{e.client}</span>
+            <span class="font-data text-[11px] text-base-content/50 truncate self-stretch" title={e.client}>{e.client}</span>
           </Show>
         </span>
       </Show>
