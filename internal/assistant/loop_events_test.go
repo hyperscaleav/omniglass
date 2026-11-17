@@ -237,3 +237,28 @@ func TestLoopContinueLeavesHistoryAlone(t *testing.T) {
 		t.Error("Continue changed the history it was given")
 	}
 }
+
+// A call's decision is heard before the call is made, so a client can show it
+// running; its result after.
+func TestLoopEventsDecideBeforeTheCallRuns(t *testing.T) {
+	t.Parallel()
+	cat := fleet()
+	var seen []string
+	var asked []Proposal
+	l := &Loop{Provider: replay(t, readThenAsk), Tools: cat, Confirm: confirmer(true, &asked),
+		Events: func(e Event) {
+			if e.Kind == EventDecided || e.Kind == EventResult {
+				seen = append(seen, fmt.Sprintf("%s %s ran=%d", e.Kind, e.Tool, len(cat.called)))
+			}
+		}}
+	if _, err := l.Run(context.Background(), "add x"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"decided list-components ran=0", "result list-components ran=1",
+		"decided create-component ran=1", "result create-component ran=2",
+	}
+	if !reflect.DeepEqual(seen, want) {
+		t.Errorf("seen = %v, want %v", seen, want)
+	}
+}

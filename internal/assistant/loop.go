@@ -224,12 +224,19 @@ func (l *Loop) answerTurn(ctx context.Context, msgs []provider.Message, byName m
 				return msgs, nil
 			}
 		}
-		call, err := l.answer(ctx, t, tc, confirm)
+		call, err := decide(ctx, t, tc, confirm)
 		if err != nil {
 			return msgs, err
 		}
-		out.Calls = append(out.Calls, call)
 		l.emit(Event{Kind: EventDecided, CallID: tc.ID, Tool: call.Tool, Decision: call.Decision})
+		if call.Decision == DecisionCalled {
+			res, err := l.Tools.Call(ctx, t.Name, tc.Arguments)
+			if err != nil {
+				return msgs, fmt.Errorf("call %s: %w", t.Name, err)
+			}
+			call.IsError, call.Text = res.IsError, resultText(res)
+		}
+		out.Calls = append(out.Calls, call)
 		l.emit(Event{Kind: EventResult, CallID: tc.ID, Tool: call.Tool, Decision: call.Decision, IsError: call.IsError, Text: call.Text})
 		msgs = append(msgs, provider.Message{Role: provider.RoleTool, ToolCallID: tc.ID, Text: call.Text, IsError: call.IsError})
 	}
@@ -262,9 +269,10 @@ func (l *Loop) emit(e Event) {
 	}
 }
 
-// answer decides one call from its tool's policy, asking confirm for an ask,
-// and makes it if it may run.
-func (l *Loop) answer(ctx context.Context, t *sdk.Tool, tc provider.ToolCall, confirm Confirmer) (Call, error) {
+// decide decides one call from its tool's policy, asking confirm for an ask.
+// A refused or declined call is final, with what the model is told; a call
+// to run is DecisionCalled, still to be made.
+func decide(ctx context.Context, t *sdk.Tool, tc provider.ToolCall, confirm Confirmer) (Call, error) {
 	if t == nil {
 		return Call{Tool: tc.Name, Decision: DecisionRefused, IsError: true, Text: "the tool " + tc.Name + " is not offered"}, nil
 	}
@@ -280,11 +288,7 @@ func (l *Loop) answer(ctx context.Context, t *sdk.Tool, tc provider.ToolCall, co
 			return Call{Tool: t.Name, Decision: DecisionDeclined, IsError: true, Text: "the person declined this call; it did not run"}, nil
 		}
 	}
-	res, err := l.Tools.Call(ctx, t.Name, tc.Arguments)
-	if err != nil {
-		return Call{}, fmt.Errorf("call %s: %w", t.Name, err)
-	}
-	return Call{Tool: t.Name, Decision: DecisionCalled, IsError: res.IsError, Text: resultText(res)}, nil
+	return Call{Tool: t.Name, Decision: DecisionCalled}, nil
 }
 
 // proposal is a call as it is put to the person.
