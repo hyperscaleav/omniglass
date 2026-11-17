@@ -663,10 +663,10 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
-	if _, err := gw.PreviewLabelRecompute(ctx, "node", all, all); err == nil {
+	if _, err := gw.PreviewLabelRecompute(ctx, "outpost", all, all); err == nil {
 		t.Fatalf("preview over an unknown kind succeeded, want a refusal")
 	}
-	if _, err := gw.RecomputeLabels(ctx, "", "node", all, all); err == nil {
+	if _, err := gw.RecomputeLabels(ctx, "", "outpost", all, all); err == nil {
 		t.Fatalf("apply over an unknown kind succeeded, want a refusal")
 	}
 }

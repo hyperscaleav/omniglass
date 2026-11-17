@@ -14,7 +14,7 @@ import (
 )
 
 // PropertySampleWrite is one observed property verdict to persist. OwnerKind
-// picks the arc; OwnerID is the fleet address (component/system/location/node
+// picks the arc; OwnerID is the fleet address (component/system/location/outpost
 // name); Instance discriminates many verdicts of one key on one owner (the
 // interface name for interface-reachable). Value is the categorical text
 // (up/down), the mirror of MetricSampleWrite but with a value domain, not a
@@ -43,7 +43,7 @@ type PropertySample struct {
 }
 
 // InsertPropertySamples writes observed property rows in one transaction, for
-// w: a node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
+// w: an outpost's lane (OutpostWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
 // observed. Callers apply reject-not-project (collection.Registry) and the
 // transition-only guard before calling; this is the durable write, and it
@@ -72,7 +72,7 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 
 // propertyOwnerKinds is the order a property batch lands its owner kinds in,
 // one statement each (writePropertySets).
-var propertyOwnerKinds = []string{"component", "system", "location", "node"}
+var propertyOwnerKinds = []string{"component", "system", "location", "outpost"}
 
 // writePropertySets is the property lane's sample-write path, in the
 // caller's transaction: the ingest's observed batch or a calc rule's
@@ -273,7 +273,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		if len(at) > 0 {
 			rows, err := tx.Query(ctx, `select distinct t.ord from unnest($1::text[], $2::text[]) with ordinality as t(kind, arc, ord)
 				where exists (select 1 from command c where c.status = 'issued' and c.owner_kind = t.kind
-					and coalesce(c.component_id, c.system_id, c.location_id, c.node_id) = t.arc::uuid)`, kinds, owners)
+					and coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id) = t.arc::uuid)`, kinds, owners)
 			if err != nil {
 				return 0, fmt.Errorf("storage: owners awaiting a command: %w", err)
 			}
@@ -365,8 +365,8 @@ func propertySeriesLockKey(ownerKind, ownerID, key, instance string) string {
 // LatestProperty returns the most recent observed property row for a component
 // series (key + instance), or nil if none. It backs the reachability panel and
 // session pill, and tests. Observed only (ADR-0161): the panel reads each
-// value as the node's own observation, so a declared, intended or calculated
-// row beside it never stands in for the node's. (The ingest's transition guard
+// value as the outpost's own observation, so a declared, intended or calculated
+// row beside it never stands in for the outpost's. (The ingest's transition guard
 // is the insert's own condition, writePropertySamples, and reads no row here.)
 //
 // ts orders it, because an observed series carries the OBSERVATION time and a
@@ -406,7 +406,7 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 // PropertyTransitions returns a component series' observed property rows
 // inside window, ordered oldest-first: the ordered flip sequence the
 // availability strip reads (each row is one transition, since the write path is
-// transition-only), the node's observations alone (ADR-0161). The
+// transition-only), the outpost's observations alone (ADR-0161). The
 // window is counted back from the DATABASE's clock (tsSince, #719); a zero
 // window returns the whole series.
 // componentRef is resolved once, and an unknown component folds into a

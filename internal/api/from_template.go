@@ -122,7 +122,7 @@ type createComponentFromTemplateInput struct {
 		Location string            `json:"location,omitempty" doc:"The location the component sits in, by name or dotted path"`
 		Name     string            `json:"name,omitempty" doc:"The component's name; minted as an unnamed create mints it when empty"`
 		Label    string            `json:"label,omitempty" doc:"The component's label"`
-		Node     string            `json:"node,omitempty" doc:"The node the endpoint is placed on; needed when inputs carry an address"`
+		Outpost  string            `json:"outpost,omitempty" doc:"The outpost the endpoint is placed on; needed when inputs carry an address"`
 		Inputs   map[string]string `json:"inputs,omitempty" doc:"Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)"`
 	}
 }
@@ -144,7 +144,7 @@ type createSystemFromTemplateInput struct {
 		Name     string                         `json:"name,omitempty" doc:"The system's name; minted from its type when empty"`
 		Label    string                         `json:"label,omitempty" doc:"The system's label"`
 		Standard string                         `json:"standard,omitempty" doc:"A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name"`
-		Node     string                         `json:"node,omitempty" doc:"The node the endpoints are placed on; needed when any component attaches"`
+		Outpost  string                         `json:"outpost,omitempty" doc:"The outpost the endpoints are placed on; needed when any component attaches"`
 		Attach   map[string][]map[string]string `json:"attach,omitempty" doc:"Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached"`
 	}
 }
@@ -211,7 +211,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Start a component from a template",
 		Description: "Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. " +
-			"Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
+			"Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.",
 	}, "component", "create"), "secret", "bind"), func(ctx context.Context, in *createComponentFromTemplateInput) (*createComponentFromTemplateOutput, error) {
 		t, err := cat.GetKind(in.Body.Template, template.KindComponent)
 		if err != nil {
@@ -232,7 +232,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 			return nil, err
 		}
 		plan, piece, err := template.PlanComponent(ctx, gw, cat, template.ComponentRequest{
-			Template: t.Name, Name: in.Body.Name, Label: in.Body.Label, Location: loc, Node: in.Body.Node, Inputs: in.Body.Inputs,
+			Template: t.Name, Name: in.Body.Name, Label: in.Body.Label, Location: loc, Outpost: in.Body.Outpost, Inputs: in.Body.Inputs,
 		})
 		if err != nil {
 			return nil, mapFromTemplateErr(err)
@@ -281,7 +281,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		}
 		sp, err := template.PlanSystem(ctx, gw, cat, template.SystemRequest{
 			Template: t.Name, Standard: in.Body.Standard, Name: in.Body.Name, Label: in.Body.Label,
-			Location: loc, Node: in.Body.Node, Attach: attach,
+			Location: loc, Outpost: in.Body.Outpost, Attach: attach,
 		})
 		if err != nil {
 			return nil, mapFromTemplateErr(err)

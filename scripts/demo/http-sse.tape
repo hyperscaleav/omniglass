@@ -39,7 +39,7 @@ Wait
 Type `omniglass secret create --name demo-bar-login --owner-kind platform --secret-type basic-auth --fields '{"username":"admin","password":"kestrel"}' | jq -c '{name}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$bar" --driver kestrel-feed --node edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"443\",\"login\":\"demo-bar-login\"}" | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$bar" --driver kestrel-feed --outpost edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"443\",\"login\":\"demo-bar-login\"}" | jq -c '{name, driver}'`
 Enter
 Wait
 

@@ -57,7 +57,7 @@ jobs:
   # The lab smoke (#1194): the user's path end to end, on a runner with only
   # Docker doing the work. `make` builds the image and the host binary from
   # this tree with one build id; ./bin/omniglass lab run brings up Postgres,
-  # the server (which migrates and applies the boot seed) and the node with its
+  # the server (which migrates and applies the boot seed) and the outpost with its
   # simulator; the smoke waits for the ready banner, proves the console and the
   # lab flag answer on the printed URL, stops it with Ctrl-C, and proves it
   # left nothing behind (scripts/lab-smoke.sh). It replaces the boot smoke: the

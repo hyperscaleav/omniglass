@@ -36,7 +36,7 @@ type systemPlanBody struct {
 // TestSimulatedSystemAPI drives adding a whole simulated system to a
 // standard: the plan previews each role staffed with a simulated product
 // (or left short, saying why), and adding it creates the system and its
-// components, each at its own free address on the node, as one write.
+// components, each at its own free address on the outpost, as one write.
 // Adding needs simulation:update and the creates it makes.
 func TestSimulatedSystemAPI(t *testing.T) {
 	t.Parallel()
@@ -57,7 +57,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -99,9 +99,9 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	// all-scope component:create, so the add is refused as a 403 naming
 	// the component tier, not a 500.
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
-		('sim-sys-all', '{"system:create","system:update","system:read","location:read","node:read","simulation:read"}'),
+		('sim-sys-all', '{"system:create","system:update","system:read","location:read","outpost:read","simulation:read"}'),
 		('sim-sys-loc', '{"component:create","component:update","endpoint:create","simulation:update"}'),
-		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","component:update","endpoint:create","node:read"}')`); err != nil {
+		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","component:update","endpoint:create","outpost:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	locTok, lhash, lprefix, err := auth.NewBearerToken()
@@ -200,17 +200,17 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		return n
 	}
 	before := componentsBefore()
-	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
-	out := c.do(builderTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
+	c.do(viewer, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
+	out := c.do(builderTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
 	if !strings.Contains(string(out), "system:create") {
 		t.Fatalf("a builder without system:create was refused with %s, want it to say so", out)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/systems", body, http.StatusConflict)
-	c.do(locTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
+	c.do(ownerTok, http.MethodPost, "/outposts/site-b/simulation/systems", body, http.StatusConflict)
+	c.do(locTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
 	// The add reads too: naming a location needs location:read. A builder
 	// missing it is refused up front, saying so, not told the location does
 	// not exist.
-	if out := c.do(noReadTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "location:read") {
+	if out := c.do(noReadTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "location:read") {
 		t.Fatalf("a builder without location:read was refused with %s, want it to say so", out)
 	}
 	if n := componentsBefore(); n != before {
@@ -231,7 +231,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 			Reason string `json:"reason"`
 		} `json:"unstaffed"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusCreated), &added); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusCreated), &added); err != nil {
 		t.Fatal(err)
 	}
 	if added.System == "" || added.SystemID == "" || len(added.Components) != plan.Components {
@@ -255,7 +255,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatalf("%d role assignments, want %d", assigned, plan.Components)
 	}
 	var view simulationBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK), &view); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &view); err != nil {
 		t.Fatal(err)
 	}
 	if len(view.Devices) != plan.Components {

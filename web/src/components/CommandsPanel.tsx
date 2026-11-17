@@ -30,12 +30,12 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { describeError, fmtTime, rel } from "../lib/format";
 
 // CommandsPanel (#1155): a component's commands, newest first, each where it
-// stands: in flight (queued for its node, delivered, awaiting the reply or the
+// stands: in flight (queued for its outpost, delivered, awaiting the reply or the
 // observation that settles it, with its window counting down) or terminal
 // (settled, failed, timed out, with why). A row opens in place to the whole
 // arc: each transition with its time, the evidence that decided it (the
 // component's reply, masked of credentials, or the observed sample), and the
-// endpoint, node and driver that carried it. It polls every second while
+// endpoint, outpost and driver that carried it. It polls every second while
 // anything is in flight and at the view's cadence at rest. With command:issue
 // and a driver that binds a command, the panel offers Issue a command; the
 // issue's toast opens the new command's row here (`open`). `component` is
@@ -84,7 +84,7 @@ export default function CommandsPanel(props: { component: string; name: string; 
     <section data-testid="commands-panel" class="flex flex-col gap-1.5">
       <Eyebrow
         label="Commands"
-        hint="What this component was told, and where each command stands: queued for its node, delivered, awaiting the reply or the observation that settles it, then settled, failed, or timed out when its settle window closed with no evidence."
+        hint="What this component was told, and where each command stands: queued for its outpost, delivered, awaiting the reply or the observation that settles it, then settled, failed, or timed out when its settle window closed with no evidence."
         right={
           <span class="flex items-center gap-2">
             <Show when={flying()}>
@@ -218,10 +218,10 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
         <KVStacked label="Settles from" hint="How its driver binding says it settles: the component's reply, or the next observation of what it sets." value={props.c.settle_mode === "none" ? "nothing (it sets no value)" : props.c.settle_mode} />
         <KVStacked label="Window" hint="How long it waits for its evidence before it times out." value={`${props.c.settle_window_seconds}s`} mono />
         <Show when={props.c.endpoint}>
-          <KVStacked label="Endpoint" hint="The endpoint it rides: the one a node took it over, else the one a node would." value={props.c.endpoint} mono />
+          <KVStacked label="Endpoint" hint="The endpoint it rides: the one an outpost took it over, else the one an outpost would." value={props.c.endpoint} mono />
         </Show>
-        <Show when={props.c.node}>
-          <KVStacked label="Node" value={props.c.node} mono />
+        <Show when={props.c.outpost}>
+          <KVStacked label="Outpost" value={props.c.outpost} mono />
         </Show>
         <Show when={props.c.driver}>
           <KVStacked label="Driver" hint="The driver whose command binding renders it and reads its reply." value={props.c.driver} mono />
@@ -233,7 +233,7 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
       </div>
       <Show when={props.c.reply}>
         <div class="flex flex-col gap-1">
-          <Eyebrow label="Reply" hint="The component's answer, as its node reported it, with the endpoint's login and anything labeled a credential masked." />
+          <Eyebrow label="Reply" hint="The component's answer, as its outpost reported it, with the endpoint's login and anything labeled a credential masked." />
           <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/75" data-testid="command-reply">{props.c.reply}</pre>
         </div>
       </Show>

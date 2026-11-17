@@ -121,7 +121,7 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(list.EventRules) != 7 {
-		t.Fatalf("listed %d rules, want 7 (the authored one and the official reachability-lost, ingest-lag-high, node-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list.EventRules))
+		t.Fatalf("listed %d rules, want 7 (the authored one and the official reachability-lost, ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list.EventRules))
 	}
 	for _, r := range list.EventRules {
 		if r.OpenAlarms == nil || r.Pending == nil {
@@ -204,7 +204,7 @@ func TestEventRuleAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(list.EventRules) != 7 {
-			t.Fatalf("a scoped viewer lists %d rules, want all 7 (both here and the official ingest-lag-high, node-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list.EventRules))
+			t.Fatalf("a scoped viewer lists %d rules, want all 7 (both here and the official ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list.EventRules))
 		}
 		for _, r := range list.EventRules {
 			if r.Name == "reach-lost" && *r.Pending != len(want) {

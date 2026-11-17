@@ -14,7 +14,7 @@ import { createSignal } from "solid-js";
 // look like a typo rather than an absence. The name shown as-is is honest, and it
 // keeps the gap visible.
 //
-// This rule used to be written out six times: `nodeLabel` in lib/nodes.ts, the
+// This rule used to be written out six times: `outpostLabel` in lib/outposts.ts, the
 // `display:` mapper on each of the Components, Systems, and Locations pages, and
 // three inline copies in the Variables owner picker. Six copies of one rule is
 // how the Components list ended up showing a name where its neighbours showed a
@@ -79,7 +79,7 @@ export function entityLabel(e: Labelled): string {
 // The call sites that remain, each composing client-side because the endpoint
 // serves another order (everything else renders the server's order):
 //   - pages/SecretTypes.tsx: ListSecretTypes serves `order by name`.
-//   - components/StartFromTemplateForm.tsx NodeSelect: ListNodes serves
+//   - components/StartFromTemplateForm.tsx OutpostSelect: ListNodes serves
 //     `order by name`.
 //   - components/TemplateCreate.tsx: the template catalog is served by kind,
 //     then name, from the binary, and is filtered to a kind here.
@@ -192,7 +192,7 @@ export function deriveName(display: string): string {
 // act (the API takes it explicitly), never a side effect of relabelling.
 //
 // It is for the REGISTRY and identity pages only: products, vendors, standards,
-// drivers, groups, nodes, the three type registries, and users. Their names have
+// drivers, groups, outposts, the three type registries, and users. Their names have
 // no generator and stay globally unique, so deriving one from what the operator
 // typed is exactly the right affordance there.
 //

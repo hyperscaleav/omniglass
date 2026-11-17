@@ -19,7 +19,7 @@ route honors.
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
-on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
+on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/outposts`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body, a
 component or a system, and fenced once per batch by the `telemetry:push` scope on the owner's own tier
 with the caller's `component:read` or `system:read` deciding the refusal, a 404 or a truthful 403,
@@ -32,7 +32,7 @@ name, every key held to its writer class, answering `202` only once the stream h
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
-the same document. The node `:enroll` and `:claim` custom methods are the
+the same document. The outpost `:enroll` and `:claim` custom methods are the
 first `:verb` routes in the wild. See [implementation status](/architecture/status/).
 :::
 
@@ -82,7 +82,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   type's definition is the seed's, its retention the install's. It is gated by `<type>:update` and
   `platform:update`, like the retention settings, and writes its own audit verb, `set_retention`.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
-  `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
+  `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/outposts:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
@@ -147,8 +147,8 @@ name is a lookup: automation that must never drift addresses `<owner>/<name>` or
 
 **What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
 have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
-unique, since only a component makes it so; a node principal on `/principals` is reached by its name on
-`/nodes` instead.
+unique, since only a component makes it so; an outpost principal on `/principals` is reached by its name on
+`/outposts` instead.
 
 ## Lists: filter, order, page
 
@@ -337,10 +337,10 @@ method is the front door; **dispatch is over NATS**: the action fans out through
   **permission universe** the [Roles
   view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
 
-## The collection surface: nodes, endpoints, tasks
+## The collection surface: outposts, endpoints, tasks
 
 The [collection](/architecture/collection/) authoring routes are the first concrete resources that
-exercise every convention above at once: the standard family per resource (`/nodes`, `/endpoints`,
+exercise every convention above at once: the standard family per resource (`/outposts`, `/endpoints`,
 `/tasks`) plus the `:verb` custom methods, the per-component reads (`reachability`,
 `events`), all `component:read`-gated, and the read-only `GET /transports`
 (the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
@@ -365,15 +365,15 @@ pin set (`new.host_key`, `new.certificate`) and the actor (#1078,
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
-`POST /nodes:claim` and the webhook receiver stay the deliberate public writes).
+`POST /outposts:claim` and the webhook receiver stay the deliberate public writes).
 
-**The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` (gated
-`node:enroll`) mints or re-mints the node's enrollment token and returns it **once**; the server stores
-only its hash and never logs it, so a re-enroll invalidates the previous token. `POST /nodes:claim` is
-the **node-facing** side: a node presents its token and receives its NATS credential (url, username,
+**The outpost custom methods are the day-one enrollment handshake.** `POST /outposts/{name}:enroll` (gated
+`outpost:enroll`) mints or re-mints the outpost's enrollment token and returns it **once**; the server stores
+only its hash and never logs it, so a re-enroll invalidates the previous token. `POST /outposts:claim` is
+the **outpost-facing** side: an outpost presents its token and receives its NATS credential (url, username,
 password). It is unauthenticated because the token itself is the authentication, and an invalid token
-is a **401** (a claim must not disclose which nodes exist). A node is fleet-wide, so `node:read` and
-`node:create` require an **all-scope** grant.
+is a **401** (a claim must not disclose which outposts exist). An outpost is fleet-wide, so `outpost:read` and
+`outpost:create` require an **all-scope** grant.
 
 **The webhook receiver is the other public write** (#1024,
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
@@ -384,7 +384,7 @@ when it will not), `401` refused, one identical
 `GET` and `HEAD` on the same path answer a sender verifying its URL. `POST
 /endpoints/{endpoint}:rotateToken` (gated `endpoint:update`) mints the endpoint's token anew, and a
 webhook endpoint's read carries its masked path, its scheme, whether it is signed, the secret its
-token is revealed through and its refusals. `GET /unclaimed-sources` (gated `node:read`) is the inbox
+token is revealed through and its refusals. `GET /unclaimed-sources` (gated `outpost:read`) is the inbox
 of senders posting to a token no endpoint holds.
 
 **An identity binding costs a write on both of its ends** (#1385,
@@ -399,7 +399,7 @@ a system refuses a caller holding none with a 403 naming it before anything reso
 resolves in its own tier's read scope and must be inside its update scope (out of read the
 non-disclosing 404, readable but not writable a 403); a put naming a different owner moves the
 binding and needs update on the owner it leaves as well, a re-put to the same owner changes nothing,
-an unregistered key, an owner that is a location or a node, or the conduit itself as owner is a 422,
+an unregistered key, an owner that is a location or an outpost, or the conduit itself as owner is a 422,
 the value rides the path as one percent-encoded segment (`room%2F1` round-trips), and every change is audited in
 its transaction, naming both ends.
 `GET /components/{name}/unbound-identities` (gated `component:read`, scope-injected on the conduit)
@@ -412,46 +412,46 @@ first, bounded at 1024 per conduit and aged out after seven days; binding one le
 what is broken on a simulated component: unplugged, or latency, jitter and loss toward it and a rate
 limit both ways. A set replaces the whole impairment (a field left out is zero, an empty body repairs
 the device) and returns it as stored; jitter above latency or a value out of range is a 422. The
-simulator beside the component's node applies it ([simulation](/architecture/simulation/)).
+simulator beside the component's outpost applies it ([simulation](/architecture/simulation/)).
 
-**A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)
-lists the components a [simulator](/architecture/simulation/) beside the node serves (each component with an
-endpoint placed on the node and inside the caller's component read scope, its product and target host),
+**An outpost's simulator is a read beside it.** `GET /outposts/{name}/simulation` (gated `outpost:read`, all-scope)
+lists the components a [simulator](/architecture/simulation/) beside the outpost serves (each component with an
+endpoint placed on the outpost and inside the caller's component read scope, its product and target host),
 joined to the simulator's stated capabilities
 and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
-stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
-`GET /nodes/{name}/simulation/observation` (gated `simulation:read`, and only for a caller whose component
-read scope is all, since the totals span every component the node simulates; any narrower scope is a 403)
-is what the simulated endpoints beside the node saw arrive and how each request settled, and what the node
-tallied sending, read as a bracket: the simulator, then the node over the bus, then the simulator again, so
+stored, so they start from zero when the server restarts; an outpost with no simulator reads `connected: false`.
+`GET /outposts/{name}/simulation/observation` (gated `simulation:read`, and only for a caller whose component
+read scope is all, since the totals span every component the outpost simulates; any narrower scope is a 403)
+is what the simulated endpoints beside the outpost saw arrive and how each request settled, and what the outpost
+tallied sending, read as a bracket: the simulator, then the outpost over the bus, then the simulator again, so
 a request in transit between reads is never a false gap. Totals are per protocol, with a capped sample of
 device ids, and count since each process started; a scale lab reconciles them
-([what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). A node that does not
-exist is a 404, and no simulator or node answering a 503.
+([what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). An outpost that does not
+exist is a 404, and no simulator or outpost answering a 503.
 
 **The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
-is every node whose simulator has pulled since the server started and simulates a component in the caller's
-scope (an all-scope reader sees every one; no node read is needed), each
+is every outpost whose simulator has pulled since the server started and simulates a component in the caller's
+scope (an all-scope reader sees every one; no outpost read is needed), each
 with its capabilities, its account of impairments and its simulated components in the caller's component scope;
 `connected` is true when any of them pulled recently, which is what shows the console's Simulation page.
 `GET /simulation/profiles` is the simulator's embedded profile catalog, each profile with the products it
 simulates. `GET /components/{name}/simulation` says whether a component is simulated and, when it is,
-gives its node, address, live hits, impairment, the products its profile simulates, and its full API
+gives its outpost, address, live hits, impairment, the products its profile simulates, and its full API
 surface from the profile (every protocol surface, with its HTTP routes, commands and SNMP OIDs, each port as the
 simulator binds it). `POST /components/{name}/simulation:fire` (gated `simulation:update`, audited) asks
-the simulator beside the component's node, over the bus, to run one operation from that surface (an HTTP
+the simulator beside the component's outpost, over the bus, to run one operation from that surface (an HTTP
 call, a command line or an SNMP get) and returns the component's answer: a component that is not simulated
 is a 409, a surface it does not serve a 422, and no simulator answering a 503.
-`POST /nodes/{name}/simulation/components` (gated `simulation:update`, and also needing `component:create`
+`POST /outposts/{name}/simulation/components` (gated `simulation:update`, and also needing `component:create`
 and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
-it through placed on the node; a node with no simulator connected is a 409, a product no profile
+it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
 simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
 (gated `simulation:read`) previews each of the standard's roles staffed with a simulated product that fits
-(or left short, with why), and `POST /nodes/{name}/simulation/systems` (gated `simulation:update`, and also
+(or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
-`node:read`, plus `location:read` when it names a location) creates the system, a
-simulated component per staffed role at its own free address with its endpoint on the node, and each
+`outpost:read`, plus `location:read` when it names a location) creates the system, a
+simulated component per staffed role at its own free address with its endpoint on the outpost, and each
 role assignment, in one transaction: it lands whole or not at all.
 
 **Alarms are raised by rules and graded by a level registry.** `/severity-levels` (read with
@@ -560,7 +560,7 @@ output, health) is the same 422.
 (create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
 endpoint **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
 `GET /tasks/{id}`): no task write routes or grants. A task references its endpoint by
-`endpoint_id`, its id **content-addressed** over endpoint, mode, and spec, with **no node column**:
+`endpoint_id`, its id **content-addressed** over endpoint, mode, and spec, with **no outpost column**:
 placement **projects from the endpoint**. An endpoint belongs to a component (or is server-hosted,
 needing an all-scoped grant), a task to an endpoint, so both inherit the component's
 [scope](/architecture/identity-access/): an out-of-read-scope component's endpoint or task is a
@@ -588,7 +588,7 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)) is served as
   `gate_reasons`, each with its `kind`, `since` and `source`, absent when none holds (#1650). The `rejection` is served whether or not a session is
   held, since a reachability probe's refusal gates an endpoint too, with its `reason` (the
-  `endpoint-rejection-reason` the node publishes beside the gate, cut to 500 characters like a
+  `endpoint-rejection-reason` the outpost publishes beside the gate, cut to 500 characters like a
   session's) and `ts` (when the gate was last published), so the console's refusal notice and its
   Retry read the same for a probe's gate as for a rejected session (#1110,
   [ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). A refusal of a changed key adds `pinned_key` and
@@ -598,11 +598,11 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   mode, the key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and
   days left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is
   why a session is served only while one is held. Every key this read composes is a native probe
-  key, the node's own observation: the verdict and its rungs, the probe metrics and timings, a
+  key, the outpost's own observation: the verdict and its rungs, the probe metrics and timings, a
   session's state and reason, the gate, a tls endpoint's pin and certificate facts. `POST
   /telemetry:push` refuses each by name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
   point 5), and the read serves each key's observed series only, so no other writer or provenance can
-  stand in for the node in any of it
+  stand in for the outpost in any of it
   ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
@@ -639,7 +639,7 @@ official types are read-only, a 409). The **metric_type catalog is the numeric k
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
 `event_type` share one resolution namespace, so a create is refused when a sibling holds the name
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Every type on the three ingest registries carries its `writer_class` (`node-probe`, `platform`,
+Every type on the three ingest registries carries its `writer_class` (`outpost-probe`, `platform`,
 `command-lifecycle`, `calc`, `collected`: who may write the key,
 [ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
 read beside it and never set; a create naming a reserved key (a native probe key, `collection-failed`,
@@ -661,7 +661,7 @@ own scope** on the component tier rather than by `component:read`,
 is the write: it records the invocation, writes a caused event,
 and (for a settleable command) opens an intended value, answering with the command as the read
 returns it beside the computed settlement verdict (none/pending/settled/failed); the invocation then
-actuates over the per-node command queue
+actuates over the per-outpost command queue
 ([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
 holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits
 at once and 4 per principal, a wait past either a 429 refused before anything is issued.
@@ -674,10 +674,10 @@ Both are gated `command:read`, resolved on the component tier with the read and 
 [ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
 
 :::note[Thin cuts today]
-The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,
+The operationally useful slice, not the full CRUD matrix. An **outpost** carries the full set (create,
 list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its endpoints, their
-derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. An **endpoint**
-`PATCH` changes only its node placement and its params (target); the type (and the name it derives)
+derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. An **endpoint**
+`PATCH` changes only its outpost placement and its params (target); the type (and the name it derives)
 and the owning component are fixed at creation, and a delete is refused while a task still references
 it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `http`; there is no
 `transport` list route yet.
@@ -728,9 +728,9 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
 - `POST /tags/{name}:setPlatform` sets the **platform-tier** value for a key from `{value}`;
   `POST /tags/{name}:clearPlatform` removes it (204). A platform binding has no owning entity, so it gates on
   `tag:update` plus `platform:update` (the install-wide tier permission below).
-- `GET /{components,systems,locations,nodes}/{name}:listTags` lists the bindings set **directly** on one entity
+- `GET /{components,systems,locations,outposts}/{name}:listTags` lists the bindings set **directly** on one entity
   (`{tags: [tagBinding]}`, each `{key, value, owner_kind, owner_id?, owner_name?}`, the entity's `:read`).
-- `POST /{components,systems,locations,nodes}/{name}:setTag` binds a value from `{key, value}`; the key
+- `POST /{components,systems,locations,outposts}/{name}:setTag` binds a value from `{key, value}`; the key
   must exist and its `applies_to` must admit the kind (a 422 otherwise). Setting a value is the
   entity's own write, so it gates on the entity's **`:update`** (`component:update` and friends), not a
   tag permission; `POST /{...}/{name}:removeTag` from `{key}` removes the binding (204). Bindings are
@@ -773,7 +773,7 @@ A **nested** registry (`component_type`, `system_type`) returns the flat set wit
 link in both forms, so the console reconstructs the tree client-side; the row carries its **own**
 `stem` / `abbrev` / `icon`, unresolved, because inheritance is the resolver's job and a read that
 silently filled a blank from an ancestor would make the override invisible. `DELETE` on one is refused
-with a 409 while it still parents another node or still classifies a row (`system_type` counts both
+with a 409 while it still parents another type or still classifies a row (`system_type` counts both
 sides).
 
 A registry body carries **both handles** like every other name-bearing resource
@@ -827,12 +827,12 @@ permissions its pieces need checked up front (a 403 naming the one missing):
   no standard, so this is how a fresh install gets one.
 - **`POST /components:createFromTemplate`** (`component:create`; plus `component:update` for declared
   values and `endpoint:create` to attach): a `location`, optionally `name` and `label`, and `inputs`
-  with a `node` to attach.
+  with an `outpost` to attach.
 - **`POST /systems:createFromTemplate`** (`system:create`; plus `system:read`, `system:update`,
   `component:create`, `component:update`, `endpoint:create` to attach, and `standard:create` when the
   template's standard is created from its template): a `location`, optionally `name`, `label`, a
   `standard` to build to, and `attach` (driver inputs per role, one object per component) with a
-  `node`.
+  `outpost`.
 - **`POST /locations:createFromTemplate`** (`location:create`; plus the system permissions when the
   subtree carries systems): a `parent`, and optionally the root's `name` and `label`.
 
@@ -1186,30 +1186,30 @@ earns its own tier only when composing the entity reads in the browser would be 
   Beside the tiers it carries `open_alarms`, one number: the alarms open (not cleared) on the
   components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
   for a caller with no component read.
-- `GET /views/platform` (`node:read`) is the read behind
+- `GET /views/platform` (`outpost:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
   server's build and start time with its panel groups (each key's current figure, a key written
   only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
-  the node table's column groups with each key's catalog facts, and one row per node with its current figure per key (a gauge's latest sample, a
+  the outpost table's column groups with each key's catalog facts, and one row per outpost with its current figure per key (a gauge's latest sample, a
   window count only while its window is the newest), in a fixed number of statements however
-  many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
-  `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
+  many outposts there are. Its rows are `/outposts`', so an outpost read short of all-scope is a **403**, as
+  `/outposts` answers, never an empty table. The figures, the verdicts and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are
   omitted, never zeroed, and `figures_read` says which. With the figures come `pipeline`, each
   hop's delivery in, out and loss per kind and per component (newest window and last hour) and the
   end to end, a newest window counted only while it is current (two report windows, as a window
-  count is), so a node that stopped reporting adds its last window to the hour and not the newest,
-  and each node's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
-  node with nothing in has no loss, never 0.
+  count is), so an outpost that stopped reporting adds its last window to the hour and not the newest,
+  and each outpost's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
+  outpost with nothing in has no loss, never 0.
 - `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
-  [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per node with a
+  [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per outpost with a
   connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s
   ring, ten brackets of `bracket_seconds`). Each gap is a loss ratio (null when nothing went into the
   hop), its masking term and its reading (`loss`, `impaired`, `restarted`); beside them each
-  protocol's counts and each simulated device's requests. A node reads `warming up` until the ring
+  protocol's counts and each simulated device's requests. An outpost reads `warming up` until the ring
   holds a window and the bracket after it. The devices are unplaced simulator state, so a component
-  read short of all-scope is a **404**, where the node's observation read answers 403
+  read short of all-scope is a **404**, where the outpost's observation read answers 403
   ([ADR-1647](/architecture/decisions/#adr-1647-platform-health-closes-the-loop-over-a-server-held-sliding-window)).
 
 Two properties are worth stating because they are easy to lose:
@@ -1317,14 +1317,14 @@ one; the permissions it needs are read from its tools' gates. They are listed in
 The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
 :::
 
-:::design[The full node NATS contract, per ADR-0036]
-## The node path is the NATS contract
+:::design[The full outpost NATS contract, per ADR-0036]
+## The outpost path is the NATS contract
 
-Nodes do **not** speak HTTP. The edge is a NATS client over the WAN: telemetry to a JetStream stream,
+Outposts do **not** speak HTTP. The edge is a NATS client over the WAN: telemetry to a JetStream stream,
 commands from a durable server-side JetStream queue, enrollment by NATS JWT/nkey, all on the sibling
-**NATS subject contract**, not this page's routes. The old node HTTP custom methods are gone; the proto
+**NATS subject contract**, not this page's routes. The old outpost HTTP custom methods are gone; the proto
 definitions survive **as the NATS message schema**. The contract lives in
-[messaging](/architecture/messaging/) and on the [node](/architecture/nodes/) page; the same AIP
+[messaging](/architecture/messaging/) and on the [outpost](/architecture/outposts/) page; the same AIP
 spirit, error envelope, and idempotency carry across.
 :::
 

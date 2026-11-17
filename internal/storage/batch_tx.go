@@ -29,8 +29,8 @@ type batchTx struct {
 	// has read it (keyWriters), so a tick of many task groups reads a key's
 	// calc claims once however many groups carry it (#1582).
 	writers map[writeLane]map[string]keyWriterOf
-	// bindings is each node writer's component, by the name it named, once
-	// resolved (nodeBinding).
+	// bindings is each outpost writer's component, by the name it named, once
+	// resolved (outpostBinding).
 	bindings map[string]string
 	// The locks the batch took up front for every lane (lockGroups, #1928),
 	// so a lane writer's own take of one is skipped rather than repeated:

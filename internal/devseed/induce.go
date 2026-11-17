@@ -15,7 +15,7 @@ import (
 // samples as refused-unregistered and the delivery table reads a loss with a
 // known cause. A driver's emitted names are checked against the catalogs when
 // the driver is written, so the key is registered first, baked into the
-// device's task, and then deleted: the task keeps the name, the node keeps
+// device's task, and then deleted: the task keeps the name, the outpost keeps
 // collecting it, and the server has no type to land it on.
 const (
 	// InducedKey is the property key the induced device answers.

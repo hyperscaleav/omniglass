@@ -52,7 +52,7 @@ func TestSoakVerdictReadsThePlatformThroughItsAPI(t *testing.T) {
 			out = 19
 		}
 		var ms []storage.PlatformMetric
-		for _, id := range []string{r.node, r.server} {
+		for _, id := range []string{r.outpost, r.server} {
 			ms = append(ms,
 				storage.PlatformMetric{ComponentID: id, Key: writerclass.DeliveryInCount, Instance: "metric", Value: in, TS: at},
 				storage.PlatformMetric{ComponentID: id, Key: writerclass.DeliveryOutCount, Instance: "metric", Value: out, TS: at},
@@ -116,9 +116,9 @@ func TestSoakVerdictReadsThePlatformThroughItsAPI(t *testing.T) {
 
 	// A token that cannot read the whole page cannot judge it: a verdict
 	// from part of the page would pass what it could not see.
-	narrow := getAs(principalWithGrants(t, r.ctx, r.dsn, "soak-node-reader", []grant{{role: "node-reader", scopeKind: "all"}}))
+	narrow := getAs(principalWithGrants(t, r.ctx, r.dsn, "soak-outpost-reader", []grant{{role: "outpost-reader", scopeKind: "all"}}))
 	until := time.Now().UTC()
 	if _, err := lab.ReadSoak(r.ctx, narrow, until.Add(-lab.SoakMinWindow), until); err == nil || !strings.Contains(err.Error(), "cannot read the whole platform health page") {
-		t.Errorf("a node-read-only token: err = %v, want a refusal naming the page", err)
+		t.Errorf("an outpost-read-only token: err = %v, want a refusal naming the page", err)
 	}
 }

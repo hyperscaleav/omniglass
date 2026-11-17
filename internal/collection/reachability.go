@@ -60,7 +60,7 @@ func pingReason(res PingResult) Reachability {
 
 // Classify maps a connect error to the reachability reason it represents. ok is
 // false when the error is NOT a reachability verdict, i.e. a resolve/setup
-// failure (the node could not even form the probe), which the caller treats as
+// failure (the outpost could not even form the probe), which the caller treats as
 // inconclusive (no sample), never as down: an unresolvable endpoint says
 // nothing about whether the target is up. A real failure to reach the target IS a
 // verdict (down): refused / prohibited / unreachable get their own reason, and a

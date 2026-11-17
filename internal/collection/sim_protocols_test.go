@@ -92,9 +92,9 @@ func TestSimProtocolsIsACopy(t *testing.T) {
 	}
 }
 
-// Every transport a node dials reaches the simulator as one of its protocols,
+// Every transport an outpost dials reaches the simulator as one of its protocols,
 // except icmp, which the kernel answers so the simulator never sees it, and a
-// push transport, which no node dials. A transport added to the registry fails
+// push transport, which no outpost dials. A transport added to the registry fails
 // here until it is placed.
 func TestSimProtocolOfPlacesEveryDialedTransport(t *testing.T) {
 	want := map[string]string{

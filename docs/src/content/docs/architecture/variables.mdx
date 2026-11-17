@@ -43,7 +43,7 @@ differ in what they are keyed to and what lifecycle they carry:
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `platform | location | system | component`): the same exclusive-arc ownership as samples (and unlike
-samples, config is not `node`-owned). The product and standard classifier bands above the trees are
+samples, config is not `outpost`-owned). The product and standard classifier bands above the trees are
 still ahead ([#184](https://github.com/hyperscaleav/omniglass/issues/184)); a
 [template](/architecture/templates/) is never one, since a fork leaves no row to bind to.
 
@@ -253,8 +253,8 @@ with an optional `default_value` and a `required` flag, unique per `(classifier,
 **`property`** series, on the **same owner exclusive-arc** as every sample, with an `instance`
 discriminator; the write path appends `provenance=declared` rows. The read is
 **`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system, location,
-and node**: `coalesce(the instance's value, the contract default)` plus the off-contract values, so a
-**productless** component, a **one-off** system, and a classifier-less **node** still resolve
+and outpost**: `coalesce(the instance's value, the contract default)` plus the off-contract values, so a
+**productless** component, a **one-off** system, and a classifier-less **outpost** still resolve
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 vertical is whole: transactional audited storage; the API (each contract gated by its owner catalog's
 permission, values by the owning entity's `:read` / `:update`, ABAC-scoped on **every** arc); the generated CLI
@@ -290,7 +290,7 @@ What the design intends, and this slice does **not** yet do:
   file a semantic role by the property it fills (a `floor_plan`, a `firmware`).
 - **A driver access/mode column** on the contract (get, set, or declare-only): settability comes
   from the driver spec's command bindings today, and a contract-level column lands with the
-  reconcile policy (#1248); a **node** still has no classifier to declare a contract, by design.
+  reconcile policy (#1248); an **outpost** still has no classifier to declare a contract, by design.
 :::
 
 The Properties panel can set, re-set, and **clear** a value: the effective read returns the

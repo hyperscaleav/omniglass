@@ -61,7 +61,7 @@ type MetricInstanceSample struct {
 // classifier's contract declares (value = coalesce(the series' latest sample,
 // the contract default)), plus any ad-hoc metric the series holds that the
 // contract does not declare. Parameterized over the same ownerContracts table
-// as EffectiveProperties, so component, system, location, and node resolve
+// as EffectiveProperties, so component, system, location, and outpost resolve
 // through one code path and cannot drift apart. The instance must be within the
 // read scope; an out-of-scope instance is its non-disclosing not-found.
 //

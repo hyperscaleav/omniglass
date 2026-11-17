@@ -81,13 +81,13 @@ func auditedRenames() []auditedRename {
 			},
 		},
 		{
-			resource: "node",
+			resource: "outpost",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
+				n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all)
 				if err != nil {
 					return "", err
 				}
-				// A node IS a principal: principal_id is the node table's primary key.
+				// An outpost IS a principal: principal_id is the outpost table's primary key.
 				return n.PrincipalID, nil
 			},
 		},

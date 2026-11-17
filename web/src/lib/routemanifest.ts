@@ -50,7 +50,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/systems/:id", shell: "protected", page: "Systems", smoke: `/systems/${UNKNOWN_UUID}` },
   { path: "/components", shell: "protected", page: "FleetRedirect", smoke: "/components" },
   { path: "/components/:id", shell: "protected", page: "Components", smoke: `/components/${UNKNOWN_UUID}` },
-  { path: "/nodes", shell: "protected", page: "Nodes", smoke: "/nodes" },
+  { path: "/outposts", shell: "protected", page: "Outposts", smoke: "/outposts" },
   // Platform health (#1644): Omniglass's own health, read off the platform components.
   { path: "/platform", shell: "protected", page: "PlatformHealth", smoke: "/platform" },
   // The simulated fleet (#890); its sidebar door shows only while a simulator

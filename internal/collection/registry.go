@@ -1,4 +1,4 @@
-// Package collection holds the node-side collection engine and the pure helpers
+// Package collection holds the outpost-side collection engine and the pure helpers
 // the ingest path shares with it. Registry answers reject-not-project: a
 // measurement name lands only if it is a registered, observable signal on the
 // lane it arrived on.

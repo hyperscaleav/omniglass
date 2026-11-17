@@ -176,7 +176,7 @@ func TestDeepLinkStillRendersTheConsole(t *testing.T) {
 	// TestNoConsoleRouteCarriesADot), which is what lets one that does read as a
 	// file.
 	h := SPAHandler(fakeConsole())
-	for _, p := range []string{"/locations/hq", "/nodes/edge-1/endpoints", "/products/samsung-qm55"} {
+	for _, p := range []string{"/locations/hq", "/outposts/edge-1/endpoints", "/products/samsung-qm55"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusOK {

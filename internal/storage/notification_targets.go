@@ -512,7 +512,7 @@ func checkPersonChannels(chs []string) ([]string, error) {
 
 // resolveTargetPeople binds a person target: the group by name or uuid, or the
 // person by username or uuid, who must be a human (a service account or a
-// node is no one to tell).
+// outpost is no one to tell).
 func resolveTargetPeople(ctx context.Context, q querier, spec NotificationTargetSpec) (groupID, principalID *string, err error) {
 	if spec.Kind == TargetPrincipalGroup {
 		id, err := groupIDByRef(ctx, q, spec.PrincipalGroup)

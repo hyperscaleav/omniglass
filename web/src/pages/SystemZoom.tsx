@@ -545,7 +545,7 @@ export default function SystemZoom() {
         </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
+            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost." />
             <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
             <Show
               when={logLines().length > 0}

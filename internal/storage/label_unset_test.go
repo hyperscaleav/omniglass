@@ -126,11 +126,11 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			}
 			return "name", "lbl-tag"
 		},
-		"node": func(t *testing.T) (string, string) {
-			if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "lbl-node", Label: blank}, all, all); err != nil {
-				t.Fatalf("create node: %v", err)
+		"outpost": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "lbl-outpost", Label: blank}, all, all); err != nil {
+				t.Fatalf("create outpost: %v", err)
 			}
-			return "name", "lbl-node"
+			return "name", "lbl-outpost"
 		},
 		"location_type": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "lbl-lt", Label: blank}); err != nil {
@@ -454,13 +454,13 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 				t.Fatalf("clear: %v", err)
 			}
 		}},
-		{"node", "name", func(t *testing.T) string {
-			if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "clr-node", Label: "Labelled"}, all, all); err != nil {
+		{"outpost", "name", func(t *testing.T) string {
+			if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "clr-outpost", Label: "Labelled"}, all, all); err != nil {
 				t.Fatalf("create: %v", err)
 			}
-			return "clr-node"
+			return "clr-outpost"
 		}, func(t *testing.T, key string) {
-			if _, err := gw.UpdateNode(ctx, "", key, storage.NodePatch{Label: &empty}, all, all, all); err != nil {
+			if _, err := gw.UpdateOutpost(ctx, "", key, storage.OutpostPatch{Label: &empty}, all, all, all); err != nil {
 				t.Fatalf("clear: %v", err)
 			}
 		}},

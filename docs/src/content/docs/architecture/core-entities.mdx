@@ -1,6 +1,6 @@
 ---
 title: Core entities
-description: "The fleet model: component, system, location, and node as the structural entities, the variable-depth trees, and the exclusive-arc owner."
+description: "The fleet model: component, system, location, and outpost as the structural entities, the variable-depth trees, and the exclusive-arc owner."
 sidebar:
   badge:
     text: Partial
@@ -14,7 +14,7 @@ import RuleLanguage from '../../../components/RuleLanguage.astro';
 import LabelDataMap from '../../../components/LabelDataMap.astro';
 import SeededSet from '../../../components/SeededSet.astro';
 
-Core entities are the things an operator manages, component, system, location, and node, each with
+Core entities are the things an operator manages, component, system, location, and outpost, each with
 its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
 they pin are [templates](/architecture/templates/); the data they own is
 [samples](/architecture/properties/); the physical tables are [storage](/architecture/storage/).
@@ -28,7 +28,7 @@ with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck 
 **A name is unique within its placement, not across the whole fleet**
 ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): two components (or systems) may
 share a name under different parents or at different locations, and two rooms may hold their own
-same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
+same-named child; only a root (no parent) location's name and an outpost's name (also its NATS subject)
 stay fleet-wide unique. A bare-name reference that now matches more than one row is refused
 (`404`, naming the candidates, the same answer every collection gives, ADR-1134) rather than silently resolving to whichever row sorted first. **A uuid
 is the address; a dotted path is a positional lookup**
@@ -97,9 +97,9 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   unconstrained, a non-empty set is enforced on create and move. The shipped set and its parents are
   rendered from the seed on the [location types guide](/guides/admin/location-types/) rather than
   listed in two places.
-- A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
-  endpoints, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
-  first-class **owner** of its own self-health telemetry and node-owned alarms.
+- An **outpost** is the edge process (`omniglass outpost run`) that pulls work, reaches components over
+  endpoints, and ships results ([outposts](/architecture/outposts/)). It is structural because it is a
+  first-class **owner** of its own self-health telemetry and outpost-owned alarms.
 
 Where a location holds exactly one system, the two groupings coincide and the console shows them as
 one thing (ADR-0139): Conference Room 123 is its system, and its components are a drill-down inside
@@ -146,7 +146,7 @@ system -> c3
 :::design[The `global` fleet owner (ADR-0057)]
 Above the four sits a singleton **`global`** fleet owner where fleet-wide health and KPIs roll up:
 one per deployment, no FK, no built table carrying a `global` arm today (every arc CHECK admits
-exactly `component | system | location | node`). An **owner** only: not a location (the location tree
+exactly `component | system | location | outpost`). An **owner** only: not a location (the location tree
 is a forest of N unparented tops, no root) and not the [cascade](/architecture/cascade/)'s
 least-specific tier, **`platform`**
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
@@ -157,7 +157,7 @@ least-specific tier, **`platform`**
 | `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape, required |
 | `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
 | `location` | a location tree; no template (the `location_type` is the only shape-definer) |
-| `node` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
+| `outpost` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
 
 The column mechanics render from the generated schema facts:
 
@@ -188,9 +188,9 @@ The column mechanics render from the generated schema facts:
 />
 
 <SchemaTable
-  table="node"
+  table="outpost"
   notes={{
-    name: 'The address the node enrolls and heartbeats under; fixed at create, unlike a component name',
+    name: 'The address the outpost enrolls and heartbeats under; fixed at create, unlike a component name',
     last_heartbeat_at: 'Liveness, stamped by the heartbeat lane',
   }}
 />
@@ -219,16 +219,16 @@ genus**: a seeded-plus-custom taxonomy that **nests by `parent_id`** and mirrors
 OpenAVCloud AV Device Taxonomy v1.1 ([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional)): category roots, subcategory types,
 and concrete leaves, microphones subtyped by form factor (`mic` over `wireless-mic`,
 `ceiling-mic`, `boundary-mic`), on the same official/custom pattern as the other classification
-catalogs, operator-graftable at any node
+catalogs, operator-graftable at any level
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)).
 It classifies the **product** (`product.component_type_id`, required), not the component directly, so
 a component inherits its type through the product it is. The row carries the identity facts that
-genuinely span products, **inheriting down the tree with override at any node**: the naming **`stem`**
+genuinely span products, **inheriting down the tree with override at any level**: the naming **`stem`**
 (the auto-generated component name's prefix, e.g. `display-1`), **`label`**, **`icon`** (the
 console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
-**`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a node that
+**`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a type that
 states one of its own can be put back to inheriting: the patch reads an explicit `""` on `stem`,
-`abbrev`, `icon` or `label_rule` as "this node declares nothing", clearing the column to NULL
+`abbrev`, `icon` or `label_rule` as "this outpost declares nothing", clearing the column to NULL
 ([#716](https://github.com/hyperscaleav/omniglass/issues/716)). A **root**'s `stem` is the one
 exception, since there is no ancestor behind it. It is **not** a
 shape-definer: contracts, declared properties, and drivers stay on the product. The seed discipline: a
@@ -291,19 +291,19 @@ product (`component.product_id -> product.component_type_id`). See the
 
 A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) is the **coarse space genus**:
 what kind of space a system **is**. It is the system-side counterpart of `component_type` and it
-nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any
-node ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
+nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any level
+([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 The shipped tree is universal, and it is rendered from the seed rather than restated here, so a blank
 cell is a fact the row genuinely inherits rather than one somebody forgot to copy:
 
 <SeededSet kind="system_types" />
 
 The row carries the identity facts that span every space of that kind, **inheriting down the tree
-with override at any node**: the naming **`stem`** (the prefix a generated system name is built from,
+with override at any level**: the naming **`stem`** (the prefix a generated system name is built from,
 e.g. `boardroom-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
 label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
 `board` states its own stem and abbrev while taking its icon from `room`, which overrides `av`'s. A
-node that states a fact of its own goes back to inheriting by patching that field to `""`, the same
+type that states a fact of its own goes back to inheriting by patching that field to `""`, the same
 three-state sentinel `component_type` uses ([#716](https://github.com/hyperscaleav/omniglass/issues/716)).
 A **root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
 "inherit", it is "nothing", and clearing a root's stem is refused (422) exactly as creating one
@@ -366,7 +366,7 @@ arm** (every property the classifier declares, resolved to
 `coalesce(the instance's current declared row, the contract default)`, marked `from_contract`) and the
 **off-contract arm** (values set directly on the instance); an instance with no classifier set (a
 **productless** component, a **one-off** system) resolves to its off-contract arm alone, and a
-**node**, with no classifier, always does.
+**outpost**, with no classifier, always does.
 
 **One resolver serves all four owner kinds.** The pairs differ only in five identifiers (instance
 table, classifier column, contract table, contract key, arc column), held as data in an
@@ -378,7 +378,7 @@ table, classifier column, contract table, contract key, arc column), held as dat
 | `component` | `component.product_id` | `product_property` |
 | `system` | `system.standard_id` | `standard_property` |
 | `location` | `location.location_type` | `location_type_property` |
-| `node` | (none) | (none) |
+| `outpost` | (none) | (none) |
 
 Every arc is **scope-checked on the write**: setting a value outside your scope is a non-disclosing
 404.
@@ -554,7 +554,7 @@ the release owns. They now **fork** it
   keys, the tree walks, the audit trail and the URL all keep naming what they already named. The
   namespace is not an addressing concept and never reaches a caller.
 - A fork restates **facts**, never **structure**: the uuid, the name, the `official` flag and the
-  parent link stay official. On a nested registry that makes inheritance resolvable **per node**, so
+  parent link stay official. On a nested registry that makes inheritance resolvable **per tree node**, so
   forking an ancestor reaches every descendant that does not override the field, and forking a leaf
   does not cut it off from what it inherits.
 - The console reads it as three origins: **official** (shipped, untouched), **custom** (yours), and
@@ -598,7 +598,7 @@ from the dependent (`component_id`) to what it depends on (`upstream_id`), of on
 |---|---|---|---|
 | `power` | fed from the named `outlet` of the upstream | a video bar on outlet 1 of the rack's PDU | a power command on that outlet holds the bar |
 | `host` | hosted by the upstream | a touch panel paired to the bar, a line card in its chassis | a reboot of the upstream holds the dependent too |
-| `path` | reached through the upstream | a peripheral behind a gateway | while any of the upstream's gates is closed, the dependent's in-band endpoints hold the `upstream` gate reason ([nodes](/architecture/nodes/#implicit-reachability)) |
+| `path` | reached through the upstream | a peripheral behind a gateway | while any of the upstream's gates is closed, the dependent's in-band endpoints hold the `upstream` gate reason ([outposts](/architecture/outposts/#implicit-reachability)) |
 
 Each edge is checked as it is written: a `power` edge names its outlet and no other kind does, a
 component never depends on itself, one edge of a kind joins a pair once, and an edge that would
@@ -649,18 +649,18 @@ Everything observed, asserted, or set attaches to exactly one structural entity 
 **exclusive-arc**. Every sample table, plus `event`, `property`, `alarm`, and `variable`, carries:
 
 - an **`owner_kind`** enum, plus
-- the **matching typed FK** (`component_id` / `system_id` / `location_id` / `node_id`), plus
+- the **matching typed FK** (`component_id` / `system_id` / `location_id` / `outpost_id`), plus
 - a **CHECK** that exactly the column matching `owner_kind` is set.
 
-Every built CHECK admits exactly `component | system | location | node`.
+Every built CHECK admits exactly `component | system | location | outpost`.
 
 :::design[The `global` all-null arm (ADR-0057)]
 The singleton `global` owner rides the same arc as an all-null arm: none of the four owner columns set.
 :::
 
-This makes **system- and node-level samples first-class** (`health` is a `property` owned by a system,
-beside what a system calc rule derives and what a push reports for the system as a whole; a node's
-self-health is owned by the node); fleet-wide samples owned by `global` are the designed extension. A
+This makes **system- and outpost-level samples first-class** (`health` is a `property` owned by a system,
+beside what a system calc rule derives and what a push reports for the system as a whole; an outpost's
+self-health is owned by the outpost); fleet-wide samples owned by `global` are the designed extension. A
 location owns its declared properties and calculated health and no observed sample: nothing collects or pushes telemetry for a
 location ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). The **owner** gives a recorded [health](/architecture/health/) verdict its level:
 component, system, and location each own a transition series under the same `health` property name. The same
@@ -782,9 +782,9 @@ The cascade is **not** "delete everything below", because containers do not own 
 - a **location** delete is **refused by the API while occupied**; today the occupancy check counts
   only child locations (`parent_id` children), a still-placed system or component surfacing as the
   generic referenced error; the console offers re-homing first;
-- a **node** delete **re-places its tasks** (to the server or another node, or surfaces the
-  components as uncollected) and revokes the node credential
-  ([identity and access](/architecture/identity-access/)); `node.*` history is retained.
+- an **outpost** delete **re-places its tasks** (to the server or another outpost, or surfaces the
+  components as uncollected) and revokes the outpost credential
+  ([identity and access](/architecture/identity-access/)); `outpost.*` history is retained.
 
 :::
 
@@ -1045,7 +1045,7 @@ Rules resolve most-specific-first, and `NULL` at a tier means "no opinion, ask t
 `system_type` chain then the global rule for systems, and `location_type` then the global rule for
 locations. Locations have two tiers rather than three because there is no location-side counterpart
 of a product, not because one is missing. On a nested registry the rule inherits by the same
-first-non-null walk `stem` and `abbrev` follow, per node across the fork boundary
+first-non-null walk `stem` and `abbrev` follow, per tree node across the fork boundary
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
 so setting a rule on a shipped type forks that row and leaves the official one byte-identical.
 
@@ -1056,7 +1056,7 @@ a filter refused it. The keys differ per entity kind, are rendered below from th
 engine builds them from ([#729](https://github.com/hyperscaleav/omniglass/issues/729)), and every one
 of them is always present: an absent fact is the empty string, which is falsy, so `{{if .Ordinal}}`
 is how a rule adapts. The grammar is the sandbox for
-what a rule can DO: an allowlist over the parsed tree admits a closed set of node types and a closed
+what a rule can DO: an allowlist over the parsed tree admits a closed set of AST node types and a closed
 set of function names, and refuses everything else text/template offers, `printf` and variable
 declarations and `{{range}}` among them. That second half is not
 tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see

@@ -1,12 +1,12 @@
 {
   "id": "fix-a-refused-probe",
   "title": "Fix a refused probe",
-  "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
+  "description": "A touch panel's SNMP agent refused the endpoint's community, so the outpost stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
   "steps": [
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This location's system. Its touch panel fills the touch-control role, and a node collects it.",
+      "caption": "This location's system. Its touch panel fills the touch-control role, and an outpost collects it.",
       "still": "step-01.png"
     },
     {
@@ -24,7 +24,7 @@
     {
       "n": 4,
       "kind": "wait",
-      "caption": "Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The node sends no more gets, so nothing hammers it.",
+      "caption": "Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The outpost sends no more gets, so nothing hammers it.",
       "still": "step-04.png"
     },
     {
@@ -66,15 +66,15 @@
     {
       "n": 11,
       "kind": "wait",
-      "caption": "The node asks again at its next check-in, the agent answers the community, and the refusal is gone.",
+      "caption": "The outpost asks again at its next check-in, the agent answers the community, and the refusal is gone.",
       "still": "step-11.png"
     }
   ],
   "poster": "step-11.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 39.3,
-    "bytes": 695643,
-    "previewBytes": 484684
+    "seconds": 39.6,
+    "bytes": 722382,
+    "previewBytes": 507420
   }
 }

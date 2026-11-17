@@ -205,20 +205,20 @@ func TestMigrationsWriteNoSamples(t *testing.T) {
 }
 
 // TestAdmitWrite pins the pure check every path runs, beyond the class table
-// writerclass holds: a node writes only on the component its task collects
-// for, and a node-probe key only under the endpoint its task ran (never with
+// writerclass holds: an outpost writes only on the component its task collects
+// for, and an outpost-probe key only under the endpoint its task ran (never with
 // none); and a calc rule writes only a key it outputs.
 func TestAdmitWrite(t *testing.T) {
 	t.Parallel()
-	probe := keyWriterOf{class: writerclass.NodeProbe}
+	probe := keyWriterOf{class: writerclass.OutpostProbe}
 	calc := keyWriterOf{class: writerclass.Calc, rules: map[string]string{"r-1": "temp-avg"}}
 	collected := keyWriterOf{class: writerclass.Collected}
 	asRule := func(id string) KeyWriter { return calcWriter(&sampleLineage{ruleID: id, ruleName: "x", version: 1}) }
 	const compA, compB = "aaaaaaaa-0000-0000-0000-000000000001", "bbbbbbbb-0000-0000-0000-000000000002"
-	// node is a node writer as admitWrites leaves it: bound to compA, or
+	// outpost is an outpost writer as admitWrites leaves it: bound to compA, or
 	// unbound when it names no component or endpoint.
-	node := func(ep string, held bool) KeyWriter {
-		w := NodeWriter(compA, ep)
+	outpost := func(ep string, held bool) KeyWriter {
+		w := OutpostWriter(compA, ep)
 		if held {
 			w.bound = compA
 		}
@@ -234,22 +234,22 @@ func TestAdmitWrite(t *testing.T) {
 		row   keyedWrite
 		admit bool
 	}{
-		{"node on its endpoint", probe, node("ssh", true), on(compA, "tcp-connect-time", "ssh"), true},
-		{"node on another endpoint", probe, node("ssh", true), on(compA, "tcp-connect-time", "panel"), false},
-		{"node with no instance", probe, node("ssh", true), on(compA, "tcp-connect-time", ""), false},
-		{"node bound to no endpoint", probe, node("", false), on(compA, "tcp-connect-time", ""), false},
-		{"node on another component's same-named endpoint", probe, node("ssh", true), on(compB, "tcp-connect-time", "ssh"), false},
-		{"node writing for a system", collected, node("ssh", true), keyedWrite{key: "uptime", ownerKind: "system", owner: compA}, false},
+		{"outpost on its endpoint", probe, outpost("ssh", true), on(compA, "tcp-connect-time", "ssh"), true},
+		{"outpost on another endpoint", probe, outpost("ssh", true), on(compA, "tcp-connect-time", "panel"), false},
+		{"outpost with no instance", probe, outpost("ssh", true), on(compA, "tcp-connect-time", ""), false},
+		{"outpost bound to no endpoint", probe, outpost("", false), on(compA, "tcp-connect-time", ""), false},
+		{"outpost on another component's same-named endpoint", probe, outpost("ssh", true), on(compB, "tcp-connect-time", "ssh"), false},
+		{"outpost writing for a system", collected, outpost("ssh", true), keyedWrite{key: "uptime", ownerKind: "system", owner: compA}, false},
 		{"push on a probe key", probe, PushWriter(), on(compA, "tcp-connect-time", "ssh"), false},
-		{"the pin on the host key", keyWriterOf{class: writerclass.NodeProbe}, gatewayWriter(writerclass.KeyPin), on(compA, "ssh-host-key", "ssh"), true},
+		{"the pin on the host key", keyWriterOf{class: writerclass.OutpostProbe}, gatewayWriter(writerclass.KeyPin), on(compA, "ssh-host-key", "ssh"), true},
 		{"the pin on the gate", probe, gatewayWriter(writerclass.KeyPin), on(compA, "endpoint-rejection", "ssh"), false},
 		{"its own rule", calc, asRule("r-1"), keyedWrite{key: "avg-temp"}, true},
 		{"another rule", calc, asRule("r-2"), keyedWrite{key: "avg-temp"}, false},
 		{"a push on a calc key", calc, PushWriter(), keyedWrite{key: "avg-temp"}, false},
 		{"an operator on a calc key", calc, gatewayWriter(writerclass.Operator), keyedWrite{key: "avg-temp"}, true},
 		{"a rule on a collected key", collected, asRule("r-1"), keyedWrite{key: "video-input"}, false},
-		{"a driver's instanced series", collected, node("ssh", true), on(compA, "uptime", "if-3"), true},
-		{"a driver's series on another component", collected, node("ssh", true), on(compB, "uptime", "if-3"), false},
+		{"a driver's instanced series", collected, outpost("ssh", true), on(compA, "uptime", "if-3"), true},
+		{"a driver's series on another component", collected, outpost("ssh", true), on(compB, "uptime", "if-3"), false},
 		{"a command's lifecycle event by a push", keyWriterOf{class: writerclass.CommandLifecycle}, PushWriter(), on(compA, "command-issued", ""), false},
 		{"a command's lifecycle event by its command", keyWriterOf{class: writerclass.CommandLifecycle}, gatewayWriter(writerclass.Command), on(compA, "command-issued", ""), true},
 	}

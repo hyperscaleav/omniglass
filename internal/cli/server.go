@@ -20,8 +20,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
-	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -36,10 +36,10 @@ func newServerCmd(version string) *cobra.Command {
 		Use:   "server",
 		Short: "Run the control-plane server (HTTP API)",
 		Long: "Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP " +
-			"API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. " +
+			"API on OMNIGLASS_ADDR and hosts the embedded NATS bus outposts connect to on OMNIGLASS_NATS_ADDR. " +
 			"Either address may name port 0, which binds whatever free port the kernel hands out; set " +
 			"OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the " +
-			"addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). " +
+			"addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to outposts). " +
 			"A file already at that path is cleared first thing at boot, and the server removes its own at a " +
 			"graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather " +
 			"than picking one and hoping it stays free. Configured by environment; see the deployment guides.",
@@ -151,7 +151,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		bootServerIdentity(ctx, gw, log, serverComponentID, version, time.Now())
 	}
 
-	// The embedded NATS server carries the node-server protocol (worklist,
+	// The embedded NATS server carries the outpost-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
 	busSrv, err := startBus(c, gw, serverComponentID, self.rec)
@@ -161,7 +161,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	defer busSrv.Shutdown()
 	log.Info("embedded nats-server listening", "addr", busSrv.Addr().String())
 	// Unset, the advertised URL is the bus's own bound address, so a bus
-	// asked for port 0 tells nodes the port it got.
+	// asked for port 0 tells outposts the port it got.
 	natsURL := c.NatsURL
 	if natsURL == "" {
 		natsURL = busSrv.LocalURL()
@@ -174,7 +174,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	log.Info("trusted proxies", "networks", trust.String())
 	loop, err := closedloop.ParseSettings(closedloop.RawSettings{
 		Bracket: c.ClosedLoopBracket, Heartbeat: c.ClosedLoopHeartbeat, ProbeEvery: c.ClosedLoopProbeEvery,
-	}, node.DefaultHeartbeat)
+	}, outpost.DefaultHeartbeat)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}
@@ -185,12 +185,12 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	if err != nil {
 		return err
 	}
-	// The closed loop over each node with a connected simulator (#1647,
+	// The closed loop over each outpost with a connected simulator (#1647,
 	// ADR-1647): a bracket a minute (a lab's faster), read as a sliding
 	// window on the Platform health page.
 	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw, loop.Cadence), time.Now, closedloop.RingSpan, loop.Every)
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
+		Handler:           api.NewHandler(gw, api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithOutpostRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())
@@ -222,7 +222,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.
 	go self.reporter(gw, serverComponentID, c.DataDir, log, busSrv.Sampler()).Run(notifyCtx)
-	go ring.Run(notifyCtx, api.SimLoopNodes(busSrv, time.Now))
+	go ring.Run(notifyCtx, api.SimLoopOutposts(busSrv, time.Now))
 
 	errc := make(chan error, 1)
 	go func() {
@@ -289,7 +289,7 @@ func startBus(c config.Config, gw *storage.PG, componentID string, rec *platform
 // one-writer ruling to it (ADR-1100). It re-judges every event rule series a
 // retirement took rows from, so a condition a retired row raised lets go, and
 // flags every stored declaration the ruling now refuses (a driver spec or a
-// derived task emitting a key the node lane may not carry, a contract line on
+// derived task emitting a key the outpost lane may not carry, a contract line on
 // a reserved key, an event rule's event or a command type's target its writer
 // may not write). Each declaration is already inert where it would act; the
 // warning names it so an operator can mend it. A failure is logged, never

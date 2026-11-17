@@ -36,7 +36,7 @@ import (
 //
 // `ts` LEADS, and it is a wall-clock value. That is deliberate and cannot be
 // swapped for the sequence: the observed lane accepts a caller-supplied `ts`
-// (a node backfilling, a device reporting a reading it took a minute ago), and
+// (an outpost backfilling, a device reporting a reading it took a minute ago), and
 // a late-arriving older sample must not become the current value merely because
 // it was written last. So the series is ordered by the value's own time, and
 // insertion order is only the tiebreak. The consequence, stated so it is not

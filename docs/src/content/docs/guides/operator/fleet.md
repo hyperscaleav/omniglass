@@ -395,15 +395,15 @@ on its label's tooltip.
 transport answers the service, the login answers the credential; each rung teaches itself on
 hover), a held session's state where the endpoint holds one, with why and **Retry** when it was
 rejected, and both keys with **Trust this key** when what changed was the component's host key
-([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
+([held sessions](/guides/operator/collection/#held-sessions)), the outpost, its state, and when
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
-endpoint that never stopped answering) and not a time the node wrote on a sample. Every
+endpoint that never stopped answering) and not a time the outpost wrote on a sample. Every
 endpoint whose transport can probe has a reachability verdict, a driver's included: an SNMP
 endpoint's is its standard get answered, and a udp endpoint's its driver's request answered (a bare
 udp or snmp endpoint has nothing to send, so it needs a driver). A stale sample under a
-healthy node points at the component or the network path, not at collection. An offline node
-says nothing about the component. This card is the one place a node appears on these pages.
+healthy outpost points at the component or the network path, not at collection. An offline outpost
+says nothing about the component. This card is the one place an outpost appears on these pages.
 
 **Identities** appears only on a component that speaks for many owners, a **conduit** (a cloud
 service reporting every room it runs, a controller fronting many components). Each value it reports
@@ -425,14 +425,14 @@ observed, with the conduit named as its source. The picker offers only owners yo
 the button shows only when you may update the conduit, because a binding writes onto both of its
 ends and costs update on both. When the server refuses, the row says why in plain words: **Not
 allowed** (a permission one end lacks, named), **Not found** (the owner is gone, or outside what you
-can see) or **Not a valid binding** (the rules refuse it, such as a location or a node as the owner).
+can see) or **Not a valid binding** (the rules refuse it, such as a location or an outpost as the owner).
 The X on a bound row unbinds it after a confirm, and its next value waits under Heard, not bound
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
-with the verdict they make every 5 seconds, the node behind Collection every 10, so an endpoint you
+with the verdict they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
 just added, or a component going down, shows up without a reload. It reads only this component and
-its node, never the whole fleet, and stops while the browser tab is hidden.
+its outpost, never the whole fleet, and stops while the browser tab is hidden.
 
 ## Scope
 

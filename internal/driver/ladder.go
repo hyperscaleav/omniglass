@@ -147,7 +147,7 @@ func (s *Spec) validateLadder() error {
 		if req == nil || req.Empty() {
 			return fmt.Errorf("driver: a request transport rung names its request (ladder.transport.request)")
 		}
-		// The node runs a declared request rung as a line over tcp or a
+		// The outpost runs a declared request rung as a line over tcp or a
 		// datagram over udp (#1037), and as a get over snmp (#821).
 		if (s.Transport != "tcp" && s.Transport != "udp") || req.Line == "" {
 			return fmt.Errorf("driver: a request rung runs as a line over tcp or a datagram over udp, or as a get over snmp")

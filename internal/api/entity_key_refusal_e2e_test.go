@@ -50,7 +50,7 @@ func TestIllegalKeyIsAlways422(t *testing.T) {
 		"/standards":      func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/location-types": func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/products":       func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
-		"/nodes":          func(s string) map[string]any { return map[string]any{"name": s} },
+		"/outposts":       func(s string) map[string]any { return map[string]any{"name": s} },
 		"/components":     func(s string) map[string]any { return map[string]any{"name": s} },
 		"/systems":        func(s string) map[string]any { return map[string]any{"name": s} },
 		"/locations":      func(s string) map[string]any { return map[string]any{"name": s, "location_type": "room"} },

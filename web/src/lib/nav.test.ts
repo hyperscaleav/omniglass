@@ -50,21 +50,21 @@ describe("filterNav", () => {
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
-  // Nodes and Platform health (#1644) are administration, so both doors sit
-  // under Admin (#1767) behind node:read: enrolling a node is an admin's job,
-  // and Status's rows are the node list. Platform health keeps its page name;
+  // Outposts and Platform health (#1644) are administration, so both doors sit
+  // under Admin (#1767) behind outpost:read: enrolling an outpost is an admin's job,
+  // and Status's rows are the outpost list. Platform health keeps its page name;
   // only the door is one word.
-  it("keeps Nodes and Status under Admin, and only for a node:read holder", () => {
-    expect(rail([">"])).not.toContain("Nodes");
-    expect(section("Admin", ["node:read"])).toContain("Nodes");
-    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Nodes");
-    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]);
-    expect(sectionLabel("/web/nodes")).toBe("Nodes");
+  it("keeps Outposts and Status under Admin, and only for an outpost:read holder", () => {
+    expect(rail([">"])).not.toContain("Outposts");
+    expect(section("Admin", ["outpost:read"])).toContain("Outposts");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Outposts");
+    expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]);
+    expect(sectionLabel("/web/outposts")).toBe("Outposts");
     expect(rail([">"])).not.toContain("Status");
     expect(rail([">"])).not.toContain("Platform health");
-    expect(section("Admin", ["node:read"])).toContain("Status");
+    expect(section("Admin", ["outpost:read"])).toContain("Status");
     expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
-    expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
+    expect(routeTokens("/web/platform")).toEqual(["outpost", "read"]);
     expect(sectionLabel("/web/platform")).toBe("Status");
   });
 
@@ -75,11 +75,11 @@ describe("filterNav", () => {
     expect(labels.filter((l) => /\s/.test(l))).toEqual([]);
   });
 
-  it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Nodes", () => {
+  it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Outposts", () => {
     const out = filterNav(navItems, (tokens) => !["location", "system", "component"].includes(tokens[0]));
     expect(out.map((i) => i.label)).not.toContain("Explore");
-    // gated on node:read, which this filter allows
-    expect(out.find((i) => i.label === "Admin")!.children!.map((c) => c.label)).toContain("Nodes");
+    // gated on outpost:read, which this filter allows
+    expect(out.find((i) => i.label === "Admin")!.children!.map((c) => c.label)).toContain("Outposts");
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -225,11 +225,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Nodes", "Status", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Outposts", "Status", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Nodes, Status and the ungated Settings under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Nodes", "Status", "Settings"]);
+  it("shows a bare *:read viewer only Outposts, Status and the ungated Settings under Admin", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status", "Settings"]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
@@ -237,7 +237,7 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
-    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
+    expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]); // outpost directory is live, gated on outpost:read
   });
 });
 
@@ -361,7 +361,7 @@ describe("the fleet rail entry (#633)", () => {
   it("stays for any fleet-kind reader, like the sidebar promises (#798)", () => {
     expect(rail(["location:read"])).toContain("Explore");
     expect(rail(["component:read"])).toContain("Explore");
-    expect(rail(["node:read"])).not.toContain("Explore");
+    expect(rail(["outpost:read"])).not.toContain("Explore");
   });
 });
 
@@ -374,7 +374,7 @@ describe("the fleet any-of gate", () => {
     for (const r of ["location", "system", "component"]) {
       expect(routeAllowed("/web/explore", (t) => t[0] === r), r).toBe(true);
     }
-    expect(routeAllowed("/web/explore", (t) => t[0] === "node")).toBe(false);
+    expect(routeAllowed("/web/explore", (t) => t[0] === "outpost")).toBe(false);
   });
 
   it("keeps simple gates exact through the same door", () => {
@@ -387,7 +387,7 @@ describe("the fleet any-of gate", () => {
 
   it("keeps Explore in the rail for a system-only reader and drops it for neither", () => {
     expect(filterNav(navItems, (t) => t[0] === "system").map((i) => i.label)).toContain("Explore");
-    expect(filterNav(navItems, (t) => t[0] === "node").map((i) => i.label)).not.toContain("Explore");
+    expect(filterNav(navItems, (t) => t[0] === "outpost").map((i) => i.label)).not.toContain("Explore");
   });
 });
 

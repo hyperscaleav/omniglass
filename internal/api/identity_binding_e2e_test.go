@@ -170,13 +170,13 @@ func TestIdentityBindingNeedsTheConduitEnd(t *testing.T) {
 	}
 }
 
-// A location or a node is no owner (422), and the match key must be registered
+// A location or an outpost is no owner (422), and the match key must be registered
 // (422).
-func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
+func TestIdentityBindingRefusesPlacesOutpostsAndUnknownKeys(t *testing.T) {
 	t.Parallel()
 	f := newBindingE2E(t)
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
-	for _, kind := range []string{"location", "node"} {
+	for _, kind := range []string{"location", "outpost"} {
 		if st, raw := f.c.send(f.owner, http.MethodPut, path, ownerBody(kind, "anything")); st != http.StatusUnprocessableEntity {
 			t.Errorf("owner kind %s = %d %s, want 422", kind, st, raw)
 		}

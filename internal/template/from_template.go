@@ -19,7 +19,7 @@ import (
 
 // ErrInvalid is a request or a template the fleet cannot create from: a
 // fill no product of the right type answers, a location type the fleet lacks or
-// refuses, an attach with no node. Its message names what to fix.
+// refuses, an attach with no outpost. Its message names what to fix.
 var ErrInvalid = errors.New("template: cannot create from the template")
 
 func invalid(format string, args ...any) error {
@@ -37,9 +37,9 @@ type ComponentRequest struct {
 	Name     string
 	Label    string
 	Location *string
-	// Node places the endpoint; required when Inputs carries an address.
-	Node   string
-	Inputs Inputs
+	// Outpost places the endpoint; required when Inputs carries an address.
+	Outpost string
+	Inputs  Inputs
 }
 
 // PlannedPiece reports one component a plan creates: the role it fills (in
@@ -53,7 +53,7 @@ type PlannedPiece struct {
 
 // componentPiece is the plan of one component from a component template or
 // a bare product, attached when the supplied inputs carry an address.
-func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTemplate, product string, inputs Inputs, node string) (storage.PlannedComponent, PlannedPiece, error) {
+func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTemplate, product string, inputs Inputs, outpost string) (storage.PlannedComponent, PlannedPiece, error) {
 	var preset map[string]string
 	var values Values
 	driver := ""
@@ -76,8 +76,8 @@ func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTem
 		}
 		return pc, piece, nil
 	}
-	if node == "" {
-		return pc, piece, invalid("attaching a %s needs the node its endpoint is placed on", product)
+	if outpost == "" {
+		return pc, piece, invalid("attaching a %s needs the outpost its endpoint is placed on", product)
 	}
 	if driver == "" {
 		prod, err := gw.GetProduct(ctx, product)
@@ -99,8 +99,8 @@ func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTem
 	for k, v := range inputs {
 		merged[k] = v
 	}
-	n := node
-	pc.Endpoints = []storage.EndpointSpec{{Driver: &driver, Inputs: merged, Node: &n}}
+	n := outpost
+	pc.Endpoints = []storage.EndpointSpec{{Driver: &driver, Inputs: merged, Outpost: &n}}
 	piece.Attached = true
 	return pc, piece, nil
 }
@@ -112,7 +112,7 @@ func PlanComponent(ctx context.Context, gw storage.Gateway, c *Catalog, req Comp
 	if err != nil {
 		return storage.Plan{}, PlannedPiece{}, err
 	}
-	pc, piece, err := componentPiece(ctx, gw, c, t.Name, "", req.Inputs, req.Node)
+	pc, piece, err := componentPiece(ctx, gw, c, t.Name, "", req.Inputs, req.Outpost)
 	if err != nil {
 		return storage.Plan{}, piece, err
 	}
@@ -130,7 +130,7 @@ type SystemRequest struct {
 	Name     string
 	Label    string
 	Location *string
-	Node     string
+	Outpost  string
 	// Attach is the inputs per role, one entry per component of the role
 	// in order; a component with none lands unattached.
 	Attach map[string][]Inputs
@@ -154,7 +154,7 @@ func PlanSystem(ctx context.Context, gw storage.Gateway, c *Catalog, req SystemR
 	if err != nil {
 		return SystemPlan{}, err
 	}
-	ps, out, err := plannedSystem(ctx, gw, c, t, req.Standard, req.Attach, req.Node)
+	ps, out, err := plannedSystem(ctx, gw, c, t, req.Standard, req.Attach, req.Outpost)
 	if err != nil {
 		return out, err
 	}
@@ -173,7 +173,7 @@ func PlanSystem(ctx context.Context, gw storage.Gateway, c *Catalog, req SystemR
 // (resolving whether it is created from its template), the planner's fill of each role, and the
 // components. It sets everything but the system's own name, label and
 // location.
-func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Template, standard string, attach map[string][]Inputs, node string) (storage.PlannedSystem, SystemPlan, error) {
+func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Template, standard string, attach map[string][]Inputs, outpost string) (storage.PlannedSystem, SystemPlan, error) {
 	out := SystemPlan{Standard: standard}
 	var roles []systemplan.Role
 	if out.Standard == "" {
@@ -269,7 +269,7 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 			if i < len(attach[f.Role]) {
 				in = attach[f.Role][i]
 			}
-			pc, piece, err := componentPiece(ctx, gw, c, fill.Component, fill.Product, in, node)
+			pc, piece, err := componentPiece(ctx, gw, c, fill.Component, fill.Product, in, outpost)
 			if err != nil {
 				return storage.PlannedSystem{}, out, err
 			}

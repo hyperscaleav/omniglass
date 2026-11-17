@@ -14,18 +14,18 @@ import (
 // A batch id already landed counts one more delivery on its receipt and lands
 // nothing: the count is what a read reports as deduplicated. A Term receipt
 // (#1691) is not a landing: this delivery replaces it, as the batch's first,
-// with its own ledger, node loss and landing time. A batch with a ledger
-// records the ledger on it, and the node's own loss account when the node
+// with its own ledger, outpost loss and landing time. A batch with a ledger
+// records the ledger on it, and the outpost's own loss account when the outpost
 // lost anything (#1692); one without (a publisher that stamps none) leaves
-// those columns empty. A pushed batch's ledger has no node: the push lane's
+// those columns empty. A pushed batch's ledger has no outpost: the push lane's
 // boot is the server's own (#1696).
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
-	var node, boot, nodeLoss *string
+	var outpost, boot, outpostLoss *string
 	var seq, resolved *int64
 	var ledger []*int64
 	var minted any
-	if b.Node != "" {
-		node = &b.Node
+	if b.Outpost != "" {
+		outpost = &b.Outpost
 	}
 	if l := b.Ledger; l != nil {
 		s, r := int64(l.Seq), int64(l.Resolved)
@@ -33,13 +33,13 @@ func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, e
 		if !l.Loss.Empty() {
 			raw, err := json.Marshal(l.Loss)
 			if err != nil {
-				return false, fmt.Errorf("storage: land batch %s: receipt node loss: %w", b.BatchID, err)
+				return false, fmt.Errorf("storage: land batch %s: receipt outpost loss: %w", b.BatchID, err)
 			}
 			n := string(raw)
-			nodeLoss = &n
+			outpostLoss = &n
 		}
 	}
-	err = tx.QueryRow(ctx, insertReceiptSQL, b.BatchID, node, boot, seq, minted, resolved, ledger, nodeLoss).Scan(&first)
+	err = tx.QueryRow(ctx, insertReceiptSQL, b.BatchID, outpost, boot, seq, minted, resolved, ledger, outpostLoss).Scan(&first)
 	if err != nil {
 		return false, fmt.Errorf("storage: land batch %s: receipt: %w", b.BatchID, err)
 	}
@@ -49,17 +49,17 @@ func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, e
 // insertReceiptSQL is insertReceipt's statement. Only a landing leaves
 // deliveries at 1 (an insert, or the replace of a Term receipt), so that is
 // the first flag; a redelivery counts on.
-const insertReceiptSQL = `insert into telemetry_receipt as r (batch_id, node, boot, seq, minted, resolved, ledger, node_loss)
+const insertReceiptSQL = `insert into telemetry_receipt as r (batch_id, outpost, boot, seq, minted, resolved, ledger, outpost_loss)
 	values ($1, $2, $3, $4, $5, $6, $7::bigint[], $8::jsonb)
 	on conflict (batch_id) do update set
 		deliveries = case when r.termed then 1 else r.deliveries + 1 end,
-		node = case when r.termed then excluded.node else r.node end,
+		outpost = case when r.termed then excluded.outpost else r.outpost end,
 		boot = case when r.termed then excluded.boot else r.boot end,
 		seq = case when r.termed then excluded.seq else r.seq end,
 		minted = case when r.termed then excluded.minted else r.minted end,
 		resolved = case when r.termed then excluded.resolved else r.resolved end,
 		ledger = case when r.termed then excluded.ledger else r.ledger end,
-		node_loss = case when r.termed then excluded.node_loss else r.node_loss end,
+		outpost_loss = case when r.termed then excluded.outpost_loss else r.outpost_loss end,
 		landed_at = case when r.termed then excluded.landed_at else r.landed_at end,
 		outcome = case when r.termed then null else r.outcome end,
 		termed = false
@@ -82,7 +82,7 @@ func recordBatchOutcome(ctx context.Context, tx pgx.Tx, batchID string, t delive
 // outcome is the batch's items by kind and outcome as the committed pass
 // landed them: what the consumer counted (Tally), every live group's rows
 // stored (its properties less the coalesced ones), every refused group's
-// rows refused-write, and the node's self-logs stored. groups is every group
+// rows refused-write, and the outpost's self-logs stored. groups is every group
 // the pass walked, so a refusal names the rows it dropped.
 func (b IngestBatch) outcome(groups, live []landGroup, refused []GroupRefusal, coalesced int) delivery.Tally {
 	var t delivery.Tally
@@ -100,11 +100,11 @@ func (b IngestBatch) outcome(groups, live []landGroup, refused []GroupRefusal, c
 	for _, r := range refused {
 		if g, ok := byIndex[r.Index]; ok {
 			t.Add(delivery.Property, delivery.RefusedWrite, tallyGroup(&t, g, delivery.RefusedWrite))
-		} else if r.Index == NodeSelfIndex && b.NodeSelf != nil {
-			t.Add(delivery.Metric, delivery.RefusedWrite, len(b.NodeSelf.Metrics))
+		} else if r.Index == OutpostSelfIndex && b.OutpostSelf != nil {
+			t.Add(delivery.Metric, delivery.RefusedWrite, len(b.OutpostSelf.Metrics))
 		}
 	}
-	t.Add(delivery.Log, delivery.Stored, len(b.NodeLogs))
+	t.Add(delivery.Log, delivery.Stored, len(b.OutpostLogs))
 	return t
 }
 

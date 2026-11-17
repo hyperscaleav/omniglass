@@ -60,8 +60,8 @@
 //
 // Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
 // lab's server and an owner token are in the CLI's env; the lab's container
-// logs are files under /stack/logs/ (server.log, and node.log, which carries
-// the node's in-process simulator too); and
+// logs are files under /stack/logs/ (server.log, and outpost.log, which carries
+// the outpost's in-process simulator too); and
 // demo_hush '<code>' runs code unseen, demo_until <seconds> '<code>' retries it
 // until it succeeds, each erasing its own command line, so a hidden block
 // leaves the screen as it found it.

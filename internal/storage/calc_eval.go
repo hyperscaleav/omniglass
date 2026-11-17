@@ -772,7 +772,7 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 	}
 	if in.Lane == rules.LaneMetric {
 		// Each instance's newest observed or calculated sample, across the
-		// instance's series (one per provenance, source and collecting node).
+		// instance's series (one per provenance, source and collecting outpost).
 		only := ""
 		if aggregateOnly {
 			only = `and s.instance = ''`

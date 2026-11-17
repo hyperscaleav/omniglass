@@ -732,9 +732,9 @@ func TestResolveStaffsEveryRoleWithItsProduct(t *testing.T) {
 	}
 }
 
-// Each site's node is named for the site, so the plan's every site has a
-// node of its own and two sites never share one.
-func TestSiteNodeIsNamedForItsSite(t *testing.T) {
+// Each site's outpost is named for the site, so the plan's every site has a
+// outpost of its own and two sites never share one.
+func TestSiteOutpostIsNamedForItsSite(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 1000)
 	if err != nil {
@@ -742,14 +742,14 @@ func TestSiteNodeIsNamedForItsSite(t *testing.T) {
 	}
 	seen := map[string]string{}
 	for _, s := range p.Sites {
-		n := SiteNode(s.Name)
+		n := SiteOutpost(s.Name)
 		if prev, ok := seen[n]; ok {
-			t.Fatalf("sites %s and %s share the node %s", prev, s.Name, n)
+			t.Fatalf("sites %s and %s share the outpost %s", prev, s.Name, n)
 		}
 		seen[n] = s.Name
 	}
-	if got := SiteNode("regional-01"); got != "edge-regional-01" {
-		t.Fatalf("SiteNode(regional-01) = %q, want edge-regional-01", got)
+	if got := SiteOutpost("regional-01"); got != "edge-regional-01" {
+		t.Fatalf("SiteOutpost(regional-01) = %q, want edge-regional-01", got)
 	}
 }
 

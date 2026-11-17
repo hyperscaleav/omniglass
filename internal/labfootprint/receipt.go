@@ -8,7 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 )
 
 // maxEndpointWindow is the longest window the receipt count can read: the
@@ -16,17 +16,17 @@ import (
 // and a window that long would lose its earliest receipts to the prune.
 const maxEndpointWindow = 23 * time.Hour
 
-// receiptCountQuery counts one node's telemetry receipts around the window
+// receiptCountQuery counts one outpost's telemetry receipts around the window
 // [t0, t1], each read off the database's clock: every receipt landed from t0
 // minus the margin, and of those, how many landed before t0, how many from
 // t0 until the lanes drained past the start read (the backlog of batches the
 // bus acknowledged before it, stopped at t1), and how many after t1. A
-// receipt's batch id is the subject the node published on and its message
-// id, so the node's prefix is its subject and a space; starts_with keeps a
-// node name's own characters literal. A Term receipt (#1691) landed
+// receipt's batch id is the subject the outpost published on and its message
+// id, so the outpost's prefix is its subject and a space; starts_with keeps a
+// outpost name's own characters literal. A Term receipt (#1691) landed
 // nothing, so it never counts.
-func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
-	prefix := collection.TelemetrySubject(nodeName) + " "
+func receiptCountQuery(outpostName string, t0, drained, t1 time.Time) string {
+	prefix := collection.TelemetrySubject(outpostName) + " "
 	return fmt.Sprintf(`select count(*),
 		count(*) filter (where landed_at < to_timestamp(%[2]s)),
 		count(*) filter (where landed_at >= to_timestamp(%[2]s) and landed_at < to_timestamp(%[3]s)
@@ -54,38 +54,38 @@ func parseReceiptCount(out string) (closedloop.ReceiptCount, error) {
 	return closedloop.ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
 }
 
-// liveWindow is how long before a drain's time a node's last heartbeat still
-// counts it live: three of the default 30 s heartbeats, so a node whose next
-// heartbeat is not due yet is waited for, while a node silent for longer is
+// liveWindow is how long before a drain's time an outpost's last heartbeat still
+// counts it live: three of the default 30 s heartbeats, so an outpost whose next
+// heartbeat is not due yet is waited for, while an outpost silent for longer is
 // not.
-const liveWindow = 3 * node.DefaultHeartbeat
+const liveWindow = 3 * outpost.DefaultHeartbeat
 
 // drainedQuery reads whether the ingest lanes have drained past at, and the
 // database's clock. Each lane lands its batches one at a time in the order
 // the stream stored them, a redelivery included (MaxAckPending 1 in
-// internal/bus), and a node's batches all share one lane (ADR-1896), so once
-// a node's sample probed after at has landed, every batch of that node's
-// lane the bus acknowledged before at has landed or been refused. One node's
+// internal/bus), and an outpost's batches all share one lane (ADR-1896), so once
+// an outpost's sample probed after at has landed, every batch of that outpost's
+// lane the bus acknowledged before at has landed or been refused. One outpost's
 // sample says nothing of another lane, so the lanes have drained once every
-// live node that collects has landed one: live is a heartbeat within live
+// live outpost that collects has landed one: live is a heartbeat within live
 // before at, read off at rather than the clock so the set holds still while
 // the drain is polled, and a heartbeat reaches the server outside the lanes,
-// so a backlog does not hide a node, while a node silent for longer is not
-// waited for. A live node that collects but lands nothing holds the drain
+// so a backlog does not hide an outpost, while an outpost silent for longer is not
+// waited for. A live outpost that collects but lands nothing holds the drain
 // until its bound, which fails the measure rather than reading it short. A
-// node whose latest worklist is empty runs no task and so lands no sample: a
-// node refused its first worklist heartbeats and reports a worklist of 0
+// outpost whose latest worklist is empty runs no task and so lands no sample: a
+// outpost refused its first worklist heartbeats and reports a worklist of 0
 // while it waits (ADR-1882), so it is passed over, and the measure goes on to
-// read its pull loss (#2008); a node that never reported one is waited for.
-// Only a node's own samples count: a push or a webhook count the server
+// read its pull loss (#2008); an outpost that never reported one is waited for.
+// Only an outpost's own samples count: a push or a webhook count the server
 // writes outside the lanes says nothing of them, and a sample stamped past
-// the database's clock is a node's clock running ahead. No live node that
+// the database's clock is an outpost's clock running ahead. No live outpost that
 // collects reads as not drained.
 func drainedQuery(at time.Time, live time.Duration) string {
 	return fmt.Sprintf(`with live as (
-			select n.principal_id from node n
+			select n.principal_id from outpost n
 			where n.last_heartbeat_at > to_timestamp(%[2]s)
-				and exists (select 1 from metric_series s where s.collector_node_id = n.principal_id)
+				and exists (select 1 from metric_series s where s.collector_outpost_id = n.principal_id)
 				and coalesce((select m.value <> 0 from metric m
 					join metric_series s on s.id = m.series_id
 					join metric_type mt on mt.id = s.metric_type_id
@@ -94,7 +94,7 @@ func drainedQuery(at time.Time, live time.Duration) string {
 		select case when exists (select 1 from live) and not exists (
 			select 1 from live l where not exists (
 				select 1 from metric_series s
-				where s.collector_node_id = l.principal_id and exists (
+				where s.collector_outpost_id = l.principal_id and exists (
 					select 1 from metric m
 					where m.series_id = s.id and m.source_rule is null
 						and m.ts > to_timestamp(%[1]s) and m.ts <= clock_timestamp())))

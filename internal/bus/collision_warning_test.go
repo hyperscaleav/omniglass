@@ -115,10 +115,10 @@ func TestTheConsumerLogsACollisionOnceAcrossBatches(t *testing.T) {
 	}}
 	owner := &storage.TaskOwner{ComponentID: "c-1"}
 	for i := 0; i < 100; i++ {
-		ev := &ogv1.TelemetryBatch{TaskId: "t-1", NodeId: "node-a",
+		ev := &ogv1.TelemetryBatch{TaskId: "t-1", OutpostId: "outpost-a",
 			Metrics: []*ogv1.MetricSample{{Name: "volume", Value: float64(i)}}}
 		if err := s.land(context.Background(), "", ev, ingestBinding{SampleOwner: owner, Arc: componentArc(*owner),
-			Writer: storage.NodeWriter(owner.ComponentID, "")}); err != nil {
+			Writer: storage.OutpostWriter(owner.ComponentID, "")}); err != nil {
 			t.Fatalf("batch %d: %v", i, err)
 		}
 	}

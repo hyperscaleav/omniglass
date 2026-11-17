@@ -21,7 +21,7 @@ import (
 // The session's auth layer on the server side (#1049): the worklist carries
 // the driver's session block and the endpoint's revision, and an operator's
 // :retry moves the revision (which is what wakes a rejected session on the
-// node) and is audited. Skipped under -short.
+// outpost) and is audited. Skipped under -short.
 
 // loginLineSpec is a line protocol behind a password prompt: a login dialog
 // over tcp, its failure line terminal.
@@ -74,8 +74,8 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "panel-login", SecretType: "basic-auth", OwnerKind: "platform",
@@ -86,9 +86,9 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "panel-login", Label: "Panel Login", Version: "1.0.0", Spec: []byte(loginLineSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "panel-1", "panel-login", "edge-1"
+	comp, drv, outpost := "panel-1", "panel-login", "edge-1"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs:     map[string]string{"host": "10.20.4.41", "login": "panel-login"},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -98,7 +98,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 
 	driverTask := func() storage.WorklistTask {
 		t.Helper()
-		wl, err := gw.NodeWorklist(ctx, "edge-1")
+		wl, err := gw.OutpostWorklist(ctx, "edge-1")
 		if err != nil {
 			t.Fatalf("worklist: %v", err)
 		}
@@ -117,7 +117,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if first.Secrets["login"]["password"] != "newtron" {
 		t.Fatalf("the login's credential was not delivered: %v", first.Secrets)
 	}
-	// The node masks a task's secret-marked fields out of what it collects; a
+	// The outpost masks a task's secret-marked fields out of what it collects; a
 	// field its type does not mark secret (the username) is not masked.
 	if len(first.Mask) != 1 || first.Mask[0] != "newtron" {
 		t.Fatalf("the task's mask = %q, want the password alone", first.Mask)
@@ -153,7 +153,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	}
 	// Every task of the endpoint (its poll and its reachability probe) is
 	// judged against one fingerprint, which the retry moved.
-	wl, err := gw.NodeWorklist(ctx, "edge-1")
+	wl, err := gw.OutpostWorklist(ctx, "edge-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 		t.Fatalf("audit rows for the retry = %d, want 1", n)
 	}
 
-	// A session-only driver's command delivery says so: the node rides the
+	// A session-only driver's command delivery says so: the outpost rides the
 	// held session or fails, never a throwaway connection that would skip
 	// the login.
 	_, hash, prefix, err := auth.NewBearerToken()
@@ -194,7 +194,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if _, err := gw.IssueCommand(ctx, actor, "component", "panel-1", "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	got, err := gw.PendingNodeCommands(ctx, "edge-1")
+	got, err := gw.PendingOutpostCommands(ctx, "edge-1")
 	if err != nil || len(got) != 1 {
 		t.Fatalf("pending = %+v, %v", got, err)
 	}
@@ -203,7 +203,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	}
 }
 
-// Review of the fingerprint slice, finding 2: a host key the node trusted on
+// Review of the fingerprint slice, finding 2: a host key the outpost trusted on
 // first use (the observed ssh-host-key) is a learned fact, not an input the
 // operator set, so it must not move the fingerprint (that would recycle a
 // healthy session once, and lift a gate held under the first fingerprint).
@@ -223,21 +223,21 @@ func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	comp, node := "codec-1", "edge-k"
+	comp, outpost := "codec-1", "edge-k"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &node,
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"10.0.0.9:22"}`)}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fp := func() (string, string) {
 		t.Helper()
-		wl, err := gw.NodeWorklist(ctx, node)
+		wl, err := gw.OutpostWorklist(ctx, outpost)
 		if err != nil || len(wl.Tasks) == 0 {
 			t.Fatalf("worklist: %v %+v", err, wl)
 		}
@@ -297,14 +297,14 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	comp, node := "codec-2", "edge-t"
+	comp, outpost := "codec-2", "edge-t"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &node,
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"10.0.0.10:22"}`)}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -312,14 +312,14 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 	first, shown, now := "SHA256:"+strings.Repeat("F", 43), "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
 	observe := func(key, value string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(comp, ep.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: key,
+		if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter(comp, ep.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: key,
 			Instance: ep.Name, Value: value, Source: "ssh", TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	task := func() storage.WorklistTask {
 		t.Helper()
-		wl, err := gw.NodeWorklist(ctx, node)
+		wl, err := gw.OutpostWorklist(ctx, outpost)
 		if err != nil || len(wl.Tasks) == 0 {
 			t.Fatalf("worklist: %v %+v", err, wl)
 		}
@@ -334,16 +334,16 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 		return n
 	}
 
-	// The node trusted the first key, then the component offered another: the
+	// The outpost trusted the first key, then the component offered another: the
 	// console showed `shown`. Before the operator confirmed, the component
-	// changed again and the node published the gate naming `now`.
+	// changed again and the outpost published the gate naming `now`.
 	observe("ssh-host-key", first)
 	observe("endpoint-rejection", "responsive host-key "+task().Fingerprint+" "+first+" "+now)
 	before := task()
 	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, storage.RetryPin{HostKey: shown}, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
 		t.Fatalf("trusting a key the component no longer offers = %v, want stale", err)
 	} else if !strings.Contains(err.Error(), now) || !strings.Contains(err.Error(), "on record") || !strings.Contains(err.Error(), "retry the endpoint without a host key") {
-		// The gate is the node's last word: a gated node dials no more, so
+		// The gate is the outpost's last word: a gated outpost dials no more, so
 		// the component may have moved on since (review of #1078). The
 		// refusal says what the record names and how to read the key again,
 		// never that the component offers it now.

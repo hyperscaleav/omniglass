@@ -75,8 +75,8 @@ func newInstFixture(t *testing.T) *instFixture {
 			t.Fatalf("create %s: %v", l.Name, err)
 		}
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	return f
 }
@@ -142,9 +142,9 @@ func TestCreateComponentFromTemplateAPI(t *testing.T) {
 		t.Fatalf("component create audit rows naming the template = %d, want 1", n)
 	}
 
-	// With an address and a node it attaches through the driver, its preset under the inputs.
+	// With an address and an outpost it attaches through the driver, its preset under the inputs.
 	if err := json.Unmarshal(f.c.do(f.owner, http.MethodPost, "/components:createFromTemplate",
-		map[string]any{"template": "newtron-panel-7", "location": "hq", "node": "edge-1", "inputs": map[string]string{"host": "10.20.0.7"}}, http.StatusCreated), &got); err != nil {
+		map[string]any{"template": "newtron-panel-7", "location": "hq", "outpost": "edge-1", "inputs": map[string]string{"host": "10.20.0.7"}}, http.StatusCreated), &got); err != nil {
 		t.Fatal(err)
 	}
 	if !got.Attached {
@@ -162,11 +162,11 @@ func TestCreateComponentFromTemplateAPI(t *testing.T) {
 	// A secret reference the caller cannot use is refused as attach refuses it, and nothing lands.
 	before := f.count(`select count(*) from component`)
 	detail := string(f.c.do(f.owner, http.MethodPost, "/components:createFromTemplate",
-		map[string]any{"template": "boreal-edge-55", "location": "hq", "node": "edge-1", "inputs": map[string]string{"host": "10.20.0.8", "community": "nobody-has-this"}}, http.StatusUnprocessableEntity))
+		map[string]any{"template": "boreal-edge-55", "location": "hq", "outpost": "edge-1", "inputs": map[string]string{"host": "10.20.0.8", "community": "nobody-has-this"}}, http.StatusUnprocessableEntity))
 	if !strings.Contains(detail, "does not exist or is not yours to use") {
 		t.Fatalf("secret refusal = %s", detail)
 	}
-	// Inputs with no address, and an attach with no node, are 422s.
+	// Inputs with no address, and an attach with no outpost, are 422s.
 	f.c.do(f.owner, http.MethodPost, "/components:createFromTemplate", map[string]any{"template": "newtron-panel-7", "location": "hq", "inputs": map[string]string{"port": "1"}}, http.StatusUnprocessableEntity)
 	f.c.do(f.owner, http.MethodPost, "/components:createFromTemplate", map[string]any{"template": "newtron-panel-7", "location": "hq", "inputs": map[string]string{"host": "10.20.0.9"}}, http.StatusUnprocessableEntity)
 	f.c.do(f.owner, http.MethodPost, "/components:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusNotFound)
@@ -213,7 +213,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	// A fresh fleet holds the boot seed's platform system and edge-1's platform
 	// component (#1625), and nothing else.
 	if n := f.count(`select count(*) from system where name <> 'platform'`) + f.count(`select count(*) from standard`) +
-		f.count(`select count(*) from component where id not in (select platform_component_id from node where platform_component_id is not null)`); n != 0 {
+		f.count(`select count(*) from component where id not in (select platform_component_id from outpost where platform_component_id is not null)`); n != 0 {
 		t.Fatalf("a refused instantiate left %d rows", n)
 	}
 
@@ -221,7 +221,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	// parent forked, a component per role, one attached.
 	var got out
 	if err := json.Unmarshal(f.c.do(f.owner, http.MethodPost, "/systems:createFromTemplate", map[string]any{
-		"template": "mr55-system", "location": "hq", "node": "edge-1",
+		"template": "mr55-system", "location": "hq", "outpost": "edge-1",
 		"attach": map[string][]map[string]string{"touch-control": {{"host": "10.30.0.5"}}},
 	}, http.StatusCreated), &got); err != nil {
 		t.Fatal(err)

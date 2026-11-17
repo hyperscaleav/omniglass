@@ -33,7 +33,7 @@ import {
 // component in one transaction. Choosing a standard reads the plan first, so
 // the operator sees what the system will hold, and which roles it will be
 // short, before anything is created.
-export default function AddSimSystemForm(props: { nodes: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
+export default function AddSimSystemForm(props: { outposts: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
   const qc = useQueryClient();
   const me = useMe();
   const canReadLocations = () => can(me.data, "location", "read");
@@ -41,7 +41,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
   const types = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
   const [draft, setDraft] = createSignal<AddSystemDraft>({
-    node: props.nodes.length === 1 ? props.nodes[0] : "",
+    outpost: props.outposts.length === 1 ? props.outposts[0] : "",
     standard: "",
     system_type: "",
     name: "",
@@ -78,7 +78,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
 
   async function submit() {
     if (Object.keys(errors()).length) {
-      setTouched({ node: true, standard: true, system_type: true, name: true, location: true });
+      setTouched({ outpost: true, standard: true, system_type: true, name: true, location: true });
       return;
     }
     if (!planReady()) return;
@@ -86,7 +86,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
     setErr(null);
     const d = draft();
     try {
-      const r = await addSimSystem(d.node, addSystemBody(d));
+      const r = await addSimSystem(d.outpost, addSystemBody(d));
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
@@ -105,10 +105,10 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm" data-testid="add-system-error"><span>{err()}</span></div>
       </Show>
-      <FieldRow label="Node" info="The node whose simulator serves the system's components. Their endpoints are placed on this node, so this node's collection polls them." hint={shown("node")}>
-        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().node} onChange={(e) => set("node", e.currentTarget.value)} disabled={busy()}>
-          <option value="" disabled>Choose a node...</option>
-          <For each={props.nodes}>{(n) => <option value={n}>{n}</option>}</For>
+      <FieldRow label="Outpost" info="The outpost whose simulator serves the system's components. Their endpoints are placed on this outpost, so this outpost's collection polls them." hint={shown("outpost")}>
+        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().outpost} onChange={(e) => set("outpost", e.currentTarget.value)} disabled={busy()}>
+          <option value="" disabled>Choose an outpost...</option>
+          <For each={props.outposts}>{(n) => <option value={n}>{n}</option>}</For>
         </select>
       </FieldRow>
       <LoadError what="the standards" query={standards} testid="standards-error" />

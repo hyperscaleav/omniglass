@@ -9,7 +9,7 @@ import (
 
 // A datagram face answers a line as one udp request; a datagram the face's
 // seeded loss swallows on the way in was received and withheld, never
-// answered, so the reconcile reads it as the sim's doing, not the node's.
+// answered, so the reconcile reads it as the sim's doing, not the outpost's.
 func TestObservedUDPDatagramAnsweredAndWithheld(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket test")

@@ -76,7 +76,7 @@ func TestLandingBeatsWhileItRunsAndStopsWhenItReturns(t *testing.T) {
 	defer func() { telemetryAckWait = prior }()
 
 	s := &Server{}
-	m := &beatMsg{subject: "og.v1.telemetry.node-a"}
+	m := &beatMsg{subject: "og.v1.telemetry.outpost-a"}
 	want := errTest("the landing's own error")
 	err := s.landing(m, func() error {
 		time.Sleep(210 * time.Millisecond)
@@ -99,7 +99,7 @@ func TestLandingBeatsWhileItRunsAndStopsWhenItReturns(t *testing.T) {
 // one beat and sends none.
 func TestLandingThatReturnsAtOnceBeatsNever(t *testing.T) {
 	s := &Server{}
-	m := &beatMsg{subject: "og.v1.telemetry.node-a"}
+	m := &beatMsg{subject: "og.v1.telemetry.outpost-a"}
 	if err := s.landing(m, func() error { return nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestHandleTelemetryBeatsWhileItLandsOnEachLane(t *testing.T) {
 		subject string
 		batch   *ogv1.TelemetryBatch
 	}{
-		{"node", "og.v1.telemetry.node-a", &ogv1.TelemetryBatch{Logs: logs}},
+		{"outpost", "og.v1.telemetry.outpost-a", &ogv1.TelemetryBatch{Logs: logs}},
 		{"api", collection.APITelemetrySubject, &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "component", Ref: "bar-1"}, Logs: logs}},
 	}
 	for _, l := range lanes {

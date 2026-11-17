@@ -255,10 +255,10 @@ func TestBatchRates(t *testing.T) {
 	}
 }
 
-// A lab with a node per site (the corporate scenario the footprint measures,
-// #1719) reports its nodes as one node row: their CPU and memory summed, so
-// the report keeps its server, node and database rows whatever the sites.
-func TestFoldNodes(t *testing.T) {
+// A lab with an outpost per site (the corporate scenario the footprint measures,
+// #1719) reports its outposts as one outpost row: their CPU and memory summed, so
+// the report keeps its server, outpost and database rows whatever the sites.
+func TestFoldOutposts(t *testing.T) {
 	w := Window{Containers: map[string]ContainerWindow{
 		"server":           {Millicores: 100, WorkingSetMiB: 200},
 		"db":               {Millicores: 50, WorkingSetMiB: 300},
@@ -266,17 +266,17 @@ func TestFoldNodes(t *testing.T) {
 		"edge-regional-01": {Millicores: 4, WorkingSetMiB: 36},
 		"edge-branch-01":   {Millicores: 2, WorkingSetMiB: 30},
 	}}
-	got := FoldNodes(w).Containers
+	got := FoldOutposts(w).Containers
 	want := map[string]ContainerWindow{
-		"server": {Millicores: 100, WorkingSetMiB: 200},
-		"db":     {Millicores: 50, WorkingSetMiB: 300},
-		"node":   {Millicores: 16, WorkingSetMiB: 106},
+		"server":  {Millicores: 100, WorkingSetMiB: 200},
+		"db":      {Millicores: 50, WorkingSetMiB: 300},
+		"outpost": {Millicores: 16, WorkingSetMiB: 106},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("folded %v, want %v", got, want)
 	}
-	if _, ok := w.Containers["node"]; ok {
-		t.Fatal("FoldNodes changed the window it was given")
+	if _, ok := w.Containers["outpost"]; ok {
+		t.Fatal("FoldOutposts changed the window it was given")
 	}
 }
 

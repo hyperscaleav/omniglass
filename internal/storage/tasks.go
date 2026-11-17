@@ -13,7 +13,7 @@ import (
 )
 
 // Task-layer sentinel errors. A task is not an operator-authored entity: it is
-// DERIVED plumbing (a node's unit of collection work), read-only over the API. A
+// DERIVED plumbing (an outpost's unit of collection work), read-only over the API. A
 // task hangs off an endpoint (task.endpoint_id), which hangs off a component, so
 // its read scope cascades through that component. NotFound doubles as the
 // non-disclosing "out of read scope".
@@ -22,9 +22,9 @@ var (
 	ErrTaskForbidden = errors.New("storage: action not permitted on this task")
 )
 
-// Task is a node's content-addressed unit of collection work: Mode is the
-// poll/listen axis, EndpointID the connection it runs over, Node the placement
-// PROJECTED from its endpoint (a task carries no node column of its own; the
+// Task is an outpost's content-addressed unit of collection work: Mode is the
+// poll/listen axis, EndpointID the connection it runs over, Outpost the placement
+// PROJECTED from its endpoint (a task carries no outpost column of its own; the
 // endpoint's placement is authoritative), Spec the inline probe jsonb, Enabled
 // the worklist toggle. ID is a content hash of the identity fields (endpoint +
 // mode + spec) so identical work dedupes. A task is DERIVED when an endpoint is
@@ -34,8 +34,8 @@ type Task struct {
 	Label      string
 	Mode       string
 	EndpointID string
-	Node       *string
-	NodeID     *string
+	Outpost    *string
+	OutpostID  *string
 	Spec       []byte
 	Enabled    bool
 	CreatedAt  time.Time
@@ -56,28 +56,28 @@ func taskID(endpointID, mode string, spec []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// taskSelectJoin is the task columns aliased to `t`, with Node PROJECTED from the
-// joined endpoint: a task carries no node column, so every read joins endpoint
-// to resolve placement. The endpoint arc stores node.principal_id, so the
-// projection resolves it to the node's name, which is what Task.Node carries.
+// taskSelectJoin is the task columns aliased to `t`, with Outpost PROJECTED from the
+// joined endpoint: a task carries no outpost column, so every read joins endpoint
+// to resolve placement. The endpoint arc stores outpost.principal_id, so the
+// projection resolves it to the outpost's name, which is what Task.Outpost carries.
 // Callers always join `endpoint i on i.id = t.endpoint_id`.
 const taskSelectJoin = `t.id, coalesce(t.label, ''), t.mode, t.endpoint_id,
-	(select n.name from node n where n.principal_id = i.node_name) as node_name, i.node_name,
+	(select n.name from outpost n where n.principal_id = i.outpost_id) as outpost_id, i.outpost_id,
 	t.spec, t.enabled, t.created_at, t.updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
-	if err := row.Scan(&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Outpost, &t.OutpostID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
 
 // deriveReachabilityTask idempotently derives the poll task for an endpoint: the
-// node's unit of collection work over that connection. It is called inside
+// outpost's unit of collection work over that connection. It is called inside
 // CreateEndpoint's transaction, never by an operator; the content-addressed id
-// makes a re-derive a no-op (on conflict do nothing). The task carries no node
-// column: its placement is a projection of the endpoint's node_name.
+// makes a re-derive a no-op (on conflict do nothing). The task carries no outpost
+// column: its placement is a projection of the endpoint's outpost_id.
 func deriveReachabilityTask(ctx context.Context, tx pgx.Tx, endpointID string) error {
 	body := []byte("{}")
 	id := taskID(endpointID, "poll", body)
@@ -105,7 +105,7 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 		select `+taskSelectJoin+`, i.component
 		from task t join endpoint i on i.id = t.endpoint_id
 		where t.id = $1`, id).Scan(
-		&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
+		&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Outpost, &t.OutpostID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrTaskNotFound
 	} else if err != nil {
@@ -197,45 +197,45 @@ type TaskOwner struct {
 	EndpointID   string
 	EndpointName string
 	Transport    string
-	// NodeID is the node the task's endpoint is placed on (its principal id),
+	// OutpostID is the outpost the task's endpoint is placed on (its principal id),
 	// the collector a metric series records (#1275).
-	NodeID string
+	OutpostID string
 }
 
-// ResolveTaskOwner binds the component a node's task collects for and, in the same
-// query, confines the node to its own tasks. Given a task id and the node that
+// ResolveTaskOwner binds the component an outpost's task collects for and, in the same
+// query, confines the outpost to its own tasks. Given a task id and the outpost that
 // published the telemetry (extracted from the NATS subject), it returns the task's
 // endpoint component id. Confinement is against the ENDPOINT's placement
-// (i.node_name), the authoritative node binding, since a task carries no node
+// (i.outpost_id), the authoritative outpost binding, since a task carries no outpost
 // column. ok is false (the sample is an orphan the ingest consumer drops, never
-// writes) when the task is unknown, its endpoint belongs to a DIFFERENT node (a
-// node cannot land a sample for a component it was not placed on), or its
+// writes) when the task is unknown, its endpoint belongs to a DIFFERENT outpost (a
+// outpost cannot land a sample for a component it was not placed on), or its
 // endpoint has no component (a shared endpoint has no pre-bound owner). err is
 // reserved for a real DB failure, so the caller can leave the message unacked for
 // redelivery.
-func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error) {
+func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (TaskOwner, bool, error) {
 	var (
-		owner       TaskOwner
-		componentID *string
-		ifaceNode   *string
+		owner        TaskOwner
+		componentID  *string
+		ifaceOutpost *string
 	)
 	// i.component is bound directly (the FK column, not a name derived from
 	// it): the row already has it, and re-deriving one from a name only to
 	// have the write side resolve it a second time is exactly the shape #627
 	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.id, i.name, i.transport,
-			coalesce(i.node_name::text, '')
+		select i.component, (select n.name from outpost n where n.principal_id = i.outpost_id), i.id, i.name, i.transport,
+			coalesce(i.outpost_id::text, '')
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointID, &owner.EndpointName, &owner.Transport, &owner.NodeID)
+		where t.id = $1`, taskID).Scan(&componentID, &ifaceOutpost, &owner.EndpointID, &owner.EndpointName, &owner.Transport, &owner.OutpostID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil
 	} else if err != nil {
 		return TaskOwner{}, false, fmt.Errorf("storage: resolve task owner %q: %w", taskID, err)
 	}
-	if ifaceNode == nil || *ifaceNode != nodeName {
-		return TaskOwner{}, false, nil // confinement: not this node's endpoint
+	if ifaceOutpost == nil || *ifaceOutpost != outpostName {
+		return TaskOwner{}, false, nil // confinement: not this outpost's endpoint
 	}
 	if componentID == nil || *componentID == "" {
 		return TaskOwner{}, false, nil // shared endpoint: no pre-bound owner
@@ -244,15 +244,15 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	return owner, true, nil
 }
 
-// ResolveTaskOwners is ResolveTaskOwner for every task of one node's batch in
-// one statement (#1582): a node's tick carries many tasks, and binding each
+// ResolveTaskOwners is ResolveTaskOwner for every task of one outpost's batch in
+// one statement (#1582): an outpost's tick carries many tasks, and binding each
 // with a read of its own would grow the ingest's reads with the tick. Each
-// task id the node may land for maps to the owner ResolveTaskOwner gives it;
-// a task ResolveTaskOwner refuses (unknown, another node's endpoint, a shared
+// task id the outpost may land for maps to the owner ResolveTaskOwner gives it;
+// a task ResolveTaskOwner refuses (unknown, another outpost's endpoint, a shared
 // endpoint with no component) is absent, never an error. err is reserved for
 // a real DB failure, so the caller can leave the message unacked for
 // redelivery.
-func (p *PG) ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []string) (map[string]TaskOwner, error) {
+func (p *PG) ResolveTaskOwners(ctx context.Context, outpostName string, taskIDs []string) (map[string]TaskOwner, error) {
 	out := make(map[string]TaskOwner, len(taskIDs))
 	if len(taskIDs) == 0 {
 		return out, nil
@@ -261,25 +261,25 @@ func (p *PG) ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []s
 	// statement's own condition: a row it returns is one ResolveTaskOwner
 	// would have bound.
 	rows, err := p.pool.Query(ctx, `
-		select t.id, i.component::text, i.id, i.name, i.transport, i.node_name::text
+		select t.id, i.component::text, i.id, i.name, i.transport, i.outpost_id::text
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		join node n on n.principal_id = i.node_name
-		where t.id = any($1::text[]) and n.name = $2 and i.component is not null`, taskIDs, nodeName)
+		join outpost n on n.principal_id = i.outpost_id
+		where t.id = any($1::text[]) and n.name = $2 and i.component is not null`, taskIDs, outpostName)
 	if err != nil {
-		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", outpostName, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id string
 		var o TaskOwner
-		if err := rows.Scan(&id, &o.ComponentID, &o.EndpointID, &o.EndpointName, &o.Transport, &o.NodeID); err != nil {
-			return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+		if err := rows.Scan(&id, &o.ComponentID, &o.EndpointID, &o.EndpointName, &o.Transport, &o.OutpostID); err != nil {
+			return nil, fmt.Errorf("storage: resolve task owners for %s: %w", outpostName, err)
 		}
 		out[id] = o
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", outpostName, err)
 	}
 	return out, nil
 }

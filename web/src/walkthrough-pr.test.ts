@@ -121,20 +121,20 @@ describe("the demo tag a PR body carries", () => {
 });
 
 describe("which demos a PR records", () => {
-  const tapes = ["http-logins", "node-enroll"];
+  const tapes = ["http-logins", "outpost-enroll"];
   const walks = ["find-a-location", "monitoring", "sample-simulation"];
   const select = (changed: string[], body = "") => selectDemos(changed, demoTag(body), tapes, walks);
   const ids = (changed: string[], body = "") => select(changed, body).map((d) => d.id);
 
   it("records exactly the demos the PR tags", () => {
     expect(ids(["internal/api/x.go"], "demo: http-logins")).toEqual(["http-logins"]);
-    expect(ids([], "demo: monitoring node-enroll")).toEqual(["node-enroll", "monitoring"]);
+    expect(ids([], "demo: monitoring outpost-enroll")).toEqual(["outpost-enroll", "monitoring"]);
   });
 
   it("records a tape or walkthrough script the PR adds or changes, tagged or not", () => {
     expect(ids(["scripts/demo/http-logins.tape", "docs/x.md"])).toEqual(["http-logins"]);
     expect(ids(["web/e2e/walkthroughs/find-a-location.yaml"], "demo: none (docs-only)")).toEqual(["find-a-location"]);
-    expect(ids(["scripts/demo/node-enroll.tape"], "demo: monitoring")).toEqual(["node-enroll", "monitoring"]);
+    expect(ids(["scripts/demo/outpost-enroll.tape"], "demo: monitoring")).toEqual(["outpost-enroll", "monitoring"]);
   });
 
   it("fans out to nothing else: touching the console, a recorder, the lab or the evidence pipeline records no extra demo", () => {
@@ -175,8 +175,8 @@ describe("which demos a PR records", () => {
   });
 
   it("keeps the tree's order, tapes first, and drops duplicates", () => {
-    const changed = ["scripts/demo/node-enroll.tape", "web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-location.yaml", "web/e2e/walkthroughs/find-a-location.yaml"];
-    expect(ids(changed, "demo: http-logins node-enroll")).toEqual(["http-logins", "node-enroll", "find-a-location", "sample-simulation"]);
+    const changed = ["scripts/demo/outpost-enroll.tape", "web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-location.yaml", "web/e2e/walkthroughs/find-a-location.yaml"];
+    expect(ids(changed, "demo: http-logins outpost-enroll")).toEqual(["http-logins", "outpost-enroll", "find-a-location", "sample-simulation"]);
   });
 
   it("refuses a tag naming a demo the tree does not have, naming it and where it would be", () => {

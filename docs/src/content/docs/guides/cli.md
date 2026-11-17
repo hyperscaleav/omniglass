@@ -16,7 +16,7 @@ command, its flags, and an example, see the **[CLI reference](/reference/cli/)**
 
 `omniglass lab run` (or `make lab`, the short form from a checkout) brings up the whole stack
 for a browser session on Docker: Postgres, the server with the operator console at
-`http://127.0.0.1:8080/web`, and the edge node `edge-hq` running the simulator in its own
+`http://127.0.0.1:8080/web`, and the edge outpost `edge-hq` running the simulator in its own
 process, serving and collecting from the seeded dev fleet. The login is `dev` / `dev`. Ctrl-C
 removes the containers and keeps the data for the next run; `--fresh` starts over from the seed.
 The [lab guide](/guides/lab/) covers what runs, its safety rails and its flags. `make` itself
@@ -34,7 +34,7 @@ and the platform does not).
 ### A server on ports it picks
 
 `omniglass server` serves the API on `OMNIGLASS_ADDR` (`:8080` by default) and hosts the
-embedded bus nodes connect to on `OMNIGLASS_NATS_ADDR` (`127.0.0.1:4222`). Either address
+embedded bus outposts connect to on `OMNIGLASS_NATS_ADDR` (`127.0.0.1:4222`). Either address
 may name port 0, which binds whatever free port the kernel hands out, so a second server on
 the same host (a test run, another worktree's stack) never collides with the first. To learn
 the ports it got, set `OMNIGLASS_READY_FILE` to a path: once both listeners are bound, the
@@ -47,9 +47,9 @@ SIGTERM), so a file you find there names a live server's ports.
 {"addr":"127.0.0.1:41234","nats_addr":"127.0.0.1:41236","nats_url":"nats://127.0.0.1:41236"}
 ```
 
-`nats_url` is the bus URL the node-claim exchange hands each node: `OMNIGLASS_NATS_URL` when
+`nats_url` is the bus URL the outpost-claim exchange hands each outpost: `OMNIGLASS_NATS_URL` when
 that is set, otherwise the address the bus bound (read as loopback when it bound a wildcard
-host such as `0.0.0.0`), so a bus on port 0 tells nodes the port it got. Read the ports from
+host such as `0.0.0.0`), so a bus on port 0 tells outposts the port it got. Read the ports from
 the file rather than finding a free port and passing it in: a port that is free when you look
 can be taken by another process before the server binds it. The end-to-end tests start every
 server this way ([test-driven](/contributing/test-driven/#tiers)).
@@ -224,47 +224,47 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** principal's pi
 ## Collection commands
 
 The [collection](/architecture/collection/) surface regenerates into three top-level command
-groups, `node`, `endpoint`, and `task`; the composed reachability read hangs off the component
+groups, `outpost`, `endpoint`, and `task`; the composed reachability read hangs off the component
 that owns it (`component reachability`). They follow the same derivation as every
 other resource (`POST /endpoints` is `endpoint create`, `GET /endpoints/{endpoint}` is `endpoint get
 <endpoint>`), so nothing here is special-cased. All examples require the matching permission on
 the running server.
 
-Check a driver spec, preview its polls through a node (storing nothing), and run an attached
+Check a driver spec, preview its polls through an outpost (storing nothing), and run an attached
 endpoint's poll now (landing it), each covered in the [drivers guide](/guides/admin/drivers/#check-preview-and-run-a-poll-now):
 
 ```sh
 omniglass driver validate --spec "$(cat spec.json)"
-omniglass driver preview --node edge-hq --driver boreal-edge-web --inputs '{"host":"10.20.4.31","login":"display-login"}'
+omniglass driver preview --outpost edge-hq --driver boreal-edge-web --inputs '{"host":"10.20.4.31","login":"display-login"}'
 omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.display-1/http' identity
 ```
 
-Register and enroll an edge node (the day-one handshake):
+Register and enroll an edge outpost (the day-one handshake):
 
 ```sh
-omniglass node list
-omniglass node create --name edge-hq --label "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
-omniglass node get edge-hq
-omniglass node update edge-hq --label "HQ Edge" --location hq-west   # needs node:update; the name is immutable
-omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its endpoints, tasks, and enrollment)
+omniglass outpost list
+omniglass outpost create --name edge-hq --label "HQ Edge Outpost" --location hq-west --description "HQ network closet"   # needs outpost:create (all-scope)
+omniglass outpost get edge-hq
+omniglass outpost update edge-hq --label "HQ Edge" --location hq-west   # needs outpost:update; the name is immutable
+omniglass outpost delete edge-hq   # needs outpost:delete; decommissions the outpost (cascades its endpoints, tasks, and enrollment)
 ```
 
-Every command above is new in practice, not only in the docs: a hand-written `node` run
-mode occupied the same name as the generated `node` group, so cobra resolved `omniglass
-node list` to the daemon and it failed asking for `--token`. The run mode is now
-`omniglass node run`, a verb beside the others:
+Every command above is new in practice, not only in the docs: a hand-written `outpost` run
+mode occupied the same name as the generated `outpost` group, so cobra resolved `omniglass
+outpost list` to the daemon and it failed asking for `--token`. The run mode is now
+`omniglass outpost run`, a verb beside the others:
 
 ```sh
-omniglass node run --name edge-hq --token ogp_...   # the edge daemon: claim, pull the worklist, heartbeat
+omniglass outpost run --name edge-hq --token ogp_...   # the edge daemon: claim, pull the worklist, heartbeat
 ```
 
-The [simulator](/architecture/simulation/) runs beside a node with that node's identity, serving the
-devices placed on it, and the node's simulation view shows what it serves and what reached it:
+The [simulator](/architecture/simulation/) runs beside an outpost with that outpost's identity, serving the
+devices placed on it, and the outpost's simulation view shows what it serves and what reached it:
 
 ```sh
 omniglass sim run --server https://omniglass.example --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
-omniglass node simulation edge-hq   # connected?, capabilities, and hits per simulated device
-omniglass node simulation observation list edge-hq   # what its endpoints saw arrive and answered, and what the node sent
+omniglass outpost simulation edge-hq   # connected?, capabilities, and hits per simulated device
+omniglass outpost simulation observation list edge-hq   # what its endpoints saw arrive and answered, and what the outpost sent
 omniglass component impairment set panel-1 --unplugged       # break it: dark on every protocol
 omniglass component impairment set panel-1 --latency-ms 300  # or slow it
 omniglass component impairment set panel-1                   # repair it
@@ -286,37 +286,37 @@ unplugged device plugs it back in.
 Impairments apply only on a simulator started with `--impairments` and `NET_ADMIN`, in a namespace
 of its own, since it rewrites that namespace's firewall.
 
-A node can also run the simulator in its own process: `omniglass node run --simulate` serves the
-components placed on that node on the node's own loopback and collects from them, on one identity
+An outpost can also run the simulator in its own process: `omniglass outpost run --simulate` serves the
+components placed on that outpost on the outpost's own loopback and collects from them, on one identity
 and one enrollment. `--impairments`, `--port-offset` and `--poll` are the simulator's flags and are
 refused without `--simulate`; `omniglass sim run` stays for a simulator as a process of its own.
 
 ```sh
-omniglass node run --name edge-hq --token ogp_... --simulate                # the node and its simulated components, one process
-omniglass node run --name edge-hq --token ogp_... --simulate --impairments  # in a container of its own, with NET_ADMIN
+omniglass outpost run --name edge-hq --token ogp_... --simulate                # the outpost and its simulated components, one process
+omniglass outpost run --name edge-hq --token ogp_... --simulate --impairments  # in a container of its own, with NET_ADMIN
 ```
 
 The [lab](/guides/lab/) runs exactly that, with `--impairments`, in a container of its own, so the
 seeded fleet is collected for real and every impairment above works with nothing but Docker.
 
-The node-facing `claim` exchange is public (the enrollment token is the authentication), so
-a node presents its name and token to receive its NATS credential:
+The outpost-facing `claim` exchange is public (the enrollment token is the authentication), so
+an outpost presents its name and token to receive its NATS credential:
 
 ```sh
-omniglass node claim --name edge-hq --token ogp_...
+omniglass outpost claim --name edge-hq --token ogp_...
 ```
 
-`omniglass node enroll <name>` mints (or re-mints) a node's enrollment token and prints it
-once (gated by `node:enroll`), the same action as the console's Enroll / Re-enroll.
+`omniglass outpost enroll <name>` mints (or re-mints) an outpost's enrollment token and prints it
+once (gated by `outpost:enroll`), the same action as the console's Enroll / Re-enroll.
 
 Author a reachability check by **creating an endpoint** (its poll task is derived
 automatically):
 
 ```sh
-# An endpoint owned by a component, placed on a node, with its probe target in params.
+# An endpoint owned by a component, placed on an outpost, with its probe target in params.
 # It is named by its transport: --transport picks from the code registry, there is no --name flag.
 omniglass endpoint create \
-  --transport tcp --component disp-1 --node edge-hq \
+  --transport tcp --component disp-1 --outpost edge-hq \
   --params '{"target":"10.0.0.1:22"}'                          # needs endpoint:create
 
 # Or ATTACH a driver instead of picking a transport: the driver's spec derives the
@@ -324,14 +324,14 @@ omniglass endpoint create \
 # (a poll task per poll function, a standing listen task per listener). Secret
 # inputs are references: the NAME of a secret of the declared shape, never a value.
 omniglass endpoint create \
-  --driver polaris-amp-snmp --component amp-1 --node edge-hq \
+  --driver polaris-amp-snmp --component amp-1 --outpost edge-hq \
   --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
 
 omniglass endpoint list
 # An endpoint is <component>/<endpoint name>: its name is its transport, unique on its component,
 # and the component is any spelling the component commands take (a name, a dotted address, a uuid).
 omniglass endpoint get disp-1/tcp
-omniglass endpoint update disp-1/tcp --node edge-hq --params '{"target":"10.0.0.2:22"}'
+omniglass endpoint update disp-1/tcp --outpost edge-hq --params '{"target":"10.0.0.2:22"}'
 # A driver-attached endpoint's address and secret edit in place, through its inputs
 # (validated against the driver; its tasks re-derive in the same transaction):
 omniglass endpoint update amp-1/snmp --inputs '{"port":"2323","community":"lab-community-2"}'
@@ -358,9 +358,9 @@ certificate's expiry, `ssh`, `http` and `https` (the handshake, then a response)
 are visible states; an http probe sends no credential, so its driver's polls prove the login), `udp` proves its rung with its driver's request (a bare udp endpoint has nothing to send),
 and `snmp` proves its rung with a standard get (sysUpTime.0) carrying its driver's community.
 An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
-unique within its component. An endpoint `update` changes only its node placement and
+unique within its component. An endpoint `update` changes only its outpost placement and
 params. A **task** is **derived** when its endpoint is created, so there is no
-`task create`, `update`, or `delete`; its placement follows the endpoint's. A node purge
+`task create`, `update`, or `delete`; its placement follows the endpoint's. An outpost purge
 cascades its endpoints and their derived tasks.
 
 Read a component's composed reachability (the verdict, the probe-layer signals, and the
@@ -623,9 +623,9 @@ template. `inputs` and `attach` take JSON:
 
 ```sh
 omniglass component createFromTemplate --template newtron-panel-7 --location hq \
-  --node edge-hq --inputs '{"host":"10.20.0.7"}'                     # attached; without inputs it lands unattached
+  --outpost edge-hq --inputs '{"host":"10.20.0.7"}'                     # attached; without inputs it lands unattached
 omniglass system createFromTemplate --template mr55-system --location hq.f3.mr-1 \
-  --node edge-hq --attach '{"touch-control":[{"host":"10.20.0.8"}]}' # creates mr55 (and meeting-room) from their templates if you hold neither
+  --outpost edge-hq --attach '{"touch-control":[{"host":"10.20.0.8"}]}' # creates mr55 (and meeting-room) from their templates if you hold neither
 omniglass location createFromTemplate --template meeting-floor --parent hq --name f4
 ```
 
@@ -646,9 +646,9 @@ omniglass event-type get call-started
 omniglass event-type delete cable-unplugged                        # 409 on an official type
 ```
 
-Every metric, property and event type reads back its `writer_class` (`node-probe`, `platform`,
+Every metric, property and event type reads back its `writer_class` (`outpost-probe`, `platform`,
 `command-lifecycle`, `calc`, `collected`): who may write the key ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
-`omniglass event-type get collection-failed` reads `node-probe`, the node's own account, and
+`omniglass event-type get collection-failed` reads `outpost-probe`, the outpost's own account, and
 `command-issued` reads `command-lifecycle`, a command's alone; a create under a reserved name is a 422
 on every catalog.
 
@@ -658,7 +658,7 @@ The [command type](/architecture/commands/#the-command_type-registry) commands c
 catalog: what a component can be told, with a target property and a settle window. `command_type:read`
 sits on the viewer floor; create/update/delete are admin-gated, official types read-only. Issuing a
 command (`command:issue`) records the invocation, writes a caused event, and returns the computed
-settlement verdict; the invocation then rides the per-node command queue to the placed node,
+settlement verdict; the invocation then rides the per-outpost command queue to the placed outpost,
 which actuates it through the attached driver's command binding, and the settle loop closes
 against the observed value the driver's polls report back
 ([commands](/architecture/commands/#actuation-the-wire-to-the-device)).
@@ -674,11 +674,11 @@ A target must be a key a command may write: a native probe key, `health` or a ca
 refused (422) naming the key.
 
 A **disruptive** type takes its device down (`reboot` ships as one): its delivery closes the gates
-of its hold set on that node (the target's in-band endpoints and those of what it hosts), nothing
+of its hold set on that outpost (the target's in-band endpoints and those of what it hosts), nothing
 runs against them for `--quiet-seconds`, and each reopens on its own first up verdict after that, or at `--hold-seconds` as a counted backstop. The
 hold must be greater than the quiet, and neither is the settle window; a run against a held endpoint
 answers 409 naming the command
-([nodes](/architecture/nodes/#implicit-reachability)):
+([outposts](/architecture/outposts/#implicit-reachability)):
 
 ```sh
 omniglass command-type create --name power-cycle --disruptive --quiet-seconds 20 --hold-seconds 300
@@ -704,11 +704,11 @@ omniglass command-type create --name outlet-cycle --disruptive --quiet-seconds 1
 
 A `path` edge says the dependent is reached through the upstream (a peripheral behind a codec, a
 device behind a gateway). It holds without a command: while any in-band endpoint of the upstream has
-a closed gate on the same node, the dependent's in-band endpoints carry an `upstream` reason naming
+a closed gate on the same outpost, the dependent's in-band endpoints carry an `upstream` reason naming
 it, so their polls are held and their probes are not run, and the gateway alone raises an alarm.
 Once the upstream opens, each dependent waits for its own probe to read up. The reason's `source` is
 the upstream's uuid and `component` its name, when you can read it
-([implicit reachability](/architecture/nodes/#implicit-reachability)):
+([implicit reachability](/architecture/outposts/#implicit-reachability)):
 
 ```sh
 omniglass component dependency create touch-1 --upstream gateway-1 --kind path
@@ -719,7 +719,7 @@ omniglass component reachability list touch-1 | jq -c '.endpoints[] | {endpoint,
 ### A command's status, from issue to settlement
 
 The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in
-flight: `queued` for its node, `delivered`, `awaiting-reply` or `awaiting-observation`), and the
+flight: `queued` for its outpost, `delivered`, `awaiting-reply` or `awaiting-observation`), and the
 evidence once there is some. `--wait` holds the issue until the command settles, fails or times out,
 or until `--wait-timeout` seconds pass (1 to 120, 30 by default), which is what a script wants; a
 server holds 64 waits at once and a principal 4, and a wait past either is a 429 refused before
@@ -732,12 +732,12 @@ omniglass component command issue "$bar" --command-type set-volume --value 0.42 
   | jq -c '{status, settled_by, reason, reply}'
 # {"status":"settled","settled_by":"reply","reason":"the reply confirmed it","reply":"{\"ok\": true}\n"}
 omniglass component command list "$bar" --status timed-out --since 2026-10-25T09:00:00Z
-omniglass component command get "$bar" 42 | jq -c '{status, phase, reason, endpoint, node, driver}'
+omniglass component command get "$bar" 42 | jq -c '{status, phase, reason, endpoint, outpost, driver}'
 ```
 
-The `reply` is the component's answer as its node reported it, masked of the endpoint's credentials
+The `reply` is the component's answer as its outpost reported it, masked of the endpoint's credentials
 and of anything labeled a credential before it was stored; a timed-out command's `reason` says where
-it stopped (`queued for node edge-depot-dark, which did not take it within its 15s settle window`).
+it stopped (`queued for outpost edge-depot-dark, which did not take it within its 15s settle window`).
 
 ## Notifications
 
@@ -828,7 +828,7 @@ omniglass metric-type get tcp-connect-time | jq .retention_days
   `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
-  `server`, `node run`, and `migrate` run modes, the trusted direct-DB owner lane
+  `server`, `outpost run`, and `migrate` run modes, the trusted direct-DB owner lane
   (`bootstrap`, `token`, `set-password`), the idempotent dev-fleet seeder
   (`seed-dev`, the same trusted lane, never for production), and `mcp`, which serves the
   [MCP tools](/reference/mcp/) over stdio for a local agent, with `mcp tools` and `mcp call`

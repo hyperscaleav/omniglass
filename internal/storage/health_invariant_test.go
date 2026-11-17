@@ -49,7 +49,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) {
 	t.Helper()
 	type row struct{ owner, kind, value string }
-	// The three fleet arcs store ids and the node arc still stores a name, so the
+	// The three fleet arcs store ids and the outpost arc still stores a name, so the
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
@@ -58,7 +58,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 		left join component c on c.id = sd.component_id
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id
-		left join node      n on n.principal_id = sd.node_id
+		left join outpost      n on n.principal_id = sd.outpost_id
 		where sd.property_type_id = (select id from property_type where name = 'health')
 		order by owner, sd.id asc`)
 	if err != nil {

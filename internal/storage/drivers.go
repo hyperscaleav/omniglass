@@ -100,7 +100,7 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	if err := rederiveDriverTasks(ctx, tx, id); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
-	if err := announceNodesOf(ctx, tx, driverSpecNodesSQL, id, prior); err != nil {
+	if err := announceOutpostsOf(ctx, tx, driverSpecOutpostsSQL, id, prior); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -227,7 +227,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	if err := rederiveDriverTasks(ctx, tx, d.ID); err != nil {
 		return nil, err
 	}
-	if err := announceNodesOf(ctx, tx, driverSpecNodesSQL, d.ID, prior); err != nil {
+	if err := announceOutpostsOf(ctx, tx, driverSpecOutpostsSQL, d.ID, prior); err != nil {
 		return nil, err
 	}
 	after, err := registryAuditImage(ctx, tx, "driver", id)

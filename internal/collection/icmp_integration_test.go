@@ -21,7 +21,7 @@ func TestICMPPingerReal(t *testing.T) {
 	p := collection.NewICMPPinger()
 	ctx := context.Background()
 
-	// Loopback: the node's own stack must answer its own echo.
+	// Loopback: the outpost's own stack must answer its own echo.
 	res, err := p.Ping(ctx, "127.0.0.1", 1, 2*time.Second)
 	if err != nil {
 		t.Fatalf("icmp loopback: this environment cannot open an unprivileged ICMP socket: %v", err)
@@ -78,7 +78,7 @@ func TestICMPPingerReal_ContextCancellation(t *testing.T) {
 	if elapsed >= wantUnder {
 		t.Fatalf("icmp cancellation: Ping took %v, want well under %v (fullRunTimeout=%v); ctx cancellation is not honored", elapsed, wantUnder, fullRunTimeout)
 	}
-	// A canceled ctx is not a node-incapable verdict: this node's ICMP capability
+	// A canceled ctx is not an outpost-incapable verdict: this outpost's ICMP capability
 	// was never in question, so the cancellation must not surface as the
 	// inconclusive "cannot ICMP at all" error.
 	if err != nil {

@@ -26,7 +26,7 @@ import (
 const calcE2EPortShift = 26000
 
 // TestCalcRuleEndToEnd drives a calc rule as an operator would (#996): the
-// real server, a simulated device, and a node collecting its tcp probe. A
+// real server, a simulated device, and an outpost collecting its tcp probe. A
 // calc rule authored through the CLI folds the probe's tcp-connect-time over its
 // instances into a metric of its own, the server's calc tick writes it as a
 // calculated sample naming the rule, and an event rule on that output key
@@ -59,11 +59,11 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-c"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-c"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "calc-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "calc-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-c", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 		args []any
 	}{
 		{`update component set product_id = (select id from product where name = $1) where name = 'calc-dev'`, []any{product}},
-		{`insert into endpoint (name, transport, component, node_name, params) values ('calc-dev-tcp', 'tcp', (select id from component where name = 'calc-dev'), (select principal_id from node where name = 'edge-c'), jsonb_build_object('target', $1::text))`, []any{target}},
+		{`insert into endpoint (name, transport, component, outpost_id, params) values ('calc-dev-tcp', 'tcp', (select id from component where name = 'calc-dev'), (select principal_id from outpost where name = 'edge-c'), jsonb_build_object('target', $1::text))`, []any{target}},
 		{`insert into task (id, mode, endpoint_id, enabled) values ('t-calc', 'poll', (select id from endpoint where name = 'calc-dev-tcp'), true)`, nil},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
@@ -112,7 +112,7 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	simCmd := exec.CommandContext(simCtx, binPath, "sim", "run",
 		"--port-offset", fmt.Sprint(calcE2EPortShift), "--poll", "300ms")
 	simCmd.Env = append(os.Environ(),
-		"OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-c", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+		"OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-c", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	simCmd.Stdout, simCmd.Stderr = os.Stderr, os.Stderr
 	if err := simCmd.Start(); err != nil {
 		t.Fatalf("start sim: %v", err)
@@ -127,8 +127,8 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 		return n
 	}
 	// Collect until the probe has reached the simulated device.
-	waitForWithin(t, 60*time.Second, "the node's tcp probe to reach the simulated device", func() bool {
-		_, _ = cli("node", "run", "--server", server, "--name", "edge-c", "--token", nodeTok, "--once")
+	waitForWithin(t, 60*time.Second, "the outpost's tcp probe to reach the simulated device", func() bool {
+		_, _ = cli("outpost", "run", "--server", server, "--name", "edge-c", "--token", outpostTok, "--once")
 		return scalarInt(`select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
 			where t.name = 'tcp-connect-time' and m.value > 0 and m.component_id = (select id from component where name = 'calc-dev')`) > 0
 	})

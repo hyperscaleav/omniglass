@@ -8,7 +8,7 @@ import (
 
 // The transport registry is code, not a table (ADR-0073): the set of wires the
 // platform can speak over is a build-time fact, so the registry is the one
-// source the storage validator, the API route, and the node's probe dispatch
+// source the storage validator, the API route, and the outpost's probe dispatch
 // all read. These tests pin the contract the rest of slice 1 hangs off.
 
 func TestRegistryCarriesTheTwelveTransports(t *testing.T) {
@@ -156,7 +156,7 @@ func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
 	}
 	for _, other := range transport.All() {
 		if other.Name != "webhook" && other.Push {
-			t.Errorf("%s: Push set on a transport a node dials", other.Name)
+			t.Errorf("%s: Push set on a transport an outpost dials", other.Name)
 		}
 	}
 	if !transport.IsPush("webhook") || transport.IsPush("http") || transport.IsPush("nope") {
@@ -164,10 +164,10 @@ func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
 	}
 }
 
-// A built transport a node dials declares the keys its probe lands and the
+// A built transport an outpost dials declares the keys its probe lands and the
 // params it reads (#1087), and the lab's expectation (BuiltIn, Answered) is a
 // subset of that declaration: the probe lands what the lab expects of it. A
-// push transport has no probe, so it declares neither. internal/node binds
+// push transport has no probe, so it declares neither. internal/outpost binds
 // each declaration to the probe that lands it.
 func TestAProbedTransportDeclaresItsParamsAndProbeKeys(t *testing.T) {
 	for _, tr := range transport.All() {

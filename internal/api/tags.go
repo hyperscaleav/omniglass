@@ -262,7 +262,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerEntityTagRoutes(api, a, gw, "component")
 	registerEntityTagRoutes(api, a, gw, "system")
 	registerEntityTagRoutes(api, a, gw, "location")
-	registerEntityTagRoutes(api, a, gw, "node")
+	registerEntityTagRoutes(api, a, gw, "outpost")
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "effective-tags",
@@ -297,7 +297,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // entityRemoveTagInput carries the name and the key to remove. The entity kind
 // is fixed by the route the closure registers.
 type entitySetTagInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 	Body struct {
 		Key   string `json:"key" minLength:"1" doc:"The tag key (must exist and apply to this kind)"`
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -305,14 +305,14 @@ type entitySetTagInput struct {
 }
 
 type entityRemoveTagInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 	Body struct {
 		Key string `json:"key" minLength:"1" doc:"The tag key to remove"`
 	}
 }
 
 type entityNameInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 }
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
@@ -413,13 +413,13 @@ func mapTagErr(err error) error {
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error404NotFound("location not found")
-	case errors.Is(err, storage.ErrNodeNotFound):
-		return huma.Error404NotFound("node not found")
+	case errors.Is(err, storage.ErrOutpostNotFound):
+		return huma.Error404NotFound("outpost not found")
 	case errors.Is(err, storage.ErrTagForbidden),
 		errors.Is(err, storage.ErrComponentForbidden),
 		errors.Is(err, storage.ErrSystemForbidden),
 		errors.Is(err, storage.ErrLocationForbidden),
-		errors.Is(err, storage.ErrNodeForbidden):
+		errors.Is(err, storage.ErrOutpostForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrTagExists):
 		return huma.Error409Conflict("a tag key with this name already exists")

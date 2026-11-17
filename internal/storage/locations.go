@@ -1370,9 +1370,9 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 		}
 	}
 	// A reparent changes the location chain every component below resolves its
-	// secrets along, so each node collecting one of them hears.
+	// secrets along, so each outpost collecting one of them hears.
 	if !sameOptional(before.ParentID, after.ParentID) {
-		if err := announceNodesOf(ctx, tx, subtreeLocationNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, subtreeLocationOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	}

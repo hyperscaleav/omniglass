@@ -472,8 +472,8 @@ func groupIDByRef(ctx context.Context, q querier, ref string) (string, error) {
 // through (any kind, and an unknown one too, so the caller's own not-found
 // applies unchanged), and anything else is a human's username or a service
 // account's name (#1133), each unique among its own kind. A word that is both
-// names no one principal and is refused with both uuids. A node is reached by
-// its name on /nodes, not here.
+// names no one principal and is refused with both uuids. An outpost is reached by
+// its name on /outposts, not here.
 func principalIDByRef(ctx context.Context, q querier, ref string) (string, error) {
 	if isUUID(ref) {
 		return ref, nil

@@ -5,19 +5,19 @@
 # authorizationError, gates the endpoint at the session rung and sends no more
 # gets, and the console shows the refusal on the endpoint all the same.
 # Pointing the community at the fleet's own secret moves the connection
-# fingerprint, and the node's next get (2s on the lab) is
+# fingerprint, and the outpost's next get (2s on the lab) is
 # answered.
 title: Fix a refused probe
-description: A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.
+description: A touch panel's SNMP agent refused the endpoint's community, so the outpost stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.
 steps:
   - goto: /systems/auditorium
-    caption: This location's system. Its touch panel fills the touch-control role, and a node collects it.
+    caption: This location's system. Its touch panel fills the touch-control role, and an outpost collects it.
   - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'
     caption: Expand it to the component's view, where collection is read.
   - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
-    caption: Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The node sends no more gets, so nothing hammers it.
+    caption: Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The outpost sends no more gets, so nothing hammers it.
     hold: 1500
   - click: { role: button, name: Open endpoint }
     caption: Open the endpoint. The ladder shows the ping answering and the community held.
@@ -32,5 +32,5 @@ steps:
   - click: 'aside[data-blade] button:has-text("Save")'
     caption: Save. What the endpoint connects with changed, so the refusal no longer holds.
   - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 20000 }
-    caption: The node asks again at its next check-in, the agent answers the community, and the refusal is gone.
+    caption: The outpost asks again at its next check-in, the agent answers the community, and the refusal is gone.
     poster: true

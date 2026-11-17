@@ -303,7 +303,7 @@ func (p *PG) reportWindowOf(ctx context.Context, tx pgx.Tx) (int, error) {
 	return s.Collection.ReportSeconds, nil
 }
 
-// announceReportWindowChange announces every node when this write moved the
+// announceReportWindowChange announces every outpost when this write moved the
 // report window from before, including into or out of settings that do not
 // resolve.
 func (p *PG) announceReportWindowChange(ctx context.Context, tx pgx.Tx, before int) error {
@@ -317,5 +317,5 @@ func (p *PG) announceReportWindowChange(ctx context.Context, tx pgx.Tx, before i
 	if after == before {
 		return nil
 	}
-	return announceEveryNode(ctx, tx)
+	return announceEveryOutpost(ctx, tx)
 }

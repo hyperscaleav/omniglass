@@ -18,11 +18,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// GET /nodes/{name}/simulation/observation (#1639): the three bracketed
+// GET /outposts/{name}/simulation/observation (#1639): the three bracketed
 // reads a scale lab reconciles, gated simulation:read and refused to any
-// caller whose component read scope is not all, since the node-wide totals
+// caller whose component read scope is not all, since the outpost-wide totals
 // cover components a scoped caller cannot see.
-func TestNodeSimulationObservationAPI(t *testing.T) {
+func TestOutpostSimulationObservationAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -40,7 +40,7 @@ func TestNodeSimulationObservationAPI(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -53,8 +53,8 @@ func TestNodeSimulationObservationAPI(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
-		('obs-no-sim', '{"component:read","node:read"}'),
-		('obs-sim-reader', '{"simulation:read","component:read","node:read"}')`); err != nil {
+		('obs-no-sim', '{"component:read","outpost:read"}'),
+		('obs-sim-reader', '{"simulation:read","component:read","outpost:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	granted := func(label, role, scopeKind string, scopeID *string) string {
@@ -91,14 +91,14 @@ func TestNodeSimulationObservationAPI(t *testing.T) {
 	at := time.Now().UTC().Truncate(time.Millisecond)
 	hub := &fakeHub{Registry: simhub.New()}
 	hub.observation = map[string]collection.EndpointObservation{"site-a": {
-		SimBefore: collection.SimObservation{Node: "site-a", At: at, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 4, Answered: 4}}},
-		Node:      collection.RequestTallySnapshot{Node: "site-a", At: at.Add(time.Millisecond), Transports: []collection.TallyCounters{{Transport: "http", Sent: 5, Answered: 4, InFlight: 1}}},
-		SimAfter:  collection.SimObservation{Node: "site-a", At: at.Add(2 * time.Millisecond), FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 5, Answered: 5}}},
+		SimBefore: collection.SimObservation{Outpost: "site-a", At: at, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 4, Answered: 4}}},
+		Outpost:   collection.RequestTallySnapshot{Outpost: "site-a", At: at.Add(time.Millisecond), Transports: []collection.TallyCounters{{Transport: "http", Sent: 5, Answered: 4, InFlight: 1}}},
+		SimAfter:  collection.SimObservation{Outpost: "site-a", At: at.Add(2 * time.Millisecond), FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: 5, Answered: 5}}},
 	}}
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub)))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	const path = "/nodes/site-a/simulation/observation"
+	const path = "/outposts/site-a/simulation/observation"
 
 	c.do("", http.MethodGet, path, nil, http.StatusUnauthorized)
 	c.do(noSim, http.MethodGet, path, nil, http.StatusForbidden)
@@ -108,21 +108,21 @@ func TestNodeSimulationObservationAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(reader, http.MethodGet, path, nil, http.StatusOK), &obs); err != nil {
 		t.Fatal(err)
 	}
-	if obs.SimBefore.Protocol("http").Received != 4 || obs.Node.Transports[0].Sent != 5 || obs.SimAfter.Protocol("http").Received != 5 {
+	if obs.SimBefore.Protocol("http").Received != 4 || obs.Outpost.Transports[0].Sent != 5 || obs.SimAfter.Protocol("http").Received != 5 {
 		t.Fatalf("observation = %+v, want the three reads as the bus took them", obs)
 	}
-	if !obs.SimBefore.At.Before(obs.Node.At) || !obs.Node.At.Before(obs.SimAfter.At) {
-		t.Fatalf("reads out of order: %v, %v, %v", obs.SimBefore.At, obs.Node.At, obs.SimAfter.At)
+	if !obs.SimBefore.At.Before(obs.Outpost.At) || !obs.Outpost.At.Before(obs.SimAfter.At) {
+		t.Fatalf("reads out of order: %v, %v, %v", obs.SimBefore.At, obs.Outpost.At, obs.SimAfter.At)
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, path, nil, http.StatusOK), &obs); err != nil {
 		t.Fatal(err)
 	}
 
-	// A node with no simulator answering is the 503 a fired operation gets,
-	// a node that is not connected the 503 a run gets, and a node that does
-	// not exist the 404 get-node-simulation gives.
-	c.do(reader, http.MethodGet, "/nodes/site-b/simulation/observation", nil, http.StatusServiceUnavailable)
-	hub.observeErr = collection.ErrNodeAbsent
+	// An outpost with no simulator answering is the 503 a fired operation gets,
+	// an outpost that is not connected the 503 a run gets, and an outpost that does
+	// not exist the 404 get-outpost-simulation gives.
+	c.do(reader, http.MethodGet, "/outposts/site-b/simulation/observation", nil, http.StatusServiceUnavailable)
+	hub.observeErr = collection.ErrOutpostAbsent
 	c.do(reader, http.MethodGet, path, nil, http.StatusServiceUnavailable)
-	c.do(reader, http.MethodGet, "/nodes/nowhere/simulation/observation", nil, http.StatusNotFound)
+	c.do(reader, http.MethodGet, "/outposts/nowhere/simulation/observation", nil, http.StatusNotFound)
 }

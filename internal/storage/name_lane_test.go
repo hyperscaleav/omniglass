@@ -12,7 +12,7 @@ import (
 // The one rule for which row a bare name resolves to (#1307, #1432): the search
 // path. A name the operator's local rows hold resolves there, in whichever of
 // the three catalogs; otherwise to the og row; one holder per tier, or nothing
-// (a collision). A reserved key (the node's or the platform's own) is never
+// (a collision). A reserved key (the outpost's or the platform's own) is never
 // shadowed, and a namespace other than local and og never answers a bare name.
 func TestResolveNameLane(t *testing.T) {
 	t.Parallel()

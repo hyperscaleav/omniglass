@@ -41,7 +41,7 @@ func principalBatchPool(t *testing.T) *pgxpool.Pool {
 // principalBatchFixture builds a directory carrying every shape the two loaders
 // could disagree about:
 //
-//   - all three profiled kinds (human, service, node), because the batch reads
+//   - all three profiled kinds (human, service, outpost), because the batch reads
 //     them as one union over three differently shaped tables where the single-row
 //     path branches on kind;
 //   - a principal with direct grants only, one with inherited grants only, one
@@ -155,9 +155,9 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 	}
 	grantTo("principal_id", svc, viewerID, "all", nil, "subtree")
 
-	nd := mint("node")
-	if _, err := pool.Exec(ctx, `insert into node (principal_id, name) values ($1, 'edge-1')`, nd); err != nil {
-		t.Fatalf("insert node: %v", err)
+	nd := mint("outpost")
+	if _, err := pool.Exec(ctx, `insert into outpost (principal_id, name) values ($1, 'edge-1')`, nd); err != nil {
+		t.Fatalf("insert outpost: %v", err)
 	}
 	join(bare, nd)
 
@@ -245,8 +245,8 @@ func describePrincipal(pr Principal) string {
 		s += fmt.Sprintf(" human=%+v", *pr.Human)
 	case pr.Service != nil:
 		s += fmt.Sprintf(" service=%+v", *pr.Service)
-	case pr.Node != nil:
-		s += fmt.Sprintf(" node=%+v", *pr.Node)
+	case pr.Outpost != nil:
+		s += fmt.Sprintf(" outpost=%+v", *pr.Outpost)
 	default:
 		s += " profile=nil"
 	}

@@ -72,7 +72,7 @@ type Server struct {
 	push              *delivery.Publisher // the push lane's ledger, one boot per server process (#1696)
 	streamEpoch       string              // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
 	internalToken     string
-	sims              *simhub.Registry   // the simulators beside this server's nodes
+	sims              *simhub.Registry   // the simulators beside this server's outposts
 	stopSweep         chan struct{}      // ends the settlement sweep
 	stopReconcile     context.CancelFunc // ends the rule reconcile loop
 	stopCalc          context.CancelFunc // ends the calc tick
@@ -81,18 +81,18 @@ type Server struct {
 	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
 	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
 	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
-	orphans           *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	orphans           *orphanTally       // the outpost lane's orphaned batches, warned and counted (#1200)
 	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
 	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
-	partitions        int                // how many ingest lanes the stream files node batches under (#1896)
+	partitions        int                // how many ingest lanes the stream files outpost batches under (#1896)
 	lanesMu           sync.Mutex         // guards lanes
 	lanes             []*ingestLane      // the telemetry durables being consumed
 	tallies           []*laneTally       // each partition's batches and busy time, then the other lanes' (#1517)
 	stopLaneLog       context.CancelFunc // ends the lane tally's log line
 	sweepStop         sync.Once
 	sweepDone         sync.WaitGroup
-	worklistSizes     worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
+	worklistSizes     worklistSizes      // each outpost's latest worklist reply size, warned near the limit (#1579)
 	worklistCounts    worklistCounts     // how worklist pulls ended (#1577)
 	worklistWorkers   int                // how many pulls the pool builds at once (#1577)
 	worklistQueue     chan worklistPull  // pulls waiting for a worker
@@ -103,15 +103,15 @@ type Server struct {
 	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
 	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
 	telemetry         jetstream.Stream   // OG_TELEMETRY, read for its last sequence
-	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
+	heartbeatFail     failOnce           // the outposts whose heartbeat write is failing, warned once a run
 	// platformComponentID is the server's own platform component, where the
 	// retention pass lands its figures (#1629); empty writes none.
 	platformComponentID string
 }
 
-// New starts an in-process NATS server (JetStream on) with the per-node auth
+// New starts an in-process NATS server (JetStream on) with the per-outpost auth
 // callback, then opens the server's own internal client and subscribes the
-// worklist and heartbeat handlers. It returns ready to serve nodes.
+// worklist and heartbeat handlers. It returns ready to serve outposts.
 func New(cfg Config, store Store) (*Server, error) {
 	tok := make([]byte, 32)
 	if _, err := rand.Read(tok); err != nil {
@@ -155,7 +155,7 @@ func New(cfg Config, store Store) (*Server, error) {
 		StoreDir:                   storeDir,
 		NoLog:                      true,
 		NoSigs:                     true,
-		CustomClientAuthentication: &nodeAuth{store: store, internalToken: s.internalToken},
+		CustomClientAuthentication: &outpostAuth{store: store, internalToken: s.internalToken},
 	}
 	ns, err := server.NewServer(opts)
 	if err != nil {
@@ -187,53 +187,53 @@ func (s *Server) subscribe() error {
 	// deadline on arrival and queues it; a bounded pool builds and answers.
 	s.startWorklistPool(s.worklistWorkers)
 	wl, err := nc.Subscribe(collection.WorklistWildcard, func(msg *nats.Msg) {
-		node := collection.NodeFromSubject(msg.Subject)
+		outpost := collection.OutpostFromSubject(msg.Subject)
 		// Confused-deputy guard: the responder answers with the FULL-PERMISSION
 		// internal client, and msg.Reply is attacker-controlled, so honor it only
-		// when it lands in the requesting node's own inbox. Otherwise a node could
-		// aim the reply at another node's subject (heartbeat forge) or, once a
-		// stream exists, at $JS.API.*/$SYS.*. The node client dials this inbox via
-		// nats.CustomInboxPrefix(collection.InboxPrefix(node)), so a real reply is
-		// InboxPrefix(node)+"."+<token>.
-		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+		// when it lands in the requesting outpost's own inbox. Otherwise an outpost could
+		// aim the reply at another outpost's subject (heartbeat forge) or, once a
+		// stream exists, at $JS.API.*/$SYS.*. The outpost client dials this inbox via
+		// nats.CustomInboxPrefix(collection.InboxPrefix(outpost)), so a real reply is
+		// InboxPrefix(outpost)+"."+<token>.
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(outpost)+".") {
 			return
 		}
 		now := time.Now()
-		s.queueWorklistPull(pullOf(node, msg, worklistDeadline(msg.Header, now)))
+		s.queueWorklistPull(pullOf(outpost, msg, worklistDeadline(msg.Header, now)))
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe worklist: %w", err)
 	}
 
 	hb, err := nc.Subscribe(collection.HeartbeatWildcard, func(msg *nats.Msg) {
-		node := collection.NodeFromSubject(msg.Subject)
-		// The subject grant guarantees this node published only its own subject,
+		outpost := collection.OutpostFromSubject(msg.Subject)
+		// The subject grant guarantees this outpost published only its own subject,
 		// so the extracted name is trusted.
-		s.recordHeartbeat(context.Background(), node)
+		s.recordHeartbeat(context.Background(), outpost)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
 	}
 
 	// The command queue pull (#815): request-reply like the worklist, same
-	// reply-inbox confinement, the reply the node's rendered pending commands
+	// reply-inbox confinement, the reply the outpost's rendered pending commands
 	// (the pull itself marks them dispatched).
 	cq, err := nc.Subscribe(collection.CommandWildcard, func(msg *nats.Msg) {
-		node := collection.NodeFromSubject(msg.Subject)
-		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+		outpost := collection.OutpostFromSubject(msg.Subject)
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(outpost)+".") {
 			return
 		}
-		s.answerCommands(context.Background(), node, msg.Respond)
+		s.answerCommands(context.Background(), outpost, msg.Respond)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command queue: %w", err)
 	}
 
-	// The execution report sink: the subject grant trusts the node name, and
+	// The execution report sink: the subject grant trusts the outpost name, and
 	// the store re-checks the placement before stamping.
 	cs, err := nc.Subscribe(collection.CommandStatusWildcard, func(msg *nats.Msg) {
-		node := collection.NodeFromSubject(msg.Subject)
-		s.recordCommandStatus(context.Background(), node, msg.Data)
+		outpost := collection.OutpostFromSubject(msg.Subject)
+		s.recordCommandStatus(context.Background(), outpost, msg.Data)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command status: %w", err)
@@ -268,7 +268,7 @@ func (s *Server) subscribe() error {
 	tellHousekeeping(context.Background(), s.store, s.platformComponentID, partitionNotes(created), time.Now(), partitionBootTimeout)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
-	// same internal client. It carries the node -> server sample flow.
+	// same internal client. It carries the outpost -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
 		// The lanes started before the failure stop with it, so a boot
 		// refused here leaves no pull loop landing batches.
@@ -282,9 +282,9 @@ func (s *Server) subscribe() error {
 	return nil
 }
 
-// buildWorklistReply maps a node's stored worklist to the JSON wire reply.
-func (s *Server) buildWorklistReply(ctx context.Context, node string) (collection.WorklistReply, error) {
-	wl, err := s.store.NodeWorklist(ctx, node)
+// buildWorklistReply maps an outpost's stored worklist to the JSON wire reply.
+func (s *Server) buildWorklistReply(ctx context.Context, outpost string) (collection.WorklistReply, error) {
+	wl, err := s.store.OutpostWorklist(ctx, outpost)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
@@ -295,7 +295,7 @@ func (s *Server) buildWorklistReply(ctx context.Context, node string) (collectio
 	return reply, nil
 }
 
-// ClientURL is the URL a node dials (nats://host:port).
+// ClientURL is the URL an outpost dials (nats://host:port).
 func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 
 // Addr is the address the bus bound: the port the kernel handed it when it
@@ -303,7 +303,7 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 func (s *Server) Addr() net.Addr { return s.ns.Addr() }
 
 // LocalURL is the URL a client on this host dials to reach the bus, the
-// default the node-claim exchange advertises when no URL is configured.
+// default the outpost-claim exchange advertises when no URL is configured.
 func (s *Server) LocalURL() string { return localURL(s.Addr()) }
 
 // localURL is the nats:// URL of a bound address, a wildcard host (0.0.0.0,
@@ -422,7 +422,7 @@ const pushTurnWait = publishAckTimeout
 // bounded retry, and the route answers 503.
 //
 // Every batch carries the push lane's ledger (#1696), minted here under the
-// server's own boot as a node's spool mints its own: a dense seq and each
+// server's own boot as an outpost's spool mints its own: a dense seq and each
 // kind's running offset, so a batch the stream stored and the ingest Termed
 // reads as missing. Publishes take their turn one at a time, so the seq
 // follows the order the stream stored them in, and a refused publish takes
@@ -502,27 +502,27 @@ func (s *Server) startReceiptPrune() {
 	}()
 }
 
-// SimStatus is the server's view of one node's simulator.
+// SimStatus is the server's view of one outpost's simulator.
 type SimStatus = simhub.Status
 
-// SimStatus reports the simulator beside a node, or false when none has
+// SimStatus reports the simulator beside an outpost, or false when none has
 // pulled since this server started.
-func (s *Server) SimStatus(node string) (SimStatus, bool) { return s.sims.Status(node) }
+func (s *Server) SimStatus(outpost string) (SimStatus, bool) { return s.sims.Status(outpost) }
 
 // ErrNoSimulator is FireSimOperation's answer when no simulator beside the
-// node is listening (or none answered in time).
+// outpost is listening (or none answered in time).
 var ErrNoSimulator = collection.ErrNoSimulator
 
-// Nodes lists the nodes whose simulator has pulled since the server
+// Outposts lists the outposts whose simulator has pulled since the server
 // started.
-func (s *Server) Nodes() []string { return s.sims.Nodes() }
+func (s *Server) Outposts() []string { return s.sims.Outposts() }
 
-// Forget drops a node's simulator status, for a node that was deleted.
-func (s *Server) Forget(node string) { s.sims.Forget(node) }
+// Forget drops an outpost's simulator status, for an outpost that was deleted.
+func (s *Server) Forget(outpost string) { s.sims.Forget(outpost) }
 
-// FireSimOperation asks the simulator beside node to run op against one of
+// FireSimOperation asks the simulator beside outpost to run op against one of
 // its devices and returns the device's answer.
-func (s *Server) FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
+func (s *Server) FireSimOperation(ctx context.Context, outpost string, op collection.SimOperation) (collection.SimOperationResult, error) {
 	var res collection.SimOperationResult
 	b, err := json.Marshal(op)
 	if err != nil {
@@ -530,7 +530,7 @@ func (s *Server) FireSimOperation(ctx context.Context, node string, op collectio
 	}
 	ctx, cancel := context.WithTimeout(ctx, simopTimeout)
 	defer cancel()
-	msg, err := s.nc.RequestWithContext(ctx, collection.SimopSubject(node), b)
+	msg, err := s.nc.RequestWithContext(ctx, collection.SimopSubject(outpost), b)
 	if errors.Is(err, nats.ErrNoResponders) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, nats.ErrTimeout) {
 		return res, ErrNoSimulator
 	}
@@ -544,27 +544,27 @@ func (s *Server) FireSimOperation(ctx context.Context, node string, op collectio
 }
 
 // subscribeSim answers simulators' device-list pulls and records their hits.
-// Both ride the node's subject grant, so the node name taken from the
+// Both ride the outpost's subject grant, so the outpost name taken from the
 // subject is the simulator's own.
 func (s *Server) subscribeSim() error {
 	list, err := s.nc.Subscribe(collection.SimlistWildcard, func(msg *nats.Msg) {
-		node := collection.NodeFromSubject(msg.Subject)
+		outpost := collection.OutpostFromSubject(msg.Subject)
 		// The same confused-deputy guard as the worklist: reply only into
-		// the requesting node's own inbox.
-		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+		// the requesting outpost's own inbox.
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(outpost)+".") {
 			return
 		}
 		var req collection.SimlistRequest
 		_ = json.Unmarshal(msg.Data, &req) // an empty request states no capabilities
-		// The node's own simulator sees everything placed on its node.
-		devices, err := s.store.NodeSimDevices(context.Background(), node, scope.Set{All: true})
+		// The outpost's own simulator sees everything placed on its outpost.
+		devices, err := s.store.OutpostSimDevices(context.Background(), outpost, scope.Set{All: true})
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls
 		}
 		// The webhook subscriptions of the components it simulates
 		// (ADR-1370): only here, and only from a lab-marked database for a
 		// component in the simulated block (the gateway's fence).
-		hooks, err := s.store.NodeSimWebhooks(context.Background(), node)
+		hooks, err := s.store.OutpostSimWebhooks(context.Background(), outpost)
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls
 		}
@@ -582,7 +582,7 @@ func (s *Server) subscribeSim() error {
 			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)
 		}
-		s.sims.Pulled(node, req.Capabilities, ids)
+		s.sims.Pulled(outpost, req.Capabilities, ids)
 		b, err := json.Marshal(reply)
 		if err != nil {
 			return
@@ -597,7 +597,7 @@ func (s *Server) subscribeSim() error {
 		if err := json.Unmarshal(msg.Data, &b); err != nil {
 			return
 		}
-		s.sims.Report(collection.NodeFromSubject(msg.Subject), b)
+		s.sims.Report(collection.OutpostFromSubject(msg.Subject), b)
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe simhit: %w", err)
@@ -758,16 +758,16 @@ func (s *Server) calcPass(ctx context.Context) {
 	}
 }
 
-// answerCommands answers a node's command pull with its rendered pending
+// answerCommands answers an outpost's command pull with its rendered pending
 // commands (the read itself marks them dispatched). Every way the answer
-// fails to reach the node is logged at WARN with the node and the error
-// (#1630): the node re-pulls next tick, but a pull that keeps failing is a
+// fails to reach the outpost is logged at WARN with the outpost and the error
+// (#1630): the outpost re-pulls next tick, but a pull that keeps failing is a
 // fleet whose commands time out, and the operator needs to see why.
-func (s *Server) answerCommands(ctx context.Context, node string, respond func([]byte) error) {
-	pending, err := s.store.PendingNodeCommands(ctx, node)
+func (s *Server) answerCommands(ctx context.Context, outpost string, respond func([]byte) error) {
+	pending, err := s.store.PendingOutpostCommands(ctx, outpost)
 	s.request(requestCommandPull, err)
 	if err != nil {
-		slog.Warn("command pull could not read the queue", "facility", "command", "node", node, "error", err.Error())
+		slog.Warn("command pull could not read the queue", "facility", "command", "outpost", outpost, "error", err.Error())
 		return
 	}
 	reply := collection.CommandPullReply{}
@@ -780,28 +780,28 @@ func (s *Server) answerCommands(ctx context.Context, node string, respond func([
 	}
 	b, err := json.Marshal(reply)
 	if err != nil {
-		slog.Warn("command pull reply could not be encoded", "facility", "command", "node", node, "error", err.Error())
+		slog.Warn("command pull reply could not be encoded", "facility", "command", "outpost", outpost, "error", err.Error())
 		return
 	}
 	if err := respond(b); err != nil {
-		slog.Warn("command pull reply could not be sent", "facility", "command", "node", node, "error", err.Error())
+		slog.Warn("command pull reply could not be sent", "facility", "command", "outpost", outpost, "error", err.Error())
 	}
 }
 
-// recordCommandStatus records a node's execution report. A report the server
-// cannot parse, or that the node had no standing to make (a command
-// dispatched to a different node, or already stamped), is logged at WARN,
-// never silently dropped: it is a race or a misbehaving node, and both want
+// recordCommandStatus records an outpost's execution report. A report the server
+// cannot parse, or that the outpost had no standing to make (a command
+// dispatched to a different outpost, or already stamped), is logged at WARN,
+// never silently dropped: it is a race or a misbehaving outpost, and both want
 // a trail.
-func (s *Server) recordCommandStatus(ctx context.Context, node string, data []byte) {
+func (s *Server) recordCommandStatus(ctx context.Context, outpost string, data []byte) {
 	var st collection.CommandStatus
 	if err := json.Unmarshal(data, &st); err != nil {
-		slog.Warn("command execution report could not be parsed", "facility", "command", "node", node, "error", err.Error())
+		slog.Warn("command execution report could not be parsed", "facility", "command", "outpost", outpost, "error", err.Error())
 		return
 	}
-	err := s.store.RecordCommandExecution(ctx, node, st.ID, st.Error, st.Reply)
+	err := s.store.RecordCommandExecution(ctx, outpost, st.ID, st.Error, st.Reply)
 	s.request(requestCommandReport, err)
 	if err != nil {
-		slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
+		slog.Warn("command execution report rejected", "facility", "command", "outpost", outpost, "command", st.ID, "error", err.Error())
 	}
 }

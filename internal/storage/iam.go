@@ -317,7 +317,7 @@ type Principal struct {
 	ArchivedAt *time.Time
 	Human      *HumanProfile
 	Service    *ServiceProfile
-	Node       *NodeProfile
+	Outpost    *OutpostProfile
 	Grants     []Grant
 	// Agent is set when the request authenticated with an agent token (#1179):
 	// the principal is the person who minted it, and the agent acts on their
@@ -343,9 +343,9 @@ type AgentCredential struct {
 // PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
 type PrincipalGroupRef struct{ ID, Name string }
 
-// HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
+// HumanProfile, ServiceProfile, and OutpostProfile carry the kind-specific
 // attributes. Each kind's identifier is its own column: a human's username, a
-// service account's name, a node's name (the fleet address).
+// service account's name, an outpost's name (the fleet address).
 type HumanProfile struct {
 	Username, Email, Label string
 	// MustChangePassword is set by an admin reset and cleared by the user's own
@@ -358,7 +358,7 @@ type HumanProfile struct {
 	AvatarUpdatedAt *time.Time
 }
 type ServiceProfile struct{ Name string }
-type NodeProfile struct{ Name string }
+type OutpostProfile struct{ Name string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
 // the admin surface can revoke a specific one).
@@ -1040,7 +1040,7 @@ type HumanSpec struct {
 	PasswordHash string
 }
 
-// ListPrincipals returns every principal, humans before nodes, each kind in
+// ListPrincipals returns every principal, humans before outposts, each kind in
 // creation order. Kind leads so the directory groups people apart from machine
 // identities; within a kind, seq (the DB-assigned identity) is the order,
 // because clock-derived keys (created_at, uuidv7 ids) invert across
@@ -1631,13 +1631,13 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 			return fmt.Errorf("storage: load service: %w", err)
 		}
 		pr.Service = &s
-	case "node":
-		var n NodeProfile
+	case "outpost":
+		var n OutpostProfile
 		if err := p.pool.QueryRow(ctx,
-			`select name from node where principal_id = $1`, pr.ID).Scan(&n.Name); err != nil {
-			return fmt.Errorf("storage: load node: %w", err)
+			`select name from outpost where principal_id = $1`, pr.ID).Scan(&n.Name); err != nil {
+			return fmt.Errorf("storage: load outpost: %w", err)
 		}
-		pr.Node = &n
+		pr.Outpost = &n
 	}
 
 	// A principal's effective grants are its direct grants unioned with the grants
@@ -1764,7 +1764,7 @@ func (p *PG) EnsureServicePrincipal(ctx context.Context, actorID, name string) (
 // non-secret prefix: every token it held before is revoked, audited, in the
 // same transaction. False when no service has the name. The trusted lane's
 // (#1370): the lab mints its simulated pusher a token on every run, as it
-// does its node's.
+// does its outpost's.
 func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

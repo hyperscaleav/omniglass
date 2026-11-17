@@ -543,8 +543,8 @@ func TestRunIdempotent(t *testing.T) {
 	assertGrant(t, conn, ctx, "viewer-hq", "viewer", "location", "hq", "subtree")
 	assertGrant(t, conn, ctx, "tech-east", "deploy", "location", "east", "subtree_excl_root")
 
-	// The worked reachability check: an enrolled node, a DSP with two protocol-named
-	// interfaces (web/http, qrc/tcp) placed on the node, a poll task over each, and the
+	// The worked reachability check: an enrolled outpost, a DSP with two protocol-named
+	// interfaces (web/http, qrc/tcp) placed on the outpost, a poll task over each, and the
 	// samples the panel reads. Every count is over two Runs, so a duplicate here is
 	// the seed failing to be idempotent.
 	all := scope.Set{All: true}
@@ -560,13 +560,13 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("reachability component rows = %d, want 1 (seed not idempotent)", reachComps)
 	}
 
-	// The node is created, enrolled, and claimed, so it reads as enrolled.
-	node, err := gw.GetNode(ctx, "edge-hq", all)
+	// The outpost is created, enrolled, and claimed, so it reads as enrolled.
+	outpost, err := gw.GetOutpost(ctx, "edge-hq", all)
 	if err != nil {
-		t.Fatalf("get seeded node: %v", err)
+		t.Fatalf("get seeded outpost: %v", err)
 	}
-	if !node.Enrolled {
-		t.Errorf("node edge-hq enrolled = false, want true (created, enrolled, and claimed)")
+	if !outpost.Enrolled {
+		t.Errorf("outpost edge-hq enrolled = false, want true (created, enrolled, and claimed)")
 	}
 
 	// Two interfaces on the DSP, each named by its protocol and typed by its transport:
@@ -595,8 +595,8 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("tcp interface type = %q, want tcp", tcpIf.Transport)
 	}
 	for _, it := range []*storage.Endpoint{httpIf, tcpIf} {
-		if it.Node == nil || *it.Node != "edge-hq" {
-			t.Errorf("interface %s node = %v, want edge-hq", it.Name, it.Node)
+		if it.Outpost == nil || *it.Outpost != "edge-hq" {
+			t.Errorf("interface %s outpost = %v, want edge-hq", it.Name, it.Outpost)
 		}
 	}
 	// The reach checks only: with the simulated fleet the dsp also carries
@@ -1689,7 +1689,7 @@ func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
 
 // TestSeededFleetIsSimulated proves the dev fleet is wired for the
 // simulator: every component whose product a simulator profile serves has
-// an endpoint on the dev node at an address in the simulated block, the SNMP
+// an endpoint on the dev outpost at an address in the simulated block, the SNMP
 // and line-protocol products through their drivers, and a second run adds
 // nothing.
 func TestSeededFleetIsSimulated(t *testing.T) {
@@ -1710,7 +1710,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	rows, err := conn.Query(ctx, `
 		select c.id, p.name from component c join product p on p.id = c.product_id
 		where not exists (select 1 from endpoint e where e.component = c.id
-			and e.node_name = (select principal_id from node where name = 'edge-hq')
+			and e.outpost_id = (select principal_id from outpost where name = 'edge-hq')
 			and e.params->>'target' like '127.60.%')`)
 	if err != nil {
 		t.Fatal(err)
@@ -1797,7 +1797,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 }
 
 // TestReachabilityDemoIsSimulatedWithTheFleet proves the worked reachability
-// check stays truthful under a live node: with the simulated fleet, the demo
+// check stays truthful under a live outpost: with the simulated fleet, the demo
 // DSP is a simulated polaris-dsp-16 whose endpoints target its simulated
 // address (HTTP and the line protocol at their real ports); without
 // it (the docs screenshots), the demo is untouched.
@@ -1935,20 +1935,20 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 // TestSeededFleetHoldsARejectedSession proves the dev fleet carries a held
 // session worth showing (#1059): the huddle's touch panel also answers NVP over
 // telnet behind a login, and the endpoint seeded on it logs in with the secret
-// holding the password from before a rotation, so a live node reads its
+// holding the password from before a rotation, so a live outpost reads its
 // session rejected beside Retry. The rotated secret holds the right one, and
 // pointing the endpoint's login at it is the fix the walkthrough teaches. A
 // second run adds nothing.
 func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, login, node string }
+	type ep struct{ host, port, login, outpost string }
 	telnet := func() (ep, int) {
 		t.Helper()
 		var e ep
 		var n int
 		rows, err := conn.Query(ctx, `
-			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.principal_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-telnet' and l.name = 'huddle'`)
 		if err != nil {
@@ -1957,7 +1957,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		defer rows.Close()
 		for rows.Next() {
 			n++
-			if err := rows.Scan(&e.host, &e.port, &e.login, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.login, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -1975,9 +1975,9 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
 	// The panel's own simulated address, its real telnet port, on the dev
-	// node, with the stale login.
-	if got.host != nvpHost || got.port != "23" || got.node != "edge-hq" || got.login != "sim-panel-login" {
-		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 23, node edge-hq, login sim-panel-login", got, nvpHost)
+	// outpost, with the stale login.
+	if got.host != nvpHost || got.port != "23" || got.outpost != "edge-hq" || got.login != "sim-panel-login" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 23, outpost edge-hq, login sim-panel-login", got, nvpHost)
 	}
 
 	all := scope.Set{All: true}
@@ -2013,7 +2013,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 // TestSeededFleetHoldsAProbeGate pins the refusal a lab shows on an
 // endpoint holding no session (#1110): the auditorium's touch panel answers
 // SNMP, and its snmp-generic endpoint reads its community from a secret
-// holding the one the panel's agent knows and refuses, so a live node's
+// holding the one the panel's agent knows and refuses, so a live outpost's
 // reachability probe meets authorizationError, gates the endpoint at the
 // session rung, and the console shows the refusal's reason beside Retry with
 // no session pill. Pointing the community at the fleet's own secret lifts it.
@@ -2021,11 +2021,11 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ id, host, port, community, node string }
+	type ep struct{ id, host, port, community, outpost string }
 	snmpEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from node n where n.principal_id = e.node_name)
+			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from outpost n where n.principal_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component
 			where d.name = 'snmp-generic' and c.id = (select c2.id from component c2 join location l on l.id = c2.location_id
 				join product p on p.id = c2.product_id where l.name = 'auditorium' and p.name = 'newtron-panel-7')`)
@@ -2036,7 +2036,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.id, &e.host, &e.port, &e.community, &e.node); err != nil {
+			if err := rows.Scan(&e.id, &e.host, &e.port, &e.community, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 			out = append(out, e)
@@ -2048,8 +2048,8 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 		t.Fatalf("auditorium touch panel snmp endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "161" || e.node != "edge-hq" || e.community != "sim-snmp-revoked" {
-		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 161, node edge-hq, community sim-snmp-revoked", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "161" || e.outpost != "edge-hq" || e.community != "sim-snmp-revoked" {
+		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 161, outpost edge-hq, community sim-snmp-revoked", e)
 	}
 
 	// The secret holds the community the panel's agent refuses, by the
@@ -2111,7 +2111,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 // shows (#1078): the touch panel in the briefing place answers NVP over its ssh
 // console, and its endpoint pins a host key from before the panel was
 // reimaged, so the simulated panel's own key (minted when the simulator
-// starts) never matches it and a live node reads the session rejected with
+// starts) never matches it and a live outpost reads the session rejected with
 // class host-key, both keys named, beside Trust this key. The login is the
 // panel's right one, so trusting the offered key brings the session up. A
 // second run neither adds an endpoint nor moves the pin an operator may have
@@ -2119,11 +2119,11 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ id, name, host, port, login, node string }
+	type ep struct{ id, name, host, port, login, outpost string }
 	sshEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.principal_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-ssh' and l.name = 'briefing'`)
 		if err != nil {
@@ -2133,7 +2133,7 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.node); err != nil {
+			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 			out = append(out, e)
@@ -2145,13 +2145,13 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 		t.Fatalf("briefing ssh endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "22" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
-		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 22, node edge-hq, the panel's right login", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "22" || e.outpost != "edge-hq" || e.login != "sim-panel-login-rotated" {
+		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 22, outpost edge-hq, the panel's right login", e)
 	}
 	const stalePin = "SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M"
 	pin := func() string {
 		t.Helper()
-		wl, err := gw.NodeWorklist(ctx, "edge-hq")
+		wl, err := gw.OutpostWorklist(ctx, "edge-hq")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2187,15 +2187,15 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 // TLS face with an endpoint attached (#1035): the huddle's touch panel also
 // answers NVP over TLS, and the seeded newtron-nvp-tls endpoint targets its
 // simulated address at the driver's port, pinning the panel's key on first
-// use, on the dev node. A second run adds nothing.
+// use, on the dev outpost. A second run adds nothing.
 func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, mode, target, node string }
+	type ep struct{ host, port, mode, target, outpost string }
 	tlsEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls-mode', ''), e.params->>'target',
-				(select n.name from node n where n.principal_id = e.node_name)
+				(select n.name from outpost n where n.principal_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-tls' and l.name = 'huddle' and e.name = 'tls'`)
 		if err != nil {
@@ -2205,7 +2205,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.host, &e.port, &e.mode, &e.target, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.mode, &e.target, &e.outpost); err != nil {
 				return nil, err
 			}
 			out = append(out, e)
@@ -2226,7 +2226,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
-	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.node != "edge-hq" {
+	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.outpost != "edge-hq" {
 		t.Fatalf("huddle tls endpoint = %+v, want host %s, port 51326, pin, on edge-hq", e, nvpHost)
 	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {
@@ -2241,16 +2241,16 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 // NVP datagram face with an endpoint attached (#1037): the huddle's touch
 // panel also answers NVP over udp, and the seeded newtron-nvp-udp endpoint
 // targets its simulated address at the driver's port, with no listen port
-// (the node binds its own and the panel pushes to the source of the
-// subscribe), on the dev node. A second run adds nothing.
+// (the outpost binds its own and the panel pushes to the source of the
+// subscribe), on the dev outpost. A second run adds nothing.
 func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, listen, target, node string }
+	type ep struct{ host, port, listen, target, outpost string }
 	udpEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.params->>'listen-port', ''), e.params->>'target',
-				(select n.name from node n where n.principal_id = e.node_name)
+				(select n.name from outpost n where n.principal_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-udp' and l.name = 'huddle' and e.name = 'udp'`)
 		if err != nil {
@@ -2260,7 +2260,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.host, &e.port, &e.listen, &e.target, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.listen, &e.target, &e.outpost); err != nil {
 				return nil, err
 			}
 			out = append(out, e)
@@ -2281,7 +2281,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
-	if e := got[0]; e.host != nvpHost || e.port != "51327" || e.listen != "" || e.target != nvpHost+":51327" || e.node != "edge-hq" {
+	if e := got[0]; e.host != nvpHost || e.port != "51327" || e.listen != "" || e.target != nvpHost+":51327" || e.outpost != "edge-hq" {
 		t.Fatalf("huddle udp endpoint = %+v, want host %s, port 51327, no listen port, on edge-hq", e, nvpHost)
 	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {

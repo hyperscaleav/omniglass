@@ -109,7 +109,7 @@ Every write is refused, with a 422 naming the field at fault, when:
   provenance rule, not in place of it: a loop through an event rule and an alarm is not in this graph.
 - **it reads `health`, or writes a reserved key.** An alarm moves health, so a rule reading it could
   feed back through an event rule. A rule's output is a key it owns, so it is never a key of the
-  reserved family: a native probe key is the node's observation, and `health` is the rollup's
+  reserved family: a native probe key is the outpost's observation, and `health` is the rollup's
   ([the writer class](/architecture/properties/#who-writes-a-key-the-writer-class)).
 - **its output is a key another enabled rule writes.** One enabled rule writes a key: two would mix
   their values on an owner by newest timestamp. The refusal names the other rule, and enabling a
@@ -120,7 +120,7 @@ Every write is refused, with a 422 naming the field at fault, when:
   The reverse order is held too, by the writer class
   ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)):
   once a rule outputs a key it is of the `calc` class, so a driver created or edited to emit it is
-  refused at its spec's write, a command type targeting it at its target, and a push or a node lane
+  refused at its spec's write, a command type targeting it at its target, and a push or an outpost lane
   carrying it at the Storage Gateway.
 
 The graph and the one-writer check are key-level: they ignore owner kinds, so a component rule and a

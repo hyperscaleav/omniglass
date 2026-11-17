@@ -200,7 +200,7 @@ func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
 	}
 }
 
-// A reserved key (the node's or the platform's own) is never shadowed: held in two
+// A reserved key (the outpost's or the platform's own) is never shadowed: held in two
 // catalogs it resolves to nothing, so an operator row that appears beside a key a
 // later release reserves cannot take the official probe key's place.
 func TestAReservedKeyIsNeverShadowed(t *testing.T) {
