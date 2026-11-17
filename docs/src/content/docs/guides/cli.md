@@ -201,11 +201,11 @@ omniglass set-password ops 'set-a-strong-one'
 omniglass set-password ops 'set-a-strong-one' --revoke-tokens   # full lockout: sessions and tokens
 ```
 
-Once a server is running, a signed-in principal manages **its own** account through the
+Once a server is running, a signed-in user manages **its own** account through the
 generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
-omniglass auth me                                    # your principal, permissions, and grants
+omniglass auth me                                    # your user, permissions, and grants
 omniglass auth agent-policy                          # what an agent may do, and whether it governs you
 omniglass auth update-profile --label "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
@@ -216,10 +216,10 @@ omniglass auth avatar                                   # read your picture back
 
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
-normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+normalizes it to a 256x256 JPEG. An administrator manages **any** user's picture with
 `omniglass principal setAvatar alice --image-base64 …` and `omniglass principal removeAvatar alice`
 (gated by `principal:set-avatar`), reading one back with `omniglass principal avatar list alice` (gated by
-`principal:read:admin`). A principal with no picture is a 404.
+`principal:read:admin`). A user with no picture is a 404.
 
 ## Collection commands
 
@@ -481,9 +481,9 @@ falls back to a string, so the common case needs no quoting. A string value that
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
 
-A signed-in principal manages its own account through the generated self-scoped commands
+A signed-in user manages its own account through the generated self-scoped commands
 (`omniglass auth me`, `auth update-profile`, `auth change-password`, `auth set-avatar` /
-`auth remove-avatar`); an administrator manages other principals, roles, groups, secrets,
+`auth remove-avatar`); an administrator manages other users, roles, groups, secrets,
 and variables through the resource commands, all covered in the [admin guide](/guides/admin/)
 and listed in full in the [CLI reference](/reference/cli/).
 
@@ -513,7 +513,7 @@ omniglass location setTag hq --key environment --value staging
 omniglass component effective-tag list codec-1                # the cascade resolved onto a component
 ```
 
-Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
+Binding is a custom method on the entity (`component setTag`), like the user lifecycle verbs, so it
 stays clear of the top-level `tag` commands. A tag's `--name` is an ordinary entity name (lowercase
 letters, digits, and hyphens, no dots and no underscores, never a uuid), and minting one that breaks
 the rule is a 422; that name is then the key a binding carries (`--key`). `--applies-to` is an
@@ -722,7 +722,7 @@ The issue answers with the command as it stands: its `status`, its `phase` (wher
 flight: `queued` for its outpost, `delivered`, `awaiting-reply` or `awaiting-observation`), and the
 evidence once there is some. `--wait` holds the issue until the command settles, fails or times out,
 or until `--wait-timeout` seconds pass (1 to 120, 30 by default), which is what a script wants; a
-server holds 64 waits at once and a principal 4, and a wait past either is a 429 refused before
+server holds 64 waits at once and a user 4, and a wait past either is a 429 refused before
 anything is issued. Every command reads back by its id under its component, with `command:read`
 ([commands](/architecture/commands/#reading-a-command-from-issue-to-settlement)):
 
@@ -905,13 +905,13 @@ on the page, minus the browser.
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
   The resource and verb come from the AIP-style path (`POST /locations` is `location
   create`, `GET /locations/{name}` is `location get <name>`, a `:verb` custom method is
-  `<resource> <verb> <id>`, so the principal lifecycle is `principal disable <id>`,
+  `<resource> <verb> <id>`, so the user lifecycle is `principal disable <id>`,
   `principal archive <id>`, `principal restore <id>`, and `principal purge <id>`); path
   parameters are positional args, the request body is
   `--flags`, and OpenAPI query parameters become optional `--flags` (a set flag is
   appended to the request query string, an unset one keeps the server default), so
-  `principal list --include-archived --kind service` filters the listing. A principal
-  `<id>` argument accepts either the uuid or a human's username (`omniglass principal
+  `principal list --include-archived --kind service` filters the listing. A user
+  `<id>` argument accepts either the uuid or a person's username (`omniglass principal
   archive alice`), resolved by the server, so you rarely need to look a uuid up first.
   `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client

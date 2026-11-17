@@ -1,29 +1,29 @@
 ---
 title: Manage users
-description: "The principal directory: create a human, edit and rename, the disable-archive-purge lifecycle, admin password reset, and profile pictures."
+description: "The user directory: create a person, edit and rename, the disable-archive-purge lifecycle, admin password reset, and profile pictures."
 screenshots:
   - id: users
     path: /web/users
-    alt: "The Users directory: each principal with its avatar, kind badge, and grant count, plus New user and Show archived."
+    alt: "The Users directory: each user with its avatar, kind badge, and grant count, plus New user and Show archived."
 ---
 
-**Admin > Users** is the admin directory of every principal, humans and service accounts,
+**Admin > Users** is the admin directory of every user, persons and machine users,
 each with the roles granted to it. This page is the account lifecycle: creating, editing,
 disabling, and removing a user. Giving a user access, a role at a scope, is the [grant
 builder](/guides/admin/access/#the-grant-builder) on the next page. The model underneath is
 [identity and access](/architecture/identity-access/).
 
-Every row leads with the principal's avatar, its uploaded picture when it has one and its
+Every row leads with the user's avatar, its uploaded picture when it has one and its
 initials otherwise. You see the directory only if you hold `principal:read:admin`, the
 admin-tier read that a plain `*:read` cannot reach, so a viewer or field tech cannot enumerate
-users. Because a principal is not part of any location or system tree, that grant is inherently
+users. Because a user is not part of any location or system tree, that grant is inherently
 **all-scope**: a location-scoped admin cannot list users.
 
 ::screenshot{#users}
 
-- Pick a row to open its **blade**: a principal's profile, the **groups** it belongs to (open
+- Pick a row to open its **blade**: a user's profile, the **groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
-- With `principal:create`, **New user** creates a human with a username and an optional initial
+- With `principal:create`, **New user** creates a person with a username and an optional initial
   password (which must meet the **password policy**: at least 12 characters, not a common password,
   and not containing the username). **Generate** fills a strong random password, kept masked, with a
   **Copy** button to hand it over (or reveal it with the show/hide toggle). The new user can sign in right away and change that
@@ -39,7 +39,7 @@ users. Because a principal is not part of any location or system tree, that gran
   footer's left slot, available without entering edit.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
   not the username), so a renamed user keeps their password and access. A username is a sign-in
-  handle, not the identity triad's **name**: a principal carries no name column and is addressed by
+  handle, not the identity triad's **name**: a user carries no name column and is addressed by
   its uuid, which is why a username moves on the ordinary update rather than through the `:rename`
   custom method a component, system, location, or group is renamed by. Only an administrator can
   change a username; the user cannot change their own.

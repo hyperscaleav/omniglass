@@ -51,7 +51,7 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 
 4. **Nav** `web/src/lib/nav.ts`: flip the child's `live: true` and set its `resource` to the
    page's authz resource (the same string its server route gates on, e.g. `"outpost"`). The sidebar
-   hides the tab from a principal without `<resource>:read` (`filterNav`). Until the page ships,
+   hides the tab from a user without `<resource>:read` (`filterNav`). Until the page ships,
    leave it `!live` with no resource; the dimmed "soon" item + shared `Placeholder` cover it (set
    the child's `issue` to link its tracking issue).
 

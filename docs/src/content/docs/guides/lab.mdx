@@ -98,7 +98,7 @@ faults below), and a plain ping. Beside them:
   so the endpoint's page reads last heard within the first two minutes.
 - **An integration pushes.** A simulated booking service pushes the HQ boardroom system's bookings
   (`booking-count`, `booking-state`) through `POST /telemetry:push`, with a token the lab mints on
-  every run for a service account that may push to that one system and do nothing else. It is an
+  every run for a machine user that may push to that one system and do nothing else. It is an
   outside actor, not a device on the network: the fleet declares it as a pusher, the way a scale
   scenario declares its own, and the simulator beside the outpost runs it as an emulator device with
   a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence). Open the
@@ -346,7 +346,7 @@ outpost runs them:
 
 - **A token pusher.** `corporate` places one booking service a site, pushing four of its systems'
   bookings every 30 seconds through `POST /telemetry:push`. The lab mints its bearer token on every
-  run, for a service account that may push to those systems and do nothing else.
+  run, for a machine user that may push to those systems and do nothing else.
 - **A webhook sender.** `corporate` also places one meeting platform account a site (`ucc-platform`),
   which speaks for every one of the site's systems. The lab seeds the account as a component with a
   `ucc-webhook` endpoint and a signing key minted on every run (beside the product's polled
@@ -1275,7 +1275,7 @@ one and a maximum no lower than the minimum. A pusher is declared like the devic
 must have a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), and it needs
 at least one a site and at least one system to push for, since a pusher scoped to nothing could
 push nowhere; omit `systems` and it is scoped to every system of its site. The profile's face says
-which kind of actor it is. A push face makes a token pusher: a service account granted
+which kind of actor it is. A push face makes a token pusher: a machine user granted
 `telemetry:push` on its systems alone, whose token the lab mints on every run and hands only to the
 simulator that runs it, never the plan or a log. A webhook face (one naming the driver of its
 endpoint and the route that adds a room, [simulation](/architecture/simulation/#a-simulated-service-posts-from-the-start))

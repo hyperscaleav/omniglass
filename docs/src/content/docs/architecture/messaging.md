@@ -490,7 +490,7 @@ Synchronous internal calls use **NATS request-reply**: an in-process call in sin
 ## KV and object store
 
 - **KV** holds config, **distributed locks and leader-election** (the CDC publisher and the clock
-  are leader-elected singletons), and the principal and permission cache (replacing Postgres
+  are leader-elected singletons), and the user and permission cache (replacing Postgres
   `LISTEN/NOTIFY` invalidation, [identity and access](/architecture/identity-access/)).
 - **Object store** holds internal artifacts (a compiled per-outpost runtime unit); user files stay on
   the content-addressed [blob store](/architecture/files/).

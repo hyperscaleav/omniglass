@@ -12,7 +12,7 @@ is [deployment](/guides/deployment/).
 The dividing line is the [two authorization layers](/architecture/identity-access/), both
 enforced in the app on every request: a `<resource>:<action>` **permission** checked on every
 route, and an ABAC **scope** injected by the Storage Gateway on every applicable query. An
-administrator is simply a principal whose grants carry the admin-tier permissions (`principal:*`,
+administrator is simply a user whose grants carry the admin-tier permissions (`principal:*`,
 `role:read:admin`, `audit:read:admin`, `secret:*`, and so on); the surfaces below render and refuse exactly
 along those grants, so what an administrator sees is what they are allowed to change.
 
@@ -31,7 +31,7 @@ Every task on these pages has two front doors, and they call the same API with t
 
 ## In this guide
 
-- **[Manage users](/guides/admin/users/)** is the principal directory: creating a human,
+- **[Manage users](/guides/admin/users/)** is the user directory: creating a person,
   editing and renaming, the disable-archive-purge lifecycle, admin password reset, and profile
   pictures.
 - **[Roles, groups, and grants](/guides/admin/access/)** is giving a user access: the built-in

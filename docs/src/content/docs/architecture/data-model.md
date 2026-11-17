@@ -787,8 +787,8 @@ telemetry.property.system_id -> fleet.system.id
 
 ## The subsystems
 
-- **identity** - who can act and what they may do: principals (human and
-  service), groups, grants, roles, the typed-slot system-slot guard, and the
+- **identity** - who can act and what they may do: users (person and
+  machine), groups, grants, roles, the typed-slot system-slot guard, and the
   impersonation trail.
 - **fleet** - what is being monitored: locations, systems, components, and the
   endpoints a component exposes.
