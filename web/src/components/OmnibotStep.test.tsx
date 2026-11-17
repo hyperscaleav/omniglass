@@ -13,10 +13,10 @@ import { uuidFor } from "../lib/testids";
 
 afterEach(cleanup);
 
-function show(step: Step) {
+function show(step: Step, waiting = false) {
   return render(() => (
     <Router>
-      <Route path="*" component={() => <OmnibotStep step={step} />} />
+      <Route path="*" component={() => <OmnibotStep step={step} waiting={waiting} />} />
     </Router>
   ));
 }
@@ -43,6 +43,12 @@ describe("the generic step card", () => {
   it("says it is running until a result arrives", () => {
     show(step("list-alarms", {}));
     expect(screen.getByText("Running")).toBeTruthy();
+  });
+
+  it("says a call the person is asked about waits for them, not that it runs", () => {
+    show(step("set-component-tag", { key: "asset-id" }), true);
+    expect(screen.getByText("Waiting for you")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
   });
 
   it("marks a declined call and shows no result", () => {

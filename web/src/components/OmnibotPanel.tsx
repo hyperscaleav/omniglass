@@ -170,7 +170,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                 <Match when={item.kind === "text" && item}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
-                <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} />}</Match>
+                <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} waiting={state().interrupt?.id === s().id} />}</Match>
               </Switch>
             )}
           </For>

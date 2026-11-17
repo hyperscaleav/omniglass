@@ -92,6 +92,7 @@ describe("the omnibot panel", () => {
     expect(screen.getByText("Let me look.")).toBeTruthy();
     expect(screen.getAllByTestId("omnibot-step")).toHaveLength(2);
     expect(screen.getByTestId("omnibot-ask").textContent).toContain("Create a component");
+    expect(screen.getByText("Waiting for you")).toBeTruthy();
     expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(true);
   });
 

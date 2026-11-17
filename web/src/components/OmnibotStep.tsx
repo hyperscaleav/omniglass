@@ -102,7 +102,9 @@ function Args(p: { args: Record<string, unknown> }) {
   );
 }
 
-export default function OmnibotStep(props: { step: Step }) {
+// waiting marks the call the run paused on, which waits for the person's
+// answer rather than running.
+export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
   const parsed = () => (props.step.result === undefined ? undefined : parse(props.step.result));
   const view = () => {
     const r = parsed();
@@ -119,7 +121,10 @@ export default function OmnibotStep(props: { step: Step }) {
         <Show when={props.step.decision === "declined"}>
           <span class="badge badge-sm badge-soft badge-warning">Declined</span>
         </Show>
-        <Show when={props.step.result === undefined && props.step.decision !== "declined"}>
+        <Show when={props.waiting}>
+          <span class="badge badge-sm badge-soft badge-warning">Waiting for you</span>
+        </Show>
+        <Show when={!props.waiting && props.step.result === undefined && props.step.decision !== "declined"}>
           <span class="badge badge-sm badge-ghost">Running</span>
         </Show>
       </div>
