@@ -114,7 +114,7 @@ export default function AddSimSystemForm(props: { outposts: string[]; close: () 
       <LoadError what="the standards" query={standards} testid="standards-error" />
       <FieldRow
         label="Standard"
-        info="The blueprint the system is built to. Its roles say which components a system of this standard holds and how many; each role is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
+        info="The contract the system is built to. Its roles say which components a system of this standard holds and how many; each role is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
         hint={shown("standard") ?? (standards.data?.length === 0 ? "No standards yet: define one under Catalog, Standards." : undefined)}
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().standard} onChange={(e) => set("standard", e.currentTarget.value)} disabled={busy() || standards.isPending}>

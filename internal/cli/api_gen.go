@@ -2970,7 +2970,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -3072,7 +3072,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()
@@ -4772,7 +4772,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name")
@@ -5034,7 +5034,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
 				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
 				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
@@ -5525,7 +5525,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification type",
-					Long:    "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+					Long:    "Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
 					Example: "  omniglass notification-type create --name name --subject subject --text text",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5553,9 +5553,9 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The type's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject, written in the rule language")
 				_ = cmd.MarkFlagRequired("subject")
-				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text, written in the rule language")
 				_ = cmd.MarkFlagRequired("text")
 				return cmd
 			}()
@@ -5622,7 +5622,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "preview <name>",
 					Short:   "Preview a notification type against an alarm",
-					Long:    "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
+					Long:    "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
 					Example: "  omniglass notification-type preview <name> --component component",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5649,8 +5649,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAlarm, "alarm", "", "The alarm's id; absent previews the component's most recently raised alarm")
 				cmd.Flags().StringVar(&fComponent, "component", "", "The component the alarm is on, by name or dotted address")
 				_ = cmd.MarkFlagRequired("component")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "A draft subject template to render instead of the stored one, so an editor previews before it saves")
-				cmd.Flags().StringVar(&fText, "text", "", "A draft text template to render instead of the stored one")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "A draft subject to render instead of the stored one, so an editor previews before it saves")
+				cmd.Flags().StringVar(&fText, "text", "", "A draft text to render instead of the stored one")
 				cmd.Flags().StringVar(&fTransition, "transition", "", "The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)")
 				return cmd
 			}()
@@ -5689,7 +5689,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a notification type",
-					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+					Long:    "Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 					Example: "  omniglass notification-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5712,8 +5712,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the message is for")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
-				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject, written in the rule language")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text, written in the rule language")
 				return cmd
 			}()
 			return cmd
@@ -6845,7 +6845,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("kind")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -7118,7 +7118,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override; an empty string clears it, so the product inherits its component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid; an empty string clears it")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid; an empty string clears it")
 				return cmd
@@ -8059,7 +8059,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List standards",
-					Long:    "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
+					Long:    "Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.",
 					Example: "  omniglass standard list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9427,7 +9427,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent system_type, by name or uuid; omit for a root type")
@@ -9458,7 +9458,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List system types",
-					Long:    "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+					Long:    "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
 					Example: "  omniglass system-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9507,7 +9507,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()

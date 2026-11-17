@@ -24,7 +24,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **fleet** | Everything an install manages, the locations, the systems in them and the components that make them up. |  |  | estate, inventory |
 | **healthy** | The health of a system whose components are all present and well. |  |  |  |
 | **incomplete** | The health of a system still missing a component its standard requires, shown as Commissioning. |  |  |  |
-| **label** | The optional friendly string a person reads in place of a name. |  |  | display name |
+| **label** | The optional friendly string a person reads in place of a name. |  |  | display name, label template |
 | **location** | A place the fleet occupies, from a campus down to a room, nested under the location it sits in. | `/locations` | `location` |  |
 | **notification** | One message about an alarm sent on one channel, such as a webhook, an email or the inbox. | `/notifications` | `notification` |  |
 | **outage** | The health of a system that cannot do its job. |  |  |  |
@@ -60,7 +60,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **secret type** | A shape a secret can take, such as a password or an API key, built into Omniglass. | `/secret-types` | `secret` |  |
 | **setting** | A platform or user preference, resolved from the user up to the platform default. | `/settings` | `settings` |  |
 | **severity level** | How bad an alarm is, ranked, with its color and whether it takes its component out. | `/severity-levels` | `severity_level` |  |
-| **standard** | A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes. | `/standards` | `standard` |  |
+| **standard** | The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes. | `/standards` | `standard` | blueprint |
 | **system type** | What kind of space a system is, such as a boardroom, a classroom or a video wall. | `/system-types` | `system_type` |  |
 | **task** | An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
 | **transport** | The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass. | `/transports` | `endpoint` |  |

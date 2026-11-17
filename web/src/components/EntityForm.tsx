@@ -431,7 +431,7 @@ export default function EntityForm(props: {
               ) : undefined}
             />
             <BladeField label="Standard" edit={slot} value={() => (row()?.standard ? labelIn(standards.data, row()!.standard as string) : "None (a one-off system)")}
-              info="The blueprint this system is built to. Clearing it makes the system a one-off."
+              info="The contract this system is built to. Clearing it makes the system a one-off."
               children={slot.editing() ? (
                 <select ref={bindSelectValue(standard, () => standards.data)} class="select select-bordered w-full" onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
@@ -686,7 +686,7 @@ export function EntityCreateForm(props: {
             <FieldRow label="Type" hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
               <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
             </FieldRow>
-            <FieldRow label="Standard" hint="The blueprint this system conforms to. Optional.">
+            <FieldRow label="Standard" hint="The contract this system is built to. Optional.">
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                 <option value="">None (a one-off system)</option>
                 <For each={standardOptions()}>{(st) => <option value={st.name}>{st.label}</option>}</For>

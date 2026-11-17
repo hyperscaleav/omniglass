@@ -662,7 +662,7 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "description": "The key a template reads it by ({{.Name}})",
+            "description": "The key a rule reads it by ({{.Name}})",
             "type": "string"
           },
           "value": {
@@ -2608,7 +2608,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components",
+            "description": "The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components",
             "type": "string"
           },
           "name": {
@@ -3083,7 +3083,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.",
+            "description": "A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422.",
             "type": "string"
           },
           "name": {
@@ -3564,7 +3564,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile",
+            "description": "The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile",
             "type": "string"
           },
           "name": {
@@ -3968,11 +3968,11 @@
             "type": "string"
           },
           "subject": {
-            "description": "The one-line subject template",
+            "description": "The one-line subject, written in the rule language",
             "type": "string"
           },
           "text": {
-            "description": "The body text template",
+            "description": "The body text, written in the rule language",
             "type": "string"
           }
         },
@@ -4179,7 +4179,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.",
+            "description": "A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422.",
             "type": "string"
           },
           "name": {
@@ -4630,7 +4630,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile",
+            "description": "The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile",
             "type": "string"
           },
           "name": {
@@ -9127,7 +9127,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template locations of this type get; empty falls back to the global rule for locations",
+            "description": "The label rule locations of this type get; empty falls back to the global rule for locations",
             "type": "string"
           },
           "name": {
@@ -9948,7 +9948,7 @@
         "additionalProperties": false,
         "properties": {
           "console_url": {
-            "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty",
+            "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty",
             "type": "string"
           },
           "egress_allow": {
@@ -10140,11 +10140,11 @@
             "type": "boolean"
           },
           "subject": {
-            "description": "The one-line subject template",
+            "description": "The one-line subject, written in the rule language",
             "type": "string"
           },
           "text": {
-            "description": "The body text template",
+            "description": "The body text, written in the rule language",
             "type": "string"
           },
           "updated_at": {
@@ -11850,11 +11850,11 @@
             "type": "string"
           },
           "subject": {
-            "description": "A draft subject template to render instead of the stored one, so an editor previews before it saves",
+            "description": "A draft subject to render instead of the stored one, so an editor previews before it saves",
             "type": "string"
           },
           "text": {
-            "description": "A draft text template to render instead of the stored one",
+            "description": "A draft text to render instead of the stored one",
             "type": "string"
           },
           "transition": {
@@ -11884,7 +11884,7 @@
             "type": "string"
           },
           "facts": {
-            "description": "The alarm facts the templates read, every key in its declared order (an absent fact is empty)",
+            "description": "The alarm facts the subject and text read, every key in its declared order (an absent fact is empty)",
             "items": {
               "$ref": "#/components/schemas/AlarmFactBody"
             },
@@ -12087,7 +12087,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule",
+            "description": "The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule",
             "type": "string"
           },
           "name": {
@@ -15841,7 +15841,7 @@
       },
       "StandardBody": {
         "additionalProperties": false,
-        "description": "A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes.",
+        "description": "The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -16126,7 +16126,7 @@
             "type": "string"
           },
           "system_type": {
-            "description": "The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to.",
+            "description": "The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to.",
             "type": "string"
           },
           "system_type_id": {
@@ -16626,7 +16626,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems",
+            "description": "The label rule systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems",
             "type": "string"
           },
           "name": {
@@ -17896,7 +17896,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.",
+            "description": "A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.",
             "type": "string"
           },
           "stem": {
@@ -18166,7 +18166,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels",
+            "description": "A new label rule for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels",
             "type": "string"
           },
           "name_rule": {
@@ -18314,11 +18314,11 @@
             "type": "string"
           },
           "subject": {
-            "description": "The one-line subject template",
+            "description": "The one-line subject, written in the rule language",
             "type": "string"
           },
           "text": {
-            "description": "The body text template",
+            "description": "The body text, written in the rule language",
             "type": "string"
           }
         },
@@ -18470,7 +18470,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.",
+            "description": "A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.",
             "type": "string"
           },
           "parent_product_id": {
@@ -18657,7 +18657,7 @@
             "type": "string"
           },
           "label_rule": {
-            "description": "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels",
+            "description": "A new label rule for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels",
             "type": "string"
           },
           "stem": {
@@ -27575,7 +27575,7 @@
         "x-omniglass-permission": "notification_type:read"
       },
       "post": {
-        "description": "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+        "description": "Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
         "operationId": "create-notification-type",
         "requestBody": {
           "content": {
@@ -27740,7 +27740,7 @@
         "x-omniglass-permission": "notification_type:read"
       },
       "patch": {
-        "description": "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+        "description": "Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
         "operationId": "update-notification-type",
         "parameters": [
           {
@@ -27792,7 +27792,7 @@
     },
     "/notification-types/{name}:preview": {
       "post": {
-        "description": "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
+        "description": "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
         "operationId": "preview-notification-type",
         "parameters": [
           {
@@ -31774,7 +31774,7 @@
     },
     "/standards": {
       "get": {
-        "description": "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
+        "description": "Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.",
         "operationId": "list-standards",
         "responses": {
           "200": {
@@ -32537,7 +32537,7 @@
     },
     "/system-types": {
       "get": {
-        "description": "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+        "description": "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
         "operationId": "list-system-types",
         "responses": {
           "200": {

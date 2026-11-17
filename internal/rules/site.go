@@ -90,7 +90,7 @@ var sites = []Site{{
 }, {
 	Name: "action",
 	Summary: "An action rule's when: true or false for one alarm transition, over the alarm facts a " +
-		"notification template reads (in snake_case) and the severity's rank. Empty always holds. " +
+		"notification's subject and text read (in snake_case) and the severity's rank. Empty always holds. " +
 		"No key types it, so none is needed.",
 	Variants: []SiteVariant{
 		{ValueType: ValueBool, When: "every action rule", Env: actionEnv},

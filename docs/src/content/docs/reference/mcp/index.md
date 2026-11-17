@@ -1258,7 +1258,7 @@ Creates a subtree of locations from a location template under a parent location 
 
 Preview a notification type against an alarm
 
-Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
 
 - Route: `POST /api/v1/notification-types/{name}:preview`
 - Gate: `notification_type:read`
@@ -1270,8 +1270,8 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 | `alarm` | string | no | The alarm's id; absent previews the component's most recently raised alarm |
 | `component` | string | yes | The component the alarm is on, by name or dotted address |
 | `name` | string | yes | The notification type's name or uuid |
-| `subject` | string | no | A draft subject template to render instead of the stored one, so an editor previews before it saves |
-| `text` | string | no | A draft text template to render instead of the stored one |
+| `subject` | string | no | A draft subject to render instead of the stored one, so an editor previews before it saves |
+| `text` | string | no | A draft text to render instead of the stored one |
 | `transition` | string | no | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
 
 ## `list-notification`

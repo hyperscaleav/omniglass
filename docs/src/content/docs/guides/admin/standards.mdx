@@ -1,12 +1,12 @@
 ---
 title: Standards
-description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is created from a template into a row you own outright."
+description: "The Standards catalog: the contract a system is built to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is created from a template into a row you own outright."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
-is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
+is the directory of **standards**: the contracts your systems are built to. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/fleet/) that **conforms** to one. Each row shows the **name** (the
 operator-facing name, for example `huddle-room`), the **label**, its **parent
@@ -24,15 +24,15 @@ sitting under the shared type catalog
 **A standard is not a system type.** They are two axes and a system can carry either, both, or
 neither. The **[system type](/architecture/core-entities/#catalog-reference-data-system_type)**
 (Catalog, under Systems: Types) is the coarse genus of what kind of space a system **is**, a
-boardroom, a classroom, a video wall; the standard is the blueprint it is **built to**. One fleet
+boardroom, a classroom, a video wall; the standard is the contract it is **built to**. One fleet
 holds ten signage standards and six classroom standards under a single coarse type, which is why the
 classifier is its own catalog rather than a use of a standard's own parent-variant chain
 ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 
 - **Conforming is optional.** A system points at a standard through its **Standard** field, and
-  leaving it empty is legitimate: a **one-off system** that matches no blueprint carries only its own
+  leaving it empty is legitimate: a **one-off system** that matches no standard carries only its own
   values, exactly as a component with no product does.
-- **Variants use parent standard.** A specific blueprint that refines a broader one points at it with
+- **Variants use parent standard.** A specific standard that refines a broader one points at it with
   **parent standard** (a Large Classroom under Classroom). A standard with no parent is a base
   standard.
 - **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
@@ -221,7 +221,7 @@ That is the whole point of the typed-slot guard. Your next move is in the messag
 picked the wrong component, or the role's accepted types (or pinned products) need widening.
 
 Roles declared **directly on a system** work identically and are edited from the same panel; use them for
-what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
+what one room needs and the standard does not. A role inherited from the standard is withdrawn on the
 **standard**, not on the system that inherits it. A system role **cannot reuse a name** its standard
 already declares, since a role is addressed by its name within the system and the name has to mean one
 slot there: declaring one, declaring the same name on the standard after a room took it, or moving a room

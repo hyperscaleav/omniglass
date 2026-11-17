@@ -35,7 +35,7 @@ type componentTypeBody struct {
 	// one row costs a query per level for a value no caller reads.
 	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"`
 	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
-	LabelRule    string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
+	LabelRule    string   `json:"label_rule,omitempty" doc:"The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
 	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
 	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
@@ -95,7 +95,7 @@ type createComponentTypeInput struct {
 		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of label; omit to inherit the parent's"`
-		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
+		LabelRule   string   `json:"label_rule,omitempty" doc:"A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422."`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
 		ParentID    string   `json:"parent_id,omitempty" doc:"The parent component_type, by name or uuid; omit for a root type"`
 	}
@@ -118,7 +118,7 @@ type updateComponentTypeInput struct {
 		Stem        *string   `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
 		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
-		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
+		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`
 	}
 }

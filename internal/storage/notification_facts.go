@@ -83,7 +83,7 @@ var alarmFactKeys = []labelKey[alarmFactRow]{
 	}},
 }
 
-// AlarmFactKeys are the keys a notification template and an action rule's
+// AlarmFactKeys are the keys a notification's subject and text and an action rule's
 // predicate may read, in documented order. Exported for the API's field
 // descriptions and the expression site, which a test holds to this list.
 func AlarmFactKeys() []string { return keyNames(alarmFactKeys) }
@@ -197,7 +197,7 @@ const (
 	NotificationTextMax    = 4000
 )
 
-// ParseNotificationTemplate compiles one notification template through the
+// ParseNotificationTemplate compiles one notification subject or text rule through the
 // sandbox's grammar: the edit-time check, so a template it refuses is never
 // stored.
 func ParseNotificationTemplate(src string) (*sandbox.Template, error) {

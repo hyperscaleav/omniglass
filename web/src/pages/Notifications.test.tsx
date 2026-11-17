@@ -71,7 +71,7 @@ describe("Notifications page", () => {
     expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("previews against a component's alarm and lists the facts a template reads", async () => {
+  it("previews against a component's alarm and lists the facts a rule reads", async () => {
     const spy = vi.spyOn(lib, "previewNotificationType").mockResolvedValue({
       subject: "HIGH display-1",
       text: "no video",

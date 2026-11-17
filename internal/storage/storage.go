@@ -294,7 +294,7 @@ type Gateway interface {
 	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
-	// The system tier: the standard catalog (the blueprint a system conforms to,
+	// The system tier: the standard catalog (the contract a system is built to,
 	// the system-side counterpart of product) and scoped CRUD, mirroring locations.
 	UpsertStandard(ctx context.Context, st Standard) error
 	// CreateStandardFromTemplate writes a whole standard from a template in one
@@ -406,10 +406,10 @@ type Gateway interface {
 	// The global tier of the label rules (#682): one row per entity kind,
 	// its shipped default rewritten authoritatively on every boot and an
 	// operator's override left alone, which is why they are two columns.
-	UpsertLabelRuleDefault(ctx context.Context, kind, template string) error
+	UpsertLabelRuleDefault(ctx context.Context, kind, rule string) error
 	ListLabelRules(ctx context.Context) ([]LabelRule, error)
 	GetLabelRule(ctx context.Context, kind string) (*LabelRule, error)
-	SetLabelRule(ctx context.Context, actorID, kind, template string) (*LabelRule, error)
+	SetLabelRule(ctx context.Context, actorID, kind, rule string) (*LabelRule, error)
 
 	// The bulk recompute (#685), the verb a rule change is applied through.
 	// PreviewLabelRecompute lists exactly the rows an apply would change and
@@ -448,7 +448,7 @@ type Gateway interface {
 	// The system_type catalog: the coarse taxonomy of what kind of space a
 	// system is (a boardroom, a classroom, a video wall), the system-side
 	// counterpart of component_type and a different question from standard,
-	// which stays the blueprint a system conforms to.
+	// which stays the contract a system is built to.
 	// ResolveSystemTypeFacts walks the tree in Go; no DB logic.
 	UpsertSystemType(ctx context.Context, st SystemType) (uuid.UUID, error)
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)

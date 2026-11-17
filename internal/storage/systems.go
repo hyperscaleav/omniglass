@@ -27,7 +27,7 @@ var (
 	// ErrUnknownSystemType is a create or patch naming a system_type that
 	// resolves to nothing. Deliberately separate from ErrUnknownStandard: the
 	// two fields answer different questions (what kind of space this is versus
-	// which blueprint it is built to), so a refusal that named the wrong one
+	// which contract it is built to), so a refusal that named the wrong one
 	// would send an operator to the wrong picker.
 	ErrUnknownSystemType = errors.New("storage: unknown system_type")
 
@@ -54,7 +54,7 @@ var (
 	ErrSystemExistsUnplaced    = fmt.Errorf("storage: an unplaced system with this name already exists: %w", ErrSystemExists)
 )
 
-// Standard is the blueprint a system conforms to (huddle room, classroom,
+// Standard is the contract a system is built to (huddle room, classroom,
 // auditorium): the system-side counterpart of product for a component. Beyond
 // the catalog shape (id, official, label) it carries an optional parent
 // standard, so a variant inherits from a base one exactly as
@@ -68,7 +68,7 @@ type Standard struct {
 	Label              string
 	ParentStandardID   *string
 	ParentStandardName *string
-	// LabelRule is this standard's label template (#682), the most specific
+	// LabelRule is this standard's label rule (#682), the most specific
 	// tier a system's label resolves through: null defers to the system_type
 	// chain, and then to the global tier.
 	LabelRule *string
@@ -134,13 +134,13 @@ func validateStandardMap(raw json.RawMessage) error {
 // System is a composition of components (the service tree): name-addressable,
 // nestable via parent_id, optionally located at a location, and optionally
 // conforming to a standard. StandardID is nil for a one-off system, mirroring
-// component.product_id: a system that matches no blueprint carries only its own
+// component.product_id: a system that matches no standard carries only its own
 // ad-hoc values.
 //
 // SystemTypeID/SystemTypeName are the coarse classifier (a boardroom, a
 // classroom, a video wall), the system-side counterpart of a product's
 // component_type and a different question from the standard: the type says what
-// kind of space this is, the standard says which blueprint it is built to. Both
+// kind of space this is, the standard says which contract it is built to. Both
 // forms are carried for the same reason the standard pair is, the uuid being
 // the stable handle and the name the one an operator reads. Nullable, and
 // nullable it stays until the floor slice.
@@ -202,7 +202,7 @@ type System struct {
 
 // SystemSpec is the create input. ParentName nil makes a root system (which only
 // an all-scoped create grant may place); LocationName optionally places it at a
-// location; StandardID optionally names the blueprint it conforms to and
+// location; StandardID optionally names the contract it is built to and
 // SystemTypeID the coarse kind of space it is, each by name or uuid.
 type SystemSpec struct {
 	Name         string

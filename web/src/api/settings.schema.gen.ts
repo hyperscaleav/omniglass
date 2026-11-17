@@ -90,7 +90,7 @@ export const settingsSchema = {
   },
   "notification": {
     "console_url": {
-      "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty",
+      "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty",
       "type": "string"
     },
     "egress_allow": {

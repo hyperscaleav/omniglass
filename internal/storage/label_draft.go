@@ -99,7 +99,7 @@ type DraftLabel struct {
 	// renders nothing. Empty is not a failure: the read ladder's third rung is
 	// the entity's own name, so an empty label means the name shows instead.
 	Label string
-	// Rule is the template that produced Label, resolved through the same tier
+	// Rule is the rule that produced Label, resolved through the same tier
 	// precedence a create uses, or "" when no tier had an opinion.
 	Rule string
 }

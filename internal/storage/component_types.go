@@ -58,7 +58,7 @@ type ComponentType struct {
 	Icon        *string
 	Abbrev      *string
 	DefaultTags []string
-	// LabelRule is this node's label template (#682), nullable on the same
+	// LabelRule is this node's label rule (#682), nullable on the same
 	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
 	// nearest ancestor that sets one, and then to the global tier.
 	LabelRule *string

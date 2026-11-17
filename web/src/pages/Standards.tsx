@@ -28,7 +28,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Standards: the catalog of blueprints a system conforms to ("Meeting room",
+// Standards: the catalog of contracts a system is built to ("Meeting room",
 // "Huddle space"), on the flat FlatList surface beside Products. A standard is the
 // system-side counterpart of a product: it is addressed by its kebab name
 // (ADR-0062: the uuid is identity, the name is what an operator reads and

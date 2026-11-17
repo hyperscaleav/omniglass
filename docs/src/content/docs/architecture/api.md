@@ -863,7 +863,7 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   vendor / driver / parent / component_type reference is a 422, and a product still referenced by a
   component is refused (409).
 - A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
-  **blueprint a system conforms to** (Huddle Room, Classroom, Auditorium), the system-side counterpart
+  **contract a system is built to** (Huddle Room, Classroom, Auditorium), the system-side counterpart
   of a product. Because it carries its own declared-property contract it is a **Catalog entity, not a
   bare type catalog**: its own `standard:*` resource at `/standards`, not `/types/system`, with an
   optional `parent_standard_id` (an unknown parent a 422); a standard still referenced by a system is

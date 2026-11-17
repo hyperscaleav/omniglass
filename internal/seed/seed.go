@@ -83,7 +83,7 @@ type rolesDoc struct {
 type labelRulesDoc struct {
 	LabelRules []struct {
 		EntityKind string `yaml:"entity_kind"`
-		Template   string `yaml:"template"`
+		Rule       string `yaml:"rule"`
 	} `yaml:"label_rules"`
 }
 
@@ -289,7 +289,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 }
 
 // seedLabelRules writes the rule this release ships for each labelled entity
-// kind (#682). Authoritative on default_template only: an operator's own rule
+// kind (#682). Authoritative on default_rule only: an operator's own rule
 // is a separate column, so re-seeding restates what we ship and never reaches
 // what they chose.
 func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
@@ -298,7 +298,7 @@ func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse label_rules: %w", err)
 	}
 	for _, r := range doc.LabelRules {
-		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Template); err != nil {
+		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Rule); err != nil {
 			return fmt.Errorf("seed: label_rule %s: %w", r.EntityKind, err)
 		}
 	}

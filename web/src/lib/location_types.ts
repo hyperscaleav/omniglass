@@ -19,7 +19,7 @@ import { api } from "../api/client";
 export const ROOT_PLACEMENT = "root";
 
 // NameRule is a type's opt-in to NAMING the locations it classifies (#687,
-// ADR-0102): a declaration rather than a template, so the console can read the
+// ADR-0102): a declaration rather than a rule string, so the console can read the
 // shape a create would mint without re-implementing anything. Absent is the
 // opt-out, and means an operator names every location of this type.
 export type NameRule = {

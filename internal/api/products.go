@@ -26,7 +26,7 @@ type productBody struct {
 	ComponentType   string `json:"component_type" doc:"The component_type this product is classified under (mic, camera, ...); the taxonomy above product"`
 	ComponentTypeID string `json:"component_type_id" doc:"The component_type's uuid; the stable form of component_type"`
 	Icon            string `json:"icon,omitempty" doc:"A product-level icon override; unset inherits the component_type's icon"`
-	LabelRule       string `json:"label_rule,omitempty" doc:"The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule"`
+	LabelRule       string `json:"label_rule,omitempty" doc:"The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule"`
 	ParentProduct   string `json:"parent_product,omitempty" doc:"The parent product's handle"`
 	ParentProductID string `json:"parent_product_id,omitempty" doc:"The parent product's uuid; the stable form of parent_product"`
 	Official        bool   `json:"official"`
@@ -96,7 +96,7 @@ type createProductInput struct {
 		Kind            string `json:"kind" enum:"device,app,service" doc:"What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly."`
 		ComponentType   string `json:"component_type" minLength:"1" doc:"The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically."`
 		Icon            string `json:"icon,omitempty" doc:"A product-level icon override; unset inherits the component_type's icon"`
-		LabelRule       string `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422."`
+		LabelRule       string `json:"label_rule,omitempty" doc:"A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422."`
 		ParentProductID string `json:"parent_product_id,omitempty" doc:"The parent product, by handle or uuid"`
 	}
 }
@@ -110,7 +110,7 @@ type updateProductInput struct {
 		Kind            *string `json:"kind,omitempty" enum:"device,app,service" doc:"A new product class"`
 		ComponentType   *string `json:"component_type,omitempty" doc:"Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears"`
 		Icon            *string `json:"icon,omitempty" doc:"A new icon override; an empty string clears it, so the product inherits its component_type's icon"`
-		LabelRule       *string `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse."`
+		LabelRule       *string `json:"label_rule,omitempty" doc:"A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse."`
 		ParentProductID *string `json:"parent_product_id,omitempty" doc:"A new parent product, by handle or uuid; an empty string clears it"`
 	}
 }

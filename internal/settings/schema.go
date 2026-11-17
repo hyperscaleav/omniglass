@@ -79,10 +79,10 @@ type LabelSettings struct {
 // NotificationSettings is the notification namespace (#618).
 type NotificationSettings struct {
 	// ConsoleURL is the console's base URL as a person outside the install
-	// reaches it, the prefix of the Link fact a notification template reads
+	// reaches it, the prefix of the Link fact a notification's subject and text read
 	// (a component's page). Empty leaves Link empty: the server cannot know the
 	// name it is reached by behind a proxy.
-	ConsoleURL string `json:"console_url" default:"" doc:"The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty"`
+	ConsoleURL string `json:"console_url" default:"" doc:"The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty"`
 	// EgressAllow opens internal destinations to the outbound client
 	// (internal/egress): each entry a CIDR, an address, or a host name. A
 	// private, loopback or link-local destination is refused unless named

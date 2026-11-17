@@ -24,7 +24,7 @@ type systemBody struct {
 	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
 	Standard       string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
 	StandardID     string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to."`
 	SystemTypeID   string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
 	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
 	Parent         *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
@@ -60,7 +60,7 @@ type systemOutput struct {
 	Body systemBody
 }
 
-// standardBody is the wire shape of a standard: the blueprint a system conforms
+// standardBody is the wire shape of a standard: the contract a system is built
 // to, the system-side counterpart of a product. The catalog lists alphabetically
 // by label.
 type standardBody struct {
@@ -496,7 +496,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/standards",
 		Summary:     "List standards",
-		Description: "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
+		Description: "Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, _ *struct{}) (*listStandardsOutput, error) {
 		items, err := gw.ListStandards(ctx)
 		if err != nil {

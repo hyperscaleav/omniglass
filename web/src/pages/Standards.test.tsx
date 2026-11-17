@@ -16,7 +16,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { TEMPLATES_KEY } from "../lib/templates";
 
-// Standards is the catalog of blueprints a system conforms to, on the flat
+// Standards is the catalog of contracts a system is built to, on the flat
 // FlatList surface beside Products. An official row is read-only (no
 // pencil, no Delete, and a read-only contract); a custom row carries Edit, Delete,
 // and a writable declared-property contract on its detail blade. Data is seeded

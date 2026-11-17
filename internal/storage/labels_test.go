@@ -824,8 +824,8 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if shipped.Template != nil {
-		t.Fatalf("a freshly seeded rule carries an operator template %q, want none", *shipped.Template)
+	if shipped.Rule != nil {
+		t.Fatalf("a freshly seeded rule carries an operator rule %q, want none", *shipped.Rule)
 	}
 	if shipped.Effective != shipped.Default || shipped.Default == "" {
 		t.Fatalf("effective = %q default = %q, want the shipped default to be in force", shipped.Effective, shipped.Default)
@@ -848,8 +848,8 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("get after re-seed: %v", err)
 	}
-	if after.Template == nil || *after.Template != "mine: {{.TypeName}}" {
-		t.Fatalf("after re-seed the operator's rule is %v, want it untouched", after.Template)
+	if after.Rule == nil || *after.Rule != "mine: {{.TypeName}}" {
+		t.Fatalf("after re-seed the operator's rule is %v, want it untouched", after.Rule)
 	}
 	if after.Default != shipped.Default {
 		t.Fatalf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Default)
@@ -868,14 +868,14 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	if restored.Template != nil || restored.Effective != shipped.Default {
-		t.Fatalf("after clearing: template %v effective %q, want none and the shipped default", restored.Template, restored.Effective)
+	if restored.Rule != nil || restored.Effective != shipped.Default {
+		t.Fatalf("after clearing: rule %v effective %q, want none and the shipped default", restored.Rule, restored.Effective)
 	}
 
 	// And an unparseable global rule is refused before it is stored, exactly as
 	// a tier rule is.
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.TypeName"); !errors.Is(err, storage.ErrInvalidLabelRule) {
-		t.Fatalf("SetLabelRule with a broken template = %v, want ErrInvalidLabelRule", err)
+		t.Fatalf("SetLabelRule with a broken rule = %v, want ErrInvalidLabelRule", err)
 	}
 }
 
@@ -953,8 +953,8 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get after re-seed: %v", err)
 	}
-	if after.Template == nil || *after.Template != "{{.TypeName}} {{.Name}}" {
-		t.Errorf("after re-seed the operator's location rule is %v, want it untouched", after.Template)
+	if after.Rule == nil || *after.Rule != "{{.TypeName}} {{.Name}}" {
+		t.Errorf("after re-seed the operator's location rule is %v, want it untouched", after.Rule)
 	}
 	if after.Default != shipped.Effective {
 		t.Errorf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Effective)

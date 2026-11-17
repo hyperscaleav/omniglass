@@ -76,7 +76,7 @@ type Product struct {
 	// unset inherits the type's, resolved the same way ResolveTypeFacts walks
 	// component_type's own icon column).
 	Icon *string
-	// LabelRule is this product's label template (#682), the most specific tier
+	// LabelRule is this product's label rule (#682), the most specific tier
 	// a component's label resolves through: null defers to the component_type
 	// chain, and then to the global tier.
 	LabelRule *string
