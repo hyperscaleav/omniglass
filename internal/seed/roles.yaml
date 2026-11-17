@@ -17,6 +17,10 @@ roles:
       # permission is still checked on every route and an install can
       # withhold it with a custom role.
       - "notification:subscribe"
+      # assistant:use is a person's own omnibot conversations (#2113): each
+      # is its owner's alone, so granting it to everyone exposes no one
+      # else's; explicit for the same reason as notification:subscribe.
+      - "assistant:use"
   - id: operator
     label: Operator
     description: >-

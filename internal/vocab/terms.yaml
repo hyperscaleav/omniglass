@@ -499,6 +499,8 @@ not_terms:
     reason: inbound webhook delivery, a mechanism
   - collection: simulation
     reason: the lab simulator, not part of a real fleet
+  - collection: assistant
+    reason: omnibot's own state, a person's stored conversations with it, rather than a thing in the fleet
   - nav: /
     reason: Home
   - nav: /explore

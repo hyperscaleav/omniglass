@@ -33,7 +33,7 @@ type AssistantConversation struct {
 	Name      string          `json:"name"`
 	Pending   json.RawMessage `json:"pending,omitempty"`
 	Usage     AssistantUsage  `json:"usage"`
-	Messages  int             `json:"messages"`
+	Messages  int             `json:"message_count"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }

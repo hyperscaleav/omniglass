@@ -183,6 +183,105 @@ Example:
 omniglass alarm list
 ```
 
+## `omniglass assistant`
+
+Commands for the assistant resource
+
+### `omniglass assistant conversation`
+
+Commands for the conversation resource
+
+#### `omniglass assistant conversation append`
+
+Append a turn to one of your omnibot conversations
+
+```
+omniglass assistant conversation append <name> [flags]
+```
+
+Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--after` | int | `0` | The seq of the last message you saw (0 for an empty conversation); anything else is a 409 |
+| `--messages` | string | (none) | The new messages, in order |
+| `--pending` | string | (none) | The write the run paused on, waiting on you; absent clears it |
+| `--usage` | string | (none) | The tokens this turn spent, added to the total |
+
+Example:
+
+```sh
+omniglass assistant conversation append <name> --after <int> --messages <json>
+```
+
+#### `omniglass assistant conversation create`
+
+Start an omnibot conversation
+
+```
+omniglass assistant conversation create [flags]
+```
+
+Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | A name (lowercase kebab), unique among your own conversations; absent names it for you |
+
+Example:
+
+```sh
+omniglass assistant conversation create
+```
+
+#### `omniglass assistant conversation delete`
+
+Delete one of your omnibot conversations
+
+```
+omniglass assistant conversation delete <name>
+```
+
+Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation delete <name>
+```
+
+#### `omniglass assistant conversation get`
+
+Get one of your omnibot conversations
+
+```
+omniglass assistant conversation get <name>
+```
+
+One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation get <name>
+```
+
+#### `omniglass assistant conversation list`
+
+List your omnibot conversations
+
+```
+omniglass assistant conversation list
+```
+
+Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation list
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource
