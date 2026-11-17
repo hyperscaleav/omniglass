@@ -8,7 +8,7 @@ import { type ComponentType, resolveComponentTypeIcon } from "./component_types"
 // (seed-owned) rows are read-only past creation, refused server-side on
 // update/delete. A product carries a kind (device/app/service; vm retired,
 // folded into app, ADR-0086), a required component_type (the device-class
-// genus every product is classified under, ADR-0085; also what a system
+// type every product is classified under, ADR-0085; also what a system
 // slot's typed-slot guard checks, #626), an optional vendor and driver, and
 // an optional parent product.
 
@@ -40,7 +40,7 @@ export type Product = {
 // icon its component_type resolves to (walking the type's inheritance
 // chain). "The icon lives on the type, products may override" (#614): the
 // device glyph belongs at the level that spans products, so an unset
-// override reads the genus, and a set one wins outright.
+// override reads the type, and a set one wins outright.
 export function resolveProductIcon(product: { icon?: string; component_type?: string }, typesByName: Map<string, ComponentType>): string {
   return product.icon || resolveComponentTypeIcon(product.component_type, typesByName);
 }

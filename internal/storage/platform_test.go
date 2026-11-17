@@ -120,8 +120,8 @@ func TestPlatformSystemRefusesRename(t *testing.T) {
 func TestPlatformSystemRefusesRetype(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	room := "room"
-	if _, err := gw.UpdateSystem(ctx, "", storage.PlatformSystemName, storage.SystemPatch{SystemTypeID: &room}, all, all); !errors.Is(err, storage.ErrPlatformSystemReserved) {
+	collab := "collaboration"
+	if _, err := gw.UpdateSystem(ctx, "", storage.PlatformSystemName, storage.SystemPatch{SystemTypeID: &collab}, all, all); !errors.Is(err, storage.ErrPlatformSystemReserved) {
 		t.Errorf("retype = %v, want ErrPlatformSystemReserved", err)
 	}
 	// Its label is the operator's to word, like any row's.

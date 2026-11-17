@@ -20,7 +20,7 @@ const view = {
   ],
   systems: [
     sys("s-aud", "Auditorium", "aud"),
-    sys("s-lab-1", "Media Lab", "lab"), sys("s-lab-2", "Media Lab Classroom 2", "lab"),
+    sys("s-lab-1", "Media Lab", "lab"), sys("s-lab-2", "Media Lab Teaching 2", "lab"),
     sys("s-loose", "Signage", ""),
   ],
 } as unknown as FleetView;
@@ -36,7 +36,7 @@ describe("where a location lands", () => {
   });
 
   it("lists the systems at a location by label", () => {
-    expect(systemsAtLocation(view, uuidFor("lab")).map((s) => s.label)).toEqual(["Media Lab", "Media Lab Classroom 2"]);
+    expect(systemsAtLocation(view, uuidFor("lab")).map((s) => s.label)).toEqual(["Media Lab", "Media Lab Teaching 2"]);
   });
 });
 

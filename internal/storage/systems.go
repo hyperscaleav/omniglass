@@ -26,7 +26,7 @@ var (
 	ErrParentStandardNotFound = errors.New("storage: parent standard not found")
 	// ErrUnknownSystemType is a create or patch naming a system_type that
 	// resolves to nothing. Deliberately separate from ErrUnknownStandard: the
-	// two fields answer different questions (what kind of space this is versus
+	// two fields answer different questions (what this system is for versus
 	// which contract it is built to), so a refusal that named the wrong one
 	// would send an operator to the wrong picker.
 	ErrUnknownSystemType = errors.New("storage: unknown system_type")
@@ -137,10 +137,10 @@ func validateStandardMap(raw json.RawMessage) error {
 // component.product_id: a system that matches no standard carries only its own
 // ad-hoc values.
 //
-// SystemTypeID/SystemTypeName are the coarse classifier (a boardroom, a
-// classroom, a video wall), the system-side counterpart of a product's
+// SystemTypeID/SystemTypeName are the use classifier (meeting,
+// teaching, signage), the system-side counterpart of a product's
 // component_type and a different question from the standard: the type says what
-// kind of space this is, the standard says which contract it is built to. Both
+// this system is for, the standard says which contract it is built to. Both
 // forms are carried for the same reason the standard pair is, the uuid being
 // the stable handle and the name the one an operator reads. Nullable, and
 // nullable it stays until the floor slice.
@@ -203,7 +203,7 @@ type System struct {
 // SystemSpec is the create input. ParentName nil makes a root system (which only
 // an all-scoped create grant may place); LocationName optionally places it at a
 // location; StandardID optionally names the contract it is built to and
-// SystemTypeID the coarse kind of space it is, each by name or uuid.
+// SystemTypeID what it is for, each by name or uuid.
 type SystemSpec struct {
 	Name         string
 	Label        string

@@ -31,8 +31,8 @@ var ErrRootSystemTypeNeedsStem = errors.New("storage: a root system_type (no par
 // any seeded or operator-built tree approaches.
 const maxSystemTypeDepth = 32
 
-// SystemType is a catalog row in the coarse taxonomy of what kind of space a
-// system is (a boardroom, a classroom, a video wall): a stable id, the official
+// SystemType is a catalog row in the taxonomy of what a system is for
+// (meeting, teaching, signage), never the space it sits in: a stable id, the official
 // flag, a label, and an optional parent for a tree of arbitrary depth.
 // It is the system-side counterpart of ComponentType, and it does NOT replace
 // standard: a standard is the contract a system is built to, this is what kind
@@ -103,7 +103,7 @@ func mapSystemTypeWriteErr(err error) error {
 
 // UpsertSystemType installs or updates a system_type by name, the boot-seed
 // phase's write. Authoritative (ON CONFLICT DO UPDATE) like component_type's,
-// not seed-if-absent like location_type's example content: the coarse taxonomy
+// not seed-if-absent like location_type's example content: the type taxonomy
 // is shipped reference data a fleet reads, not content it owns. Idempotent:
 // re-seeding the same name updates it in place, id stable. It returns the
 // row's id, so the seed names the row it wrote (#1432).

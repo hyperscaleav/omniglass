@@ -93,7 +93,7 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 		"name": "ifc-stem-rule", "label": "Stem Rule", "parent_id": "mic", "stem": "good",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifc-sys-stem-rule", "label": "Sys Stem Rule", "parent_id": "room", "stem": "good",
+		"name": "ifc-sys-stem-rule", "label": "Sys Stem Rule", "parent_id": "collaboration", "stem": "good",
 	}, http.StatusCreated)
 
 	for _, bad := range []string{"Bad Stem", "-leading-hyphen", "has space", "UPPER", "trailing space "} {

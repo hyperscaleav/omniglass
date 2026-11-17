@@ -27,13 +27,13 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// System Types (Catalog > Systems: Types): the coarse space taxonomy
-// (ADR-0096). It classifies the SYSTEM (`system.system_type_id`) by what kind
-// of space it is, a boardroom, a classroom, a video wall. It is deliberately
+// System Types (Catalog > Systems: Types): what a system is for
+// (ADR-0096). It classifies the SYSTEM (`system.system_type_id`) by what it
+// is for: meeting, teaching, signage. It is deliberately
 // not the standard, which sits beside it and says which contract the system is
 // built to: one fleet can hold ten signage standards and six classroom
-// standards under a single coarse type here. It nests by parent_id (av over
-// room over board), on the same official/custom pattern as Component Types, and
+// standards under a single type here. It nests by parent_id (av over
+// collaboration over board), on the same official/custom pattern as Component Types, and
 // every identity fact (stem, abbrev, icon) inherits down the tree unless a node
 // overrides it. There is no reparent leg: a custom type's placement is fixed at
 // create, so the edit blade revises a node's own facts only.
@@ -338,7 +338,7 @@ export function CreateSystemTypeForm(p: { onCreated: (t: SystemType) => void }):
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
       <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Huddle Room" onInput={(e) => setDisplay(e.currentTarget.value)} />
+        <input class="input input-bordered w-full" value={display()} placeholder="Huddle" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="huddle" onInput={(e) => setName(e.currentTarget.value)} />

@@ -8,26 +8,26 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
-// System Types (Catalog > Systems: Types): the coarse space taxonomy
+// System Types (Catalog > Systems: Types): what a system is for
 // (ADR-0096), on the same official/custom FlatList pattern as Component Types
 // and tree-shaped by parent_id. The catalog is NOT the standard: the type says
-// what kind of space this is, the standard says which contract it is built to.
+// what this system is for, the standard says which contract it is built to.
 // Every identity fact (stem, abbrev, icon) inherits down the tree unless a node
 // overrides it, and there is no reparent leg, so a custom type's placement is
 // fixed at create.
 const seed: SystemType[] = [
   { id: uuidFor("st-av"), name: "av", label: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" },
-  { id: uuidFor("st-room"), name: "room", label: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" },
-  { id: uuidFor("st-board"), name: "board", label: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
+  { id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "collaboration", abbrev: "collab", icon: "door-open", resolved_icon: "door-open" },
+  { id: uuidFor("st-board"), name: "board", label: "Board Meeting", official: true, parent: "collaboration", parent_id: uuidFor("st-collab"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
   {
     id: uuidFor("st-lab"), name: "lab", label: "Lab", official: false,
-    parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab", resolved_icon: "door-open",
+    parent: "collaboration", parent_id: uuidFor("st-collab"), stem: "lab", abbrev: "lab", resolved_icon: "door-open",
     // The SERVER's answer to "clear this box and you get what?" (#716), seeded
     // with strings no client-side climb could produce: `av`, two levels up,
     // states an icon of "layers", so a console that walked the chain in
     // TypeScript would print that and fail here.
     inherited_icon: "icon-from-the-server", inherited_icon_source: "av",
-    inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
+    inherited_stem: "stem-from-the-server", inherited_stem_source: "collaboration",
   },
   // A custom row that states NONE of the three, so the list has an inheriting
   // row to put beside a stating one in the same columns (#743). Its three facts
@@ -36,8 +36,8 @@ const seed: SystemType[] = [
   // takes.
   {
     id: uuidFor("st-studio"), name: "studio", label: "Studio", official: false,
-    parent: "room", parent_id: uuidFor("st-room"), resolved_icon: "icon-from-the-server",
-    inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
+    parent: "collaboration", parent_id: uuidFor("st-collab"), resolved_icon: "icon-from-the-server",
+    inherited_stem: "stem-from-the-server", inherited_stem_source: "collaboration",
     inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "av",
     inherited_icon: "icon-from-the-server", inherited_icon_source: "av",
   },
@@ -87,27 +87,27 @@ describe("SystemTypes page", () => {
     const rows = screen.getAllByRole("row").slice(1); // drop the header row
     const names = rows.map((r) => within(r).getAllByRole("cell")[0].textContent);
     const avAt = names.findIndex((t) => t?.includes("AV"));
-    const roomAt = names.findIndex((t) => t?.includes("Room"));
-    const boardAt = names.findIndex((t) => t?.includes("Boardroom"));
+    const roomAt = names.findIndex((t) => t?.includes("Collaboration"));
+    const boardAt = names.findIndex((t) => t?.includes("Board Meeting"));
     expect(avAt).toBe(0);
     expect(roomAt).toBe(avAt + 1);
-    // Alphabetical within a level: Boardroom before Lab.
+    // Alphabetical within a level: Board Meeting before Lab.
     expect(boardAt).toBe(roomAt + 1);
   });
 
   it("shows the resolved icon the server sent, not the row's own blank one", () => {
     mount();
     const rows = screen.getAllByRole("row").slice(1);
-    const boardRow = rows.find((r) => within(r).getAllByRole("cell")[0].textContent?.includes("Boardroom"))!;
+    const boardRow = rows.find((r) => within(r).getAllByRole("cell")[0].textContent?.includes("Board Meeting"))!;
     // board sets no icon of its own, so the Icon cell names the one the server
-    // resolved for it (room's, not the root av's).
+    // resolved for it (collaboration's, not the root av's).
     expect(boardRow.textContent).toContain("door-open");
     expect(boardRow.textContent).not.toContain("layers");
   });
 
   // #743, the system catalog's half: the same defect, the same fix, the same
   // vocabulary. The strings are the SERVER's, seeded so that a list climbing the
-  // chain in TypeScript would print `room`'s real stem and fail here.
+  // chain in TypeScript would print `collaboration`'s real stem and fail here.
   it("shows the value an inheriting row takes, in the list, rather than an em dash", () => {
     mount();
     const row = rowFor("Studio");
@@ -134,7 +134,7 @@ describe("SystemTypes page", () => {
   });
 
   // The Icon cell has shown the resolved glyph since #695 without saying where
-  // it came from, which is the treatment the other two now match. Boardroom is
+  // it came from, which is the treatment the other two now match. Board Meeting is
   // the control: it states no icon and the server served it no inherited answer,
   // so the cell names what it shows and, like every other cell, attributes
   // nothing.
@@ -143,7 +143,7 @@ describe("SystemTypes page", () => {
     const inherited = cellOf(rowFor("Studio"), "Icon");
     expect(inherited.textContent).toContain("icon-from-the-server");
     expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
-    const unattributed = cellOf(rowFor("Boardroom"), "Icon");
+    const unattributed = cellOf(rowFor("Board Meeting"), "Icon");
     expect(unattributed.textContent).toContain("door-open");
     expect(within(unattributed).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
@@ -170,7 +170,7 @@ describe("SystemTypes page", () => {
     const labels = await treeOptions(await screen.findByLabelText("Parent"));
     expect(labels[0]).toMatch(/root/i);
     expect(labels).toContain("AV");
-    expect(labels).toContain("Boardroom");
+    expect(labels).toContain("Board Meeting");
   });
 
   it("sends the chosen parent and facts on create", async () => {
@@ -179,17 +179,17 @@ describe("SystemTypes page", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.endsWith("/system-types")) {
         sent = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ id: uuidFor("st-lecture"), name: "lecture", label: "Lecture Hall", official: false, parent: "room", parent_id: uuidFor("st-room") }), { status: 201, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ id: uuidFor("st-lecture"), name: "lecture", label: "Lecture Hall", official: false, parent: "collaboration", parent_id: uuidFor("st-collab") }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ system_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
     fireEvent.click(screen.getByText("New system type"));
-    fireEvent.input(await screen.findByPlaceholderText("Huddle Room"), { target: { value: "Lecture Hall" } });
-    await pickTree(screen.getByLabelText("Parent"), "Room");
+    fireEvent.input(await screen.findByPlaceholderText("Huddle"), { target: { value: "Lecture Hall" } });
+    await pickTree(screen.getByLabelText("Parent"), "Collaboration");
     fireEvent.click(screen.getByRole("button", { name: /create system type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ name: "lecture-hall", label: "Lecture Hall", parent_id: "room" });
+    expect(sent).toMatchObject({ name: "lecture-hall", label: "Lecture Hall", parent_id: "collaboration" });
   });
 
   // The create form's twin of the component catalog's, and it carries one
@@ -201,21 +201,21 @@ describe("SystemTypes page", () => {
   it("tells the create form's operator that a blank fact inherits, and that a root's stem is required", async () => {
     mount();
     fireEvent.click(screen.getByText("New system type"));
-    await screen.findByPlaceholderText("Huddle Room");
+    await screen.findByPlaceholderText("Huddle");
     const form = screen.getByPlaceholderText("huddle").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     expect(within(form).getByText("The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
     // Pinned verbatim on both pages (#744): the two create forms are
     // byte-similar by design, and the root-stem rule is one rule the server
     // enforces on both tiers, so a change to either wording has to fail here.
-    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact label form (br, cls, vw). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });
 
   it("an official row greys Edit; a custom row carries it live", async () => {
     mount();
-    fireEvent.click(screen.getByText("Boardroom"));
+    fireEvent.click(screen.getByText("Board Meeting"));
     const officialBlade = await waitFor(() => {
       const el = asides()[0];
       if (!el) throw new Error("no blade yet");

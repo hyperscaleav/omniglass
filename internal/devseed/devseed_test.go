@@ -937,10 +937,10 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom B", platform: true},
 		// The same-BUCKET same-type siblings live in the media lab: a place
 		// holding several systems names each one's kind after it, and the
-		// ordinal follows the name, so `classroom` reads "Media Lab Classroom"
-		// and `classroom-2` "Media Lab Classroom 2" (#693, #872).
-		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Classroom", platform: true},
-		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Classroom 2", platform: true},
+		// ordinal follows the name, so `classroom` reads "Media Lab Teaching"
+		// and `classroom-2` "Media Lab Teaching 2" (#693, #872).
+		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Teaching", platform: true},
+		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Teaching 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.

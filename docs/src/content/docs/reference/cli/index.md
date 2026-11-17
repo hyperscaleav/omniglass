@@ -6668,7 +6668,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant, o
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
-| `--system-type-id` | string | (none) | The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified |
+| `--system-type-id` | string | (none) | The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified |
 
 Example:
 
@@ -7475,7 +7475,7 @@ List system types
 omniglass system-type list
 ```
 
-Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
+Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
 
 Example:
 

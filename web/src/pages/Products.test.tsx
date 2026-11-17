@@ -271,7 +271,7 @@ describe("Products page", () => {
   });
 });
 
-// #614: the component_type catalog returns as the product's genus (ADR-0085),
+// #614: the component_type catalog returns as the product's type (ADR-0085),
 // so classifying a product is now a required, pickable fact, not an implicit
 // derivation from kind. The picker offers the seeded tree, indented by depth,
 // so a nested type (interactive-display under display) reads as nested.

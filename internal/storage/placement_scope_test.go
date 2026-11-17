@@ -87,7 +87,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide create into the same system: %v", err)
 	}
-	if !strings.Contains(leaked.Label, "Boardroom") {
+	if !strings.Contains(leaked.Label, "Board Meeting") {
 		t.Errorf("wide create stored %q, want the system type's label in it", leaked.Label)
 	}
 }
@@ -347,7 +347,7 @@ func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
 	if d.Label == "" || d.Label != c.Label {
 		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", d.Label, c.Label)
 	}
-	if !strings.Contains(d.Label, "Boardroom") {
+	if !strings.Contains(d.Label, "Board Meeting") {
 		t.Errorf("drafted label %q does not carry the system type's label, so the refusals above withhold nothing", d.Label)
 	}
 }

@@ -21,7 +21,7 @@ A product is also what a **component** points at: `component.product_id` names t
 **is**, required, so every component always resolves a shape (its vendor, driver, and classification)
 and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The
 component-level `component_type` retired in the fields fold; the catalog returned differently shaped,
-above the product rather than beside the component, so a component's genus is read through the product
+above the product rather than beside the component, so a component's type is read through the product
 it is, never stored on the component itself. The system side has the same arrangement one level up: a
 system is built to a [standard](/guides/admin/standards/), the contract that is the system side's counterpart of a
 product. See [core entities](/architecture/core-entities/) for where both catalogs sit in the fleet
@@ -33,7 +33,7 @@ model.
   it is refused (422), and the retired **vm** value folds into **app** (nothing forked on a virtual
   machine that did not fork the same way on any other app).
 - **Type** classifies the product under a [component type](/architecture/core-entities/#catalog-reference-data-component_type) (required):
-  the device-class genus (`display`, `dsp`, `mic`, ...) that carries the naming stem a generated
+  the device-class type (`display`, `dsp`, `mic`, ...) that carries the naming stem a generated
   component name uses, the console glyph, and the hostname abbreviation. Three generic types
   (`generic-device`, `generic-app`, `generic-service`) exist for anything not yet modeled more
   specifically. It is also what a

@@ -10,9 +10,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// systemTypeBody is the wire shape of a system_type catalog row: the coarse
-// taxonomy of what kind of space a system is (a boardroom, a classroom, a video
-// wall). It is not the standard, which stays the contract a system is built
+// systemTypeBody is the wire shape of a system_type catalog row: the
+// taxonomy of what a system is for (meeting, teaching, signage), never the
+// space it sits in. It is not the standard, which stays the contract a system conforms
 // to. Stem, Icon, and Abbrev are the system's console-facing name and glyph
 // facts, inherited from the nearest ancestor that sets them (null in storage;
 // rendered as "" here, the same as every other optional scalar). ParentID and
@@ -143,7 +143,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/system-types",
 		Summary:     "List system types",
-		Description: "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
+		Description: "Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
 	}, "system_type", "read"), func(ctx context.Context, _ *struct{}) (*listSystemTypesOutput, error) {
 		types, err := gw.ListSystemTypes(ctx)
 		if err != nil {

@@ -254,7 +254,7 @@ alarm has been raised) keeps counting. It reads only this system and its members
 fleet, and stops while the browser tab is hidden.
 
 A system's label is its location's by default, so a room and its system read as one name. A location
-holding several systems names each one's kind ("Media Lab Meeting Room", "Media Lab Signage"),
+holding several systems names each one's kind ("Media Lab Meeting", "Media Lab Signage"),
 and a system with no location reads its kind. Type your own label and it stays yours.
 
 ## A location's own view

@@ -2181,52 +2181,52 @@
    "icon": "layers"
   },
   {
-   "id": "room",
-   "label": "Room",
+   "id": "collaboration",
+   "label": "Collaboration",
    "parent_id": "av",
-   "stem": "room",
-   "abbrev": "rm",
+   "stem": "collaboration",
+   "abbrev": "collab",
    "icon": "door-open"
   },
   {
    "id": "board",
-   "label": "Boardroom",
-   "parent_id": "room",
+   "label": "Board Meeting",
+   "parent_id": "collaboration",
    "stem": "boardroom",
    "abbrev": "br"
   },
   {
    "id": "class",
-   "label": "Classroom",
-   "parent_id": "room",
+   "label": "Teaching",
+   "parent_id": "collaboration",
    "stem": "classroom",
    "abbrev": "cls"
   },
   {
    "id": "meeting",
-   "label": "Meeting Room",
-   "parent_id": "room",
+   "label": "Meeting",
+   "parent_id": "collaboration",
    "stem": "meeting",
    "abbrev": "mtg"
   },
   {
    "id": "training",
-   "label": "Training Room",
-   "parent_id": "room",
+   "label": "Training",
+   "parent_id": "collaboration",
    "stem": "training",
    "abbrev": "trn"
   },
   {
    "id": "conference",
-   "label": "Conference Room",
-   "parent_id": "room",
+   "label": "Conference",
+   "parent_id": "collaboration",
    "stem": "conference",
    "abbrev": "conf"
   },
   {
    "id": "huddle",
-   "label": "Huddle Room",
-   "parent_id": "room",
+   "label": "Huddle",
+   "parent_id": "collaboration",
    "stem": "huddle",
    "abbrev": "hud"
   },

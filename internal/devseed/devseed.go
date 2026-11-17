@@ -186,8 +186,8 @@ func PlantedFaults(sc Scenario) ([]PlantedFault, error) {
 // System is one example system: a thing in a room that either works or does not.
 // Key is the fixture-local identity (see identity.go); Name is optional and its
 // absence asks the platform to mint one from the system_type's stem. Standard
-// names a boot-seeded standard whose slots it inherits live; SystemType names a
-// boot-seeded coarse space classifier (what kind of space it is, a separate axis
+// names a boot-seeded contract whose slots it inherits live; SystemType names a
+// boot-seeded use classifier (what the system is for, a separate axis
 // from the standard); Location names a fixture location BY KEY.
 type System struct {
 	Key        string `yaml:"key"`

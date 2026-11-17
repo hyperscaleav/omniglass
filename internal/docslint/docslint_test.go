@@ -692,3 +692,37 @@ func TestPendingRenameKeepsOnlyADR2036(t *testing.T) {
 		t.Error("an ADR-2036 hit in hand-written docs was waved through")
 	}
 }
+
+// TestADR2034GenusFires proves the genus entry catches the retired word for a
+// type catalog row, singular and plural, and passes an ADR link whose anchor
+// still carries it (ADR titles and anchors keep the word).
+func TestADR2034GenusFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2034") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"The device-class genus catalog: what kind of device a product is.",
+		"Root creates a new top-level genus.",
+		"two genera share a parent",
+		"The Genus column",
+	} {
+		if !fires(line) {
+			t.Errorf("genus passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"see [the registry](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)",
+		"a generic type parameter",
+		"the content type of the response",
+		"an input of type checkbox",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}

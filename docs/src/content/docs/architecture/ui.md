@@ -276,7 +276,7 @@ them (#1346). Targets is the one Actions entry off the read floor: `notification
 sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
-down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
+down the cascade, a distinct kind of thing from the entities themselves. **Config is the CI store** (desired
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is

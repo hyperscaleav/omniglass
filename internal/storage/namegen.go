@@ -34,7 +34,7 @@ var ErrComponentTypeNoStem = errors.New("storage: component_type chain has no st
 // (ErrRootSystemTypeNeedsStem), so this is reachable only through data that
 // predates that guard or through the trusted boot-seed upsert. A refusal by
 // policy for the same reason the component one is: a room called "1" says
-// nothing about what kind of space it is.
+// nothing about what it is for.
 var ErrSystemTypeNoStem = errors.New("storage: system_type chain has no stem to generate a name from")
 
 // ErrSystemTypeRequiredForName is a system asking the platform to name it while
