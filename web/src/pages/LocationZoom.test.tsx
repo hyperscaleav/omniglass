@@ -21,7 +21,7 @@ import { uuidFor } from "../lib/testids";
 // location shared by several) shows its own card with its tabs: a brief card per
 // system it holds, then what is beneath it as the outline rooted here.
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const loc = (handle: string, name: string, label: string, type: string, parent: string, verdict: string) => ({
   id: uuidFor(handle),

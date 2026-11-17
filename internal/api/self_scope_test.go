@@ -29,7 +29,7 @@ func TestSelfScopeAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	body := func(name, parent string) map[string]any {
 		// A child needs a type placement-compatible with a campus parent
@@ -51,7 +51,7 @@ func TestSelfScopeAPI(t *testing.T) {
 
 	// A deploy grant scoped to exactly room-42 (self): read + update on the tree
 	// tiers, read via the viewer floor, but only the one row.
-	selfTok := principalWithGrants(t, ctx, dsn, "single-outpost",
+	selfTok := userWithGrants(t, ctx, dsn, "single-outpost",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "self"}})
 	patch := map[string]any{"label": "x"}
 

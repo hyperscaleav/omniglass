@@ -74,7 +74,7 @@ func TestSystemTypesAPI(t *testing.T) {
 	}
 
 	// A viewer reads the shipped tree via the *:read floor.
-	viewerTok := principalWithGrants(t, ctx, dsn, "st-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "st-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	rows := list(viewerTok)
 	if len(rows) == 0 {
 		t.Fatal("system_types empty, want the shipped tree")

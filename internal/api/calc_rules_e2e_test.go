@@ -248,7 +248,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(south, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
-	placeOwner := setupScopedPrincipal(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	placeOwner := setupScopedUser(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOwner, http.MethodGet, "/calc-rules/temp-mean", nil, http.StatusOK)
 	c.do(placeOwner, http.MethodPost, "/calc-rules", map[string]any{"name": "mine", "owner_kind": "component",
 		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "max(t)"}, "output_key": "temp-twice"}, http.StatusForbidden)

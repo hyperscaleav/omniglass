@@ -238,7 +238,7 @@ export default function Subscriptions(): JSX.Element {
           {(target) => (
             <SubscriptionForm
               rule={target === "new" ? undefined : target}
-              hasEmail={!!me.data?.human?.email}
+              hasEmail={!!me.data?.person?.email}
               onDone={(saved) => {
                 setEditing(null);
                 setNote({ tone: "success", text: `Saved ${entityLabel(saved)}.` });

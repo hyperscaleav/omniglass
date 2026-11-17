@@ -9,10 +9,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The principal-group admin surface: a group holds role x scope grants that its
+// The user-group admin surface: a group holds role x scope grants that its
 // members inherit, so an admin assigns access to a team once instead of per user.
-// Group management is all-scope admin work, gated by principal_group; granting to
-// a group reuses the principal_grant capability and the same escalation
+// Group management is all-scope admin work, gated by user_group; granting to
+// a group reuses the user_grant capability and the same escalation
 // cover-check as a direct grant. Inheritance itself lives in the storage grant
 // loader (a member's group grants are unioned into its grants), so nothing here
 // resolves scope: the gateway does that from the loaded grants.
@@ -22,7 +22,7 @@ type groupBody struct {
 	Name        string `json:"name"`
 	Label       string `json:"label,omitempty"`
 	Description string `json:"description,omitempty"`
-	MemberCount int    `json:"member_count" doc:"How many principals belong to the group (populated on list and get; 0 from create/update)."`
+	MemberCount int    `json:"member_count" doc:"How many users belong to the group (populated on list and get; 0 from create/update)."`
 	GrantCount  int    `json:"grant_count" doc:"How many grants the group confers on its members."`
 }
 
@@ -30,16 +30,16 @@ func toGroupBody(g *storage.Group) groupBody {
 	return groupBody{ID: g.ID, Name: g.Name, Label: g.Label, Description: g.Description, MemberCount: g.MemberCount, GrantCount: g.GrantCount}
 }
 
-// memberBody is one principal on a group's roster. The two facts are kept
+// memberBody is one user on a group's roster. The two facts are kept
 // apart: `name` is the identifier, whichever kind the member is (a human's
-// username, a service account's name), and `label` is the friendly
+// username, a machine user's name), and `label` is the friendly
 // string, present only where a human set one. It used to be one field carrying
 // either, which crossed an identifier with a label and is what #563 ended.
 type memberBody struct {
-	PrincipalID string `json:"principal_id"`
-	Kind        string `json:"kind"`
-	Name        string `json:"name,omitempty" doc:"The member's identifier: a human's username, or a service account's name"`
-	Label       string `json:"label,omitempty" doc:"The friendly string, where the member is a human who has one"`
+	UserID string `json:"user_id"`
+	Kind   string `json:"kind"`
+	Name   string `json:"name,omitempty" doc:"The member's identifier: a person's username, or a machine user's name"`
+	Label  string `json:"label,omitempty" doc:"The friendly string, where the member is a human who has one"`
 }
 
 type groupPathInput struct {
@@ -62,7 +62,7 @@ type createGroupInput struct {
 }
 
 // updateGroupInput is the PATCH body. It deliberately carries no name: a rename is
-// the :rename custom method, gated by principal_group:rename.
+// the :rename custom method, gated by user_group:rename.
 type updateGroupInput struct {
 	Group string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
 	Body  struct {
@@ -82,12 +82,12 @@ type renameGroupInput struct {
 type addMemberInput struct {
 	Group string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
 	Body  struct {
-		PrincipalID string `json:"principal_id" minLength:"1" doc:"The principal to add: a human's username, a service account's name, or its uuid"`
+		UserID string `json:"user_id" minLength:"1" doc:"The user to add: a person's username, a machine user's name, or its uuid"`
 	}
 }
 type memberPathInput struct {
-	Group     string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
-	Principal string `path:"principal" doc:"The member: a human's username, a service account's name, or the principal's uuid" example:"alice"`
+	Group string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
+	User  string `path:"user" doc:"The member: a person's username, a machine user's name, or the user's uuid" example:"alice"`
 }
 type listMembersOutput struct {
 	Body struct {
@@ -113,19 +113,19 @@ type listGroupGrantsOutput struct {
 	}
 }
 
-// registerPrincipalGroupRoutes wires the group admin surface: group CRUD, member
+// registerUserGroupRoutes wires the group admin surface: group CRUD, member
 // management, and grant assignment. All are all-scope admin operations.
-func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-groups",
 		Method:      http.MethodGet,
-		Path:        "/principal-groups",
-		Summary:     "List principal groups",
-		Description: "Every principal group. Gated by principal_group:read:admin.",
-	}, "principal_group", "read", "admin"), func(ctx context.Context, _ *struct{}) (*listGroupsOutput, error) {
-		groups, err := gw.ListGroups(ctx, a.scopeFor(ctx, "principal_group", "read"))
+		Path:        "/user-groups",
+		Summary:     "List user groups",
+		Description: "Every user group. Gated by user_group:read:admin.",
+	}, "user_group", "read", "admin"), func(ctx context.Context, _ *struct{}) (*listGroupsOutput, error) {
+		groups, err := gw.ListGroups(ctx, a.scopeFor(ctx, "user_group", "read"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		out := &listGroupsOutput{}
 		out.Body.Groups = make([]groupBody, 0, len(groups))
@@ -138,13 +138,13 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-group",
 		Method:      http.MethodGet,
-		Path:        "/principal-groups/{group}",
-		Summary:     "Get a principal group",
-		Description: "One principal group, by name or uuid. Gated by principal_group:read:admin.",
-	}, "principal_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*groupOutput, error) {
-		g, err := gw.GetGroup(ctx, in.Group, a.scopeFor(ctx, "principal_group", "read"))
+		Path:        "/user-groups/{group}",
+		Summary:     "Get a user group",
+		Description: "One user group, by name or uuid. Gated by user_group:read:admin.",
+	}, "user_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*groupOutput, error) {
+		g, err := gw.GetGroup(ctx, in.Group, a.scopeFor(ctx, "user_group", "read"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		return &groupOutput{Body: toGroupBody(g)}, nil
 	})
@@ -152,16 +152,16 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-group",
 		Method:        http.MethodPost,
-		Path:          "/principal-groups",
+		Path:          "/user-groups",
 		DefaultStatus: http.StatusCreated,
-		Summary:       "Create a principal group",
-		Description:   "Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.",
-	}, "principal_group", "create"), func(ctx context.Context, in *createGroupInput) (*groupOutput, error) {
+		Summary:       "Create a user group",
+		Description:   "Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.",
+	}, "user_group", "create"), func(ctx context.Context, in *createGroupInput) (*groupOutput, error) {
 		g, err := gw.CreateGroup(ctx, actorID(ctx), storage.GroupSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description,
-		}, a.scopeFor(ctx, "principal_group", "create"))
+		}, a.scopeFor(ctx, "user_group", "create"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		return &groupOutput{Body: toGroupBody(g)}, nil
 	})
@@ -169,15 +169,15 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-group",
 		Method:      http.MethodPatch,
-		Path:        "/principal-groups/{group}",
-		Summary:     "Update a principal group",
-		Description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
-	}, "principal_group", "update"), func(ctx context.Context, in *updateGroupInput) (*groupOutput, error) {
+		Path:        "/user-groups/{group}",
+		Summary:     "Update a user group",
+		Description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).",
+	}, "user_group", "update"), func(ctx context.Context, in *updateGroupInput) (*groupOutput, error) {
 		g, err := gw.UpdateGroup(ctx, actorID(ctx), in.Group, storage.GroupPatch{
 			Label: in.Body.Label, Description: in.Body.Description,
-		}, a.scopeFor(ctx, "principal_group", "update"))
+		}, a.scopeFor(ctx, "user_group", "update"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		return &groupOutput{Body: toGroupBody(g)}, nil
 	})
@@ -185,13 +185,13 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "rename-group",
 		Method:      http.MethodPost,
-		Path:        "/principal-groups/{group}:rename",
-		Summary:     "Rename a principal group",
-		Description: "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
-	}, "principal_group", "rename"), func(ctx context.Context, in *renameGroupInput) (*groupOutput, error) {
-		g, err := gw.RenameGroup(ctx, actorID(ctx), in.Group, in.Body.Name, a.scopeFor(ctx, "principal_group", "rename"))
+		Path:        "/user-groups/{group}:rename",
+		Summary:     "Rename a user group",
+		Description: "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).",
+	}, "user_group", "rename"), func(ctx context.Context, in *renameGroupInput) (*groupOutput, error) {
+		g, err := gw.RenameGroup(ctx, actorID(ctx), in.Group, in.Body.Name, a.scopeFor(ctx, "user_group", "rename"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		return &groupOutput{Body: toGroupBody(g)}, nil
 	})
@@ -199,12 +199,12 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-group",
 		Method:        http.MethodDelete,
-		Path:          "/principal-groups/{group}",
+		Path:          "/user-groups/{group}",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Delete a principal group",
-		Description:   "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
-	}, "principal_group", "delete"), func(ctx context.Context, in *groupPathInput) (*struct{}, error) {
-		if err := gw.DeleteGroup(ctx, actorID(ctx), in.Group, a.scopeFor(ctx, "principal_group", "delete")); err != nil {
+		Summary:       "Delete a user group",
+		Description:   "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).",
+	}, "user_group", "delete"), func(ctx context.Context, in *groupPathInput) (*struct{}, error) {
+		if err := gw.DeleteGroup(ctx, actorID(ctx), in.Group, a.scopeFor(ctx, "user_group", "delete")); err != nil {
 			return nil, mapBoundErr(ctx, a, err)
 		}
 		return nil, nil
@@ -213,18 +213,18 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-group-members",
 		Method:      http.MethodGet,
-		Path:        "/principal-groups/{group}/members",
+		Path:        "/user-groups/{group}/members",
 		Summary:     "List a group's members",
-		Description: "The principals in a group. Gated by principal_group:read:admin.",
-	}, "principal_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listMembersOutput, error) {
-		members, err := gw.ListGroupMembers(ctx, in.Group, a.scopeFor(ctx, "principal_group", "read"))
+		Description: "The users in a group. Gated by user_group:read:admin.",
+	}, "user_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listMembersOutput, error) {
+		members, err := gw.ListGroupMembers(ctx, in.Group, a.scopeFor(ctx, "user_group", "read"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		out := &listMembersOutput{}
 		out.Body.Members = make([]memberBody, 0, len(members))
 		for _, m := range members {
-			out.Body.Members = append(out.Body.Members, memberBody{PrincipalID: m.PrincipalID, Kind: m.Kind, Name: m.Name, Label: m.Label})
+			out.Body.Members = append(out.Body.Members, memberBody{UserID: m.UserID, Kind: m.Kind, Name: m.Name, Label: m.Label})
 		}
 		return out, nil
 	})
@@ -232,16 +232,16 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "add-group-member",
 		Method:        http.MethodPost,
-		Path:          "/principal-groups/{group}/members",
+		Path:          "/user-groups/{group}/members",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Add a member to a group",
-		Description:   "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
-	}, "principal_group", "update"), func(ctx context.Context, in *addMemberInput) (*struct{}, error) {
+		Description:   "Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
+	}, "user_group", "update"), func(ctx context.Context, in *addMemberInput) (*struct{}, error) {
 		if err := a.groupMemberCoverOK(ctx, gw, in.Group); err != nil {
 			return nil, err
 		}
-		if err := gw.AddGroupMember(ctx, actorID(ctx), in.Group, in.Body.PrincipalID, a.scopeFor(ctx, "principal_group", "update")); err != nil {
-			return nil, mapPrincipalErr(err)
+		if err := gw.AddGroupMember(ctx, actorID(ctx), in.Group, in.Body.UserID, a.scopeFor(ctx, "user_group", "update")); err != nil {
+			return nil, mapUserErr(err)
 		}
 		return nil, nil
 	})
@@ -249,13 +249,13 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "remove-group-member",
 		Method:        http.MethodDelete,
-		Path:          "/principal-groups/{group}/members/{principal}",
+		Path:          "/user-groups/{group}/members/{user}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Remove a member from a group",
-		Description:   "Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).",
-	}, "principal_group", "update"), func(ctx context.Context, in *memberPathInput) (*struct{}, error) {
-		if err := gw.RemoveGroupMember(ctx, actorID(ctx), in.Group, in.Principal, a.scopeFor(ctx, "principal_group", "update")); err != nil {
-			return nil, mapPrincipalErr(err)
+		Description:   "Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).",
+	}, "user_group", "update"), func(ctx context.Context, in *memberPathInput) (*struct{}, error) {
+		if err := gw.RemoveGroupMember(ctx, actorID(ctx), in.Group, in.User, a.scopeFor(ctx, "user_group", "update")); err != nil {
+			return nil, mapUserErr(err)
 		}
 		return nil, nil
 	})
@@ -263,13 +263,13 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-group-grants",
 		Method:      http.MethodGet,
-		Path:        "/principal-groups/{group}/grants",
+		Path:        "/user-groups/{group}/grants",
 		Summary:     "List a group's grants",
-		Description: "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
-	}, "principal_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listGroupGrantsOutput, error) {
-		grants, err := gw.ListGroupGrants(ctx, in.Group, a.scopeFor(ctx, "principal_group", "read"))
+		Description: "The role x scope grants a group confers on its members. Gated by user_group:read:admin.",
+	}, "user_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listGroupGrantsOutput, error) {
+		grants, err := gw.ListGroupGrants(ctx, in.Group, a.scopeFor(ctx, "user_group", "read"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		out := &listGroupGrantsOutput{}
 		out.Body.Grants = make([]grantBody, 0, len(grants))
@@ -282,11 +282,11 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-group-grant",
 		Method:        http.MethodPost,
-		Path:          "/principal-groups/{group}/grants",
+		Path:          "/user-groups/{group}/grants",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Grant a role to a group",
-		Description:   "Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
-	}, "principal_grant", "create"), func(ctx context.Context, in *createGroupGrantInput) (*grantOutput, error) {
+		Description:   "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+	}, "user_grant", "create"), func(ctx context.Context, in *createGroupGrantInput) (*grantOutput, error) {
 		ok, err := a.grantCoverOK(ctx, in.Body.Role)
 		if err != nil {
 			return nil, err
@@ -296,9 +296,9 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		}
 		g, err := gw.CreateGroupGrant(ctx, actorID(ctx), in.Group, storage.GrantSpec{
 			Role: in.Body.Role, ScopeKind: in.Body.ScopeKind, ScopeID: in.Body.ScopeID, ScopeOp: in.Body.ScopeOp,
-		}, a.scopeFor(ctx, "principal_grant", "create"))
+		}, a.scopeFor(ctx, "user_grant", "create"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		return &grantOutput{Body: toGrantBody(g)}, nil
 	})
@@ -306,13 +306,13 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "revoke-group-grant",
 		Method:        http.MethodDelete,
-		Path:          "/principal-groups/{group}/grants/{grantId}",
+		Path:          "/user-groups/{group}/grants/{grantId}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Revoke a group grant",
-		Description:   "Removes one grant from a group. Gated by principal_grant:delete (all-scope).",
-	}, "principal_grant", "delete"), func(ctx context.Context, in *revokeGroupGrantInput) (*struct{}, error) {
-		if err := gw.RevokeGroupGrant(ctx, actorID(ctx), in.Group, in.GrantID, a.scopeFor(ctx, "principal_grant", "delete")); err != nil {
-			return nil, mapPrincipalErr(err)
+		Description:   "Removes one grant from a group. Gated by user_grant:delete (all-scope).",
+	}, "user_grant", "delete"), func(ctx context.Context, in *revokeGroupGrantInput) (*struct{}, error) {
+		if err := gw.RevokeGroupGrant(ctx, actorID(ctx), in.Group, in.GrantID, a.scopeFor(ctx, "user_grant", "delete")); err != nil {
+			return nil, mapUserErr(err)
 		}
 		return nil, nil
 	})
@@ -327,7 +327,7 @@ func (a *authenticator) groupMemberCoverOK(ctx context.Context, gw storage.Gatew
 	if !constrained(ctx) {
 		return nil
 	}
-	actor, ok := principalFrom(ctx)
+	actor, ok := userFrom(ctx)
 	if !ok {
 		return huma.Error401Unauthorized("unauthenticated")
 	}
@@ -337,7 +337,7 @@ func (a *authenticator) groupMemberCoverOK(ctx context.Context, gw storage.Gatew
 	}
 	grants, err := gw.ListGroupGrants(ctx, group, scope.Set{All: true})
 	if err != nil {
-		return mapPrincipalErr(err)
+		return mapUserErr(err)
 	}
 	roles := make([]string, 0, len(grants))
 	for _, g := range grants {

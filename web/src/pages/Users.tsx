@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { useFormActions } from "../lib/formactions";
 import PasswordField from "../components/PasswordField";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName, kindBadge, kindLabel } from "../lib/principals";
+import { type User, USERS_KEY, listUsers, createUser, userName, kindBadge, kindLabel } from "../lib/users";
 import { identityColumn } from "../components/IdentityCell";
 import { createIdentity, type Labelled } from "../lib/entities";
 import UserAvatar from "../components/UserAvatar";
@@ -18,24 +18,24 @@ import { Plus } from "../components/icons";
 // Users: the admin user directory, a config over the shared FlatList. A row per
 // user (a person or a machine user) opens its detail as a blade (rooted here on
 // user, drilling into the user groups it belongs to); "New user" opens the create Drawer
-// (gated by principal:create). It is self-teaching: the detail shows the grant model
+// (gated by user:create). It is self-teaching: the detail shows the grant model
 // (role x scope) the platform enforces. Every gate is a UI hint; the server is
 // authority. The blade bodies live in UserDetail / GroupDetail (the cross-entity
 // catalog), so a user's user group drills to its blade over it.
 
-const filterKeys: FilterKey<Principal>[] = [
-  { key: "name", type: "string", hint: "substring", get: (p) => principalName(p) },
+const filterKeys: FilterKey<User>[] = [
+  { key: "name", type: "string", hint: "substring", get: (p) => userName(p) },
   { key: "kind", type: "string", hint: "exact", get: (p) => kindLabel(p.kind), values: (rows) => [...new Set(rows.map((r) => kindLabel(r.kind)))].sort() },
-  { key: "username", type: "string", hint: "substring", get: (p) => p.human?.username ?? "" },
+  { key: "username", type: "string", hint: "substring", get: (p) => p.person?.username ?? "" },
 ];
 
 // A user wears the two operator-facing identities the console labels everything
 // by, under its own field names: the username stands in for the name (what the API,
 // the CLI, and the sign-in prompt address a person by) and the label is the
 // label. A machine user carries only its name, so nothing sits beneath it.
-const principalIdentity = (p: Principal): Labelled => ({
-  name: p.human?.username ?? p.service?.name ?? p.kind,
-  label: p.human?.label,
+const userIdentity = (p: User): Labelled => ({
+  name: p.person?.username ?? p.machine?.name ?? p.kind,
+  label: p.person?.label,
 });
 
 const identity = identityColumn<Labelled>();
@@ -43,16 +43,16 @@ const identity = identityColumn<Labelled>();
 // The directory columns. Name carries the avatar plus the shared identity cell;
 // Kind the person/machine badge (with an inactive marker); Grants the grant count;
 // User groups the badges of the user groups the user belongs to.
-const columns: FlatColumn<Principal>[] = [
+const columns: FlatColumn<User>[] = [
   {
     ...identity,
     // The avatar is a user's own identity cue and stays; the two lines beside
     // it are the shared cell, read through the adapter above.
-    sortVal: (p: Principal) => identity.sortVal(principalIdentity(p)),
-    cell: (p: Principal) => (
+    sortVal: (p: User) => identity.sortVal(userIdentity(p)),
+    cell: (p: User) => (
       <div class="flex items-center gap-2.5">
-        <UserAvatar principal={p} size="w-7" textClass="text-[10px]" />
-        {identity.cell(principalIdentity(p))}
+        <UserAvatar user={p} size="w-7" textClass="text-[10px]" />
+        {identity.cell(userIdentity(p))}
       </div>
     ),
   },
@@ -89,17 +89,17 @@ export default function Users() {
   // Archived (soft-deleted) users are hidden by default; the toggle includes
   // them (a distinct query key) so an admin can re-find one to restore or purge.
   const [showArchived, setShowArchived] = createSignal(false);
-  const principals = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, showArchived()], queryFn: () => listPrincipals(undefined, showArchived()) }));
+  const users = useQuery(() => ({ queryKey: [...USERS_KEY, showArchived()], queryFn: () => listUsers(undefined, showArchived()) }));
   // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
   const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
 
   return (
-    <FlatList<Principal>
+    <FlatList<User>
       config={{
         entity: { name: "user", plural: "users" },
-        rows: () => principals.data ?? [],
-        loading: () => principals.isLoading,
-        error: () => principals.error,
+        rows: () => users.data ?? [],
+        loading: () => users.isLoading,
+        error: () => users.error,
         filterKeys,
         filterPlaceholder: "filter by name, kind, username",
         columns,
@@ -115,7 +115,7 @@ export default function Users() {
         ),
         create: {
           label: "New user",
-          can: () => can(me.data, "principal", "create"),
+          can: () => can(me.data, "user", "create"),
           // The handoff is the URL (#759): ?u=<id>&edit=1 opens the new user's
           // blade already editing (the openId deep link plus the edit param),
           // so grants are assigned without a second step.
@@ -134,7 +134,7 @@ export default function Users() {
 // The two identity fields are the shared coupling: the label leads and the
 // username derives from it, so an operator types "Jordan Rivera" without meeting the
 // handle character class, and the moment they edit the username it is theirs.
-function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) => void }) {
+function CreateUserForm(props: { close: () => void; onCreated: (p: User) => void }) {
   const qc = useQueryClient();
   const { display, name: username, nameDerived, setDisplay, setName: setUsername } = createIdentity();
   const [email, setEmail] = createSignal("");
@@ -159,7 +159,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
     setErr(null);
     setPwServerError(null);
     try {
-      const created = await createPrincipal({
+      const created = await createUser({
         username: username().trim(),
         label: display().trim() || undefined,
         email: email().trim() || undefined,
@@ -167,8 +167,8 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       });
       // Seed the new user's detail cache so its blade opens instantly, then hand it
       // to onCreated, whose URL (#759) carries the open-in-edit intent.
-      qc.setQueryData([...PRINCIPALS_KEY, created.id], created);
-      await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+      qc.setQueryData([...USERS_KEY, created.id], created);
+      await qc.invalidateQueries({ queryKey: USERS_KEY });
       props.onCreated(created);
     } catch (er) {
       const msg = describeError(er);

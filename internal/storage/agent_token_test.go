@@ -62,7 +62,7 @@ func TestAgentTokenRoundTripAndAudit(t *testing.T) {
 		t.Fatalf("authenticate agent token: %v", err)
 	}
 	if pr.ID != root.ID {
-		t.Errorf("agent token principal = %s, want the minting person %s", pr.ID, root.ID)
+		t.Errorf("agent token user = %s, want the minting person %s", pr.ID, root.ID)
 	}
 	if pr.Agent == nil || pr.Agent.Name != "claude-desktop" || !slices.Equal(pr.Agent.Roles, []string{"viewer"}) ||
 		!slices.Equal(pr.Agent.Channels, []string{"mcp"}) || pr.Agent.CredentialID == "" {

@@ -51,13 +51,13 @@ const levels: SeverityLevel[] = [
 const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
 const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const scoped: Me = { user: { id: "u-hq", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
 // Owns one location, views the fleet: rule:create is in its flattened set, but a
 // fleet-wide rule needs it on an all-scope grant, so the server refuses it.
 const locationOwner: Me = {
-  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+  user: { id: "u-po", kind: "person" }, person: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: uuidFor("loc-hq") }, { role: "viewer", scope_kind: "all" }],
 };
 

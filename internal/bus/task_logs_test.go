@@ -83,7 +83,7 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('tcp', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:51325"}'::jsonb)`, comp.ID); err != nil {
+		('tcp', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:51325"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

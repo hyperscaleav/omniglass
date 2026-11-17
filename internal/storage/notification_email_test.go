@@ -70,8 +70,8 @@ func (f *peopleFixture) drain(t *testing.T, m *mailbox) {
 
 func (f *peopleFixture) emailRule(t *testing.T) {
 	t.Helper()
-	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetPrincipalGroup,
-		PrincipalGroup: "on-call", Channels: []string{storage.DeliveryInbox, storage.DeliveryEmail}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetUserGroup,
+		UserGroup: "on-call", Channels: []string{storage.DeliveryInbox, storage.DeliveryEmail}}, f.all, storage.SecretUse{}, bindAll); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateActionRule(f.ctx, "", storage.ActionRuleSpec{Name: "page-on-call", On: []string{"raised"},
@@ -132,7 +132,7 @@ func TestAPersonsEmailIsJudgedAgainAtSend(t *testing.T) {
 	f.relay(t)
 	f.human(t, "carol", storage.GrantSpec{Role: "viewer", ScopeKind: "all"})
 	f.human(t, "dave", storage.GrantSpec{Role: "viewer", ScopeKind: "all"})
-	pr, err := f.gw.CreateHumanPrincipal(f.ctx, "", storage.HumanSpec{Username: "erin"}, f.all)
+	pr, err := f.gw.CreatePerson(f.ctx, "", storage.PersonSpec{Username: "erin"}, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAPersonsEmailIsJudgedAgainAtSend(t *testing.T) {
 	// Between the queue and the send: alice loses the fleet (her grant is
 	// narrowed to display-2), carol leaves the group, dave is archived; erin
 	// never had an email.
-	alice, err := f.gw.GetPrincipal(f.ctx, f.ids["alice"], f.all)
+	alice, err := f.gw.GetUser(f.ctx, f.ids["alice"], f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestAPersonsEmailIsJudgedAgainAtSend(t *testing.T) {
 	if err := f.gw.RemoveGroupMember(f.ctx, "", "on-call", "carol", f.all); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.ArchivePrincipal(f.ctx, "", f.ids["dave"], f.all); err != nil {
+	if err := f.gw.ArchiveUser(f.ctx, "", f.ids["dave"], f.all); err != nil {
 		t.Fatal(err)
 	}
 	m := &mailbox{}

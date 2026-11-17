@@ -52,12 +52,12 @@ type alarmBody struct {
 	// and still raised, raised and unacknowledged, or cleared having never been
 	// acknowledged.
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
-	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)"`
+	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)"`
 	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
 	// The snooze belongs to the alarm's condition (#1318), so every alarm of
 	// the same (component, dedup_key) reads the same pair.
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
-	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name)"`
+	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the condition, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -310,12 +310,12 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	}, "alarm", "acknowledge"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
 		// The ACTION scope comes from alarm:acknowledge, so only the grants whose
 		// role actually carries the acknowledgement contribute their scope: a wide
-		// component read does not widen what may be acknowledged, and a principal
+		// component read does not widen what may be acknowledged, and a user
 		// that may acknowledge in one building cannot acknowledge in another one it
 		// can merely see.
 		//
 		// The READ scope is the caller's own component:read, and it decides only
-		// which refusal that principal is owed (#736, #728): a component outside it
+		// which refusal that user is owed (#736, #728): a component outside it
 		// is still the non-disclosing 404, and a component inside it that the
 		// acknowledgement does not reach is the truthful 403. It grants nothing.
 		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
@@ -395,7 +395,7 @@ type alarmTimelineEntryBody struct {
 	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
 	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed, or why a suppressed one was held back"`
 	Channel      string `json:"channel,omitempty" enum:"webhook,inbox,email," doc:"How a notification travels: webhook, a person's inbox, or email"`
-	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"`
+	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of user:read:admin"`
 	Withheld     bool   `json:"recipient_withheld,omitempty" doc:"True when a notification is addressed to a person whose name the caller may not see"`
 }
 

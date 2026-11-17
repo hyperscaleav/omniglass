@@ -64,7 +64,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **task** | An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
 | **transport** | The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass. | `/transports` | `endpoint` |  |
 | **unclaimed source** | A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored. | `/unclaimed-sources` | `outpost` |  |
-| **user** | Who a role is granted to, a person who signs in or a machine user that holds tokens. | `/principals` | `principal` | principal, service account, human |
-| **user group** | A set of users granted roles together, each member inheriting the group's grants. | `/principal-groups` | `principal_group` | principal group |
+| **user** | Who a role is granted to, a person who signs in or a machine user that holds tokens. | `/users` | `user` | principal, service account, human |
+| **user group** | A set of users granted roles together, each member inheriting the group's grants. | `/user-groups` | `user_group` | principal group |
 | **vendor** | An organization behind products, a manufacturer, an integrator or a developer. | `/vendors` | `vendor` |  |
 

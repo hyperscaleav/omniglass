@@ -402,8 +402,8 @@ func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 // label, so a caller who cannot read the placement must not be handed one
 // through the preview, whatever their grant on the entity being drafted.
 //
-// Driven by a narrow-scoped principal deliberately: three scope defects in this
-// epic survived review because every fixture drove a principal holding all.
+// Driven by a narrow-scoped user deliberately: three scope defects in this
+// epic survived review because every fixture drove a user holding all.
 func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)

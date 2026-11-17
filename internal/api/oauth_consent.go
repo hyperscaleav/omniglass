@@ -119,11 +119,11 @@ func (a *authenticator) getOAuthClientHandler(ctx context.Context, in *oauthClie
 }
 
 func (a *authenticator) authorizeOAuthClientHandler(ctx context.Context, in *authorizeOAuthClientInput) (*authorizeOAuthClientOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if pr.Human == nil {
+	if pr.Person == nil {
 		return nil, huma.Error422UnprocessableEntity("only a person can approve an OAuth client")
 	}
 	if impersonationMode(ctx) != "" {
@@ -181,7 +181,7 @@ func (a *authenticator) authorizeOAuthClientHandler(ctx context.Context, in *aut
 		return nil, huma.Error500InternalServerError("authorize oauth client")
 	}
 	if err := a.gw.CreateOAuthCode(ctx, storage.OAuthCode{
-		Hash: hash, ClientID: c.ID, PrincipalID: pr.ID, RedirectURI: b.RedirectURI,
+		Hash: hash, ClientID: c.ID, UserID: pr.ID, RedirectURI: b.RedirectURI,
 		CodeChallenge: b.CodeChallenge, Resource: b.Resource, Roles: b.Roles,
 		ExpiresAt: time.Now().Add(oauthCodeLifetime),
 	}); err != nil {

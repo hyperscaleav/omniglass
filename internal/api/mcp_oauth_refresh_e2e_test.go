@@ -298,8 +298,8 @@ func TestOAuthRefreshRefusedWhileDisabled(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer conn.Close(s.ctx)
-		if _, err := conn.Exec(s.ctx, `update principal set active = $2
-			where id = (select principal_id from credential where oauth_client_id = $1)`, client, active); err != nil {
+		if _, err := conn.Exec(s.ctx, `update users set active = $2
+			where id = (select user_id from credential where oauth_client_id = $1)`, client, active); err != nil {
 			t.Fatal(err)
 		}
 	}

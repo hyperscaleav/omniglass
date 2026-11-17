@@ -198,7 +198,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	opTok := setupScopedViewer(t, ctx, dsn, "op-other", "operator", "component", other.ID)
 	c.do(opTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "reboot"}, http.StatusNotFound)
 
-	// An ungranted principal is forbidden to issue.
-	noneTok := principalWithGrants(t, ctx, dsn, "nocmd", nil)
+	// An ungranted user is forbidden to issue.
+	noneTok := userWithGrants(t, ctx, dsn, "nocmd", nil)
 	c.do(noneTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "reboot"}, http.StatusForbidden)
 }

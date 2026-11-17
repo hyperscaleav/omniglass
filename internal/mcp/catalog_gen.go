@@ -29,12 +29,12 @@ var catalog = []tooldef.Def{
 		QueryParams: []string{"limit", "resource", "verb", "before", "agent", "channel", "client"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
 		Class:       tooldef.ClassRead,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"agent\":{\"description\":\"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)\",\"type\":\"string\"},\"before\":{\"description\":\"Only events strictly older than this RFC3339 timestamp (paging backward)\",\"type\":\"string\"},\"channel\":{\"description\":\"Filter to the events that arrived through one channel; direct is a plain API call, with no channel\",\"enum\":[\"direct\",\"mcp\",\"omnibot\"],\"type\":\"string\"},\"client\":{\"description\":\"Filter to the events whose declared MCP client contains this term, case-insensitively\",\"type\":\"string\"},\"limit\":{\"description\":\"Max rows to return, newest first (default 100, capped at 500)\",\"format\":\"int64\",\"type\":\"integer\"},\"resource\":{\"description\":\"Filter to one resource kind (e.g. auth, principal_grant)\",\"type\":\"string\"},\"verb\":{\"description\":\"Filter to one verb (e.g. login, create)\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"agent\":{\"description\":\"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)\",\"type\":\"string\"},\"before\":{\"description\":\"Only events strictly older than this RFC3339 timestamp (paging backward)\",\"type\":\"string\"},\"channel\":{\"description\":\"Filter to the events that arrived through one channel; direct is a plain API call, with no channel\",\"enum\":[\"direct\",\"mcp\",\"omnibot\"],\"type\":\"string\"},\"client\":{\"description\":\"Filter to the events whose declared MCP client contains this term, case-insensitively\",\"type\":\"string\"},\"limit\":{\"description\":\"Max rows to return, newest first (default 100, capped at 500)\",\"format\":\"int64\",\"type\":\"integer\"},\"resource\":{\"description\":\"Filter to one resource kind (e.g. auth, user_grant)\",\"type\":\"string\"},\"verb\":{\"description\":\"Filter to one verb (e.g. login, create)\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
 		Name:        "get-auth-me",
-		Title:       "The authenticated principal, its permissions, and grants",
-		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
+		Title:       "The authenticated user, its permissions, and grants",
+		Description: "Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 		Method:      "GET",
 		Path:        "/auth/me",
 		Permission:  "",
@@ -56,7 +56,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-auth-me-notifications",
 		Title:       "List your inbox",
-		Description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+		Description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
 		Method:      "GET",
 		Path:        "/auth/me/notifications",
 		Permission:  "notification:read",
@@ -861,7 +861,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-notification",
 		Title:       "List notifications",
-		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
+		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.",
 		Method:      "GET",
 		Path:        "/notifications",
 		Permission:  "notification:read",

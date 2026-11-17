@@ -33,7 +33,7 @@ export const AuthGuard: ParentComponent = (props) => {
     <Show when={!me.isPending && !status.isPending && me.data !== null} fallback={<FullScreenLoader pending={me.isPending || status.isPending} />}>
       {/* An admin-reset account is gated to the change-password screen (the server
           refuses every other route until it clears), replacing the whole shell. */}
-      <Show when={me.data?.human?.must_change_password} fallback={props.children}>
+      <Show when={me.data?.person?.must_change_password} fallback={props.children}>
         <ForceChangePassword />
       </Show>
     </Show>

@@ -170,7 +170,7 @@ func (p *PG) PendingOutpostCommands(ctx context.Context, outpost string) ([]Comm
 		with here as (
 			select distinct e.component as component_id
 			from endpoint e
-			where e.outpost_id = (select principal_id from outpost where name = $1)
+			where e.outpost_id = (select user_id from outpost where name = $1)
 			  and e.driver_id is not null
 			  and e.component is not null
 		),
@@ -180,7 +180,7 @@ func (p *PG) PendingOutpostCommands(ctx context.Context, outpost string) ([]Comm
 			(select m.value from metric_declared m where m.command_id = k.id order by m.id desc limit 1),
 			k.disruptive, k.quiet_seconds, k.hold_seconds, k.target_id, k.outpost_id::text, k.power_outlet_param
 		from candidate k
-		where k.outpost_id = (select principal_id from outpost where name = $1)
+		where k.outpost_id = (select user_id from outpost where name = $1)
 		  and (k.dispatched_at is null or k.dispatched_at < now() - interval '`+redeliverAfter+`')`, outpost)
 	if err != nil {
 		return nil, fmt.Errorf("storage: pending commands for %q: %w", outpost, err)
@@ -320,7 +320,7 @@ func (p *PG) markDispatched(ctx context.Context, delivered []dispatch) error {
 			from unnest($1::bigint[], $2::uuid[]) as u(id, endpoint_id)
 			where c.id = u.id
 			returning c.id, c.delivery_count, extract(epoch from c.first_dispatched_at - c.ts) * 1000, c.first_dispatched_at,
-				(select n.platform_component_id::text from endpoint i join outpost n on n.principal_id = i.outpost_id where i.id = u.endpoint_id)`,
+				(select n.platform_component_id::text from endpoint i join outpost n on n.user_id = i.outpost_id where i.id = u.endpoint_id)`,
 			ids, endpoints)
 		if err != nil {
 			return fmt.Errorf("storage: mark %d commands dispatched: %w", len(ids), err)
@@ -428,7 +428,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, outpost string, command
 		  and exists (
 			select 1 from endpoint i
 			where i.id = c.dispatched_endpoint_id
-			  and i.outpost_id = (select principal_id from outpost where name = $2))
+			  and i.outpost_id = (select user_id from outpost where name = $2))
 		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id)::text,
 			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text,
 			extract(epoch from c.executed_at - c.first_dispatched_at) * 1000, c.executed_at,

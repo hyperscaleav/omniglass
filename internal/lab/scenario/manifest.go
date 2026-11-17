@@ -46,7 +46,7 @@ type Manifest struct {
 // Pusher is one outside actor a scenario places at every site, PerSite of
 // them a site, each scoped to Systems of the site's systems, or to every one
 // when Systems is omitted. Its profile's face says what kind it is: a push
-// face (a booking service, say) makes a token pusher, whose principal the
+// face (a booking service, say) makes a token pusher, whose user the
 // lab seeds and whose token it mints per run, granted telemetry:push on its
 // systems; a webhook face (the meeting platform's account, #1747) makes a
 // signed-webhook sender, a component the lab seeds with a webhook endpoint

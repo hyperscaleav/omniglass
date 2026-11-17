@@ -9,7 +9,7 @@ import (
 )
 
 // The snooze routes end to end (#1318), driven as a caller drives them, on
-// the acknowledgement's fixture (newAckFixture): every principal narrow, the
+// the acknowledgement's fixture (newAckFixture): every user narrow, the
 // owner only the control that proves a refusal is a boundary. alarm:snooze is
 // the capability, and the component tier its grant is scoped at is the reach,
 // resolved exactly as alarm:acknowledge's is (ADR-0109).
@@ -36,7 +36,7 @@ func decodeSnooze(t *testing.T, raw []byte) snoozeView {
 }
 
 // TestAnOperatorSnoozesAndUnsnoozesInScope is the happy path by the narrow
-// principal: the alarm reads the snooze, the list read carries it, and an
+// user: the alarm reads the snooze, the list read carries it, and an
 // unsnooze takes it off.
 func TestAnOperatorSnoozesAndUnsnoozesInScope(t *testing.T) {
 	t.Parallel()
@@ -69,12 +69,12 @@ func TestAnOperatorSnoozesAndUnsnoozesInScope(t *testing.T) {
 	f.c.do(f.responder, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "unsnooze"), nil, http.StatusOK)
 }
 
-// TestSnoozeRefusesWithoutTheCapability: a viewer and a deploy-only principal
+// TestSnoozeRefusesWithoutTheCapability: a viewer and a deploy-only user
 // hold no alarm:snooze, so the gate refuses them before scope is consulted.
 func TestSnoozeRefusesWithoutTheCapability(t *testing.T) {
 	t.Parallel()
 	f := newAckFixture(t)
-	deployer := principalWithGrants(t, f.c.ctx, f.dsn, "deployer", []grant{{role: "deploy", scopeKind: "all"}})
+	deployer := userWithGrants(t, f.c.ctx, f.dsn, "deployer", []grant{{role: "deploy", scopeKind: "all"}})
 	for _, tok := range []string{f.watcher, deployer} {
 		for _, verb := range []string{"snooze", "unsnooze"} {
 			f.c.do(tok, http.MethodPost, snoozePath(f.mine, f.mineAlarm, verb), map[string]any{"duration": "1h"}, http.StatusForbidden)
@@ -87,14 +87,14 @@ func TestSnoozeRefusesWithoutTheCapability(t *testing.T) {
 
 // TestSnoozeRefusesOutsideTheScope is the ABAC layer: the responder holds
 // alarm:snooze on one component and reads the whole fleet, so the far
-// component is a truthful 403; a principal whose grant reaches one component
+// component is a truthful 403; a user whose grant reaches one component
 // and reads nothing else is owed the non-disclosing 404 on the far one.
 func TestSnoozeRefusesOutsideTheScope(t *testing.T) {
 	t.Parallel()
 	f := newAckFixture(t)
 	f.c.do(f.responder, http.MethodPost, snoozePath(f.theirs, f.theirsAlarm, "snooze"), map[string]any{"duration": "1h"}, http.StatusForbidden)
 
-	narrow := principalWithGrants(t, f.c.ctx, f.dsn, "narrow", []grant{{role: "operator", scopeKind: "component", scopeID: f.mineCompID}})
+	narrow := userWithGrants(t, f.c.ctx, f.dsn, "narrow", []grant{{role: "operator", scopeKind: "component", scopeID: f.mineCompID}})
 	f.c.do(narrow, http.MethodPost, snoozePath(f.theirs, f.theirsAlarm, "snooze"), map[string]any{"duration": "1h"}, http.StatusNotFound)
 	f.c.do(narrow, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "snooze"), map[string]any{"duration": "1h"}, http.StatusOK)
 
@@ -172,7 +172,7 @@ func TestASnoozedConditionsNotificationsListAsSuppressed(t *testing.T) {
 	f.c.do(f.owner, http.MethodPost, "/notifications/"+env.Notifications[0].ID+":retry", nil, http.StatusConflict)
 
 	// A caller who reads only the far component sees none of it.
-	far := principalWithGrants(t, f.c.ctx, f.dsn, "far", []grant{{role: "viewer", scopeKind: "component", scopeID: f.theirsCompID}})
+	far := userWithGrants(t, f.c.ctx, f.dsn, "far", []grant{{role: "viewer", scopeKind: "component", scopeID: f.theirsCompID}})
 	var none struct {
 		Notifications []row `json:"notifications"`
 	}

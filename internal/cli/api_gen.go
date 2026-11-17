@@ -485,7 +485,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().IntVar(&qLimit, "limit", 0, "Max rows to return, newest first (default 100, capped at 500)")
-				cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, principal_grant)")
+				cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, user_grant)")
 				cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
 				cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
 				cmd.Flags().StringVar(&qAgent, "agent", "", "Filter to the events one agent took on its person's behalf (the name its agent token was minted with)")
@@ -661,8 +661,8 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "me",
-					Short:   "The authenticated principal, its permissions, and grants",
-					Long:    "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
+					Short:   "The authenticated user, its permissions, and grants",
+					Long:    "Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 					Example: "  omniglass auth me",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -927,7 +927,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "list",
 							Short:   "List your inbox",
-							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
 							Example: "  omniglass auth me notification list",
 							Args:    pathArgs(0),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -1159,7 +1159,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update-profile",
 					Short:   "Update your own profile",
-					Long:    "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+					Long:    "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).",
 					Example: "  omniglass auth update-profile",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5415,7 +5415,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List notifications",
-					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
+					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.",
 					Example: "  omniglass notification list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5479,14 +5479,14 @@ func generatedCommands() []*cobra.Command {
 				var fKind string
 				var fLabel string
 				var fName string
-				var fPrincipal string
-				var fPrincipalGroup string
 				var fSecret string
 				var fUrl string
+				var fUser string
+				var fUserGroup string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification target",
-					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 					Example: "  omniglass notification-target create --kind kind --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5510,17 +5510,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
-						if cmd.Flags().Changed("principal") {
-							body["principal"] = fPrincipal
-						}
-						if cmd.Flags().Changed("principal-group") {
-							body["principal_group"] = fPrincipalGroup
-						}
 						if cmd.Flags().Changed("secret") {
 							body["secret"] = fSecret
 						}
 						if cmd.Flags().Changed("url") {
 							body["url"] = fUrl
+						}
+						if cmd.Flags().Changed("user") {
+							body["user"] = fUser
+						}
+						if cmd.Flags().Changed("user-group") {
+							body["user_group"] = fUserGroup
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -5533,10 +5533,10 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The target's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fPrincipal, "principal", "", "A principal target's person, by username or uuid; binding one takes principal:read:admin")
-				cmd.Flags().StringVar(&fPrincipalGroup, "principal-group", "", "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
 				cmd.Flags().StringVar(&fUrl, "url", "", "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
+				cmd.Flags().StringVar(&fUser, "user", "", "A user target's person, by username or uuid; binding one takes user:read:admin")
+				cmd.Flags().StringVar(&fUserGroup, "user-group", "", "A user_group target's group, by name or uuid; binding one takes user_group:read:admin")
 				return cmd
 			}()
 			return cmd
@@ -6193,755 +6193,6 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "New free-form operator notes")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Set the outpost's location by name or id, or \"\" to clear it")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
-			Use:   "principal",
-			Short: "Commands for the principal resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "archive <id>",
-					Short:   "Archive a principal",
-					Long:    "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
-					Example: "  omniglass principal archive <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:archive", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "avatar",
-				Short: "Commands for the avatar resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <id>",
-						Short:   "Get a principal's profile picture",
-						Long:    "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.",
-						Example: "  omniglass principal avatar list <id>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/avatar", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fEmail string
-				var fLabel string
-				var fPassword string
-				var fUsername string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create a human principal",
-					Long:    "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
-					Example: "  omniglass principal create --username username",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals")
-						body := map[string]any{}
-						if cmd.Flags().Changed("email") {
-							body["email"] = fEmail
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("password") {
-							body["password"] = fPassword
-						}
-						if cmd.Flags().Changed("username") {
-							body["username"] = fUsername
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fEmail, "email", "", "Contact email for the account")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists; falls back to the username")
-				cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
-				cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
-				_ = cmd.MarkFlagRequired("username")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "disable <id>",
-					Short:   "Disable a principal",
-					Long:    "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
-					Example: "  omniglass principal disable <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:disable", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "enable <id>",
-					Short:   "Enable a principal",
-					Long:    "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
-					Example: "  omniglass principal enable <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:enable", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <id>",
-					Short:   "Get a principal",
-					Long:    "Fetches one principal by id with its profile and grants. Gated by principal:read:admin.",
-					Example: "  omniglass principal get <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "grant",
-				Short: "Commands for the grant resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fRole string
-					var fScopeId string
-					var fScopeKind string
-					var fScopeOp string
-					cmd := &cobra.Command{
-						Use:     "create <id>",
-						Short:   "Grant a role to a principal",
-						Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
-						Example: "  omniglass principal grant create <id> --role role --scope-kind scope_kind",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("role") {
-								body["role"] = fRole
-							}
-							if cmd.Flags().Changed("scope-id") {
-								body["scope_id"] = fScopeId
-							}
-							if cmd.Flags().Changed("scope-kind") {
-								body["scope_kind"] = fScopeKind
-							}
-							if cmd.Flags().Changed("scope-op") {
-								body["scope_op"] = fScopeOp
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
-					_ = cmd.MarkFlagRequired("role")
-					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
-					_ = cmd.MarkFlagRequired("scope-kind")
-					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <id> <grantId>",
-						Short:   "Revoke a grant",
-						Long:    "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
-						Example: "  omniglass principal grant delete <id> <grantId>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDurationMinutes int
-				var fMode string
-				cmd := &cobra.Command{
-					Use:     "impersonate <id>",
-					Short:   "Impersonate a principal (view-as or act-as)",
-					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
-					Example: "  omniglass principal impersonate <id> --mode mode",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:impersonate", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("duration-minutes") {
-							body["duration_minutes"] = fDurationMinutes
-						}
-						if cmd.Flags().Changed("mode") {
-							body["mode"] = fMode
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().IntVar(&fDurationMinutes, "duration-minutes", 0, "Session lifetime in minutes (default 30, max 1440)")
-				cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal")
-				_ = cmd.MarkFlagRequired("mode")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var qKind string
-				var qIncludeArchived bool
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List principals",
-					Long:    "Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.",
-					Example: "  omniglass principal list",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals")
-						q := url.Values{}
-						if cmd.Flags().Changed("kind") {
-							q.Set("kind", fmt.Sprintf("%v", qKind))
-						}
-						if cmd.Flags().Changed("include-archived") {
-							q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
-						}
-						if enc := q.Encode(); enc != "" {
-							path += "?" + enc
-						}
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by principal kind")
-				cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) principals, hidden by default")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "purge <id>",
-					Short:   "Purge a principal",
-					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
-					Example: "  omniglass principal purge <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:purge", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "removeAvatar <id>",
-					Short:   "Remove a principal's profile picture",
-					Long:    "Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
-					Example: "  omniglass principal removeAvatar <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:removeAvatar", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fPassword string
-				cmd := &cobra.Command{
-					Use:     "resetPassword <id>",
-					Short:   "Reset a principal's password",
-					Long:    "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
-					Example: "  omniglass principal resetPassword <id> --password password",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:resetPassword", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("password") {
-							body["password"] = fPassword
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
-				_ = cmd.MarkFlagRequired("password")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "restore <id>",
-					Short:   "Restore a principal",
-					Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
-					Example: "  omniglass principal restore <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:restore", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "session",
-				Short: "Commands for the session resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <id>",
-						Short:   "List a principal's sessions",
-						Long:    "Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another principal).",
-						Example: "  omniglass principal session list <id>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "revoke <id> <sid>",
-						Short:   "Revoke a principal's session",
-						Long:    "Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
-						Example: "  omniglass principal session revoke <id> <sid>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions/%s:revoke", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "POST", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fPurpose string
-					cmd := &cobra.Command{
-						Use:     "revokeAll <id>",
-						Short:   "Revoke all of a principal's sessions or tokens",
-						Long:    "Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
-						Example: "  omniglass principal session revokeAll <id> --purpose purpose",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions:revokeAll", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("purpose") {
-								body["purpose"] = fPurpose
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens")
-					_ = cmd.MarkFlagRequired("purpose")
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fImageBase64 string
-				cmd := &cobra.Command{
-					Use:     "setAvatar <id>",
-					Short:   "Set a principal's profile picture",
-					Long:    "Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
-					Example: "  omniglass principal setAvatar <id> --image-base64 image_base64",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:setAvatar", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("image-base64") {
-							body["image_base64"] = fImageBase64
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
-				_ = cmd.MarkFlagRequired("image-base64")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fEmail string
-				var fLabel string
-				var fUsername string
-				cmd := &cobra.Command{
-					Use:     "update <id>",
-					Short:   "Update a principal",
-					Long:    "Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
-					Example: "  omniglass principal update <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("email") {
-							body["email"] = fEmail
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("username") {
-							body["username"] = fUsername
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
-				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
-				cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name (lowercase letters, digits, and . _ -); renaming is safe")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
-			Use:   "principal-group",
-			Short: "Commands for the principal-group resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDescription string
-				var fLabel string
-				var fName string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create a principal group",
-					Long:    "Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.",
-					Example: "  omniglass principal-group create --name name",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups")
-						body := map[string]any{}
-						if cmd.Flags().Changed("description") {
-							body["description"] = fDescription
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists")
-				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and hyphens)")
-				_ = cmd.MarkFlagRequired("name")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "delete <group>",
-					Short:   "Delete a principal group",
-					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
-					Example: "  omniglass principal-group delete night-shift",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "DELETE", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <group>",
-					Short:   "Get a principal group",
-					Long:    "One principal group, by name or uuid. Gated by principal_group:read:admin.",
-					Example: "  omniglass principal-group get night-shift",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "grant",
-				Short: "Commands for the grant resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fRole string
-					var fScopeId string
-					var fScopeKind string
-					var fScopeOp string
-					cmd := &cobra.Command{
-						Use:     "create <group>",
-						Short:   "Grant a role to a group",
-						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
-						Example: "  omniglass principal-group grant create night-shift --role role --scope-kind scope_kind",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("role") {
-								body["role"] = fRole
-							}
-							if cmd.Flags().Changed("scope-id") {
-								body["scope_id"] = fScopeId
-							}
-							if cmd.Flags().Changed("scope-kind") {
-								body["scope_kind"] = fScopeKind
-							}
-							if cmd.Flags().Changed("scope-op") {
-								body["scope_op"] = fScopeOp
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
-					_ = cmd.MarkFlagRequired("role")
-					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
-					_ = cmd.MarkFlagRequired("scope-kind")
-					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <group> <grantId>",
-						Short:   "Revoke a group grant",
-						Long:    "Removes one grant from a group. Gated by principal_grant:delete (all-scope).",
-						Example: "  omniglass principal-group grant delete night-shift <grantId>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <group>",
-						Short:   "List a group's grants",
-						Long:    "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
-						Example: "  omniglass principal-group grant list night-shift",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List principal groups",
-					Long:    "Every principal group. Gated by principal_group:read:admin.",
-					Example: "  omniglass principal-group list",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups")
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "member",
-				Short: "Commands for the member resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fPrincipalId string
-					cmd := &cobra.Command{
-						Use:     "create <group>",
-						Short:   "Add a member to a group",
-						Long:    "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
-						Example: "  omniglass principal-group member create night-shift --principal-id principal_id",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("principal-id") {
-								body["principal_id"] = fPrincipalId
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fPrincipalId, "principal-id", "", "The principal to add: a human's username, a service account's name, or its uuid")
-					_ = cmd.MarkFlagRequired("principal-id")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <group> <principal>",
-						Short:   "Remove a member from a group",
-						Long:    "Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).",
-						Example: "  omniglass principal-group member delete night-shift alice",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <group>",
-						Short:   "List a group's members",
-						Long:    "The principals in a group. Gated by principal_group:read:admin.",
-						Example: "  omniglass principal-group member list night-shift",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fName string
-				cmd := &cobra.Command{
-					Use:     "rename <group>",
-					Short:   "Rename a principal group",
-					Long:    "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
-					Example: "  omniglass principal-group rename night-shift --name name",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s:rename", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new unique group name (lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDescription string
-				var fLabel string
-				cmd := &cobra.Command{
-					Use:     "update <group>",
-					Short:   "Update a principal group",
-					Long:    "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
-					Example: "  omniglass principal-group update night-shift",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("description") {
-							body["description"] = fDescription
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
-				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
 				return cmd
 			}()
 			return cmd
@@ -7676,7 +6927,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List your own sessions and tokens",
-					Long:    "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+					Long:    "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.",
 					Example: "  omniglass session list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7780,7 +7031,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "Get the caller's effective settings",
-						Long:    "The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+						Long:    "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
 						Example: "  omniglass setting me list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -10064,6 +9315,755 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "user",
+			Short: "Commands for the user resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "archive <id>",
+					Short:   "Archive a user",
+					Long:    "Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.",
+					Example: "  omniglass user archive <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:archive", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "avatar",
+				Short: "Commands for the avatar resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "Get a user's profile picture",
+						Long:    "Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.",
+						Example: "  omniglass user avatar list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/avatar", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEmail string
+				var fLabel string
+				var fPassword string
+				var fUsername string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a person",
+					Long:    "Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.",
+					Example: "  omniglass user create --username username",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users")
+						body := map[string]any{}
+						if cmd.Flags().Changed("email") {
+							body["email"] = fEmail
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("password") {
+							body["password"] = fPassword
+						}
+						if cmd.Flags().Changed("username") {
+							body["username"] = fUsername
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fEmail, "email", "", "Contact email for the account")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists; falls back to the username")
+				cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
+				cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
+				_ = cmd.MarkFlagRequired("username")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "disable <id>",
+					Short:   "Disable a user",
+					Long:    "Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.",
+					Example: "  omniglass user disable <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:disable", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "enable <id>",
+					Short:   "Enable a user",
+					Long:    "Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).",
+					Example: "  omniglass user enable <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:enable", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <id>",
+					Short:   "Get a user",
+					Long:    "Fetches one user by id with its profile and grants. Gated by user:read:admin.",
+					Example: "  omniglass user get <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "grant",
+				Short: "Commands for the grant resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fRole string
+					var fScopeId string
+					var fScopeKind string
+					var fScopeOp string
+					cmd := &cobra.Command{
+						Use:     "create <id>",
+						Short:   "Grant a role to a user",
+						Long:    "Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
+						Example: "  omniglass user grant create <id> --role role --scope-kind scope_kind",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/grants", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("role") {
+								body["role"] = fRole
+							}
+							if cmd.Flags().Changed("scope-id") {
+								body["scope_id"] = fScopeId
+							}
+							if cmd.Flags().Changed("scope-kind") {
+								body["scope_kind"] = fScopeKind
+							}
+							if cmd.Flags().Changed("scope-op") {
+								body["scope_op"] = fScopeOp
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+					_ = cmd.MarkFlagRequired("role")
+					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
+					_ = cmd.MarkFlagRequired("scope-kind")
+					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <grantId>",
+						Short:   "Revoke a grant",
+						Long:    "Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.",
+						Example: "  omniglass user grant delete <id> <grantId>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDurationMinutes int
+				var fMode string
+				cmd := &cobra.Command{
+					Use:     "impersonate <id>",
+					Short:   "Impersonate a user (view-as or act-as)",
+					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
+					Example: "  omniglass user impersonate <id> --mode mode",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:impersonate", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("duration-minutes") {
+							body["duration_minutes"] = fDurationMinutes
+						}
+						if cmd.Flags().Changed("mode") {
+							body["mode"] = fMode
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().IntVar(&fDurationMinutes, "duration-minutes", 0, "Session lifetime in minutes (default 30, max 1440)")
+				cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user")
+				_ = cmd.MarkFlagRequired("mode")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qKind string
+				var qIncludeArchived bool
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List users",
+					Long:    "Lists all users (people and machine users) with their grants. Gated by user:read:admin.",
+					Example: "  omniglass user list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users")
+						q := url.Values{}
+						if cmd.Flags().Changed("kind") {
+							q.Set("kind", fmt.Sprintf("%v", qKind))
+						}
+						if cmd.Flags().Changed("include-archived") {
+							q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by user kind")
+				cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) users, hidden by default")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "purge <id>",
+					Short:   "Purge a user",
+					Long:    "Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.",
+					Example: "  omniglass user purge <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:purge", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "removeAvatar <id>",
+					Short:   "Remove a user's profile picture",
+					Long:    "Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
+					Example: "  omniglass user removeAvatar <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:removeAvatar", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fPassword string
+				cmd := &cobra.Command{
+					Use:     "resetPassword <id>",
+					Short:   "Reset a user's password",
+					Long:    "Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
+					Example: "  omniglass user resetPassword <id> --password password",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:resetPassword", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("password") {
+							body["password"] = fPassword
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
+				_ = cmd.MarkFlagRequired("password")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "restore <id>",
+					Short:   "Restore a user",
+					Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).",
+					Example: "  omniglass user restore <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:restore", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "session",
+				Short: "Commands for the session resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a user's sessions",
+						Long:    "Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another user).",
+						Example: "  omniglass user session list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "revoke <id> <sid>",
+						Short:   "Revoke a user's session",
+						Long:    "Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+						Example: "  omniglass user session revoke <id> <sid>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions/%s:revoke", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "POST", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fPurpose string
+					cmd := &cobra.Command{
+						Use:     "revokeAll <id>",
+						Short:   "Revoke all of a user's sessions or tokens",
+						Long:    "Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+						Example: "  omniglass user session revokeAll <id> --purpose purpose",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions:revokeAll", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("purpose") {
+								body["purpose"] = fPurpose
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens")
+					_ = cmd.MarkFlagRequired("purpose")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fImageBase64 string
+				cmd := &cobra.Command{
+					Use:     "setAvatar <id>",
+					Short:   "Set a user's profile picture",
+					Long:    "Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
+					Example: "  omniglass user setAvatar <id> --image-base64 image_base64",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:setAvatar", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("image-base64") {
+							body["image_base64"] = fImageBase64
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
+				_ = cmd.MarkFlagRequired("image-base64")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEmail string
+				var fLabel string
+				var fUsername string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update a user",
+					Long:    "Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
+					Example: "  omniglass user update <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("email") {
+							body["email"] = fEmail
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("username") {
+							body["username"] = fUsername
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
+				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
+				cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name (lowercase letters, digits, and . _ -); renaming is safe")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "user-group",
+			Short: "Commands for the user-group resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a user group",
+					Long:    "Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.",
+					Example: "  omniglass user-group create --name name",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists")
+				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <group>",
+					Short:   "Delete a user group",
+					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).",
+					Example: "  omniglass user-group delete night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <group>",
+					Short:   "Get a user group",
+					Long:    "One user group, by name or uuid. Gated by user_group:read:admin.",
+					Example: "  omniglass user-group get night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "grant",
+				Short: "Commands for the grant resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fRole string
+					var fScopeId string
+					var fScopeKind string
+					var fScopeOp string
+					cmd := &cobra.Command{
+						Use:     "create <group>",
+						Short:   "Grant a role to a group",
+						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+						Example: "  omniglass user-group grant create night-shift --role role --scope-kind scope_kind",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("role") {
+								body["role"] = fRole
+							}
+							if cmd.Flags().Changed("scope-id") {
+								body["scope_id"] = fScopeId
+							}
+							if cmd.Flags().Changed("scope-kind") {
+								body["scope_kind"] = fScopeKind
+							}
+							if cmd.Flags().Changed("scope-op") {
+								body["scope_op"] = fScopeOp
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+					_ = cmd.MarkFlagRequired("role")
+					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
+					_ = cmd.MarkFlagRequired("scope-kind")
+					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <group> <grantId>",
+						Short:   "Revoke a group grant",
+						Long:    "Removes one grant from a group. Gated by user_grant:delete (all-scope).",
+						Example: "  omniglass user-group grant delete night-shift <grantId>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <group>",
+						Short:   "List a group's grants",
+						Long:    "The role x scope grants a group confers on its members. Gated by user_group:read:admin.",
+						Example: "  omniglass user-group grant list night-shift",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List user groups",
+					Long:    "Every user group. Gated by user_group:read:admin.",
+					Example: "  omniglass user-group list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "member",
+				Short: "Commands for the member resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fUserId string
+					cmd := &cobra.Command{
+						Use:     "create <group>",
+						Short:   "Add a member to a group",
+						Long:    "Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
+						Example: "  omniglass user-group member create night-shift --user-id user_id",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("user-id") {
+								body["user_id"] = fUserId
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fUserId, "user-id", "", "The user to add: a person's username, a machine user's name, or its uuid")
+					_ = cmd.MarkFlagRequired("user-id")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <group> <user>",
+						Short:   "Remove a member from a group",
+						Long:    "Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).",
+						Example: "  omniglass user-group member delete night-shift alice",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <group>",
+						Short:   "List a group's members",
+						Long:    "The users in a group. Gated by user_group:read:admin.",
+						Example: "  omniglass user-group member list night-shift",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <group>",
+					Short:   "Rename a user group",
+					Long:    "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).",
+					Example: "  omniglass user-group rename night-shift --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new unique group name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				cmd := &cobra.Command{
+					Use:     "update <group>",
+					Short:   "Update a user group",
+					Long:    "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).",
+					Example: "  omniglass user-group update night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
+				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "variable",
 			Short: "Commands for the variable resource",
 		}
@@ -10447,7 +10447,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "receive <token>",
 					Short:   "Receive a webhook post for an endpoint",
-					Long:    "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
+					Long:    "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
 					Example: "  omniglass webhook receive <token>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

@@ -700,11 +700,11 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 // An outpost is fleet-wide, not a scope tree, so its effective tags are just the
 // platform layer plus its own direct bindings (an outpost-direct value wins over a
 // propagating platform). No recursion: there is nothing above an outpost to inherit
-// from. Targets and owner ids are outpost.principal_id.
+// from. Targets and owner ids are outpost.user_id.
 const effectiveOutpostTagsSQL = `
 with
 targets as (
-    select principal_id as target_id from outpost where principal_id = any($1)
+    select user_id as target_id from outpost where user_id = any($1)
 ),
 owners(target_id, owner_kind, owner_id, band) as (
                 select target_id, 'platform', null::uuid, 0 from targets
@@ -821,7 +821,7 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 		return &l.ID, l.Name, nil
 	case "outpost":
 		// An outpost is fleet-wide (not a scope tree), so tagging it needs an all
-		// scope on both legs, like a global owner; the owner id is its principal_id.
+		// scope on both legs, like a global owner; the owner id is its user_id.
 		// RejectAddressForm first, same as GetOutpost/UpdateOutpost/DeleteOutpost/
 		// SetEnrollmentToken: an outpost's name stays a single token, and this arm's
 		// raw `where name = $1` had no guard of its own, unlike GetOutpost et al,
@@ -834,7 +834,7 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 			return nil, "", ErrOutpostForbidden
 		}
 		var pid string
-		err := q.QueryRow(ctx, `select principal_id from outpost where name = $1`, *name).Scan(&pid)
+		err := q.QueryRow(ctx, `select user_id from outpost where name = $1`, *name).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, "", ErrOutpostNotFound
 		} else if err != nil {

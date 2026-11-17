@@ -79,25 +79,25 @@ func (r *platformHealthRig) health(t *testing.T, tok string, args ...string) (st
 	return runCLI(t, append(append([]string{"platform", "health"}, args...), "--server", r.url, "--token", tok)...)
 }
 
-// outpostReader mints a service principal granted only outpost:read at the all
+// outpostReader mints a service user granted only outpost:read at the all
 // scope: it may open the platform view but read none of its figures.
 func (r *platformHealthRig) outpostReader(t *testing.T) string {
 	t.Helper()
 	var pid string
-	if err := r.conn.QueryRow(r.ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := r.conn.QueryRow(r.ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `insert into service (principal_id, name) values ($1, 'fleet-outpost-reader')`, pid); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `insert into machine (user_id, name) values ($1, 'fleet-outpost-reader')`, pid); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint token: %v", err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, pid, hash, prefix); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op)
+	if _, err := r.conn.Exec(r.ctx, `insert into user_grant (user_id, role_id, scope_kind, scope_id, scope_op)
 		values ($1, (select id from role where name = 'outpost-reader'), 'all', null, 'subtree')`, pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}

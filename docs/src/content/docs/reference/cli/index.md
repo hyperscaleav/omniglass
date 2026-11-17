@@ -326,7 +326,7 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 | `--channel` | string | (none) | Filter to the events that arrived through one channel; direct is a plain API call, with no channel |
 | `--client` | string | (none) | Filter to the events whose declared MCP client contains this term, case-insensitively |
 | `--limit` | int | `0` | Max rows to return, newest first (default 100, capped at 500) |
-| `--resource` | string | (none) | Filter to one resource kind (e.g. auth, principal_grant) |
+| `--resource` | string | (none) | Filter to one resource kind (e.g. auth, user_grant) |
 | `--verb` | string | (none) | Filter to one verb (e.g. login, create) |
 
 Example:
@@ -455,13 +455,13 @@ omniglass auth logout
 
 ### `omniglass auth me`
 
-The authenticated principal, its permissions, and grants
+The authenticated user, its permissions, and grants
 
 ```
 omniglass auth me
 ```
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 Example:
 
@@ -631,7 +631,7 @@ List your inbox
 omniglass auth me notification list [flags]
 ```
 
-The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -802,7 +802,7 @@ Update your own profile
 omniglass auth update-profile [flags]
 ```
 
-Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4191,7 +4191,7 @@ List notifications
 omniglass notification list [flags]
 ```
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4234,7 +4234,7 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4244,10 +4244,10 @@ Adds a destination a notification can be sent to: a webhook, its URL and, option
 | `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
-| `--principal` | string | (none) | A principal target's person, by username or uuid; binding one takes principal:read:admin |
-| `--principal-group` | string | (none) | A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
 | `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+| `--user` | string | (none) | A user target's person, by username or uuid; binding one takes user:read:admin |
+| `--user-group` | string | (none) | A user_group target's group, by name or uuid; binding one takes user_group:read:admin |
 
 Example:
 
@@ -4855,598 +4855,6 @@ omniglass platform health
   omniglass platform health --every 5m --window 1m --append health.jsonl
 ```
 
-## `omniglass principal`
-
-Commands for the principal resource
-
-### `omniglass principal archive`
-
-Archive a principal
-
-```
-omniglass principal archive <id>
-```
-
-Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
-
-Example:
-
-```sh
-omniglass principal archive <id>
-```
-
-### `omniglass principal avatar`
-
-Commands for the avatar resource
-
-#### `omniglass principal avatar list`
-
-Get a principal's profile picture
-
-```
-omniglass principal avatar list <id>
-```
-
-Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
-
-Example:
-
-```sh
-omniglass principal avatar list <id>
-```
-
-### `omniglass principal create`
-
-Create a human principal
-
-```
-omniglass principal create [flags]
-```
-
-Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--email` | string | (none) | Contact email for the account |
-| `--label` | string | (none) | What an operator reads in lists; falls back to the username |
-| `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
-| `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
-
-Example:
-
-```sh
-omniglass principal create --username username
-```
-
-### `omniglass principal disable`
-
-Disable a principal
-
-```
-omniglass principal disable <id>
-```
-
-Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
-
-Example:
-
-```sh
-omniglass principal disable <id>
-```
-
-### `omniglass principal enable`
-
-Enable a principal
-
-```
-omniglass principal enable <id>
-```
-
-Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
-
-Example:
-
-```sh
-omniglass principal enable <id>
-```
-
-### `omniglass principal get`
-
-Get a principal
-
-```
-omniglass principal get <id>
-```
-
-Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
-
-Example:
-
-```sh
-omniglass principal get <id>
-```
-
-### `omniglass principal grant`
-
-Commands for the grant resource
-
-#### `omniglass principal grant create`
-
-Grant a role to a principal
-
-```
-omniglass principal grant create <id> [flags]
-```
-
-Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
-| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
-
-Example:
-
-```sh
-omniglass principal grant create <id> --role role --scope-kind scope_kind
-```
-
-#### `omniglass principal grant delete`
-
-Revoke a grant
-
-```
-omniglass principal grant delete <id> <grantId>
-```
-
-Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
-
-Example:
-
-```sh
-omniglass principal grant delete <id> <grantId>
-```
-
-### `omniglass principal impersonate`
-
-Impersonate a principal (view-as or act-as)
-
-```
-omniglass principal impersonate <id> [flags]
-```
-
-Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--duration-minutes` | int | `0` | Session lifetime in minutes (default 30, max 1440) |
-| `--mode` | string | (none) | view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal |
-
-Example:
-
-```sh
-omniglass principal impersonate <id> --mode mode
-```
-
-### `omniglass principal list`
-
-List principals
-
-```
-omniglass principal list [flags]
-```
-
-Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--include-archived` | bool | `false` | Include archived (soft-deleted) principals, hidden by default |
-| `--kind` | string | (none) | Optionally filter by principal kind |
-
-Example:
-
-```sh
-omniglass principal list
-```
-
-### `omniglass principal purge`
-
-Purge a principal
-
-```
-omniglass principal purge <id>
-```
-
-Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
-
-Example:
-
-```sh
-omniglass principal purge <id>
-```
-
-### `omniglass principal removeAvatar`
-
-Remove a principal's profile picture
-
-```
-omniglass principal removeAvatar <id>
-```
-
-Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
-
-Example:
-
-```sh
-omniglass principal removeAvatar <id>
-```
-
-### `omniglass principal resetPassword`
-
-Reset a principal's password
-
-```
-omniglass principal resetPassword <id> [flags]
-```
-
-Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--password` | string | (none) | The new password (at least 12 characters, not a common password, not containing the username) |
-
-Example:
-
-```sh
-omniglass principal resetPassword <id> --password password
-```
-
-### `omniglass principal restore`
-
-Restore a principal
-
-```
-omniglass principal restore <id>
-```
-
-Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
-
-Example:
-
-```sh
-omniglass principal restore <id>
-```
-
-### `omniglass principal session`
-
-Commands for the session resource
-
-#### `omniglass principal session list`
-
-List a principal's sessions
-
-```
-omniglass principal session list <id>
-```
-
-Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
-
-Example:
-
-```sh
-omniglass principal session list <id>
-```
-
-#### `omniglass principal session revoke`
-
-Revoke a principal's session
-
-```
-omniglass principal session revoke <id> <sid>
-```
-
-Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-
-Example:
-
-```sh
-omniglass principal session revoke <id> <sid>
-```
-
-#### `omniglass principal session revokeAll`
-
-Revoke all of a principal's sessions or tokens
-
-```
-omniglass principal session revokeAll <id> [flags]
-```
-
-Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--purpose` | string | (none) | Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens |
-
-Example:
-
-```sh
-omniglass principal session revokeAll <id> --purpose purpose
-```
-
-### `omniglass principal setAvatar`
-
-Set a principal's profile picture
-
-```
-omniglass principal setAvatar <id> [flags]
-```
-
-Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
-
-Example:
-
-```sh
-omniglass principal setAvatar <id> --image-base64 image_base64
-```
-
-### `omniglass principal update`
-
-Update a principal
-
-```
-omniglass principal update <id> [flags]
-```
-
-Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--email` | string | (none) | Email; empty clears it |
-| `--label` | string | (none) | Label; empty clears it |
-| `--username` | string | (none) | Sign-in name (lowercase letters, digits, and . _ -); renaming is safe |
-
-Example:
-
-```sh
-omniglass principal update <id>
-```
-
-## `omniglass principal-group`
-
-Commands for the principal-group resource
-
-### `omniglass principal-group create`
-
-Create a principal group
-
-```
-omniglass principal-group create [flags]
-```
-
-Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Free-form notes on what the group is for |
-| `--label` | string | (none) | What an operator reads in lists |
-| `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
-
-Example:
-
-```sh
-omniglass principal-group create --name name
-```
-
-### `omniglass principal-group delete`
-
-Delete a principal group
-
-```
-omniglass principal-group delete <group>
-```
-
-Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group delete night-shift
-```
-
-### `omniglass principal-group get`
-
-Get a principal group
-
-```
-omniglass principal-group get <group>
-```
-
-One principal group, by name or uuid. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group get night-shift
-```
-
-### `omniglass principal-group grant`
-
-Commands for the grant resource
-
-#### `omniglass principal-group grant create`
-
-Grant a role to a group
-
-```
-omniglass principal-group grant create <group> [flags]
-```
-
-Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
-| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
-
-Example:
-
-```sh
-omniglass principal-group grant create night-shift --role role --scope-kind scope_kind
-```
-
-#### `omniglass principal-group grant delete`
-
-Revoke a group grant
-
-```
-omniglass principal-group grant delete <group> <grantId>
-```
-
-Removes one grant from a group. Gated by principal_grant:delete (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group grant delete night-shift <grantId>
-```
-
-#### `omniglass principal-group grant list`
-
-List a group's grants
-
-```
-omniglass principal-group grant list <group>
-```
-
-The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group grant list night-shift
-```
-
-### `omniglass principal-group list`
-
-List principal groups
-
-```
-omniglass principal-group list
-```
-
-Every principal group. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group list
-```
-
-### `omniglass principal-group member`
-
-Commands for the member resource
-
-#### `omniglass principal-group member create`
-
-Add a member to a group
-
-```
-omniglass principal-group member create <group> [flags]
-```
-
-Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--principal-id` | string | (none) | The principal to add: a human's username, a service account's name, or its uuid |
-
-Example:
-
-```sh
-omniglass principal-group member create night-shift --principal-id principal_id
-```
-
-#### `omniglass principal-group member delete`
-
-Remove a member from a group
-
-```
-omniglass principal-group member delete <group> <principal>
-```
-
-Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group member delete night-shift alice
-```
-
-#### `omniglass principal-group member list`
-
-List a group's members
-
-```
-omniglass principal-group member list <group>
-```
-
-The principals in a group. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group member list night-shift
-```
-
-### `omniglass principal-group rename`
-
-Rename a principal group
-
-```
-omniglass principal-group rename <group> [flags]
-```
-
-Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--name` | string | (none) | The new unique group name (lowercase letters, digits, hyphens) |
-
-Example:
-
-```sh
-omniglass principal-group rename night-shift --name name
-```
-
-### `omniglass principal-group update`
-
-Update a principal group
-
-```
-omniglass principal-group update <group> [flags]
-```
-
-Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Description; empty clears it |
-| `--label` | string | (none) | Label; empty clears it |
-
-Example:
-
-```sh
-omniglass principal-group update night-shift
-```
-
 ## `omniglass product`
 
 Commands for the product resource
@@ -6021,7 +5429,7 @@ List your own sessions and tokens
 omniglass session list
 ```
 
-Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.
 
 Example:
 
@@ -6127,7 +5535,7 @@ Get the caller's effective settings
 omniglass setting me list
 ```
 
-The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
 
 Example:
 
@@ -7874,13 +7282,13 @@ omniglass template list
 
 ## `omniglass token`
 
-Mint an additional bearer token for an existing principal (direct DB)
+Mint an additional bearer token for an existing user (direct DB)
 
 ```
 omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for a dev database when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+Issues a new bearer credential for an existing user, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for a dev database when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7925,6 +7333,598 @@ Example:
 
 ```sh
 omniglass unclaimed-source list
+```
+
+## `omniglass user`
+
+Commands for the user resource
+
+### `omniglass user archive`
+
+Archive a user
+
+```
+omniglass user archive <id>
+```
+
+Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.
+
+Example:
+
+```sh
+omniglass user archive <id>
+```
+
+### `omniglass user avatar`
+
+Commands for the avatar resource
+
+#### `omniglass user avatar list`
+
+Get a user's profile picture
+
+```
+omniglass user avatar list <id>
+```
+
+Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.
+
+Example:
+
+```sh
+omniglass user avatar list <id>
+```
+
+### `omniglass user create`
+
+Create a person
+
+```
+omniglass user create [flags]
+```
+
+Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--email` | string | (none) | Contact email for the account |
+| `--label` | string | (none) | What an operator reads in lists; falls back to the username |
+| `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
+| `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
+
+Example:
+
+```sh
+omniglass user create --username username
+```
+
+### `omniglass user disable`
+
+Disable a user
+
+```
+omniglass user disable <id>
+```
+
+Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.
+
+Example:
+
+```sh
+omniglass user disable <id>
+```
+
+### `omniglass user enable`
+
+Enable a user
+
+```
+omniglass user enable <id>
+```
+
+Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).
+
+Example:
+
+```sh
+omniglass user enable <id>
+```
+
+### `omniglass user get`
+
+Get a user
+
+```
+omniglass user get <id>
+```
+
+Fetches one user by id with its profile and grants. Gated by user:read:admin.
+
+Example:
+
+```sh
+omniglass user get <id>
+```
+
+### `omniglass user grant`
+
+Commands for the grant resource
+
+#### `omniglass user grant create`
+
+Grant a role to a user
+
+```
+omniglass user grant create <id> [flags]
+```
+
+Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
+| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
+
+Example:
+
+```sh
+omniglass user grant create <id> --role role --scope-kind scope_kind
+```
+
+#### `omniglass user grant delete`
+
+Revoke a grant
+
+```
+omniglass user grant delete <id> <grantId>
+```
+
+Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.
+
+Example:
+
+```sh
+omniglass user grant delete <id> <grantId>
+```
+
+### `omniglass user impersonate`
+
+Impersonate a user (view-as or act-as)
+
+```
+omniglass user impersonate <id> [flags]
+```
+
+Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--duration-minutes` | int | `0` | Session lifetime in minutes (default 30, max 1440) |
+| `--mode` | string | (none) | view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user |
+
+Example:
+
+```sh
+omniglass user impersonate <id> --mode mode
+```
+
+### `omniglass user list`
+
+List users
+
+```
+omniglass user list [flags]
+```
+
+Lists all users (people and machine users) with their grants. Gated by user:read:admin.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--include-archived` | bool | `false` | Include archived (soft-deleted) users, hidden by default |
+| `--kind` | string | (none) | Optionally filter by user kind |
+
+Example:
+
+```sh
+omniglass user list
+```
+
+### `omniglass user purge`
+
+Purge a user
+
+```
+omniglass user purge <id>
+```
+
+Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.
+
+Example:
+
+```sh
+omniglass user purge <id>
+```
+
+### `omniglass user removeAvatar`
+
+Remove a user's profile picture
+
+```
+omniglass user removeAvatar <id>
+```
+
+Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass user removeAvatar <id>
+```
+
+### `omniglass user resetPassword`
+
+Reset a user's password
+
+```
+omniglass user resetPassword <id> [flags]
+```
+
+Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--password` | string | (none) | The new password (at least 12 characters, not a common password, not containing the username) |
+
+Example:
+
+```sh
+omniglass user resetPassword <id> --password password
+```
+
+### `omniglass user restore`
+
+Restore a user
+
+```
+omniglass user restore <id>
+```
+
+Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).
+
+Example:
+
+```sh
+omniglass user restore <id>
+```
+
+### `omniglass user session`
+
+Commands for the session resource
+
+#### `omniglass user session list`
+
+List a user's sessions
+
+```
+omniglass user session list <id>
+```
+
+Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).
+
+Example:
+
+```sh
+omniglass user session list <id>
+```
+
+#### `omniglass user session revoke`
+
+Revoke a user's session
+
+```
+omniglass user session revoke <id> <sid>
+```
+
+Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass user session revoke <id> <sid>
+```
+
+#### `omniglass user session revokeAll`
+
+Revoke all of a user's sessions or tokens
+
+```
+omniglass user session revokeAll <id> [flags]
+```
+
+Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens |
+
+Example:
+
+```sh
+omniglass user session revokeAll <id> --purpose purpose
+```
+
+### `omniglass user setAvatar`
+
+Set a user's profile picture
+
+```
+omniglass user setAvatar <id> [flags]
+```
+
+Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
+
+Example:
+
+```sh
+omniglass user setAvatar <id> --image-base64 image_base64
+```
+
+### `omniglass user update`
+
+Update a user
+
+```
+omniglass user update <id> [flags]
+```
+
+Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--email` | string | (none) | Email; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
+| `--username` | string | (none) | Sign-in name (lowercase letters, digits, and . _ -); renaming is safe |
+
+Example:
+
+```sh
+omniglass user update <id>
+```
+
+## `omniglass user-group`
+
+Commands for the user-group resource
+
+### `omniglass user-group create`
+
+Create a user group
+
+```
+omniglass user-group create [flags]
+```
+
+Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | Free-form notes on what the group is for |
+| `--label` | string | (none) | What an operator reads in lists |
+| `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
+
+Example:
+
+```sh
+omniglass user-group create --name name
+```
+
+### `omniglass user-group delete`
+
+Delete a user group
+
+```
+omniglass user-group delete <group>
+```
+
+Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).
+
+Example:
+
+```sh
+omniglass user-group delete night-shift
+```
+
+### `omniglass user-group get`
+
+Get a user group
+
+```
+omniglass user-group get <group>
+```
+
+One user group, by name or uuid. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group get night-shift
+```
+
+### `omniglass user-group grant`
+
+Commands for the grant resource
+
+#### `omniglass user-group grant create`
+
+Grant a role to a group
+
+```
+omniglass user-group grant create <group> [flags]
+```
+
+Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
+| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
+
+Example:
+
+```sh
+omniglass user-group grant create night-shift --role role --scope-kind scope_kind
+```
+
+#### `omniglass user-group grant delete`
+
+Revoke a group grant
+
+```
+omniglass user-group grant delete <group> <grantId>
+```
+
+Removes one grant from a group. Gated by user_grant:delete (all-scope).
+
+Example:
+
+```sh
+omniglass user-group grant delete night-shift <grantId>
+```
+
+#### `omniglass user-group grant list`
+
+List a group's grants
+
+```
+omniglass user-group grant list <group>
+```
+
+The role x scope grants a group confers on its members. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group grant list night-shift
+```
+
+### `omniglass user-group list`
+
+List user groups
+
+```
+omniglass user-group list
+```
+
+Every user group. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group list
+```
+
+### `omniglass user-group member`
+
+Commands for the member resource
+
+#### `omniglass user-group member create`
+
+Add a member to a group
+
+```
+omniglass user-group member create <group> [flags]
+```
+
+Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--user-id` | string | (none) | The user to add: a person's username, a machine user's name, or its uuid |
+
+Example:
+
+```sh
+omniglass user-group member create night-shift --user-id user_id
+```
+
+#### `omniglass user-group member delete`
+
+Remove a member from a group
+
+```
+omniglass user-group member delete <group> <user>
+```
+
+Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+
+Example:
+
+```sh
+omniglass user-group member delete night-shift alice
+```
+
+#### `omniglass user-group member list`
+
+List a group's members
+
+```
+omniglass user-group member list <group>
+```
+
+The users in a group. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group member list night-shift
+```
+
+### `omniglass user-group rename`
+
+Rename a user group
+
+```
+omniglass user-group rename <group> [flags]
+```
+
+Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new unique group name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass user-group rename night-shift --name name
+```
+
+### `omniglass user-group update`
+
+Update a user group
+
+```
+omniglass user-group update <group> [flags]
+```
+
+Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | Description; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
+
+Example:
+
+```sh
+omniglass user-group update night-shift
 ```
 
 ## `omniglass variable`
@@ -8212,7 +8212,7 @@ Receive a webhook post for an endpoint
 omniglass webhook receive <token>
 ```
 
-The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
 
 Example:
 

@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// pathTestServer boots a real Postgres-backed server with an owner principal,
+// pathTestServer boots a real Postgres-backed server with an owner user,
 // the shared harness every dotted-address e2e in this file drives requests
 // against. Skipped under -short (storagetest.NewDSN handles that).
 func pathTestServer(t *testing.T) (*apiClient, string) {

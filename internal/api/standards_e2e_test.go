@@ -50,7 +50,7 @@ func TestStandardsAPI(t *testing.T) {
 	// the standard:read floor (*:read): one forked from a template here, since
 	// the boot seeds none.
 	c.do(ownerTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "classroom"}, http.StatusCreated)
-	viewerTok := principalWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	var listed struct {
 		Standards []struct {
 			ID       string `json:"id"`

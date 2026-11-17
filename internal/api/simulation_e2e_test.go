@@ -70,7 +70,7 @@ func TestOutpostSimulationAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select principal_id from outpost where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select user_id from outpost where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
 		t.Fatal(err)
 	}
 	var dsp1 string
@@ -85,17 +85,17 @@ func TestOutpostSimulationAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		var pid string
-		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
 		for _, q := range []struct {
 			sql  string
 			args []any
 		}{
-			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "sim-scoped-" + component}},
-			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-outpost-reader'), 'all', null)`, []any{pid}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-component-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+			{`insert into machine (user_id, name) values ($1, $2)`, []any{pid, "sim-scoped-" + component}},
+			{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-outpost-reader'), 'all', null)`, []any{pid}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-component-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
 		} {
 			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 				t.Fatalf("%s: %v", q.sql, err)

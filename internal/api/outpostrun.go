@@ -37,16 +37,16 @@ type OutpostRunner interface {
 func WithOutpostRunner(r OutpostRunner) Option { return func(o *options) { o.outpostRunner = r } }
 
 // WithOutpostRunLimits bounds how many on-demand runs may be in flight at once,
-// in all and per principal. Zero keeps a default.
-func WithOutpostRunLimits(total, perPrincipal int) Option {
-	return func(o *options) { o.outpostRuns, o.outpostRunsPerPrincipal = total, perPrincipal }
+// in all and per user. Zero keeps a default.
+func WithOutpostRunLimits(total, perUser int) Option {
+	return func(o *options) { o.outpostRuns, o.outpostRunsPerUser = total, perUser }
 }
 
 // The stricter class: an on-demand run holds a request open while an outpost
 // works, and it reaches the fleet, so fewer run at once than commands wait.
 const (
-	defaultOutpostRuns             = 16
-	defaultOutpostRunsPerPrincipal = 2
+	defaultOutpostRuns        = 16
+	defaultOutpostRunsPerUser = 2
 	// defaultRunSeconds is a run's budget when the caller names none; the
 	// outpost's whole answer, every poll included, must fit in it.
 	defaultRunSeconds = 15
@@ -160,12 +160,12 @@ func registerOutpostRunRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if in.Body.Outpost == "" {
 			return nil, huma.Error422UnprocessableEntity("outpost is required: the outpost that reaches the target runs the preview")
 		}
-		principal := actorID(ctx)
-		if !runs.acquire(principal) {
+		user := actorID(ctx)
+		if !runs.acquire(user) {
 			return nil, huma.NewError(http.StatusTooManyRequests, "too many on-demand runs are in flight; retry in a moment")
 		}
-		defer runs.release(principal)
-		plan, err := gw.PlanDriverPreview(ctx, principal, storage.PreviewInput{
+		defer runs.release(user)
+		plan, err := gw.PlanDriverPreview(ctx, user, storage.PreviewInput{
 			Outpost: in.Body.Outpost, Driver: in.Body.Driver, Spec: in.Body.Spec, Inputs: in.Body.Inputs, Polls: in.Body.Polls,
 			OutpostRead: a.scopeFor(ctx, "outpost", "read"),
 			Secrets:     a.secretBind(ctx),
@@ -210,12 +210,12 @@ func registerOutpostRunRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if runner == nil {
 			return nil, huma.Error503ServiceUnavailable("no bus is wired, so no outpost can run a poll now")
 		}
-		principal := actorID(ctx)
-		if !runs.acquire(principal) {
+		user := actorID(ctx)
+		if !runs.acquire(user) {
 			return nil, huma.NewError(http.StatusTooManyRequests, "too many on-demand runs are in flight; retry in a moment")
 		}
-		defer runs.release(principal)
-		run, err := gw.PlanEndpointRun(ctx, principal, in.Endpoint, in.Poll,
+		defer runs.release(user)
+		run, err := gw.PlanEndpointRun(ctx, user, in.Endpoint, in.Poll,
 			a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "run"))
 		if err != nil {
 			return nil, mapOutpostRunErr(err)
@@ -257,7 +257,7 @@ func newRunLimiter(total, per int) *waitLimiter {
 		total = defaultOutpostRuns
 	}
 	if per <= 0 {
-		per = defaultOutpostRunsPerPrincipal
+		per = defaultOutpostRunsPerUser
 	}
 	return newWaitLimiter(total, per)
 }

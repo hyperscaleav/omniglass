@@ -14,7 +14,7 @@ import (
 // nothing simulates it.
 func (p *PG) ComponentSimOutpost(ctx context.Context, componentID string) (string, error) {
 	var outpost string
-	err := p.pool.QueryRow(ctx, `select n.name from endpoint i join outpost n on n.principal_id = i.outpost_id
+	err := p.pool.QueryRow(ctx, `select n.name from endpoint i join outpost n on n.user_id = i.outpost_id
 		where i.component = $1 order by i.name limit 1`, componentID).Scan(&outpost)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil

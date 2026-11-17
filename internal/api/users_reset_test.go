@@ -28,22 +28,22 @@ func TestResetPasswordAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
-	opTok := principalWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
+	opTok := userWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	ownerID := meID(t, c, ownerTok)
 
 	var created struct {
 		ID string `json:"id"`
 	}
-	body := c.do(adminTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
+	body := c.do(adminTok, "POST", "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
 	if err := json.Unmarshal(body, &created); err != nil || created.ID == "" {
 		t.Fatalf("create alice: %v (%s)", err, body)
 	}
-	path := "/principals/" + created.ID + ":resetPassword"
+	path := "/users/" + created.ID + ":resetPassword"
 
-	// An operator lacks principal:reset-password.
+	// An operator lacks user:reset-password.
 	c.do(opTok, "POST", path, map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
 	// A common password and a username-containing password are both refused.
 	c.do(adminTok, "POST", path, map[string]string{"password": "administrator"}, http.StatusUnprocessableEntity)
@@ -52,13 +52,13 @@ func TestResetPasswordAPI(t *testing.T) {
 	// Self is refused: you reset your own password from your profile (with your
 	// current password), not from the admin surface (which skips that confirmation).
 	adminID := meID(t, c, adminTok)
-	c.do(adminTok, "POST", "/principals/"+adminID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusUnprocessableEntity)
+	c.do(adminTok, "POST", "/users/"+adminID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusUnprocessableEntity)
 
 	// Owner protection (the takeover guard, mirroring impersonation): an owner cannot
 	// have its password reset by a lesser admin, nor even by another owner.
-	c.do(adminTok, "POST", "/principals/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
-	otherOwnerTok := principalWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
-	c.do(otherOwnerTok, "POST", "/principals/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
+	c.do(adminTok, "POST", "/users/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
+	otherOwnerTok := userWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
+	c.do(otherOwnerTok, "POST", "/users/"+ownerID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusForbidden)
 
 	// The admin resets the password.
 	c.do(adminTok, "POST", path, map[string]string{"password": "purple-canyon-7"}, http.StatusNoContent)
@@ -80,7 +80,7 @@ func TestResetPasswordAPI(t *testing.T) {
 	}
 
 	// An unknown id is 404.
-	c.do(adminTok, "POST", "/principals/00000000-0000-0000-0000-000000000000:resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusNotFound)
+	c.do(adminTok, "POST", "/users/00000000-0000-0000-0000-000000000000:resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusNotFound)
 }
 
 // TestResetScopeEscalation proves a reset carries the same all-scope-only cover check
@@ -98,7 +98,7 @@ func TestResetScopeEscalation(t *testing.T) {
 	defer gw.Close()
 	// A custom role granting only the reset capability (an all-scope reset-password
 	// grant, without the target's other capabilities).
-	if err := gw.UpsertRole(ctx, storage.Role{Name: "resetter", Permissions: []string{"principal:reset-password"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "resetter", Permissions: []string{"user:reset-password"}}); err != nil {
 		t.Fatalf("seed resetter role: %v", err)
 	}
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -107,15 +107,15 @@ func TestResetScopeEscalation(t *testing.T) {
 
 	// A split-grant caller: reset-password at all-scope (reaches the endpoint) plus the
 	// target's real capability (deploy) at only a narrow location scope.
-	splitTok := principalWithGrants(t, ctx, dsn, "split-resetter", []grant{
+	splitTok := userWithGrants(t, ctx, dsn, "split-resetter", []grant{
 		{role: "resetter", scopeKind: "all"},
 		{role: "deploy", scopeKind: "location", scopeID: "11111111-1111-1111-1111-111111111111"},
 	})
 	// The target holds deploy at all-scope: taking it over would grant fleet-wide deploy.
-	targetTok := principalWithGrants(t, ctx, dsn, "all-scope-deployer", []grant{{role: "deploy", scopeKind: "all"}})
+	targetTok := userWithGrants(t, ctx, dsn, "all-scope-deployer", []grant{{role: "deploy", scopeKind: "all"}})
 	targetID := meID(t, c, targetTok)
 
 	// Refused: the caller's ALL-SCOPE grants (reset-password only) do not cover the
 	// target's deploy, so a reset cannot promote a narrow deploy to fleet-wide.
-	c.do(splitTok, "POST", "/principals/"+targetID+":resetPassword", map[string]string{"password": "orange-boat-42x"}, http.StatusForbidden)
+	c.do(splitTok, "POST", "/users/"+targetID+":resetPassword", map[string]string{"password": "orange-boat-42x"}, http.StatusForbidden)
 }

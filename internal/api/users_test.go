@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestPrincipalDirectoryAPI drives the admin directory against the real binary:
-// an all-scope owner lists, gets, and creates principals; a location-scoped admin
-// is refused (a principal is not a scope-tree entity); duplicate and short-password
-// creates are rejected; secrets never appear in a response; and a created human can
+// TestUserDirectoryAPI drives the admin directory against the real binary:
+// an all-scope owner lists, gets, and creates users; a location-scoped admin
+// is refused (a user is not a scope-tree entity); duplicate and short-password
+// creates are rejected; secrets never appear in a response; and a created person can
 // sign in with the initial password. Skipped under -short.
-func TestPrincipalDirectoryAPI(t *testing.T) {
+func TestUserDirectoryAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -30,20 +30,20 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	// An all-scope owner (principal:* at all scope) and a location-scoped admin
-	// (has principal:read via the admin role, but only at location scope).
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	// An all-scope owner (user:* at all scope) and a location-scoped admin
+	// (has user:read via the admin role, but only at location scope).
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := userWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Owner lists the two service principals we seeded.
-	if code, body := c.send(ownerTok, "GET", "/principals", nil); code != 200 ||
+	// Owner lists the two machine users we seeded.
+	if code, body := c.send(ownerTok, "GET", "/users", nil); code != 200 ||
 		!bytes.Contains(body, []byte(`"owner-all"`)) || !bytes.Contains(body, []byte(`"hq-admin"`)) {
 		t.Fatalf("owner list: code %d body %s", code, body)
 	}
 
-	// Owner creates a human with an initial password. The response carries no secret.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{
+	// Owner creates a person with an initial password. The response carries no secret.
+	created := c.do(ownerTok, "POST", "/users", map[string]string{
 		"username": "alice", "password": "orange-boat-42x", "email": "alice@example.test", "label": "Alice",
 	}, http.StatusCreated)
 	if !bytes.Contains(created, []byte(`"username":"alice"`)) {
@@ -51,50 +51,50 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	}
 	assertNoSecret(t, created)
 	var made struct {
-		ID    string `json:"id"`
-		Human struct {
+		ID     string `json:"id"`
+		Person struct {
 			Username string `json:"username"`
-		} `json:"human"`
+		} `json:"person"`
 	}
 	if err := json.Unmarshal(created, &made); err != nil || made.ID == "" {
 		t.Fatalf("parse created: %v (%s)", err, created)
 	}
 
-	// The kind filter returns only the human, not the seeded services.
-	if code, body := c.send(ownerTok, "GET", "/principals?kind=human", nil); code != 200 ||
+	// The kind filter returns only the person, not the seeded machine users.
+	if code, body := c.send(ownerTok, "GET", "/users?kind=person", nil); code != 200 ||
 		!bytes.Contains(body, []byte(`"username":"alice"`)) || bytes.Contains(body, []byte(`"owner-all"`)) {
-		t.Fatalf("kind=human filter: code %d body %s", code, body)
+		t.Fatalf("kind=person filter: code %d body %s", code, body)
 	}
 
 	// Get by id, and an unknown id is a 404.
-	if code, body := c.send(ownerTok, "GET", "/principals/"+made.ID, nil); code != 200 || !bytes.Contains(body, []byte(`"username":"alice"`)) {
+	if code, body := c.send(ownerTok, "GET", "/users/"+made.ID, nil); code != 200 || !bytes.Contains(body, []byte(`"username":"alice"`)) {
 		t.Fatalf("get alice: code %d body %s", code, body)
 	}
-	assertNoSecret(t, c.do(ownerTok, "GET", "/principals/"+made.ID, nil, 200))
-	if code, _ := c.send(ownerTok, "GET", "/principals/00000000-0000-0000-0000-000000000000", nil); code != http.StatusNotFound {
+	assertNoSecret(t, c.do(ownerTok, "GET", "/users/"+made.ID, nil, 200))
+	if code, _ := c.send(ownerTok, "GET", "/users/00000000-0000-0000-0000-000000000000", nil); code != http.StatusNotFound {
 		t.Fatalf("get unknown: want 404, got %d", code)
 	}
 
 	// A duplicate username is a 409; a too-short password is a 422.
-	if code, _ := c.send(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-99z"}); code != http.StatusConflict {
+	if code, _ := c.send(ownerTok, "POST", "/users", map[string]string{"username": "alice", "password": "orange-boat-99z"}); code != http.StatusConflict {
 		t.Fatalf("duplicate username: want 409, got %d", code)
 	}
-	if code, _ := c.send(ownerTok, "POST", "/principals", map[string]string{"username": "bob", "password": "short"}); code != http.StatusUnprocessableEntity {
+	if code, _ := c.send(ownerTok, "POST", "/users", map[string]string{"username": "bob", "password": "short"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("short password: want 422, got %d", code)
 	}
 
 	// The all-scope invariant: a location-scoped admin is refused list, get, and create.
-	if code, _ := c.send(scopedTok, "GET", "/principals", nil); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "GET", "/users", nil); code != http.StatusForbidden {
 		t.Fatalf("scoped list: want 403, got %d", code)
 	}
-	if code, _ := c.send(scopedTok, "GET", "/principals/"+made.ID, nil); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "GET", "/users/"+made.ID, nil); code != http.StatusForbidden {
 		t.Fatalf("scoped get: want 403, got %d", code)
 	}
-	if code, _ := c.send(scopedTok, "POST", "/principals", map[string]string{"username": "eve", "password": "purple-canyon-7"}); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "POST", "/users", map[string]string{"username": "eve", "password": "purple-canyon-7"}); code != http.StatusForbidden {
 		t.Fatalf("scoped create: want 403, got %d", code)
 	}
 
-	// The created human can sign in with the initial password.
+	// The created person can sign in with the initial password.
 	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
 	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(loginBody))
 	if err != nil {
@@ -102,16 +102,16 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("created human login: want 204, got %d", resp.StatusCode)
+		t.Fatalf("created person login: want 204, got %d", resp.StatusCode)
 	}
 }
 
-// TestUpdatePrincipalAPI drives the admin update against the real binary: an
-// all-scope admin edits a human's label, email, and username; the rename
+// TestUpdateUserAPI drives the admin update against the real binary: an
+// all-scope admin edits a person's label, email, and username; the rename
 // re-homes the login (new username works, old fails); a location-scoped admin is
-// refused; a clash is 409, an unknown id 404, and a non-human target 422. Skipped
+// refused; a clash is 409, an unknown id 404, and a non-person target 422. Skipped
 // under -short.
-func TestUpdatePrincipalAPI(t *testing.T) {
+func TestUpdateUserAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -123,19 +123,19 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := userWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Create a human with a password, capture its id.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x", "label": "Alice"}, http.StatusCreated)
+	// Create a person with a password, capture its id.
+	created := c.do(ownerTok, "POST", "/users", map[string]string{"username": "alice", "password": "orange-boat-42x", "label": "Alice"}, http.StatusCreated)
 	var made struct {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(created, &made)
 
 	// Update all three admin-owned fields, including a rename.
-	upd := c.do(ownerTok, "PATCH", "/principals/"+made.ID, map[string]string{
+	upd := c.do(ownerTok, "PATCH", "/users/"+made.ID, map[string]string{
 		"label": "Alice Cooper", "email": "ac@example.test", "username": "alice-2",
 	}, http.StatusOK)
 	if !bytes.Contains(upd, []byte(`"username":"alice-2"`)) || !bytes.Contains(upd, []byte(`"label":"Alice Cooper"`)) {
@@ -160,42 +160,42 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	}
 
 	// A location-scoped admin is refused, an unknown id is 404.
-	if code, _ := c.send(scopedTok, "PATCH", "/principals/"+made.ID, map[string]string{"label": "no"}); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "PATCH", "/users/"+made.ID, map[string]string{"label": "no"}); code != http.StatusForbidden {
 		t.Fatalf("scoped update: want 403, got %d", code)
 	}
-	if code, _ := c.send(ownerTok, "PATCH", "/principals/00000000-0000-0000-0000-000000000000", map[string]string{"label": "no"}); code != http.StatusNotFound {
+	if code, _ := c.send(ownerTok, "PATCH", "/users/00000000-0000-0000-0000-000000000000", map[string]string{"label": "no"}); code != http.StatusNotFound {
 		t.Fatalf("unknown update: want 404, got %d", code)
 	}
 
 	// A username clash is 409.
-	c.do(ownerTok, "POST", "/principals", map[string]string{"username": "bob"}, http.StatusCreated)
+	c.do(ownerTok, "POST", "/users", map[string]string{"username": "bob"}, http.StatusCreated)
 	var bobID string
 	for _, p := range listIDs(t, c, ownerTok) {
 		if p.username == "bob" {
 			bobID = p.id
 		}
 	}
-	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+bobID, map[string]string{"username": "alice-2"}); code != http.StatusConflict {
+	if code, _ := c.send(ownerTok, "PATCH", "/users/"+bobID, map[string]string{"username": "alice-2"}); code != http.StatusConflict {
 		t.Fatalf("clash update: want 409, got %d", code)
 	}
 
-	// A non-human target (a service principal) is 422.
-	var svcID string
+	// A non-person target (a machine user) is 422.
+	var machineID string
 	for _, p := range listIDs(t, c, ownerTok) {
-		if p.kind == "service" {
-			svcID = p.id
+		if p.kind == "machine" {
+			machineID = p.id
 		}
 	}
-	if svcID == "" {
-		t.Fatal("expected a service principal in the directory")
+	if machineID == "" {
+		t.Fatal("expected a machine user in the directory")
 	}
-	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+svcID, map[string]string{"label": "no"}); code != http.StatusUnprocessableEntity {
-		t.Fatalf("non-human update: want 422, got %d", code)
+	if code, _ := c.send(ownerTok, "PATCH", "/users/"+machineID, map[string]string{"label": "no"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("non-person update: want 422, got %d", code)
 	}
 }
 
 // TestGrantAPI drives role assignment against the real binary: an admin grants a
-// role, sees it on the principal, revokes it, cannot strip the last owner, and a
+// role, sees it on the user, revokes it, cannot strip the last owner, and a
 // location-scoped admin is refused. Skipped under -short.
 func TestGrantAPI(t *testing.T) {
 	t.Parallel()
@@ -209,18 +209,18 @@ func TestGrantAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := userWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/users", map[string]string{"username": "alice"}, http.StatusCreated)
 	var alice struct {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(created, &alice)
 
 	// Grant viewer@all, capture the grant id from the response.
-	g := c.do(ownerTok, "POST", "/principals/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	g := c.do(ownerTok, "POST", "/users/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
 	var grantResp struct {
 		ID string `json:"id"`
 	}
@@ -228,38 +228,38 @@ func TestGrantAPI(t *testing.T) {
 	if grantResp.ID == "" {
 		t.Fatalf("create grant returned no id: %s", g)
 	}
-	if _, body := c.send(ownerTok, "GET", "/principals/"+alice.ID, nil); !bytes.Contains(body, []byte(`"role":"viewer"`)) {
-		t.Fatalf("grant not on principal: %s", body)
+	if _, body := c.send(ownerTok, "GET", "/users/"+alice.ID, nil); !bytes.Contains(body, []byte(`"role":"viewer"`)) {
+		t.Fatalf("grant not on user: %s", body)
 	}
 
 	// Bad inputs.
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+"/grants", map[string]string{"role": "nope", "scope_kind": "all"}); code != http.StatusUnprocessableEntity {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+alice.ID+"/grants", map[string]string{"role": "nope", "scope_kind": "all"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("unknown role: want 422, got %d", code)
 	}
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "location"}); code != http.StatusUnprocessableEntity {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "location"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("scoped grant without id: want 422, got %d", code)
 	}
-	if code, _ := c.send(scopedTok, "POST", "/principals/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "all"}); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "POST", "/users/"+alice.ID+"/grants", map[string]string{"role": "viewer", "scope_kind": "all"}); code != http.StatusForbidden {
 		t.Fatalf("scoped create grant: want 403, got %d", code)
 	}
 
 	// Revoke it; then it is gone.
-	if code, _ := c.send(ownerTok, "DELETE", "/principals/"+alice.ID+"/grants/"+grantResp.ID, nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "DELETE", "/users/"+alice.ID+"/grants/"+grantResp.ID, nil); code != http.StatusNoContent {
 		t.Fatalf("revoke: want 204, got %d", code)
 	}
-	if code, _ := c.send(ownerTok, "DELETE", "/principals/"+alice.ID+"/grants/"+grantResp.ID, nil); code != http.StatusNotFound {
+	if code, _ := c.send(ownerTok, "DELETE", "/users/"+alice.ID+"/grants/"+grantResp.ID, nil); code != http.StatusNotFound {
 		t.Fatalf("revoke again: want 404, got %d", code)
 	}
 
 	// The owner invariant: the owner cannot revoke its own last owner grant.
 	_, me := c.send(ownerTok, "GET", "/auth/me", nil)
 	var meDoc struct {
-		Principal struct {
+		User struct {
 			ID string `json:"id"`
-		} `json:"principal"`
+		} `json:"user"`
 	}
 	_ = json.Unmarshal(me, &meDoc)
-	_, ownerDetail := c.send(ownerTok, "GET", "/principals/"+meDoc.Principal.ID, nil)
+	_, ownerDetail := c.send(ownerTok, "GET", "/users/"+meDoc.User.ID, nil)
 	var ownerDoc struct {
 		Grants []struct {
 			ID   string `json:"id"`
@@ -276,7 +276,7 @@ func TestGrantAPI(t *testing.T) {
 	if ownerGrantID == "" {
 		t.Fatal("owner should hold an owner grant")
 	}
-	if code, _ := c.send(ownerTok, "DELETE", "/principals/"+meDoc.Principal.ID+"/grants/"+ownerGrantID, nil); code != http.StatusConflict {
+	if code, _ := c.send(ownerTok, "DELETE", "/users/"+meDoc.User.ID+"/grants/"+ownerGrantID, nil); code != http.StatusConflict {
 		t.Fatalf("revoke last owner: want 409, got %d", code)
 	}
 }
@@ -296,11 +296,11 @@ func TestDisableAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	scopedTok := userWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
 	var alice struct {
 		ID string `json:"id"`
 	}
@@ -320,7 +320,7 @@ func TestDisableAPI(t *testing.T) {
 		t.Fatal("alice should sign in before disable")
 	}
 	// Disable: sign-in is refused and the directory shows inactive.
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+":disable", nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+alice.ID+":disable", nil); code != http.StatusNoContent {
 		t.Fatalf("disable: want 204, got %d", code)
 	}
 	// A disabled account with the CORRECT password gets a distinct 403 ("account
@@ -342,11 +342,11 @@ func TestDisableAPI(t *testing.T) {
 	if badLogin() != http.StatusUnauthorized {
 		t.Fatal("a disabled user with a wrong password should get a generic 401")
 	}
-	if _, body := c.send(ownerTok, "GET", "/principals/"+alice.ID, nil); !bytes.Contains(body, []byte(`"active":false`)) {
+	if _, body := c.send(ownerTok, "GET", "/users/"+alice.ID, nil); !bytes.Contains(body, []byte(`"active":false`)) {
 		t.Fatalf("alice should read inactive: %s", body)
 	}
 	// Enable restores access.
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+alice.ID+":enable", nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+alice.ID+":enable", nil); code != http.StatusNoContent {
 		t.Fatalf("enable: want 204, got %d", code)
 	}
 	if login() != http.StatusNoContent {
@@ -356,43 +356,43 @@ func TestDisableAPI(t *testing.T) {
 	// The last active owner cannot be disabled.
 	_, me := c.send(ownerTok, "GET", "/auth/me", nil)
 	var meDoc struct {
-		Principal struct {
+		User struct {
 			ID string `json:"id"`
-		} `json:"principal"`
+		} `json:"user"`
 	}
 	_ = json.Unmarshal(me, &meDoc)
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+meDoc.Principal.ID+":disable", nil); code != http.StatusConflict {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+meDoc.User.ID+":disable", nil); code != http.StatusConflict {
 		t.Fatalf("disable last owner: want 409, got %d", code)
 	}
 	// A location-scoped admin is refused.
-	if code, _ := c.send(scopedTok, "POST", "/principals/"+alice.ID+":disable", nil); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "POST", "/users/"+alice.ID+":disable", nil); code != http.StatusForbidden {
 		t.Fatalf("scoped disable: want 403, got %d", code)
 	}
 }
 
 type dirRow struct{ id, kind, username string }
 
-// listIDs pulls the principal directory as a flat id/kind/username list.
+// listIDs pulls the user directory as a flat id/kind/username list.
 func listIDs(t *testing.T, c *apiClient, tok string) []dirRow {
 	t.Helper()
-	_, body := c.send(tok, "GET", "/principals", nil)
+	_, body := c.send(tok, "GET", "/users", nil)
 	var doc struct {
-		Principals []struct {
-			ID    string `json:"id"`
-			Kind  string `json:"kind"`
-			Human *struct {
+		Users []struct {
+			ID     string `json:"id"`
+			Kind   string `json:"kind"`
+			Person *struct {
 				Username string `json:"username"`
-			} `json:"human"`
-		} `json:"principals"`
+			} `json:"person"`
+		} `json:"users"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		t.Fatalf("parse list: %v", err)
 	}
-	rows := make([]dirRow, 0, len(doc.Principals))
-	for _, p := range doc.Principals {
+	rows := make([]dirRow, 0, len(doc.Users))
+	for _, p := range doc.Users {
 		r := dirRow{id: p.ID, kind: p.Kind}
-		if p.Human != nil {
-			r.username = p.Human.Username
+		if p.Person != nil {
+			r.username = p.Person.Username
 		}
 		rows = append(rows, r)
 	}

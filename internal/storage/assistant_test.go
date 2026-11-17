@@ -12,7 +12,7 @@ import (
 )
 
 // Omnibot conversations (#2113), against a real Postgres: a conversation is
-// its owner's alone (anyone else, an owner-role principal included, finds
+// its owner's alone (anyone else, an owner-role user included, finds
 // nothing), an append names the last message it saw so two clients cannot
 // interleave, a paused run's pending write is kept with it, and retention
 // prunes a conversation by when it last moved.

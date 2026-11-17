@@ -46,9 +46,9 @@ type Alarm struct {
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
 	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
-	// label: a human's username, a service account's name, or an outpost's name,
-	// resolved by principalIdent. It is what an operator surface renders
-	// (ADR-0062), and it reads empty once that principal is purged, while
+	// label: a person's username, a machine user's name, or an outpost's name,
+	// resolved by userIdent. It is what an operator surface renders
+	// (ADR-0062), and it reads empty once that user is purged, while
 	// audit_log keeps the identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
@@ -108,13 +108,13 @@ var (
 	ErrAlarmInvalid = errors.New("storage: alarm is invalid")
 )
 
-// alarmCols is the read shape. acknowledged_by surfaces the acting principal's
+// alarmCols is the read shape. acknowledged_by surfaces the acting user's
 // IDENTIFIER rather than its uuid, so every alarm read hands the API something
-// an operator recognises (ADR-0062); it reads empty once that principal is
+// an operator recognises (ADR-0062); it reads empty once that user is
 // purged, which is honest, and audit_log still names them.
 //
 // The identifier sources are projected as their own columns and folded in Go
-// (principalIdent), which is where that policy lives since #564 dropped the
+// (userIdent), which is where that policy lives since #564 dropped the
 // stored function. A projection rather than a join, because one of the four
 // statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
 // left-join, and giving the UPDATE a FROM clause would change which rows it
@@ -126,8 +126,8 @@ var (
 var alarmCols = `a.id, a.component_id, (select c.name from component c where c.id = a.component_id),
 	a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at, a.raised_by_rule_id::text,
 	(select r.name from event_rule r where r.id = a.raised_by_rule_id),
-	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by") + `,
-	` + snoozeOf("snoozed_until") + `, ` + principalIdentCols(snoozeOf("snoozed_by"))
+	a.acknowledged_at, ` + userIdentCols("a.acknowledged_by") + `,
+	` + snoozeOf("snoozed_until") + `, ` + userIdentCols(snoozeOf("snoozed_by"))
 
 // snoozeOf reads one column of the snooze in force on the alarm's condition
 // (#1318): a scalar subquery on the primary key, so it rides the UPDATE ...
@@ -147,8 +147,8 @@ func scanAlarm(row pgx.Row) (*Alarm, error) {
 		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName); err != nil {
 		return nil, err
 	}
-	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackOutpostName)
-	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzOutpostName)
+	a.AcknowledgedBy = userIdent(ackUsername, ackServiceName, ackOutpostName)
+	a.SnoozedBy = userIdent(snzUsername, snzServiceName, snzOutpostName)
 	return &a, nil
 }
 

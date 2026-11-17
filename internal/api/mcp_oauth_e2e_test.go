@@ -232,10 +232,10 @@ func TestOAuthConsentNeverIssuesARoleThePersonLacks(t *testing.T) {
 	var alice struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
 		t.Fatal(err)
 	}
-	s.c.do(s.owner, http.MethodPost, "/principals/"+alice.ID+"/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/users/"+alice.ID+"/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
 	aliceSession := loginBearer(t, s.c, "alice", "orange-boat-42x")
 
 	var status int

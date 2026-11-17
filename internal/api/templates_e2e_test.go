@@ -29,7 +29,7 @@ func TestTemplatesAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	viewer := principalWithGrants(t, ctx, dsn, "tmpl-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, ctx, dsn, "tmpl-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 
 	type body struct {
 		Kind     string `json:"kind"`
@@ -105,7 +105,7 @@ func TestCreateStandardFromTemplateAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	viewer := principalWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 
 	type std struct {
 		ID       string `json:"id"`

@@ -68,10 +68,10 @@ func TestAbsolutesQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	var outpostID string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('outpost') returning id`).Scan(&outpostID); err != nil {
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&outpostID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into outpost (principal_id, name) values ($1, 'edge-x')`, outpostID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into outpost (user_id, name) values ($1, 'edge-x')`, outpostID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx, `insert into outpost_log (outpost_id, message) select $1, 'x' from generate_series(1, 50)`, outpostID); err != nil {

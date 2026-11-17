@@ -375,7 +375,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	// IssueCommand's caused event needs a real actor uuid (the column is a
 	// foreign key), so the bootstrapped owner is resolved by username rather
 	// than passed as an empty string.
-	actor, err := gw.ResolvePrincipalRef(ctx, "root")
+	actor, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 		t.Fatalf("wing-loc-2: %v", err)
 	}
 
-	// A deploy principal scoped to component:<container> only (the review's
+	// A deploy user scoped to component:<container> only (the review's
 	// own failure scenario): posting a child with a system AND a location
 	// bind used to 422 unconditionally.
 	compScope := scope.Set{IDs: []string{container.ID}}
@@ -655,7 +655,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 // chain, so every non-all caller's ?system= filter silently fell into the
 // "named a system with no binding here" empty-band branch regardless of
 // whether the system genuinely had one, a wrong answer with no error, not a
-// refusal. A scoped principal that can read the component must still see the
+// refusal. A scoped user that can read the component must still see the
 // system band its own tags cascade includes.
 func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 	t.Parallel()

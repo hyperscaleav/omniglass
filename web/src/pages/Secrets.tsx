@@ -259,7 +259,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // The Scope select offers only the tiers this principal may actually write at.
+  // The Scope select offers only the tiers this user may actually write at.
   // The platform tier is install-wide, gated server-side on platform:create on top
   // of secret:create, so offering it to a caller holding only the resource half
   // would be offering a control the server refuses.

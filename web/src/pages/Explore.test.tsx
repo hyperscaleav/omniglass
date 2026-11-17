@@ -22,8 +22,8 @@ import { uuidFor } from "../lib/testids";
 // fixture is deliberately uneven: a campus of two buildings, a room holding
 // two systems, a degraded room, a system at a location this caller cannot read.
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
 
 const loc = (h: string, label: string, type: string, parent = "") => ({
   id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : undefined, verdict: "healthy",

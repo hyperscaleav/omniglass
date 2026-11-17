@@ -20,8 +20,8 @@ const failed = uuidFor("notification-failed");
 const queued = uuidFor("notification-queued");
 const snoozed = uuidFor("notification-suppressed");
 
-const operator: Me = { principal: { id: "u-op", kind: "human" }, human: { username: "op" }, permissions: ["*:read", "notification:retry"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const operator: Me = { user: { id: "u-op", kind: "person" }, person: { username: "op" }, permissions: ["*:read", "notification:retry"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const entries = () => [
   { at: ago(60_000), kind: "audit", what: "raise", actor: "jordan", message: "no video" },

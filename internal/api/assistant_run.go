@@ -74,8 +74,8 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		if o.omnibotModel == nil {
 			return nil, huma.Error503ServiceUnavailable("omnibot has no model on this server")
 		}
-		pr, ok := principalFrom(ctx)
-		if !ok || pr.Human == nil || pr.Agent != nil || impersonationMode(ctx) != "" {
+		u, ok := userFrom(ctx)
+		if !ok || u.Person == nil || u.Agent != nil || impersonationMode(ctx) != "" {
 			return nil, huma.Error403Forbidden("only a person, as themselves, runs omnibot")
 		}
 		conv, ms, err := gw.GetAssistantConversation(ctx, callerID(ctx), in.Name)
@@ -110,7 +110,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		ua, ip := clientMetaFrom(ctx)
 		issued, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{
-			ActorID: actorID(ctx), Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
+			ActorID: actorID(ctx), Username: u.Person.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
 			ExpiresAt: &exp, Description: "omnibot run", UserAgent: ua, ClientIP: ip,
 			Agent: "omnibot", AgentChannels: []string{"omnibot"},
 		})

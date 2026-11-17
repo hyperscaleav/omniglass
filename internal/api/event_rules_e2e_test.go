@@ -173,12 +173,12 @@ func TestEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(south, &southLoc); err != nil || southLoc.ID == "" {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
-	placeViewer := setupScopedPrincipal(t, ctx, dsn, "south-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: southLoc.ID})
+	placeViewer := setupScopedUser(t, ctx, dsn, "south-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: southLoc.ID})
 	target, err := gw.GetComponent(ctx, "rule-target", all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	compViewer := setupScopedPrincipal(t, ctx, dsn, "target-viewer", grantSpec{role: "viewer", scopeKind: "component", scopeID: target.ID})
+	compViewer := setupScopedUser(t, ctx, dsn, "target-viewer", grantSpec{role: "viewer", scopeKind: "component", scopeID: target.ID})
 	ruleState := func(tok string) []struct {
 		Component string `json:"component"`
 	} {
@@ -243,7 +243,7 @@ func TestEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", created, err)
 	}
-	placeOwner := setupScopedPrincipal(t, ctx, dsn, "north-owner",
+	placeOwner := setupScopedUser(t, ctx, dsn, "north-owner",
 		grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID},
 		grantSpec{role: "viewer", scopeKind: "all"})
 	var me struct {
@@ -264,7 +264,7 @@ func TestEventRuleAPI(t *testing.T) {
 
 	// A holder of every rule permission on one place alone still writes no
 	// rule: a rule's selector reaches the whole fleet.
-	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	placeOnly := setupScopedUser(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOnly, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "condition-started"}, http.StatusForbidden)
@@ -590,7 +590,7 @@ func TestAlarmTimelineAPI(t *testing.T) {
 	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", created, err)
 	}
-	north := setupScopedPrincipal(t, ctx, dsn, "tl-north-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
+	north := setupScopedUser(t, ctx, dsn, "tl-north-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
 	c.do(north, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusNotFound)
 	c.do(viewer, http.MethodGet, "/components/tl-target/alarms/01a15700-0000-7000-8000-000000000000:timeline", nil, http.StatusNotFound)
 }
@@ -798,7 +798,7 @@ func TestEventRuleRenameAPI(t *testing.T) {
 	if err := json.Unmarshal(south, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
-	placeOwner := setupScopedPrincipal(t, ctx, dsn, "rn-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	placeOwner := setupScopedUser(t, ctx, dsn, "rn-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOwner, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusForbidden)
 
 	var renamed struct {

@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest";
 // scan is line-scoped and keys on an object literal carrying BOTH an `id:`
 // string literal AND a `name:` on the same line, because id-plus-name is the
 // uuid-plus-handle contract. Shapes with no `name` slot (audit events,
-// principal stubs, blade ids) are out of scope, as are multi-line literals;
+// user stubs, blade ids) are out of scope, as are multi-line literals;
 // every catalog fixture in the tree today is single-line, and a new offender
 // pattern is a cue to widen this scan, not to trust it blindly. The precedent
 // for a blunt-but-cheap source scan is style-guard.test.ts.

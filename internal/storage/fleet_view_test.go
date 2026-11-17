@@ -237,19 +237,19 @@ func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 }
 
 // Scope decides what exists, per tier, in the query rather than after it. A
-// principal who can read no location sees an empty canvas, which is not an
+// user who can read no location sees an empty canvas, which is not an
 // error: there is simply nothing of theirs to draw.
 func TestFleetProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
 	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, scope.Set{}, scope.Set{}, scope.Set{})
 	if len(v.Locations) != 0 || len(v.Systems) != 0 {
-		t.Fatalf("an unscoped principal must get an empty canvas, got %d locations and %d systems",
+		t.Fatalf("an unscoped user must get an empty canvas, got %d locations and %d systems",
 			len(v.Locations), len(v.Systems))
 	}
 }
 
-// The three tiers are scoped independently, which is what lets a principal who
+// The three tiers are scoped independently, which is what lets a user who
 // may read the place tree but not its components see the shape of their fleet
 // without its contents.
 func TestFleetProjectionScopesEachTierOnItsOwn(t *testing.T) {

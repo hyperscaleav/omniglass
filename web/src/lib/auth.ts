@@ -2,14 +2,14 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/solid-quer
 import { api, setToken, clearToken } from "../api/client";
 
 // Auth for the SPA. Authentication is an httpOnly session cookie set by
-// POST /auth/login; GET /auth/me resolves the principal (200) or rejects (401).
+// POST /auth/login; GET /auth/me resolves the user (200) or rejects (401).
 // The SPA never sees the token: it logs in with a username and password, and the
 // cookie rides on every request (the client sends credentials).
 
 export type Me = {
-  principal: { id: string; kind: string };
-  human?: { username: string; email?: string; label?: string; must_change_password?: boolean; has_avatar?: boolean };
-  service?: { name: string };
+  user: { id: string; kind: string };
+  person?: { username: string; email?: string; label?: string; must_change_password?: boolean; has_avatar?: boolean };
+  machine?: { name: string };
   permissions: string[];
   // The permissions held on an all-scope grant: what reaches fleet-wide config
   // (event rules), which a grant bounded to a location or system never does.
@@ -35,9 +35,9 @@ export function useMe() {
   }));
 }
 
-// primeMe loads the principal into the cache after a successful sign-in, BEFORE
+// primeMe loads the user into the cache after a successful sign-in, BEFORE
 // the caller navigates: it reads /auth/me (now authenticated) and writes the
-// result, so the auth guard sees the principal immediately and does not bounce
+// result, so the auth guard sees the user immediately and does not bounce
 // back to the login screen on the first attempt.
 async function primeMe(qc: QueryClient): Promise<void> {
   const { data } = await api.GET("/auth/me");
@@ -46,7 +46,7 @@ async function primeMe(qc: QueryClient): Promise<void> {
 }
 
 // useLogin posts a username and password to /auth/login. On success the server
-// sets the session cookie; we then prime /auth/me so the guard sees the principal.
+// sets the session cookie; we then prime /auth/me so the guard sees the user.
 export function useLogin() {
   const qc = useQueryClient();
   return async (username: string, password: string): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -135,7 +135,7 @@ export function useChangePassword() {
       return { ok: false, message: "Could not change your password." };
     }
     // Refresh /auth/me so a cleared must_change_password flag releases the
-    // force-change gate (and any other principal state stays fresh).
+    // force-change gate (and any other user state stays fresh).
     await qc.invalidateQueries({ queryKey: ME_KEY });
     return { ok: true };
   };
@@ -234,7 +234,7 @@ function matchTopic(pat: string[], path: string[]): boolean {
   return i === path.length;
 }
 
-// can reports whether the principal's flattened permissions allow a permission,
+// can reports whether the user's flattened permissions allow a permission,
 // given as its tokens (e.g. can(me, "location", "read") or, for a sensitive tier,
 // can(me, "audit", "read", "admin")). It mirrors the server's Allows, including
 // the :read floor (holding any permission on a resource implies read on it, but
@@ -255,7 +255,7 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
   return false;
 }
 
-// fleetView is the principal as fleet-wide config sees it: only the
+// fleetView is the user as fleet-wide config sees it: only the
 // permissions its all-scope grants carry. Pass it wherever a check takes a Me
 // (can, catalogLock) to judge a fleet-wide resource on what the server will
 // actually admit, since the gateway refuses such a write without an all-scope
@@ -264,7 +264,7 @@ export function fleetView(me: Me | null | undefined): Me | null {
   return me ? { ...me, permissions: me.fleet_permissions ?? [] } : null;
 }
 
-// canFleet is can() over fleetView: may the principal do this to fleet-wide
+// canFleet is can() over fleetView: may the user do this to fleet-wide
 // config (an event rule)?
 export function canFleet(me: Me | null | undefined, ...tokens: string[]): boolean {
   return can(fleetView(me), ...tokens);
@@ -279,7 +279,7 @@ export function canAtPlatform(me: Me | null | undefined, resource: string, actio
   return can(me, resource, action) && can(me, "platform", action);
 }
 
-// platformTierGap lists the install-wide capabilities a principal would need for
+// platformTierGap lists the install-wide capabilities a user would need for
 // the given actions but does not hold, counting only the actions it holds the
 // resource half of. Empty means nothing to explain: either it holds both halves, or
 // it holds neither and the control is absent for the ordinary reason.
@@ -287,7 +287,7 @@ export function platformTierGap(me: Me | null | undefined, resource: string, act
   return actions.filter((a) => can(me, resource, a) && !can(me, "platform", a)).map((a) => `platform:${a}`);
 }
 
-// platformAuthorityHint is what a half-held principal reads instead of meeting a
+// platformAuthorityHint is what a half-held user reads instead of meeting a
 // 403: the tier's blast radius, then the capabilities it is missing by name. `what`
 // names the thing being written ("A variable"), `missing` comes from
 // platformTierGap.

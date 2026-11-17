@@ -105,7 +105,7 @@ archetypes:
 
 # The outside actors each site has, declared like its devices (#1743): one
 # booking service a site, an emulator device with a push face, scoped to four
-# of the site's systems. The lab seeds its telemetry:push principal and mints
+# of the site's systems. The lab seeds its telemetry:push user and mints
 # its token per run, so every corporate lab pushes and lab measure reads the
 # push lane.
 #

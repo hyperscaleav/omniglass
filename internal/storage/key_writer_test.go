@@ -72,15 +72,15 @@ func newWriterFixtureAt(t *testing.T, at time.Time) writerFixture {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb),
-		('tls', 'tls', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443","tls-mode":"pin"}'::jsonb)`); err != nil {
+		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb),
+		('tls', 'tls', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443","tls-mode":"pin"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor, dsn: dsn, now: now}

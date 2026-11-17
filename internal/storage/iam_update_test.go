@@ -11,11 +11,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestUpdatePrincipalHuman proves the admin profile update against a real Postgres:
-// label, email, and username are editable; a rename follows the principal id
+// TestUpdatePerson proves the admin profile update against a real Postgres:
+// label, email, and username are editable; a rename follows the user id
 // (the password still authenticates under the new username, not the old); a clash is
 // refused; and a non-all scope is refused. Skipped under -short.
-func TestUpdatePrincipalHuman(t *testing.T) {
+func TestUpdatePerson(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -35,24 +35,24 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 	all := scope.Set{All: true}
 
 	hash, _ := auth.HashPassword("alice-s3cret")
-	alice, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "alice", Label: "Alice", PasswordHash: hash}, all)
+	alice, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: "alice", Label: "Alice", PasswordHash: hash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	// Update all three admin-owned fields, including a rename.
 	newName, newEmail, newUser := "Alice Cooper", "ac@example.test", "alice2"
-	updated, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{
+	updated, err := gw.UpdatePerson(ctx, owner.ID, alice.ID, storage.AdminPersonPatch{
 		Label: &newName, Email: &newEmail, Username: &newUser,
 	}, all)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if updated.Human.Username != "alice2" || updated.Human.Label != "Alice Cooper" || updated.Human.Email != "ac@example.test" {
-		t.Fatalf("update did not stick: %+v", updated.Human)
+	if updated.Person.Username != "alice2" || updated.Person.Label != "Alice Cooper" || updated.Person.Email != "ac@example.test" {
+		t.Fatalf("update did not stick: %+v", updated.Person)
 	}
 
-	// The rename follows the principal id: the password authenticates under the new
+	// The rename follows the user id: the password authenticates under the new
 	// username, and the old username no longer resolves.
 	if _, err := gw.AuthenticatePassword(ctx, "alice2", "alice-s3cret"); err != nil {
 		t.Fatalf("password should authenticate under the new username: %v", err)
@@ -63,31 +63,31 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 
 	// A partial update leaves the other fields alone.
 	onlyDisplay := "Just Display"
-	again, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{Label: &onlyDisplay}, all)
-	if err != nil || again.Human.Username != "alice2" || again.Human.Email != "ac@example.test" {
-		t.Fatalf("partial update touched other fields: %+v (err %v)", again.Human, err)
+	again, err := gw.UpdatePerson(ctx, owner.ID, alice.ID, storage.AdminPersonPatch{Label: &onlyDisplay}, all)
+	if err != nil || again.Person.Username != "alice2" || again.Person.Email != "ac@example.test" {
+		t.Fatalf("partial update touched other fields: %+v (err %v)", again.Person, err)
 	}
 
 	// A username clash is refused.
-	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "bob"}, all); err != nil {
+	if _, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: "bob"}, all); err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
-	bob, _ := gw.ListPrincipals(ctx, all, false)
+	bob, _ := gw.ListUsers(ctx, all, false)
 	var bobID string
 	for _, p := range bob {
-		if p.Human != nil && p.Human.Username == "bob" {
+		if p.Person != nil && p.Person.Username == "bob" {
 			bobID = p.ID
 		}
 	}
-	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, bobID, storage.AdminHumanPatch{Username: &newUser}, all); !errors.Is(err, storage.ErrUsernameTaken) {
+	if _, err := gw.UpdatePerson(ctx, owner.ID, bobID, storage.AdminPersonPatch{Username: &newUser}, all); !errors.Is(err, storage.ErrUsernameTaken) {
 		t.Fatalf("username clash: want ErrUsernameTaken, got %v", err)
 	}
 
 	// Scope and not-found guards.
-	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{Label: &newName}, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("non-all scope: want ErrPrincipalForbidden, got %v", err)
+	if _, err := gw.UpdatePerson(ctx, owner.ID, alice.ID, storage.AdminPersonPatch{Label: &newName}, scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("non-all scope: want ErrUserForbidden, got %v", err)
 	}
-	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.AdminHumanPatch{Label: &newName}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Fatalf("unknown id: want ErrPrincipalNotFound, got %v", err)
+	if _, err := gw.UpdatePerson(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.AdminPersonPatch{Label: &newName}, all); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Fatalf("unknown id: want ErrUserNotFound, got %v", err)
 	}
 }

@@ -132,16 +132,16 @@ var retiredIdentifiers = []BannedTerm{
 		// on eighteen other tables. Spelled with the table, so it cannot catch the
 		// ordinary noun.
 		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
-		Replacement: "service.name, a service account's identifier",
+		Replacement: "machine.name, a machine user's identifier",
 		Origin:      "ADR-0111",
 	},
 	{
-		// The stored function that resolved a principal to its identifier, dropped
+		// The stored function that resolved a user to its identifier, dropped
 		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
 		// a contributor to call something that is not there; and it is a retired
 		// WORD, since both its branches returned an identifier and never a label.
 		Pattern:     regexp.MustCompile(`\bprincipal_label\b`),
-		Replacement: "the gateway's identifier resolution (internal/storage/principal_ident.go)",
+		Replacement: "the gateway's identifier resolution (internal/storage/user_ident.go)",
 		Origin:      "ADR-0110",
 	},
 	{
@@ -477,21 +477,6 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "api", "openapi.json"),
 }
 
-// pendingRename lists the generated files whose text comes from the Go
-// descriptions ADR-2036's schema, API and CLI rename (#2075) rewrites, so a hit
-// from that ADR's entries in them is the rename's to fix, not the console and
-// docs sweep's (#2076). Every other entry still applies to them.
-// TODO(#2075): delete this once the Go descriptions say user.
-var pendingRename = map[string]bool{
-	"openapi.json": true,
-	filepath.Join("reference", "mcp", "index.md"): true,
-}
-
-// pendingRenameHit reports whether msg is an ADR-2036 hit in a pendingRename file.
-func pendingRenameHit(file, msg string) bool {
-	return pendingRename[file] && strings.Contains(msg, "(ADR-2036)")
-}
-
 // ScanOperatorStrings applies the same denylist to the operator-visible text
 // outside the docs tree. Reported separately from ScanVocabulary so a failure
 // says which surface drifted.
@@ -507,9 +492,6 @@ func ScanOperatorStrings() ([]Finding, error) {
 		}
 		for i, line := range strings.Split(string(b), "\n") {
 			for _, text := range scanLine(line) {
-				if pendingRenameHit(filepath.Base(path), text) {
-					continue
-				}
 				findings = append(findings, Finding{File: filepath.Base(path), Line: i + 1, Text: text})
 			}
 		}
@@ -570,9 +552,6 @@ func ScanVocabulary() ([]Finding, error) {
 		}
 		for i, line := range strings.Split(content, "\n") {
 			for _, text := range scanLine(line) {
-				if pendingRenameHit(rel, text) {
-					continue
-				}
 				findings = append(findings, Finding{File: rel, Line: i + 1, Text: text})
 			}
 		}

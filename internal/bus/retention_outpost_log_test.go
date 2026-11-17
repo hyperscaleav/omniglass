@@ -81,7 +81,7 @@ func outpostLogOverridePrunesOutpostLogsAndOnlyThem(t *testing.T, at time.Time) 
 		var q string
 		if table == "outpost_log" {
 			q = `insert into outpost_log (ts, outpost_id, source, severity, message)
-				values ($1, (select principal_id from outpost where name = 'outpost-a'), 'outpost', $2, $3)`
+				values ($1, (select user_id from outpost where name = 'outpost-a'), 'outpost', $2, $3)`
 		} else {
 			q = `insert into log_line (ts, component_id, instance, source, severity, message)
 				values ($1, (select id from component where name = 'display-1'), '', 'push', $2, $3)`

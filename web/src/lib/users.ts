@@ -3,138 +3,138 @@ import { fileToBase64 } from "./auth";
 import { entityLabel } from "./entities";
 import type { FilterKey } from "./predicate";
 
-// The principals data layer: thin typed wrappers over the generated client, so
+// The users data layer: thin typed wrappers over the generated client, so
 // the admin directory page stays declarative and unit-testable against a mocked
-// client. Shapes follow the OpenAPI (see api/principals.go). Credentials are never
+// client. Shapes follow the OpenAPI (see api/users.go). Credentials are never
 // returned, so there is no secret here to leak.
-// group_id / group (the name) / group_label are set on a grant inherited from a group the principal
+// group_id / group (the name) / group_label are set on a grant inherited from a group the user
 // belongs to (absent for a direct grant). An inherited grant is read-only on the
-// principal: it is revoked by editing the group, not the member.
+// user: it is revoked by editing the group, not the member.
 export type Grant = { id?: string; role: string; scope_kind: string; scope_id?: string; scope_op?: string; group_id?: string; group?: string; group_label?: string };
 
-export type Principal = {
+export type User = {
   id: string;
   kind: string;
   active: boolean;
-  // Set when the principal is archived (soft-deleted): hidden from the default
+  // Set when the user is archived (soft-deleted): hidden from the default
   // directory, cannot authenticate, reversible until purged. Absent means live.
   archived_at?: string;
   // has_avatar is a boolean flag (never the bytes): the image is fetched lazily via
-  // principalAvatarUrl only when it is set, so the directory stays cheap to load.
-  human?: { username: string; email?: string; label?: string; has_avatar?: boolean };
-  service?: { name: string };
+  // userAvatarUrl only when it is set, so the directory stays cheap to load.
+  person?: { username: string; email?: string; label?: string; has_avatar?: boolean };
+  machine?: { name: string };
   grants: Grant[];
-  // The principal groups this principal belongs to; the grants they confer ride
+  // The user groups this user belongs to; the grants they confer ride
   // grants (tagged group_id), this names them for the directory and clickthrough.
   groups?: { id: string; name: string }[];
 };
 
-export const PRINCIPALS_KEY = ["principals"] as const;
+export const USERS_KEY = ["users"] as const;
 
-// includeArchived surfaces soft-deleted principals (the "show archived"
+// includeArchived surfaces soft-deleted users (the "show archived"
 // directory view), so a hidden account can be restored or purged.
-export async function listPrincipals(kind?: "human" | "service", includeArchived?: boolean): Promise<Principal[]> {
-  const query: { kind?: "human" | "service"; include_archived?: boolean } = {};
+export async function listUsers(kind?: "person" | "machine", includeArchived?: boolean): Promise<User[]> {
+  const query: { kind?: "person" | "machine"; include_archived?: boolean } = {};
   if (kind) query.kind = kind;
   if (includeArchived) query.include_archived = true;
-  const { data, error } = await api.GET("/principals", { params: { query } });
+  const { data, error } = await api.GET("/users", { params: { query } });
   if (error) throw error;
-  return (data?.principals ?? []) as Principal[];
+  return (data?.users ?? []) as User[];
 }
 
-export async function getPrincipal(id: string): Promise<Principal> {
-  const { data, error } = await api.GET("/principals/{id}", { params: { path: { id } } });
+export async function getUser(id: string): Promise<User> {
+  const { data, error } = await api.GET("/users/{id}", { params: { path: { id } } });
   if (error) throw error;
-  return data as Principal;
+  return data as User;
 }
 
-export type CreatePrincipal = {
+export type CreateUser = {
   username: string;
   label?: string;
   email?: string;
   password?: string;
 };
 
-export async function createPrincipal(body: CreatePrincipal): Promise<Principal> {
-  const { data, error } = await api.POST("/principals", { body });
+export async function createUser(body: CreateUser): Promise<User> {
+  const { data, error } = await api.POST("/users", { body });
   if (error) throw error;
-  return data as Principal;
+  return data as User;
 }
 
-export type UpdatePrincipal = { label?: string; email?: string; username?: string };
+export type UpdateUser = { label?: string; email?: string; username?: string };
 
-export async function updatePrincipal(id: string, body: UpdatePrincipal): Promise<Principal> {
-  const { data, error } = await api.PATCH("/principals/{id}", { params: { path: { id } }, body });
+export async function updateUser(id: string, body: UpdateUser): Promise<User> {
+  const { data, error } = await api.PATCH("/users/{id}", { params: { path: { id } }, body });
   if (error) throw error;
-  return data as Principal;
+  return data as User;
 }
 
 export type ScopeKind = "all" | "location" | "system" | "component";
 
 export type CreateGrant = { role: string; scope_kind: ScopeKind; scope_id?: string; scope_op?: "subtree" | "subtree_excl_root" | "self" };
 
-export async function createGrant(principalId: string, body: CreateGrant): Promise<Grant> {
-  const { data, error } = await api.POST("/principals/{id}/grants", { params: { path: { id: principalId } }, body });
+export async function createGrant(userId: string, body: CreateGrant): Promise<Grant> {
+  const { data, error } = await api.POST("/users/{id}/grants", { params: { path: { id: userId } }, body });
   if (error) throw error;
   return data as Grant;
 }
 
-export async function revokeGrant(principalId: string, grantId: string): Promise<void> {
-  const { error } = await api.DELETE("/principals/{id}/grants/{grantId}", { params: { path: { id: principalId, grantId } } });
+export async function revokeGrant(userId: string, grantId: string): Promise<void> {
+  const { error } = await api.DELETE("/users/{id}/grants/{grantId}", { params: { path: { id: userId, grantId } } });
   if (error) throw error;
 }
 
-export async function setPrincipalActive(id: string, active: boolean): Promise<void> {
+export async function setUserActive(id: string, active: boolean): Promise<void> {
   const { error } = active
-    ? await api.POST("/principals/{id}:enable", { params: { path: { id } } })
-    : await api.POST("/principals/{id}:disable", { params: { path: { id } } });
+    ? await api.POST("/users/{id}:enable", { params: { path: { id } } })
+    : await api.POST("/users/{id}:disable", { params: { path: { id } } });
   if (error) throw error;
 }
 
-// resetPrincipalPassword sets a new password for a human principal (an admin action;
-// no current password required). Gated by principal:reset-password; the new password
+// resetUserPassword sets a new password for a person (an admin action;
+// no current password required). Gated by user:reset-password; the new password
 // must meet the policy (a 422 otherwise, surfaced inline on the field).
-export async function resetPrincipalPassword(id: string, password: string): Promise<void> {
-  const { error } = await api.POST("/principals/{id}:resetPassword", { params: { path: { id } }, body: { password } });
+export async function resetUserPassword(id: string, password: string): Promise<void> {
+  const { error } = await api.POST("/users/{id}:resetPassword", { params: { path: { id } }, body: { password } });
   if (error) throw error;
 }
 
-// setPrincipalAvatar sets another principal's profile picture (an admin action).
-// Gated by principal:set-avatar; the server normalizes the upload to a 256x256 JPEG
+// setUserAvatar sets another user's profile picture (an admin action).
+// Gated by user:set-avatar; the server normalizes the upload to a 256x256 JPEG
 // and rejects a bad or oversize image with a 422.
-export async function setPrincipalAvatar(id: string, file: File): Promise<void> {
+export async function setUserAvatar(id: string, file: File): Promise<void> {
   const image_base64 = await fileToBase64(file);
-  const { error } = await api.POST("/principals/{id}:setAvatar", { params: { path: { id } }, body: { image_base64 } });
+  const { error } = await api.POST("/users/{id}:setAvatar", { params: { path: { id } }, body: { image_base64 } });
   if (error) throw error;
 }
 
-// removePrincipalAvatar clears another principal's profile picture (a no-op if none
-// is set). Gated by principal:set-avatar.
-export async function removePrincipalAvatar(id: string): Promise<void> {
-  const { error } = await api.POST("/principals/{id}:removeAvatar", { params: { path: { id } } });
+// removeUserAvatar clears another user's profile picture (a no-op if none
+// is set). Gated by user:set-avatar.
+export async function removeUserAvatar(id: string): Promise<void> {
+  const { error } = await api.POST("/users/{id}:removeAvatar", { params: { path: { id } } });
   if (error) throw error;
 }
 
-// principalAvatarUrl reads a principal's profile picture and returns it as a data
-// URL, or null when there is none (a 404). Gated by principal:read.
-export async function principalAvatarUrl(id: string): Promise<string | null> {
-  const { data, error } = await api.GET("/principals/{id}/avatar", { params: { path: { id } } });
+// userAvatarUrl reads a user's profile picture and returns it as a data
+// URL, or null when there is none (a 404). Gated by user:read.
+export async function userAvatarUrl(id: string): Promise<string | null> {
+  const { data, error } = await api.GET("/users/{id}/avatar", { params: { path: { id } } });
   if (error || !data) return null;
   return `data:image/jpeg;base64,${data.image_base64}`;
 }
 
 // The soft/hard delete lifecycle: archive hides the account (reversible),
 // restore brings it back, and purge hard-deletes an archived one (irreversible).
-export async function archivePrincipal(id: string): Promise<void> {
-  const { error } = await api.POST("/principals/{id}:archive", { params: { path: { id } } });
+export async function archiveUser(id: string): Promise<void> {
+  const { error } = await api.POST("/users/{id}:archive", { params: { path: { id } } });
   if (error) throw error;
 }
-export async function restorePrincipal(id: string): Promise<void> {
-  const { error } = await api.POST("/principals/{id}:restore", { params: { path: { id } } });
+export async function restoreUser(id: string): Promise<void> {
+  const { error } = await api.POST("/users/{id}:restore", { params: { path: { id } } });
   if (error) throw error;
 }
-export async function purgePrincipal(id: string): Promise<void> {
-  const { error } = await api.POST("/principals/{id}:purge", { params: { path: { id } } });
+export async function purgeUser(id: string): Promise<void> {
+  const { error } = await api.POST("/users/{id}:purge", { params: { path: { id } } });
   if (error) throw error;
 }
 
@@ -197,40 +197,37 @@ export const roleFilterKeys: FilterKey<Role>[] = [
   { key: "permission", type: "string", hint: "substring", get: (r) => effectivePerms(r).join(" "), values: (rows) => uniqSorted(rows.flatMap((r) => permResources(effectivePerms(r)))) },
 ];
 
-// The label for a principal: a human's label or username, a service
-// account's name, else the bare kind.
+// The label for a user: a person's label or username, a machine
+// user's name, else the bare kind.
 //
-// NOT entityLabel, and deliberately: a principal is addressed by uuid and each
+// NOT entityLabel, and deliberately: a user is addressed by uuid and each
 // kind carries its identifier under its own column, and the precedence here runs
 // the other way round from an entity's (a username is the identifier, and it
 // outranks a machine user's name). Widening entityLabel to express it would
 // make the entity rule answer a question it does not have the columns for.
 //
-// It takes the structural shape rather than a Principal so the sidebar's `me`
+// It takes the structural shape rather than a User so the sidebar's `me`
 // payload reaches the same rule (#683). That payload nests the kind one level
 // deeper and used to restate all four rungs by hand, which is the same drift
 // with a different subject.
-export type PrincipalIdentity = {
-  human?: { username: string; label?: string };
-  service?: { name: string };
+export type UserIdentity = {
+  person?: { username: string; label?: string };
+  machine?: { name: string };
   kind: string;
 };
 
-export function principalName(p: Principal | PrincipalIdentity): string {
-  return p.human?.label || p.human?.username || p.service?.name || p.kind;
+export function userName(p: User | UserIdentity): string {
+  return p.person?.label || p.person?.username || p.machine?.name || p.kind;
 }
 
 // Presentational helpers shared by the directory columns and the detail body, so a
 // user reads the same in the list and its blade.
 //
 // kindLabel is the word an operator reads for a user's kind (ADR-2036): a person
-// or a machine. The API still says human and service until #2075 renames the
-// values; the console speaks the new words now, so the badge and the filter read
-// person and machine while the wire does not.
+// or a machine, the wire's own values.
 export function kindLabel(kind: string): string {
-  if (kind === "human") return "person";
-  if (kind === "service") return "machine";
   return kind;
 }
-export const kindBadge = (kind: string) => `badge badge-soft badge-sm capitalize ${kind === "service" ? "badge-info" : "badge-primary"}`;
-export const principalInitials = (p: Principal): string => principalName(p).slice(0, 2).toUpperCase();
+
+export const kindBadge = (kind: string) => `badge badge-soft badge-sm capitalize ${kind === "machine" ? "badge-info" : "badge-primary"}`;
+export const userInitials = (p: User): string => userName(p).slice(0, 2).toUpperCase();

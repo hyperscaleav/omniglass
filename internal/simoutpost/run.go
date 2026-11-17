@@ -47,7 +47,7 @@ type Config struct {
 	Applier applier
 	// Pushers are the outside actors the lab's scenario declared on this
 	// outpost (#1743): each runs as an emulator device of its profile with a
-	// push face, holding the token minted for its principal, and pushes the
+	// push face, holding the token minted for its user, and pushes the
 	// systems its grant names through POST /telemetry:push. None pushes
 	// nothing.
 	Pushers []Pusher

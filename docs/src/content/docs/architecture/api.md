@@ -56,7 +56,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   A path or a reference resolves whichever form it is given, since a kebab name can never look like a
   uuid.
 - **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
-  `/systems`, `/locations`, `/principal-groups/{group}`) moves the `name`, gated by `<entity>:rename`
+  `/systems`, `/locations`, `/user-groups/{group}`) moves the `name`, gated by `<entity>:rename`
   rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
   breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
   integration's config), so it is an act a grant can withhold on its own instead of a side effect of
@@ -87,7 +87,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
   id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
-  counterparts on `/principals/{id}` do carry a capability and a scoped path id.
+  counterparts on `/users/{id}` do carry a capability and a scoped path id.
 - **Each typed catalog is its own plural collection**: `/location-types`, `/metric-types`,
   `/property-types`,
   `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
@@ -102,10 +102,10 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   a deploy user scoped to one subtree still gets a correct answer for a placement it cannot
   read via `GET`, because the check queries the target bucket directly rather than reading the row.
 - **A user is addressable by uuid, username, or machine user name.** Every
-  `/principals/{id}` route resolves any of them server-side (a value that parses as a uuid is used
+  `/users/{id}` route resolves any of them server-side (a value that parses as a uuid is used
   directly, else a username or a machine user's name, an unknown one a 404, and a word that is
   both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
-  may list the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the
+  may list the whole directory (`user:read:admin` on an all-scope grant); anyone else gets the
   all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
   username is mutable, nothing keys on it).
 
@@ -123,7 +123,7 @@ The forms, by what the name is unique within:
 | secret, variable | `{secret}`, `{variable}` | a bare name, or `<owner>/<name>`, the owner a location, system or component in any form above, or `$platform` | `demo-panel-login`, `$platform/demo-panel-login` |
 | file | `{file}` | its filename | `codec-firmware-2.1.4.txt` |
 | user group | `{group}` | its name | `night-shift` |
-| user, group member | `{id}`, `{principal}` | a username, a machine user's name | `alice` |
+| user, group member | `{id}`, `{user}` | a username, a machine user's name | `alice` |
 | a grant's scope root | `scope_id` (body) | a bare name, a dotted address | `boi.17c` |
 
 The slash in an endpoint, secret or variable reference is one path segment, so a URL percent-encodes
@@ -147,7 +147,7 @@ name is a lookup: automation that must never drift addresses `<owner>/<name>` or
 
 **What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
 have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
-unique, since only a component makes it so; an outpost user on `/principals` is reached by its name on
+unique, since only a component makes it so; an outpost user on `/users` is reached by its name on
 `/outposts` instead.
 
 ## Lists: filter, order, page
@@ -1127,7 +1127,7 @@ the component tier). An alarm's `:timeline` carries each notification after the 
 ([alarms and actions](/architecture/alarms-actions/#notifications)).
 
 People are recipients too (#1341). A target's kind may be `email` (a shared mailbox) or name people,
-`principal_group` or `principal`, on the channels `inbox` and `email`; binding people takes the
+`user_group` or `user`, on the channels `inbox` and `email`; binding people takes the
 directory's admin-tier read. The caller's own inbox is `GET /auth/me/notifications` with
 `POST /auth/me/notifications/{id}:markRead` and `POST /auth/me/notifications:markAllRead`
 (`notification:read`, the caller's rows alone, scoped at read). A person's own subscriptions are

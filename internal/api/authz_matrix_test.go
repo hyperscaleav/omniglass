@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// grant is a (role x scope) pair for building test principals.
+// grant is a (role x scope) pair for building test users.
 type grant struct {
 	role      string
 	scopeKind string
@@ -64,7 +64,7 @@ type actionRoute struct {
 	// create/update/delete. They join the matrix's write-only role, so they
 	// carry that role's narrow grant rather than the viewer floor's reach:
 	// alarm:acknowledge resolves its scope from the acknowledgement, and a
-	// principal holding it at root only must not be able to acknowledge
+	// user holding it at root only must not be able to acknowledge
 	// fleet-wide just because it can read fleet-wide.
 	needs []string
 	// prepare runs as the OWNER against one target before the split is driven,
@@ -78,14 +78,14 @@ type actionRoute struct {
 	// componentEnd marks a route that also names a COMPONENT it writes onto (a
 	// membership or a slot assignment, #510): the component end has to be inside
 	// the caller's component:update scope as well. The matrix gives its two
-	// narrow principals that authority over the rack these routes' components are
+	// narrow users that authority over the rack these routes' components are
 	// made under, so the split this matrix drives stays the system's own; the
 	// component end's split is TestStaffingWritesNeedTheComponentInScope's.
 	componentEnd bool
 }
 
 // matrixRack is the component the component-end routes' components are made
-// under, and the root of the component grant the matrix's principals carry.
+// under, and the root of the component grant the matrix's users carry.
 const matrixRack = "az-rack"
 
 // matrixProperty is the catalog property the property routes write. Any seeded
@@ -409,7 +409,7 @@ func (e scopedEntity) createBody(name, parent string) map[string]any {
 }
 
 // TestAuthzConformance is the foundation security test, run against EVERY scoped
-// entity: it drives the live API with realistically-granted principals and
+// entity: it drives the live API with realistically-granted users and
 // asserts the full authorization matrix end to end (grant -> role index ->
 // per-action visible_set -> gateway 3-way split):
 //
@@ -446,7 +446,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	// reads no other resource or out-of-scope target.
 	//
 	// The extra permissions belong on THIS role and not on viewer: they have to
-	// carry the narrow grant, or the readable-but-not-actionable principal below
+	// carry the narrow grant, or the readable-but-not-actionable user below
 	// would be actionable everywhere it can read and the case would evaporate.
 	writerRole := e.resource + "-writer"
 	writePerms := []string{e.resource + ":create,update,delete"}
@@ -478,7 +478,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	rootID := entityID(t, c, ownerTok, e.base, "az-root")
 
 	// The component end (#510): a route that writes onto a component needs it in
-	// the caller's component:update scope, so both narrow principals hold that
+	// the caller's component:update scope, so both narrow users hold that
 	// over the rack the routes' components are made under. A component-kind grant
 	// reaches no system, so the system-tier split below is untouched by it.
 	var componentEnd []grant
@@ -494,21 +494,21 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	patch := map[string]any{"label": "x"}
 	path := func(name string) string { return e.base + "/" + name }
 
-	// Principal 1: viewer@all (read everywhere, write nothing).
-	reader := principalWithGrants(t, ctx, dsn, "reader", []grant{{role: "viewer", scopeKind: "all"}})
+	// User 1: viewer@all (read everywhere, write nothing).
+	reader := userWithGrants(t, ctx, dsn, "reader", []grant{{role: "viewer", scopeKind: "all"}})
 	c.do(reader, http.MethodGet, path("az-other"), nil, http.StatusOK)            // reads anything
 	c.do(reader, http.MethodPatch, path("az-child"), patch, http.StatusForbidden) // capability 403 (no write anywhere)
 
-	// Principal 2: write-only, scoped to root only (no @all). Read scope = root
+	// User 2: write-only, scoped to root only (no @all). Read scope = root
 	// subtree (via floor); az-other is outside it.
-	narrow := principalWithGrants(t, ctx, dsn, "narrow", append([]grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}}, componentEnd...))
+	narrow := userWithGrants(t, ctx, dsn, "narrow", append([]grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}}, componentEnd...))
 	c.do(narrow, http.MethodPatch, path("az-child"), patch, http.StatusOK)       // write in scope
 	c.do(narrow, http.MethodGet, path("az-other"), nil, http.StatusNotFound)     // out of read scope -> non-disclosing 404
 	c.do(narrow, http.MethodPatch, path("az-other"), patch, http.StatusNotFound) // 404, not 403
 
-	// Principal 3: viewer@all + writer@root (the over-permit case): reads
+	// User 3: viewer@all + writer@root (the over-permit case): reads
 	// everywhere, writes only under root.
-	mixed := principalWithGrants(t, ctx, dsn, "mixed", append([]grant{
+	mixed := userWithGrants(t, ctx, dsn, "mixed", append([]grant{
 		{role: "viewer", scopeKind: "all"},
 		{role: writerRole, scopeKind: e.resource, scopeID: rootID},
 	}, componentEnd...))
@@ -530,7 +530,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	}
 }
 
-// runActionRouteSplit drives one action route through the same three principals
+// runActionRouteSplit drives one action route through the same three users
 // the entity's own PATCH is driven through.
 //
 // The refusals go to az-other and the success to az-child, so a mutating success
@@ -629,9 +629,9 @@ func bootstrapOwnerTok(t *testing.T, ctx context.Context, gw storage.Gateway) st
 	return tok
 }
 
-// principalWithGrants creates a service principal with a bearer credential and
+// userWithGrants creates a service user with a bearer credential and
 // the given grants, returning its token.
-func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, grants []grant) string {
+func userWithGrants(t *testing.T, ctx context.Context, dsn, label string, grants []grant) string {
 	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -639,10 +639,10 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 	}
 	defer conn.Close(ctx)
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, label); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, label); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -650,7 +650,7 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 		t.Fatalf("mint token: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
 		pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
@@ -664,7 +664,7 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 			op = "subtree"
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where name = $2), $3, $4, $5)`,
+			`insert into user_grant (user_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where name = $2), $3, $4, $5)`,
 			pid, g.role, g.scopeKind, scopeID, op); err != nil {
 			t.Fatalf("insert grant %+v: %v", g, err)
 		}

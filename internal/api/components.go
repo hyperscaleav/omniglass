@@ -162,7 +162,7 @@ const ErrSystemBindNeedsUpdate = "creating a component into a system writes that
 // in the update scope alone, so a system outside it came back as the
 // non-disclosing "system not found" (422), which a caller that had just read
 // that system on the same screen could only read as a broken platform. A
-// principal with a location-scoped deploy grant is exactly that caller: the
+// user with a location-scoped deploy grant is exactly that caller: the
 // cross-tier expansion is unbuilt (#10), so its system:update scope is empty
 // while its viewer floor reads every system in the fleet.
 //

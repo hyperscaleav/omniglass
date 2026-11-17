@@ -12,8 +12,8 @@ import (
 
 // Pusher is one outside actor the emulator runs beside its outpost (#1743): a
 // pusher the lab's scenario declared, as a device of a profile with a push
-// face, holding the bearer token the lab minted for its principal this run.
-// Name is the principal's; the emulator never logs Token.
+// face, holding the bearer token the lab minted for its user this run.
+// Name is the user's; the emulator never logs Token.
 type Pusher struct {
 	Name, Profile, Token string
 }

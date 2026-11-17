@@ -584,7 +584,7 @@ proves itself with. The kinds are a code-declared enum published through the API
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
 paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
 mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
-people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)).
+people: a `user_group` or one `user` ([below](#people-group-and-person-targets-and-the-inbox)).
 Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
@@ -628,14 +628,14 @@ environment.
 
 ### People: group and person targets, and the inbox
 
-A target can name people instead of a channel (#1341): a **`principal_group`** target reaches every
-member of a group, and a **`principal`** target one person, each on the **channels** it names (`inbox`,
+A target can name people instead of a channel (#1341): a **`user_group`** target reaches every
+member of a group, and a **`user`** target one person, each on the **channels** it names (`inbox`,
 the console inbox, and `email`, each person's directory email). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
 every critical alarm" is an action rule whose target is the group:
 
 ```bash
-omniglass notification-target create --name on-call-page --kind principal_group \
-  --principal-group on-call --channels '["inbox"]'
+omniglass notification-target create --name on-call-page --kind user_group \
+  --user-group on-call --channels '["inbox"]'
 omniglass action-rule create --name page-on-call --on '["raised"]' \
   --when 'severity_rank >= 50' --targets '["on-call-page"]'
 ```
@@ -663,9 +663,9 @@ entry about a component they have since lost is gone from their inbox.
 
 **Who is named.** A person-addressed row is visible wherever its alarm is (`/notifications`, the
 alarm's timeline), so the alarm's history stays whole, but its recipient is named only to that person
-and to holders of `principal:read:admin`; everyone else reads it as withheld
+and to holders of `user:read:admin`; everyone else reads it as withheld
 ([identity and access](/architecture/identity-access/#people-as-notification-audiences)). Binding a group or a person to a
-target takes `principal_group:read:admin` or `principal:read:admin` on top of
+target takes `user_group:read:admin` or `user:read:admin` on top of
 `notification_target:create`, as binding a secret takes `secret:bind`, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
 
@@ -684,7 +684,7 @@ that secret, judged inside the patch's own transaction, as binding a secret to a
 
 Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a
 webhook. A **person's email row** (a group or person target with the `email` channel) sends to the
-person's **directory email** (`human.email`, admin-set or synced from the identity provider), resolved
+person's **directory email** (`person.email`, admin-set or synced from the identity provider), resolved
 at send. Before it sends, the tick **judges the recipient again**, inside the row's own transaction:
 they are still an active person, still a member of the group the row came through, and their component
 read scope as it stands still admits the alarm's component; otherwise the row fails at once with the
@@ -983,16 +983,16 @@ catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), 
 
 <SchemaTable table="action_rule_target" notes={{ target_id: 'A target it sends to; a target a rule names cannot be deleted (RESTRICT)' }} />
 
-<SchemaTable table="action_rule_opt_out" notes={{ principal_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
+<SchemaTable table="action_rule_opt_out" notes={{ user_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
 
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The target kind, a code-declared enum: webhook, email, principal_group or "principal"; a CHECK holds each kind to its own columns',
+    kind: 'The target kind, a code-declared enum: webhook, email, user_group or user; a CHECK holds each kind to its own columns',
     addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
     url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
-    principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
-    principal_id: 'The one person a person target reaches (ON DELETE RESTRICT)',
+    user_group_id: 'The group a user_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
+    user_id: 'The one person a person target reaches (ON DELETE RESTRICT)',
     channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}
@@ -1009,7 +1009,7 @@ catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), 
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
     channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
     recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',
-    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and principal:read:admin',
+    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and user:read:admin',
     read_at: 'When its recipient read an inbox entry',
   }}
 />

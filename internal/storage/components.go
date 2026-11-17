@@ -1170,7 +1170,7 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from outpost n where n.principal_id = i.outpost_id), ''), i.params, l.last_seen_at,
+		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from outpost n where n.user_id = i.outpost_id), ''), i.params, l.last_seen_at,
 			i.transport <> all($2::text[]) and (exists (select 1 from task t where t.endpoint_id = i.id and t.mode = 'listen' and t.enabled)
 				or exists (select 1 from driver d where d.id = i.driver_id and d.spec ? 'session'))
 		from endpoint i

@@ -55,8 +55,8 @@ const SYS_ID = uuidFor("sys-meeting-1");
 const LVL_ID = uuidFor("l-level-9");
 const COMP_ID = uuidFor("c-display-1");
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 let landed = "";
 function Landing() {
@@ -69,7 +69,7 @@ function Landing() {
 // location, system and component create/update/rename/move, no standard:create,
 // no endpoint:create.
 const deploy: Me = {
-  principal: { id: "u-deploy", kind: "human" }, human: { username: "deploy" }, grants: [],
+  user: { id: "u-deploy", kind: "person" }, person: { username: "deploy" }, grants: [],
   permissions: ["*:read", ...["location", "system", "component"].flatMap((r) => ["create", "update", "rename", "move"].map((a) => `${r}:${a}`))],
 };
 

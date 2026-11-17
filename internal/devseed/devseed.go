@@ -329,7 +329,7 @@ type Location struct {
 	Parent string `yaml:"parent"`
 }
 
-// User is one example human principal with a known password and its grants.
+// User is one example person with a known password and its grants.
 type User struct {
 	Username string  `yaml:"username"`
 	Password string  `yaml:"password"`
@@ -464,7 +464,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		if err != nil {
 			return fmt.Errorf("devseed: hash password for %q: %w", u.Username, err)
 		}
-		pr, err := gw.CreateHumanPrincipal(ctx, actorID, storage.HumanSpec{
+		pr, err := gw.CreatePerson(ctx, actorID, storage.PersonSpec{
 			Username:     u.Username,
 			Label:        u.Label,
 			PasswordHash: hash,

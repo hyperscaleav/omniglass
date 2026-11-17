@@ -86,9 +86,9 @@ func TestOutpostRenameCarriesEveryRow(t *testing.T) {
 	if left := snapshotRows(t, conn, schemaNodeNames, true); len(left) > 0 {
 		t.Errorf("after the rename the schema still spells node: %v", left)
 	}
-	outpostID := `(select principal_id from outpost where name = 'rename-n1')`
+	outpostID := `(select user_id from outpost where name = 'rename-n1')`
 	for _, q := range []string{
-		`select count(*) from principal where kind = 'outpost' and id = ` + outpostID,
+		`select count(*) from users where kind = 'machine' and id = ` + outpostID,
 		`select count(*) from outpost_log where message = 'hello' and outpost_id = ` + outpostID,
 		`select count(*) from property where owner_kind = 'outpost' and outpost_id = ` + outpostID,
 		`select count(*) from tag_binding where owner_kind = 'outpost' and outpost_id = ` + outpostID,
@@ -115,8 +115,8 @@ func TestOutpostRenameCarriesEveryRow(t *testing.T) {
 	if got := ids("event_rule", "outpost-silent"); got != ruleID {
 		t.Errorf("event rule id %s, want it kept as %s", got, ruleID)
 	}
-	if _, err := conn.Exec(ctx, `insert into principal (kind) values ('node')`); err == nil {
-		t.Error("a principal of kind node was accepted after the rename")
+	if _, err := conn.Exec(ctx, `insert into users (kind) values ('node')`); err == nil {
+		t.Error("a user of kind node was accepted after the rename")
 	}
 	if _, err := conn.Exec(ctx, `insert into tag_binding (tag_id, owner_kind, outpost_id, value)
 		values ((select id from tag where name = 'rename-t1'), 'outpost', `+outpostID+`, 'y')`); err == nil {

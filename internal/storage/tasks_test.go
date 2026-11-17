@@ -52,8 +52,8 @@ func TestResolveTaskOwner(t *testing.T) {
 	// endpoint on outpost-a. The outpost placement lives on the ENDPOINT; a task carries
 	// no outpost column (its placement projects from its endpoint).
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
-		('shared-tcp', 'tcp', null, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
+		('shared-tcp', 'tcp', null, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -123,10 +123,10 @@ func TestResolveTaskOwners(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
-		('disp-2-snmp', 'snmp', (select id from component where name = 'disp-2'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.2:161"}'::jsonb),
-		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"10.0.0.3:22"}'::jsonb),
-		('shared-tcp', 'tcp', null, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.4:22"}'::jsonb)`); err != nil {
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
+		('disp-2-snmp', 'snmp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.2:161"}'::jsonb),
+		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select user_id from outpost where name = 'outpost-b'), '{"target":"10.0.0.3:22"}'::jsonb),
+		('shared-tcp', 'tcp', null, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.4:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

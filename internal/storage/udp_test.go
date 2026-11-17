@@ -138,7 +138,7 @@ func TestAUDPCommandDeliveryCarriesItsRetries(t *testing.T) {
 	}
 }
 
-// ownerActor bootstraps an owner and returns its principal id.
+// ownerActor bootstraps an owner and returns its user id.
 func ownerActor(t *testing.T, f *tlsFixture) string {
 	t.Helper()
 	_, hash, prefix, err := auth.NewBearerToken()
@@ -154,7 +154,7 @@ func ownerActor(t *testing.T, f *tlsFixture) string {
 	}
 	defer conn.Close(context.Background())
 	var actor string
-	if err := conn.QueryRow(context.Background(), `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(context.Background(), `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatal(err)
 	}
 	return actor

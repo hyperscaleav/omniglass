@@ -317,7 +317,7 @@ type entityNameInput struct {
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
 // one entity kind. Binding is modeled as custom methods on the entity (like the
-// principal lifecycle actions), so the generated CLI reads `component set-tag
+// user lifecycle actions), so the generated CLI reads `component set-tag
 // <name>` rather than colliding with the top-level tag resource. Reading an
 // entity's tags rides that entity's read floor; setting or removing a value is
 // the entity's own update, so binding a tag needs no permission beyond the write

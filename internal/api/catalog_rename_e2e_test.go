@@ -45,8 +45,8 @@ func TestCatalogRenameAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	adminTok := principalWithGrants(t, ctx, dsn, "catalog-admin", []grant{{role: "admin", scopeKind: "all"}})
-	operatorTok := principalWithGrants(t, ctx, dsn, "catalog-operator", []grant{{role: "operator", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "catalog-admin", []grant{{role: "admin", scopeKind: "all"}})
+	operatorTok := userWithGrants(t, ctx, dsn, "catalog-operator", []grant{{role: "operator", scopeKind: "all"}})
 
 	type row struct {
 		ID   string `json:"id"`
@@ -137,7 +137,7 @@ func TestCatalogRenameAPI(t *testing.T) {
 	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusNotFound)
 
 	// vendor:update without vendor:rename edits the vendor and cannot rename it.
-	editorTok := principalWithGrants(t, ctx, dsn, "vendor-editor", []grant{{role: "vendor-editor", scopeKind: "all"}})
+	editorTok := userWithGrants(t, ctx, dsn, "vendor-editor", []grant{{role: "vendor-editor", scopeKind: "all"}})
 	c.do(editorTok, http.MethodPatch, "/vendors/acme", map[string]any{"label": "Acme Audio"}, http.StatusOK)
 	c.do(editorTok, http.MethodPost, "/vendors/acme:rename", map[string]any{"name": "acme-audio"}, http.StatusForbidden)
 	c.do(adminTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)

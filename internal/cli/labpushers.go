@@ -17,7 +17,7 @@ import (
 // devices are: a scale scenario's pushers per site, the dev fleet's in its
 // fixtures. Each run mints every declared pusher a token, the way it mints
 // each outpost one: the plaintext goes to the emulator on the pusher's outpost,
-// the hash and prefix to the seed, which grants the pusher's principal its
+// the hash and prefix to the seed, which grants the pusher's user its
 // systems and sets the credential. One path for both lab kinds.
 
 // minter mints a bearer token: the plaintext, its hash and its non-secret
@@ -71,7 +71,7 @@ func devLabPushers(ps []devseed.SimPusher, noOutpost bool, mint minter) ([]lab.P
 
 // setPusherTokens gives each pusher this run's token, replacing the last
 // run's, so the emulator on its outpost can push with it. A pusher whose
-// principal the lab's fleet does not hold (a lab kept from before it was
+// user the lab's fleet does not hold (a lab kept from before it was
 // declared, never seeded again) is noted, not fatal: nothing pushes for it.
 func setPusherTokens(ctx context.Context, out io.Writer, gw storage.Gateway, tokens map[string]lab.PusherToken) error {
 	names := make([]string, 0, len(tokens))
@@ -85,7 +85,7 @@ func setPusherTokens(ctx context.Context, out io.Writer, gw storage.Gateway, tok
 		if err != nil {
 			return fmt.Errorf("lab seed: %s: pusher %s: the hash is not hex", lab.PusherTokensEnv, name)
 		}
-		ok, err := gw.SetServiceToken(ctx, "", name, hash, t.Prefix)
+		ok, err := gw.SetMachineToken(ctx, "", name, hash, t.Prefix)
 		if err != nil {
 			return err
 		}
