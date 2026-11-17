@@ -34,7 +34,7 @@ func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 	if wl.ReportSeconds != 60 {
 		t.Fatalf("the worklist's report window = %d seconds, want the default 60", wl.ReportSeconds)
 	}
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatalf("override: %v", err)
 	}
 	if wl, err = gw.OutpostWorklist(ctx, "edge-unknown"); err != nil || wl.ReportSeconds != 30 {

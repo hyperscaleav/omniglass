@@ -209,7 +209,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"product_metric":    {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property":         {Shape: ShapeIDOnly},
 	"retired_sample":   {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
-	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
+	"setting_binding": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_slot_assignment": {Shape: ShapeIDOnly},
 	// The one row omniglass lab writes into its own database (#1195); nobody

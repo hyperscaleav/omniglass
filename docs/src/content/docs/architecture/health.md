@@ -411,7 +411,7 @@ An SLI is just another derived property, and transition-only recording's cleares
 ## SLO and SLA: the target, and meeting it
 
 The **SLI** is the *measured indicator* (the `system-availability` calc above); the **SLO** is the
-**target** (availability >= 99.9%), a [config](/architecture/variables/) value on the entity or
+**target** (availability >= 99.9%), a [declared](/architecture/variables/) value on the entity or
 standard; the **SLA** is **meeting the SLO**: an `event_rule` fires when the SLI breaches the
 target, and compliance over the contractual window is itself an SLI.
 

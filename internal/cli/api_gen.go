@@ -2222,7 +2222,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective tags for a component",
-						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-tag list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2254,7 +2254,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective variables for a component",
-						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-variable list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2687,7 +2687,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's properties and where each stands",
-						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4677,7 +4677,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a location's effective properties",
-						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6992,7 +6992,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <namespace>",
 					Short:   "Restore a settings namespace to defaults",
-					Long:    "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+					Long:    "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
 					Example: "  omniglass setting delete <namespace>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7050,7 +7050,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "restoreDefaults",
 					Short:   "Restore all settings to defaults",
-					Long:    "Removes every platform override (a factory reset). Gated by settings:update and platform:update.",
+					Long:    "Removes every platform binding (a factory reset). Gated by settings:update and platform:update.",
 					Example: "  omniglass setting restoreDefaults",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7068,7 +7068,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <namespace>",
 					Short:   "Update a settings namespace",
-					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.",
+					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.",
 					Example: "  omniglass setting update notification --body '{\"egress_allow\":[\"smtp.example.com\"]}'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8342,7 +8342,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's properties and where each stands",
-						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

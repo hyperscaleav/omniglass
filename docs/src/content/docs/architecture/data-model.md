@@ -565,7 +565,7 @@ config: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
-  setting_override: {
+  setting_binding: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }

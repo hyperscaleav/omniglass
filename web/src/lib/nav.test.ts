@@ -210,7 +210,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("keeps the operator-set values under Values and the re-homed index routes gated off-rail", () => {
-    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Declared values", "Files"]);
     // The old index URLs redirect into the fleet's list face, but their detail
     // routes remain, so the gates and top-bar identities must survive the move.
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);

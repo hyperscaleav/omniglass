@@ -885,19 +885,19 @@ func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, 
 	return nil, nil, nil
 }
 func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
-func (UnimplementedGateway) GetSettingOverrides(context.Context, string) ([]SettingOverride, error) {
+func (UnimplementedGateway) GetSettingBindings(context.Context, string) ([]SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertSettingOverride(context.Context, string, string, string, map[string]any, []string) (*SettingOverride, error) {
+func (UnimplementedGateway) UpsertSettingBinding(context.Context, string, string, string, map[string]any, []string) (*SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) MergePatchSettingOverride(context.Context, string, string, string, map[string]any) (*SettingOverride, error) {
+func (UnimplementedGateway) MergePatchSettingBinding(context.Context, string, string, string, map[string]any) (*SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSettingOverride(context.Context, string, string, string) error {
+func (UnimplementedGateway) DeleteSettingBinding(context.Context, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) DeleteAllSettingOverrides(context.Context, string, string) error {
+func (UnimplementedGateway) DeleteAllSettingBindings(context.Context, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) Close() {}
@@ -1278,7 +1278,7 @@ func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)   
 func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, error) {
 	return nil, "no mail relay is configured", nil
 }
-func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingOverride, error) {
+func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
 	return nil, nil
 }
 

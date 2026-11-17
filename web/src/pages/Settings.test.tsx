@@ -115,7 +115,7 @@ describe("Settings page", () => {
     // The card lists every declared key, sorted: default_landing, then theme.
     fireEvent.click((await screen.findAllByLabelText("Show resolution"))[1]);
     expect(await screen.findByText("Layer stack")).toBeTruthy();
-    expect(screen.getByText("Console override (platform)")).toBeTruthy();
+    expect(screen.getByText("Console binding (platform)")).toBeTruthy();
   });
 
   // A list-valued setting (the acronym dictionary, #684) is the first setting

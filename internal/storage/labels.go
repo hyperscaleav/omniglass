@@ -151,7 +151,7 @@ func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) 
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}

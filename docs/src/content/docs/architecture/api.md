@@ -738,7 +738,7 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   collision-free.
 - `GET /components/{name}/effective-tags` is the **cascade** for one component: each a `resolvedTag`
   (`{key, value, owner_kind, owner_id?, owner_name?, band, depth, winner}`), keys unioning and values
-  overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
+  shadowing most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
   only from a binding on the component itself (`component:read`, read-scoped).
 - The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
   map (`{key: winning_value}`) on every row, resolved for the whole page in one batched query. A

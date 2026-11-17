@@ -447,7 +447,7 @@ and is omitted for a `platform` secret (the install-wide tier, which needs an al
 `platform:create`). Field maps pass as a JSON object to `--fields`, validated against the type's shape.
 
 A secret's name is unique within its owner, and the cascade makes one name at several owners the
-ordinary case (a room's `core-snmp` overriding the platform's), so the bare name resolves only where
+ordinary case (a room's `core-snmp` shadowing the platform's), so the bare name resolves only where
 exactly one secret you can see carries it. `<owner>/<name>` always resolves: the owner by name,
 dotted address or uuid, or `$platform` for the install-wide tier, which has no name of its own
 (`omniglass secret reveal '$platform/core-snmp'`).
@@ -520,7 +520,7 @@ the rule is a 422; that name is then the key a binding carries (`--key`). `--app
 entity-kind allow-list passed as a JSON array (`'["component","system"]'`; empty means universal),
 checked when a value is bound. `--propagates`
 defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
-that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
+that resolves only on its own entity. Resolving onto a component **unions** keys and **shadows** values
 most-specific-wins down the cascade.
 
 ## Component classification catalogs

@@ -106,7 +106,7 @@ func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
 func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {
 	t.Parallel()
 	f := newSettingsFixture(t)
-	if _, err := f.gw.UpsertSettingOverride(f.c.ctx, "", "platform", "ui",
+	if _, err := f.gw.UpsertSettingBinding(f.c.ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-light"}, nil); err != nil {
 		t.Fatalf("seed platform override: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSettingsPatchStoresAtPlatformScope(t *testing.T) {
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
 
-	rows, err := f.gw.GetSettingOverrides(f.c.ctx, "platform")
+	rows, err := f.gw.GetSettingBindings(f.c.ctx, "platform")
 	if err != nil {
 		t.Fatalf("read platform overrides: %v", err)
 	}

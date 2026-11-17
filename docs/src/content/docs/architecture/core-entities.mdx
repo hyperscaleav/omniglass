@@ -223,7 +223,7 @@ catalogs, operator-graftable at any level
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)).
 It classifies the **product** (`product.component_type_id`, required), not the component directly, so
 a component inherits its type through the product it is. The row carries the identity facts that
-genuinely span products, **inheriting down the tree with override at any level**: the naming **`stem`**
+genuinely span products, **inheriting down the tree, shadowed at any level**: the naming **`stem`**
 (the auto-generated component name's prefix, e.g. `display-1`), **`label`**, **`icon`** (the
 console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
 **`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a type that
@@ -298,11 +298,11 @@ cell is a fact the row genuinely inherits rather than one somebody forgot to cop
 
 <SeededSet kind="system_types" />
 
-The row carries the identity facts that span every system of that type, **inheriting down the tree
-with override at any level**: the naming **`stem`** (the prefix a generated system name is built from,
+The row carries the identity facts that span every system of that type, **inheriting down the tree,
+shadowed at any level**: the naming **`stem`** (the prefix a generated system name is built from,
 e.g. `boardroom-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
 label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
-`board` states its own stem and abbrev while taking its icon from `collaboration`, which overrides `av`'s. A
+`board` states its own stem and abbrev while taking its icon from `collaboration`, which shadows `av`'s. A
 type that states a fact of its own goes back to inheriting by patching that field to `""`, the same
 three-state sentinel `component_type` uses ([#716](https://github.com/hyperscaleav/omniglass/issues/716)).
 A **root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
@@ -333,7 +333,7 @@ the `official` boolean; the promotion of the former `system_type` label catalog
 A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
 first-class and carries no contract. The standard is a separate axis from `system_type` above: a
 system can carry either, both, or neither. Conformance is **not** a copy: the standard's contract defaults
-resolve **live** for every conforming system until it overrides one. See the
+resolve **live** for every conforming system until it binds its own. See the
 [Standards guide](/guides/admin/standards/).
 
 A system also declares **slots** directly on itself (an ad hoc slot), which is how a one-off system
@@ -746,7 +746,7 @@ suppress four consequences:
 - **action dispatch is held**: an alarm may open, but no `action_rule` pages or opens a ticket
   ([alarms and actions](/architecture/alarms-actions/));
 - **drift is observed, not enforced**: no command is sent to make the device match its declared value, so a tech mid-swap is not fought
-  ([config](/architecture/variables/));
+  ([declared values](/architecture/variables/));
 - **health rolls up no impact**: the member does not sink its parent's
   [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode;
 - **SLA does not count it**: the window is excluded from availability and the SLO.

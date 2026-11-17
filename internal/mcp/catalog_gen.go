@@ -313,7 +313,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "effective-tags",
 		Title:       "Effective tags for a component",
-		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 		Method:      "GET",
 		Path:        "/components/{name}/effective-tags",
 		Permission:  "component:read",
@@ -413,7 +413,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-component-properties",
 		Title:       "List a component's properties and where each stands",
-		Description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/components/{name}/properties",
 		Permission:  "component:read",
@@ -824,7 +824,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-location-properties",
 		Title:       "List a location's effective properties",
-		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/locations/{name}/properties",
 		Permission:  "location:read",
@@ -1099,7 +1099,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-system-properties",
 		Title:       "List a system's properties and where each stands",
-		Description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/systems/{name}/properties",
 		Permission:  "system:read",

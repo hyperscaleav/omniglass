@@ -1,6 +1,6 @@
 ---
 title: Workers
-description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile desired-state loop."
+description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile loop over declared values."
 sidebar:
   badge:
     text: Partial
@@ -40,7 +40,7 @@ The one machinery is a **JetStream work-queue consumer** over a configurable con
   rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
-- **reconcile**: the desired-state loop (below).
+- **reconcile**: the declared-value loop (below).
 
 A subsystem that consumes the same message is **a stage, not a second loop**; competing consumers
 scale horizontally with no leader (JetStream hands each message to exactly one member).
@@ -162,16 +162,16 @@ backtest is **windowed by default** (the last 30 days), whole-history the explic
 
 :::design[The reconcile control loop, tracked in #526]
 
-## Reconcile: the desired-state control loop
+## Reconcile: the declared-value control loop
 
-Reconcile is another JetStream consumer: it projects **declared desired state** onto the things that
-drift, the system-level form of [config](/architecture/variables/)'s `reconcile: enforce` policy.
+Reconcile is another JetStream consumer: it projects **declared values** onto the things that
+drift, the system-level form of the [declared value](/architecture/variables/)'s `reconcile: enforce` policy.
 
 - **Inputs**: the desired declarations (templates, component assignments, config declared values)
   plus observed state; config changes commit in PG and CDC publishes them
   ([audit](/architecture/audit/)), so reconcile is a CDC consumer plus the current projections.
 - **Output**: the delta, asserted as **outpost config** (which tasks and commands each outpost runs,
-  derived from placements) and as **reconciled `run` actions** (desired-state commands that stay
+  derived from placements) and as **reconciled `run` actions** (declared-value commands that stay
   asserted, e.g. a codec's feedback registration).
 - **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging a
   `log_line` per run on the server's platform component, as the retention pass does

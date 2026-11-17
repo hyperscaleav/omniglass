@@ -268,47 +268,47 @@ func TestWorklistWritersReportWindow(t *testing.T) {
 	ctx, gw := f.ctx, f.gw
 	every := []string{"edge-a", "edge-b", "edge-c", "edge-d"}
 
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
 
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window merge-patch", every...)
 
 	// The same value again, or another namespace, moves no worklist.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "an unchanged report window")
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "another namespace")
 
-	if err := gw.DeleteSettingOverride(ctx, "", "platform", "collection"); err != nil {
+	if err := gw.DeleteSettingBinding(ctx, "", "platform", "collection"); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window restore", every...)
 
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
+	if err := gw.DeleteAllSettingBindings(ctx, "", "platform"); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "a reset with the window at its default")
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 20}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 20}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
+	if err := gw.DeleteAllSettingBindings(ctx, "", "platform"); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a factory reset", every...)
 
 	// Settings that no longer resolve still take the write that repairs them,
 	// and the repair moves every worklist back onto a window.
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
@@ -317,14 +317,14 @@ func TestWorklistWritersReportWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `update setting_override set doc = '{"report_seconds": "soon"}' where namespace = 'collection'`); err != nil {
+	if _, err := conn.Exec(ctx, `update setting_binding set doc = '{"report_seconds": "soon"}' where namespace = 'collection'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
 		t.Fatalf("a write beside settings that do not resolve: %v", err)
 	}
 	f.quiet(t, "another namespace beside settings that do not resolve")
-	if err := gw.DeleteSettingOverride(ctx, "", "platform", "collection"); err != nil {
+	if err := gw.DeleteSettingBinding(ctx, "", "platform", "collection"); err != nil {
 		t.Fatalf("the restore that repairs the settings: %v", err)
 	}
 	expectChanges(t, f.changes, "the restore that repairs the settings", every...)

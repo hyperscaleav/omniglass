@@ -36,7 +36,7 @@ type componentTypeBody struct {
 	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"`
 	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
 	LabelRule    string   `json:"label_rule,omitempty" doc:"The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
-	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
+	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not set its own) starts with"`
 	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 	ParentID     *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`

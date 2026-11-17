@@ -405,7 +405,7 @@
       "labelled": true
     },
     {
-      "table": "setting_override",
+      "table": "setting_binding",
       "shape": "id only",
       "labelled": false
     },
