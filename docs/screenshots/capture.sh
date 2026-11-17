@@ -71,8 +71,8 @@ sec secret create --name core-snmp --secret-type snmp-community --owner-kind pla
 # a place no shot photographs, so only the audit page moves. Just as LOUD.
 agent_token="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$LAB_TOKEN" "$LAB_IMAGE" \
   auth create-token --description "docs capture agent" --agent claude-code --ttl-days 1 --channels '["mcp"]' | jq -er .token)"
-lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$agent_token" "$LAB_IMAGE" \
-  mcp call set-component-tag --args '{"name":"wl4-c5a","key":"asset-id","value":"AV-0415"}' >/dev/null
+out="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$agent_token" "$LAB_IMAGE" \
+  mcp call set-component-tag --args '{"name":"hq.west.level-4.meeting-405.$comp.videobar-1","key":"asset-id","value":"AV-0415"}')" || { echo "$out" >&2; exit 1; }
 
 mkdir -p "$OUT" "$BASELINE"
 lab_run -v "$ROOT:/w" -w /w \
