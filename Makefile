@@ -20,6 +20,14 @@
 .DEFAULT_GOAL := all
 BUILD_ID := $(shell c=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown); \
 	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then c="$$c-dirty-$$(date -u +%Y%m%dT%H%M%SZ)"; fi; echo $$c)
+# Screenshot builds stamp the newest release tag instead of BUILD_ID: a dirty
+# build id is long and time-stamped, and the Version tile on Platform health
+# would otherwise shift every baseline with it.
+SHOTS_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo $(BUILD_ID))
+# A tag is a semver, which the lab takes for a release binary and would run by
+# image digest; point it at the local image this build just tagged instead.
+docs-shots docs-shots-check: BUILD_ID := $(SHOTS_VERSION)
+docs-shots docs-shots-check: export OMNIGLASS_LAB_IMAGE := omniglass:dev-$(SHOTS_VERSION)
 HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 all:
