@@ -392,6 +392,44 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fMessages string
+					var fResume string
+					var fRunId string
+					var fThreadId string
+					cmd := &cobra.Command{
+						Use:     "run <name>",
+						Short:   "Run omnibot on one of your conversations",
+						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, or a prompt while one waits, is a 409. A server with no model is a 503. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation run <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s:run", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("messages") {
+								body["messages"] = jsonOrString(fMessages)
+							}
+							if cmd.Flags().Changed("resume") {
+								body["resume"] = jsonOrString(fResume)
+							}
+							if cmd.Flags().Changed("runId") {
+								body["runId"] = fRunId
+							}
+							if cmd.Flags().Changed("threadId") {
+								body["threadId"] = fThreadId
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fMessages, "messages", "", "The client's view of the conversation; only its last user message is read, as the prompt")
+					cmd.Flags().StringVar(&fResume, "resume", "", "The answer to the interrupt the last run ended on")
+					cmd.Flags().StringVar(&fRunId, "runId", "", "The run's id, echoed in its events")
+					cmd.Flags().StringVar(&fThreadId, "threadId", "", "Ignored: the conversation is the thread")
+					return cmd
+				}()
+				return cmd
+			}())
 			return parent
 		}())
 		return parent

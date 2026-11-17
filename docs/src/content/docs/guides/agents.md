@@ -189,6 +189,34 @@ you see. If the run it was kept from stopped on a write it was waiting to ask yo
 your answer. `omniglass assistant conversation list`, `get` and `delete` manage them, and a conversation
 nobody touches for `assistant.conversation_days` (30 by default) is deleted.
 
+### Running omnibot on the server
+
+The server runs omnibot too, over a conversation it keeps, and streams the run as
+[AG-UI](https://docs.ag-ui.com/) events: the protocol the console, and any AG-UI client, reads. Send
+the prompt as the run's last user message:
+
+```bash
+omniglass assistant conversation create --name lobby
+omniglass assistant conversation run lobby --messages '[{"role":"user","content":"tag the meeting 405 video bar with its asset id"}]'
+```
+
+The answer is the event stream: `RUN_STARTED`, the model's text, each tool call and its result, and
+`RUN_FINISHED`. The run holds a one-day `omnibot` token of its own, revoked when the stream ends, and
+its writes are audited as `agent omnibot` acting for you, as the CLI's are. A write your agent policy
+asks about ends the run on an interrupt naming the call (`outcome.type` is `interrupt`) and keeps it
+with the conversation. Answer it with the next run:
+
+```bash
+omniglass assistant conversation run lobby --resume '[{"interruptId":"call-2","status":"resolved","payload":{"approved":true}}]'
+```
+
+`{"approved": true}` runs the call; `false`, or a `cancelled` status, declines it, and the model hears
+that you declined. A run that names a call that is not waiting, or a new prompt while one waits, is a
+409. Only you run your conversations, as yourself: an agent token or an impersonation session is
+refused. The server runs omnibot only with a model: until a live provider lands, it plays the
+recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
+that tags the meeting 405 video bar, so the commands above run there as written.
+
 ### Giving omnibot a credential
 
 omnibot can bind a credential to a device without ever seeing it. In the chat, `/secret` hands it one:

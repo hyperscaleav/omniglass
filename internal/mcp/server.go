@@ -72,7 +72,15 @@ func newServer(api http.Handler, version string) *sdk.Server {
 	for _, d := range catalog {
 		d := d
 		srv.AddTool(toolFor(d), func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			return call(ctx, api, d, req), nil
+			var raw json.RawMessage
+			if req.Params != nil {
+				raw = req.Params.Arguments
+			}
+			var authorization string
+			if req.Extra != nil && req.Extra.Header != nil {
+				authorization = req.Extra.Header.Get("Authorization")
+			}
+			return call(ctx, api, d, raw, authorization, clientName(req)), nil
 		})
 	}
 	return srv
@@ -104,7 +112,7 @@ func toolFor(d tooldef.Def) *sdk.Tool {
 // client the caller declared, so the audit row records how it arrived. The
 // response becomes the tool's result; a non-2xx status is a tool error whose
 // text is the route's problem+json.
-func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToolRequest) (result *sdk.CallToolResult) {
+func call(ctx context.Context, api http.Handler, d tooldef.Def, raw json.RawMessage, authorization, client string) (result *sdk.CallToolResult) {
 	// A tool runs off the HTTP goroutine, where net/http's own recovery does not
 	// reach: a route that panics would take down the server (and the bus it
 	// hosts). Contain it to this call's 500, as a direct call gets.
@@ -114,22 +122,16 @@ func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToo
 			result = toolError("500 Internal Server Error")
 		}
 	}()
-	var raw json.RawMessage
-	if req.Params != nil {
-		raw = req.Params.Arguments
-	}
 	dctx, release := detached(ctx)
 	defer release()
 	httpReq, err := buildRequest(dctx, d, raw)
 	if err != nil {
 		return toolError(err.Error())
 	}
-	if req.Extra != nil && req.Extra.Header != nil {
-		if a := req.Extra.Header.Get("Authorization"); a != "" {
-			httpReq.Header.Set("Authorization", a)
-		}
+	if authorization != "" {
+		httpReq.Header.Set("Authorization", authorization)
 	}
-	httpReq = httpReq.WithContext(storage.WithAuditChannel(httpReq.Context(), storage.AuditChannelMCP, clientName(req)))
+	httpReq = httpReq.WithContext(storage.WithAuditChannel(httpReq.Context(), storage.AuditChannelMCP, client))
 	rec := newRecorder()
 	api.ServeHTTP(rec, httpReq)
 	body := bytes.TrimSpace(rec.body.Bytes())

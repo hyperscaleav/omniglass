@@ -41,7 +41,11 @@ func withAgentPolicy(api http.Handler) sdk.Middleware {
 			if !ok {
 				return res, nil
 			}
-			policy, err := readAgentPolicy(ctx, api, req)
+			var authorization string
+			if extra := req.GetExtra(); extra != nil && extra.Header != nil {
+				authorization = extra.Header.Get("Authorization")
+			}
+			policy, err := readAgentPolicy(ctx, api, authorization)
 			if err != nil {
 				slog.Warn("mcp: tools listed without their agent policy", "err", err)
 				return res, nil
@@ -91,16 +95,14 @@ func markTools(list *sdk.ListToolsResult, policy agentPolicy) *sdk.ListToolsResu
 
 // readAgentPolicy is the caller's resolved agent policy, as the API answers
 // GET /auth/me/agent-policy over the MCP channel.
-func readAgentPolicy(ctx context.Context, api http.Handler, req sdk.Request) (agentPolicy, error) {
+func readAgentPolicy(ctx context.Context, api http.Handler, authorization string) (agentPolicy, error) {
 	dctx, release := detached(ctx)
 	defer release()
 	httpReq, err := http.NewRequestWithContext(storage.WithAuditChannel(dctx, storage.AuditChannelMCP, ""), http.MethodGet, apiBase+"/auth/me/agent-policy", nil)
 	if err != nil {
 		return agentPolicy{}, err
 	}
-	if extra := req.GetExtra(); extra != nil && extra.Header != nil {
-		httpReq.Header.Set("Authorization", extra.Header.Get("Authorization"))
-	}
+	httpReq.Header.Set("Authorization", authorization)
 	httpReq.Header.Set("Accept", "application/json")
 	rec := newRecorder()
 	api.ServeHTTP(rec, httpReq)

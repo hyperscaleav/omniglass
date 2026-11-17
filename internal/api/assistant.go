@@ -68,7 +68,8 @@ type appendAssistantConversationInput struct {
 	}
 }
 
-func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway, o options) {
+	registerAssistantRunRoute(api, a, gw, o)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-assistant-conversations",
 		Method:      http.MethodGet,
