@@ -103,6 +103,11 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
   `demo_until <seconds> '<code>'` retries code until it succeeds (and fails the demo if it never
   does), and `demo_hush '<code>'` runs a lookup unseen; each erases its own line, so the screen
   shows nothing of the block when `Show` resumes. A wait never costs the GIF any frames.
+- **Answer a command's own question.** A command that asks (a `[y/N]` before it runs a step) is
+  answered after a `Wait+Screen /<the question>/`, with a `Type` and an `Enter`, and still ends on
+  a plain `Wait`. The pattern has to be one that nothing typed since the last prompt matches, or
+  it could fire on the command line itself; the rules refuse the answer otherwise
+  (`scripts/demo/omnibot.tape` answers two).
 - **Read the lab's logs.** The server's and the outpost's logs are files (`/stack/logs/server.log`,
   `/stack/logs/outpost.log`; the outpost's carries its in-process simulator's lines too): grep them for
   what the API does not show, keeping to the stable part of each line.
