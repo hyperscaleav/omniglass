@@ -260,7 +260,7 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}\?edit=1/);
     const systemId = page.url().match(/systems\/([0-9a-f-]{36})/)![1];
 
-    // The outline: the campus says what it holds in the registry's words, and
+    // The outline: the campus says what it holds in the catalog's words, and
     // expanding it shows both buildings. Expansion persists per browser by
     // design, and the reveal above opened the campus, so start collapsed.
     await page.evaluate(() => localStorage.removeItem("explore-open"));

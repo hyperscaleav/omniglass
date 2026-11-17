@@ -32,7 +32,7 @@ import { entityLabel } from "../lib/entities";
 // tree holds locations only and a location's components sit directly beneath it.
 // Nothing here reads a location type's name: the hierarchy, folding, counts
 // and what may be created under a row all come from the tree and from the
-// registry's allowed_parent_types (lib/outline, lib/location_type_graph).
+// catalog's allowed_parent_types (lib/outline, lib/location_type_graph).
 //
 // What is expanded is this browser's, shared by every outline; what is
 // filtered rides the URL, so a link carries it; ?node= reveals one row (the
@@ -169,7 +169,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     ];
   });
 
-  // What may be created under a row: what the registry lets sit there, and
+  // What may be created under a row: what the catalog lets sit there, and
   // what the caller may create.
   const addOptions = (n: { typeName: string }): AddKind[] => {
     const kinds: AddKind[] = [];

@@ -24,14 +24,14 @@ import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
 import { TEMPLATES_KEY } from "../lib/templates";
 
-// The Catalog shell: a layout route wrapping every registry page in the
+// The Catalog shell: a layout route wrapping every catalog page in the
 // two-column chrome. The subrail is NAVIGATION, not a filter: each entry is a
-// link to the registry's own routed page (which renders in the right pane with
+// link to the catalog's own routed page (which renders in the right pane with
 // its real FilterBar, create button, and blades), Overview leads to /catalog,
 // and the URL stays canonical (/products, /metrics, ...). Groups, membership,
 // order, labels, gates, and count sources all come from the CATALOG_GROUPS
 // table in lib/catalog.ts, the same table the Overview cards derive from, so
-// the two surfaces can never drift. Counts ride the registries' own shared
+// the two surfaces can never drift. Counts ride the catalogs' own shared
 // list-query keys (one cache with the pages); a gated entry drops, and with it
 // its query; an emptied group drops its header; secret types keep no entry at
 // all (the standing ruling), though /secret-types still renders in the pane.
@@ -43,7 +43,7 @@ const meWith = (permissions: string[]): Me => ({ principal: { id: "u-x", kind: "
 // Rows only need a length: the subrail renders counts, never row fields.
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `row-${i}` }));
 
-// Every subrail registry's shared cache key, primed with a distinct count,
+// Every subrail catalog's shared cache key, primed with a distinct count,
 // keyed exactly as the list pages key them (a shared cache, not a parallel one).
 const PRIMED: [readonly string[], number][] = [
   [PRODUCTS_KEY, 2],
@@ -118,7 +118,7 @@ describe("CatalogShell", () => {
     expect(hrefs()).toEqual([
       "/catalog",
       "/metrics", "/properties", "/event-types",
-      "/command-types", "/rules", "/calc-rules", "/severity-levels", "/notifications", "/action-rules", "/notification-targets",
+      "/command-types", "/event-rules", "/calc-rules", "/severity-levels", "/notifications", "/action-rules", "/notification-targets",
       "/vendors", "/products", "/drivers", "/component-types", "/templates?kind=component_template",
       "/standards", "/system-types", "/templates?kind=standard_template,system_template",
       "/location-types", "/templates?kind=location_template",
@@ -147,8 +147,8 @@ describe("CatalogShell", () => {
     expect(nav().querySelector('a[href="/metrics"]')!.className).not.toContain("menu-active");
   });
 
-  it("shows live counts from the shared query keys, absent until a registry resolves", () => {
-    // An unprimed registry's fetch never settles: its count must be absent, not
+  it("shows live counts from the shared query keys, absent until a catalog resolves", () => {
+    // An unprimed catalog's fetch never settles: its count must be absent, not
     // an invented zero, while the primed neighbors show theirs.
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
     mount(owner, { skip: [DRIVERS_KEY] });
@@ -169,7 +169,7 @@ describe("CatalogShell", () => {
     expect(a.textContent).toContain("2");
     expect(a.textContent).not.toContain("soon");
     // Rules went live (#921): a plain link with its count, no soon treatment.
-    const rules = nav().querySelector(`a[href="/rules"]`)!;
+    const rules = nav().querySelector(`a[href="/event-rules"]`)!;
     expect(rules.textContent).toContain("3");
     expect(rules.textContent).not.toContain("soon");
   });
@@ -204,13 +204,13 @@ describe("CatalogShell", () => {
 
   it("drops a gated entry (and never creates its query) and drops an emptied group's header", () => {
     const { qc } = mount(meWith(["metric_type:read"]), { skip: [TAGS_KEY] });
-    // Only the ungated Overview and the one readable registry keep their links
+    // Only the ungated Overview and the one readable catalog keep their links
     // (Rules, Notifications and the Templates slots are gated on their reads).
     expect(hrefs()).toEqual(["/catalog", "/metrics"]);
     // Every other group's entries are gated away, so their headers drop too.
     const headers = [...nav().querySelectorAll(".menu-title")].map((h) => h.textContent);
     expect(headers).toEqual(["Telemetry"]);
-    // The structural fact: the gated registry's count query was never created,
+    // The structural fact: the gated catalog's count query was never created,
     // so no fetch can ever have been on its path.
     expect(qc.getQueryCache().find({ queryKey: [...TAGS_KEY] })).toBeUndefined();
   });

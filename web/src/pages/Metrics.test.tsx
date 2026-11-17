@@ -8,7 +8,7 @@ import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Metrics page is a single FlatList over the /metric-types catalog: the
-// numeric lane of the signal registry, the twin of the Properties page. A metric
+// numeric lane of the signal catalog, the twin of the Properties page. A metric
 // type carries the numeric facts the property lane never holds (unit, precision)
 // and its data type is int|float. Official rows are read-only;
 // custom rows are writable only when the caller holds metric_type:*. Data is

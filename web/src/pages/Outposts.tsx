@@ -108,7 +108,7 @@ export default function Outposts() {
 
   // The outpost blade closes over setEnrollResult so its Enroll action can hand the
   // minted token to the page-level show-once modal (the blade body only receives an
-  // id, so the callback rides in on the registry entry).
+  // id, so the callback rides in on the catalog entry).
   const outpostBlade: BladeDef = {
     Title: (p) => <OutpostBladeTitle name={p.id} />,
     Body: (p) => <OutpostBladeBody name={p.id} onEnrolled={setEnrollResult} />,

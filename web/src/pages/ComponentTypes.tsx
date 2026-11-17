@@ -23,15 +23,15 @@ import {
   restoreComponentType,
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
-import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, catalogLock, catalogOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Component Types (Catalog > Components: Types): the device-class genus
-// registry (ADR-0085, the component_type registry's partial reversal of
+// catalog (ADR-0085, the component_type catalog's partial reversal of
 // ADR-0047). It classifies the PRODUCT (`product.component_type_id`), so a
-// component's shape comes through the product it is; this registry is not a
+// component's shape comes through the product it is; this catalog is not a
 // second classifier on the component. It nests by parent_id (mic over
 // wireless-mic, ceiling-mic, boundary-mic), on the same official/custom
 // pattern as Location Types, and every identity fact (stem, icon, abbrev,
@@ -39,16 +39,16 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // no reparent leg: a custom type's placement is fixed at create, so the edit
 // blade revises a node's own facts only. A ROOT type must state a stem of its
 // own, since there is no ancestor to inherit one from, and the create form says
-// so in the same words the system registry's does (#744): one rule refused by
+// so in the same words the system catalog's does (#744): one rule refused by
 // the gateway on both tiers, one sentence.
 
-// Origin is three-state on this registry, the first to adopt the fork (#655,
+// Origin is three-state on this catalog, the first to adopt the fork (#655,
 // ADR-0095): a row this release ships, a row the operator made, or a shipped
 // row the operator has overridden. The third is the one that has to read
 // unambiguously, because it is the only state where what an operator sees is
 // not what the release ships.
 function originBadge(row: { official: boolean; forked?: boolean }): JSX.Element {
-  switch (registryOrigin(row)) {
+  switch (catalogOrigin(row)) {
     case "yours":
       return <span class="badge badge-outline badge-sm">custom</span>;
     case "overridden":
@@ -92,7 +92,7 @@ export default function ComponentTypes() {
   const types = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
 
   // Tree order (parent immediately followed by its children, each level
-  // alphabetical), not a flat alphabetical list: the registry's nesting is
+  // alphabetical), not a flat alphabetical list: the catalog's nesting is
   // the point of this page, so the row order teaches it.
   const treeRows = createMemo(() => flattenComponentTypeTree(componentTypeTree(types.data ?? [])));
   const columns: FlatColumn<ComponentType & { depth: number }>[] = [
@@ -111,7 +111,7 @@ export default function ComponentTypes() {
     { key: "stem", label: "Stem", width: "110px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
     { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "box"} /> },
-    { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
+    { key: "official", label: "Origin", width: "110px", sortVal: (r) => catalogOrigin(r), cell: (r) => originBadge(r) },
   ];
 
   const canCreate = () => can(me.data, "component_type", "create");
@@ -125,7 +125,7 @@ export default function ComponentTypes() {
         error: () => types.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (r) => registryOrigin(r), values: () => ["shipped", "yours", "overridden"] },
+          { key: "official", type: "string", hint: "exact", get: (r) => catalogOrigin(r), values: () => ["shipped", "yours", "overridden"] },
         ],
         filterPlaceholder: "filter component types by name…",
         columns,
@@ -148,7 +148,7 @@ export default function ComponentTypes() {
   );
 }
 
-// componentTypeBlade renders one registry row on the shared blade stack. A
+// componentTypeBlade renders one catalog row on the shared blade stack. A
 // custom row carries Edit + Delete; a shipped row carries Edit too, because an
 // edit forks it rather than writing it, and its destructive action is Restore
 // (discard the fork), never Delete.
@@ -276,7 +276,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
         ? { label: "Delete", tone: "danger" as const, onClick: removeType }
         : undefined;
     },
-    locked: () => registryLock(row(), me.data, "component_type", { forkable: true }),
+    locked: () => catalogLock(row(), me.data, "component_type", { forkable: true }),
   });
 
   return (

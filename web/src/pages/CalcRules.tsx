@@ -19,7 +19,7 @@ import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useMe, canFleet, fleetView } from "../lib/auth";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { PROPERTIES_KEY, PROPERTY_DATA_TYPES, type PropertyDataType, type PropertyRow, createProperty, listProperties } from "../lib/properties";
@@ -58,8 +58,8 @@ import {
 } from "../lib/calc_rules";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
-// calc rule registry, a sibling of Rules and Severity in the catalog's Actions
-// group, as each registry there is its own page. A calc rule derives one
+// calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
+// group, as each catalog there is its own page. A calc rule derives one
 // output key on each owner it selects (a component, or a system from its
 // role-bound members) by an expression over its inputs, each bound by an
 // alias as the list of its current values; the server's tick computes it and
@@ -467,7 +467,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
       const r = row();
       if (!r) return null;
       if (r.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
+      return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });
 

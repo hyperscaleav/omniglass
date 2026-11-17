@@ -255,7 +255,7 @@ describe("Rules page", () => {
     // (fixtures are stamped at load, so the age is matched, not pinned)
     expect(within(b).getByTestId("rule-judged").textContent).toMatch(/^1\ds ago$/);
     expect(within(b).getByText("Every component")).toBeTruthy();
-    // The level it raises at links to the severity registry beside the rules.
+    // The level it raises at links to the severity catalog beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
   });
 
@@ -347,7 +347,7 @@ describe("Rules page", () => {
     expect(editBtn.disabled).toBe(true);
   });
 
-  it("lists every rule to a caller scoped to one location, like a registry, but offers it no write", () => {
+  it("lists every rule to a caller scoped to one location, like a catalog, but offers it no write", () => {
     mount(scoped);
     expect(screen.getByText("Too hot")).toBeTruthy();
     expect(screen.queryByText(/fleet-wide config/)).toBeNull();
@@ -634,7 +634,7 @@ describe("Rules page", () => {
     return writes;
   }
 
-  it("marks a selector entry the registries no longer have as deleted, with why", async () => {
+  it("marks a selector entry the catalogs no longer have as deleted, with why", async () => {
     await editStale();
     const selected = screen.getByLabelText("Selected");
     const chips = within(selected).getAllByText("deleted");
@@ -706,7 +706,7 @@ describe("Rules page", () => {
     expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
   });
 
-  it("authors an informational rule: severity None, the event type pickers from the registry, no clear event", async () => {
+  it("authors an informational rule: severity None, the event type pickers from the catalog, no clear event", async () => {
     const writes = catchWrites();
     mount();
     fireEvent.click(screen.getByText("New rule"));
@@ -753,7 +753,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names, so an event row can point at the rule that wrote it", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       const b = await blade();
@@ -764,7 +764,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
-    window.history.pushState({}, "", `/rules?rule=${reach.id}`);
+    window.history.pushState({}, "", `/event-rules?rule=${reach.id}`);
     try {
       mount();
       const b = await blade();
@@ -778,12 +778,12 @@ describe("Rules page", () => {
   });
 
   it("follows the rule a link names as it changes (back and forward), and lets go of it when the blade closes", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       let b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
-      window.history.pushState({}, "", "/rules?rule=too-hot");
+      window.history.pushState({}, "", "/event-rules?rule=too-hot");
       window.dispatchEvent(new PopStateEvent("popstate"));
       await waitFor(() => expect(within(asides()[asides().length - 1] as HTMLElement).getByText("too-hot")).toBeTruthy());
       b = asides()[asides().length - 1] as HTMLElement;
@@ -795,7 +795,7 @@ describe("Rules page", () => {
   });
 
   it("says a linked rule is not found only once the list has loaded, and reads no state for it", async () => {
-    window.history.pushState({}, "", "/rules?rule=no-such-rule");
+    window.history.pushState({}, "", "/event-rules?rule=no-such-rule");
     try {
       let release!: () => void;
       const gate = new Promise<void>((r) => { release = r; });

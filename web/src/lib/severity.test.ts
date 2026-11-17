@@ -16,8 +16,8 @@ import {
 import { sortAlarms } from "./alarms";
 import { MAJOR_LEVEL, SEEDED_LEVELS } from "./testseverity";
 
-// The severity registry's pure core (#917): a level name in, its label, badge
-// class, rank and outage flag out, and alarms ordered by the registry's rank.
+// The severity catalog's pure core (#917): a level name in, its label, badge
+// class, rank and outage flag out, and alarms ordered by the catalog's rank.
 describe("severityScale", () => {
   const scale = severityScale(SEEDED_LEVELS);
 
@@ -70,7 +70,7 @@ describe("severity badge classes", () => {
   });
 });
 
-describe("sorting by the registry's rank", () => {
+describe("sorting by the catalog's rank", () => {
   const at = (severity: string, raised_at: string) => ({ severity, raised_at });
 
   it("puts the worst first, the newest first within a level, and unknown names last", () => {

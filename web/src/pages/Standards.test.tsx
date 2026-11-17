@@ -34,7 +34,7 @@ const catalog: PropertyRow[] = [
 
 // The roles the custom standard declares (RoleEditor keys the query on the
 // standard's uuid, which is what the page passes it), plus the component_type
-// and product registries its typed-slot pickers read (#626).
+// and product catalogs its typed-slot pickers read (#626).
 const roles: DeclaredRole[] = [{ name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
 const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] }];
 const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];

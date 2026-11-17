@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
-// The component_type registry data layer: the device-class genus a product is
+// The component_type catalog data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
 // above product, not beside component). It nests by parent_id/parent name
 // (mic over wireless-mic, ceiling-mic, boundary-mic), and each identity fact
@@ -123,21 +123,21 @@ export async function restoreComponentType(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// componentTypeByName indexes the flat registry by name, the join key every
+// componentTypeByName indexes the flat catalog by name, the join key every
 // reference (product.component_type, a node's own parent) resolves through.
 export function componentTypeByName(types: ComponentType[]): Map<string, ComponentType> {
   return new Map(types.map((t) => [t.name, t] as const));
 }
 
 // resolveComponentTypeIcon reads the icon the SERVER resolved for a named type,
-// falling back to "box" (generic-device's icon) for a name the registry does not
+// falling back to "box" (generic-device's icon) for a name the catalog does not
 // contain, or a chain that sets no icon anywhere.
 //
 // It no longer walks (#695). The climb was a second implementation of
 // resolveTypeFacts written in TypeScript, and the failure it could produce was
 // a wrong glyph on a type whose chain the two disagreed about. The fallback
-// stays here because it is a rendering choice (the system registry falls back
-// to a different glyph) rather than a fact about the registry.
+// stays here because it is a rendering choice (the system catalog falls back
+// to a different glyph) rather than a fact about the catalog.
 export function resolveComponentTypeIcon(typeName: string | undefined, byName: Map<string, ComponentType>): string {
   const t = typeName ? byName.get(typeName) : undefined;
   return t?.resolved_icon || "box";
@@ -145,9 +145,9 @@ export function resolveComponentTypeIcon(typeName: string | undefined, byName: M
 
 export type ComponentTypeNode = ComponentType & { children: ComponentTypeNode[]; depth: number };
 
-// componentTypeTree groups the flat registry into a forest by parent_id, for the admin
+// componentTypeTree groups the flat catalog into a forest by parent_id, for the admin
 // page's rows and the classification picker's indented option list. It does
-// not sort: the registry is served in label order (#757), and grouping keeps
+// not sort: the catalog is served in label order (#757), and grouping keeps
 // the order each level was received in.
 export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
   const byId = new Map<string, ComponentTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));

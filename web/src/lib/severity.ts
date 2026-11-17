@@ -5,7 +5,7 @@ import type { CreateSeverityLevelInputBody, SeverityLevelBody, UpdateSeverityLev
 import { entityLabel } from "./entities";
 import { entityNameError } from "./names";
 
-// The severity registry (#917): how bad an alarm is, as a list of named levels the
+// The severity catalog (#917): how bad an alarm is, as a list of named levels the
 // server owns rather than a fixed set the console hardcodes. Each level carries a
 // rank (higher is worse), a color token, and whether an active alarm at it puts
 // its component in outage. Every console surface that colors, orders or explains
@@ -42,7 +42,7 @@ export const SEVERITY_BADGE: Record<SeverityColor, string> = {
   darkred: "badge-disaster",
 };
 
-// The look for a name the registry does not (yet) know: while the levels load, or
+// The look for a name the catalog does not (yet) know: while the levels load, or
 // for a level deleted since the alarm was raised. The raw name in a neutral chip,
 // never a throw and never a guessed hue.
 const NEUTRAL = "badge-ghost";
@@ -51,7 +51,7 @@ export type SeverityLook = {
   name: string;
   label: string;
   badge: string;
-  // null when the registry does not know the name.
+  // null when the catalog does not know the name.
   rank: number | null;
   outage: boolean;
   known: boolean;
@@ -62,7 +62,7 @@ export function severityBadge(color: string | undefined): string {
 }
 
 export type SeverityScale = {
-  // Least to most severe, the registry's own order.
+  // Least to most severe, the catalog's own order.
   levels: SeverityLevel[];
   look: (name: string) => SeverityLook;
   // Higher is worse; -Infinity for an unknown name, so it sorts last.
@@ -98,7 +98,7 @@ export function compareSeverity(levels?: SeverityLevel[] | null): (a: string, b:
   };
 }
 
-// useSeverity reads the registry once per session-ish (levels change rarely and
+// useSeverity reads the catalog once per session-ish (levels change rarely and
 // only by an admin) and hands back the scale. Before the read lands the scale is
 // empty, so every name falls back to the neutral look.
 export function useSeverity(): () => SeverityScale {

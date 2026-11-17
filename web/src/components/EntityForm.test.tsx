@@ -111,7 +111,7 @@ describe("the one form, read", () => {
     const form = await screen.findByTestId("entity-form");
     const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags)$/).map((e) => e.textContent);
     expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
-    // The registry's labels, never the handles (#870): the type and the
+    // The catalog's labels, never the handles (#870): the type and the
     // standard read as an operator names them.
     expect(within(form).getByText("Huddle")).toBeTruthy();
     expect(within(form).getByText("Huddle Room Standard")).toBeTruthy();
@@ -124,7 +124,7 @@ describe("the one form, read", () => {
 });
 
 describe("the one form reads labels, not handles (#870)", () => {
-  it("names a location's type by its registry label", async () => {
+  it("names a location's type by its catalog label", async () => {
     mount("location", uuidFor("ef-room"));
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Room")).toBeTruthy();

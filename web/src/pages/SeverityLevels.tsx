@@ -41,15 +41,15 @@ import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 
-// Severity levels (Catalog > Actions > Severity, #921): the ranked registry an
+// Severity levels (Catalog > Actions > Severity, #921): the ranked catalog an
 // event rule raises at (#917), beside the rules. Each row is a level's rank, its
 // label in its own color (the chip every alarm at it wears), whether an active
 // alarm at it takes its component out, and its origin, worst first, the order an
 // operator triages in. An operator level is created, renamed, relabelled,
 // recolored, re-ranked and deleted here in a Drawer (#930). Reads are
-// registry-shaped (any grant), but a level's rank moves health fleet-wide, so
+// catalog-shaped (any grant), but a level's rank moves health fleet-wide, so
 // every write is judged on the caller's all-scope permissions (fleetView), like
 // an event rule's; official levels are read-only. The form teaches the rank: where the typed
 // rank sits among the levels, and whether its alarms take a component out.
@@ -203,7 +203,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
       const l = row();
       if (!l) return null;
       if (l.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(l, fleetView(me.data), "severity_level");
+      return canUpdate() ? null : catalogLock(l, fleetView(me.data), "severity_level");
     },
   });
 

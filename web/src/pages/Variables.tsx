@@ -260,7 +260,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
-  // take the name over by hand (createIdentity, the registry-page affordance).
+  // take the name over by hand (createIdentity, the catalog-page affordance).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [valueType, setValueType] = createSignal<ValueType>("string");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");

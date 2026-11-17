@@ -6,7 +6,7 @@ import { TAGS_KEY, type Tag } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Tags page is a single FlatList over the /tags key registry. Data is seeded
+// The Tags page is a single FlatList over the /tags key catalog. Data is seeded
 // into the query cache so no server is needed.
 //
 // The identity column is the thing worth pinning here. A tag gained a label in

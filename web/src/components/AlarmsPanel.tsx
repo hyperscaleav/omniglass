@@ -47,7 +47,7 @@ import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 // would put a triage act behind the guard for a different kind of act.
 
 //
-// Severity is the registry's (#917): the raise form offers its levels, least to
+// Severity is the catalog's (#917): the raise form offers its levels, least to
 // most severe, each saying what it does to this component, and the badges render
 // each level's label and color through SeverityBadge.
 
@@ -69,7 +69,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  // The chosen level, by name. Empty means "the default": the registry's least
+  // The chosen level, by name. Empty means "the default": the catalog's least
   // severe level, so a raise nobody tuned is the mildest one, never an outage.
   const [chosen, setChosen] = createSignal("");
   const severity = () => chosen() || scale().levels[0]?.name || "";

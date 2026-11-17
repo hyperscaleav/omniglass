@@ -10,7 +10,7 @@ import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // System Types (Catalog > Systems: Types): the coarse space taxonomy
 // (ADR-0096), on the same official/custom FlatList pattern as Component Types
-// and tree-shaped by parent_id. The registry is NOT the standard: the type says
+// and tree-shaped by parent_id. The catalog is NOT the standard: the type says
 // what kind of space this is, the standard says which blueprint it is built to.
 // Every identity fact (stem, abbrev, icon) inherits down the tree unless a node
 // overrides it, and there is no reparent leg, so a custom type's placement is
@@ -105,7 +105,7 @@ describe("SystemTypes page", () => {
     expect(boardRow.textContent).not.toContain("layers");
   });
 
-  // #743, the system registry's half: the same defect, the same fix, the same
+  // #743, the system catalog's half: the same defect, the same fix, the same
   // vocabulary. The strings are the SERVER's, seeded so that a list climbing the
   // chain in TypeScript would print `room`'s real stem and fail here.
   it("shows the value an inheriting row takes, in the list, rather than an em dash", () => {
@@ -192,7 +192,7 @@ describe("SystemTypes page", () => {
     expect(sent).toMatchObject({ name: "lecture-hall", label: "Lecture Hall", parent_id: "room" });
   });
 
-  // The create form's twin of the component registry's, and it carries one
+  // The create form's twin of the component catalog's, and it carries one
   // thing more: a ROOT type must state a stem, because there is no ancestor to
   // take one from (`ErrRootSystemTypeNeedsStem` at the gateway). #742 removed
   // the blade hint's present-tense sentence, which the mark replaced; neither
@@ -266,7 +266,7 @@ describe("SystemTypes page", () => {
     expect(sent).toMatchObject({ icon: "" });
   });
 
-  // #716's clearing move on this registry: a node that HAS its own fact edited
+  // #716's clearing move on this catalog: a node that HAS its own fact edited
   // back to inheriting its parent's. Lab carries a stem and an abbrev, so
   // emptying both boxes has to reach the server as the sentinel on each.
   it("sends the sentinel for a fact the operator cleared back to inheriting", async () => {
@@ -295,7 +295,7 @@ describe("SystemTypes page", () => {
     expect(sent).toMatchObject({ stem: "", abbrev: "" });
   });
 
-  // #716's console half on the system registry: the same field, the same
+  // #716's console half on the system catalog: the same field, the same
   // vocabulary, the same served answers. Lab states a stem and an abbrev and no
   // icon, so one field is inheriting and two are not, on one blade.
   it("shows what an inherited fact inherits, and names the ancestor it came from", async () => {

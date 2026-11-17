@@ -22,8 +22,8 @@ export type NavChild = {
   // so the sidebar hides the tab from exactly whoever the server would 403.
   perm?: string;
   // The section this entry sits under inside its group. A section is named for
-  // the fleet noun it serves; the entry keeps the registry's own word (and where
-  // the registry's only word is "type", the entry is Types). The sidebar renders
+  // the fleet noun it serves; the entry keeps the catalog's own word (and where
+  // the catalog's only word is "type", the entry is Types). The sidebar renders
   // a section header as a non-folding label before each run of children sharing a
   // section, never as a collapsible fold; filterNav still judges each entry on
   // its own gate, so a section whose entries are all hidden loses its header too.
@@ -70,7 +70,7 @@ export const navItems: NavItem[] = [
   // the old fleet group dissolved into the entry above, whose outline lists
   // every location, system and component, and the old index URLs redirect
   // there. Their detail view routes, gates, and top-bar identities
-  // survive through OFF_RAIL below, the same move the catalog registries made
+  // survive through OFF_RAIL below, the same move the catalogs made
   // (#608). Outposts is infrastructure, not part of the fleet; setting one up is
   // administration, so its door is under Admin below (#1767).
   // Simulation (#890): the simulated fleet a simulator beside an outpost serves,
@@ -90,14 +90,14 @@ export const navItems: NavItem[] = [
     ],
   },
   // Catalog is a single live entry opening the catalog area: a layout shell
-  // (CatalogShell) whose subrail navigates between the registries' own routed
+  // (CatalogShell) whose subrail navigates between the catalogs' own routed
   // pages, with the /catalog Overview as its landing. Ungated like Home: the
   // subrail and the Overview permission-filter their entries (and count queries)
   // with the same can() this rail uses, so a floor viewer opens it and sees
-  // exactly the registries it may read, while each registry page keeps its own
-  // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
+  // exactly the catalogs it may read, while each catalog page keeps its own
+  // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
-  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
@@ -152,7 +152,7 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 
 // Off-rail pages: routed surfaces with no rail entry of their own. The Catalog
 // rail collapsed to the single /catalog entry (the shell's subrail navigates
-// the registries now), but every registry keeps its own routed page (where the
+// the catalogs now), but every catalog keeps its own routed page (where the
 // create and edit surfaces live), its identity in the top bar, and its
 // permission gate in the route guard, all declared here.
 // /templates set the precedent when it left the rail (#608). Each entry's
@@ -170,23 +170,23 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
-  { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
+  { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus catalog: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
-  { path: "/system-types", label: "System types", resource: "system_type", hint: "The coarse space registry: what kind of space a system is (a boardroom, a classroom, a video wall), each carrying the icon, stem, and abbreviation its systems inherit." },
-  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The location classifier registry: the shipped types and your own, and where each may sit." },
+  { path: "/system-types", label: "System types", resource: "system_type", hint: "The coarse space catalog: what kind of space a system is (a boardroom, a classroom, a video wall), each carrying the icon, stem, and abbreviation its systems inherit." },
+  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The location classifier catalog: the shipped types and your own, and where each may sit." },
   { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },
   { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
   { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
   { path: "/event-types", label: "Events", resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by." },
   { path: "/command-types", label: "Commands", resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window." },
   { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the fleet." },
-  { path: "/rules", label: "Rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
+  { path: "/event-rules", label: "Event rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
-  { path: "/severity-levels", label: "Severity", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
+  { path: "/severity-levels", label: "Severity levels", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
-  { path: "/notification-targets", label: "Targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a group or a person. Admin-only." },
+  { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a group or a person. Admin-only." },
   // The template catalog (#1329), live inside the catalog shell: the
   // Components, Systems and Locations groups' Templates slots open it filtered.
   { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of locations from one, then own what you get." },

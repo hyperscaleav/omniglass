@@ -304,9 +304,9 @@ describe("AlarmsPanel", () => {
     expect(within(group).getByText(/never acknowledged/)).toBeTruthy();
   });
 
-  // Severity is the registry's (#917): the form lists its levels least to most
+  // Severity is the catalog's (#917): the form lists its levels least to most
   // severe, shows each label with what it does, and sends the name.
-  it("offers the registry's levels, labelled, least to most severe", () => {
+  it("offers the catalog's levels, labelled, least to most severe", () => {
     const { getByLabelText } = mount();
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
@@ -332,7 +332,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text()).severity).toBe("info");
   });
 
-  it("offers, renders and sorts an operator-defined level by the registry alone", async () => {
+  it("offers, renders and sorts an operator-defined level by the catalog alone", async () => {
     let post: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

@@ -23,7 +23,7 @@ import {
   deleteStandard,
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -38,7 +38,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // the Edit / Delete pair greys, and the contract is read-only.
 //
 // A standard lives here rather than as a Types tab because it is no longer a bare
-// classifier registry row: it carries a contract and its own authorization
+// classifier catalog row: it carries a contract and its own authorization
 // resource (standard:*), exactly like a product.
 
 function officialBadge(official: boolean): JSX.Element {
@@ -173,7 +173,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "standard", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeStandard }
         : undefined,
-    locked: () => registryLock(row(), me.data, "standard"),
+    locked: () => catalogLock(row(), me.data, "standard"),
   });
 
   return (
@@ -286,7 +286,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
   );
 }
 
-// ParentStandardSelect: the variant-parent picker over the standard registry, with
+// ParentStandardSelect: the variant-parent picker over the standard catalog, with
 // a "None" option. `exclude` drops the standard being edited, so a row cannot be
 // made a variant of itself.
 function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v: string) => void }): JSX.Element {
@@ -294,7 +294,7 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
   const options = createMemo(() =>
     (standards.data ?? []).filter((s) => s.name !== p.exclude),
   );
-  // Bound through the shared binder, not value=: the registry can answer after
+  // Bound through the shared binder, not value=: the catalog can answer after
   // the edit face is on screen, and a <select> keeps no value it has no option
   // for (lib/selectvalue.ts, #772).
   return (

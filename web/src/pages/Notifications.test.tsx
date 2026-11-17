@@ -9,7 +9,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Notifications page (#618) is a FlatList over the /notification-types
-// registry; official types are read-only, an operator's are editable by a
+// catalog; official types are read-only, an operator's are editable by a
 // caller holding notification_type:update, and the blade previews a type
 // against a real alarm through the server, drafts included while editing.
 const at = "2026-10-28T00:00:00Z";

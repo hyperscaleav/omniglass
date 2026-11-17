@@ -17,7 +17,7 @@ import { systemsAtLocation } from "../lib/detail";
 // LocationCard (#872): a location as context. Systems are what Omniglass monitors;
 // locations are folders and metadata about where, so a detail view shows its
 // location as one compact card above the system rather than as a view of its
-// own. It names the location's type in the registry's words and its tags, and
+// own. It names the location's type in the catalog's words and its tags, and
 // opens the location's own panel (its form, its Edit) without leaving the view.
 //
 // `showName` is off where the view is already titled by the location (a sole

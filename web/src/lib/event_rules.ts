@@ -8,10 +8,10 @@ import { entityNameError } from "./names";
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
 // /event-rules plus the pure core the Rules page reads a rule through. A rule
 // reads one sample key (a property or a metric, whose lane the server derives
-// from the registries), opens an alarm at its severity when a sample meets its
+// from the catalogs), opens an alarm at its severity when a sample meets its
 // fire criteria for the fire sustain, and clears it on its clear criteria (or,
 // absent one, the opposite of the fire criteria) held for the clear sustain.
-// Rules read like a registry: any rule:read lists them all, with live counts
+// Rules read like a catalog: any rule:read lists them all, with live counts
 // over the components the caller may read; writing one takes an all-scope
 // grant. Official rules ship with the platform and are read-only.
 //
@@ -147,7 +147,7 @@ export function criteriaErrorWords(e: NonNullable<EventRule["criteria_error"]>):
 }
 
 // criteriaPhrase is the value half of a criterion: "down", "anything but up",
-// "above 40". A metric's unit rides after its number when the registry names
+// "above 40". A metric's unit rides after its number when the catalog names
 // one; an expression with no short form reads as itself.
 export function criteriaPhrase(c: RuleCriteria, lane: RuleLane, unit?: string): string {
   const sf = shortForm(c);
@@ -219,7 +219,7 @@ export type RuleDraft = {
 
 // defaultSeverity is the most severe level that does NOT take its component
 // out: a new rule degrades until its author decides it is an outage. Judged on
-// the registry's own rank and outage flag, never on a level's name.
+// the catalog's own rank and outage flag, never on a level's name.
 export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
   const sorted = [...(levels ?? [])].sort((a, b) => a.rank - b.rank);
   const degrading = sorted.filter((l) => !l.outage);
@@ -228,7 +228,7 @@ export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
 
 // The official generic event types a rule writes when it needs no semantic
 // type of its own (#948): a new rule starts on them until the form offers the
-// registry (#951).
+// catalog (#951).
 export const GENERIC_FIRE_EVENT_TYPE = "condition-started";
 export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
 

@@ -148,7 +148,7 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
 }
 
 // What a location holds, in the outline's words: the locations directly beneath it
-// counted by their type's registry label ("2 buildings, 1 floor"), or Empty.
+// counted by their type's catalog label ("2 buildings, 1 floor"), or Empty.
 export function contentsOf(view: FleetView, locationId: string, types: { name: string; label?: string }[]): string {
   const counts = new Map<string, number>();
   for (const c of childrenIndex(view).get(locationId) ?? []) counts.set(c.location_type, (counts.get(c.location_type) ?? 0) + 1);

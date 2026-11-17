@@ -6,7 +6,7 @@ import { uuidFor } from "./testids";
 // root.
 // Ids are uuids post-ADR-0062, so fixtures mint them from a handle rather than
 // putting the handle in the id slot: a fixture that fakes the shape lets a real
-// join break ship green (registry-fixture-guard).
+// join break ship green (catalog-fixture-guard).
 const loc = (handle: string, name: string, type: string, parent?: string) => ({
   id: uuidFor(handle),
   name,

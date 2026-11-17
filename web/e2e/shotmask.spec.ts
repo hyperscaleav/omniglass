@@ -352,8 +352,8 @@ test.describe("docs screenshot masks", () => {
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
-  // CatalogShell.tsx's subrail: each registry's entry is a label and, right-aligned
-  // at the end of the row, the live count of the registry's rows. The rail's width
+  // CatalogShell.tsx's subrail: each catalog's entry is a label and, right-aligned
+  // at the end of the row, the live count of the catalog's rows. The rail's width
   // is fixed, so the count's RIGHT edge holds still and its left edge moves with
   // its digits, which is what a declared box anchored at the top-left cannot
   // hold (#1482). A release that seeds one more driver or type moves a digit on

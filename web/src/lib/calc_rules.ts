@@ -8,7 +8,7 @@ import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 // a rule through. A calc rule derives one output key on each owner it selects
 // (each component, or each system from its role-bound members) by an
 // expression over its inputs, each bound by its alias as the list of its
-// current values. Rules read like a registry:
+// current values. Rules read like a catalog:
 // any rule:read lists them all, with live counts over the owners the caller
 // may read; writing one takes an all-scope grant.
 //

@@ -19,12 +19,12 @@ export type Command = { label: string; path: string; group?: string; section?: s
 // one the rail shows). The rail half runs through nav.ts's filterNav, the very
 // function that hides a sidebar button. The catalog half runs through
 // catalog.ts's visibleGroups, the very function the shell's subrail and the
-// Overview cards render from: the registries left the rail for that subrail
+// Overview cards render from: the catalogs left the rail for that subrail
 // (#625), and reading them from CATALOG_GROUPS is what keeps them findable by
 // name here without a second membership list to drift (#628).
 //
-// A registry wears its catalog group as a section, so the group tag reads
-// `Catalog · Telemetry` and a lane name finds its registries. A pathless soon
+// A catalog wears its catalog group as a section, so the group tag reads
+// `Catalog · Telemetry` and a lane name finds its catalogs. A pathless soon
 // slot (the Templates reservations) is no destination and is left out; a routed
 // soon slot (Rules, Notifications) jumps to its stub, exactly as the rail's own
 // unbuilt sections do.

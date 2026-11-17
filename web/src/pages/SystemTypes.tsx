@@ -22,7 +22,7 @@ import {
   deleteSystemType,
 } from "../lib/system_types";
 import { useMe, can } from "../lib/auth";
-import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -59,7 +59,7 @@ function NameCell(p: { row: SystemType & { depth: number } }): JSX.Element {
 }
 
 // The Icon cell resolves through the same InheritedCell the other two inherited
-// facts use, for the reason the component registry's copy of it records: it has
+// facts use, for the reason the component catalog's copy of it records: it has
 // shown the server's resolved glyph since #695 without saying where the glyph
 // came from, and that is the treatment the other two now match.
 function IconCell(p: { row: SystemType; resolvedIcon: string }): JSX.Element {
@@ -77,7 +77,7 @@ export default function SystemTypes() {
   const types = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
 
   // Tree order (parent immediately followed by its children, each level
-  // alphabetical), not a flat alphabetical list: the registry's nesting is the
+  // alphabetical), not a flat alphabetical list: the catalog's nesting is the
   // point of this page, so the row order teaches it.
   const treeRows = createMemo(() => flattenSystemTypeTree(systemTypeTree(types.data ?? [])));
 
@@ -90,7 +90,7 @@ export default function SystemTypes() {
     // three facts inherit along.
     { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
     // Stem and Abbrev show what the row TAKES when it states nothing, and show
-    // it undifferentiated (#743), the same treatment the component registry
+    // it undifferentiated (#743), the same treatment the component catalog
     // gives the same three facts. Provenance is the blade's answer.
     { key: "stem", label: "Stem", width: "120px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
     { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
@@ -132,7 +132,7 @@ export default function SystemTypes() {
   );
 }
 
-// systemTypeBlade renders one registry row on the shared blade stack. An
+// systemTypeBlade renders one catalog row on the shared blade stack. An
 // official row is read-only; a custom row carries Edit + Delete.
 export const systemTypeBlade: BladeDef = {
   Title: (p) => <SystemTypeBladeTitle id={p.id} />,
@@ -224,7 +224,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "system_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeType }
         : undefined,
-    locked: () => registryLock(row(), me.data, "system_type"),
+    locked: () => catalogLock(row(), me.data, "system_type"),
   });
 
   return (
@@ -249,7 +249,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
             onInput={setLabel}
           />
           {/*
-            The same three inherited facts the component registry's blade shows,
+            The same three inherited facts the component catalog's blade shows,
             through the same field (#716): the placeholder carries the value this
             type would take with the box empty, the mark beside the label names
             the ancestor it comes from, and both are the server's answers off the

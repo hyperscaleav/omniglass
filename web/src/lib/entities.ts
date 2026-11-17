@@ -44,7 +44,7 @@ export type IdentityBinding = keyof typeof IDENTITY_LABELS;
 // it in one expression rather than growing a seventh copy of the rule.
 //
 // label_generated is optional because only component, system and location
-// carry it. Every catalog registry row (a product, a vendor, a role) has a label
+// carry it. Every catalog row (a product, a vendor, a role) has a label
 // no rule renders, so its absence must read as "the operator owns it".
 export interface Labelled {
   name: string;
@@ -62,7 +62,7 @@ export function entityLabel(e: Labelled): string {
 // byLabel is how a list of labelled rows is ordered: alphabetically by the label
 // an operator reads, with UNLABELLED rows last and the name breaking ties.
 //
-// The server's order is the order (#757). A registry list the API serves is
+// The server's order is the order (#757). A catalog list the API serves is
 // ordered by the SQL half of this rule, `order by label nulls last, name` (#613,
 // ADR-0118), and the console renders it as received; byLabel is for a list the
 // client composes itself, where no query has ordered it. Writing the rule twice
@@ -191,8 +191,8 @@ export function deriveName(display: string): string {
 // can never rewrite a live name from its label. Renaming is a deliberate
 // act (the API takes it explicitly), never a side effect of relabelling.
 //
-// It is for the REGISTRY and identity pages only: products, vendors, standards,
-// drivers, groups, outposts, the three type registries, and users. Their names have
+// It is for the CATALOG and identity pages only: products, vendors, standards,
+// drivers, groups, outposts, the three type catalogs, and users. Their names have
 // no generator and stay globally unique, so deriving one from what the operator
 // typed is exactly the right affordance there.
 //

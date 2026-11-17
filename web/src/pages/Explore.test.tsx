@@ -128,7 +128,7 @@ describe("arrival", () => {
     expect(row("Headquarters").getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("says what a collapsed location holds in the registry's words, and counts its systems by health", async () => {
+  it("says what a collapsed location holds in the catalog's words, and counts its systems by health", async () => {
     mount();
     await screen.findByRole("tree");
     const hq = row("Headquarters");

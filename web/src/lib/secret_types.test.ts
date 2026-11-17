@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listSecretTypes } from "./secret_types";
 import { uuidFor } from "./testids";
 
-// The registry read is the module's whole surface: secret types are seed-owned
+// The catalog read is the module's whole surface: secret types are seed-owned
 // reference data with no write routes, so there are no write wrappers to test.
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -13,7 +13,7 @@ describe("secret_types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists the registry with each type's declared fields", async () => {
+  it("lists the catalog with each type's declared fields", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         secret_types: [

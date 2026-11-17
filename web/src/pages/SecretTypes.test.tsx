@@ -6,7 +6,7 @@ import { SECRET_TYPES_KEY, type SecretType } from "../lib/secret_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Secret Types page is the release-owned registry of secret shapes, read-only
+// The Secret Types page is the release-owned catalog of secret shapes, read-only
 // by DESIGN, not by permission: the seed upserts it authoritatively (ON
 // CONFLICT DO UPDATE) so a release can correct it, and no write route exists.
 // The read-only-ness must therefore hold for an owner exactly as for anyone
@@ -46,7 +46,7 @@ function mount(me: Me = admin) {
 describe("SecretTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the registry rows with name and label in one column", () => {
+  it("lists the catalog rows with name and label in one column", () => {
     mount();
     expect(screen.getByText("snmp-community")).toBeTruthy();
     expect(screen.getByText("basic-auth")).toBeTruthy();

@@ -305,7 +305,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
-  // The strip's tone follows the registry's outage flag (#917), not a level name:
+  // The strip's tone follows the catalog's outage flag (#917), not a level name:
   // high and disaster take the component out and read red, average only degrades.
   it.each([
     ["high", "High", true],

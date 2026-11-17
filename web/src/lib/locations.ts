@@ -32,8 +32,8 @@ export type Location = {
 
 export const LOCATIONS_KEY = ["locations"] as const;
 
-// The location_type registry (the type picker's rows) lives in
-// lib/location_types.ts, its own module beside its page, so the registry and the
+// The location_type catalog (the type picker's rows) lives in
+// lib/location_types.ts, its own module beside its page, so the catalog and the
 // entity never share a fetch or a cache key (#598).
 
 export async function listLocations(): Promise<Location[]> {

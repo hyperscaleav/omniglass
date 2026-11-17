@@ -368,7 +368,7 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
   // a check no outpost can run yet.
   const transports = useQuery(() => ({ queryKey: TRANSPORTS_KEY, queryFn: listTransports }));
   const builtTransports = () => (transports.data ?? []).filter((t) => t.built);
-  // The attachable drivers: the registry rows that carry a spec (#813). A
+  // The attachable drivers: the catalog rows that carry a spec (#813). A
   // stub cannot be attached, so the picker never offers one.
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const attachable = () => (drivers.data ?? []).filter((d) => !!d.spec);
@@ -455,7 +455,7 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
       <Show when={mode() === "probe"}>
         <div>
           <label class="eyebrow mb-1.5 block" for="new-iface-type">Transport</label>
-          {/* The registry answers after the blade opens, and a <select> keeps no
+          {/* The transport list answers after the blade opens, and a <select> keeps no
               value it has no option for, so the control takes its value through
               the shared binder (lib/selectvalue.ts, ADR-0133). */}
           <select id="new-iface-type" ref={bindSelectValue(type, builtTransports)} class="select select-bordered w-full" onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>

@@ -5,7 +5,7 @@ import { EMPTY_VALUE } from "./BladeField";
 
 // InheritedCell is the list-side render of a fact that inherits (#743). Its job
 // is one fallback chain, in one place instead of at six cells across two
-// registries: the row's own value, else what the server resolved for it, else
+// catalogs: the row's own value, else what the server resolved for it, else
 // the em dash.
 //
 // It says NOTHING about where the value came from, and every assertion about a

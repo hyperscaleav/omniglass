@@ -1,10 +1,10 @@
 import { ROOT_PLACEMENT } from "./location_types";
 
-// The location type hierarchy, read off the registry (ADR-0102).
+// The location type hierarchy, read off the catalog (ADR-0102).
 //
 // A location type is customer data: one fleet runs campus, building, floor,
 // room; another runs plot, sector, coordinate. So nothing in the console may
-// decide a type's position in the hierarchy from its NAME. The registry already
+// decide a type's position in the hierarchy from its NAME. The catalog already
 // says where each type may sit (allowed_parent_types), and that is the only
 // fact these read. Pure, so the answers are testable without a server.
 
@@ -16,7 +16,7 @@ const unconstrained = (t: TypeShape) => t.allowed_parent_types.length === 0;
 
 // typeRanks orders the hierarchy: a type ranks one below the deepest type it
 // may sit under, and a type that may sit at the root (or anywhere) with no
-// other parent ranks 0. So in the shipped registry campus, building, floor and
+// other parent ranks 0. So in the shipped catalog campus, building, floor and
 // room rank 0, 1, 2, 3 even though a building may also sit at the root, and a
 // customer's plot, sector, coordinate rank the same way. It is what the tree
 // sorts a Type column by, weights a name by, and orders a parent picker by.

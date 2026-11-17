@@ -250,7 +250,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
-  // take the name over by hand (createIdentity, the registry-page affordance).
+  // take the name over by hand (createIdentity, the catalog-page affordance).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [typeId, setTypeId] = createSignal("");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
