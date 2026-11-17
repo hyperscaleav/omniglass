@@ -3,6 +3,7 @@ import { render, screen, cleanup, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import OmnibotStep, { STEP_RENDERERS } from "./OmnibotStep";
 import type { Step } from "../lib/assistant";
+import { uuidFor } from "../lib/testids";
 
 // A step card is one tool call omnibot made (#1167): the tool, what it was
 // asked, and what came back. A tool with a renderer shows its result the way
@@ -62,16 +63,16 @@ describe("the tool renderers", () => {
   });
 
   it("shows a component read as a link to its page", () => {
-    show(step("get-component", { name: "amp-9" }, { id: "u-amp", name: "amp-9", label: "Lobby amp", product: "xpa-2" }));
+    show(step("get-component", { name: "amp-9" }, { id: uuidFor("amp-9"), name: "amp-9", label: "Lobby amp", product: "xpa-2" }));
     const link = screen.getByRole("link", { name: "Lobby amp" });
-    expect(link.getAttribute("href")).toBe("/components/u-amp");
+    expect(link.getAttribute("href")).toBe(`/components/${uuidFor("amp-9")}`);
     expect(link.parentElement?.textContent).toContain("amp-9");
   });
 
   it("lists components as links", () => {
-    show(step("list-components", {}, { components: [{ id: "u-1", name: "amp-1" }, { id: "u-2", name: "amp-2", label: "Amp two" }] }));
-    expect(screen.getByRole("link", { name: "amp-1" }).getAttribute("href")).toBe("/components/u-1");
-    expect(screen.getByRole("link", { name: "Amp two" }).getAttribute("href")).toBe("/components/u-2");
+    show(step("list-components", {}, { components: [{ id: uuidFor("amp-1"), name: "amp-1" }, { id: uuidFor("amp-2"), name: "amp-2", label: "Amp two" }] }));
+    expect(screen.getByRole("link", { name: "amp-1" }).getAttribute("href")).toBe(`/components/${uuidFor("amp-1")}`);
+    expect(screen.getByRole("link", { name: "Amp two" }).getAttribute("href")).toBe(`/components/${uuidFor("amp-2")}`);
   });
 
   it("says when a list came back empty", () => {

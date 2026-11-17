@@ -61,7 +61,7 @@ export const STEP_RENDERERS: Record<string, StepRenderer> = {
           <For each={reach.endpoints}>
             {(e) => (
               <li class="flex flex-wrap items-center gap-2">
-                <span class="font-medium">{e.label || e.endpoint}</span>
+                <span class="font-medium">{entityLabel({ name: e.endpoint, label: e.label })}</span>
                 <span class="text-xs text-base-content/60">{e.transport}{e.address ? ` ${e.address}` : ""}</span>
                 <ReachLadder iface={e} />
               </li>

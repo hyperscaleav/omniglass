@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
+import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotStep from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
@@ -117,17 +118,12 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         }}
       />
       <div class="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          class="btn btn-quiet btn-sm"
-          title="Create a secret and give omnibot its name, never its value"
-          onClick={() => setCredential(true)}
-        >
-          <Key size={14} /> Add a credential
-        </button>
-        <button type="submit" class="btn btn-primary btn-sm" disabled={busy() || !draft().trim()}>
+        <Button intent="quiet" size="sm" icon={Key} title="Create a secret and give omnibot its name, never its value" onClick={() => setCredential(true)}>
+          Add a credential
+        </Button>
+        <Button intent="action" size="sm" type="submit" disabled={busy() || !draft().trim()}>
           Send
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -145,9 +141,9 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         }
         headerExtra={
           <Show when={state().items.length > 0}>
-            <button type="button" class="btn btn-quiet btn-sm" disabled={busy()} onClick={restart}>
-              <Plus size={14} /> New conversation
-            </button>
+            <Button intent="quiet" size="sm" icon={Plus} disabled={busy()} onClick={restart}>
+              New conversation
+            </Button>
           </Show>
         }
         footer={composerBar}
@@ -187,12 +183,12 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                 </Show>
                 <p class="mt-1 text-xs text-base-content/60">Your agent policy asks about this call. It runs as omnibot, on your behalf.</p>
                 <div class="mt-2 flex gap-2">
-                  <button type="button" class={`btn btn-sm ${i().destructive ? "btn-error" : "btn-primary"}`} onClick={() => decide(true)}>
+                  <Button intent={i().destructive ? "danger" : "action"} size="sm" onClick={() => decide(true)}>
                     Confirm
-                  </button>
-                  <button type="button" class="btn btn-quiet btn-sm" onClick={() => decide(false)}>
+                  </Button>
+                  <Button intent="quiet" size="sm" onClick={() => decide(false)}>
                     Decline
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

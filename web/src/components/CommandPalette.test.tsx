@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCommands, matches } from "./CommandPalette";
+import { buildCommands, matches, withAsk } from "./CommandPalette";
 
 // The palette flattens every destination the caller may reach to one searchable
 // list: the nav IA plus the catalogs, which left the rail for the
@@ -86,5 +86,23 @@ describe("command palette source", () => {
     const telemetry = commands.filter((c) => matches(c, "telemetry")).map((c) => c.path);
     expect(telemetry).toEqual(expect.arrayContaining(["/metrics", "/properties", "/event-types"]));
     expect(telemetry).not.toContain("/products");
+  });
+});
+
+// The palette's last row hands the query to omnibot (#1167), for a person who
+// may run it: a question the palette has no destination for still has an answer.
+describe("asking omnibot from the palette", () => {
+  const found = [{ label: "Alarms", path: "/alarms" }];
+
+  it("ends the results with the query as a prompt", () => {
+    expect(withAsk(found, "why is amp-9 down", true).at(-1)).toEqual({ label: "Ask omnibot: why is amp-9 down", ask: true });
+  });
+
+  it("offers it with no query too", () => {
+    expect(withAsk([], "", true)).toEqual([{ label: "Ask omnibot", ask: true }]);
+  });
+
+  it("is not offered to someone who may not run omnibot", () => {
+    expect(withAsk(found, "x", false)).toEqual(found);
   });
 });

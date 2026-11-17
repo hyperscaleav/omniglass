@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import OmnibotPanel from "./OmnibotPanel";
+import { uuidFor } from "../lib/testids";
 
 // The omnibot panel (#1167): a prompt starts a conversation and runs it,
 // omnibot's text and each tool call stream in, a call the person's policy
@@ -32,15 +33,15 @@ beforeEach(() => {
     const body = text ? JSON.parse(text) : {};
     calls.push({ url: req.url, method: req.method, body });
     if (req.url.endsWith("/assistant/conversations") && req.method === "POST") {
-      return json({ id: "c-1", name: "conv-1", message_count: 0, created_at: "", updated_at: "" }, 201);
+      return json({ id: uuidFor("conv-1"), name: "conv-1", message_count: 0, created_at: "", updated_at: "" }, 201);
     }
     if (req.url.includes(":run")) return runReply(body);
     if (req.url.endsWith("/auth/me")) return json({ principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] });
     if (req.url.endsWith("/secret-types")) {
-      return json({ secret_types: [{ id: "t-1", name: "snmp-community", label: "SNMP community", fields: [{ name: "community", secret: true }] }] });
+      return json({ secret_types: [{ id: uuidFor("snmp-community"), name: "snmp-community", label: "SNMP community", fields: [{ name: "community", secret: true }] }] });
     }
     if (req.url.endsWith("/secrets") && req.method === "POST") {
-      return json({ id: "s-1", name: body.name, secret_type: body.secret_type, owner_kind: body.owner_kind }, 201);
+      return json({ id: uuidFor("lobby-snmp"), name: body.name, secret_type: body.secret_type, owner_kind: body.owner_kind }, 201);
     }
     return json({ items: [] });
   });
@@ -51,12 +52,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function open() {
+function open(prompt?: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
-        <Route path="*" component={() => <OmnibotPanel open onClose={() => {}} />} />
+        <Route path="*" component={() => <OmnibotPanel open onClose={() => {}} prompt={prompt} />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -71,6 +72,12 @@ describe("the omnibot panel", () => {
   it("teaches what omnibot is before the first prompt", () => {
     open();
     expect(screen.getByTestId("omnibot-empty").textContent).toContain("acts as you");
+  });
+
+  it("takes the palette's query as a draft, sent only when the person sends it", () => {
+    open("why is amp-9 down");
+    expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).value).toBe("why is amp-9 down");
+    expect(calls).toEqual([]);
   });
 
   it("starts a conversation, runs the prompt, and waits on the call it asks about", async () => {

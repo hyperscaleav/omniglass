@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { answer, ask, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState } from "./assistant";
+import { answer, ask, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
 
 // The panel's data layer (#1167): the reader turns a :run stream into AG-UI
 // events, and the reducer folds them into what the panel shows. The fixtures
@@ -52,9 +52,11 @@ describe("folding a run into the panel", () => {
     expect(s.items[0]).toMatchObject({ kind: "user", text: "add the lobby display" });
     expect(s.items[1]).toMatchObject({ kind: "text", text: "Let me look." });
     expect(s.items[2]).toMatchObject({ kind: "step", id: "call-1", tool: "list-components", args: {}, result: '{"components":[]}' });
-    expect(s.items[3]).toMatchObject({ kind: "step", id: "call-2", tool: "create-component", args: { name: "lobby-display" } });
+    expect(s.items[3]).toMatchObject({ kind: "step", id: "call-2", tool: "create-component" });
+    expect((s.items[3] as Step).args).toEqual({ name: "lobby-display" });
     expect(s.status).toBe("pending");
-    expect(s.interrupt).toMatchObject({ id: "call-2", tool: "create-component", title: "Create a component", arguments: { name: "lobby-display" } });
+    expect(s.interrupt).toMatchObject({ id: "call-2", tool: "create-component", title: "Create a component" });
+    expect(s.interrupt?.arguments).toEqual({ name: "lobby-display" });
   });
 
   it("runs the call once it is confirmed, and finishes", async () => {
