@@ -15,7 +15,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { can, canFleet, fleetView, useMe } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { toggled, PILL_NEUTRAL } from "../lib/subscriptions";
@@ -245,7 +245,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
       const t = row();
       if (!t || canUpdate()) return null;
       // A target carries no official flag: judged on the permission arm alone.
-      return registryLock({ official: false }, fleetView(me.data), "notification_target");
+      return catalogLock({ official: false }, fleetView(me.data), "notification_target");
     },
   });
 

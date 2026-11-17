@@ -14,7 +14,7 @@ import (
 
 // TestEventRuleTypedAndOptionalAlarm proves a rule's alarm is optional and
 // its events are typed (#948): a rule saves with no severity (informational),
-// a rule names a fire event type from the registry (required) and may name a
+// a rule names a fire event type from the catalog (required) and may name a
 // clear one, each refused when it does not exist, and an update can set,
 // change or drop them.
 func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {

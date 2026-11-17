@@ -11,7 +11,7 @@ import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 
-// The severity levels page (#921, authored since #930): the registry an event
+// The severity levels page (#921, authored since #930): the catalog an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
 // own color (the same chip every alarm wears), whether it takes a component out,
 // and its origin; worst first, the order an operator triages in. An operator
@@ -90,7 +90,7 @@ describe("Severity levels page", () => {
     ]);
   });
 
-  it("renders each level's label in the registry's color, the chip an alarm wears", () => {
+  it("renders each level's label in the catalog's color, the chip an alarm wears", () => {
     mount();
     const row = bodyRows().find((r) => r.textContent?.includes("major"))!;
     const chip = row.querySelector('[data-severity="major"]')!;

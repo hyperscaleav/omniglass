@@ -40,13 +40,13 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - The **sidebar** is the information architecture: Explore (the one door into the fleet), Outposts,
   and sections grouped into Values, Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
-  left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
-  Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
+  left groups the catalogs by the fleet noun they serve (Telemetry, Actions, Components,
+  Systems, Locations, Metadata), and clicking an entry opens that catalog's own page beside it,
   at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.
   A live entry is full strength with its live row count; one whose backend has not landed yet is
   dimmed with a **soon** tag (clickable when its stub page exists, with a short note on what it
   will do and, where one exists, the issue tracking it). The subrail's first entry, **Overview** (`/catalog`), is the
-  landing: one card per group, teaching what it holds, with live registry counts linking to each
+  landing: one card per group, teaching what it holds, with live catalog counts linking to each
   page; you see only the groups and entries you can enter.
 - The **top bar** shows the current section and a **Search (⌘K)** button. The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
@@ -55,7 +55,7 @@ There are two ways to operate, and they are the same API with the same checks be
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
   page's own [filter](/guides/operator/fleet/#finding-one-thing). It searches every destination you can
   reach: the sidebar's own sections and, though the sidebar shows Catalog as one entry, each
-  catalog registry by its own name, tagged with its group (typing `products` jumps straight to
+  catalog by its own name, tagged with its group (typing `products` jumps straight to
   **Catalog, under Components: Products**). Typing a group name finds everything under it, so
   `telemetry` lists Metrics, Properties, and Events. The palette offers only what you may read,
   the same rule that hides a sidebar tab.

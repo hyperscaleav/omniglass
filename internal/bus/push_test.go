@@ -9,10 +9,10 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// testRegistry is the minimal registry these cases resolve against.
-func testRegistry(t *testing.T) collection.Registry {
+// testCatalog is the minimal catalog these cases resolve against.
+func testCatalog(t *testing.T) collection.Catalog {
 	t.Helper()
-	return collection.NewRegistry([]storage.MetricType{{Name: "icmp-rtt-avg"}, {Name: "audio-level"}}, nil, nil)
+	return collection.NewCatalog([]storage.MetricType{{Name: "icmp-rtt-avg"}, {Name: "audio-level"}}, nil, nil)
 }
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.
@@ -113,7 +113,7 @@ func TestAPIBindingLandsASystemOwnerOnTheSystemArc(t *testing.T) {
 // Every lane stamps the binding's arc, never a hardcoded component (#422):
 // a system's metric, property and event each land with owner_kind system.
 func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
-	reg := collection.NewRegistry([]storage.MetricType{{Name: "audio-level"}},
+	reg := collection.NewCatalog([]storage.MetricType{{Name: "audio-level"}},
 		[]storage.PropertyType{{Name: "room-state", DataType: "string"}},
 		[]storage.EventType{{Name: "call-started"}})
 	ev := &ogv1.TelemetryBatch{
@@ -140,7 +140,7 @@ func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
 // The wire value wins where supplied, else the interface-derived value. This is what
 // keeps the outpost lane byte-for-byte unchanged while letting a push express both.
 func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
-	reg := testRegistry(t)
+	reg := testCatalog(t)
 
 	t.Run("push supplies instance and source", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{

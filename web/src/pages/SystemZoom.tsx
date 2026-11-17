@@ -139,7 +139,7 @@ export default function SystemZoom() {
   // Each alarm row in the Why strip opens its timeline in place (#950).
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
-  // registry's flag, #917), amber when they only degrade.
+  // catalog's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));

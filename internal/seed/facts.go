@@ -55,7 +55,7 @@ type factsNamed struct {
 
 // factsTransport renders the code registry (internal/transport, ADR-0073) into
 // the same facts artifact the seeded YAMLs feed: the transports are build-time
-// facts of the binary, so the docs table derives from the registry rather than
+// facts of the binary, so the docs table derives from the catalog rather than
 // restating it.
 type factsTransport struct {
 	Name        string `json:"name"`
@@ -95,7 +95,7 @@ type factsNameRule struct {
 	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
-// factsTypeNode is one row of an INHERITING classification registry
+// factsTypeNode is one row of an INHERITING classification catalog
 // (component_type, system_type) as the docs render it (#678).
 //
 // The blank facts are rendered blank, `omitempty` and all: a child that states

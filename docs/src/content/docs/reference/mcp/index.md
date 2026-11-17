@@ -212,7 +212,7 @@ The caller's own console inbox: the notifications addressed to them on the inbox
 
 List calc rules
 
-Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
 
 - Route: `GET /api/v1/calc-rules`
 - Gate: `rule:read`
@@ -275,7 +275,7 @@ Computes a candidate calc rule now, on each owner it selects that the caller may
 
 List component types
 
-Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
 
 - Route: `GET /api/v1/component-types`
 - Gate: `component_type:read`
@@ -807,7 +807,7 @@ Creates one component from a component template at a location: its product and t
 
 List drivers
 
-Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
 
 - Route: `GET /api/v1/drivers`
 - Gate: `driver:read`
@@ -933,7 +933,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `out_of_band` | boolean | no | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
 | `outpost` | string | no | Outpost placement, by name or id |
 | `params` | any | no | Address/target settings (jsonb); an attach derives them from the inputs instead |
-| `transport` | string | no | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
+| `transport` | string | no | A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
 ## `get-endpoint`
 
@@ -1039,7 +1039,7 @@ Mints a webhook endpoint's token anew (#1024): a post bearing the old one answer
 
 List event rules
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 - Route: `GET /api/v1/event-rules`
 - Gate: `rule:read`
@@ -1338,7 +1338,7 @@ Returns the outpost's own recent operational log lines (the raw ingest lane of A
 
 List products
 
-Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 - Route: `GET /api/v1/products`
 - Gate: `product:read`
@@ -1678,7 +1678,7 @@ Reads one template from the catalog by name, whole: its kind and the body that k
 
 List the transports the platform speaks
 
-Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
 
 - Route: `GET /api/v1/transports`
 - Gate: `endpoint:read`
@@ -1702,7 +1702,7 @@ The unclaimed-source inbox: each source a listener heard from that no endpoint c
 
 List vendors
 
-Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
 
 - Route: `GET /api/v1/vendors`
 - Gate: `vendor:read`

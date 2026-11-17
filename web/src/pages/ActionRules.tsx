@@ -15,7 +15,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { can, canFleet, fleetView, useMe } from "../lib/auth";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { PILL_NEUTRAL, TRANSITIONS, TRANSITION_PILL, toggled, whenError, type Transition } from "../lib/subscriptions";
@@ -241,7 +241,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
       const r = row();
       if (!r) return null;
       if (r.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
+      return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });
 
@@ -305,7 +305,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
 // hosts it and draws its rail. The when is written in the expression editor at
 // the action site (no sample key: it reads the alarm's fixed facts) and must
 // compile before the rule saves; the targets and the notification type are
-// picked from their registries. The name is fixed at create.
+// picked from their catalogs. The name is fixed at create.
 export function ActionRuleForm(p: { mode: "create" | "edit"; rule?: ActionRule; onSaved: (r: ActionRule) => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();

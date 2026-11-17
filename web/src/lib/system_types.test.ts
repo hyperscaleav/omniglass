@@ -18,7 +18,7 @@ describe("system_types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists the registry off the typed literal path", async () => {
+  it("lists the catalog off the typed literal path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         system_types: [{ id: uuidFor("st-room"), name: "room", label: "Room", official: true, stem: "room", icon: "door-open", abbrev: "rm" }],

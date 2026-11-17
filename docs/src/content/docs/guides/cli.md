@@ -117,14 +117,14 @@ A bare word that is not valid JSON falls back to itself, so the common case need
 (`--value HDMI1`); a string that would parse as JSON is quoted to force a string (`--value '"30"'`).
 
 A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
-`system`, `location`, and `principal-group` each carry one, and so do the registries `vendor`,
+`system`, `location`, and `principal-group` each carry one, and so do the catalogs `vendor`,
 `driver`, `product`, `standard`, and `location-type`
 ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)),
 each gated by `<resource>:rename`, which is granted separately because moving a name breaks the
 references stored outside Omniglass (bookmarks, runbooks, integration config). Inside it nothing
 breaks, since every reference holds the entity's `id`, which every write returns
 ([ADR-0076](/architecture/decisions/)). A taken name is a 409, an illegal or uuid-shaped one a 422,
-and an official registry row keeps the name it ships with (422):
+and an official catalog row keeps the name it ships with (422):
 
 ```sh
 omniglass vendor rename acme --name acme-av        # needs vendor:rename (admin)
@@ -422,12 +422,12 @@ omniglass component unbound-identity list 'hq.$comp.ucc-platform'               
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values, `secret-type` lists the shape registry, and `component
+covers the encrypted values, `secret-type` lists the shape catalog, and `component
 effective-secret` reads the masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
 behind `reveal`, which the server audits and which only admin and owner may call.
 
 ```sh
-omniglass secret-type list                           # the shape registry (snmp-community, basic-auth)
+omniglass secret-type list                           # the shape catalog (snmp-community, basic-auth)
 omniglass secret list                               # the all-scope admin directory (masked fields)
 omniglass secret create --name core-snmp --secret-type snmp-community \
   --owner-kind location --owner hq --fields '{"community":"public"}'
@@ -526,15 +526,15 @@ most-specific-wins down the cascade.
 ## Component classification catalogs
 
 The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type)
-commands cover the `vendor` and `driver` registries: flat, official-vs-custom catalogs on
-the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the four
+commands cover the `vendor` and `driver` catalogs: flat, official-vs-custom catalogs on
+the same pattern as the `type` catalogs. Each resource's `:read` sits on the viewer floor; the four
 writes (`:create`, `:update`, `:delete`, `:rename`) are admin-gated.
 
 A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `integrator`, or `developer`
 (default `manufacturer`):
 
 ```sh
-omniglass vendor list                                               # the vendor registry
+omniglass vendor list                                               # the vendor catalog
 omniglass vendor create --name barco --label Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
 omniglass vendor get barco
@@ -547,7 +547,7 @@ A **driver** names the implementation that gets, emits, or sets a product's sign
 `--version`:
 
 ```sh
-omniglass driver list                                               # the driver registry
+omniglass driver list                                               # the driver catalog
 omniglass driver get snmp-generic                                   # includes the spec body, when authored
 omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0 \
   --spec '{"version":1,"transport":"snmp", ...}'                    # validated at write: a broken spec is a 422 naming the fault
@@ -563,7 +563,7 @@ example `javascript:`) is a 422.
 ## Products
 
 The [product](/architecture/core-entities/#catalog-reference-data-product) commands cover the product
-registry: the concrete **SKU** that ties the vendor and driver catalogs together, classified under a
+catalog: the concrete **SKU** that ties the vendor and driver catalogs together, classified under a
 **component_type**, and the thing a `component` points at. `product:read` sits on the viewer floor; the
 four writes (`product:create`, `product:update`, `product:delete`, `product:rename`) are admin-gated.
 
@@ -572,7 +572,7 @@ A product names its **kind** (`device`, `app`, `service`, or `vm`, default `devi
 **parent product** it is a variant of:
 
 ```sh
-omniglass product list                                              # the product registry
+omniglass product list                                              # the product catalog
 omniglass product create --name barco-ub12 --label "Barco UB12" --kind device \
   --component-type projector --vendor-id barco --driver-id barco-snmp
 omniglass product get barco-ub12
@@ -634,7 +634,7 @@ with `omniglass endpoint create`. A subtree whose root type its parent refuses i
 
 ## Event types
 
-The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,
+The [event type](/architecture/events/#the-event_type-catalog) commands cover the occurrence keyspace,
 the twin of the property catalog: the discrete happenings an event is typed by (`call-started`,
 `cable-unplugged`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
 `event_type:delete` are admin-gated. Official event types are read-only.
@@ -654,7 +654,7 @@ on every catalog.
 
 ## Command types
 
-The [command type](/architecture/commands/#the-command_type-registry) commands cover the "do"
+The [command type](/architecture/commands/#the-command_type-catalog) commands cover the "do"
 catalog: what a component can be told, with a target property and a settle window. `command_type:read`
 sits on the viewer floor; create/update/delete are admin-gated, official types read-only. Issuing a
 command (`command:issue`) records the invocation, writes a caused event, and returns the computed
@@ -795,8 +795,8 @@ omniglass system property delete boardroom room-capacity             # falls bac
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**
 (one conforming to no standard) and a **productless component** still resolve, to their off-contract
 values alone. The value commands are **scope-injected**: an instance outside your read scope is a
-non-disclosing 404 on the read and on the write. The registry and its contract share one noun:
-`omniglass location-type list` is the registry, `omniglass location-type property list <id>` its contract.
+non-disclosing 404 on the read and on the write. The catalog and its contract share one noun:
+`omniglass location-type list` is the catalog, `omniglass location-type property list <id>` its contract.
 
 ## Retention
 

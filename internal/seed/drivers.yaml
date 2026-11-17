@@ -1,6 +1,6 @@
 # The official drivers, seeded idempotently at boot. A driver is the
 # implementation that gets/emits/sets a product's signals; a product points at
-# one. The registry lists alphabetically by label. Starter set,
+# one. The catalog lists alphabetically by label. Starter set,
 # operator-extensible later; tune freely. Fictional-brand drivers match the
 # omniglass-lab device surfaces: Kestrel speaks an HTTP JSON device API,
 # Newtron a vendor control protocol, Boreal and the audio rack SNMP.

@@ -1,4 +1,4 @@
-# The system_type taxonomy: the coarse registry that says what KIND OF SPACE a
+# The system_type taxonomy: the coarse catalog that says what KIND OF SPACE a
 # system is (ADR-0096). It is the system-side counterpart of component_type, and
 # it is not `standard`: a standard is the blueprint a system is built to, and one
 # fleet can hold ten signage standards and six classroom standards under a

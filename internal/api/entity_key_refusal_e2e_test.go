@@ -16,7 +16,7 @@ import (
 // This is the tier that matters and the tier that was missing. Asserting the
 // storage sentinel proves the gateway refuses; it says nothing about what the
 // route does with that refusal. When the key rule was first widened, five
-// registry routes threw a brand new sentinel into mapTypeErr, which had no case
+// catalog routes threw a brand new sentinel into mapTypeErr, which had no case
 // for it, so every one of them fell to the default branch and returned
 // 500 "type operation failed" for a name with a capital letter in it. The whole
 // suite stayed green, because nothing drove those routes with a bad name.

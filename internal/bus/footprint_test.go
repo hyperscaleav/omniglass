@@ -59,9 +59,9 @@ const (
 	// wantStatementsPerBatch is every statement one batch costs, from the
 	// owner resolution to the endpoint's seen stamp. Exact. 31 until #1279,
 	// which replaced the three catalog reads with one fingerprint read and a
-	// registry kept between batches (29); #1274 resolves each owner and reads
+	// catalog kept between batches (29); #1274 resolves each owner and reads
 	// the clock once per batch and lands the metric lane in one statement (19);
-	// #1299 carries the command-targeted property names on the kept registry,
+	// #1299 carries the command-targeted property names on the kept catalog,
 	// so the property lane no longer reads them in the batch's transaction
 	// (18). Until #1582 a batch was one task's check; since, it is one outpost
 	// tick, a group for every task the outpost checked (215 here), resolved in
@@ -162,11 +162,11 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 	tb.Cleanup(func() { _ = conn.Close(context.Background()) })
 	srv := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
-	// The registry's clock stands still, so the warm-up reads the catalogs'
+	// The catalog's clock stands still, so the warm-up reads the catalogs'
 	// fingerprint and the window's batches fall inside its interval, as a
 	// fleet's do once more than a few outposts tick (#1928).
 	frozen := time.Now()
-	srv.registry.now = func() time.Time { return frozen }
+	srv.catalog.now = func() time.Time { return frozen }
 	return &footprintFixture{
 		srv:     srv,
 		counter: counter,

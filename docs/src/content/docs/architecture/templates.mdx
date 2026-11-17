@@ -65,7 +65,7 @@ A template is one of four kinds, each naming what it creates:
 A location type is not a template kind. Since
 [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)
 a location type is an official row an operator reshapes through the
-[registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
+[catalog fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
 so what locations get is a template for a **subtree of locations**, each location's type checked against its
 parent's allowance, and no wording or logic keyed on any particular type.
 
@@ -97,7 +97,7 @@ What this release ships, rendered from the catalog itself:
 ## Reading a template
 
 **`GET /templates`** (optionally one `kind`) and **`GET /templates/{template}`**, gated
-`template:read`, which the viewer's `*:read` floor already grants. A catalog read is a registry read:
+`template:read`, which the viewer's `*:read` floor already grants. A catalog read is a catalog read:
 no owner and no scope injection. The body is the template whole: its kind and the body that kind
 carries. The CLI is `omniglass template list` and `omniglass template get <template>`.
 

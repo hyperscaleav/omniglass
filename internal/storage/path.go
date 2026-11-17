@@ -203,7 +203,7 @@ func ParseAddress(ref string) (*Address, error) {
 }
 
 // ErrAddressNotAccepted is returned for a ref that looks like #627's address
-// grammar (dot-joined, or opening on an accessor) sent to a registry whose
+// grammar (dot-joined, or opening on an accessor) sent to a catalog whose
 // names stay a single global kebab token: outpost, tag, and the four telemetry
 // lane types (metric_type, property_type, event_type, command_type). Those
 // tables sit outside the three scoped tree entities the grammar addresses,
@@ -220,7 +220,7 @@ func (e *ErrAddressNotAccepted) Error() string {
 
 // RejectAddressForm refuses ref for kind when it looks like an address
 // (contains "." or "$") rather than a plain name or a uuid. Call it before
-// any lookup on a registry outside the three tree entities: outpost, tag, and
+// any lookup on a catalog outside the three tree entities: outpost, tag, and
 // the four lane types. A ref that is not address-shaped, including any
 // ordinary kebab name or a uuid, passes through untouched.
 func RejectAddressForm(kind, ref string) error {

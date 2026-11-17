@@ -97,7 +97,7 @@ func auditedRenames() []auditedRename {
 // A property type is addressed only by name today, so it never acquires two keys
 // for two addressings. The rename hazard is the whole risk here: the name IS the
 // address, which is exactly why the trail cannot also be keyed on it.
-func TestAuditResourceIDOnANameAddressedRegistry(t *testing.T) {
+func TestAuditResourceIDOnANameAddressedCatalog(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")

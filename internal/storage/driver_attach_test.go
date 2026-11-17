@@ -374,7 +374,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 		t.Fatalf("ambiguous secret reference: err = %v, want ErrAttachInvalid naming the collision", err)
 	}
 
-	// An unknown driver reference is the registry's not-found, mapped by the
+	// An unknown driver reference is the catalog's not-found, mapped by the
 	// API tier to a 422 like the other reference faults.
 	ghost := "no-such-driver"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{

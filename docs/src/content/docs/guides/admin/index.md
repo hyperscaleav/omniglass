@@ -59,7 +59,7 @@ Every task on these pages has two front doors, and they call the same API with t
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
   **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference
-  registries a product ties together. Beside standards sit the two coarse genus registries the
+  catalogs a product ties together. Beside standards sit the two coarse genus catalogs the
   console calls **Types**: the
   [component type](/architecture/core-entities/#catalog-reference-data-component_type) tree above
   products, and the [system type](/architecture/core-entities/#catalog-reference-data-system_type)

@@ -27,7 +27,7 @@ import { seedSeverityLevels } from "../lib/testseverity";
 // roles, a location's systems), then the form's identity, placement and tags,
 // read or edit through the blade's own footer. Configuration (roles,
 // properties, their cascade) is the detail view's Configure tab, one Expand
-// away. Every body self-fetches by id, so the registry serves any page.
+// away. Every body self-fetches by id, so the catalog serves any page.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 

@@ -12,11 +12,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestVendorsAPI drives the vendor registry over HTTP: a
+// TestVendorsAPI drives the vendor catalog over HTTP: a
 // viewer reads the seeded official rows under the vendor:read floor but cannot
 // create, an admin (owner) creates a custom row, an official row is
 // read-only (422 on patch), and the admin deletes the custom row. Vendor is a flat
-// registry, so the vendor:* permission is wired exactly like type:*.
+// catalog, so the vendor:* permission is wired exactly like type:*.
 func TestVendorsAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)

@@ -60,7 +60,7 @@ func countShadows(t *testing.T, ctx context.Context, dsn string) int {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 	var n int
-	if err := conn.QueryRow(ctx, `select count(*) from registry_shadow`).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from catalog_shadow`).Scan(&n); err != nil {
 		t.Fatalf("count shadows: %v", err)
 	}
 	return n

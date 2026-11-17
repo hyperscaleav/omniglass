@@ -83,7 +83,7 @@ describe("Systems create-as-route", () => {
     expect(screen.getByText(/Available once the system is created/)).toBeTruthy();
   });
 
-  it("offers the standard registry on the create form, with a one-off option", async () => {
+  it("offers the standard catalog on the create form, with a one-off option", async () => {
     mount("/systems/create");
     // The label is associated with its control by id (FieldRow), not by wrapping
     // it, so the lookup goes through the accessible name. That also proves the

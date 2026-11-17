@@ -182,7 +182,7 @@ func TestIdentityBindingRefusesPlacesOutpostsAndUnknownKeys(t *testing.T) {
 		}
 	}
 	if st, raw := f.c.send(f.owner, http.MethodPut, bindPath("ucc-cloud", "no-such-key", "R-1"), ownerBody("system", "room-a")); st != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "property type") {
-		t.Errorf("unregistered key = %d %s, want 422 naming the property type registry", st, raw)
+		t.Errorf("unregistered key = %d %s, want 422 naming the property type catalog", st, raw)
 	}
 }
 

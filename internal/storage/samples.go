@@ -70,7 +70,7 @@ func ownerColumn(kind string) (string, error) {
 // InsertMetricSamples writes observed metric rows in one transaction, for w:
 // an outpost's lane (OutpostWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
-// observed. Callers apply reject-not-project (collection.Registry) before
+// observed. Callers apply reject-not-project (collection.Catalog) before
 // calling; this is the durable write, and it refuses the whole batch, writing
 // nothing, when a key's writer class does not admit w (ADR-0161).
 func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error {

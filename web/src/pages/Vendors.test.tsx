@@ -36,7 +36,7 @@ function mount(me: Me = admin) {
 describe("Vendors page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  // The registry list puts an UNLABELLED row at the END, not the beginning
+  // The catalog list puts an UNLABELLED row at the END, not the beginning
   // (#613). The console re-sorts what the gateway already ordered, so fixing
   // `order by nullif(label, '') nulls last, name` in SQL fixed nothing an
   // operator could see: a plain `a.label.localeCompare(b.label)` is negative for

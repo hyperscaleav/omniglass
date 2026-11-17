@@ -455,7 +455,7 @@ func identityOwnerForbidden(kind string) error {
 
 // IdentityKeyInUseError is a delete of a property type that identity
 // bindings still use as their match key. It counts them rather than naming
-// their conduits: the registry delete carries no component scope to judge
+// their conduits: the catalog delete carries no component scope to judge
 // which conduits the caller may read.
 type IdentityKeyInUseError struct {
 	Key      string

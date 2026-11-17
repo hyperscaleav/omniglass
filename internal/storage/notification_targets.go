@@ -320,7 +320,7 @@ func getNotificationTarget(ctx context.Context, q querier, ref string, forUpdate
 	if forUpdate {
 		lock = " for update of t"
 	}
-	t, err := scanNotificationTarget(q.QueryRow(ctx, `select `+notificationTargetCols+notificationTargetFrom+` where t.`+registryRefCol(ref)+` = $1`+lock, ref))
+	t, err := scanNotificationTarget(q.QueryRow(ctx, `select `+notificationTargetCols+notificationTargetFrom+` where t.`+catalogRefCol(ref)+` = $1`+lock, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotificationTargetNotFound
 	}

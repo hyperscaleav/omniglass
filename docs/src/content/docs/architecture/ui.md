@@ -17,7 +17,7 @@ Roughly 22 live pages (fleet, catalog, values, admin, plus the shell) ship as **
 surface that is neither: an outline of locations over one projection (`GET /views/fleet`) and
 the CRUD lists, and the detail views it opens. Its core is one pure model,
 `web/src/lib/outline.ts`, which nests the locations, puts each system on the location where it
-sits, folds single-child chains, counts what a row holds in the registry's own type labels,
+sits, folds single-child chains, counts what a row holds in the catalog's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
 renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
 location from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
@@ -143,12 +143,12 @@ composable dashboards are the customization layer over the complete coded consol
 
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
 
-::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
+::::design[Views and the SSE live relay, tracked in #523; the unit catalog is #430]
 A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
 earns it. Config-dependent presentation (a severity level's name to label and color) resolves
 client-side from the config view (built today over polling: every severity chip reads the
-`/severity-levels` registry, #917); a sample value converts on read to the operator's preferred
-display unit via a future unit registry keyed by the
+`/severity-levels` catalog, #917); a sample value converts on read to the operator's preferred
+display unit via a future unit catalog keyed by the
 [property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit.
 
 :::caution[Open question]
@@ -159,7 +159,7 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 ## Configuration UIs
 
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
-rules, config, groups, schedules, severity levels, the IAM resources). The type registries each
+rules, config, groups, schedules, severity levels, the IAM resources). The type catalogs each
 hold their own page: location types (CRUD; Catalog, under Locations: Types) and secret types
 (read-only, at `/secret-types` by URL with no subrail entry), the former tabbed Types page having split with the
 system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
@@ -257,16 +257,16 @@ drafts, never the previous entity's half-typed edit under the new page.
 
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
 grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
-navigate to the registries' own canonical flat routes (`/products`, `/metrics`, ...), each real
+navigate to the catalogs' own canonical flat routes (`/products`, `/metrics`, ...), each real
 page rendering in the pane beside it, and an **Overview landing** at `/catalog` with one card per
-group and live registry counts, the [learning-tool](/contributing/learning-tool/) answer to "what
+group and live catalog counts, the [learning-tool](/contributing/learning-tool/) answer to "what
 is all this". Subrail and cards derive from one group table judged through the same permission
 filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
 are all gated away disappears with its header; secret types holds no subrail entry at all
 (`/secret-types` stays routed and gated, rendering in the pane). The naming rule
 ([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
 carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
-registry's own word, and where the registry's only word is "type" the entry is Types with the
+catalog's own word, and where the catalog's only word is "type" the entry is Types with the
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
 teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
 a happening (caught from the fleet or caused by the platform), never an outbound message, which

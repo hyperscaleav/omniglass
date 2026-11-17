@@ -257,7 +257,7 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
 
 // fleetView is the principal as fleet-wide config sees it: only the
 // permissions its all-scope grants carry. Pass it wherever a check takes a Me
-// (can, registryLock) to judge a fleet-wide resource on what the server will
+// (can, catalogLock) to judge a fleet-wide resource on what the server will
 // actually admit, since the gateway refuses such a write without an all-scope
 // grant even when a bounded grant carries the permission.
 export function fleetView(me: Me | null | undefined): Me | null {

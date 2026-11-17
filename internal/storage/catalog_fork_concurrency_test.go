@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The registry fork writes the whole mutable row back (ADR-0095 decision 2),
+// The catalog fork writes the whole mutable row back (ADR-0095 decision 2),
 // so it has none of the lost-update immunity the column-wise coalesce write it
 // replaced had. Two operators editing different fields of one shipped row at
 // once each compute an image from the image they read, and whichever writes
@@ -22,7 +22,7 @@ import (
 // These two tests drive exactly that, and they FAIL against the unlocked code
 // rather than asserting that a lock exists. The interleaving needs no help: the
 // two calls take the same path from the same starting gun, so both reads land
-// before either commit, and both registries lost an edit inside two rounds on
+// before either commit, and both catalogs lost an edit inside two rounds on
 // every run measured (#709 in the report; see the build-log entry).
 //
 // They are also the reason the lock is where it is. location_type shipped with
@@ -148,8 +148,8 @@ func TestConcurrentLocationTypeForksKeepBothEdits(t *testing.T) {
 // fork's icon instead. A restore that ran SECOND must audit the image it
 // actually discarded, the edit, not the base it read before the edit landed.
 //
-// component_type carries this one because the lock is the same lockRegistryRow
-// call on both registries and the location half of the pair is covered by
+// component_type carries this one because the lock is the same lockCatalogRow
+// call on both catalogs and the location half of the pair is covered by
 // TestConcurrentLocationTypeForksKeepBothEdits.
 func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
 	t.Parallel()

@@ -441,7 +441,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 		t.Fatalf("ordinal after a label edit = %v, want 2", ordstr(after.Ordinal))
 	}
 
-	// The same patch written in the OTHER form a registry reference takes
+	// The same patch written in the OTHER form a catalog reference takes
 	// (ADR-0062): the type's uuid rather than its name. It addresses the row the
 	// location already carries, so it is still not a reclassify, and the
 	// comparison that says so has to be on the RESOLVED id rather than on the
@@ -593,7 +593,7 @@ func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
 	}
 }
 
-// TestNameRuleRoundTripsThroughTheRegistry pins what is stored and read back,
+// TestNameRuleRoundTripsThroughTheCatalog pins what is stored and read back,
 // including the one normalization: a positional rule carries no suppression
 // flag, so a rule written with one comes back without it and two rules that
 // mint identically compare equal.
@@ -602,7 +602,7 @@ func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
 // them: NO shipped location type carries a name rule. `floor` carried one for
 // two slices and ADR-0103 reversed it, so this is the assertion that fails if a
 // rule is ever put back into the seed without the argument being made again.
-func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
+func TestNameRuleRoundTripsThroughTheCatalog(t *testing.T) {
 	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -650,7 +650,7 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 // writes them with ON CONFLICT DO UPDATE, and a withdrawn value DOES leave an
 // fleet (TestWithdrawnShippedValueLeavesTheFleet is that half). What survives
 // the boot now is the fork. An edit of a shipped type stores the operator's
-// whole version in registry_shadow keyed on the row's own uuid, and every read
+// whole version in catalog_shadow keyed on the row's own uuid, and every read
 // resolves it over the official row (ADR-0095, ADR-0106).
 //
 // So the mechanism is asserted and not just the outcome: the official row is

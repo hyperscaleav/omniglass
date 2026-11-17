@@ -61,7 +61,7 @@ export async function systemAlarms(name: string): Promise<Alarm[]> {
 }
 
 export type RaiseAlarm = {
-  // A severity level by name, from the registry (GET /severity-levels).
+  // A severity level by name, from the catalog (GET /severity-levels).
   severity: string;
   message?: string;
   dedup_key?: string;
@@ -132,7 +132,7 @@ export function unacknowledgedCount(list: Alarm[]): number {
   return list.filter((a) => a.active && !a.acknowledged).length;
 }
 
-// sortAlarms puts the worst first (by the registry's rank, unknown names last),
+// sortAlarms puts the worst first (by the catalog's rank, unknown names last),
 // and the most recent first within a severity, so the line that explains the
 // outage is the line the eye lands on. The levels are passed in so the sort stays
 // pure; without them every alarm ties on severity and the order is by recency.

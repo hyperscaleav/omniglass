@@ -144,7 +144,7 @@ row per system, with its components under each. A component two systems share ap
 both, marked **also in** the other; a component in no system sits directly under its location.
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
-registry's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
+catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
 column counts the systems beneath it by verdict, in four fixed slots: healthy, incomplete,
 degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
@@ -231,7 +231,7 @@ that system**. Its address lands there, and so does the panel's Expand.
 The view reads top-down:
 
 - **The location card**: where the system sits, as context. It names the location's type in your
-  registry's words and its tags, and **Location details** opens the location's own panel (its
+  catalog's words and its tags, and **Location details** opens the location's own panel (its
   form, its Edit) without leaving the view. The view is titled by the location, so the card
   does not name it again, and the breadcrumb ends at the location's parent: the room is named
   once. The breadcrumb's **Explore** goes back up to where you were: the outline, opened down

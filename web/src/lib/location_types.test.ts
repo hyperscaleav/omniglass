@@ -13,7 +13,7 @@ describe("location_types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists the registry and normalizes a missing allowed_parent_types to empty", async () => {
+  it("lists the catalog and normalizes a missing allowed_parent_types to empty", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         location_types: [{ id: uuidFor("lt-campus"), name: "campus", label: "Campus", icon: "landmark", official: false }],

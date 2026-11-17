@@ -32,7 +32,7 @@ const products: Product[] = [
   { id: uuidFor("prod-generic-service"), name: "generic-service", label: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
 ];
 
-// The device-class registry the create form resolves a generated name's stem
+// The device-class catalog the create form resolves a generated name's stem
 // through. Three tiers on purpose: ceiling-mic sets no stem of its own, so a
 // preview that read the product's own type and stopped would answer nothing
 // where the server's inheriting walk answers "mic".
@@ -158,7 +158,7 @@ describe("Components create-as-route", () => {
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
     // Enabled once the platform has ANSWERED, which is a round trip since #702
-    // rather than a synchronous read of a registry the picker had loaded. The
+    // rather than a synchronous read of a catalog the picker had loaded. The
     // wait is the behaviour change: submitting before the answer lands would
     // post no precondition, so the gate holds until there is one.
     await waitFor(() => expect(submit.disabled).toBe(false)); // name still blank, and that is fine

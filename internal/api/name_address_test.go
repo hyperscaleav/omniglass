@@ -23,7 +23,7 @@ import (
 // referenceFields maps a uuid field to the name field that must accompany it, per
 // response schema. A schema listed here must carry both.
 //
-// The registry references join the fleet references here now that every registry
+// The catalog references join the fleet references here now that every catalog
 // has a uuid primary key and a renameable `name` (epic #262, ADR-0062). A product,
 // a vendor, a driver, a standard, and their parents are addressed the same way an
 // fleet entity is: the id is the handle, the name is the label, and a response
@@ -69,14 +69,14 @@ var referenceFields = map[string]string{
 	"group_id": "group",
 }
 
-// registryNameRefs is the reverse direction: a response that names a renameable
-// registry by its handle must ALSO carry the uuid, so a name-only reference (which
+// catalogNameRefs is the reverse direction: a response that names a renameable
+// catalog by its handle must ALSO carry the uuid, so a name-only reference (which
 // the forward `*_id` scan cannot see, because there is no id field to trip on)
 // cannot slip through. Keyed by the NAME field, valued by the id field it requires.
-// Only unambiguous registry-name fields belong here. An endpoint's `transport`
+// Only unambiguous catalog-name fields belong here. An endpoint's `transport`
 // is deliberately absent: transports are a code registry (ADR-0073) with no
 // uuid to pair, so the name alone IS the stable handle.
-var registryNameRefs = map[string]string{
+var catalogNameRefs = map[string]string{
 	"location_type":      "location_type_id",
 	"secret_type":        "secret_type_id",
 	"property_type_name": "property_type_id",
@@ -84,9 +84,9 @@ var registryNameRefs = map[string]string{
 }
 
 // reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a
-// diagnostic BFF row that carries a registry name for display where the id would
+// diagnostic BFF row that carries a catalog name for display where the id would
 // be dead weight. Empty today: the one exemption it held (the reachability
-// row's interface_type) retired with the interface_type registry (ADR-0073).
+// row's interface_type) retired with the interface_type catalog (ADR-0073).
 var reverseNameOnlyOK = map[string]bool{}
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -105,7 +105,7 @@ var idOnlyIsCorrect = map[string]string{
 }
 
 // References exempt from the both-forms rule, each for a reason of its own.
-// The nine component-classification registries used to live here, back when their
+// The nine component-classification catalogs used to live here, back when their
 // name WAS their primary key; epic #262 gave each a uuid key and a renameable
 // name, so they moved into referenceFields and now carry both like any reference.
 // What remains is a set of row ids that address rows with no separate name of
@@ -183,9 +183,9 @@ func TestReferencesCarryBothForms(t *testing.T) {
 					"and the name as the label", name, field, pair)
 			}
 		}
-		// Reverse direction: a name-only registry reference has no `*_id` field to
-		// trip the forward scan, so check the curated registry-name fields directly.
-		for nameField, idField := range registryNameRefs {
+		// Reverse direction: a name-only catalog reference has no `*_id` field to
+		// trip the forward scan, so check the curated catalog-name fields directly.
+		for nameField, idField := range catalogNameRefs {
 			if _, hasName := sch.Properties[nameField]; !hasName {
 				continue
 			}
@@ -194,7 +194,7 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			}
 			checked++
 			if _, hasID := sch.Properties[idField]; !hasID {
-				t.Errorf("%s carries the registry name %q but not %q: a registry reference carries both, "+
+				t.Errorf("%s carries the catalog name %q but not %q: a catalog reference carries both, "+
 					"the name as the label and the id as the stable handle", name, nameField, idField)
 			}
 		}

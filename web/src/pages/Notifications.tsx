@@ -22,14 +22,14 @@ import {
 } from "../lib/notification_types";
 import { COMPONENTS_KEY, listComponents, type Component } from "../lib/components";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Notifications (Catalog > Actions > Notifications, #618): the outbound message
-// registry, the peer of Commands. A notification type says WHAT a message about
+// catalog, the peer of Commands. A notification type says WHAT a message about
 // an alarm says, as a one-line subject and a body text, each a template in the
 // same sandbox a label rule runs in, reading the alarm facts. The blade previews
 // a type (or the draft being edited) against a real alarm through the server's
@@ -159,7 +159,7 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "notification_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: remove }
         : undefined,
-    locked: () => registryLock(row(), me.data, "notification_type"),
+    locked: () => catalogLock(row(), me.data, "notification_type"),
   });
 
   // The preview renders the drafts while editing and the stored templates

@@ -1,4 +1,4 @@
-# The ship-with notification_type registry (#618): what a message about an
+# The ship-with notification_type catalog (#618): what a message about an
 # alarm says. Each type carries two templates rendered through the shared
 # template sandbox over the alarm fact map (Component, Location, SeverityLabel,
 # Message, Transition, RaisedAt, ClearedAt, Rule, Link, ...): a one-line

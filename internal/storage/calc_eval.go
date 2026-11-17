@@ -503,7 +503,7 @@ type calcMember struct {
 }
 
 // calcPlan is a rule's reduce ready to run: its inputs typed from the
-// registries and its program, read and compiled once per computation (or
+// catalogs and its program, read and compiled once per computation (or
 // once per preview).
 type calcPlan struct {
 	typed []rules.TypedInput
@@ -1059,7 +1059,7 @@ func systemSelectedSQL(r, s string) string {
 }
 
 // calcProbeSQL finds the enabled rules (either owner kind) reading any of a
-// write's keys (lane:name, resolved to their ids in the registries), except
+// write's keys (lane:name, resolved to their ids in the catalogs), except
 // the write's own rule, with each rule's input keys as lane:name: an index
 // probe of calc_rule_input by key id (TestCalcProbeUsesTheInputIndexes), so
 // a write no rule reads pays for nothing more.

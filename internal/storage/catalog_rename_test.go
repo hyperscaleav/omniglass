@@ -13,14 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A registry handle can be renamed with every reference intact. This is the whole
-// point of giving the registries uuid primary keys, and it is the test each slice
+// A catalog handle can be renamed with every reference intact. This is the whole
+// point of giving the catalogs uuid primary keys, and it is the test each slice
 // of the epic writes first.
 //
 // Before this, a product id was the primary key, so a typo or a rebrand could not
 // be corrected: a product's name was permanent, and every referencing row would
 // have had to be rewritten to change it.
-func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
+func TestCatalogHandleRenameKeepsReferences(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -168,9 +168,9 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Errorf("sample key = %v, want tcp-dial-time through the rename", dp)
 	}
 
-	// Slice 4: the leaf registries (driver, location_type, secret_type,
+	// Slice 4: the leaf catalogs (driver, location_type, secret_type,
 	// interface_type) rename with every inbound reference intact. These are the
-	// last string-keyed registries the epic converts, closing the invariant that
+	// last string-keyed catalogs the epic converts, closing the invariant that
 	// no foreign key anywhere points at a mutable string.
 
 	// driver: a product's driver arc follows the rename.

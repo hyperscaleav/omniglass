@@ -15,7 +15,7 @@ import (
 
 // The action rule surface (#618, #1321): the subscription that wires an
 // alarm transition to a notification. A rule, so it rides rule:* (decision 1
-// of #618): reads registry-shaped on the viewer floor, writes all-scope like
+// of #618): reads catalog-shaped on the viewer floor, writes all-scope like
 // an event rule's, since a rule watches the whole fleet.
 
 type actionRuleBody struct {

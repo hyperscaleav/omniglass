@@ -223,7 +223,7 @@ func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, compon
 		returning id, raised_at, dedup_key`,
 		component.ID, spec.Severity, spec.Message, spec.DedupKey, ruleID).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// The severity names a level in the registry (#917). A raise that
+		// The severity names a level in the catalog (#917). A raise that
 		// lands on an open alarm's dedup key inserts nothing, so the foreign
 		// key never checks it: check here, on this path only, so the winning
 		// raise costs no extra statement.

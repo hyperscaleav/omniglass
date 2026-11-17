@@ -8,7 +8,7 @@ import { api } from "../api/client";
 // all (a one-off system is first class).
 //
 // Official (seed-owned) standards are read-only; custom standards are operator
-// created. This module carries the registry itself; the declared-property contract
+// created. This module carries the catalog itself; the declared-property contract
 // is the classifier-generic layer in lib/classifier_properties.
 export type Standard = {
   id: string;

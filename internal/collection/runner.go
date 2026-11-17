@@ -14,7 +14,7 @@ import (
 // The canonical reachability sample names the tcp probe emits, declared once
 // in probekeys (which the calc rule check also reads). They are seeded
 // metric_types (internal/seed/metric_types.yaml); the ingest
-// consumer's reject-not-project drops any name absent from that registry.
+// consumer's reject-not-project drops any name absent from that catalog.
 const (
 	SignalTCPOpen        = probekeys.TCPOpen
 	SignalTCPConnectTime = probekeys.TCPConnectTime

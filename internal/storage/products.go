@@ -15,7 +15,7 @@ import (
 // request fault the API reports as 422). An out-of-set kind is
 // ErrProductInvalidKind, caught before the write so the DB CHECK never has
 // to. Existence, duplicate, official read-only, and in-use reuse the shared
-// type-registry sentinels.
+// type-catalog sentinels.
 var (
 	ErrProductRefNotFound = errors.New("storage: product references a missing vendor, driver, parent, or component_type")
 	ErrProductInvalidKind = errors.New("storage: product kind is not one of device, app, service")
@@ -42,13 +42,13 @@ func validProductKind(s string) bool {
 	return false
 }
 
-// Product is a registry row naming a concrete SKU in the fleet model (e.g.
+// Product is a catalog row naming a concrete SKU in the fleet model (e.g.
 // "Kestrel VRoom"): a stable id, the official flag, a label, a kind
 // (device/app/service), the component_type it is classified under (the
 // taxonomy above product; mic, camera, wireless-mic...), an optional icon
 // override, and optional pointers at a vendor (who makes it), a driver (what
 // talks to it), and a parent product (a variant it inherits from). The
-// registry lists alphabetically by label; there is no ordering field.
+// catalog lists alphabetically by label; there is no ordering field.
 type Product struct {
 	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the fleet bodies do: the
@@ -333,7 +333,7 @@ func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
 
 // GetProduct resolves one product by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
-	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from `+refRows("product", id)+` product where `+registryRefCol(id)+` = $1`, id))
+	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from `+refRows("product", id)+` product where `+catalogRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -463,7 +463,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		update product set
 			label      = case when $10::boolean then $2 else label end,
 			-- The three-state string (#260, the shape #716 gave the type
-			-- registries): NULL leaves the column, '' clears it to NULL, a value
+			-- catalogs): NULL leaves the column, '' clears it to NULL, a value
 			-- sets it. A coalesce could set but never clear.
 			vendor_id         = case when $3::text is null then vendor_id else nullif($3::text, '')::uuid end,
 			driver_id         = case when $4::text is null then driver_id else nullif($4::text, '')::uuid end,
@@ -479,7 +479,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 				else $9::text
 			end,
 			updated_at        = now()
-		where id = (select id from `+refRows("product", id)+` t where `+registryRefCol(id)+` = $1)
+		where id = (select id from `+refRows("product", id)+` t where `+catalogRefCol(id)+` = $1)
 		returning `+productCols,
 		id, labelVal, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon, patch.LabelRule, setLabel))
 	if err != nil {
@@ -511,10 +511,10 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	return m, nil
 }
 
-// productAuditImage is registryAuditImage under the product sentinel: an
+// productAuditImage is catalogAuditImage under the product sentinel: an
 // unknown ref reads as ErrTypeNotFound rather than a bare no-rows.
 func productAuditImage(ctx context.Context, tx pgx.Tx, ref string) (map[string]any, error) {
-	img, err := registryAuditImage(ctx, tx, "product", ref)
+	img, err := catalogAuditImage(ctx, tx, "product", ref)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -541,7 +541,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from product where id = (select id from `+refRows("product", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from product where id = (select id from `+refRows("product", id)+` t where `+catalogRefCol(id)+` = $1)`, id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return ErrTypeInUse

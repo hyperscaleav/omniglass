@@ -195,7 +195,7 @@ func TestScanLineAllowsRetirementProse(t *testing.T) {
 	}
 	// The escape must be narrow: a nearby retirement word does not license an
 	// unrelated current-tense claim later on the same line.
-	live := "the `field_definition` registry stores the contract"
+	live := "the `field_definition` catalog stores the contract"
 	if got := scanLine(live); len(got) == 0 {
 		t.Errorf("current-tense claim did not fire: %q", live)
 	}
@@ -219,11 +219,11 @@ func TestScanLineFirstMatchWins(t *testing.T) {
 // some unrelated thing that "was replaced" while still making a current-tense
 // claim about a retired term, and a whole-line escape waved exactly that through.
 func TestScanLineEscapeIsProximityScoped(t *testing.T) {
-	drift := "The `field_definition` registry stores the contract, unlike the old alarm model which was replaced."
+	drift := "The `field_definition` catalog stores the contract, unlike the old alarm model which was replaced."
 	if got := scanLine(drift); len(got) == 0 {
 		t.Errorf("a distant retirement word exempted current-tense drift: %q", drift)
 	}
-	near := "the `field_definition` registry retired with the fields fold"
+	near := "the `field_definition` catalog retired with the fields fold"
 	if got := scanLine(near); len(got) != 0 {
 		t.Errorf("an adjacent retirement marker failed to exempt: %q -> %v", near, got)
 	}
@@ -265,7 +265,7 @@ func TestOperatorStringPathsResolve(t *testing.T) {
 func TestNearRetirementMarkerIsRuneSafe(t *testing.T) {
 	// Curly quotes and arrows are three bytes each, so a byte window would cut
 	// through one of them here.
-	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` registry stores it"
+	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` catalog stores it"
 	if got := scanLine(line); len(got) == 0 {
 		t.Errorf("multi-byte line did not fire: %q", line)
 	}
@@ -455,6 +455,63 @@ func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
 	} {
 		if fires(line) {
 			t.Errorf("node in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2035RegistryAsTheCatalogFires proves the registry-as-the-catalog entry
+// catches the word where it names the database rows the fleet is typed by, and
+// passes the lookups compiled into the binary that keep it: the transport
+// registry and its entries, the expression diagnostics, the declarative env
+// registry, the settings namespace registry, the simulator registry, the
+// console's blade and page registries, the agent skills, and a container or
+// package registry an image is pushed to or pulled from.
+func TestADR2035RegistryAsTheCatalogFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2035") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the component_type registry is a hierarchy above product",
+		"Every registry lists alphabetically by label.",
+		"the three ingest registries share one name space",
+		"an operator forks a shipped registry row",
+		"the unit registry carries the symbol",
+		"Registries are seeded official and operator-extensible.",
+	} {
+		if !fires(line) {
+			t.Errorf("registry as the catalog passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the transport registry declares each rung",
+		"each registry transport runs on a dev-fleet component",
+		"The transports are a code registry the binary ships",
+		"is its own registry entry over the tls handshake",
+		"the engine keeps a registry of diagnostics",
+		"generated from the registry (`make gen`)",
+		"the declarative env registry in `internal/config`",
+		"the environment registry (`make gen`)",
+		"the namespace registry, Huma reflects it",
+		"The simulator registry is per server process",
+		"the fleet's cross-entity blade registry",
+		"resolved through the PAGES registry",
+		"the skill registry lacks it",
+		"pushes to the GitHub Container Registry",
+		"build with `--push` to a registry",
+		"a fork run has no registry credential",
+		"the binary never asks the registry",
+		"the npm registry serves the package",
+		"[forks](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row)",
+		"the capability registry was retired by #626",
+		"<BladeStack registry={fleetRegistry} />",
+	} {
+		if fires(line) {
+			t.Errorf("registry in a kept sense fired: %q", line)
 		}
 	}
 }

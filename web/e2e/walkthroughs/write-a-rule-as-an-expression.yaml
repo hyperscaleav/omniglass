@@ -7,7 +7,7 @@
 title: Write a rule as an expression
 description: Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.
 steps:
-  - goto: /rules
+  - goto: /event-rules
     caption: Rules turn readings into conditions and alarms. Start a new one.
   - click: { role: button, name: New rule }
     caption: New rule opens the drawer.

@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// Every registry list orders by the label an operator reads, and an UNLABELLED
+// Every catalog list orders by the label an operator reads, and an UNLABELLED
 // row sorts last rather than first (#613).
 //
 // This is the one behaviour in the display_name-to-label sweep that a rename
@@ -17,21 +17,21 @@ import (
 // of the column name. Postgres sorts NULL last under a default ASC and the empty
 // string FIRST, so an `order by label, name` puts unlabelled rows at the bottom
 // when unset is NULL and at the top when it is the empty string. All seven
-// registries were storing the empty string when this test was written, so all
+// catalogs were storing the empty string when this test was written, so all
 // seven already floated their unlabelled rows to the top of the picker.
 //
 // What it guards NOW is the write side, not the SQL. `nulls last` is the default
 // for an ASC sort, so the ordering is correct exactly as long as unset really is
 // NULL, which is labelOrNull's job (label_unset.go, ADR-0118). Break that helper
 // or forget to call it on one create path and this test goes red on that
-// registry: it is how CreateStandard was caught still binding its label raw
+// catalog: it is how CreateStandard was caught still binding its label raw
 // after every other path had been converted.
 //
 // This is deliberately NOT D4 (ordering by the RENDERED label, falling back to
 // the name). That is ruled and belongs to the slice that gives tag, variable,
 // secret and interface a label. What is pinned here is the ordering the
-// registries have TODAY, made insensitive to the nullability change.
-func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
+// catalogs have TODAY, made insensitive to the nullability change.
+func TestAnUnlabelledCatalogRowSortsLast(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
@@ -56,12 +56,12 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 	type row struct{ name, label string }
 
 	cases := []struct {
-		registry string
-		create   func(t *testing.T, name, label string)
-		list     func(t *testing.T) []row
+		catalog string
+		create  func(t *testing.T, name, label string)
+		list    func(t *testing.T) []row
 	}{
 		{
-			registry: "vendor",
+			catalog: "vendor",
 			create: func(t *testing.T, name, label string) {
 				if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: name, Label: label, Kind: "manufacturer"}); err != nil {
 					t.Fatalf("create vendor %q: %v", name, err)
@@ -80,7 +80,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "driver",
+			catalog: "driver",
 			create: func(t *testing.T, name, label string) {
 				if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, Label: label}); err != nil {
 					t.Fatalf("create driver %q: %v", name, err)
@@ -99,7 +99,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "product",
+			catalog: "product",
 			create: func(t *testing.T, name, label string) {
 				if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: name, Label: label}); err != nil {
 					t.Fatalf("create product %q: %v", name, err)
@@ -118,7 +118,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "standard",
+			catalog: "standard",
 			create: func(t *testing.T, name, label string) {
 				if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: name, Label: label}); err != nil {
 					t.Fatalf("create standard %q: %v", name, err)
@@ -137,7 +137,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "system_type",
+			catalog: "system_type",
 			create: func(t *testing.T, name, label string) {
 				stem := name
 				if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: name, Label: label, Stem: &stem}); err != nil {
@@ -157,7 +157,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "component_type",
+			catalog: "component_type",
 			create: func(t *testing.T, name, label string) {
 				stem := name
 				if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: name, Label: label, Stem: &stem}); err != nil {
@@ -177,7 +177,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			},
 		},
 		{
-			registry: "location_type",
+			catalog: "location_type",
 			create: func(t *testing.T, name, label string) {
 				if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: name, Label: label}); err != nil {
 					t.Fatalf("create location_type %q: %v", name, err)
@@ -198,14 +198,14 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.registry, func(t *testing.T) {
+		t.Run(tc.catalog, func(t *testing.T) {
 			tc.create(t, unlabelled, "")
 			tc.create(t, labelledZ, "Zulu")
 			tc.create(t, labelledA, "Alpha")
 
 			all := tc.list(t)
 
-			// The three rows this case created, in the order the registry returned
+			// The three rows this case created, in the order the catalog returned
 			// them. Everything the seed installed is ignored here; the next
 			// assertion is the one that covers it.
 			mine := make([]string, 0, 3)
@@ -216,7 +216,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 			}
 			if len(mine) != len(wantOrder) {
-				t.Fatalf("%s: found %d of the 3 created rows in the list (%v)", tc.registry, len(mine), mine)
+				t.Fatalf("%s: found %d of the 3 created rows in the list (%v)", tc.catalog, len(mine), mine)
 			}
 			for i := range wantOrder {
 				if mine[i] != wantOrder[i] {
@@ -224,7 +224,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 						"An unlabelled row must sort LAST, not first. Postgres sorts '' before every "+
 						"other string, so a bare `order by label, name` floats every unlabelled row to "+
 						"the top of the picker the moment the column stops being nullable. Spell it "+
-						"`order by nullif(label, '') nulls last, name`.", tc.registry, mine, wantOrder)
+						"`order by nullif(label, '') nulls last, name`.", tc.catalog, mine, wantOrder)
 				}
 			}
 
@@ -238,7 +238,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				if seenUnlabelled != "" {
 					t.Fatalf("%s: labelled row %q (%q) sorts after unlabelled row %q; "+
-						"every unlabelled row belongs at the end of the list", tc.registry, r.name, r.label, seenUnlabelled)
+						"every unlabelled row belongs at the end of the list", tc.catalog, r.name, r.label, seenUnlabelled)
 				}
 			}
 		})

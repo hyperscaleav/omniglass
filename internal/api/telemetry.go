@@ -35,7 +35,7 @@ import (
 // regardless of how a record arrived.
 
 // pushBatchLimit bounds how many items one batch may carry, so a single request
-// cannot pin the registry snapshot or the publish path for an unbounded time.
+// cannot pin the catalog snapshot or the publish path for an unbounded time.
 //
 // The encoded SIZE needs no guard of its own: Huma already caps the request body at
 // 1 MiB (a larger body is a 413 before this handler runs), and protobuf encodes more
@@ -92,7 +92,7 @@ type pushInput struct {
 		Metrics    []pushMetric   `json:"metrics,omitempty" doc:"Numeric observations, validated against metric_type"`
 		Properties []pushProperty `json:"properties,omitempty" doc:"Categorical observations, validated against property_type and each type's validation schema"`
 		Events     []pushEvent    `json:"events,omitempty" doc:"Natively caught occurrences, validated against event_type"`
-		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422"`
+		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422"`
 	}
 }
 
@@ -188,20 +188,20 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// Reject-not-project, applied HERE so rejection is synchronous. Publishing is
 		// asynchronous, so a route that validated nothing would have to answer "202,
 		// and good luck", which is useless to a human who mistyped a property name.
-		// The registry is an in-memory snapshot, so this costs a map lookup per name.
+		// The catalog is an in-memory snapshot, so this costs a map lookup per name.
 		metricTypes, err := gw.ListMetricTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
 		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
 		eventTypes, err := gw.ListEventTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
-		reg := collection.NewRegistry(metricTypes, properties, eventTypes)
+		reg := collection.NewCatalog(metricTypes, properties, eventTypes)
 
 		out := &pushOutput{Status: http.StatusAccepted}
 		batch := &ogv1.TelemetryBatch{
@@ -502,7 +502,7 @@ func endpointListing(names []string) string {
 // registered nowhere, or the name is held on another lane by an operator's row
 // that shadows an official one of the same name on this install (#1307), which
 // is not "unregistered": the official catalog does hold it.
-func unregisteredReason(reg collection.Registry, name, kind string) string {
+func unregisteredReason(reg collection.Catalog, name, kind string) string {
 	if reg.IsShadowed(name) {
 		return "name is shadowed on this install: an operator's row of the same name in another catalog takes it over the official " + kind + " type"
 	}

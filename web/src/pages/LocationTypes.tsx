@@ -23,12 +23,12 @@ import {
 } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
 import { nameStemError } from "../lib/validate";
-import { registryLock, registryOrigin } from "../lib/catalog";
+import { catalogLock, catalogOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Location types (Catalog > Locations): the location classifier registry (campus, building, floor, room,
+// Location types (Catalog > Locations): the location classifier catalog (campus, building, floor, room,
 // and your own) on the FlatList surface. The shipped rows are OFFICIAL and the
 // platform owns them (#703), which is what lets a release withdraw a value it
 // once shipped; editing one is still allowed and FORKS it (#655, ADR-0095), so
@@ -38,21 +38,21 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // location_type:*). A row's detail carries the location type's declared-property
 // contract on the shared ContractEditor.
 //
-// This page names ONE registry on purpose. Its former home, the tabbed Types
-// page, fetched the secret_type registry jointly and threw if either fetch
+// This page names ONE catalog on purpose. Its former home, the tabbed Types
+// page, fetched the secret_type catalog jointly and threw if either fetch
 // failed, so a plain viewer (no secret:read) lost this page too (#598). The
-// secret registry now lives on its own read-only page (SecretTypes.tsx).
+// secret catalog now lives on its own read-only page (SecretTypes.tsx).
 //
 // The other two shape-definers are catalog entities of their own, each with its
 // own page and contract editor: a system's shape is the STANDARD it conforms to
 // (Standards), and a component's is the product it is an instance of (Products).
 
-// Origin is three-state on a fork-adopting registry: a row this release ships, a
+// Origin is three-state on a fork-adopting catalog: a row this release ships, a
 // row the operator made, or a shipped row the operator has overridden. The third
 // is the one that has to read unambiguously, because it is the only state where
 // what an operator sees is not what the release ships.
 function originBadge(row: { official: boolean; forked?: boolean }): JSX.Element {
-  switch (registryOrigin(row)) {
+  switch (catalogOrigin(row)) {
     case "yours":
       return <span class="badge badge-outline badge-sm">custom</span>;
     case "overridden":
@@ -85,7 +85,7 @@ function namingSummary(r: LocationType): string {
 const columns: FlatColumn<LocationType>[] = [
   identityColumn<LocationType>(),
   { key: "icon", label: "Icon", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.icon ?? "\u2014"}</span> },
-  { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
+  { key: "official", label: "Origin", width: "110px", sortVal: (r) => catalogOrigin(r), cell: (r) => originBadge(r) },
 ];
 
 export default function LocationTypes() {
@@ -106,7 +106,7 @@ export default function LocationTypes() {
         error: () => types.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (r) => registryOrigin(r), values: () => ["shipped", "yours", "overridden"] },
+          { key: "official", type: "string", hint: "exact", get: (r) => catalogOrigin(r), values: () => ["shipped", "yours", "overridden"] },
         ],
         filterPlaceholder: "filter location types by name…",
         columns,
@@ -121,7 +121,7 @@ export default function LocationTypes() {
   );
 }
 
-// locationTypeBlade renders one registry row on the shared blade stack. A
+// locationTypeBlade renders one catalog row on the shared blade stack. A
 // shipped row is editable (the edit forks it) and carries Restore once forked; a
 // custom row carries Edit + Delete.
 export const locationTypeBlade: BladeDef = {
@@ -129,8 +129,8 @@ export const locationTypeBlade: BladeDef = {
   Body: (p) => <LocationTypeBladeBody id={p.id} />,
 };
 
-// The blade id is the name (unique within the registry); the row is looked up
-// from the cached registry query.
+// The blade id is the name (unique within the catalog); the row is looked up
+// from the cached catalog query.
 function useLocationTypeRow(id: string): () => LocationType | undefined {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   return () => (types.data ?? []).find((r) => r.name === id);
@@ -280,7 +280,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
         ? { label: "Delete", tone: "danger" as const, onClick: removeType }
         : undefined;
     },
-    locked: () => registryLock(row(), me.data, "location_type", { forkable: true }),
+    locked: () => catalogLock(row(), me.data, "location_type", { forkable: true }),
   });
 
   return (

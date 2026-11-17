@@ -18,11 +18,11 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// outcomeRegistry is the catalog the outcome cases derive against: a
+// outcomeCatalog is the catalog the outcome cases derive against: a
 // collected metric, a calc metric no outpost may write, an outpost-probe metric, a
 // property with an enum, and an event with a payload schema.
-func outcomeRegistry() collection.Registry {
-	return collection.NewRegistry(
+func outcomeCatalog() collection.Catalog {
+	return collection.NewCatalog(
 		[]storage.MetricType{
 			{Name: "participant-count", WriterClass: writerclass.Collected},
 			{Name: "rollup-avg", WriterClass: writerclass.Calc},
@@ -53,7 +53,7 @@ func only(t delivery.Tally, k delivery.Kind, o delivery.Outcome, n uint64) bool 
 // make counts its item under its own outcome and only that one (#1641), and a
 // sample that derives counts nothing (the gateway counts it stored).
 func TestDeriveTalliesEachRefusal(t *testing.T) {
-	reg := outcomeRegistry()
+	reg := outcomeCatalog()
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 	w := storage.OutpostWriter(owner.ComponentID, owner.EndpointName)
 	arc := componentArc(owner)
@@ -106,7 +106,7 @@ func TestDeriveTalliesEachRefusal(t *testing.T) {
 // identity) or unbound (an identity no binding places), and a bound sample
 // its lane refuses counts that refusal (#1641).
 func TestFanOutTalliesUnboundAndUnidentified(t *testing.T) {
-	reg := outcomeRegistry()
+	reg := outcomeCatalog()
 	fanned := func() *ogv1.TelemetryBatch {
 		return &ogv1.TelemetryBatch{
 			Metrics:    []*ogv1.MetricSample{{Name: "participant-count", Value: 3, Identity: room("zr-a")}},
@@ -172,7 +172,7 @@ func TestFanOutTalliesUnboundAndUnidentified(t *testing.T) {
 }
 
 // outcomeStore is an outpost lane's store with no database: it resolves the
-// tasks it holds, serves outcomeRegistry, places no identity, and captures
+// tasks it holds, serves outcomeCatalog, places no identity, and captures
 // the batch it is asked to land.
 type outcomeStore struct {
 	fakeStore

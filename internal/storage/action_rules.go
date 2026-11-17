@@ -112,7 +112,7 @@ func scanActionRule(row pgx.Row) (*ActionRule, error) {
 }
 
 // ListActionRules lists every platform rule, by name. Rules read like a
-// registry; a personal rule is its owner's alone and never listed here.
+// catalog; a personal rule is its owner's alone and never listed here.
 func (p *PG) ListActionRules(ctx context.Context) ([]ActionRule, error) {
 	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_principal_id is null order by r.name`)
 	if err != nil {
@@ -149,7 +149,7 @@ func getActionRule(ctx context.Context, q querier, ref, owner string, forUpdate 
 	if owner != "" && !isUUID(owner) {
 		return nil, ErrActionRuleNotFound
 	}
-	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+registryRefCol(ref)+` = $1
+	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+catalogRefCol(ref)+` = $1
 		and x.owner_principal_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionRuleNotFound

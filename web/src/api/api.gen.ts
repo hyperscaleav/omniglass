@@ -650,7 +650,7 @@ export type CalcInputBody = {
 };
 
 /**
- * Which registry the key is in
+ * Which catalog the key is in
  */
 export type CalcInputReadBodyLane = typeof CalcInputReadBodyLane[keyof typeof CalcInputReadBodyLane];
 
@@ -667,7 +667,7 @@ export type CalcInputReadBody = {
   key: string;
   /** The key's uuid, which the rule holds it by */
   key_id: string;
-  /** Which registry the key is in */
+  /** Which catalog the key is in */
   lane: CalcInputReadBodyLane;
   /** The window the input reads its key over, in seconds; absent for an input that reads current values */
   window_seconds?: number;
@@ -881,7 +881,7 @@ export type CalcPreviewOutputBody = {
 };
 
 /**
- * Which lane the output key is on, derived from the registries
+ * Which lane the output key is on, derived from the catalogs
  */
 export type CalcRuleBodyOutputLane = typeof CalcRuleBodyOutputLane[keyof typeof CalcRuleBodyOutputLane];
 
@@ -908,7 +908,7 @@ export const CalcRuleBodyOwnerKind = {
 export type CalcRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
+  /** Why the stored reduce does not compile against the catalogs as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
   calc_error?: CalcErrorBody;
   /**
      * The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same
@@ -936,7 +936,7 @@ export type CalcRuleBody = {
   official: boolean;
   /** The property or metric the rule writes */
   output_key: string;
-  /** Which lane the output key is on, derived from the registries */
+  /** Which lane the output key is on, derived from the catalogs */
   output_lane: CalcRuleBodyOutputLane;
   /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members) */
   owner_kind: CalcRuleBodyOwnerKind;
@@ -1620,15 +1620,15 @@ export type ComponentTypeBody = {
   icon?: string;
   /** The component_type's uuid, the stable handle that survives a rename */
   id: string;
-  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_abbrev?: string;
   /** The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent */
   inherited_abbrev_source?: string;
-  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_icon?: string;
   /** The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent */
   inherited_icon_source?: string;
-  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_stem?: string;
   /** The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
@@ -1643,7 +1643,7 @@ export type ComponentTypeBody = {
   parent?: string;
   /** The parent component_type's id, the canonical handle; absent for a root type */
   parent_id?: string;
-  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it */
   resolved_icon?: string;
   /** The auto-generated component name's prefix; empty inherits the nearest ancestor's */
   stem?: string;
@@ -1953,7 +1953,7 @@ export type CreateEndpointInputBody = {
   outpost?: string;
   /** Address/target settings (jsonb); an attach derives them from the inputs instead */
   params?: unknown;
-  /** A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
+  /** A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
   transport?: string;
 };
 
@@ -3238,7 +3238,7 @@ export type EndpointBody = {
   outpost_id?: string;
   /** The address/target settings (jsonb) */
   params?: unknown;
-  /** The transport name (the wire this endpoint speaks over), from the code registry */
+  /** The transport name (the wire this endpoint speaks over), from the built-in transports */
   transport: string;
   /** A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list */
   webhook?: EndpointWebhookBody;
@@ -3448,7 +3448,7 @@ export type EventBody = {
 };
 
 /**
- * Which lane the key reads, derived from the registries
+ * Which lane the key reads, derived from the catalogs
  */
 export type EventRuleBodySampleLane = typeof EventRuleBodySampleLane[keyof typeof EventRuleBodySampleLane];
 
@@ -3503,7 +3503,7 @@ export type EventRuleBody = {
   pending_streaks: number;
   /** The property or metric the rule reads */
   sample_key: string;
-  /** Which lane the key reads, derived from the registries */
+  /** Which lane the key reads, derived from the catalogs */
   sample_lane: EventRuleBodySampleLane;
   /** The components the rule watches; both lists empty is every component */
   selector: SelectorBody;
@@ -5216,15 +5216,15 @@ export type SystemTypeBody = {
   icon?: string;
   /** The system_type's uuid, the stable handle that survives a rename */
   id: string;
-  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_abbrev?: string;
   /** The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent */
   inherited_abbrev_source?: string;
-  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_icon?: string;
   /** The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent */
   inherited_icon_source?: string;
-  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_stem?: string;
   /** The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
@@ -5238,7 +5238,7 @@ export type SystemTypeBody = {
   parent?: string;
   /** The parent system_type's id, the canonical handle; absent for a root type */
   parent_id?: string;
-  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it */
   resolved_icon?: string;
   /** The prefix a generated system name is built from; empty inherits the nearest ancestor's */
   stem?: string;
@@ -6836,7 +6836,7 @@ export type PushInputBody = {
      */
   events?: PushEvent[] | null;
   /**
-     * Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422
+     * Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422
      * @nullable
      */
   logs?: PushLog[] | null;
@@ -7089,6 +7089,18 @@ export type RenameCalcRuleInputBody = {
   name: string;
 };
 
+export type RenameCatalogInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name: string;
+};
+
 export type RenameComponentInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7130,18 +7142,6 @@ export type RenameLocationInputBody = {
   readonly $schema?: string;
   /**
      * The new name, unique within its placement (lowercase letters, digits, hyphens)
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name: string;
-};
-
-export type RenameRegistryInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)
      * @minLength 1
      * @maxLength 100
      * @pattern ^[a-z0-9][a-z0-9-]*$
@@ -7198,7 +7198,7 @@ export type RenderSystemLabelInputBody = {
   parent?: string;
   /** The standard this system conforms to, by name or uuid; omit for a one-off system */
   standard_id?: string;
-  /** The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */
+  /** The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row. */
   system_type_id?: string;
 };
 
@@ -10838,7 +10838,7 @@ export const getListCalcRuleUrl = () => {
 }
 
 /**
- * Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+ * Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
  * @summary List calc rules
  */
 export const listCalcRule = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listCalcRuleResponse> => {
@@ -11506,7 +11506,7 @@ export const getListComponentTypesUrl = () => {
 }
 
 /**
- * Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+ * Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
  * @summary List component types
  */
 export const listComponentTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentTypesResponse> => {
@@ -14301,7 +14301,7 @@ export const getListDriversUrl = () => {
 }
 
 /**
- * Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+ * Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
  * @summary List drivers
  */
 export const listDrivers = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listDriversResponse> => {
@@ -14554,7 +14554,7 @@ export const getRenameDriverUrl = (id: string,) => {
  * @summary Rename a driver
  */
 export const renameDriver = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -14575,7 +14575,7 @@ return ogFetch<renameDriverResponse>(getRenameDriverUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -15132,7 +15132,7 @@ export const getListEventRuleUrl = () => {
 }
 
 /**
- * Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+ * Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
  * @summary List event rules
  */
 export const listEventRule = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listEventRuleResponse> => {
@@ -16127,7 +16127,7 @@ export const getListLocationTypesUrl = () => {
 }
 
 /**
- * Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
+ * Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
  * @summary List location types
  */
 export const listLocationTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypesResponse> => {
@@ -16638,7 +16638,7 @@ export const getRenameLocationTypeUrl = (id: string,) => {
  * @summary Rename a location type
  */
 export const renameLocationType = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -16659,7 +16659,7 @@ return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -18562,7 +18562,7 @@ export const getRenameNotificationTypeUrl = (id: string,) => {
  * @summary Rename a notification type
  */
 export const renameNotificationType = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -18583,7 +18583,7 @@ return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -21352,7 +21352,7 @@ export const getListProductsUrl = () => {
 }
 
 /**
- * Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
  * @summary List products
  */
 export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
@@ -21907,7 +21907,7 @@ export const getRenameProductUrl = (id: string,) => {
  * @summary Rename a product
  */
 export const renameProduct = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -21928,7 +21928,7 @@ return ogFetch<renameProductResponse>(getRenameProductUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -23973,7 +23973,7 @@ export const getRenameStandardUrl = (id: string,) => {
  * @summary Rename a standard
  */
 export const renameStandard = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -23994,7 +23994,7 @@ return ogFetch<renameStandardResponse>(getRenameStandardUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -24086,7 +24086,7 @@ export const getListSystemTypesUrl = () => {
 }
 
 /**
- * Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+ * Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
  * @summary List system types
  */
 export const listSystemTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemTypesResponse> => {
@@ -26743,7 +26743,7 @@ export const getListTransportsUrl = () => {
 }
 
 /**
- * Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+ * Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
  * @summary List the transports the platform speaks
  */
 export const listTransports = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listTransportsResponse> => {
@@ -27036,7 +27036,7 @@ export const getListVendorsUrl = () => {
 }
 
 /**
- * Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+ * Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
  * @summary List vendors
  */
 export const listVendors = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listVendorsResponse> => {
@@ -27289,7 +27289,7 @@ export const getRenameVendorUrl = (id: string,) => {
  * @summary Rename a vendor
  */
 export const renameVendor = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -27310,7 +27310,7 @@ return ogFetch<renameVendorResponse>(getRenameVendorUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 

@@ -151,7 +151,7 @@ export default function EntityForm(props: {
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: props.kind === "system" }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: props.kind === "location" }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: props.kind === "component" }));
-  // A handle reads as its registry row's label (#870): the operator's word for
+  // A handle reads as its catalog row's label (#870): the operator's word for
   // a type, a standard or a product, never the machine identifier behind it.
   const labelIn = (list: { name: string; label?: string }[] | undefined, handle: string) => {
     const hit = (list ?? []).find((x) => x.name === handle);
@@ -567,7 +567,7 @@ export function EntityCreateForm(props: {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: isComponent() }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
-  // Every create reads the registry: a location's type list, and every kind's
+  // Every create reads the catalog: a location's type list, and every kind's
   // placement picker, which orders sibling locations by their type's rank in the
   // customer's hierarchy (never by a table of the shipped type names).
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));

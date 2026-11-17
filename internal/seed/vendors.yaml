@@ -1,6 +1,6 @@
 # The official vendors (manufacturers), seeded idempotently at boot. A vendor
 # names an organization in the fleet model; products point at one. Each vendor
-# carries a kind (manufacturer, integrator, or developer). The registry lists
+# carries a kind (manufacturer, integrator, or developer). The catalog lists
 # alphabetically by label.
 #
 # The catalog is FICTIONAL by design: the demo fleet is not sponsored, so the

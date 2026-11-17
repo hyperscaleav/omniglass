@@ -12,7 +12,7 @@ import { entityLabel } from "./entities";
 // beneath; a location holding several groups its components under one header per
 // system. Location types are customer data (ADR-0102), so nothing here reads a
 // type's name: the tree comes from parent links, counts come from the
-// registry's own labels, and folding comes from the tree's shape.
+// catalog's own labels, and folding comes from the tree's shape.
 //
 // Pure, so everything an operator could dispute (where a component lands, what
 // a count says, what folds) is unit-tested without a DOM.

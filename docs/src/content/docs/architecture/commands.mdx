@@ -1,6 +1,6 @@
 ---
 title: Commands
-description: "The do primitive: the command_type registry, command invocations, and computed settlement that ties want, told, and is together."
+description: "The do primitive: the command_type catalog, command invocations, and computed settlement that ties want, told, and is together."
 sidebar:
   badge:
     text: Partial
@@ -10,7 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Partial: record, reconcile, actuation, and the status read are built; derived producers are deferred]
-The `command_type` registry, the `command` invocation log, computed settlement, the **recorded
+The `command_type` catalog, the `command` invocation log, computed settlement, the **recorded
 status** (`issued` / `settled` / `failed` / `timed-out`), and the **two-armed target** (a command
 may set a property or a metric; the metric arm is schema-and-storage deep, its authoring surface
 deferred until a metric command exists)
@@ -132,9 +132,9 @@ of their own: delivery loss is undelivered over dispatch samples plus undelivere
 unexecuted over execution samples plus unexecuted. The keys, units and writers are rendered with
 every platform key on [collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself).
 
-A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
+A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its catalog is `command_type`, the driver-owned twin of the sample and event catalogs.
 
-## The command_type registry
+## The command_type catalog
 
 `command_type` describes every command: `(name, label, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, disruptive, quiet_seconds, hold_seconds, power_outlet_param, official)`. Two facts are the driver's, not the abstract signal's:
 
@@ -157,7 +157,7 @@ them as any command: the shipped `ferrite-pdu-api` renders a POST to the PDU's `
 omniglass component command issue power-1 --command-type outlet-off --params '{"outlet": 2}'
 ```
 
-The registry is seeded official and operator-extensible, official rows read-only, on the same shape as the [sample](/architecture/properties/#the-two-catalogs) and [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
+The catalog is seeded official and operator-extensible, official rows read-only, on the same shape as the [sample](/architecture/properties/#the-two-catalogs) and [event](/architecture/events/#the-event_type-catalog) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
 
 ### The hold set follows dependency edges
 
@@ -190,7 +190,7 @@ cannot loop it, and each endpoint is held once. Only endpoints placed on the del
 sent; holding one on another outpost is [#1655](https://github.com/hyperscaleav/omniglass/issues/1655).
 A component with no edges holds what it held before, less its out-of-band endpoints. The
 power-command marker is set only on a disruptive type (a CHECK and a 422 refuse it on any other),
-and the one shipped type that sets it is [`outlet-off`](#the-command_type-registry). The outlet is
+and the one shipped type that sets it is [`outlet-off`](#the-command_type-catalog). The outlet is
 read from the params as the dependency names it, a whole number as its digits however the JSON
 spells it, so `{"outlet": 2.0}` holds what outlet 2 feeds just as `{"outlet": 2}` does.
 
@@ -362,7 +362,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
   table="command"
   notes={{
     command_type_id: 'What the component was told to do',
-    params: 'The invocation arguments, validated against the registry schema',
+    params: 'The invocation arguments, validated against the catalog schema',
     actor: 'Who told it',
     status: 'The recorded lifecycle: issued until a terminal settled, failed, or timed-out',
     settled_at: 'The terminal moment; null exactly while status is issued',

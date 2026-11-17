@@ -30,7 +30,7 @@ per-slice detail is on [implementation status](/architecture/status/).
   append-only [audit](/architecture/audit/) trail with its admin read surface.
 - **The fleet and its catalogs.** The `location` / `system` / `component` trees on the shared
   scoped-CRUD primitive, `system_member` multi-membership, system roles with the typed-slot assignment
-  guard, the standard / product / vendor / driver / component_type registries, and location types with
+  guard, the standard / product / vendor / driver / component_type catalogs, and location types with
   `allowed_parent_types` placement rules.
 - **The values cascade.** [Tags](/architecture/tags/), [variables](/architecture/variables/),
   envelope-encrypted secrets, [files](/architecture/files/) over the content-addressed blob store,
@@ -49,7 +49,7 @@ per-slice detail is on [implementation status](/architecture/status/).
   (#816, #817), polls run on their declared schedule (#822), and an attached endpoint's tasks
   re-derive when its driver's spec changes (#823).
 - **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
-  registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
+  catalogs, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
   from the series, and the
   [command](/architecture/commands/) pillar with computed settlement
   ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
@@ -106,14 +106,14 @@ that describes the target:
    #1041), protocols that move whole files (#1043 to
    #1047), and the outpost's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
-   canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
+   canonical-signal catalog and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/) all shipped, and so has the
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
    criteria and calc). [Templates](/architecture/templates/) (the clone model: standard, system,
    location and component templates an operator starts from, #827) landed.
-3. **Detection and verdict.** [Events](/architecture/events/) shipped (their registry, sink, and
+3. **Detection and verdict.** [Events](/architecture/events/) shipped (their catalog, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
    has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its
    impact, and the transitions record when it changed. What **produces** an alarm has landed too: the

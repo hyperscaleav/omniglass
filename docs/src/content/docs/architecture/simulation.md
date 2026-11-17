@@ -313,7 +313,7 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
-The registry is per server process, and it forgets. Deleting an outpost (`DELETE /outposts/{name}`) drops
+The simulator registry is per server process, and it forgets. Deleting an outpost (`DELETE /outposts/{name}`) drops
 its entry at once, so neither `GET /simulation` nor `GET /outposts/{name}/simulation` can name an outpost
 that no longer exists. A simulator that has neither pulled nor reported for a hundred seconds (ten
 of its pulls) is dropped on the next read, so one torn down without its outpost being deleted ages out

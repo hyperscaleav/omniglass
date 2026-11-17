@@ -28,7 +28,7 @@ import { TEMPLATES_KEY } from "../lib/templates";
 // the CatalogShell subrail renders (one source of truth), so membership, order,
 // copy, and gating can never drift between the two surfaces: a group whose
 // entries are all gated away renders no card. Counts ride the list pages' own
-// query keys (learning-tool doctrine: real rows, not decoration); each registry
+// query keys (learning-tool doctrine: real rows, not decoration); each catalog
 // is its own query, so one failing fetch marks its own row and nothing else
 // (#598). No slot is soon any more: Notifications went live (#618), and the
 // Templates slots link to the one Templates page filtered to their kinds, each
@@ -41,7 +41,7 @@ const meWith = (permissions: string[]): Me => ({ principal: { id: "u-x", kind: "
 // Rows only need a length: the page renders counts, never row fields.
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `row-${i}` }));
 
-// Every registry's shared cache key, primed with a distinct count so a card's
+// Every catalog's shared cache key, primed with a distinct count so a card's
 // numbers are tellable apart, keyed exactly as the list pages key them.
 const PRIMED: [readonly string[], number][] = [
   [PRODUCTS_KEY, 2],
@@ -131,12 +131,12 @@ describe("CatalogOverview page", () => {
     const act = card("Actions")!;
     expect(entry(act, "Commands").textContent).toContain("6");
     // Rules went live (#921): its count, no soon.
-    const rules = entry(act, "Rules");
+    const rules = entry(act, "Event rules");
     expect(rules.textContent).toContain("3");
     expect(rules.textContent).not.toContain("soon");
-    expect(rules.getAttribute("href")).toBe("/rules");
+    expect(rules.getAttribute("href")).toBe("/event-rules");
     // The severity levels sit beside the rules that raise at them (#921).
-    const severity = entry(act, "Severity");
+    const severity = entry(act, "Severity levels");
     expect(severity.textContent).toContain("5");
     expect(severity.getAttribute("href")).toBe("/severity-levels");
     // Notifications went live (#618): its count, no soon.
@@ -147,8 +147,8 @@ describe("CatalogOverview page", () => {
     // When a message is sent and where it goes, beside what it says (#1346).
     expect(entry(act, "Action rules").getAttribute("href")).toBe("/action-rules");
     expect(entry(act, "Action rules").textContent).toContain("4");
-    expect(entry(act, "Targets").getAttribute("href")).toBe("/notification-targets");
-    expect(entry(act, "Targets").textContent).toContain("3");
+    expect(entry(act, "Notification targets").getAttribute("href")).toBe("/notification-targets");
+    expect(entry(act, "Notification targets").textContent).toContain("3");
     // The Templates slots went live (#1329): filtered links, their own counts.
     const templates = entry(card("Components")!, "Templates");
     expect(templates.tagName).toBe("A");
@@ -166,7 +166,7 @@ describe("CatalogOverview page", () => {
   it("hides a fully gated group's card and never creates the gated query", () => {
     const { qc } = mount(meWith(["tag:read"]), { skip: [METRICS_KEY, PROPERTIES_KEY, EVENT_TYPES_KEY] });
     // Telemetry's entries are all gated away: no card, and no query was ever
-    // created for its registries (the structural #598 fact, synchronous).
+    // created for its catalogs (the structural #598 fact, synchronous).
     expect(card("Telemetry")).toBeNull();
     expect(card("Metadata")).toBeTruthy();
     expect(entry(card("Metadata")!, "Tags").textContent).toContain("9");
@@ -181,9 +181,9 @@ describe("CatalogOverview page", () => {
     expect(entry(comp, "Products").textContent).toContain("2");
   });
 
-  // One query per registry: a failing fetch marks its own row and leaves every
+  // One query per catalog: a failing fetch marks its own row and leaves every
   // other count standing (the #598 lesson; no all-or-nothing Promise.all).
-  it("marks a failing registry unavailable while other cards keep their counts", async () => {
+  it("marks a failing catalog unavailable while other cards keep their counts", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url;
       if (url.includes("/vendors")) {

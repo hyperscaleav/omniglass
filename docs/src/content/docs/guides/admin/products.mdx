@@ -7,7 +7,7 @@ import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Components: Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
 is the directory of **products**: the concrete SKUs the fleet is built from, on the same
-flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
+flat-catalog pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
 a specific model (a **Kestrel VRoom**, a **Boreal Edge 55**), not an organization and not an installed
 unit. It is where the two leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
 it and the [driver](/guides/admin/drivers/) that speaks to it, classified by a **kind** and a
@@ -20,11 +20,11 @@ to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 A product is also what a **component** points at: `component.product_id` names the product a component
 **is**, required, so every component always resolves a shape (its vendor, driver, and classification)
 and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The
-component-level `component_type` retired in the fields fold; the registry returned differently shaped,
+component-level `component_type` retired in the fields fold; the catalog returned differently shaped,
 above the product rather than beside the component, so a component's genus is read through the product
 it is, never stored on the component itself. The system side has the same arrangement one level up: a
 system conforms to a [standard](/guides/admin/standards/), which is the blueprint's counterpart of a
-product. See [core entities](/architecture/core-entities/) for where both registries sit in the fleet
+product. See [core entities](/architecture/core-entities/) for where both catalogs sit in the fleet
 model.
 
 - **Kind** classifies what the product is: a **device** (a physical unit), an **app** (software), or a
@@ -77,7 +77,7 @@ model.
   <SeededSet kind="products" />
 - **Delete** enforces the referential guard the leaf catalogs deferred: a product still referenced by a
   **component** (`component.product_id`) cannot be deleted (409), the same delete-refused-while-referenced
-  rule the [Location Types](/guides/admin/location-types/) registry enforces. Remove or repoint the component first. An
+  rule the [Location Types](/guides/admin/location-types/) catalog enforces. Remove or repoint the component first. An
   official row is still refused (422) regardless.
 
 Minting a product is admin-gated, and the product form is where the vendor and driver

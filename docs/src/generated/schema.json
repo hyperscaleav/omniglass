@@ -153,6 +153,39 @@
    }
   },
   "catalog": {
+   "catalog_shadow": {
+    "columns": [
+     {
+      "name": "catalog",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "row_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "image",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "component_type": {
     "columns": [
      {
@@ -532,39 +565,6 @@
      {
       "name": "product_property_product_id_property_type_id_key",
       "definition": "CREATE UNIQUE INDEX product_property_product_id_property_type_id_key ON public.product_property USING btree (product_id, property_type_id)"
-     }
-    ]
-   },
-   "registry_shadow": {
-    "columns": [
-     {
-      "name": "registry",
-      "type": "text",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "row_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "image",
-      "type": "jsonb",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
      }
     ]
    },

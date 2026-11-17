@@ -65,7 +65,7 @@ export type FlatConfig<T> = {
   rowId?: (r: T) => string;
   openId?: () => string | undefined;
   // When present, a row (and openId) opens a cross-entity blade stack instead of
-  // the single Drawer detail. `rootKind` is the kind a row opens; `registry` maps
+  // the single Drawer detail. `rootKind` is the kind a row opens; `catalog` maps
   // each kind to its blade renderers; a body drills via useBlades(). Requires rowId.
   // The blade stack and the Drawer detail are mutually exclusive; a config sets one.
   // `rowKind` maps a ROW to its kind for a mixed-kind surface; absent, every row

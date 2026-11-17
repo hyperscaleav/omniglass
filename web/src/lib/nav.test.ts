@@ -46,7 +46,7 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Inventory");
     expect(labels).toContain("Explore");
     // The index entries left the rail but not the app: each keeps its gate and
-    // identity through OFF_RAIL, like the catalog registries before them.
+    // identity through OFF_RAIL, like the catalogs before them.
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
@@ -171,7 +171,7 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
-    // The split registries (#598): each page's URL carries its own gate, and
+    // The split catalogs (#598): each page's URL carries its own gate, and
     // /secret-types requires the same secret resource its API route stamps, so
     // the route guard blocks a floor viewer from the URL the sidebar hid.
     expect(routeTokens("/web/location-types")).toEqual(["location_type", "read"]);
@@ -243,7 +243,7 @@ describe("nav IA rework", () => {
 
 // The Catalog rail collapsed to a single browse entry (the single-surface
 // prototype): one live, ungated, resource-less leaf at /catalog, declared the
-// same way Home and Explore are. The registries left the rail but not the app:
+// same way Home and Explore are. The catalogs left the rail but not the app:
 // each keeps its route, its top-bar identity, and its gate through OFF_RAIL.
 describe("Catalog single entry", () => {
   const cat = navItems.find((i) => i.label === "Catalog")!;
@@ -257,19 +257,19 @@ describe("Catalog single entry", () => {
     expect(routeTokens("/web/catalog")).toBeNull();
   });
 
-  it("keeps every former registry page reachable off-rail with its gate intact", () => {
+  it("keeps every former catalog page reachable off-rail with its gate intact", () => {
     const paths = OFF_RAIL.map((o) => o.path);
     for (const p of ["/products", "/vendors", "/drivers", "/component-types", "/standards", "/system-types", "/location-types", "/secret-types", "/metrics", "/properties", "/event-types", "/command-types", "/tags"]) {
       expect(paths).toContain(p);
     }
     // The gates did not loosen when the rail entries vanished: the sensitive
-    // registry still demands secret:read (#598), the plain one its own read.
+    // catalog still demands secret:read (#598), the plain one its own read.
     expect(routeTokens("/web/secret-types")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/products")).toEqual(["product", "read"]);
     expect(routeTokens("/web/tags")).toEqual(["tag", "read"]);
   });
 
-  it("labels the off-rail pages by their own registry word in the top bar", () => {
+  it("labels the off-rail pages by their own catalog word in the top bar", () => {
     expect(sectionLabel("/web/catalog")).toBe("Catalog");
     expect(sectionLabel("/web/location-types")).toBe("Location types");
     expect(sectionLabel("/web/secret-types")).toBe("Secret types");
@@ -283,7 +283,7 @@ describe("Catalog single entry", () => {
 
   it("keeps every off-rail page's identity for bookmarks and stubs", () => {
     expect(lookupNav("/web/products").label).toBe("Products");
-    expect(lookupNav("/web/rules").label).toBe("Rules");
+    expect(lookupNav("/web/event-rules").label).toBe("Event rules");
     expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
 
@@ -311,7 +311,7 @@ describe("Catalog single entry", () => {
       "/location-types": ["location_type", "read"],
       "/secret-types": ["secret", "read"],
       "/tags": ["tag", "read"],
-      "/rules": ["rule", "read"],
+      "/event-rules": ["rule", "read"],
       "/calc-rules": ["rule", "read"],
       "/severity-levels": ["severity_level", "read"],
       "/notifications": ["notification_type", "read"],

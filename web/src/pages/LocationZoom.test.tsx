@@ -203,7 +203,7 @@ describe("where a location lands (#872)", () => {
 });
 
 describe("a folder location (#872)", () => {
-  it("is titled by the location, names its type in the registry's words, and ends the path at its parent", () => {
+  it("is titled by the location, names its type in the catalog's words, and ends the path at its parent", () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
     expect(within(screen.getByTestId("location-header")).getByTestId("location-type").textContent).toBe("Building");

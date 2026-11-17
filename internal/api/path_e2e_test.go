@@ -140,7 +140,7 @@ func TestGetComponentByLocationAddressIs404(t *testing.T) {
 	}
 }
 
-// TestGetOutpostByDottedRefIs422 is the registry-side companion: an outpost's name
+// TestGetOutpostByDottedRefIs422 is the catalog-side companion: an outpost's name
 // stays a single global token (#627 Task 12), so a dotted ref must be an
 // explicit 422 naming that, never a fall-through 404 that looks identical to
 // an ordinary unknown outpost.

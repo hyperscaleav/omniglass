@@ -375,10 +375,10 @@ func (a *authenticator) require(tokens ...string) func(huma.Context, func(huma.C
 // three things set together so they can never drift: the authn+require middleware
 // stack (unchanged enforcement), the "x-omniglass-permission" OpenAPI extension so
 // the required permission is published per-operation in the generated spec, and a
-// record in the permission registry (a.perms) so the read side can report the full
+// record in the permission catalog (a.perms) so the read side can report the full
 // universe. Every gated route MUST register through gated(...); the authn-only
 // self-scoped routes and the public routes do not, so they carry no stamp and no
-// registry entry (the invariant the spec-contract test asserts).
+// catalog entry (the invariant the spec-contract test asserts).
 func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operation {
 	perm := strings.Join(tokens, ":")
 	if a.perms != nil {
@@ -400,7 +400,7 @@ const platformTier = "platform"
 // platformGated declares the SECOND permission a route needs when its write lands
 // at the platform tier, the least-specific level of the cascade. The route keeps
 // its own resource gate (gated(...) is what enforces admission); this adds
-// platform:<action> to the permission registry and publishes it on the operation
+// platform:<action> to the permission catalog and publishes it on the operation
 // as "x-omniglass-platform-permission", so the tier gate the handler enforces
 // through requirePlatform / canPlatform is in the universe the roles view reports
 // and in the spec, exactly like a primary gate. Wrap gated: platformGated(a.gated(op,
@@ -455,7 +455,7 @@ func (a *authenticator) requirePlatform(ctx context.Context, action string) erro
 // or a membership or role-assignment route naming a component in its path, which
 // always carries one (ADR-0510). The route keeps its own gate (gated(...) is
 // what admits the request at all); this adds the conditional permission to the
-// registry so the roles view can report it, and publishes it on the operation as
+// catalog so the roles view can report it, and publishes it on the operation as
 // "x-omniglass-conditional-permission" so the spec stays a faithful map of what
 // the route enforces rather than only of what it always enforces. The handler
 // runs the check itself through allows(...), because the middleware cannot see

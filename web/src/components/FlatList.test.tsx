@@ -52,7 +52,7 @@ describe("FlatList blades rowKind", () => {
   });
 });
 
-// The list primitive renders rows in the order it is given (#757). Registry
+// The list primitive renders rows in the order it is given (#757). Catalog
 // pages hand it the server's order, which is the SQL label rule, so a new list
 // picks that order up by default; sorting is the operator's, by a column header.
 describe("FlatList row order", () => {

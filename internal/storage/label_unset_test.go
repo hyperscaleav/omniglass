@@ -30,7 +30,7 @@ import (
 // declared reason fails, so the next table to gain a label cannot quietly skip
 // this. That property is not decoration. Writing this test found CreateStandard
 // still binding its label raw after every other path had been converted, and it
-// found it as an ordering failure two registries away from the defect.
+// found it as an ordering failure two catalogs away from the defect.
 
 // labelUnsetExempt names the labelled tables no operator write path reaches
 // with a label of their own, and why. Anything not here needs a prover.

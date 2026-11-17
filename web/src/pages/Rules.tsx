@@ -22,7 +22,7 @@ import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useMe, canFleet, fleetView } from "../lib/auth";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { useSeverity } from "../lib/severity";
@@ -65,7 +65,7 @@ import {
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
 
-// Rules (Catalog > Actions > Rules, #921): the event rule registry. A rule reads
+// Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
 // severity when the value meets its fire criteria for the fire sustain; it
 // clears on its clear criteria (or the opposite) held for the clear sustain.
@@ -74,7 +74,7 @@ import { previewEventRule, type RulePreview } from "../lib/expressions";
 // page polls one list, not a query per rule), so the list is the teaching
 // surface: the official reachability rule's counts move while a simulated
 // component is unplugged. Official rules are read-only. Rules read like a
-// registry, so any rule:read lists them all (the live counts cover only the
+// catalog, so any rule:read lists them all (the live counts cover only the
 // components the caller may read); a rule's selector reaches the whole fleet,
 // so every write is judged on the caller's all-scope permissions (fleetView).
 
@@ -82,7 +82,7 @@ import { previewEventRule, type RulePreview } from "../lib/expressions";
 // on the form and the detail alike.
 export const RULE_HINTS = {
   reads:
-    "A rule reads one sample key: a property (text, compared with is or is not) or a metric (a number, compared any way). The lane follows the registry the key is in.",
+    "A rule reads one sample key: a property (text, compared with is or is not) or a metric (a number, compared any way). The lane follows the catalog the key is in.",
   selector:
     "The components the rule watches: those whose type falls within a listed component type, and those listed by name. Leave both empty to watch every component.",
   criteria:
@@ -208,7 +208,7 @@ export default function Rules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
-  // A link may name a rule (/rules?rule=<name or uuid>): an event row on Activity
+  // A link may name a rule (/event-rules?rule=<name or uuid>): an event row on Activity
   // points at the rule that wrote it, and lands on its blade. The page follows
   // the param as it changes (back and forward open the rule it names), and
   // lets go of it when the blade stack closes, so a reload does not reopen a
@@ -495,7 +495,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
       if (!r) return null;
       if (r.official) return OFFICIAL_LOCK;
       // Only when the primary Edit is not bound (BladeStack refuses the pair).
-      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
+      return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });
 
@@ -703,7 +703,7 @@ function DeletedMark(p: { what: string }): JSX.Element {
 // draws its action rail. An edit may rename (#977), on the entity forms' save
 // model: the PATCH first, the :rename LAST, so a refused rename (a taken name)
 // leaves the rest saved and says why. The sample key picker spans
-// both registries and its lane decides the comparisons and the value's type;
+// both catalogs and its lane decides the comparisons and the value's type;
 // every rule is judged in TypeScript (lib/event_rules), shown beside its field
 // once the field is touched, and gates the submit.
 export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved: (r: EventRule) => void }): JSX.Element {
@@ -722,7 +722,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // A new rule starts at the registry's default level once the levels land,
+  // A new rule starts at the catalog's default level once the levels land,
   // until its author picks one (None included). An edit never fills one in:
   // an informational rule (no severity) stays informational unless its author
   // picks a level.
@@ -750,7 +750,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel));
   const componentOptions = createMemo(() => [...(components.data ?? [])].filter((c) => !d.components.includes(c.id)).sort(byLabel));
   const componentById = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
-  // A selector entry the registries no longer hold (deleted after the rule was
+  // A selector entry the catalogs no longer hold (deleted after the rule was
   // written) is judged only once its list has landed, so nothing reads as
   // deleted while loading.
   const typeNames = createMemo(() => (componentTypes.data ? new Set(componentTypes.data.map((t) => t.name)) : undefined));

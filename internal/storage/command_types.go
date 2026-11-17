@@ -474,7 +474,7 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	if err := guardCommandTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "command_type", name)
+	before, err := catalogAuditImage(ctx, tx, "command_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrCommandTypeNotFound
@@ -564,7 +564,7 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		}
 		return nil, fmt.Errorf("storage: reload command type %q: %w", name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "command_type", name)
+	after, err := catalogAuditImage(ctx, tx, "command_type", name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
@@ -588,7 +588,7 @@ func (p *PG) DeleteCommandType(ctx context.Context, actorID, name string) error 
 	if err := guardCommandTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "command_type", name)
+	before, err := catalogAuditImage(ctx, tx, "command_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrCommandTypeNotFound

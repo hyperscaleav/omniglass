@@ -35,7 +35,7 @@ type componentTypeWire struct {
 	Parent                string   `json:"parent"`
 }
 
-// TestComponentTypesAPI drives the component_type registry over HTTP: list
+// TestComponentTypesAPI drives the component_type catalog over HTTP: list
 // shows the seeded tree with parent links (a child's parent id AND name), a
 // viewer creates nothing (403), an admin (owner) creates a custom child under
 // an existing root (mic), and delete refuses an official row and a row still
@@ -363,5 +363,5 @@ func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("display is missing from the registry listing")
+	t.Fatal("display is missing from the catalog listing")
 }

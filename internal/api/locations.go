@@ -50,12 +50,12 @@ type listLocationsOutput struct {
 	}
 }
 
-// locationTypeBody is the wire shape of a location_type registry row: the
+// locationTypeBody is the wire shape of a location_type catalog row: the
 // stable id a location is classified by, its label, the icon the
 // console renders as each location's leading tree glyph, AllowedParentTypes
 // (the placement constraint: a set of location_type ids and/or the reserved
 // "root" sentinel; empty means unconstrained), and whether it ships with the
-// binary. The registry lists alphabetically by label.
+// binary. The catalog lists alphabetically by label.
 type locationTypeBody struct {
 	ID                 string            `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
 	Name               string            `json:"name" doc:"The name an operator reads and types; renameable"`
@@ -99,7 +99,7 @@ type nameRuleReadBody struct {
 	Examples  []string `json:"examples" doc:"The first two names this rule mints in one parent, produced by the same mint a create allocates from: the first shows whether the first of a stem carries a number, the second shows the shape every later one takes. Read these rather than rebuilding the shape, which is what keeps one definition of a generated name"`
 }
 
-// toLocationTypeBody is the one projection of a registry row onto the wire.
+// toLocationTypeBody is the one projection of a catalog row onto the wire.
 // The three routes that return one used to spell it out each time, which is
 // fine for five columns and a trap at seven: a rule added to two of the three
 // is a field that reads back empty from whichever one was missed.
@@ -277,7 +277,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/location-types",
 		Summary:     "List location types",
-		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
+		Description: "Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
 	}, "location_type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {

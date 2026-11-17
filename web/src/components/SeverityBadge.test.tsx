@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SeverityBadge from "./SeverityBadge";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 
-// The severity chip renders the registry's label in the registry's color (#917),
+// The severity chip renders the catalog's label in the catalog's color (#917),
 // and a level name it cannot resolve as itself in the neutral chip.
 function mount(name: string, levels = SEEDED_LEVELS, seed = true) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -37,7 +37,7 @@ describe("SeverityBadge", () => {
     expect(mount("average").getByText("Average").title).toMatch(/degrades its component/);
   });
 
-  it("renders an operator-defined level from the registry alone", () => {
+  it("renders an operator-defined level from the catalog alone", () => {
     const el = mount("major", [...SEEDED_LEVELS, MAJOR_LEVEL]).getByText("Major");
     expect(el.classList.contains("badge-average")).toBe(true);
   });

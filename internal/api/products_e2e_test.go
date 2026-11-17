@@ -27,12 +27,12 @@ type productBodyWire struct {
 	Official        bool   `json:"official"`
 }
 
-// TestProductsAPI drives the product registry over HTTP: a viewer reads the
+// TestProductsAPI drives the product catalog over HTTP: a viewer reads the
 // seeded official rows under the product:read floor but cannot create, an admin
 // (owner) creates a custom row with a vendor/driver/kind, bad references and a
 // bad kind are 422s, an official row is read-only (422 on patch and delete), and
 // the admin deletes the custom row. Mirrors TestVendorsAPI; product is a flat
-// registry like vendor, so product:* is wired exactly like vendor:*.
+// catalog like vendor, so product:* is wired exactly like vendor:*.
 func TestProductsAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)

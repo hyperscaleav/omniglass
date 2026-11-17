@@ -304,7 +304,7 @@ describe("the system zoom", () => {
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
   });
 
-  // The strip's tone and each marker's follow the registry's outage flag (#917).
+  // The strip's tone and each marker's follow the catalog's outage flag (#917).
   it("tones the alarm strip red when an alarm on it is at an outage level, amber otherwise", () => {
     mount();
     const strip = screen.getByTestId("alarm-strip");
@@ -491,7 +491,7 @@ describe("the map tab (#791)", () => {
   });
 
   // The marker reads the row's own facts (#1074): once the component, product
-  // and type registries land, the marker carries the component's display label
+  // and type catalogs land, the marker carries the component's display label
   // (not its name slug) and the very glyph its row leads with.
   it("shows the same display label and type icon as the component's row", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
@@ -681,7 +681,7 @@ describe("the events and logs tabs (#793)", () => {
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
     // By the rule's uuid, which a rename since the event (#977) has not moved.
-    expect(link.getAttribute("href")).toBe(`/web/rules?rule=${uuidFor("szp-rule")}`);
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?rule=${uuidFor("szp-rule")}`);
     expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 

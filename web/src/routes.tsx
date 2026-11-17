@@ -45,10 +45,10 @@ import OAuthConsent from "./pages/OAuthConsent";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
-// The page registry the route manifest resolves against: routes.tsx and the
+// The page catalog the route manifest resolves against: routes.tsx and the
 // manifest (lib/routemanifest.ts, pure data) together are the router's source,
 // and route-manifest-guard.test.ts pins that every manifest entry names a key
-// here. Separate from index.tsx so tests can import the registry without
+// here. Separate from index.tsx so tests can import the catalog without
 // index.tsx's render side effect.
 export const PAGES: Record<string, Component> = {
   Login,

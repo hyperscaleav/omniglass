@@ -260,9 +260,9 @@ func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	}
 }
 
-// TestSystemTypeDeleteRestricted proves both refusals the registry owes: a type
+// TestSystemTypeDeleteRestricted proves both refusals the catalog owes: a type
 // that still parents another type, and a type that still classifies a system.
-// The #507 lesson is that a registry delete must never cascade through
+// The #507 lesson is that a catalog delete must never cascade through
 // classified rows, so each refusal leaves the world exactly as it was.
 func TestSystemTypeDeleteRestricted(t *testing.T) {
 	t.Parallel()
@@ -390,10 +390,10 @@ func TestSystemCarriesItsType(t *testing.T) {
 }
 
 // TestSystemTypeRenameKeepsItsSystems proves the classification survives a
-// rename of the registry row: system.system_type_id holds the uuid (ADR-0062),
+// rename of the catalog row: system.system_type_id holds the uuid (ADR-0062),
 // never a copy of the name, so the pointer cannot go stale and the projected
 // handle follows the row to its new name. The rename runs as raw SQL because
-// the registry has no rename leg on the gateway (component_type has none
+// the catalog has no rename leg on the gateway (component_type has none
 // either); the invariant under test is the storage shape, not the verb.
 func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
 	t.Parallel()

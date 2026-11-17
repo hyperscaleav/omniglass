@@ -56,9 +56,9 @@ var (
 
 // Standard is the blueprint a system conforms to (huddle room, classroom,
 // auditorium): the system-side counterpart of product for a component. Beyond
-// the registry shape (id, official, label) it carries an optional parent
+// the catalog shape (id, official, label) it carries an optional parent
 // standard, so a variant inherits from a base one exactly as
-// product.parent_product_id does. The registry lists alphabetically by
+// product.parent_product_id does. The catalog lists alphabetically by
 // label; there is no ordering field.
 type Standard struct {
 	// ID is the uuid primary key and Name the renameable name (ADR-0062).
@@ -247,7 +247,7 @@ type SystemMove struct {
 	ParentName   *string
 }
 
-// --- standard registry -------------------------------------------------------
+// --- standard catalog -------------------------------------------------------
 
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
 // as the fleet arcs do.
@@ -267,7 +267,7 @@ func scanStandard(row pgx.Row) (*Standard, error) {
 }
 
 // mapStandardWriteErr translates Postgres constraint violations on a standard
-// write into the registry sentinels: a duplicate id is ErrTypeExists, and the
+// write into the catalog sentinels: a duplicate id is ErrTypeExists, and the
 // only foreign key a standard carries is its parent, so an FK violation is
 // ErrParentStandardNotFound rather than an opaque 500.
 func mapStandardWriteErr(err error) error {
@@ -325,7 +325,7 @@ func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
 
 // GetStandard resolves one standard by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
-	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from `+refRows("standard", id)+` standard where `+registryRefCol(id)+` = $1`, id))
+	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from `+refRows("standard", id)+` standard where `+catalogRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -366,7 +366,7 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 
 	if st.ParentStandardID != nil && *st.ParentStandardID != "" {
 		var known bool
-		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *st.ParentStandardID)+` standard where `+registryRefCol(*st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
+		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *st.ParentStandardID)+` standard where `+catalogRefCol(*st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
 			return nil, ErrParentStandardNotFound
 		}
 	}
@@ -408,7 +408,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	if err := guardTypeMutable(ctx, tx, "standard", id); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "standard", id)
+	before, err := catalogAuditImage(ctx, tx, "standard", id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -420,7 +420,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	// being left to resolve to nothing.
 	if patch.ParentStandardID != nil && *patch.ParentStandardID != "" {
 		var known bool
-		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *patch.ParentStandardID)+` standard where `+registryRefCol(*patch.ParentStandardID)+` = $1`, *patch.ParentStandardID).Scan(&known); err != nil {
+		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *patch.ParentStandardID)+` standard where `+catalogRefCol(*patch.ParentStandardID)+` = $1`, *patch.ParentStandardID).Scan(&known); err != nil {
 			return nil, ErrParentStandardNotFound
 		}
 	}
@@ -450,7 +450,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 				else map
 			end,
 			updated_at         = now()
-		where id = (select id from `+refRows("standard", id)+` t where `+registryRefCol(id)+` = $1)
+		where id = (select id from `+refRows("standard", id)+` t where `+catalogRefCol(id)+` = $1)
 		returning `+standardCols,
 		id, labelVal, patch.ParentStandardID, patch.LabelRule, setLabel, patch.Map != nil, mapPatchValue(patch.Map)))
 	if err != nil {
@@ -459,7 +459,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 		}
 		return nil, mapStandardWriteErr(err)
 	}
-	after, err := registryAuditImage(ctx, tx, "standard", id)
+	after, err := catalogAuditImage(ctx, tx, "standard", id)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
 	}
@@ -489,7 +489,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 		if err := lockRoleNames(ctx, q); err != nil {
 			return err
 		}
-		if _, err := q.Exec(ctx, `select 1 from standard where id = (select r.id from `+refRows("standard", id)+` r where r.`+registryRefCol(id)+` = $1) for update`, id); err != nil {
+		if _, err := q.Exec(ctx, `select 1 from standard where id = (select r.id from `+refRows("standard", id)+` r where r.`+catalogRefCol(id)+` = $1) for update`, id); err != nil {
 			return fmt.Errorf("storage: lock standard %s: %w", id, err)
 		}
 		return nil
@@ -500,7 +500,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // --- system CRUD -------------------------------------------------------------
 
 // The system_type handle is a live subselect, not a stored copy: the row is
-// pinned by uuid, so renaming the registry row moves the projected name with it
+// pinned by uuid, so renaming the catalog row moves the projected name with it
 // and can never orphan the classification.
 const systemCols = `id, name, coalesce(label, ''), name_generated, ordinal, label_generated, standard_id,
 	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
@@ -632,7 +632,7 @@ func (p *PG) GetSystem(ctx context.Context, name string, read scope.Set) (*Syste
 // the platform, which mints the system_type chain's stem plus the lowest free
 // ordinal in this placement, suppressing the ordinal on the first of its stem
 // in the bucket (ADR-0101). An unclassified system cannot be named that way
-// (ErrSystemTypeRequiredForName): the stem lives on the registry row.
+// (ErrSystemTypeRequiredForName): the stem lives on the catalog row.
 //
 // locationRead is the PLACEMENT's scope, the same one the draft render takes
 // for the same reference (#700): create says who may write a system, this says
@@ -725,7 +725,7 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	var standardID *string
 	if spec.StandardID != nil {
 		var sid string
-		err := tx.QueryRow(ctx, `select id from `+refRows("standard", *spec.StandardID)+` standard where `+registryRefCol(*spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("standard", *spec.StandardID)+` standard where `+catalogRefCol(*spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		} else if err != nil {
@@ -734,13 +734,13 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 		standardID = &sid
 	}
 
-	// system_type is a registry on the same footing: resolved by name or uuid,
+	// system_type is a catalog on the same footing: resolved by name or uuid,
 	// an unknown ref refused here as ErrUnknownSystemType (-> 422) rather than
 	// left to surface as an opaque foreign-key error at insert time.
 	var systemTypeID *string
 	if spec.SystemTypeID != nil {
 		var tid string
-		err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *spec.SystemTypeID)+` system_type where `+registryRefCol(*spec.SystemTypeID)+` = $1`, *spec.SystemTypeID).Scan(&tid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *spec.SystemTypeID)+` system_type where `+catalogRefCol(*spec.SystemTypeID)+` = $1`, *spec.SystemTypeID).Scan(&tid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownSystemType
 		} else if err != nil {
@@ -917,7 +917,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	var systemTypePatchID *string
 	if patch.SystemTypeID != nil && *patch.SystemTypeID != "" {
 		var tid string
-		if err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *patch.SystemTypeID)+` system_type where `+registryRefCol(*patch.SystemTypeID)+` = $1`, *patch.SystemTypeID).Scan(&tid); err != nil {
+		if err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *patch.SystemTypeID)+` system_type where `+catalogRefCol(*patch.SystemTypeID)+` = $1`, *patch.SystemTypeID).Scan(&tid); err != nil {
 			return nil, ErrUnknownSystemType
 		}
 		systemTypePatchID = &tid
@@ -1081,7 +1081,7 @@ func resolveStandardPatch(ctx context.Context, q querier, ref *string) (*string,
 		return nil, nil
 	}
 	var id string
-	if err := q.QueryRow(ctx, `select id from `+refRows("standard", *ref)+` standard where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from `+refRows("standard", *ref)+` standard where `+catalogRefCol(*ref)+` = $1`, *ref).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		}
@@ -1497,7 +1497,7 @@ func mapSystemWriteErr(err error) error {
 			// NOT the same constraint as the two above, despite how it reads:
 			// those name the STANDARD foreign key (system_type was the old
 			// column name for standard_id, ADR-0048), while this one names the
-			// system_type registry that came back as its own table (ADR-0096).
+			// system_type catalog that came back as its own table (ADR-0096).
 			// The _id_ makes them distinct strings, which is why the reuse is
 			// safe at the schema level; it is only the prose that collides.
 			case "system_system_type_id_fkey":

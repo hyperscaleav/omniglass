@@ -36,7 +36,7 @@ export default defineConfig({
   redirects: {
     '/guides/console/': '/guides/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
-    // The joint Types guide split into one page per registry (#598); the old
+    // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
     // Find things in your fleet folded into the outline guide (#861).

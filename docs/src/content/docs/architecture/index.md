@@ -221,7 +221,7 @@ A handful of patterns hold everywhere:
   one-time clone with no back-pointer, so a template can be rewritten in any release without
   migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **The `official` boolean**: every registry (`metric_type`, `property_type`, `event_type`,
+- **The `official` boolean**: every catalog (`metric_type`, `property_type`, `event_type`,
   `command_type`, and the
   catalogs) and rule row carries an `official` boolean: the curated ship-with set, seeded at boot
   and authoritative; the rest is operator-authored and local to a deployment.

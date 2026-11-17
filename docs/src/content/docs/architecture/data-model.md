@@ -186,6 +186,11 @@ fleet: {
 }
 
 catalog: {
+  catalog_shadow: {
+    shape: sql_table
+    catalog: text {constraint: primary_key}
+    row_id: uuid {constraint: primary_key}
+  }
   component_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -214,11 +219,6 @@ catalog: {
     id: uuid {constraint: primary_key}
     product_id: uuid {constraint: foreign_key}
     property_type_id: uuid {constraint: foreign_key}
-  }
-  registry_shadow: {
-    shape: sql_table
-    registry: text {constraint: primary_key}
-    row_id: uuid {constraint: primary_key}
   }
   standard: {
     shape: sql_table
@@ -797,7 +797,7 @@ telemetry.property.system_id -> fleet.system.id
 - **telemetry** - the five-lane observability model
   ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
   [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
-  the typed registries (`metric_type`, `property_type`, `event_type`,
+  the typed catalogs (`metric_type`, `property_type`, `event_type`,
   `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
   `command`, `log_line`) and the alarms raised off them (`alarm`).
 - **collection** - where and how telemetry is gathered: the outposts that run probes,

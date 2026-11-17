@@ -21,7 +21,7 @@ import { Plus } from "../components/icons";
 // (gated by principal:create). It is self-teaching: the detail shows the grant model
 // (role x scope) the platform enforces. Every gate is a UI hint; the server is
 // authority. The blade bodies live in UserDetail / GroupDetail (the cross-entity
-// registry), so a user's group drills to a group blade over it.
+// catalog), so a user's group drills to a group blade over it.
 
 const filterKeys: FilterKey<Principal>[] = [
   { key: "name", type: "string", hint: "substring", get: (p) => principalName(p) },

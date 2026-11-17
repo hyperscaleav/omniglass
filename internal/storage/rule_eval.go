@@ -483,7 +483,7 @@ type seriesSample struct {
 	value               any
 }
 
-// laneTables names a lane's sample table, its type registry, and the
+// laneTables names a lane's sample table, its type catalog, and the
 // expression its value reads as.
 func laneTables(lane rules.Lane) (table, typeTable, value string) {
 	if lane == rules.LaneMetric {
@@ -1117,7 +1117,7 @@ type EventRuleLive struct {
 }
 
 // EventRuleState reads a rule's live state by name. The rule reads like a
-// registry, but its open alarms and streaks name components, so only those on
+// catalog, but its open alarms and streaks name components, so only those on
 // a component the visible component read scope admits are listed.
 func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set) (*EventRuleLive, error) {
 	r, err := p.GetEventRule(ctx, name, visible)

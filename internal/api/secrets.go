@@ -117,7 +117,7 @@ type revealSecretOutput struct {
 	}
 }
 
-// registerSecretRoutes wires the secret surface: the shape registry, the
+// registerSecretRoutes wires the secret surface: the shape catalog, the
 // all-scope admin directory, and scoped create/delete. Read (masked) rides the
 // viewer floor; create and delete are gated by the sensitive secret:create /
 // secret:delete.

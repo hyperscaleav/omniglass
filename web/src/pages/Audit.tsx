@@ -101,7 +101,7 @@ const VALUE_CELL = "font-data text-xs align-top whitespace-pre-wrap wrap-break-w
 // AuditDetail is the drawer body: who did what and when, then the field-level
 // before/after diff over the row images the write recorded. An auth event (no
 // images) says so instead of rendering an empty table; a create renders only
-// its After column and a delete only its Before, so the one-sided registry
+// its After column and a delete only its Before, so the one-sided catalog
 // writes (#228) still read honestly.
 function AuditDetail(p: { e: AuditEvent }): JSX.Element {
   const e = p.e;

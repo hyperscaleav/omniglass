@@ -31,7 +31,7 @@ var ErrRootSystemTypeNeedsStem = errors.New("storage: a root system_type (no par
 // any seeded or operator-built tree approaches.
 const maxSystemTypeDepth = 32
 
-// SystemType is a registry row in the coarse taxonomy of what kind of space a
+// SystemType is a catalog row in the coarse taxonomy of what kind of space a
 // system is (a boardroom, a classroom, a video wall): a stable id, the official
 // flag, a label, and an optional parent for a tree of arbitrary depth.
 // It is the system-side counterpart of ComponentType, and it does NOT replace
@@ -40,7 +40,7 @@ const maxSystemTypeDepth = 32
 //
 // Stem, Icon, and Abbrev are nullable: null means "inherit from parent",
 // resolved by ResolveSystemTypeFacts walking ParentID in Go (no DB logic) until
-// it finds the first non-null value. The registry lists alphabetically by
+// it finds the first non-null value. The catalog lists alphabetically by
 // label; there is no ordering field.
 //
 // No DefaultTags. ComponentType carries one because a product's instances start
@@ -85,7 +85,7 @@ func scanSystemType(row pgx.Row) (*SystemType, error) {
 }
 
 // mapSystemTypeWriteErr translates Postgres constraint violations on a
-// system_type write into the registry sentinels: a duplicate name is
+// system_type write into the catalog sentinels: a duplicate name is
 // ErrTypeExists, and the only foreign key the row carries is its parent, so an
 // FK violation is ErrParentSystemTypeNotFound.
 func mapSystemTypeWriteErr(err error) error {
@@ -152,7 +152,7 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 // GetSystemType resolves one system_type by name or id. An unknown ref is
 // ErrTypeNotFound.
 func (p *PG) GetSystemType(ctx context.Context, ref string) (*SystemType, error) {
-	st, err := scanSystemType(p.pool.QueryRow(ctx, `select `+systemTypeCols+` from `+refRows("system_type", ref)+` system_type where `+registryRefCol(ref)+` = $1`, ref))
+	st, err := scanSystemType(p.pool.QueryRow(ctx, `select `+systemTypeCols+` from `+refRows("system_type", ref)+` system_type where `+catalogRefCol(ref)+` = $1`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -250,14 +250,14 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 	// only when the patch actually clears, so an ordinary edit pays nothing.
 	if patch.Stem != nil && *patch.Stem == "" {
 		var parentID *uuid.UUID
-		if err := tx.QueryRow(ctx, `select parent_id from `+refRows("system_type", ref)+` system_type where id = (select id from `+refRows("system_type", ref)+` t where `+registryRefCol(ref)+` = $1)`, ref).Scan(&parentID); err != nil {
+		if err := tx.QueryRow(ctx, `select parent_id from `+refRows("system_type", ref)+` system_type where id = (select id from `+refRows("system_type", ref)+` t where `+catalogRefCol(ref)+` = $1)`, ref).Scan(&parentID); err != nil {
 			return nil, fmt.Errorf("storage: load system_type %q parent: %w", ref, err)
 		}
 		if clearsARootStem(patch.Stem, parentID) {
 			return nil, ErrRootSystemTypeNeedsStem
 		}
 	}
-	before, err := registryAuditImage(ctx, tx, "system_type", ref)
+	before, err := catalogAuditImage(ctx, tx, "system_type", ref)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -279,7 +279,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			abbrev       = case when $5::text is null then abbrev     else nullif($5::text, '') end,
 			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			updated_at   = now()
-		where id = (select id from `+refRows("system_type", ref)+` t where `+registryRefCol(ref)+` = $1)
+		where id = (select id from `+refRows("system_type", ref)+` t where `+catalogRefCol(ref)+` = $1)
 		returning `+systemTypeCols,
 		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, setLabel))
 	if err != nil {
@@ -288,7 +288,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 		}
 		return nil, fmt.Errorf("storage: update system_type %q: %w", ref, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "system_type", ref)
+	after, err := catalogAuditImage(ctx, tx, "system_type", ref)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image system_type %q: %w", ref, err)
 	}

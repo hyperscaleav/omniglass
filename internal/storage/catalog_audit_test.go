@@ -8,13 +8,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestRegistryAuditImages pins the fuller trail #228 asks for: a registry
+// TestCatalogAuditImages pins the fuller trail #228 asks for: a catalog
 // update records the row as it stood before the write beside the row after
 // it, and a delete records the whole row it removed, not a bare id. Both
 // images come from the same row shape (column-keyed), so the audit drawer's
 // field diff lines up key for key. Exercised on a driver (its own delete
 // path) and a location_type (the shared deleteTypeRow path).
-func TestRegistryAuditImages(t *testing.T) {
+func TestCatalogAuditImages(t *testing.T) {
 	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()

@@ -354,7 +354,7 @@ func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
 			ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "participant-count", Value: float64(i), Identity: room(fmt.Sprintf("zr-%03d", i))})
 		}
 		subject, tick := f.outpostLane(ev)
-		f.deliver(t, subject, tick, "") // warm the registry and the first rows
+		f.deliver(t, subject, tick, "") // warm the catalog and the first rows
 		counter.Reset()
 		subject, tick = f.outpostLane(ev)
 		f.deliver(t, subject, tick, "")

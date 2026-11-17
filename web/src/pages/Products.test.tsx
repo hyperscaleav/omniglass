@@ -19,7 +19,7 @@ import { openTree, pickTree } from "../components/TreeSelect.testkit";
 // component is an instance of). An official row is read-only, same
 // invariant as the Types catalog's official rows: no edit pencil, no Delete.
 // Data is seeded into the query cache so no server is needed; the vendor and
-// driver registries the pickers read are seeded too, so the create form
+// driver catalogs the pickers read are seeded too, so the create form
 // stays network-free.
 // Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
 // handle (vendor) and the uuid (vendor_id).
@@ -59,15 +59,15 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-// lateRegistries starts the vendor, driver, and component_type registries EMPTY,
+// lateCatalogs starts the vendor, driver, and component_type catalogs EMPTY,
 // so a test can deliver them after the blade is open and reproduce the order the
-// pickers actually hit: the product is in hand before its three registries are.
-function mount(me: Me = admin, lateRegistries = false) {
+// pickers actually hit: the product is in hand before its three catalogs are.
+function mount(me: Me = admin, lateCatalogs = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...PRODUCTS_KEY], seed);
-  qc.setQueryData([...COMPONENT_TYPES_KEY], lateRegistries ? [] : componentTypes);
-  qc.setQueryData([...VENDORS_KEY], lateRegistries ? [] : vendors);
-  qc.setQueryData([...DRIVERS_KEY], lateRegistries ? [] : drivers);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], lateCatalogs ? [] : componentTypes);
+  qc.setQueryData([...VENDORS_KEY], lateCatalogs ? [] : vendors);
+  qc.setQueryData([...DRIVERS_KEY], lateCatalogs ? [] : drivers);
   qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
   qc.setQueryData([...METRICS_KEY], []);
   qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
@@ -133,14 +133,14 @@ describe("Products page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    // vendor + driver selects both offer the seeded registry rows
+    // vendor + driver selects both offer the seeded catalog rows
     expect(within(blade).getByRole("option", { name: "Crestron" })).toBeInTheDocument();
     expect(within(blade).getByRole("option", { name: "Crestron CT" })).toBeInTheDocument();
   });
 
   // #260: the "None" the vendor and driver pickers offer has to reach the
   // server as the three-state string's clear (""), the same sentinel the type
-  // registries' blades send (#716). The blade used to omit an emptied picker
+  // catalogs' blades send (#716). The blade used to omit an emptied picker
   // (`|| undefined`), which the patch read as "unchanged", so choosing None and
   // saving reverted on the refetch.
   it("sends the clear when an operator picks None for the vendor and the driver", async () => {
@@ -195,12 +195,12 @@ describe("Products page", () => {
     expect(sent).toMatchObject({ vendor_id: "crestron" });
   });
 
-  it("shows the product's own vendor when the registries answer after edit opened", async () => {
-    // Three pickers on this blade read three separate registries, none of which
+  it("shows the product's own vendor when the catalogs answer after edit opened", async () => {
+    // Three pickers on this blade read three separate catalogs, none of which
     // is guaranteed to answer before the operator is looking at the field. A
     // <select> holds no value it has no option for, so the vendor read "None" on
     // a product that has one, and saving in that window would have posted the
-    // fallback (#772). The registries land by hand below, never on a timer.
+    // fallback (#772). The catalogs land by hand below, never on a timer.
     const { qc } = mount(admin, true);
     fireEvent.click(screen.getByText("Acme Panel"));
     const blade = await waitFor(() => {
@@ -271,7 +271,7 @@ describe("Products page", () => {
   });
 });
 
-// #614: the component_type registry returns as the product's genus (ADR-0085),
+// #614: the component_type catalog returns as the product's genus (ADR-0085),
 // so classifying a product is now a required, pickable fact, not an implicit
 // derivation from kind. The picker offers the seeded tree, indented by depth,
 // so a nested type (interactive-display under display) reads as nested.

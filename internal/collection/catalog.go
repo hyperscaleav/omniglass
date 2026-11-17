@@ -1,5 +1,5 @@
 // Package collection holds the outpost-side collection engine and the pure helpers
-// the ingest path shares with it. Registry answers reject-not-project: a
+// the ingest path shares with it. Catalog answers reject-not-project: a
 // measurement name lands only if it is a registered, observable signal on the
 // lane it arrived on.
 package collection
@@ -11,15 +11,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// Registry is an immutable snapshot of the observable-signal vocabulary, built
+// Catalog is an immutable snapshot of the observable-signal vocabulary, built
 // from the three catalog reads (metric_type, property_type, event_type). It is
 // pure: no I/O, safe to hold and share.
 //
-// Since the per-lane wire (#594) the lane IS the routing, so the registry keeps
+// Since the per-lane wire (#594) the lane IS the routing, so the catalog keeps
 // no kind strings: it answers membership per catalog, returning the catalog row
 // so ingest can validate the sample against it (data_type, validation,
 // payload_schema).
-type Registry struct {
+type Catalog struct {
 	metrics    map[string]storage.MetricType
 	properties map[string]storage.PropertyType
 	events     map[string]storage.EventType
@@ -32,7 +32,7 @@ type Registry struct {
 	shadowed []string
 }
 
-// NewRegistry snapshots the collectable vocabulary per lane: the metric lane
+// NewCatalog snapshots the collectable vocabulary per lane: the metric lane
 // (metric_type), the property lane (property_type), and the event lane
 // (event_type, the occurrence keyspace, ADR-0063).
 //
@@ -47,7 +47,7 @@ type Registry struct {
 // loser unwritable, so the snapshot refuses the name and reports it so the state
 // is visible. The namespace tiering of #318 (private shadows official) is the
 // general form of this rule.
-func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.PropertyType, eventTypes []storage.EventType) Registry {
+func NewCatalog(metricTypes []storage.MetricType, propertyTypes []storage.PropertyType, eventTypes []storage.EventType) Catalog {
 	// Each row carries its writer class (ADR-0161). A catalog read resolves
 	// it; a row built by hand is resolved here the same way, so the snapshot
 	// never holds a classless key. The rows are copied first: the caller's
@@ -133,40 +133,40 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 			events[et.Name] = et
 		}
 	}
-	return Registry{metrics: metrics, properties: properties, events: events, collisions: collisions, shadowed: shadowed}
+	return Catalog{metrics: metrics, properties: properties, events: events, collisions: collisions, shadowed: shadowed}
 }
 
 // Collisions returns the names registered in more than one catalog that resolve
 // to nothing. Empty in a healthy install; non-empty means two operator rows (or
 // two official ones) hold a name, and every sample carrying it is being refused
 // until one of them is deleted.
-func (r Registry) Collisions() []string { return r.collisions }
+func (r Catalog) Collisions() []string { return r.collisions }
 
 // Shadowed returns the names an official row holds in one catalog and an
 // operator's row holds in another: each resolves to the operator's row, and the
 // official one waits until the operator deletes theirs (#1307).
-func (r Registry) Shadowed() []string { return r.shadowed }
+func (r Catalog) Shadowed() []string { return r.shadowed }
 
 // IsShadowed reports a name an operator's row shadows an official row of (#1307).
-func (r Registry) IsShadowed(name string) bool { return slices.Contains(r.shadowed, name) }
+func (r Catalog) IsShadowed(name string) bool { return slices.Contains(r.shadowed, name) }
 
 // Metric resolves name on the metric lane (reject-not-project: false means the
 // sample carrying it is refused by name).
-func (r Registry) Metric(name string) (storage.MetricType, bool) {
+func (r Catalog) Metric(name string) (storage.MetricType, bool) {
 	mt, ok := r.metrics[name]
 	return mt, ok
 }
 
 // Property resolves name on the property lane, returning the catalog row so the
 // caller can validate the value against data_type and the validation schema.
-func (r Registry) Property(name string) (storage.PropertyType, bool) {
+func (r Catalog) Property(name string) (storage.PropertyType, bool) {
 	pt, ok := r.properties[name]
 	return pt, ok
 }
 
 // Event resolves name on the event lane, returning the catalog row so the
 // caller can validate the payload against payload_schema.
-func (r Registry) Event(name string) (storage.EventType, bool) {
+func (r Catalog) Event(name string) (storage.EventType, bool) {
 	et, ok := r.events[name]
 	return et, ok
 }

@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 
 // The tags data layer: thin typed wrappers over the generated client. A tag is a
-// governed key in the tenant-wide vocabulary. This layer covers the key registry
+// governed key in the tenant-wide vocabulary. This layer covers the key catalog
 // (mint, edit governance fields, delete); a key is addressed by its name, not an
 // id, on the write paths. Value bindings and the effective-tags cascade are a
 // separate surface.

@@ -9,7 +9,7 @@ import { uuidFor } from "../lib/testids";
 import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // Component Types (Catalog > Components: Types): the device-class genus
-// registry (ADR-0085, partially reversing ADR-0047), on the same
+// catalog (ADR-0085, partially reversing ADR-0047), on the same
 // official/custom FlatList pattern as Location Types, but tree-shaped
 // (parent_id) rather than flat: a subtype (interactive-display) grafts under
 // a root (display), and every identity fact (stem, icon, abbrev) inherits

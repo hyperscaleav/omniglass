@@ -400,7 +400,7 @@ func kindOrder(k Kind) int {
 	return len(Kinds)
 }
 
-// nameRule is the platform's name rule for registry and fleet names: lower
+// nameRule is the platform's name rule for catalog and fleet names: lower
 // case, digits and hyphens, starting with a letter or digit.
 var nameRule = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 

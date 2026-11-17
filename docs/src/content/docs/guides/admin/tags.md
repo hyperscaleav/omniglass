@@ -27,7 +27,7 @@ carry none at the end.
 
 Minting a **key** is admin-gated here; **setting a value** on a key is the ordinary entity write. Open a
 component, system, or location, and its detail blade carries a **Tags** panel: type a key (the picker
-offers the registry keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
+offers the catalog keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
 opens this same create form), give it a value, and it binds on **Add**; the **x** on a chip removes it.
 Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
 [Explore's filter](/guides/operator/fleet/#finding-one-thing) then matches each location, system and component on its **effective** tags

@@ -62,7 +62,7 @@ A driver **brings no keys, it references registered ones**: two display drivers 
 **The driver is the source of truth for configurability**: a signal becomes settable on a class of
 component when its [driver](/architecture/collection/#drivers-the-declarative-menu) both reads it (a
 poll function or listener emitting the observed sample) and writes it (a **command binding** that
-actuates the signal's command over the driver's protocol); the registry's soft `settable` hint is
+actuates the signal's command over the driver's protocol); the catalog's soft `settable` hint is
 never authoritative.
 
 Each piece of a config item has one home, joined by the canonical key:
@@ -137,12 +137,12 @@ there is nothing there for it to appear in.
 client secret), marked by `admin_sensitive` at whatever scope it sits; the **`platform` tier** is a
 *rung on the cascade*, the install-wide one. The words are unrelated.
 
-**Shape is a `secret_type` registry**: a per-field list of `{name, type, secret, origin}`, so one
+**Shape is a `secret_type` catalog**: a per-field list of `{name, type, secret, origin}`, so one
 field is secret (a password) while another is plaintext (a username), `origin` marking whether the
 operator or the lifecycle fills it. A **`default_admin_sensitive`** boolean seeds the create form's
 `admin_sensitive` default: a device type (`snmp-community`, `basic-auth`) defaults operational, a
 platform-integration type (`oauth2-client`) admin-sensitive; those are the ship-with types, with
-`official` marking shipped-canonical versus org-local as in the sample and role registries.
+`official` marking shipped-canonical versus org-local as in the sample and role catalogs.
 
 **Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK
 provider**: the **encryption key** comes from the env (`OMNIGLASS_ENCRYPTION_KEY`), a file
@@ -213,7 +213,7 @@ in the app), owned on the exclusive arc and resolved down the cascade, with a Va
 `variable:create,update` to operators** (delete stays admin and owner), mirroring the secret member. Deferred from
 the design below: the classifier owner bands (slice 1 mirrors the secret arc,
 `platform | location | system | component`; the product and standard bands and cascade groups are
-[#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` registry** (slice 1 types
+[#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` catalog** (slice 1 types
 inline with the `value_type` enum, matching the "operator-defined, not curated" model); and the **`$var:`**
 consumer and the **secret-flagged** variable. Logged in the [decision log](/architecture/decisions/).
 :::
@@ -224,7 +224,7 @@ label). Zabbix-style **macros**, resolved down the same [cascade](/architecture/
 interpolated as `$var:<name>` into functions, endpoint definitions, and rule scopes.
 
 - **A name is org-specific, not a canonical signal**, the one place the "operator-defined, not
-  curated" namespace applies: no registry, no pre-registration. The ordinary entity name rule still
+  curated" namespace applies: no catalog, no pre-registration. The ordinary entity name rule still
   holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `newtron-ssh`
   names a variable and `newtron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
   ([IAM](/architecture/identity-access/)) and by every variable being **surfaced in the tree**.
@@ -243,7 +243,7 @@ flagged secret (a webhook signing token) without being a full secret cell, since
 ## property: one typed name, a classifier contract, a stored value
 
 :::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
-Three pieces are **built**. The **`property_type` catalog**: the registry of typed value names
+Three pieces are **built**. The **`property_type` catalog**: the catalog of typed value names
 (`name`, `data_type` over `string` / `bool` / `json`, optional label, a JSON Schema
 `validation`), `official` rows read-only; numeric names live in its `metric_type` sibling
 ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog),
@@ -299,9 +299,9 @@ the value and falling back to the contract default (the owning entity's own `:up
 
 ## tag: a normalized label vocabulary
 
-:::note[Built: slice 1, the registry, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
+:::note[Built: slice 1, the catalog, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
 The tag primitive's first slice is **built** ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)):
-the governed `tag` key registry, the per-entity `tag_binding` cell on the exclusive arc, and the union-on-key /
+the governed `tag` key catalog, the per-entity `tag_binding` cell on the exclusive arc, and the union-on-key /
 override-on-value cascade resolver. The [tags](/architecture/tags/) page is its home; this section is the
 conceptual frame for how tags share the cascade.
 :::
@@ -345,7 +345,7 @@ earlier design kept declared out of the samples in a separate config store; ADR-
 
 ## Storage
 
-The shape registries, the value cells, and the operator-label tables; the physical layout (the owner
+The shape catalogs, the value cells, and the operator-label tables; the physical layout (the owner
 arc, the cascade key) lives on [storage](/architecture/storage/). The **secret** and **variable**
 cells are **built**; the **config** cell is `Design`.
 
@@ -354,7 +354,7 @@ The two shipped members each got their own table rather than a shared discrimina
 Whether the `config` cell joins `variable` in one table with a discriminator is open; they share the
 cascade and the exclusive-arc scope either way.
 
-`secret_type` (**Built**) is the secret **shape** registry (`snmp-community`, `basic-auth` seeded);
+`secret_type` (**Built**) is the secret **shape** catalog (`snmp-community`, `basic-auth` seeded);
 `official` marks shipped-canonical versus org-local.
 
 <SchemaTable
@@ -381,7 +381,7 @@ above.
 />
 
 `variable` (**Built**) is the plaintext variable cell and the `$var:` cascade key; scope is the
-exclusive arc. Typed inline (no `variable_type` registry: the value is validated against
+exclusive arc. Typed inline (no `variable_type` catalog: the value is validated against
 `value_type` in the app), no observed side. The **config** cell is a separate, deferred member.
 
 <SchemaTable

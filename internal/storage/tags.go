@@ -152,7 +152,7 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 // #613). `nulls last` is redundant on an ASC sort and written anyway, because it
 // is the half of this ordering that is a DECISION rather than a default, and
 // because it holds only while unset really is SQL NULL (labelOrNull, ADR-0118).
-// The registry is tenant-wide (not ABAC-scoped), so any reader past the tag:read
+// The catalog is tenant-wide (not ABAC-scoped), so any reader past the tag:read
 // floor sees every key; the middleware is the gate.
 func (p *PG) ListTags(ctx context.Context) ([]Tag, error) {
 	rows, err := p.pool.Query(ctx, `select `+tagCols+` from tag order by label nulls last, name`)

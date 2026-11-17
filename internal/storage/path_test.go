@@ -211,16 +211,16 @@ func TestParseAddressMidPathAccessorIsInvalid(t *testing.T) {
 	}
 }
 
-// RejectAddressForm is the companion check for the 22 registry routes whose
+// RejectAddressForm is the companion check for the 22 catalog routes whose
 // names stay a single global kebab token (outpost, tag, and the four lane
 // types): #627's address grammar covers only component/system/location, and
 // a dotted ref sent to one of these must be refused explicitly, never fall
 // through to a bare 404 that never says why it missed.
-func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
+func TestRejectAddressFormRefusesADottedRefForACatalogKind(t *testing.T) {
 	t.Parallel()
 	err := storage.RejectAddressForm("outpost", "boi.17c")
 	if err == nil {
-		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token registry")
+		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token catalog")
 	}
 	var notAccepted *storage.ErrAddressNotAccepted
 	if !errors.As(err, &notAccepted) {
@@ -237,7 +237,7 @@ func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
 func TestRejectAddressFormRefusesALeadingAccessor(t *testing.T) {
 	t.Parallel()
 	if err := storage.RejectAddressForm("tag", "$comp.foo"); err == nil {
-		t.Fatal("RejectAddressForm accepted a leading accessor for a single-token registry")
+		t.Fatal("RejectAddressForm accepted a leading accessor for a single-token catalog")
 	}
 }
 

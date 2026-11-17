@@ -9,11 +9,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// productBody is the wire shape of a product registry row. A product ties the
+// productBody is the wire shape of a product catalog row. A product ties the
 // classification catalogs together: a vendor (who makes it), a driver (what
 // talks to it), a kind, the component_type it is classified under (the
 // taxonomy above product), an optional icon override, and an optional parent
-// product. The registry lists alphabetically by label.
+// product. The catalog lists alphabetically by label.
 type productBody struct {
 	ID              string `json:"id" doc:"The product's uuid, the stable handle that survives a rename"`
 	Name            string `json:"name" doc:"The name an operator reads and types; renameable"`
@@ -132,7 +132,7 @@ func validProductKind(kind string) bool {
 
 // mapProductErr translates the product storage sentinels into HTTP status. An
 // unknown vendor/driver/parent/component_type reference and an out-of-set
-// kind are 422s; everything else falls through to the shared type-registry
+// kind are 422s; everything else falls through to the shared type-catalog
 // mapping (not-found 404, duplicate 409, official read-only 422, in-use 409).
 func mapProductErr(err error) error {
 	switch {
@@ -145,7 +145,7 @@ func mapProductErr(err error) error {
 	}
 }
 
-// registerProductRoutes wires the product registry CRUD surface, on the same
+// registerProductRoutes wires the product catalog CRUD surface, on the same
 // pattern as the vendor/driver catalogs. Gated by
 // product:read|create|update|delete: product:read sits in the viewer read-floor
 // (*:read), the mutations at the admin tier, exactly like vendor:*.
@@ -156,7 +156,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/products",
 		Summary:     "List products",
-		Description: "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+		Description: "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, _ *struct{}) (*listProductsOutput, error) {
 		items, err := gw.ListProducts(ctx)
 		if err != nil {

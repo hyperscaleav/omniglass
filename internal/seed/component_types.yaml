@@ -1,6 +1,6 @@
-# The component_type taxonomy: the hierarchical registry a product is
+# The component_type taxonomy: the hierarchical catalog a product is
 # classified by (partially reverses ADR-0047's retirement of the flat
-# component_type registry, recorded as such: the reintroduced shape sits above
+# component_type catalog, recorded as such: the reintroduced shape sits above
 # product, not beside component). Official (ON CONFLICT DO UPDATE,
 # authoritative), unlike location_types.yaml's seed-if-absent example content.
 #

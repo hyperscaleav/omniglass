@@ -34,7 +34,7 @@ store, behind the same Storage Gateway as everything else.
 Splitting them means search and listing never touch bytes, and one blob can back many handles.
 
 :::design[Tags on files, tracked in #191]
-`file` tags will reuse the `tag` **key** registry (so `category` means the same thing on a firmware
+`file` tags will reuse the `tag` **key** catalog (so `category` means the same thing on a firmware
 image as on a component, [config and credentials](/architecture/variables/)) but bind as a **flat
 per-file set**: a file is not on the structural exclusive-arc, so there is no parent to cascade
 from. The vocabulary is shared; the cascade is not.

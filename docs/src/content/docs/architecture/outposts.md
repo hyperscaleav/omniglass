@@ -859,7 +859,7 @@ gone device.
 
 **A disruptive command closes its endpoints' gates** (built, #1651,
 [ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)).
-A command whose type is [disruptive](/architecture/commands/#the-command_type-registry) (`reboot`)
+A command whose type is [disruptive](/architecture/commands/#the-command_type-catalog) (`reboot`)
 arrives with its **hold set**, the endpoints on this outpost the command takes down (its target's
 in-band endpoints and those of what it hosts, or every endpoint of what a power command's outlet
 feeds; [the hold set follows dependency edges](/architecture/commands/#the-hold-set-follows-dependency-edges)),
@@ -1013,7 +1013,7 @@ admission -> worker
 ship -> failed: "raw on failure" { style.stroke-dash: 4 }
 ```
 
-Samples are already produced at the edge; an **admission consumer** binds owner (registry
+Samples are already produced at the edge; an **admission consumer** binds owner (catalog
 lookup, owner attribution against the outpost's placement) at **consume time** and republishes to the
 trusted stream the rule engine and persistence read, so a forged owner drops before evaluation,
 not at the durable write. The server never re-derives observed samples; the outpost's job ends at the

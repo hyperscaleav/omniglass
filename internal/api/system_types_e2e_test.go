@@ -31,7 +31,7 @@ type systemTypeWire struct {
 	Parent                string `json:"parent"`
 }
 
-// TestSystemTypesAPI drives the system_type registry over HTTP on the same
+// TestSystemTypesAPI drives the system_type catalog over HTTP on the same
 // contract component_type's e2e pins: list shows the shipped tree with parent
 // links in both forms, a viewer reads but creates nothing, an admin creates a
 // custom child under a shipped node, the official rows are read-only, an

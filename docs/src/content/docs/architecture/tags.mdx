@@ -11,7 +11,7 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Partial]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
-**built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
+**built**: the governed **`tag`** key catalog, the per-entity **`tag_binding`** cell on the exclusive arc, and the
 union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. Also built: the
 console **Tags directory**, the per-entity **binding editor**, **value-domain enums**
 ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), the directory **Tags column** with per-key
@@ -34,7 +34,7 @@ combinator rather than a single most-specific value.
 ## Two layers: the key vocabulary and the value binding
 
 - **`tag`** is the **governed key vocabulary**: one row per key (`category`, `environment`), shared across the
-  whole tenant (one registry per database, the tenant boundary). It owns no value.
+  whole tenant (one catalog per database, the tenant boundary). It owns no value.
 - **`tag_binding`** is the **value cell**: a value for a key at one owner on the exclusive arc
   (`platform | location | system | component | outpost`), exactly the arc a [variable](/architecture/variables/)
   or a secret is owned at.

@@ -22,7 +22,7 @@ type severityLevelBody struct {
 	Outage   bool   `json:"outage"`
 }
 
-// TestSeverityLevelAPI drives the severity registry over HTTP: every reader
+// TestSeverityLevelAPI drives the severity catalog over HTTP: every reader
 // lists the levels, least to most severe, each saying whether it puts a
 // component in outage; an admin adds, renames and deletes operator levels;
 // official levels are read-only; and raising an alarm names a level that
@@ -109,7 +109,7 @@ func TestSeverityLevelAPI(t *testing.T) {
 
 	// A holder of every severity_level permission on one place alone still
 	// writes no level: a level's rank moves health fleet-wide. It still reads
-	// the registry; an all-scope holder writes.
+	// the catalog; an all-scope holder writes.
 	created := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "north", "location_type": "campus"}, http.StatusCreated)
 	var loc struct {
 		ID string `json:"id"`

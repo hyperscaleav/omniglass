@@ -22,7 +22,7 @@ import (
 // non-table heads never reach the check.
 var tableColumnSpan = regexp.MustCompile(`^([a-z_]+)\.([a-z_]+)`)
 
-// loadSeededDottedNames reads the generated seed facts for registry keys that
+// loadSeededDottedNames reads the generated seed facts for catalog keys that
 // carry a dot (property, event, and command type names like command-issued or
 // interface-reachable): a dotted NAME is not a column claim, and the seed facts
 // are the authoritative list of them.
@@ -83,7 +83,7 @@ func scanTableColumnsIn(line string, tables map[string]map[string]bool, seededNa
 			continue
 		}
 		if seededNames[span] {
-			continue // a seeded registry key, a name that happens to dot
+			continue // a seeded catalog key, a name that happens to dot
 		}
 		cols, ok := tables[tc[1]]
 		if !ok {

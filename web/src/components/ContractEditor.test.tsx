@@ -199,7 +199,7 @@ describe("ContractEditor on a location type", () => {
     expect(put!.url).toContain("/location-types/meeting-room/properties/has_camera");
   });
 
-  // A location type's contract is part of the location_type registry, so the
+  // A location type's contract is part of the location_type catalog, so the
   // server gates it on location_type:update, not location:update. A principal
   // holding only location writes must not see the write controls.
   it("gates its write controls on location_type:update, not location:update", () => {
