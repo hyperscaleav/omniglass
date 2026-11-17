@@ -145,6 +145,17 @@ terms:
     schema: OutpostBody
     permission: outpost
     nav: /outposts
+    retired:
+      # Banned as the bare word and every identifier spelling it (node_id, OMNIGLASS_NODE_,
+      # /nodes, node:read, omniglass node), since the collector had too many phrasings to list.
+      # Allow carries the senses the word keeps: a node of a tree or of the DOM, the Node.js
+      # runtime (its node: imports, node_modules, a node script.mjs invocation), the explore
+      # ?node= parameter, the D2 shape class the diagrams share, and a grant on this node only.
+      - word: node
+        pattern: '(?i)(?:\b|_)nodes?(?:\b|_)'
+        origin: ADR-2031
+        replacement: outpost (the collecting process; OMNIGLASS_OUTPOST_, /outposts, outpost:read, omniglass outpost)
+        allow: '(?i)\bnode_modules\b|\bnode:(?:fs|path|url|os|crypto|child_process|test|assert|util|https?|net|stream|events|readline|process|buffer|zlib|module|timers|worker_threads|perf_hooks)\b|[?&]node=|\bnode\.?js\b|\bnode (?:--?[\w-]+(?:=\S+)? )*\S+\.(?:m?js|cjs|ts)\b|\bclass: node\b|\bnode: \{ style\b|\b(?:tree|leaf|root|child|parent|ancestor|descendant|sibling|dom|text|deepest|interior|ast|jsx|forest|element|graph) nodes?\b|\bthis node only\b'
   - word: unclaimed source
     plural: unclaimed sources
     definition: A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.

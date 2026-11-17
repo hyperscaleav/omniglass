@@ -50,7 +50,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **metric type** | A numeric signal in the catalog, the series a sample measures, with its unit and precision. | `/metric-types` | `metric_type` |  |
 | **notification target** | Where a notification goes, a webhook, a mailbox, a group or a person. | `/notification-targets` | `notification_target` |  |
 | **notification type** | What a notification about an alarm says, as a subject and a text. | `/notification-types` | `notification_type` |  |
-| **outpost** | A collection process placed near the fleet that runs tasks and commands over endpoints and reports back. | `/outposts` | `outpost` |  |
+| **outpost** | A collection process placed near the fleet that runs tasks and commands over endpoints and reports back. | `/outposts` | `outpost` | node |
 | **principal** | A user, a person or a machine, that roles are granted to. | `/principals` | `principal` |  |
 | **principal group** | A set of users granted roles together, each member inheriting the group's grants. | `/principal-groups` | `principal_group` |  |
 | **product** | A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under. | `/products` | `product` |  |

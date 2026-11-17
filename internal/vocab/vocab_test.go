@@ -44,6 +44,7 @@ not_terms:
 		"no definition":      `terms: [{word: a, plural: as, audience: operator}]`,
 		"label without nav":  `terms: [{word: a, plural: as, definition: An a., audience: operator, nav_label: A}]`,
 		"bad pattern":        `terms: [{word: a, plural: as, definition: An a., audience: operator, retired: [{word: b, pattern: "(", origin: "#1"}]}]`,
+		"bad allow":          `terms: [{word: a, plural: as, definition: An a., audience: operator, retired: [{word: b, pattern: b, origin: "#1", allow: "("}]}]`,
 		"retired no origin":  `terms: [{word: a, plural: as, definition: An a., audience: operator, retired: [{word: b, pattern: b}]}]`,
 		"unknown field":      `terms: [{word: a, plural: as, definition: An a., audience: operator, colour: red}]`,
 		"not_term no reason": `not_terms: [{nav: /x}]`,

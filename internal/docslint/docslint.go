@@ -52,7 +52,7 @@ var Banned = append(retiredIdentifiers, vocabularyRetired()...)
 func vocabularyRetired() []BannedTerm {
 	var out []BannedTerm
 	for _, b := range vocab.MustLoad().Banned() {
-		out = append(out, BannedTerm{Pattern: b.Pattern, Replacement: b.Replacement, Origin: b.Origin})
+		out = append(out, BannedTerm{Pattern: b.Pattern, Replacement: b.Replacement, Origin: b.Origin, Allow: b.Allow})
 	}
 	return out
 }
