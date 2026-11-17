@@ -16,7 +16,7 @@ import (
 // database just below the rename, plants a person, a machine user, an
 // outpost and what hangs off them, and migrates forward over them.
 
-const userRenameVersion = "20261117182952"
+const userRenameVersion = "20261117224704"
 
 // schemaPrincipalNames is every table, column, constraint, index, sequence
 // and trigger in the public schema whose name spells principal, human or

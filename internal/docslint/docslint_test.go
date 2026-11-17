@@ -657,7 +657,7 @@ func TestADR2036TheUserFires(t *testing.T) {
 		"add a user group for the night shift",
 		"a person signs in with a password",
 		"the `principal` table became `users`",
-		"migration `20261117182952_principal_becomes_user` renamed it",
+		"migration `20261117224704_principal_becomes_user` renamed it",
 		"the `principal_id` column became `user_id`",
 		"the principal reason is cost",
 		"the principal axes of the design",
