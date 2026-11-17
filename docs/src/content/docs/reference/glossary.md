@@ -16,20 +16,20 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` |  |
 | **command** | One instruction sent to a component, typed by a command type, and its outcome. |  | `command` |  |
 | **component** | One managed device or service, an instance of a product, placed at a location and usually a member of a system. | `/components` | `component` |  |
-| **degraded** | The verdict of a system that still works but has lost something it should have. |  |  |  |
+| **degraded** | The health of a system that still works but has lost something it should have. |  |  |  |
 | **detail view** | An entity's own page, a system with its location as context, or a location or component on its own. |  |  | workspace |
 | **endpoint** | A connection to a component over one transport, the API Omniglass reaches it through. | `/endpoints` | `endpoint` | interface |
 | **event** | One point-in-time occurrence on a component, typed by an event type. |  |  |  |
 | **file** | Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook. | `/files` | `file` |  |
 | **fleet** | Everything an install manages, the locations, the systems in them and the components that make them up. |  |  | estate, inventory |
-| **healthy** | The verdict of a system whose components are all present and well. |  |  |  |
-| **incomplete** | The verdict of a system still missing a component its standard requires, shown as Commissioning. |  |  |  |
+| **healthy** | The health of a system whose components are all present and well. |  |  |  |
+| **incomplete** | The health of a system still missing a component its standard requires, shown as Commissioning. |  |  |  |
 | **label** | The optional friendly string a person reads in place of a name. |  |  | display name |
 | **location** | A place the fleet occupies, from a campus down to a room, nested under the location it sits in. | `/locations` | `location` |  |
 | **notification** | One message about an alarm sent on one channel, such as a webhook, an email or the inbox. | `/notifications` | `notification` |  |
-| **outage** | The verdict of a system that cannot do its job. |  |  |  |
+| **outage** | The health of a system that cannot do its job. |  |  |  |
 | **secret** | An encrypted credential set at one level of the fleet and inherited below it. | `/secrets` | `secret` |  |
-| **system** | The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict. | `/systems` | `system` |  |
+| **system** | The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own. | `/systems` | `system` |  |
 | **tag** | An operator's key and value on a location, system or component, its key governed install-wide. | `/tags` | `tag` |  |
 | **template** | An example you clone to start a standard, a component, a system or a set of locations, then own what you get. | `/templates` | `template` |  |
 | **variable** | A named value set at one level of the fleet and inherited below it, written into text as $var. | `/variables` | `variable` |  |

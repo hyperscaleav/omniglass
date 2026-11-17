@@ -5257,7 +5257,7 @@ export type ListSystemTypesOutputBody = {
 export type SystemBodyEffectiveTags = {[key: string]: string};
 
 /**
- * The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict.
+ * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
  */
 export type SystemBody = {
   /** A URL to the JSON Schema for this object. */

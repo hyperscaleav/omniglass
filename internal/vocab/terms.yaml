@@ -55,7 +55,7 @@ terms:
     nav: /location-types
   - word: system
     plural: systems
-    definition: The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict.
+    definition: The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
     audience: operator
     collection: systems
     schema: SystemBody
@@ -395,22 +395,22 @@ terms:
     nav_label: Audit
   - word: healthy
     plural: healthy
-    definition: The verdict of a system whose components are all present and well.
+    definition: The health of a system whose components are all present and well.
     audience: operator
     verdict: healthy
   - word: incomplete
     plural: incomplete
-    definition: The verdict of a system still missing a component its standard requires, shown as Commissioning.
+    definition: The health of a system still missing a component its standard requires, shown as Commissioning.
     audience: operator
     verdict: incomplete
   - word: degraded
     plural: degraded
-    definition: The verdict of a system that still works but has lost something it should have.
+    definition: The health of a system that still works but has lost something it should have.
     audience: operator
     verdict: degraded
   - word: outage
     plural: outage
-    definition: The verdict of a system that cannot do its job.
+    definition: The health of a system that cannot do its job.
     audience: operator
     verdict: outage
 
