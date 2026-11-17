@@ -201,6 +201,8 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 |---|---|---|---|
 | `--agent` | string | (none) | Filter to the events one agent took on its person's behalf (the name its agent token was minted with) |
 | `--before` | string | (none) | Only events strictly older than this RFC3339 timestamp (paging backward) |
+| `--channel` | string | (none) | Filter to the events that arrived through one channel; direct is a plain API call, with no channel |
+| `--client` | string | (none) | Filter to the events whose declared MCP client contains this term, case-insensitively |
 | `--limit` | int | `0` | Max rows to return, newest first (default 100, capped at 500) |
 | `--resource` | string | (none) | Filter to one resource kind (e.g. auth, principal_grant) |
 | `--verb` | string | (none) | Filter to one verb (e.g. login, create) |

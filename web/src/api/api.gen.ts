@@ -8654,7 +8654,20 @@ export type ListAuditLogParams = {
   before?: string;
   /** Filter to the events one agent took on its person's behalf (the name its agent token was minted with) */
   agent?: string;
+  /** Filter to the events that arrived through one channel; direct is a plain API call, with no channel */
+  channel?: ListAuditLogChannel;
+  /** Filter to the events whose declared MCP client contains this term, case-insensitively */
+  client?: string;
 };
+
+export type ListAuditLogChannel = typeof ListAuditLogChannel[keyof typeof ListAuditLogChannel];
+
+
+export const ListAuditLogChannel = {
+  direct: 'direct',
+  mcp: 'mcp',
+  omnibot: 'omnibot',
+} as const;
 
 export type ListAuthMeNotificationsParams = {
   /** Only the entries not yet read */

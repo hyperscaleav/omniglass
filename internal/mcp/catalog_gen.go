@@ -26,10 +26,10 @@ var catalog = []tooldef.Def{
 		Method:      "GET",
 		Path:        "/audit-log",
 		Permission:  "audit:read:admin",
-		QueryParams: []string{"limit", "resource", "verb", "before", "agent"},
+		QueryParams: []string{"limit", "resource", "verb", "before", "agent", "channel", "client"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
 		Class:       tooldef.ClassRead,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"agent\":{\"description\":\"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)\",\"type\":\"string\"},\"before\":{\"description\":\"Only events strictly older than this RFC3339 timestamp (paging backward)\",\"type\":\"string\"},\"limit\":{\"description\":\"Max rows to return, newest first (default 100, capped at 500)\",\"format\":\"int64\",\"type\":\"integer\"},\"resource\":{\"description\":\"Filter to one resource kind (e.g. auth, principal_grant)\",\"type\":\"string\"},\"verb\":{\"description\":\"Filter to one verb (e.g. login, create)\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"agent\":{\"description\":\"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)\",\"type\":\"string\"},\"before\":{\"description\":\"Only events strictly older than this RFC3339 timestamp (paging backward)\",\"type\":\"string\"},\"channel\":{\"description\":\"Filter to the events that arrived through one channel; direct is a plain API call, with no channel\",\"enum\":[\"direct\",\"mcp\",\"omnibot\"],\"type\":\"string\"},\"client\":{\"description\":\"Filter to the events whose declared MCP client contains this term, case-insensitively\",\"type\":\"string\"},\"limit\":{\"description\":\"Max rows to return, newest first (default 100, capped at 500)\",\"format\":\"int64\",\"type\":\"integer\"},\"resource\":{\"description\":\"Filter to one resource kind (e.g. auth, principal_grant)\",\"type\":\"string\"},\"verb\":{\"description\":\"Filter to one verb (e.g. login, create)\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
 		Name:        "get-auth-me",
