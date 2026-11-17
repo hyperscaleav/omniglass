@@ -82,7 +82,9 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 			values (now(), (select principal_id from outpost where name = 'sev-outpost'), 'outpost', $1, $1)`, sev)
 	}
 
-	up := severityBackfillUp(t)
+	// The backfill predates #2059, which renamed node_log; it runs here over
+	// the table as it is named now.
+	up := strings.ReplaceAll(severityBackfillUp(t), "public.node_log", "public.outpost_log")
 	read := func(sql string) []string {
 		t.Helper()
 		rows, err := f.conn.Query(f.ctx, sql)
