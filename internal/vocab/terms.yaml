@@ -71,12 +71,18 @@ terms:
     nav: /system-types
   - word: standard
     plural: standards
-    definition: A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes.
+    definition: The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes.
     audience: admin
     collection: standards
     schema: StandardBody
     permission: standard
     nav: /standards
+    retired:
+      # A blueprint is drawn once and followed; a standard is a contract a system keeps.
+      - word: blueprint
+        pattern: '(?i)\bblueprints?\b'
+        origin: ADR-2033
+        replacement: the contract a system is built to (a standard)
   - word: component
     plural: components
     definition: One managed device or service, an instance of a product, placed at a location and usually a member of a system.
@@ -363,6 +369,11 @@ terms:
         pattern: '\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b'
         origin: ADR-0118
         replacement: label (the friendly string), or label_generated (the pen that says the platform rendered it)
+      # A template is the catalog entry you clone once; the string a label renders from is a rule.
+      - word: label template
+        pattern: '(?i)\blabel[ -]templates?\b|\bdefault_template\b'
+        origin: ADR-2033
+        replacement: label rule (the string a label renders from; the default_rule and rule columns)
   - word: detail view
     plural: detail views
     definition: An entity's own page, a system with its location as context, or a location or component on its own.

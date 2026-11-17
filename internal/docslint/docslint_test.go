@@ -515,3 +515,46 @@ func TestADR2035RegistryAsTheCatalogFires(t *testing.T) {
 		}
 	}
 }
+
+// TestADR2033LabelTemplateAndBlueprintFire proves the two ADR-2033 entries:
+// the string a label renders from is a rule, never a label template (the
+// prose noun and the column that spelled it), and a standard is the contract
+// a system is built to, never a blueprint. The senses template keeps pass:
+// a label rule, the Go text/template engine it is written in, the catalog
+// template an operator clones once, and a template's own label.
+func TestADR2033LabelTemplateAndBlueprintFire(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2033") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"a new label template",
+		"The label template systems of this type get",
+		"Label templates resolve through four tiers.",
+		"each label-template compiles at write time",
+		"the `default_template` column the boot seed owns",
+		"a standard is the blueprint a system conforms to",
+		"the blueprints your systems are built against",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2033 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a new label rule",
+		"a Go text/template",
+		"The rule language is Go `text/template` over a closed map.",
+		"create a standard from the `meeting-room` standard template",
+		"a template's label is the name the catalog shows",
+		"the `label_rule` column's `default_rule` and `rule`",
+		"a standard is the contract a system is built to",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}

@@ -547,19 +547,19 @@ is three catalogs and a delivery row, each answering one question: a **notificat
 ### Notification types: what a message says
 
 A `notification_type` is the outbound peer of `command_type`: fleet-wide reference data carrying
-the `official` boolean, a `label` and `description`, and two templates, a one-line `subject` and a
+the `official` boolean, a `label` and `description`, and two rules, a one-line `subject` and a
 body `text`. The shipped set is authoritative on every boot and read-only; an operator writes
 their own beside it, and renames one with `:rename`.
 
 <SeededSet kind="notification_types" />
 
-A template is the language a [label rule](/architecture/glossary/) is written in, run by the same
+Each is written in the language a [label rule](/architecture/glossary/) is written in, run by the same
 sandbox (`internal/sandbox`, lifted out of the label engine so there is one): a closed grammar
 (`if`, the comparisons and the label rule's functions; `printf`, `call`, `index`, `range` and
-variables are refused when the template is written, a 422 naming the construct, and it is never
+variables are refused when the rule is written, a 422 naming the construct, and it is never
 stored) over a closed map of strings. The work one render may do is bounded at the primitive, not
-by the grammar alone: a template's source, the arguments of one call, and each fact's length are
-capped, so a template over a long alarm message cannot multiply it. A notification template reads the **alarm facts**, declared once beside
+by the grammar alone: a rule's source, the arguments of one call, and each fact's length are
+capped, so a rule over a long alarm message cannot multiply it. A notification's subject and text read the **alarm facts**, declared once beside
 the accessor that builds them; a fact outside the map renders empty, and a secret is not in it to
 filter out:
 
@@ -567,11 +567,11 @@ filter out:
 
 `Link` is built on the `console_url` key of the `notification` [settings](/architecture/settings/) namespace (a platform
 namespace, admin-only), since the server cannot know the name a receiver reaches it by.
-`POST /notification-types/{name}:preview` renders a type, or a draft of either template, against
+`POST /notification-types/{name}:preview` renders a type, or a draft of either rule, against
 a real alarm on a component the caller can read, exactly as a delivery of that transition would
 carry it, and returns the facts beside the result; it writes nothing. The console's
-**Catalog > Actions > Notifications** page edits the templates and previews them through that
-route, so an author sees what a receiver gets and what a template can read. Its neighbours,
+**Catalog > Actions > Notifications** page edits the rules and previews them through that
+route, so an author sees what a receiver gets and what a rule can read. Its neighbours,
 **Action rules** and **Notification targets** (#1346), author the other two catalogs: a target's panel tests it
 and shows the receiver's answer, reveals its URL under the audit row, and names the rules sending to
 it; a rule's panel switches it on and off and lists what it recently sent, its `when` written in the
@@ -604,7 +604,7 @@ alarm) exactly as a delivery would be sent, answers what the receiver said, and 
 audit row.
 
 **The send pipeline is render, then sign, then send.** The body is a fixed, versioned JSON
-envelope: the templates render strings, never the JSON itself, so an operator's template cannot
+envelope: the rules render strings, never the JSON itself, so an operator's rule cannot
 produce an invalid body. The signature is over the exact bytes sent and is the scheme the inbound
 `hmac` webhook verifies ([ADR-1024](/architecture/decisions/)), so a receiver can prove the
 sender, and Omniglass can verify its own notifications.
@@ -1004,7 +1004,7 @@ catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), 
     alarm_id: 'The alarm it is about; written in that alarm transition\'s own transaction',
     component_id: 'The alarm\'s component, denormalized for the scope filter every read injects',
     rule_name: 'The action rule that queued it, kept by name after the rule is deleted (as type_name and target_name are)',
-    facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
+    facts: 'The alarm facts the rules rendered over, sent as the envelope\'s facts',
     status: 'queued, sent, failed or suppressed (a snoozed condition\'s row, written but never sent); the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
     channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
@@ -1055,7 +1055,7 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity ca
   }}
 />
 
-<SchemaTable table="notification_type" notes={{ subject: 'The one-line subject template, rendered over the alarm facts; whitespace collapses', text: 'The body text template; its lines are kept' }} />
+<SchemaTable table="notification_type" notes={{ subject: 'The one-line subject rule, rendered over the alarm facts; whitespace collapses', text: 'The body text rule; its lines are kept' }} />
 
 <SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
 

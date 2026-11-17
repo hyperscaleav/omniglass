@@ -587,7 +587,7 @@ an unknown vendor, driver, parent, or component_type id is a 422.
 ## Standards
 
 The [standard](/architecture/core-entities/#catalog-reference-data-standard) commands cover the
-system-side counterpart of a product: the **blueprint a system conforms to**. `standard:read` sits on the
+system-side counterpart of a product: the **contract a system is built to**. `standard:read` sits on the
 viewer floor; `standard:create`, `standard:update`, `standard:delete`, and `standard:rename` are
 admin-gated.
 

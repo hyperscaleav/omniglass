@@ -188,7 +188,7 @@ the two in one migration. Three buckets, never conflated:
   operator-writable or inert table keeps the ordinary insert-if-absent rule above.
 
   **A row that is both shipped and operator-owned splits into two columns.** The global label rules
-  (`label_rule`, one row per labelled entity kind) carry `default_template` and `template`: the seed
+  (`label_rule`, one row per labelled entity kind) carry `default_rule` and `rule`: the seed
   writes only the first, authoritatively, and the second is the operator's, resolved over it. Neither
   single-column arrangement works, since an authoritative seed stomps the operator on the next
   restart and a seed-if-absent freezes the shipped default at the first boot. It is the same

@@ -83,7 +83,7 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
 - A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
   the **logical** grouping the business cares about, the unit Omniglass monitors, and what support
   troubleshoots through (its health, usually remotely). It is located at a location and **conforms
-  to a `standard`**, the blueprint it is built against; the pointer is optional, mirroring
+  to a `standard`**, the contract it is built to; the pointer is optional, mirroring
   `component.product_id`. Operators add components **to a system**: membership is how a component
   belongs ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing)).
 - A **location** is the **physical** grouping: where things sit, in the customer's own tree, and
@@ -175,7 +175,7 @@ The column mechanics render from the generated schema facts:
   notes={{
     parent_id: 'The self-referencing service tree',
     location_id: 'Where the service lives',
-    standard_id: 'Optional pointer at the blueprint the system conforms to',
+    standard_id: 'Optional pointer at the contract the system is built to',
   }}
 />
 
@@ -318,14 +318,14 @@ tag set, while a system's effective tags come from the platform, its location, a
 tree, so the column would have no reader.
 
 The **type is not the standard**, and both stay. The type says what a system **is**; the standard
-below says which blueprint it is **built to**. One fleet holds ten signage standards and six
+below says which contract it is **built to**. One fleet holds ten signage standards and six
 classroom standards under a single coarse type, which is exactly why standard's own
 `parent_standard_id` inheritance (which expresses **design forks**, two ways to build the same kind of
 room) is the wrong axis for this question.
 
 ### Catalog reference data: `standard`
 
-A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
+A **`standard`** (Huddle Room, Classroom, ...) is the **contract a system is built to**: a stable
 `id` and `label`, an optional **`parent_standard_id`** (a variant points at its base), and
 the `official` boolean; the promotion of the former `system_type` label catalog
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
@@ -1015,7 +1015,7 @@ ordinal, and it decodes straight into the same mint a component and a system are
 building is `1`, the next is `2`, allocated among that building's own decks, so every building has
 its own deck `1`. A positional type is right where the number is an arbitrary disambiguator (a deck,
 a rack row, a berth) and wrong where it is a fact somebody reads off a wall. That is deliberately not
-the `label_rule` template beside it on the same catalog: a label that fails to render falls through
+the `label_rule` beside it on the same catalog: a label that fails to render falls through
 to the next rung of the read ladder, and a name has no next rung, so a rule that would mint an
 illegal name is refused **when the rule is edited** by minting from it, rather than discovered by a
 create it breaks.
