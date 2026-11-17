@@ -558,7 +558,7 @@ func TestListSystemTypesCostIsFlatInCatalogDepth(t *testing.T) {
 	}
 	small := measure(t, counter, list)
 
-	parent := "room"
+	parent := "collaboration"
 	for i := range widePage {
 		name := fmt.Sprintf("probe-sys-type-%d", i)
 		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{

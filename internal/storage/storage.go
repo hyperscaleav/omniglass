@@ -445,8 +445,8 @@ type Gateway interface {
 	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
 	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)
 
-	// The system_type catalog: the coarse taxonomy of what kind of space a
-	// system is (a boardroom, a classroom, a video wall), the system-side
+	// The system_type catalog: the taxonomy of what a system is for
+	// (meeting, teaching, signage), the system-side
 	// counterpart of component_type and a different question from standard,
 	// which stays the contract a system is built to.
 	// ResolveSystemTypeFacts walks the tree in Go; no DB logic.

@@ -750,7 +750,7 @@ The **classification catalogs** ([core entities](/architecture/core-entities/#ca
 are official-vs-custom catalogs the fleet entities reference, on the same pattern as the
 `*_type` catalogs; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
 ([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
-`system_type` its system-side counterpart, the coarse taxonomy of what kind of space a system is
+`system_type` its system-side counterpart, the taxonomy of what a system is for
 ([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
 resource with one shared CRUD shape: the list routes
 (`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`, `/system-types`) order
@@ -852,7 +852,7 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   scheme, for example `javascript:`).
 - A **driver** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional `version`.
-- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class genus a product is
+- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class type a product is
   classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a
   [system slot's type guard](#system-slots-a-system-declares-one-a-component-fills-it) accepts.
 - A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the

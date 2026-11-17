@@ -2824,7 +2824,7 @@ export type CreateSystemInputBody = {
   parent?: string;
   /** The standard it conforms to, by handle or uuid; omit for a one-off system */
   standard_id?: string;
-  /** The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified */
+  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
   system_type_id?: string;
 };
 
@@ -5206,7 +5206,7 @@ export type ListSystemSlotsOutputBody = {
 };
 
 /**
- * What kind of space a system is, such as a boardroom, a classroom or a video wall.
+ * What a system is for, such as meeting, teaching or signage, never the space it sits in.
  */
 export type SystemTypeBody = {
   /** A URL to the JSON Schema for this object. */

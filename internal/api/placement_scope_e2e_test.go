@@ -174,7 +174,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	owned = f.c.do(f.owner, http.MethodPost, "/components", map[string]any{
 		"name": "panel-c", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusCreated)
-	if !strings.Contains(label(t, owned), "Boardroom") {
+	if !strings.Contains(label(t, owned), "Board Meeting") {
 		t.Errorf("owner create stored %q, want the out-of-scope system's type label in it", label(t, owned))
 	}
 }

@@ -192,9 +192,9 @@ identity pages.
 
   A system's shipped rule reads its **location**, because a system is what makes that location work: a
   system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a location holds several
-  systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
+  systems, each adds its **type**: **Media Lab Meeting** beside **Media Lab Signage**, and the
   first one restamps when the second arrives (and back when it leaves). Two of the same type add
-  the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
+  the number their names carry: `boardroom-2` shows **Boardroom 204B Board Meeting 2**. A system with
   no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
   with a number in it means a name with the same number in it, and neither is a guess: both are read
   from the placement you have just picked. A system with no location reads its type.
@@ -283,7 +283,7 @@ identity pages.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
   reads its location, so a room and its system read as one name instead of the room's name above the
-  system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
+  system's type ("Meeting" under Briefing Room). A fleet created before the upgrade keeps its
   old labels until you run `omniglass system previewLabels`, then `omniglass system
   recomputeLabels`. Only the second of a kind in a location adds its type and number: a location with one
   boardroom reads as the location, exactly as its name is `boardroom` rather than `boardroom-1`.

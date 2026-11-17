@@ -8483,7 +8483,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
-				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified")
 				return cmd
 			}()
 			return cmd

@@ -450,7 +450,7 @@ describe("the one form, empty", () => {
     ]);
     qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
     qc.setQueryData([...STANDARDS_KEY], []);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-room"), name: "room", label: "Room" }]);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
     window.history.pushState({}, "", "/web/x");
     render(() => (
@@ -487,7 +487,7 @@ describe("the one form, empty", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":renderLabel")) {
         asked.push(req.url);
-        return new Response(JSON.stringify({ name: "room", ordinal: 1, label: "Room", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ name: "collaboration", ordinal: 1, label: "Collaboration", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
@@ -497,7 +497,7 @@ describe("the one form, empty", () => {
       await waitFor(() => expect(within(form).getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
       expect(asked).toEqual([]);
 
-      await pickTree(within(form).getByLabelText("Type"), "Room");
+      await pickTree(within(form).getByLabelText("Type"), "Collaboration");
       await waitFor(() => expect(asked.length).toBe(1));
       expect(asked[0]).toContain("/systems:renderLabel");
     } finally { stub.mockRestore(); }

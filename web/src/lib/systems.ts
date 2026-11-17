@@ -9,9 +9,9 @@ import { api } from "../api/client";
 // property contract, the system-side counterpart of a product). It is optional: a
 // one-off system that conforms to no standard is first class.
 //
-// It is separately classified by a SYSTEM_TYPE: what kind of space it is (a
-// boardroom, a classroom, a video wall). The two answer different questions,
-// and a fleet can hold many standards under one coarse type. Also optional
+// It is separately classified by a SYSTEM_TYPE: what it is for (meeting,
+// teaching, signage). The two answer different questions,
+// and a fleet can hold many standards under one type. Also optional
 // while the column is nullable.
 export type System = {
   id: string;
@@ -25,7 +25,7 @@ export type System = {
   // the name an operator reads, standard_id the uuid it resolves to.
   standard?: string;
   standard_id?: string;
-  // The coarse space classifier, in both forms: system_type is the name an
+  // The system type, in both forms: system_type is the name an
   // operator reads, system_type_id the uuid it resolves to.
   system_type?: string;
   system_type_id?: string;

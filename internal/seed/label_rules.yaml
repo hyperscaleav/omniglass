@@ -20,12 +20,12 @@ label_rules:
     # A system reads as the location it monitors (#872). A system is the logical
     # group of components that makes a location work, and nearly every room holds
     # exactly one, so the operator's word for it is the location's: "Briefing
-    # Room", not the kind of space ("Meeting Room") read back under a
+    # Room", not its system type ("Meeting") read back under a
     # breadcrumb that already says Briefing Room. The kind and the standard
     # stay attributes beside the label.
     #
     # A location holding several systems names each one's kind after the location
-    # ("Media Lab Meeting Room", "Media Lab Signage"), and the siblings restamp
+    # ("Media Lab Meeting", "Media Lab Signage"), and the siblings restamp
     # as the count changes. An unclassified system has no kind to name, so it
     # names itself ("Media Lab Lobby Wall"). The ordinal still follows the NAME
     # (#693): the first of a stem is bare and the second carries its 2

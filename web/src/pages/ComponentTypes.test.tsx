@@ -8,7 +8,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
-// Component Types (Catalog > Components: Types): the device-class genus
+// Component Types (Catalog > Components: Types): the device-class type
 // catalog (ADR-0085, partially reversing ADR-0047), on the same
 // official/custom FlatList pattern as Location Types, but tree-shaped
 // (parent_id) rather than flat: a subtype (interactive-display) grafts under
@@ -265,7 +265,7 @@ describe("ComponentTypes page", () => {
     const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
-    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });

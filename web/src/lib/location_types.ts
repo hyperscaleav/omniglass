@@ -11,7 +11,7 @@ import { api } from "../api/client";
 // STANDARD, a first-class catalog entity with its own catalog and a
 // declared-property contract (lib/standards.ts). A component's shape is
 // likewise the product it is an instance of. The system_type NAME now belongs
-// to a different object, the coarse space taxonomy in lib/system_types.ts.
+// to a different object, the system type taxonomy in lib/system_types.ts.
 
 // ROOT_PLACEMENT is the reserved allowed_parent_types member meaning "may sit
 // at the top, no parent" (mirrors storage.RootPlacement). CreateLocationType

@@ -37,7 +37,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // reads and types); official rows are read-only,
 // same as the Types catalog's official rows: the Edit / Delete pair greys. A
 // product carries a kind (device/app/service; vm retired, folded into app,
-// ADR-0086), a required component_type (the device-class genus every product
+// ADR-0086), a required component_type (the device-class type every product
 // is classified under, ADR-0085, picked from the Types tree; also what a
 // system slot's typed-slot guard checks, #626), an optional icon override
 // (default: the type's icon), and an optional vendor and driver (picked from
@@ -246,7 +246,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // CreateProductForm: the label leads and the kebab name (the
 // operator-facing address; the uuid is the database's to mint) derives from it
 // until the operator edits it by hand (lib/entities). Kind defaults to device;
-// component_type (the device-class genus, #614) is required, no default, so
+// component_type (the device-class type, #614) is required, no default, so
 // every product states its class explicitly rather than reading the silent
 // default that let a mislabeled cloud service pass as correct forever
 // (ADR-0086); vendor, driver, and icon override are optional.

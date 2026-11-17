@@ -3461,7 +3461,7 @@ components:
           description: The standard it conforms to, by handle or uuid; omit for a one-off system
           type: string
         system_type_id:
-          description: The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified
+          description: The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified
           type: string
       type: object
     CreateSystemTypeInputBody:
@@ -12315,7 +12315,7 @@ components:
       type: object
     SystemTypeBody:
       additionalProperties: false
-      description: What kind of space a system is, such as a boardroom, a classroom or a video wall.
+      description: What a system is for, such as meeting, teaching or signage, never the space it sits in.
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.

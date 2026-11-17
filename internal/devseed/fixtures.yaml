@@ -1232,7 +1232,7 @@ systems:
   # briefing-av below the ONE provisioning exception. The pods keep their other
   # job: the fleet's same-BUCKET same-type siblings, the pair that demonstrates
   # the ordinal the system rule reads (#693): two `class` systems in one room
-  # mint `classroom` and `classroom-2`, rendering "Classroom" and "Classroom 2".
+  # mint `classroom` and `classroom-2`, rendering "Teaching" and "Teaching 2".
   - key: lab-pod-a
     standard: classroom
     system_type: class

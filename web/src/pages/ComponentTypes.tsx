@@ -28,7 +28,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Component Types (Catalog > Components: Types): the device-class genus
+// Component Types (Catalog > Components: Types): the device-class type
 // catalog (ADR-0085, the component_type catalog's partial reversal of
 // ADR-0047). It classifies the PRODUCT (`product.component_type_id`), so a
 // component's shape comes through the product it is; this catalog is not a
