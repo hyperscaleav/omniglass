@@ -51,10 +51,25 @@ func withAgentPolicy(api http.Handler) sdk.Middleware {
 	}
 }
 
-// markTools is list with each catalog tool's _meta carrying its class and the
-// policy for that class. The tools are copied: the listed ones are the
-// server's own and shared by every session.
-func markTools(list *sdk.ListToolsResult, policy map[tooldef.Class]string) *sdk.ListToolsResult {
+// agentPolicy is the caller's resolved agent policy: one per class, and one
+// per tool the install overrides (#2088).
+type agentPolicy struct {
+	classes map[tooldef.Class]string
+	tools   map[string]string
+}
+
+// of is a tool's policy: its own override's resolution, else its class's.
+func (p agentPolicy) of(tool string, class tooldef.Class) string {
+	if v, ok := p.tools[tool]; ok {
+		return v
+	}
+	return p.classes[class]
+}
+
+// markTools is list with each catalog tool's _meta carrying its class and its
+// resolved policy. The tools are copied: the listed ones are the server's own
+// and shared by every session.
+func markTools(list *sdk.ListToolsResult, policy agentPolicy) *sdk.ListToolsResult {
 	out := *list
 	out.Tools = make([]*sdk.Tool, len(list.Tools))
 	for i, t := range list.Tools {
@@ -68,20 +83,20 @@ func markTools(list *sdk.ListToolsResult, policy map[tooldef.Class]string) *sdk.
 		for k, v := range t.Meta {
 			cp.Meta[k] = v
 		}
-		cp.Meta[agentPolicyMeta] = map[string]string{"class": string(class), "policy": policy[class]}
+		cp.Meta[agentPolicyMeta] = map[string]string{"class": string(class), "policy": policy.of(t.Name, class)}
 		out.Tools[i] = &cp
 	}
 	return &out
 }
 
-// readAgentPolicy is the install's agent policy by class, as the API answers
-// the caller for GET /auth/me/agent-policy over the MCP channel.
-func readAgentPolicy(ctx context.Context, api http.Handler, req sdk.Request) (map[tooldef.Class]string, error) {
+// readAgentPolicy is the caller's resolved agent policy, as the API answers
+// GET /auth/me/agent-policy over the MCP channel.
+func readAgentPolicy(ctx context.Context, api http.Handler, req sdk.Request) (agentPolicy, error) {
 	dctx, release := detached(ctx)
 	defer release()
 	httpReq, err := http.NewRequestWithContext(storage.WithAuditChannel(dctx, storage.AuditChannelMCP, ""), http.MethodGet, apiBase+"/auth/me/agent-policy", nil)
 	if err != nil {
-		return nil, err
+		return agentPolicy{}, err
 	}
 	if extra := req.GetExtra(); extra != nil && extra.Header != nil {
 		httpReq.Header.Set("Authorization", extra.Header.Get("Authorization"))
@@ -90,20 +105,27 @@ func readAgentPolicy(ctx context.Context, api http.Handler, req sdk.Request) (ma
 	rec := newRecorder()
 	api.ServeHTTP(rec, httpReq)
 	if rec.status != http.StatusOK {
-		return nil, &policyStatusError{rec.status}
+		return agentPolicy{}, &policyStatusError{rec.status}
 	}
 	var body struct {
 		Classes []struct {
 			Class  tooldef.Class `json:"class"`
 			Policy string        `json:"policy"`
 		} `json:"classes"`
+		Tools []struct {
+			Tool   string `json:"tool"`
+			Policy string `json:"policy"`
+		} `json:"tools"`
 	}
 	if err := json.Unmarshal(rec.body.Bytes(), &body); err != nil {
-		return nil, err
+		return agentPolicy{}, err
 	}
-	policy := make(map[tooldef.Class]string, len(body.Classes))
+	policy := agentPolicy{classes: make(map[tooldef.Class]string, len(body.Classes)), tools: make(map[string]string, len(body.Tools))}
 	for _, c := range body.Classes {
-		policy[c.Class] = c.Policy
+		policy.classes[c.Class] = c.Policy
+	}
+	for _, t := range body.Tools {
+		policy.tools[t.Tool] = t.Policy
 	}
 	return policy, nil
 }

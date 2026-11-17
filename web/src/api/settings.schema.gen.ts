@@ -28,6 +28,14 @@ export const settingsSchema = {
         "never"
       ]
     },
+    "roles": {
+      "description": "Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter",
+      "type": "object"
+    },
+    "tools": {
+      "description": "Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter",
+      "type": "object"
+    },
     "write": {
       "description": "Policy for an agent's writes that create or act (a POST that is not a read)",
       "type": "string",

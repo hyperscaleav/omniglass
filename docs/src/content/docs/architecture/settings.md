@@ -200,6 +200,13 @@ a boot panic like any other. Three consequences worth knowing before declaring o
 - **Declare it `nullable:"false"`.** Huma makes arrays nullable by default, and `null` is the merge
   patch's delete sentinel, so a nullable list invites a write that means something else entirely.
 
+**A map-valued setting** is a `map[string]T` field with `omitempty` and no default: the agent
+policy's `roles` and `tools` overrides are the first ([ADR-2088](/architecture/decisions/#adr-2088-role-and-per-tool-overrides-narrow-the-agent-policy-strictest-wins)).
+Unlike a list it merges by key, so a patch adds or replaces one entry and a nested `null` deletes
+one, without restating the rest. Its entries are checked by a value check rather than a tag, since a
+tag cannot reach a map's values. The console edits it as its JSON text, from the generated
+`"type": "object"` constraint, and refuses inline anything that does not parse to a JSON object.
+
 **An optional setting** declares no `default` tag and a `json:"<key>,omitempty"`: the effective
 document leaves it out until a level sets it, the published schema does not list it as required, and
 its Go reader treats the zero value as "unset" and falls back to whatever the setting overrides. The

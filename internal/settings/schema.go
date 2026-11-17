@@ -5,7 +5,10 @@
 // sync.
 package settings
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 // Settings is the canonical settings document, one field per namespace. The
 // settings tag is "<domain>[,client]": domain is "profile" or "platform", and the
@@ -169,6 +172,32 @@ type AgentSettings struct {
 	Write                 string `json:"write" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's writes that create or act (a POST that is not a read)"`
 	Destructive           string `json:"destructive" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)"`
 	CredentialDestination string `json:"credential_destination" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)"`
+	// Roles and Tools narrow the class policies above (#2088); neither widens.
+	Roles map[string]AgentClassOverride `json:"roles,omitempty" doc:"Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter"`
+	Tools map[string]string             `json:"tools,omitempty" doc:"Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter"`
+}
+
+// AgentClassOverride is one role's override of the class policies (#2088). An
+// unset class leaves the platform's value.
+type AgentClassOverride struct {
+	Read                  string `json:"read,omitempty" enum:"always,ask,never" doc:"Policy for this role's agents' reads"`
+	Write                 string `json:"write,omitempty" enum:"always,ask,never" doc:"Policy for this role's agents' writes that create or act"`
+	Destructive           string `json:"destructive,omitempty" enum:"always,ask,never" doc:"Policy for this role's agents' writes that overwrite or delete"`
+	CredentialDestination string `json:"credential_destination,omitempty" enum:"always,ask,never" doc:"Policy for this role's agents' calls that may point a stored credential somewhere"`
+}
+
+func (o AgentClassOverride) policy(class string) string {
+	switch class {
+	case "read":
+		return o.Read
+	case "write":
+		return o.Write
+	case "destructive":
+		return o.Destructive
+	case "credential_destination":
+		return o.CredentialDestination
+	}
+	return ""
 }
 
 // The three agent policies.
@@ -177,6 +206,63 @@ const (
 	AgentAsk    = "ask"
 	AgentNever  = "never"
 )
+
+// The layers an agent policy is resolved from (#2088).
+const (
+	AgentSourcePlatform = "platform"
+	AgentSourceRole     = "role"
+	AgentSourceTool     = "tool"
+)
+
+// AgentDecision is a resolved agent policy and the layer that set it; Role
+// names the role when the layer is a role's override.
+type AgentDecision struct {
+	Policy string
+	Source string
+	Role   string
+}
+
+// agentStrictness orders the policies: never is stricter than ask, ask than
+// always. An unknown policy ranks with ask.
+func agentStrictness(p string) int {
+	switch p {
+	case AgentAlways:
+		return 0
+	case AgentNever:
+		return 2
+	}
+	return 1
+}
+
+// ResolveClass is the policy for one class for a person granted roles: the
+// strictest of the platform's value and each held role's override. A tie
+// keeps the earlier layer, the platform before any role and roles by name, so
+// the named source is the one an admin would have to change.
+func (a AgentSettings) ResolveClass(class string, roles []string) AgentDecision {
+	d := AgentDecision{Policy: a.Policy(class), Source: AgentSourcePlatform}
+	held := append([]string(nil), roles...)
+	slices.Sort(held)
+	for _, r := range slices.Compact(held) {
+		o, ok := a.Roles[r]
+		if !ok {
+			continue
+		}
+		if p := o.policy(class); p != "" && agentStrictness(p) > agentStrictness(d.Policy) {
+			d = AgentDecision{Policy: p, Source: AgentSourceRole, Role: r}
+		}
+	}
+	return d
+}
+
+// ResolveTool is the policy for one tool of a class: its class's resolved
+// policy, narrowed by the tool's override when that is stricter.
+func (a AgentSettings) ResolveTool(tool, class string, roles []string) AgentDecision {
+	d := a.ResolveClass(class, roles)
+	if p, ok := a.Tools[tool]; ok && agentStrictness(p) > agentStrictness(d.Policy) {
+		d = AgentDecision{Policy: p, Source: AgentSourceTool}
+	}
+	return d
+}
 
 // Policy is the policy for one operation class, falling back to the class's
 // default when unset (a zero value, as the unimplemented gateway returns), and

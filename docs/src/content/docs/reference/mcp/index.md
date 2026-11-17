@@ -25,7 +25,7 @@ Each tool also has an **agent class**, the one the install's [agent policy](/gui
 sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
 stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
 `tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
-for it.
+for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
 99 tools.
 
@@ -182,7 +182,7 @@ Returns the caller's principal, flattened permissions (a UI hint and the fast-re
 
 What the install lets an agent do
 
-Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
 
 - Route: `GET /api/v1/auth/me/agent-policy`
 - Gate: authn only
