@@ -67,6 +67,12 @@
       "labelled": false
     },
     {
+      "table": "catalog_shadow",
+      "shape": "id only",
+      "reason": "addressed by the catalog row it shadows, never named",
+      "labelled": false
+    },
+    {
       "table": "choice_alternate",
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway",
@@ -369,12 +375,6 @@
       "shape": "keyspace",
       "reason": "serial-number, a signal name referenced from drivers and templates",
       "labelled": true
-    },
-    {
-      "table": "registry_shadow",
-      "shape": "id only",
-      "reason": "addressed by the registry row it shadows, never named",
-      "labelled": false
     },
     {
       "table": "reserved_key",

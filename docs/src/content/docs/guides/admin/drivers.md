@@ -6,7 +6,7 @@ description: "The Drivers catalog: each driver's declarative spec (the menu one 
 **Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
 is the directory of **drivers**: the normalized menu that turns a device family's API into
 what to fetch, how to parse it, and what actuates,
-on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
+on the same flat-catalog pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Newtron NVP`). Each row shows the **name** (the
 operator-facing name, for example `snmp-generic`), the **label**, an optional
@@ -165,8 +165,8 @@ A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladd
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
 given as `ladder.transport.request`, where an open port cannot be detected; it runs as a line over
 `tcp`, a datagram over `udp`, or a get over `snmp`) and
-`ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
-registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
+`ladder.session.enabled` (whether a login rung exists). Every field defaults from the
+transport registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
 cloud API is never pinged, but its 443 is checked open before its session runs:
 
 ```yaml
@@ -468,7 +468,7 @@ rotateToken <component>/webhook` mints another, and the old URL answers 404 at o
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
-driver this way. It is a leaf catalog beside the vendor registry. See
+driver this way. It is a leaf catalog beside the vendor catalog. See
 [core entities](/architecture/core-entities/) for where it sits in the fleet model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a

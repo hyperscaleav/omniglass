@@ -338,7 +338,7 @@ Configuration is **two tiers**, and platform settings are deliberately **central
   at all**; env vars override.
 - **The platform settings store (a single home).** Everything else lives in the single, audited
   [settings engine](/architecture/settings/): feature flags, buffer and retention defaults, CDC routing,
-  integration settings, UI defaults, official-registry overrides, resolved most-specific-wins down the
+  integration settings, UI defaults, official-catalog overrides, resolved most-specific-wins down the
   principal hierarchy. An operator **settings file** (`settings.json` or YAML) is the GitOps layer, read
   into memory at boot and mounting cleanly as a **Kubernetes ConfigMap** (and a future operator); only
   the **override** an operator sets through the API is persisted in Postgres (audited), while the file

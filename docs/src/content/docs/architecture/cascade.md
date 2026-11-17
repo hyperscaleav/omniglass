@@ -160,7 +160,7 @@ first field, a structural segment never overruns into another however deep a tre
 many group weights stack. The single specificity numbers elsewhere on this page (`0`, `100`, the
 `300s`, the `400s`) are a **presentation-only** flattening of that key for the resolve view.
 
-## The registry is outside the cascade
+## The catalog is outside the cascade
 
 `property_type` defines **identity** (kind, unit, validation, fusion_policy) for every property,
 which the cascade never overrides (policy, not ontology). A type's **default** lives on that
@@ -255,7 +255,7 @@ synthetic root location.
 
 Service Depot is that argument made concrete rather than hypothetical. It was added to the seed
 later than the other three, it is a **building** at the top with rooms straight off it (no campus
-above, no floor between, which the type registry allows and the model has never required), and it
+above, no floor between, which the type catalog allows and the model has never required), and it
 came up covered by exactly one thing: the `platform` binding. Every location-tier binding written
 before it existed still misses it.
 

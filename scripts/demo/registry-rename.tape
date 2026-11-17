@@ -1,4 +1,4 @@
-# A registry renames, and a product's references clear
+# A catalog row renames, and a product's references clear
 #
 # A custom vendor and driver, and a product that names both. The product's
 # driver clears with an empty string and reads back gone, where it used to

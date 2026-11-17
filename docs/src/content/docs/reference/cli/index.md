@@ -779,7 +779,7 @@ List calc rules
 omniglass calc-rule list
 ```
 
-Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
 
 Example:
 
@@ -2191,7 +2191,7 @@ List component types
 omniglass component-type list
 ```
 
-Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
 
 Example:
 
@@ -2307,7 +2307,7 @@ List drivers
 omniglass driver list
 ```
 
-Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
 
 Example:
 
@@ -2352,7 +2352,7 @@ Moves a custom driver's name, the handle an operator types, addressed by its cur
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -2425,7 +2425,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `--out-of-band` | bool | `false` | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
 | `--outpost` | string | (none) | Outpost placement, by name or id |
 | `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
-| `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
+| `--transport` | string | (none) | A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
 Example:
 
@@ -2659,7 +2659,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -3671,7 +3671,7 @@ List location types
 omniglass location-type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
+Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
 
 Example:
 
@@ -3805,7 +3805,7 @@ Moves a custom location type's name, the handle an operator types, addressed by 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -4350,7 +4350,7 @@ Moves a custom notification type's name, the handle an operator types, addressed
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -5329,7 +5329,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 Example:
 
@@ -5463,7 +5463,7 @@ Moves a custom product's name, the handle an operator types, addressed by its cu
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -6441,7 +6441,7 @@ Moves a custom standard's name, the handle an operator types, addressed by its c
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -7138,7 +7138,7 @@ The system tier of :renderLabel on components. Drafts the name and the label a s
 | `--name` | string | (none) | The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. |
 | `--parent` | string | (none) | The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope. |
 | `--standard-id` | string | (none) | The standard this system conforms to, by name or uuid; omit for a one-off system |
-| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. |
+| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row. |
 
 Example:
 
@@ -7409,7 +7409,7 @@ List system types
 omniglass system-type list
 ```
 
-Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
 
 Example:
 
@@ -7629,7 +7629,7 @@ Accepts per-lane observations (metrics, properties, events) and raw log lines fo
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--events` | string | (none) | Natively caught occurrences, validated against event_type |
-| `--logs` | string | (none) | Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422 |
+| `--logs` | string | (none) | Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422 |
 | `--metrics` | string | (none) | Numeric observations, validated against metric_type |
 | `--owner` | string | (none) | The entity every row in the batch lands under |
 | `--properties` | string | (none) | Categorical observations, validated against property_type and each type's validation schema |
@@ -7709,7 +7709,7 @@ List the transports the platform speaks
 omniglass transport list
 ```
 
-Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
 
 Example:
 
@@ -7894,7 +7894,7 @@ List vendors
 omniglass vendor list
 ```
 
-Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
 
 Example:
 
@@ -7914,7 +7914,7 @@ Moves a custom vendor's name, the handle an operator types, addressed by its cur
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 

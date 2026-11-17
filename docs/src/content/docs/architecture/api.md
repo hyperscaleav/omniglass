@@ -28,7 +28,7 @@ with the caller's `component:read` or `system:read` deciding the refusal, a 404 
 an instance naming no endpoint of the owner refused with a 422, and a system, which has no endpoints
 and owns no log line, refused a named instance or a log line with a 422, every native probe key refused by
 name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
-[ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type registries, the
+[ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type catalogs, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
@@ -88,7 +88,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
   id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
   counterparts on `/principals/{id}` do carry a capability and a scoped path id.
-- **Each typed registry is its own plural collection**: `/location-types`, `/metric-types`,
+- **Each typed catalog is its own plural collection**: `/location-types`, `/metric-types`,
   `/property-types`,
   `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
 - **Collection-level custom methods** carry the colon on the collection, not a member:
@@ -202,12 +202,12 @@ The **three-state string** convention (an omitted field unchanged, an explicit `
 sets: `moveComponentInput`, a system's `standard`, a product's `vendor_id`, `driver_id`,
 `parent_product_id` and `icon`) is untouched and stays the idiomatic way to clear a string. A nullable
 reference is a string on the wire, so its clear is the same `""`, and the storage write is the same
-`CASE` the inherited registry facts below use rather than a `coalesce`, which can set a column but never
+`CASE` the inherited catalog facts below use rather than a `coalesce`, which can set a column but never
 clear it ([#260](https://github.com/hyperscaleav/omniglass/issues/260)). The mask is what
 generalizes clearing to everything that is not a string; retiring the sentinel in its favor is a
 separate ripple, not folded in here.
 
-The **inherited registry facts** are where that pays off. A `component_type` or `system_type` stores
+The **inherited catalog facts** are where that pays off. A `component_type` or `system_type` stores
 `stem`, `abbrev`, `icon` and `label_rule` as nullable strings where NULL means "inherit from the
 nearest ancestor that sets one", so each of the four has a clear state, and all four spell it the
 same way ([#716](https://github.com/hyperscaleav/omniglass/issues/716)): omit the field and it is
@@ -454,11 +454,11 @@ needing `system:create`, `system:update`, `system:read`, `component:create`, `en
 simulated component per staffed role at its own free address with its endpoint on the outpost, and each
 role assignment, in one transaction: it lands whole or not at all.
 
-**Alarms are raised by rules and graded by a level registry.** `/severity-levels` (read with
+**Alarms are raised by rules and graded by a level catalog.** `/severity-levels` (read with
 `severity_level:read` on any grant, written with `severity_level:*` only on an all-scope grant, since a
 level's rank moves health fleet-wide) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
-(gated `rule:*`; read like a registry, written only on an all-scope grant) authors the rules that raise alarms: a sample
+(gated `rule:*`; read like a catalog, written only on an all-scope grant) authors the rules that raise alarms: a sample
 key, fire and clear criteria, sustains, a selector, the event types it writes when its condition starts
 (`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
 optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
@@ -511,7 +511,7 @@ it names no component, so it is not fenced. Because writing a rule needs an all-
 the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
 rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
 
-**Calc rules derive a key from aliased inputs.** `/calc-rules` (gated `rule:*`, read like a registry,
+**Calc rules derive a key from aliased inputs.** `/calc-rules` (gated `rule:*`, read like a catalog,
 written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
 on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
 `selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{alias, key}` pairs (the key by name or uuid, held by uuid; a read answers `key`,
@@ -527,12 +527,12 @@ window outside 1 to 3600 seconds or on a system rule, `health` as an input or
 output, an output of the reserved family (a native probe key, `health`), an output a driver's declared
 emits write or a command type targets, an output another enabled rule
 writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
-longer compiles against the registries, and such a rule cannot be enabled (422); a reduce that compiles
+longer compiles against the catalogs, and such a rule cannot be enabled (422); a reduce that compiles
 with a warning (an input it never names) carries it in `calc_warnings`, which never refuses a save. Deleting a property
 or metric type a calc rule writes or reads is a 409 naming the rule. A metric or property type a calc
 rule writes names it on `/metric-types` and `/property-types` (list and get) as `written_by`
 (`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
-registry is (#1019). A rule that would close a cycle in the key graph is a 422 whose detail names the chain
+catalog is (#1019). A rule that would close a cycle in the key graph is a 422 whose detail names the chain
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
 bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
 version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
@@ -633,13 +633,13 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   component reconciliation route retired into it
   ([ADR-1297](/architecture/decisions/#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)).
 
-**Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
+**Three catalogs ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
 `GET/POST/PATCH/DELETE /metric-types[/{name}]`, gated `metric_type:read` / `:create` / `:update` /
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
 `event_type` share one resolution namespace, so a create is refused when a sibling holds the name
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Every type on the three ingest registries carries its `writer_class` (`outpost-probe`, `platform`,
+Every type on the three ingest catalogs carries its `writer_class` (`outpost-probe`, `platform`,
 `command-lifecycle`, `calc`, `collected`: who may write the key,
 [ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
 read beside it and never set; a create naming a reserved key (a native probe key, `collection-failed`,
@@ -647,11 +647,11 @@ read beside it and never set; a create naming a reserved key (a native probe key
 refuses for its writer (a declared value, a command's target, a calc rule's output, an event rule's
 event type, a driver spec's emits on a key its route may not write) is a 422 naming the key and who
 does write it.
-The **event_type registry is the occurrence keyspace**:
+The **event_type catalog is the occurrence keyspace**:
 `GET/POST/PATCH/DELETE /event-types[/{name}]`, gated `event_type:read` / `:create` / `:update` /
 `:delete`; an ingested occurrence is typed by a registered `event_type` name (the log-to-event
 promotion, ADR-0063), the optional `payload_schema` a JSON Schema fragment for its payload. The
-**command_type registry is the do catalog**:
+**command_type catalog is the do catalog**:
 `GET/POST/PATCH/DELETE /command-types[/{name}]`, gated `command_type:read` / `:create` / `:update` /
 `:delete`, each type carrying a `settle_window_seconds` and an optional `target_property_type` (the
 property a settleable command sets; the metric target arm is storage-deep, its authoring surface
@@ -691,7 +691,7 @@ variables](/architecture/variables/)); its routes (`GET /secret-types`, `GET` / 
 [reference](/reference/api/)) are a worked instance of the conventions above. Secret is a **sensitive
 resource**
 ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
-off the viewer `*:read` floor: the registry and directory reads need an explicit `secret:read` grant
+off the viewer `*:read` floor: the catalog and directory reads need an explicit `secret:read` grant
 (seeded to operator, deploy, admin, and owner), the writes gate on
 `secret:create` / `secret:update` / `secret:delete`, and the plaintext decrypt on **`secret:reveal`**,
 held by operator and deploy (the device secrets in their scope), admin (via `secret:>`, which alone
@@ -706,7 +706,7 @@ keeps its value. A `platform` secret needs an all-scope grant **and** `platform:
 
 A **variable** is the plaintext sibling of a secret ([config, secrets, and
 variables](/architecture/variables/)): the same owner arc and cascade (`owner_kind:
-platform|location|system|component`), shown in the clear (no registry, no mask, no reveal), the value
+platform|location|system|component`), shown in the clear (no catalog, no mask, no reveal), the value
 polymorphic JSON typed by `value_type` (`string|int|float|bool|json`) and validated against it on
 write. `GET /variables` is the **all-scope admin directory** (like the secret directory, a non-all
 scope is a 403) on `variable:read`; `POST /variables` creates (201, `variable:create`),
@@ -747,8 +747,8 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   per-entity effective-tags detail, not the row.
 
 The **classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
-are official-vs-custom registries the fleet entities reference, on the same pattern as the
-`*_type` registries; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
+are official-vs-custom catalogs the fleet entities reference, on the same pattern as the
+`*_type` catalogs; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
 ([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
 `system_type` its system-side counterpart, the coarse taxonomy of what kind of space a system is
 ([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
@@ -759,7 +759,7 @@ alphabetically by label, and each list and per-id `GET` sits on the viewer floor
 `system_type:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
 `<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
-(`PATCH` and `DELETE` both 422), except on a registry that has adopted the **fork**
+(`PATCH` and `DELETE` both 422), except on a catalog that has adopted the **fork**
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)):
 there a `PATCH` of a shipped row succeeds without writing it, storing the caller's version over it and
 answering 200 with `forked: true` under the same id, `DELETE` is still 422 (a fork is an overlay, not
@@ -769,20 +769,20 @@ are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` 
 either way: one uuid per logical row, forked or not (a name names one row per namespace, ADR-0318), and the fork never appears in a
 URL.
 
-A **nested** registry (`component_type`, `system_type`) returns the flat set with each row's parent
+A **nested** catalog (`component_type`, `system_type`) returns the flat set with each row's parent
 link in both forms, so the console reconstructs the tree client-side; the row carries its **own**
 `stem` / `abbrev` / `icon`, unresolved, because inheritance is the resolver's job and a read that
 silently filled a blank from an ancestor would make the override invisible. `DELETE` on one is refused
 with a 409 while it still parents another type or still classifies a row (`system_type` counts both
 sides).
 
-A registry body carries **both handles** like every other name-bearing resource
+A catalog body carries **both handles** like every other name-bearing resource
 ([above](#shape-resources-and-verb-methods),
 [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
 a create takes the `name`, the response carries the minted uuid, and a reference to one (`vendor`,
 `driver`, a parent) resolves whichever form it is given.
 
-The handle is what ADR-0062 made renameable, and five registries rename it: `POST
+The handle is what ADR-0062 made renameable, and five catalogs rename it: `POST
 /vendors/{id}:rename`, `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and
 `/location-types/{id}:rename`, each with a body of `{"name": "<new>"}`, the row addressed by its
 current name or its uuid
@@ -798,10 +798,10 @@ seed owns it by name; a standard is never official and never seeded (it is creat
 so every standard renames. A taken name is
 a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
 `rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
-telemetry name and the remaining type registries do not rename yet
+telemetry name and the remaining type catalogs do not rename yet
 ([#1188](https://github.com/hyperscaleav/omniglass/issues/1188)).
 
-The **template catalog** is read beside them but is not a registry: a
+The **template catalog** is read beside them but is not a catalog: a
 [template](/architecture/templates/) is never a row, so it has no uuid, no create and no write of any
 kind. `GET /templates` lists what this binary ships, ordered by kind then name, and takes an optional
 `kind` (`standard_template`, `system_template`, `location_template` or `component_template`; any other
@@ -859,13 +859,13 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   concrete **SKU** that ties the leaf catalogs together and the target of `component.product_id`: a
   vendor, a driver, a `kind` of `device` / `app` / `service` / `vm` (default `device`, a 422
   otherwise), a required `component_type`, and an optional `parent_product_id` variant, the `vendor`
-  and `driver` handles reading the referenced registry's current name beside its uuid. An unknown
+  and `driver` handles reading the referenced catalog's current name beside its uuid. An unknown
   vendor / driver / parent / component_type reference is a 422, and a product still referenced by a
   component is refused (409).
 - A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
   **blueprint a system conforms to** (Huddle Room, Classroom, Auditorium), the system-side counterpart
   of a product. Because it carries its own declared-property contract it is a **Catalog entity, not a
-  bare type registry**: its own `standard:*` resource at `/standards`, not `/types/system`, with an
+  bare type catalog**: its own `standard:*` resource at `/standards`, not `/types/system`, with an
   optional `parent_standard_id` (an unknown parent a 422); a standard still referenced by a system is
   refused (409). The **shipped** standards are `official: false`, so unlike a seeded product they are
   fully editable
@@ -915,7 +915,7 @@ identical route shapes:
   `product:read` / `:update` / `:delete`; `GET /standards/{id}/properties`, `PUT` /
   `DELETE /standards/{id}/properties/{property}`, gated `standard:read` / `:update` / `:delete`.
 - `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
-  gated `location_type:read` / `:update` / `:delete`, the registry's own resource.
+  gated `location_type:read` / `:update` / `:delete`, the catalog's own resource.
 
 The list returns the contract ordered by property name, each line
 `{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's
@@ -1080,7 +1080,7 @@ An alarm hangs off its component and rides that component's gating:
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
   incidents that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
-  `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
+  `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
   verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the condition
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so

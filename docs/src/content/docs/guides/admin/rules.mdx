@@ -24,7 +24,7 @@ raises at, and is where you add your own (with `severity_level:create` on an all
 **Catalog, under Actions: Calc rules** derives values from others for rules like these to judge
 ([calc rules](/guides/admin/calc-rules/)).
 
-Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
+Rules **read like a catalog**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
 components you may read. **Writing** a rule is fleet-wide, since its selector reaches every component:
 a caller who holds `rule:create` only on a grant bounded to a location or system is not offered **New
@@ -49,7 +49,7 @@ data directory stays over 90% used for 2 minutes, and clears once it is back at 
 `retention-behind` opens a warning alarm on the server's component when a retention lane stays
 behind its window for 5 minutes ([storage](/architecture/storage/#what-a-retention-pass-reports)). `reachability-lost` is what makes an unplugged component move its system: unplug a
 simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
-its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Rules page
+its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Event rules page
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system
 carry an alarm at the rule's severity with its label as the message. The sustain is timed from the
 server's receipt of the first `down` sample, and judged on the server's 5s sweep tick, so the alarm
@@ -145,10 +145,10 @@ sits.
   as events and raises no alarm: it pages nobody and moves no verdict. A new rule starts at the worst
   level that does not take its component out; editing a rule never fills a level in for it.
 - **Fire event type** and **Clear event type**: the [events](/architecture/events/) the rule writes,
-  from the event type registry. The fire type is required and is written once when the condition comes
+  from the event type catalog. The fire type is required and is written once when the condition comes
   into force (after the fire sustain); the clear type is optional (**No clear event**) and is written
   once when it leaves force (after the clear sustain). `condition-started` and `condition-ended` are
-  the generic pair; a pair the registry already models (`call-started` / `call-ended`) says what
+  the generic pair; a pair the catalog already models (`call-started` / `call-ended`) says what
   happened instead.
 - **Watches component types** and **Watches components**: the components it selects. A type
   includes every type beneath it. Leave both empty to watch every component.

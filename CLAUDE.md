@@ -189,7 +189,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/storage-schema-change`** (ported) - how dbmate migrations work (run-once, never edited,
   idempotent, the PG rename DO-block), the three buckets, the Gateway ripple, and the
   testcontainer round-trip RED->GREEN.
-- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the registry and
+- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the catalog and
   collection-engine slices.
 - **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
   the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's

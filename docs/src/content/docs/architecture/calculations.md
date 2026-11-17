@@ -14,7 +14,7 @@ its own table with typed columns, evaluated in the ingest transaction rather tha
 consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). It
 writes its typed fire and clear events at each edge of its condition, its alarm optional
 ([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)).
-The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
+The **`calc_rule` catalog** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
 rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,
 #997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
 server tick rather than a JetStream consumer, below. A rule's **state** and a candidate's **preview**
@@ -25,7 +25,7 @@ inputs** held by uuid, each bound as the list of its values (#1018). Event rules
 (#1002), and the `action_rule` is still design.
 :::
 
-## The calc_rule registry
+## The calc_rule catalog
 
 A **calc rule** derives one **output key** on each of its owners from aliased **inputs**. It is a
 sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather than one spec:
@@ -36,7 +36,7 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
   included, and systems, both empty for every system). Fixed at create.
 - **`inputs`**: one to sixteen `{alias, key}` pairs, held in `calc_rule_input`, one row each (#1018).
   `key` is a registered property or metric, read once, written by name or uuid and **held by its id**
-  in its lane's registry (the lane recorded), so renaming the key changes nothing the rule computes and
+  in its lane's catalog (the lane recorded), so renaming the key changes nothing the rule computes and
   a key a rule reads cannot be deleted; a read answers both its name now (`key`) and its uuid
   (`key_id`, with `lane`). `alias` is the name the expression binds the input by (the
   [alias rules](#aliases) below). An input may carry a **`window_seconds`** (1 to 3600, a component
@@ -44,12 +44,12 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
   ([windowed inputs](#windowed-inputs) below).
 - **`reduce`**: always an **expression** `{expr}` over the aliases (#1018 retired the named reducers;
   the list functions below compute what they did).
-- **`output_key`**: a registered property or metric, held by its id in its lane's registry (the lane
+- **`output_key`**: a registered property or metric, held by its id in its lane's catalog (the lane
   recorded in `output_lane`), so a key a rule writes cannot be deleted.
 - `name` (unique, renameable), `label`, `description`, `enabled`, `official` (read-only), `version`
   (bumps on every update; a write that changes nothing writes nothing).
 
-Rules read like a registry, gated `rule:read` on any grant, and are written with `rule:*` on an
+Rules read like a catalog, gated `rule:read` on any grant, and are written with `rule:*` on an
 all-scope grant, as event rules are; every write is audited on the rule's uuid and returns it. A rule
 is addressed by its name or its uuid, and `POST /calc-rules/{name}:rename` moves the name
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)):

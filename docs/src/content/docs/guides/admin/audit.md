@@ -47,7 +47,7 @@ up short is a cue to load older and look deeper. The rows scroll inside the list
 The **Id** column shows the resource's **name** (a principal's username), resolved from the row's own
 change images; hovering it reveals the stable uuid the trail actually stores, which is what keeps a row
 attributable after a rename. `resource_id` is always the resource's primary key, so a row whose images
-carry no name (an older registry delete) falls back to that raw uuid.
+carry no name (an older catalog delete) falls back to that raw uuid.
 
 Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
 it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
@@ -55,7 +55,7 @@ both sides, an added field only its After, a removed one only its Before, and un
 create shows only an After column and a delete only a Before. A value that is JSON (an endpoint's params
 and inputs, a driver's spec) reads as indented JSON, and a long value wraps inside its own column, so
 both sides of a change stay on screen however long either is. Rows written before that shipped carried
-those JSON columns as base64 and still read that way: the trail keeps each row as it was written. Registry mutations record the full row on
+those JSON columns as base64 and still read that way: the trail keeps each row as it was written. Catalog mutations record the full row on
 both sides (an update carries the row as it stood and as it became, a delete the whole row it
 removed); rows written before that shipped carried only an id, so an old row can still read
 one-sided. Auth events (sign-ins, password changes)

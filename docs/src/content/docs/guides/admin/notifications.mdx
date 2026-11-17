@@ -28,9 +28,9 @@ to a chat channel**. Three pieces take part, each answering one question
 - a **notification type** says *what* (the subject and text, rendered over the alarm's facts).
 
 All three live in the console on **Catalog, under Actions**: **Notifications** (the types),
-**Action rules** and **Targets**, side by side. Targets are admin-only (`notification_target:*`): a
+**Action rules** and **Notification targets**, side by side. Targets are admin-only (`notification_target:*`): a
 target is a destination the server sends to, holding a credential, and its URL is often itself a
-credential, so the Targets entry is not shown to anyone else. Action rules ride `rule:*`: anyone who
+credential, so the Notification targets entry is not shown to anyone else. Action rules ride `rule:*`: anyone who
 reads rules sees them, and writing one takes an all-scope grant. Notification types are a catalog an
 operator writes (`notification_type:create,update`). Every step below is also a CLI command, shown
 beside it.
@@ -133,7 +133,7 @@ group, and a `principal` target one person, on the channels it names. `inbox` is
 relay (below). Binding a group takes `principal_group:read:admin` and binding a person
 `principal:read:admin`, both admin's.
 
-On the Targets page these are the **Group** and **Person** kinds, each with the channels it tells
+On the Notification targets page these are the **Group** and **Person** kinds, each with the channels it tells
 on; neither takes a test, since people are told only about alarms.
 
 ```bash

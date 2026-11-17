@@ -37,7 +37,7 @@ each entry validated against its own catalog
 superseding the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event
 promotion) under the same confinement, the property series **transition-only** (one row per flip,
 guarded at the outpost and at ingest). The batch also carries the outpost's **self-logs** as raw
-`LogLine`s (untyped, no registry name, no task), landed in `outpost_log` keyed to the outpost before
+`LogLine`s (untyped, no catalog name, no task), landed in `outpost_log` keyed to the outpost before
 the task confinement (a logs-only batch needs no `task_id`); the run loop installs a capturing
 `slog` handler as the process default, so plain `slog.Info(...)` anywhere in outpost code emits a
 self-log (`facility` / `source` lift into the `outpost_log` columns), the between-ticks buffer bounded,
@@ -143,7 +143,7 @@ endpoints:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is the `transport`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
+- **Type is the `transport`, which is the transport**, not the protocol driver: the transport registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
 - **A label is the one identity string an operator types on an endpoint.** The name is derived from the type, so every SSH endpoint in the fleet reads `ssh`: the row says which protocol it speaks and nothing about what it is for. The label ("Control processor") is where that goes, and it is settable at create rather than on a following edit, an endpoint labelled by a second call being unlabelled at the moment it is made ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)). It is optional; an endpoint with none reads its derived name **verbatim**. Note the corollary of a derived name: since the name IS the protocol and is unique within the component, a component holds at most **one endpoint per protocol**, and a second of the same type is a 409.
 - **`liveness`**: the per-endpoint reachability gate deciding whether its functions run ([outposts](/architecture/outposts/)).
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
@@ -641,7 +641,7 @@ from its own side, is not built
 
 ## Endpoint types and their config
 
-The poll types and listeners in the `transport` registry and the operator config they read. How the outpost *executes* these (scheduling, reachability gating, the task queue) is [outposts](/architecture/outposts/).
+The poll types and listeners in the transport registry and the operator config they read. How the outpost *executes* these (scheduling, reachability gating, the task queue) is [outposts](/architecture/outposts/).
 
 ### Poll protocols and their config
 
@@ -709,7 +709,7 @@ Built (#1035,
 `tls` is the line protocol over a TLS connection, its own transport rather than an option on `tcp`, since an
 endpoint is named by its transport (a component holds a raw control port and a TLS one side by side)
 and its rung is the handshake. The handshake is one primitive: `https` consumes it as its own
-registry entry by the same rule ([http and https](#http-and-https)), as does `wss`
+catalog entry by the same rule ([http and https](#http-and-https)), as does `wss`
 ([websocket and wss](#websocket-and-wss)), and the mqtt carrier consumes it later. Each connection, the held session's and the probe's,
 runs the TCP connect and then the handshake under the endpoint's **verification mode**, its driver's
 `tls-mode` input, edited in place like a host or a port:
@@ -752,7 +752,7 @@ onto the same key, a changed key held beneath the gate across an outpost restart
 Built (#902, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)):
 `http` is a full collection transport, stateless: every poll and every command is a request of its
 own, with no connection held (a login's session, below, is state the outpost keeps, never a held
-connection). `https` is the same over the shared TLS primitive, its own registry
+connection). `https` is the same over the shared TLS primitive, its own catalog
 entry as `tls` is ([ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)'s
 rule: its rung is the handshake, and a component may serve a plain web port beside a TLS one).
 
@@ -966,7 +966,7 @@ refusal is judged as any request's is (a 401 is a terminal `auth`, a lapsed logi
 a digest challenge is answered), and anything else (a 404, an answer that is not a stream) is a
 failed attempt the session retries on its backoff. `session-state` and `session-reason` land as for
 a held line session, `endpoint-authenticated` lands when the stream carries a credential, and the
-registry's `http` and `https` entries read `held` because they now are. The endpoint's learned auth
+catalog's `http` and `https` entries read `held` because they now are. The endpoint's learned auth
 (the jar, a login's session, the digest challenge) is the one its polls and commands share, so one
 login serves them all.
 
@@ -1016,7 +1016,7 @@ restart; the secret fixed in place brings it back; a stream behind a form login 
 Built (#1034, [ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)):
 many components' control APIs are a websocket, one socket carrying a subscription's pushes and the
 answers to requests at once. `websocket` holds it, and `wss` holds it over the shared TLS handshake
-(its own registry entry, its key pinned on first use and trusted again with `:retry` and
+(its own catalog entry, its key pinned on first use and trusted again with `:retry` and
 `certificate`, as `tls` and `https` are). A message is a **text frame**, routed by the precedence a
 line session's is ([below](#listeners-over-a-held-session)), and a request is a frame: a
 `line` sent verbatim, or a JSON `body` rendered injection-safe as an http body is (a whole-leaf
@@ -1198,7 +1198,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp
@@ -1284,7 +1284,7 @@ the row rather than timing out.
 
 A **push endpoint** is one a sender pushes to rather than one an outpost dials
 ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
-`webhook` is the first push transport in the registry: nothing is dialed, so its endpoint has no
+`webhook` is the first push transport in the transport registry: nothing is dialed, so its endpoint has no
 reachability task and no ladder (a ladder declared on one refuses at write), and it reads **last
 heard**, stamped by every post that lands, in place of a verdict. It is never shown down for
 silence. A webhook endpoint is hosted by the server (it takes no outpost) and names one component.
@@ -1804,9 +1804,9 @@ identity field.
 
 ## Storage
 
-The connection registry, the declared connections, and the outpost's units of work; the physical layout lives on [storage](/architecture/storage/).
+The connection catalog, the declared connections, and the outpost's units of work; the physical layout lives on [storage](/architecture/storage/).
 
-The **transports** are a **code registry** the binary ships (`internal/transport`), not a table: [ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) decided it and #811 executed it, retiring the `transport` table and its FK. The registry renders below from the same generated facts the seed doc uses, so this list cannot drift from what a create refuses:
+The **transports** are a **code registry** the binary ships (`internal/transport`), not a table: [ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) decided it and #811 executed it, retiring the `transport` table and its FK. The transport registry renders below from the same generated facts the seed doc uses, so this list cannot drift from what a create refuses:
 
 <SeededSet kind="transports" />
 

@@ -55,14 +55,14 @@ contract's defaults take over. Every component is required to name a
 **`product`** (`component.product_id` is `NOT NULL`; the three seeded generics,
 `generic-device` / `generic-app` / `generic-service`, cover anything not yet modeled more
 specifically), a **`standard`** stays optional on a system, and a **`location_type`** stays optional
-on a location. The **`component_type`** registry, retired in the fields fold
+on a location. The **`component_type`** catalog, retired in the fields fold
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)),
 **returns as the product's genus**
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)):
 a nested taxonomy above the product (`product.component_type_id`, required), not a second classifier
 on the component. The old `system_type` COLUMN was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model);
-the name now belongs to a different object, the nested **`system_type` registry** that says what kind
+the name now belongs to a different object, the nested **`system_type` catalog** that says what kind
 of space a system is (`system.system_type_id`, nullable for now,
 [ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
@@ -197,8 +197,8 @@ The column mechanics render from the generated schema facts:
 
 ### Catalog reference data: vendor, driver, capability
 
-The **component-classification catalogs** are flat, seed-and-custom registries on the same
-official/custom pattern as the `*_type` registries ([Location Types guide](/guides/admin/location-types/)); the
+The **component-classification catalogs** are flat, seed-and-custom catalogs on the same
+official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides/admin/location-types/)); the
 **`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
 
 - A **`vendor`** (Boreal, Polaris, ...) names an organization, with a **`kind`** of `manufacturer`,
@@ -206,7 +206,7 @@ official/custom pattern as the `*_type` registries ([Location Types guide](/guid
   manufacturer-only `component_make`.
 - A **`driver`** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
-- The capability registry retired (#626): a product's device-class genus is now `component_type`
+- The capability catalog retired (#626): a product's device-class genus is now `component_type`
   (below), and what a [system role](#system-roles-the-slots-a-system-needs-filled) requires is a
   typed-slot guard over it, not a capability set.
 
@@ -235,13 +235,13 @@ shape-definer: contracts, declared properties, and drivers stay on the product. 
 subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
 subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
 
-The registry **listing serves the resolved icon** beside the raw one (`resolved_icon` next to `icon`,
-on both this registry and `system_type`), because a console that climbed the chain itself would be a
+The catalog **listing serves the resolved icon** beside the raw one (`resolved_icon` next to `icon`,
+on both this catalog and `system_type`), because a console that climbed the chain itself would be a
 second implementation of this walk in another language, and the failure that produces is a wrong
 glyph on a type the two disagree about
 ([#695](https://github.com/hyperscaleav/omniglass/issues/695)). Both fields ship because they answer
 different questions: an edit blade posts the raw one back, where blank still means inherit, and a
-list cell draws the resolved one. It costs no extra read: the listing is the whole registry in one
+list cell draws the resolved one. It costs no extra read: the listing is the whole catalog in one
 query, so every ancestor is already in hand.
 
 The listing also serves **what a row would inherit**, which is a third question and not the second
@@ -253,7 +253,7 @@ question an edit blade's placeholder asks, and answering it with the shown value
 string an operator had just deleted back at them as the thing they were about to inherit. The source
 is per fact rather than per row, because one type can take its stem from a grandparent and its abbrev
 from its parent, and it is measured rather than assumed to be free:
-`TestListComponentTypesCostIsFlatInRegistryDepth` grows the registry twenty levels deeper and pins
+`TestListComponentTypesCostIsFlatInCatalogDepth` grows the catalog twenty levels deeper and pins
 the read at the same one statement.
 
 The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
@@ -327,7 +327,7 @@ room) is the wrong axis for this question.
 
 A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
 `id` and `label`, an optional **`parent_standard_id`** (a variant points at its base), and
-the `official` boolean; the promotion of the former `system_type` label registry
+the `official` boolean; the promotion of the former `system_type` label catalog
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
 A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
@@ -526,13 +526,13 @@ Shipped content is two kinds, never conflated:
   ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
-  and `command_type` registries) is the shared namespace a driver maps onto, identical install to
+  and `command_type` catalogs) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
   `product`) ride that path today, and `location_type` joined them in
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
   a fleet still shapes its own location vocabulary, through the
-  [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
+  [catalog fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
   rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
 **Copying applies to template -> row, never to classifier -> instance**: a system conforms, never
@@ -546,7 +546,7 @@ the release owns. They now **fork** it
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
 [#655](https://github.com/hyperscaleav/omniglass/issues/655)):
 
-- An edit stores the operator's whole version of the row's **mutable columns** in `registry_shadow`,
+- An edit stores the operator's whole version of the row's **mutable columns** in `catalog_shadow`,
   keyed on the shipped row's own uuid, and every read resolves the shadow over the official row.
 - The shipped row is **never written**, so the next release can still improve it, and **restore**
   (`POST /component-types/{id}:restore`) discards the shadow to take those improvements back.
@@ -554,14 +554,14 @@ the release owns. They now **fork** it
   keys, the tree walks, the audit trail and the URL all keep naming what they already named. The
   namespace is not an addressing concept and never reaches a caller.
 - A fork restates **facts**, never **structure**: the uuid, the name, the `official` flag and the
-  parent link stay official. On a nested registry that makes inheritance resolvable **per tree node**, so
+  parent link stay official. On a nested catalog that makes inheritance resolvable **per tree node**, so
   forking an ancestor reaches every descendant that does not override the field, and forking a leaf
   does not cut it off from what it inherits.
 - The console reads it as three origins: **official** (shipped, untouched), **custom** (yours), and
   **overridden** (a shipped row carrying your version).
 
-`component_type` is the first adopter. The other registries carrying `official` adopt as their
-slices land; the primitive is registry-agnostic and needs no schema of its own per adopter.
+`component_type` is the first adopter. The other catalogs carrying `official` adopt as their
+slices land; the primitive is catalog-agnostic and needs no schema of its own per adopter.
 
 ## The variable-depth trees
 
@@ -804,7 +804,7 @@ Three things, and no fourth:
   ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)).
   A read projects `coalesce(label, '')`, so nothing above the Storage Gateway has to know. A surface
   with no label renders the name **verbatim**, never re-cased or prettified. The one spelling is
-  what lets a registry list say `order by label nulls last, name` and mean it: Postgres sorts NULL
+  what lets a catalog list say `order by label nulls last, name` and mean it: Postgres sorts NULL
   last already, and an ordering that had to say `nullif(label, '')` would be a read undoing the way
   the value was stored.
 
@@ -816,7 +816,7 @@ with no `name` in the `PATCH` body at all
 
 Every exception is declared in `internal/storage/identity_shape.go` and rendered below, so this page
 cannot drift from the code. Most tables bear a name on the ordinary entity rule and the shape
-explains itself. Two groups need a reason: the keyspace tables, the catalog registries whose names
+explains itself. Two groups need a reason: the keyspace tables, the catalogs whose names
 are fleet-wide vocabulary rather than rows inside a parent, and the tables carrying a
 human-readable identifier that is not a name at all.
 
@@ -1015,7 +1015,7 @@ ordinal, and it decodes straight into the same mint a component and a system are
 building is `1`, the next is `2`, allocated among that building's own decks, so every building has
 its own deck `1`. A positional type is right where the number is an arbitrary disambiguator (a deck,
 a rack row, a berth) and wrong where it is a fact somebody reads off a wall. That is deliberately not
-the `label_rule` template beside it on the same registry: a label that fails to render falls through
+the `label_rule` template beside it on the same catalog: a label that fails to render falls through
 to the next rung of the read ladder, and a name has no next rung, so a rule that would mint an
 illegal name is refused **when the rule is edited** by minting from it, rather than discovered by a
 create it breaks.
@@ -1044,7 +1044,7 @@ Rules resolve most-specific-first, and `NULL` at a tier means "no opinion, ask t
 `product` then the `component_type` chain then the global rule for components, `standard` then the
 `system_type` chain then the global rule for systems, and `location_type` then the global rule for
 locations. Locations have two tiers rather than three because there is no location-side counterpart
-of a product, not because one is missing. On a nested registry the rule inherits by the same
+of a product, not because one is missing. On a nested catalog the rule inherits by the same
 first-non-null walk `stem` and `abbrev` follow, per tree node across the fork boundary
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
 so setting a rule on a shipped type forks that row and leaves the official one byte-identical.

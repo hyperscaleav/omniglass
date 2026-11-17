@@ -20,7 +20,7 @@ in credentials; the Expr and Go-template machinery in [expressions](/architectur
 :::note[Partial]
 Built today: the **alarm as a held row**, raised on a **component** by a caller or by an
 [event rule](#the-event_rule) (#819), carrying a `severity`
-(a level of the [severity registry](#severity-a-registry-of-named-levels), by name), a message, a
+(a level of the [severity catalog](#severity-a-catalog-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
 through the component's own verdict (any active alarm degrades it, one at or above the `high` level
 is an outage), and such an alarm impairs every [role](/architecture/health/) that component occupies
@@ -30,7 +30,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
 sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `outpost-silent` on an outpost's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
-live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
+live state, and the console's **Event rules** and **Severity levels** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
 its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
@@ -250,9 +250,9 @@ its fire criteria. There is no separate `alarm_rule`.
 The alarm is **optional** (#948): a rule with no severity is **informational** and raises no alarm. A
 rule also names the [event types](/architecture/events/) it records: a required **`fire_event_type`**,
 written when its condition starts, and an optional **`clear_event_type`**, written when it ends, both by
-name from the `event_type` registry (an unknown one is refused, and a type a rule names cannot be
+name from the `event_type` catalog (an unknown one is refused, and a type a rule names cannot be
 deleted). The platform seeds a generic pair for rules that need no semantic type of their own,
-`condition-started` and `condition-ended`; a rule can name a bracketing pair the registry already
+`condition-started` and `condition-ended`; a rule can name a bracketing pair the catalog already
 models instead (`call-started` / `call-ended`).
 
 **Edges, not samples** (#949). A rule's condition is in force on a component and instance while it
@@ -450,7 +450,7 @@ The **selector** picks the components a rule watches: those whose type falls wit
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.
 
-Rules **read like a registry**: any `rule:read` grant lists and gets every rule, wherever it is scoped.
+Rules **read like a catalog**: any `rule:read` grant lists and gets every rule, wherever it is scoped.
 Writing one is fleet-wide: authored at `/event-rules` with `rule:*` on an all-scope grant, since a
 rule's selector reaches every component (ADR-0144). A version bumps on every change.
 
@@ -462,7 +462,7 @@ it points at fire or clear, since when). The list and a get carry the same state
 (`conditions_in_force`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
 one list rather than a state read per rule. The state names components, so the lists and the counts
 cover only the components the caller's component read scope admits: a reader scoped to one location sees
-every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists
+every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Event rules** page (#921) lists
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the
@@ -496,9 +496,9 @@ fires a system-owned alarm).
 :::
 
 
-## Severity: a registry of named levels
+## Severity: a catalog of named levels
 
-Severity is a **registry of named levels**, not a bare integer. It takes the ordinary identity
+Severity is a **catalog of named levels**, not a bare integer. It takes the ordinary identity
 triad, so it adds no fourth vocabulary: a **`name`** on the entity name rule, an optional
 **`label`**, and its uuid **`id`** like any other row, plus a **`color`** and an integer
 **`order`** used only for comparison. Rules reference a level **by name**; official defaults ship
@@ -520,10 +520,10 @@ already taken is a 409, an official level is read-only). An alarm's `severity` r
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
 own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
-The console reads the registry everywhere a severity shows: every alarm chip (the component's
+The console reads the catalog everywhere a severity shows: every alarm chip (the component's
 alarms, a system's and a location's "why", a rule's open alarms) renders the level's label in its color
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
-**Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
+**Catalog > Actions > Severity levels** (#921) lists the levels worst first with their rank, color and
 effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
 delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
 2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one location reads
@@ -540,7 +540,7 @@ default ack-timeout per level.
 A **notification** is the outbound lane to people: a message about an alarm, sent to the chat or
 paging tool somebody already watches. It is distinct from a [command](/architecture/commands/)
 (sent to a component) and from an [event](/architecture/events/) (a record, never sent). The lane
-is three registries and a delivery row, each answering one question: a **notification type** says
+is three catalogs and a delivery row, each answering one question: a **notification type** says
 *what* a message says, a **notification target** says *where* it goes, an **action rule** says
 *when* it is sent, and a **notification** is one message on its way (#618).
 
@@ -572,7 +572,7 @@ a real alarm on a component the caller can read, exactly as a delivery of that t
 carry it, and returns the facts beside the result; it writes nothing. The console's
 **Catalog > Actions > Notifications** page edits the templates and previews them through that
 route, so an author sees what a receiver gets and what a template can read. Its neighbours,
-**Action rules** and **Targets** (#1346), author the other two registries: a target's panel tests it
+**Action rules** and **Notification targets** (#1346), author the other two catalogs: a target's panel tests it
 and shows the receiver's answer, reveals its URL under the audit row, and names the rules sending to
 it; a rule's panel switches it on and off and lists what it recently sent, its `when` written in the
 expression editor at the action site.
@@ -745,7 +745,7 @@ transition to a notification: **on** one or both of an alarm's transitions (`rai
 one for the transition) **to** its targets. Single-step and multi-step actions are one model,
 distinguished only by the length of the step list, so in #618 the rule has the one step `notify`
 and flows extend the same row (#618, decision 1). It is a rule, so it
-rides `rule:*`: reads registry-shaped, writes all-scope like an event rule's. Its `enabled` flag
+rides `rule:*`: reads catalog-shaped, writes all-scope like an event rule's. Its `enabled` flag
 (default true, set on create or patch) pauses it: a disabled rule queues nothing on a transition,
 what it queued before still delivers, and re-enabled it acts on the next transition.
 
@@ -916,7 +916,7 @@ multi-step are one model**: only the length of the step list distinguishes them.
 ## Namespacing
 
 Event rules and severity levels carry the same **`official` boolean** discipline as the rest of
-the registries (built, #917 and #920), seeded through each registry's authoritative upsert
+the catalogs (built, #917 and #920), seeded through each catalog's authoritative upsert
 (`UpsertEventRule`, `UpsertSeverityLevel`, beside `UpsertPropertyType` and siblings): `official:
 true` ships vetted and is read-only, `official: false` is operator-authored. An official level never
 takes over an operator's: a clash stops the boot naming it.
@@ -965,7 +965,7 @@ A snooze is a row of its own, one per snoozed condition, keyed by the condition 
 />
 
 The notification lane is four tables: the `notification_type` and `notification_target`
-registries, the `action_rule` and the targets it sends to (`action_rule_target`), and the
+catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), and the
 `notification` delivery row.
 
 <SchemaTable
@@ -1023,13 +1023,13 @@ above; no `action` table exists for flows yet.
 The event rule is three tables: the authored **`event_rule`** row, the durable streak each rule
 holds per component and instance while it waits out a sustain, **`event_rule_state`**, and the
 condition each rule holds in force per component and instance, **`event_rule_condition`**, which an
-upgrade backfilled from the rule-raised alarms open at the time. The severity registry is
+upgrade backfilled from the rule-raised alarms open at the time. The severity catalog is
 **`severity_level`**.
 
 <SchemaTable
   table="event_rule"
   notes={{
-    sample_key: 'The property or metric it reads, by name; sample_lane records which registry',
+    sample_key: 'The property or metric it reads, by name; sample_lane records which catalog',
     fire_criteria: 'The expression the condition starts on, {"expr": "..."} (#957); the short form {op, value} is lowered to it on input',
     clear_criteria: 'The expression it ends on, {"expr": "..."}; NULL clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
@@ -1059,7 +1059,7 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity re
 
 <SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
 
-A command **is two real tables**: the `command_type` registry and the `command` invocation row with
+A command **is two real tables**: the `command_type` catalog and the `command` invocation row with
 its computed settlement; see [commands](/architecture/commands/). The `action_rule` config row lives
 with the [rule families](/architecture/calculations/).
 

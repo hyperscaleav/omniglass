@@ -64,10 +64,10 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 | V06 | `Stat` tiles: locations, open alarms, systems, collectors, platform verdict (`pages/Home.tsx`) | `/` | derived | `fleetView`, `listLocations`, `listOutposts`, `platformView` | mount+focus | metric card |
 | V07 | `uptime-kpi` card, uptime over 30 days (`pages/SystemZoom.tsx`) | `/systems/<id>` | derived | `systemHealth` transitions (`lib/health.ts`) | poll 5 s | metric card |
 | V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`pages/ComponentLeaf.tsx`) | `/components/<id>` | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; the only metric surface with no chart or sparkline) |
-| V09 | `Count` per registry row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each registry's own list read, on the list page's query key | mount+focus | metric card |
+| V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
 | V10 | `explore-counts` line and the "need attention" count (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
 | V11 | `InboxIndicator` unread count on the top bar (`components/InboxIndicator.tsx`) | every page in the shell | event | `useUnreadCount` (`lib/inbox.ts`) | poll 30 s, and at once when an entry is marked read | metric card |
-| V12 | `RuleLive` tallies: in force, open, pending (`pages/Rules.tsx`) | `/rules` | derived | `listEventRules` | poll 10 s | metric card |
+| V12 | `RuleLive` tallies: in force, open, pending (`pages/Rules.tsx`) | `/event-rules` | derived | `listEventRules` | poll 10 s | metric card |
 | V13 | `CalcLive` tallies: computed, pending, without inputs, failing (`pages/CalcRules.tsx`) | `/calc-rules` | derived | `listCalcRules` | poll 10 s | metric card |
 
 ## Status pills and health indicators
@@ -104,7 +104,7 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V31 | `HealthHistory compact` with `incident-marker-*` triangles and the expandable `incident-list` (`components/HealthHistory.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event (recorded verdict edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
-| V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
+| V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
 
 ## Alarm, event and log lists
 
@@ -114,7 +114,7 @@ component set; the surfaces below are where they are mounted.
 | V35 | `incident-list` and "Other alarms" (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, `AlarmTimeline` (`pages/ComponentLeaf.tsx`) | `/components/<id>` | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
-| V38 | Rule detail "Open alarms" and "conditions in force" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
+| V38 | Rule detail "Open alarms" and "conditions in force" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
 | V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |
 | V40 | `EventsPanel`: key badge, origin badge, time (`components/EventsPanel.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
 | V41 | `logs-tab` mono block with `LogFilters`, severity-coloured lines (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | log | `systemLogs` | poll 5 s, only while the tab is open | log list |
@@ -175,7 +175,7 @@ what each page draws itself.
 | `Properties.tsx` | `/properties` | none checked: config chips only (data type, origin) |
 | `RoleDetail.tsx` | `/roles` (blade) | none checked: permission list |
 | `Roles.tsx` | `/roles` | none checked |
-| `Rules.tsx` | `/rules` | V12, V33, V38 |
+| `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
 | `SectionStub.tsx` | `/alarms`, `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |

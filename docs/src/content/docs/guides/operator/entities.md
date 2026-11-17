@@ -435,7 +435,7 @@ platform acted for. A **notify** line is a notification the alarm's raise or cle
 status row: its target, how its delivery stands (**on its way**, **sent**, **failed** with the
 receiver's answer and a **Retry**, or **snoozed** with the snooze's reason), and the **action rule**
 that queued it. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
-each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
+each open alarm in a rule's blade on the Event rules page. Click it again to fold the timeline away; any
 number can be open at once.
 
 From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,

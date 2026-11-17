@@ -27,7 +27,7 @@ transition history**. Three reads serve it: the two explanations
 (`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
 also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
 official `reachability-lost` among them, so an unplugged component moves its system with nobody
-writing anything. Severity is a [ranked registry](/architecture/alarms-actions/#severity-a-registry-of-named-levels):
+writing anything. Severity is a [ranked catalog](/architecture/alarms-actions/#severity-a-catalog-of-named-levels):
 `high` and above is an outage, and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
 location detail views; healthy reads green there and a muted green in the outline, so it never
@@ -76,7 +76,7 @@ alarm on a component
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
   component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
-  names what it takes away (#626 retired the capability registry that used to route it).
+  names what it takes away (#626 retired the capability catalog that used to route it).
 - A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
   it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
   (an info or warning alarm) still counts, since severity is how loudly to page somebody, not a
@@ -312,7 +312,7 @@ change, never a sample: the availability strip's data and the answer to "since w
 
 ## The alarm: what is wrong with one component
 
-An alarm is a row on a component with a **`severity`** (a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) by name, `info` to `disaster`), a
+An alarm is a row on a component with a **`severity`** (a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) by name, `info` to `disaster`), a
 **message**, a **`raised_at`**, and a **nullable `cleared_at`**. Clearing sets `cleared_at` and
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 

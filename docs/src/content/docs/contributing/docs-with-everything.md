@@ -261,7 +261,7 @@ the only correct answer when the enclosing cell holds something the shot exists 
 
 **Standing masks** cover console chrome that shows a count of the seed's rows, and need no
 frontmatter entry: the capture applies them to every shot wherever the element renders
-(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-registry
+(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-catalog
 counts (`data-testid="catalog-entry-count"`). A count is the seed's, not the page's, so a release
 that adds a driver or a type moves a digit on every page under the Catalog shell; without the
 standing mask each such PR failed the gate on a UI it never touched (#1482). Add a new count of

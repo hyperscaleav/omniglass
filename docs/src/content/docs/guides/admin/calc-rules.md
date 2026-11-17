@@ -14,7 +14,7 @@ that as a **calculated** sample of its **output key**, naming the rule. The valu
 other: it shows among a component's vitals and properties and a system's data, linked back to the rule
 ("by calc rule rtt-worst"), and event rules judge it on a component like an observed sample. How it runs is on [calculations](/architecture/calculations/).
 
-Calc rules read like a registry, as [event rules](/guides/admin/rules/) do: any grant carrying
+Calc rules read like a catalog, as [event rules](/guides/admin/rules/) do: any grant carrying
 `rule:read` lists them all, with live counts over the owners you may read. **Writing** one is
 fleet-wide, so **New rule**, Edit, Disable and Delete are offered on an all-scope grant only.
 
@@ -39,7 +39,7 @@ lists the first twelve; **and N more** shows the rest.
 
 **New rule** opens the form:
 
-- **Name** and **Label**, as for every registry; the name is renameable later (Edit, the Name field).
+- **Name** and **Label**, as for every catalog; the name is renameable later (Edit, the Name field).
 - **Derives on**: each component, or each system from its **role-bound members** (the components
   assigned to its roles). Fixed when the rule is created.
 - **Of types** and **Or** owners: the selector, as for event rules (a type includes its subtypes); both

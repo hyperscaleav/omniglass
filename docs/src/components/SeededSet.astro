@@ -37,7 +37,7 @@ function locationLines(p, depth = 0) {
   return [here, ...(p.locations ?? []).flatMap((c) => locationLines(c, depth + 1))];
 }
 
-// The inheriting registries (component_type, system_type) are nested by
+// The inheriting catalogs (component_type, system_type) are nested by
 // parent_id, so they are laid out depth-first from the roots in declaration
 // order rather than printed flat. Depth is climbed rather than assumed from
 // adjacency: a subtype declared away from its parent still lands under it.

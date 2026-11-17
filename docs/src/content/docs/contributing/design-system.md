@@ -44,7 +44,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 ## Core UI contracts
 
 - **One list shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every list page
-  (Files and the flat registries; the fleet kinds are listed by Explore's outline instead)
+  (Files and the flat catalogs; the fleet kinds are listed by Explore's outline instead)
   is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
   header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
   the primary create), the tree and flattened body rendering, and the stacked blades. A page that
@@ -54,11 +54,11 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whose loaded page outgrows its first paint (the audit trail) sets the shell's `fill` and sits in
   a box of definite height, so its rows scroll under sticky headers and its footer stays put; the
   console scrolls the document, so `fill` with no sized box around it grows like any other list.
-- **Lists render in server order; the SQL rule is the ordering primitive.** A registry list the
+- **Lists render in server order; the SQL rule is the ordering primitive.** A catalog list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
   only when the operator clicks a column header, and no page or picker re-sorts a served list.
-  A new registry list picks the order up by doing nothing. `byLabel` (`lib/entities.ts`) is the
+  A new catalog list picks the order up by doing nothing. `byLabel` (`lib/entities.ts`) is the
   same rule for a list the client composes itself, where no query ordered it, and its doc comment
   names the call sites that remain. The two halves are held together by one committed fixture
   (`web/src/lib/label_order.fixture.json`): a storage test orders it through the real query, a web
@@ -421,7 +421,7 @@ affordance the create form carries (`components/PenToggle.tsx` is the one copy o
 icons and its words), beside the field and next to the act that changes it. That is where the NAME's
 own pen already stated itself, on the component blade.
 
-**An inherited field is not a locked one, and does not borrow the lock.** The type registries'
+**An inherited field is not a locked one, and does not borrow the lock.** The type catalogs'
 `stem`, `abbrev` and `icon` inherit from the nearest ancestor that states them, which looks like the
 same picture as the pen (a value this row did not choose) and is the opposite relation: a locked
 value is one the platform owns and the operator may not set, an inherited one is a value the operator
@@ -453,7 +453,7 @@ reader running down the Stem column is answering "what is this type's stem", and
 attribution charges them for a question they did not ask, so a cell states the value and stops: a
 stated value and an inherited one render **identically** in a table, which is the treatment rather
 than an omission. `components/InheritedCell.tsx` is the one copy of the list render, consumed by both
-type registries' Stem, Abbrev and Icon columns (#743); it holds one fallback chain, the row's own
+type catalogs' Stem, Abbrev and Icon columns (#743); it holds one fallback chain, the row's own
 value, else what the server resolved for it, else the em dash. The Icon column, which has shown
 `resolved_icon` undifferentiated since #695, is the precedent the other two match. The em dash stays
 for a row that states nothing with nothing above it, since a cell that asserts a value it does not
@@ -538,7 +538,7 @@ for anyone passing one, which is the failure mode a per-page test cannot catch.
 The write side does differ, page by page. `createIdentity` derives the name from the label as
 an operator types and stops the moment they edit the name by hand, and an edit form seeds it with
 the existing name so relabelling can never rewrite a live address. That path belongs to the
-registries, whose names have no generator and stay globally unique.
+catalogs, whose names have no generator and stay globally unique.
 
 The three fleet entities do not wire it. A component, a system, and a location get their names
 from the platform, minted from the resolved type stem and the placement bucket, so deriving a name
@@ -548,7 +548,7 @@ label. Their create forms ask what and where first, then show the name the row w
 one"; the drafted NAME travels back with the create as `expected_name`, so a name that moved between
 the preview and the submit, because another create took the number or the type's stem was edited, is
 a refusal rather than a silent difference. The three
-signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
+signal catalogs (`property_type`, `event_type`, `command_type`) do not wire it either, because a
 signal name is chosen to match what an endpoint reports rather than derived from prose somebody
 typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
 invite an exception because their prose calls them keys; they get none, and take the one rule like
