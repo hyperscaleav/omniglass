@@ -1,13 +1,13 @@
 ---
 title: Simulate a fleet
-description: "Running the simulator beside a node, watching the collector reach its simulated components, exercising one's API, adding one, and breaking one on purpose to watch monitoring react."
+description: "Running the simulator beside an outpost, watching the collector reach its simulated components, exercising one's API, adding one, and breaking one on purpose to watch monitoring react."
 walkthroughs:
   - id: sample-simulation
 ---
 
 Omniglass can simulate the components it monitors. The simulator ships in the same binary: beside a
-collection node it serves every component placed on that node whose product it has a profile for,
-each on its own loopback address, speaking the protocols the real product speaks. The node collects
+collection outpost it serves every component placed on that outpost whose product it has a profile for,
+each on its own loopback address, speaking the protocols the real product speaks. The outpost collects
 from those simulated components exactly as it would from hardware, so the whole monitoring loop runs with no gear
 at all, and an operator can break one on purpose to see what monitoring makes of it. The model
 behind it is [simulation](/architecture/simulation/); every action here passes the same
@@ -17,36 +17,36 @@ console.
 ## Run it
 
 **In a lab**, with nothing but Docker, run `omniglass lab run` (`make lab` from a checkout): its own
-server and database, and the node `edge-hq` running the simulator in its own process with impairments
+server and database, and the outpost `edge-hq` running the simulator in its own process with impairments
 applied, so the seeded fleet is collected for real and the console is at `http://127.0.0.1:8080/web`
 ([try omniglass in five minutes](/guides/lab/)).
 
-**Beside a node of your own**, run the node with the simulator in its process:
-`omniglass node run --simulate` serves the components placed on that node on its own loopback, with
-the node's own identity ([run a simulator](/guides/install/#run-a-simulator)).
+**Beside an outpost of your own**, run the outpost with the simulator in its process:
+`omniglass outpost run --simulate` serves the components placed on that outpost on its own loopback, with
+the outpost's own identity ([run a simulator](/guides/install/#run-a-simulator)).
 
-**As a process of its own**, the simulator is `omniglass sim run`, started beside a node with that
-node's identity:
+**As a process of its own**, the simulator is `omniglass sim run`, started beside an outpost with that
+outpost's identity:
 
 ```sh
-omniglass sim run --server https://omniglass.example --name edge-hq --token "$NODE_TOKEN"
+omniglass sim run --server https://omniglass.example --name edge-hq --token "$OUTPOST_TOKEN"
 ```
 
-It reads the same `OMNIGLASS_SERVER`, `OMNIGLASS_NODE_NAME` and `OMNIGLASS_NODE_TOKEN` as
-`node run`, and must share the node's loopback (the same host, or the same pod or container network
+It reads the same `OMNIGLASS_SERVER`, `OMNIGLASS_OUTPOST_NAME` and `OMNIGLASS_OUTPOST_TOKEN` as
+`outpost run`, and must share the outpost's loopback (the same host, or the same pod or container network
 namespace). It binds the profiles' real ports when it may (SNMP 161, HTTP 80, SSH 22), or lifts them
 with `--port-offset` when it may not; the endpoints must target the ports it serves. The privileges
 it can use, and how to grant them, are in the [install guide](/guides/install/#run-a-simulator).
 
 The simulator follows the fleet as it changes: every ten seconds it pulls the components placed on
-its node, so a component added on the server starts answering, and a deleted one goes dark, with no
+its outpost, so a component added on the server starts answering, and a deleted one goes dark, with no
 restart.
 
 ## See it
 
 While a simulator is connected, **Simulation** appears in the sidebar (with `simulation:read`, which
 viewers hold). You see each simulator that serves a component in your scope, and only those
-components: a technician scoped to a building sees that building's simulated components. The page has a card per node with a simulator, saying whether it is connected, its total
+components: a technician scoped to a building sees that building's simulated components. The page has a card per outpost with a simulator, saying whether it is connected, its total
 hits and components, what it may do where it runs (**Low ports**: bind ports below 1024; **Port offset**:
 the lift it applies when it cannot; **NET_ADMIN**), and whether it can apply impairments (and if not,
 why). Under it, a table lists every simulated component with its product, address, status, hits and
@@ -60,10 +60,10 @@ When no simulator is connected the entry is hidden, since there is nothing to sh
 
 ::walkthrough{#sample-simulation}
 
-From a terminal the same view is `omniglass simulation get`, and one node's is
-`omniglass node simulation <node>`.
+From a terminal the same view is `omniglass simulation get`, and one outpost's is
+`omniglass outpost simulation <outpost>`.
 
-A simulated component's own page carries a **Simulation** section (its node, address, hits, and
+A simulated component's own page carries a **Simulation** section (its outpost, address, hits, and
 anything broken on it), so the component and its simulation are one page. **Open simulation** opens the same
 simulation drawer a row on the Simulation page opens.
 
@@ -88,9 +88,9 @@ omniglass component simulation fire panel-1 --surface nvp --command "GET INPUT" 
 ## Add a component
 
 **Add simulated component** on the Simulation page (with `simulation:update`, `component:create` and
-`endpoint:create`) asks for a node with a simulator, a product the simulator has a profile for (the
+`endpoint:create`) asks for an outpost with a simulator, a product the simulator has a profile for (the
 form lists them by profile), a name, and optionally a location. It creates the component and the
-endpoint the node reaches it through, at the next free address in `127.60.0.0/16`; the simulator
+endpoint the outpost reaches it through, at the next free address in `127.60.0.0/16`; the simulator
 serves it from its next pull. From a terminal:
 
 ```sh
@@ -108,7 +108,7 @@ display line in its sizes, say), which keeps its endpoint valid (with `component
 A simulated system is built to one of your **standards** (a meeting room, a huddle room, a digital
 sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
 the roles it cannot fill yet, which stay short so the system honestly reads that way. On the
-Simulation page, **Add simulated system** asks for a node, a standard, a system type, and optionally a
+Simulation page, **Add simulated system** asks for an outpost, a standard, a system type, and optionally a
 location and a name; choosing the standard previews its **plan** (each role, the product it gets and how
 many, and any short role with its reason) before anything is created. From a terminal, preview the plan,
 then add it:
@@ -120,7 +120,7 @@ omniglass simulation add-system edge-hq --standard meeting-room --system-type me
 
 The system and its components land together or not at all (with `simulation:update`, plus
 `system:create`, `system:update`, `system:read`, `component:create`, `component:update`, `endpoint:create`
-and `node:read`; `component:create` and `component:update` must reach the whole fleet, since the
+and `outpost:read`; `component:create` and `component:update` must reach the whole fleet, since the
 components are created at the top level and each is then assigned its role), named as any new system and
 component are named, and the simulator serves them from its next pull.
 
@@ -142,7 +142,7 @@ seeing it: unplug a component and its TCP and ping checks go down; plug it back 
 
 Impairments apply only on a simulator started with `--impairments` and holding `NET_ADMIN`, since
 they rewrite the firewall and traffic shaping of its network namespace. Without that the setting
-still saves, and the node's card says why it is not applied. With it, **ping tells the truth**: an
+still saves, and the outpost's card says why it is not applied. With it, **ping tells the truth**: an
 address that no component answers on stops answering ping.
 
 ```sh
@@ -159,7 +159,7 @@ lasts. Repair it and the next `up` reading clears the alarm and the verdict reco
 [rules guide](/guides/admin/rules/) walks the same loop with a rule of your own.
 
 Loss shows from the far end too. [Platform health](/guides/operator/platform-health/#with-a-simulator)
-sets what each simulated device saw beside what the node sent and the server collected: drop an snmp
-device's packets and the node's **sent, not received** gap for snmp opens, read as impaired rather than
+sets what each simulated device saw beside what the outpost sent and the server collected: drop an snmp
+device's packets and the outpost's **sent, not received** gap for snmp opens, read as impaired rather than
 lost, while the device's received count falls; repair it and the attribution clears once the window
 slides past the change.

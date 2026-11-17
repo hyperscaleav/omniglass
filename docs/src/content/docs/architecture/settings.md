@@ -210,8 +210,8 @@ tag cannot reach a map's values. The console edits it as its JSON text, from the
 **An optional setting** declares no `default` tag and a `json:"<key>,omitempty"`: the effective
 document leaves it out until a level sets it, the published schema does not list it as required, and
 its Go reader treats the zero value as "unset" and falls back to whatever the setting overrides. The
-node log windows are the first (`retention.node_log_debug_days` and its three siblings, #1350): unset,
-a node's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
+outpost log windows are the first (`retention.outpost_log_debug_days` and its three siblings, #1350): unset,
+an outpost's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
 lists every key the generated schema declares, not only the keys the effective document resolved, so
 an optional setting shows as `not set` and is still settable from the console
 ([ADR-1350](/architecture/decisions/#adr-1350-a-node-log-window-is-an-optional-setting-unset-follows-the-shared-band)).

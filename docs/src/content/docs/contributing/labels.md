@@ -33,7 +33,7 @@ The subsystem a change touches, named to match the architecture glossary. The se
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:node` `area:lab` `area:docs`
+`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.

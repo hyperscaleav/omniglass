@@ -124,7 +124,7 @@ a location holding none or several renders its own subject card,
   gates create/update/delete by the entity's resource name. The server is the authority; this is
   a hint only.
 - **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
-  model); Maximize promotes it to the `/<entity>/:id` URL. The blade stack holds node ids, so a
+  model); Maximize promotes it to the `/<entity>/:id` URL. The blade stack holds outpost ids, so a
   blade survives a refetch.
 - **The shell owns the action rail; the body registers, never draws.** A panel's buttons are
   declared, not laid out: a blade body binds through `lib/blades` (`destructive`, `secondary`,
@@ -182,7 +182,7 @@ with dark ink; that rule is inert while the console is dark-only.
 
 Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
 badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
-badge-warning` for stale). A **neutral** state (a node that has never checked in, a disabled task,
+badge-warning` for stale). A **neutral** state (an outpost that has never checked in, a disabled task,
 an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
 (`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
 `badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
@@ -203,7 +203,7 @@ from a high. The chip shows the level's label; whether it takes a component out 
 
 A held **session** wears `SessionPill` (#1059), on `HealthBadge`'s recipe of glyph, word and hue:
 establishing the incomplete look (a dashed ring: not yet, not broken), up `badge-success`,
-recovering `badge-info` (the node is working on it), down `badge-error`, and rejected
+recovering `badge-info` (the outpost is working on it), down `badge-error`, and rejected
 `badge-warning` with a refusal glyph, because it is the one state that waits on an operator and must
 not read as down. Beside it sits its age, and a state whose endpoint has delivered nothing for the
 staleness window takes the grey `badge-ghost` chip, its tooltip saying what it last read. The
@@ -237,7 +237,7 @@ Solid's `For` rebuilds a row whose item is a new object, so over a poll every ro
 holds: an expanded chart closes, a tooltip vanishes under the pointer, a disclosure the operator
 closed opens again. `KeyedFor` takes the list and a key (`by`) and keeps a row mounted while its key
 is in the list, handing it the key's newest item, so the row's state survives the poll and its
-figures follow it. Platform health renders every level with it (server, panel, key, route, node,
+figures follow it. Platform health renders every level with it (server, panel, key, route, outpost,
 column).
 
 **A toast points at an outcome; it never holds the only copy.** Any surface raises one with
@@ -338,13 +338,13 @@ announces the field to a screen reader without claiming the browser will refuse 
 
 ### A scrollable region needs a focus stop
 
-**A node that can scroll (`overflow-auto`, `overflow-x-auto`, `overflow-y-auto`) must be reachable by
+**An outpost that can scroll (`overflow-auto`, `overflow-x-auto`, `overflow-y-auto`) must be reachable by
 keyboard**, or a keyboard user cannot scroll what a mouse user can. axe's `scrollable-region-focusable`
 (serious) fires on a scroll container with no focusable descendant. A region that holds a control, a
 link or a button already has its focus stop (the Drawer body holds its form fields, the calc-rule
 preview's owner list holds an owner link per row). A region of plain text has none: give it
 `tabindex="0"`, `role="region"` and an `aria-label` that names what it holds, and never `aria-hidden`,
-since a focusable node hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
+since a focusable outpost hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
 `ExpressionField`'s source-and-caret echo is the worked example (#1101): it scrolls sideways because
 the caret under a column only stays aligned on one unwrapped line, so it takes the focus stop rather
 than wrapping.
@@ -470,7 +470,7 @@ ancestor's NAME and build the mark themselves, which is exactly the shape the (i
 had (`info` is a string, not an `<InfoTip>`). The rule is not stylistic: a `JSX.Element` in a prop
 compiles to a getter, so the element is rebuilt every time anything that getter reads notifies, and a
 mark derived from a TanStack query is then replaced under the pointer on every refetch (a hover
-half-open, a click landing on a node that is no longer mounted). Wrapping the element in a
+half-open, a click landing on an outpost that is no longer mounted). Wrapping the element in a
 `createMemo` looks like the fix and is not, because the memo tracks the derived array a refetch hands
 back equal-but-new. A string cannot have this problem: `<Show>` re-renders on a change of truthiness,
 and the name updates in place.
@@ -607,7 +607,7 @@ Go binary under the `web` build tag, served at `/web`. One artifact serves the A
 console. In dev, `npm run dev` serves the SPA on :5173 with `/api` proxied to a running
 [lab](/guides/lab/#the-console-fast-loop), so the frontend loop needs no rebuild: `./bin/omniglass lab
 run` in one terminal, `cd web && npm run dev` in another. The proxy targets `http://127.0.0.1:8080`
-(IPv4 loopback, not `localhost`, which Node may resolve to `::1` while the lab publishes on IPv4 only),
+(IPv4 loopback, not `localhost`, which Outpost may resolve to `::1` while the lab publishes on IPv4 only),
 and `OMNIGLASS_LAB_URL` moves it for a lab on another `--port`.
 
 ## Tests

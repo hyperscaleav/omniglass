@@ -800,8 +800,8 @@ telemetry.property.system_id -> fleet.system.id
   the typed registries (`metric_type`, `property_type`, `event_type`,
   `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
   `command`, `log_line`) and the alarms raised off them (`alarm`).
-- **collection** - where and how telemetry is gathered: the nodes that run probes,
-  the tasks they execute, and the `node_log` self-log lane.
+- **collection** - where and how telemetry is gathered: the outposts that run probes,
+  the tasks they execute, and the `outpost_log` self-log lane.
 - **config** - the settings, variables, secrets, and credentials that parameterize
   everything above.
 - **content** - the cross-cutting attachments: blobs, files, and the tag bindings

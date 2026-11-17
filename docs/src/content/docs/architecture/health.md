@@ -88,7 +88,7 @@ cares: hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-healt
 "No active alarms" is two different facts, and a component's verdict keeps them apart (#1454). A
 component that something has **observed** and found clean is `healthy`. A component that **nothing has
 ever observed** reads **`unknown`**, because `healthy` there would be a false green: a device created a
-moment ago, with an endpoint no node has probed, has had no chance to be wrong.
+moment ago, with an endpoint no outpost has probed, has had no chance to be wrong.
 
 A component counts as observed once either has happened: an alarm was ever raised on it (a cleared one
 counts, since what was wrong outlives the fix), or one of its endpoints has delivered a batch of anything

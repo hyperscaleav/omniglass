@@ -3,7 +3,7 @@ title: API first
 description: The Go API is the single integration contract; the SPA, CLI, and YAML tooling are generated clients of it.
 ---
 
-The Go HTTP API is the **single integration contract**. The SPA, the CLI, the node
+The Go HTTP API is the **single integration contract**. The SPA, the CLI, the outpost
 worklist, and the YAML authoring tooling are all **generated clients** of it. Nothing but
 the API talks to the database, and the API is described by one machine-readable spec that
 cannot drift from the implementation.
@@ -125,7 +125,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `DELETE` removes. No upsert/register shortcuts.
 - **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}:rename`,
   `/components/{name}/commands:issue`, `/auth/me:changePassword`,
-  `/auth/me/sessions/{id}:revoke`, `/nodes:claim`, `/principals/{id}:disable`.
+  `/auth/me/sessions/{id}:revoke`, `/outposts:claim`, `/principals/{id}:disable`.
 - **A rename is a custom method, not a field write.** Every renameable collection carries a
   `:rename`, gated `<resource>:rename` and not `<resource>:update`, because moving a name breaks the
   bookmarks, runbooks, and integration config held outside the platform while nothing inside it

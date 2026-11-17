@@ -57,13 +57,13 @@ omniglass auth create-token --description "claude code on my laptop" \
 An agent token can never reveal or copy a secret's plaintext, whatever its roles: the agent works
 with credentials only through the routes that use them server-side (polling an endpoint, issuing a
 command), so it knows a credential is present and never what it is. Otherwise it may do what you
-may: with `secret:bind` it can attach an endpoint with a secret input, edit the address, node or
+may: with `secret:bind` it can attach an endpoint with a secret input, edit the address, outpost or
 secret of an endpoint that has one, create a system from a template that binds a secret, or add a
 simulated device that needs one, exactly as you could. Binding chooses where a credential goes, so
 decide in your MCP client whether such a tool runs always, asks first, or never (an admin can also
 refuse it to every agent: [what an agent may do](#what-an-agent-may-do)); every write the
-agent makes is audited as the agent's. An agent also never enrolls a node, since the enrollment
-token is itself a node credential. The same ceiling holds for any token, yours included, while it
+agent makes is audited as the agent's. An agent also never enrolls an outpost, since the enrollment
+token is itself an outpost credential. The same ceiling holds for any token, yours included, while it
 is used through MCP. An agent token also cannot mint another token, change your password or
 impersonate anyone.
 
@@ -241,7 +241,7 @@ endpoints, metrics and logs, it covers the triage loop:
 
 Some operations are never tools: any route that takes or returns a credential in plaintext (creating,
 updating, copying or revealing a secret, minting a token, logging in, setting a password, enrolling or
-claiming a node, a notification target's URL). A credential a person must see goes to that person in the
+claiming an outpost, a notification target's URL). A credential a person must see goes to that person in the
 console or the CLI, never into an agent's context, and the build fails if one of those routes is stamped.
 Running an endpoint's poll now masks the endpoint's own secrets wherever the device echoes them in the
 answer: a sample's text, labels and identity, the faults, and a refusal's text.

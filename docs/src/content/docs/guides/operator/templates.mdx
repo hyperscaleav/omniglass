@@ -91,18 +91,18 @@ address) needs more.
   variant also asks for the standard it hangs off, by default yours named for the template's parent.
   A taken name or a missing parent is refused, and the form shows the refusal as the API words it.
 - **A component template** asks for its **location**, an optional **name** (empty mints one from its type,
-  as any component's name is) and **label**, and, to attach it now, the **node** its endpoint is placed
+  as any component's name is) and **label**, and, to attach it now, the **outpost** its endpoint is placed
   on and the **address** its driver reaches it at. A driver input that reads a secret asks for one of
   your secrets by name. Without an address the component lands unattached, to attach later.
 - **A system template** asks for its **location**, a **name** and **label**, the **standard** to build to
   (the template's by default: yours of that name when you hold one, else created from its template in
-  the same write), a **node**, and an **address per component** by role. The system, a component for
+  the same write), an **outpost**, and an **address per component** by role. The system, a component for
   each role filled to its quorum and their assignments land together, or not at all.
 - **A location template** asks for the **parent location** the subtree sits under (or none, for a new top) and
   the root's **name** and **label**. Each location's type must be allowed under its parent's, as your
   fleet has the location types; a placement your types refuse is refused, naming the pair.
 
-An address with no node is caught before you submit. On success the console lands on what you
+An address with no outpost is caught before you submit. On success the console lands on what you
 created, the new standard's panel or the new component, system or root location, with a note that
 names the template and says it is yours now, and, where they apply, the standards the start created from their templates and
 how many components are still to attach. The note rides the address you landed on, not the row:

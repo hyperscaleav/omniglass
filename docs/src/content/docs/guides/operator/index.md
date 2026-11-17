@@ -27,18 +27,18 @@ There are two ways to operate, and they are the same API with the same checks be
   children, and creating, editing, or deleting.
 - **[Your inbox and alarm subscriptions](/guides/operator/notifications/)**: the alarms you are
   told about, and subscribing yourself to the ones you care about.
-- **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
+- **[Outposts and reachability](/guides/operator/collection/)**: enrolling a collection outpost,
   adding a protocol-named endpoint to a component, and reading its reachability and events.
 - **[Platform health](/guides/operator/platform-health/)**: whether Omniglass itself is well, the
   build running and its uptime, each server's request timing, ingest lag, queues and retention,
-  and each node's check-in, schedule and command queue.
-- **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside a node,
+  and each outpost's check-in, schedule and command queue.
+- **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside an outpost,
   watching the collector reach its devices, exercising and adding a device, and breaking one on
   purpose.
 
 ## Getting around
 
-- The **sidebar** is the information architecture: Explore (the one door into the fleet), Nodes,
+- The **sidebar** is the information architecture: Explore (the one door into the fleet), Outposts,
   and sections grouped into Values, Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
   left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
   Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,

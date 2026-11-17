@@ -5271,7 +5271,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
+| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |

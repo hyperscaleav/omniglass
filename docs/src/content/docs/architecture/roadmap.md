@@ -20,7 +20,7 @@ Three surfaces carry the time axis, and this page ties them together:
 
 ## What has landed
 
-The platform half is well past its midpoint. The single binary runs in `server` / `node` / `migrate`
+The platform half is well past its midpoint. The single binary runs in `server` / `outpost` / `migrate`
 modes over a BYO Postgres, and the tiers below are shipped, tested, and live in the console; the
 per-slice detail is on [implementation status](/architecture/status/).
 
@@ -36,9 +36,9 @@ per-slice detail is on [implementation status](/architecture/status/).
   envelope-encrypted secrets, [files](/architecture/files/) over the content-addressed blob store,
   the [settings](/architecture/settings/) engine (platform rung), and the unified resolution panel
   that explains which value won and why.
-- **The collection vertical.** The [node](/architecture/nodes/) runtime with enrollment and claim,
-  embedded NATS/JetStream with per-node subject isolation, the transition-only reachability verdict
-  and its panel, endpoint and task authoring, and the raw-log lane with node self-logs
+- **The collection vertical.** The [outpost](/architecture/outposts/) runtime with enrollment and claim,
+  embedded NATS/JetStream with per-outpost subject isolation, the transition-only reachability verdict
+  and its panel, endpoint and task authoring, and the raw-log lane with outpost self-logs
   ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). The
   stateless arc of [#603](https://github.com/hyperscaleav/omniglass/issues/603) (#824) made transports
   code and completed the layer-7 ladder: an `http` probe draws a real response and an `ssh` probe runs a
@@ -72,7 +72,7 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
+| [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [outposts](/architecture/outposts/) |
 | [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
@@ -90,7 +90,7 @@ The spine has converged over most of its lower half; what remains `Design` is co
 automation and read tier. The broad order the remaining work follows, each band pointing at the page
 that describes the target:
 
-1. **Collection at the edge.** Substantially landed: the [node](/architecture/nodes/) runtime, the
+1. **Collection at the edge.** Substantially landed: the [outpost](/architecture/outposts/) runtime, the
    embedded bus, the probes up the layer-7 ladder (`http` and `ssh` prove a real answer, not only an
    open port), the declarative driver spec with poll interpretation, the command wire, and
    [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
@@ -99,12 +99,12 @@ that describes the target:
    #1033, #1032), the same line protocol as datagrams over `udp` (#1037), snmp's reachability
    rung, a standard get (#821), and http and https polls and commands that read JSON, XML and HTML
    through one extraction primitive, authenticated by a declared scheme (#902, the first slice of
-   #1113) or by a login whose session the node keeps, or digest (#1114), a server-sent events
+   #1113) or by a login whose session the outpost keeps, or digest (#1114), a server-sent events
    stream held as a session over either (#1038), and a websocket held over `websocket` and `wss`,
    its replies matched by a minted id (#1034, which completes #1113), and webhooks received on the
    server, signed and mapped onto any lane (#1024, the first slice of #1146). Still ahead: SNMP v3 (#1083), the held transports beyond those (#1036, #1039 to
    #1041), protocols that move whole files (#1043 to
-   #1047), and the node's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
+   #1047), and the outpost's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the
@@ -120,7 +120,7 @@ that describes the target:
    `event_rule` tier raises and clears alarms at a severity level, and component
    [calc rules](/architecture/calculations/) derive the samples rules judge. What remains is what
    **acts** on an alarm ([alarms and actions](/architecture/alarms-actions/), the automation tier).
-4. **The machinery underneath.** The [messaging](/architecture/messaging/) subject contract, per-node
+4. **The machinery underneath.** The [messaging](/architecture/messaging/) subject contract, per-outpost
    subject isolation, and the durable JetStream telemetry consumer
    ([workers](/architecture/workers/)) shipped, beside three server loops that are not consumers (the
    command settlement sweep, the event rule sweep, and the calc tick). Still ahead: the raw/trusted
