@@ -249,11 +249,14 @@ answer: a sample's text, labels and identity, the faults, and a refusal's text.
 ## Seeing what it did
 
 An agent's writes are yours in the [audit trail](/guides/admin/audit/), with how they arrived beside
-them. An admin reads it with:
+them. In the console, Admin > Audit marks each with an `mcp` pill over its client and, for an agent
+token, an `agent <name>` tag beside you; type `channel:mcp` to see only what came through an agent. An
+admin reads the same from the CLI with:
 
 ```bash
-omniglass audit-log list --resource component --limit 5 | jq '.events[] | {verb, actor_name, channel, client}'
+omniglass audit-log list --channel mcp --limit 5 | jq '.events[] | {verb, actor_name, agent, client}'
 ```
 
 A row with `"channel": "mcp"` came from an MCP tool call, and `client` names the client the agent
-declared itself as (asserted by the client, not verified).
+declared itself as (asserted by the client, not verified), which `--client claude` matches by
+substring.

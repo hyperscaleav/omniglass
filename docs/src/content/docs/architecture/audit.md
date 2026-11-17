@@ -96,7 +96,8 @@ The read-audit granularity: per-resource opt-in versus a global verbosity settin
 
 `GET /audit-log` is gated by the admin-sensitive `audit:read:admin`, out of a two-token wildcard's
 reach, so only admin and owner see the security trail. Rows return newest first, filterable by
-`resource` and `verb`, paged backward with `before` plus `limit` (default 100, capped at 500), each
+`resource`, `verb`, `agent`, `channel` (`direct` for the rows with none, a plain API call) and
+`client` (a case-insensitive contains, since a client's version moves), paged backward with `before` plus `limit` (default 100, capped at 500), each
 carrying the `old` and `new` images the write recorded: a create only `new`, a delete only `old`, an
 update both, auth events neither. Redaction is the write side's (sealed secret material and
 credential hashes never enter an image); the read passes images through verbatim. An image carries a
