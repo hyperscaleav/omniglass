@@ -51,7 +51,7 @@ import {
 // column joins only when more than one outpost serves. A row opens the component's
 // drawer (status, impairment, API surface). The one primary action adds a
 // simulated component; beside it, quieter, adding a simulated system builds a
-// whole system to a standard, a simulated component per staffed role (#913). Its sidebar door shows only while a simulator is
+// whole system to a standard, a simulated component per staffed slot (#913). Its sidebar door shows only while a simulator is
 // connected; this page renders an honest face either way.
 //
 // Rows iterate stable component ids, never the objects a poll hands back: a
@@ -75,7 +75,7 @@ export default function Simulation(): JSX.Element {
   const canAdd = () => can(me.data, "simulation", "update") && can(me.data, "component", "create") && can(me.data, "endpoint", "create");
   // Adding a system writes the system, its components and their endpoints; the
   // form reads the standards and system types its selects offer, and the server
-  // reads the outpost and assigns the roles under system:read.
+  // reads the outpost and assigns the slots under system:read.
   const canAddSystem = () =>
     can(me.data, "simulation", "update") &&
     can(me.data, "system", "create") &&
@@ -229,7 +229,7 @@ type SimRowData = { outpost: string; sim: SimComponent };
 
 // AddedNote: what the last add-simulated-system created, until dismissed. The
 // new components are already in the table below; this links the system they
-// belong to and names the roles it was left short, each with why.
+// belong to and names the slots it was left short, each with why.
 function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void }) {
   const n = () => (props.result.components ?? []).length;
   const short = () => props.result.unstaffed ?? [];
@@ -240,7 +240,7 @@ function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void })
         <A href={`/systems/${props.result.system_id}`} class="font-data font-semibold hover:underline">{props.result.system}</A> on{" "}
         <span class="font-data">{props.result.outpost}</span>: {n()} {n() === 1 ? "component" : "components"}
         <Show when={short().length > 0}>
-          , short <span data-testid="sim-system-short">{short().map((r) => `${r.role} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
+          , short <span data-testid="sim-system-short">{short().map((r) => `${r.slot} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
         </Show>
         .
       </span>

@@ -15,7 +15,7 @@ screenshots:
       # walk to the component view this shot teaches.
       - action: click
         selector: "aside[data-blade] button[aria-label=Expand]"
-    alt: "A component's view: its location as a card saying the location is its own, the verdict with its since-line, why, what it is, the systems it serves with its role in each, and collection."
+    alt: "A component's view: its location as a card saying the location is its own, the verdict with its since-line, why, what it is, the systems it serves with its slot in each, and collection."
     # The since-line and the alarm ages count from the capture's own clock.
     #
     # A mask is painted at the size of what it resolves to, and a since-line
@@ -33,19 +33,19 @@ screenshots:
       - "text=/acknowledged/ >> xpath=ancestor::div[1]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
-    alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, roles, properties, tags)."
+    alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-system
     path: /web/systems/huddle
-    alt: "A system's view: the location as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's role, roles grouped only where they say something."
+    alt: "A system's view: the location as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
     # now (#872), so nothing else on Overview moves.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-map
     path: /web/systems/huddle
-    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, each the type icon of the component holding it, in its health colour, with its label under it."
+    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
     # The header's since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
@@ -246,7 +246,7 @@ A location holding a system and locations beneath it lists those locations under
 outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its verdict, **Why**,
-the roles and who is staffing them, each component's health light, and the data section's latest
+the slots and who is staffing them, each component's health light, and the data section's latest
 values (the 24 hour sparklines every 30), and on **Activity** the incidents, events and logs. A component going down shows up as the system's new
 verdict and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
@@ -280,38 +280,38 @@ location becomes `?tab=configure&edit=location` on its system).
 Cause before arithmetic:
 
 - **Why** leads, worst first: severity, message, the down component (click it to open its
-  panel), the role it impairs, and how long it has been raised.
-- **Components** follow, as rows in the outline's idiom: the component, the **role** it
+  panel), the slot it impairs, and how long it has been raised.
+- **Components** follow, as rows in the outline's idiom: the component, the **slot** it
   fills, its product, the alarm behind a red light, and its health (healthy a muted green,
   trouble in its own colour). Click a row to open its panel.
-- **Role chrome appears only where it says something a column cannot.** A role that wants
+- **Slot chrome appears only where it says something a column cannot.** A slot that wants
   more than one occupant, is short, or is unstaffed heads a group with its arithmetic ("1
   of 2, 1 spare") and its occupants beneath; a seat nobody staffs draws as an **empty
   slot**. A down occupant still holds its seat: that is a failure the alarms explain, not a
   gap.
-- **A deployed system fills every role**, so slot arithmetic appears only while hardware is
-  missing. An unstaffed role reads **incomplete** (a commissioning gap); a short staffed
-  role reads the impact it declared. Same arithmetic, different cause.
+- **A deployed system fills every slot**, so slot arithmetic appears only while hardware is
+  missing. An unstaffed slot reads **incomplete** (a commissioning gap); a short staffed
+  slot reads the impact it declared. Same arithmetic, different cause.
 - The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
-- A shared component is marked **also in** the other system; a member filling no role reads
-  **no role**, and that is a normal state.
+- A shared component is marked **also in** the other system; a member filling no slot reads
+  **no slot**, and that is a normal state.
 
 ## Overview: the map and the data
 
 A standard may declare the system's physical layout (a room, a stage, a vehicle, whatever
-the system occupies): where each role position sits, top-down. Every
+the system occupies): where each slot position sits, top-down. Every
 system built to that standard draws the **map** inside Overview, under the components:
 one marker per declared position. A staffed position shows the component's type icon in
 its health colour (green, amber, red, as in the Health column) with the component's label
-under it; hover or focus a marker for its role, product, health and any alarm, and click it to
-open its panel. A dashed ring is a position nobody staffs, labelled with its role.
+under it; hover or focus a marker for its slot, product, health and any alarm, and click it to
+open its panel. A dashed ring is a position nobody staffs, labelled with its slot.
 
 The map redraws to the width it has. A label never runs past the edge of the map: a marker
 near a side hangs its label inward, one near the bottom puts it above its icon, and a phone
 anchors sooner than a desktop because the same position is fewer pixels from the edge. Where
 two labels would overprint, the later one moves to the other side of its icon, and when
-nothing is clear it collapses to the icon alone; hover or focus it for the same label, role
+nothing is clear it collapses to the icon alone; hover or focus it for the same label, slot
 and health as any other marker.
 
 ::screenshot{#fleet-map}
@@ -357,7 +357,7 @@ permission and its own audit verb; systems and components read where they sit.
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; roles,
+component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
 properties and their cascade are configuration, and live here.
 
 ::screenshot{#fleet-configure}
@@ -378,7 +378,7 @@ alarm and its age), its product, and its tabs.
 Overview reads **why** (severity, message, age, and whether anyone has acknowledged it; a
 cleared alarm is history, not a state), **what it is** (product, vendor, driver, and every
 property the contract resolved to a value: model, serial, firmware, the RMA facts), and the
-**systems it serves**, each with the role it fills there and the primary marked when there
+**systems it serves**, each with the slot it fills there and the primary marked when there
 is more than one. **Vitals** lists the effective metrics that carry a value, a dot marking
 the component speaking rather than a contract default standing in. Each value carries its
 metric's unit (an uptime reads `306 s`, a poll duration `0.15 ms`); a decimal is rounded for reading,

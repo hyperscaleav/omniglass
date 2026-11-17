@@ -13,7 +13,7 @@ import MemberRows from "../components/MemberRows";
 import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, verdictOf } from "../lib/health";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
@@ -69,7 +69,7 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 //
 // It refreshes on its own while open (#940), the way a component's view does
 // (#934): the system's own reads (its health report, which carries the
-// verdict, Why and the roles' staffing; its declared roles; its members, each
+// verdict, Why and the slots' staffing; its declared slots; its members, each
 // with its own verdict; its data) poll at the leaf's cadence. The fleet view
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
@@ -103,7 +103,7 @@ export default function SystemZoom() {
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
-  const declared = useQuery(() => ({ queryKey: systemRolesKey(id()), queryFn: () => systemRoles(id()), refetchInterval: LEAF_POLL_MS }));
+  const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
   // Each member's own verdict, polled off the system's members read: the
   // fleet view's dots (read once) stand in until it answers.
   const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
@@ -335,7 +335,7 @@ export default function SystemZoom() {
           </Show>
           <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its roles add up to." />
+              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its slots add up to." />
               <HealthBadge verdict={health.data?.verdict} size="sm" />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
@@ -347,7 +347,7 @@ export default function SystemZoom() {
               <span class="text-base-content/30">·</span>
               <span data-testid="component-count" class="tabular-nums text-base-content/70">{componentCount()} {componentCount() === 1 ? "component" : "components"}</span>
               {/* Slot arithmetic speaks only when hardware is MISSING: a
-                  deployed room fills every role (#785), and a down occupant
+                  deployed room fills every slot (#785), and a down occupant
                   is a failure the alarms explain, not a gap. */}
               <Show when={strip() && strip()!.empty > 0}>
                 <span class="text-base-content/30">·</span>
@@ -465,7 +465,7 @@ export default function SystemZoom() {
                               </Show>
                               <Show
                                 when={reasons().length > 0}
-                                fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a role nobody staffed), not a failure.</p>}
+                                fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a slot nobody staffed), not a failure.</p>}
                               >
                                 <ul class="mt-2 flex flex-col gap-1">
                                   <For each={reasons()}>
@@ -567,7 +567,7 @@ export default function SystemZoom() {
               {(z) => (
                 <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
                   {/* Cause before arithmetic (#785): what is wrong, on which
-                      component, impairing which role, since when. */}
+                      component, impairing which slot, since when. */}
                   <Show when={alarms().length > 0}>
                     <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
                       <h2 class="eyebrow">Why</h2>
@@ -580,7 +580,7 @@ export default function SystemZoom() {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -598,7 +598,7 @@ export default function SystemZoom() {
                     </section>
                   </Show>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the role it fills. A role gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>

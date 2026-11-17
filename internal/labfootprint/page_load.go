@@ -39,7 +39,7 @@ var SystemPageReads = []string{
 	"/systems/{system}/metrics",
 	pageSeriesRead,
 	pageSeriesRead + "&instance={instance}",
-	"/systems/{system}/roles",
+	"/systems/{system}/slots",
 	"/views/fleet",
 }
 

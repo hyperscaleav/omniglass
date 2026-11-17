@@ -21,7 +21,7 @@ const view = {
 } as unknown as FleetView;
 const health = {
   verdict: "degraded",
-  roles: [
+  slots: [
     {
       name: "display", label: "Display", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,
       impaired: true, active: true, assigned_to: ["display-1"], down: [],

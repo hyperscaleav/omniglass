@@ -13,7 +13,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { uuidFor } from "../lib/testids";
-import { standardRolesKey } from "../lib/system_roles";
+import { standardSlotsKey } from "../lib/system_slots";
 import { pickTree } from "../components/TreeSelect.testkit";
 
 // The Templates page (#1329): the catalog across four kinds, filtered by the
@@ -27,7 +27,7 @@ const catalog: Template[] = [
     kind: "standard_template", name: "mr55", label: "Meeting Room 55", description: "A 55-inch meeting room.",
     standard: {
       parent: "meeting-room",
-      roles: [
+      slots: [
         { name: "video-bar", label: "Video bar", quorum: 1, capacity: 1, accepted_types: ["video-bar"] },
         { name: "main-display", label: "Main display", quorum: 1, capacity: 1, pinned_products: ["boreal-edge-55"] },
       ],
@@ -36,7 +36,7 @@ const catalog: Template[] = [
   },
   {
     kind: "system_template", name: "mr55-system", label: "Meeting Room 55, staffed",
-    system: { standard: "mr55", system_type: "meeting", roles: { "video-bar": { component: "kestrel-vroom" }, "main-display": { component: "boreal-edge-55" } } },
+    system: { standard: "mr55", system_type: "meeting", slots: { "video-bar": { component: "kestrel-vroom" }, "main-display": { component: "boreal-edge-55" } } },
   },
   {
     kind: "location_template", name: "meeting-floor", label: "A floor of meeting rooms",
@@ -73,17 +73,17 @@ const deploy: Me = {
   permissions: ["*:read", ...["location", "system", "component"].flatMap((r) => ["create", "update", "rename", "move"].map((a) => `${r}:${a}`))],
 };
 
-// The fleet's own mr55, whose roles differ from the template's copy.
+// The fleet's own mr55, whose slots differ from the template's copy.
 const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
 
-function mount(path: string, me: Me = admin, held: Standard[] = standards, roles: Record<string, unknown[]> = {}) {
+function mount(path: string, me: Me = admin, held: Standard[] = standards, slots: Record<string, unknown[]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TEMPLATES_KEY], catalog);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], [hq, west]);
   qc.setQueryData([...OUTPOSTS_KEY], [{ name: "lab-outpost", enrolled: true, tags: {} }]);
   qc.setQueryData([...STANDARDS_KEY], held);
-  for (const [id, r] of Object.entries(roles)) qc.setQueryData([...standardRolesKey(id)], r);
+  for (const [id, r] of Object.entries(slots)) qc.setQueryData([...standardSlotsKey(id)], r);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...DRIVERS_KEY], []);
   qc.setQueryData([...SECRETS_KEY], []);
@@ -122,7 +122,7 @@ describe("Templates page", () => {
     expect(screen.getByText("A floor of meeting rooms")).toBeInTheDocument();
     expect(screen.getByText("Boreal Edge 55 display")).toBeInTheDocument();
     expect(screen.getByTestId("template-teach")).toHaveTextContent("An example you clone, then own");
-    expect(screen.getByText("2 roles, a variant of meeting-room")).toBeInTheDocument();
+    expect(screen.getByText("2 slots, a variant of meeting-room")).toBeInTheDocument();
   });
 
   it("filters to the kinds the URL asks for, the chip reading the kind's word", async () => {
@@ -133,7 +133,7 @@ describe("Templates page", () => {
     expect(screen.getAllByText("system").length).toBeGreaterThan(0);
   });
 
-  it("renders a standard template's roles and choices from its body", async () => {
+  it("renders a standard template's slots and choices from its body", async () => {
     mount("/templates?kind=standard_template");
     const b = await blade("Meeting Room 55");
     const preview = within(b).getByTestId("preview-standard");
@@ -143,7 +143,7 @@ describe("Templates page", () => {
     expect(within(b).getByText("A 55-inch meeting room.")).toBeInTheDocument();
   });
 
-  it("renders a system's role fills by their component templates' labels", async () => {
+  it("renders a system's slot fills by their component templates' labels", async () => {
     mount("/templates?kind=system_template");
     const b = await blade("Meeting Room 55, staffed");
     const preview = within(b).getByTestId("preview-system");
@@ -296,11 +296,11 @@ describe("Templates page", () => {
   });
 
   it("staffs the address slots to the fleet's own standard when it holds one", async () => {
-    const roles = [
+    const slots = [
       { name: "video-bar", label: "Video bar", quorum: 1, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
       { name: "main-display", label: "Main display", quorum: 2, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
     ];
-    mount("/templates?kind=system_template", admin, [...standards, mr55], { [mr55.id]: roles });
+    mount("/templates?kind=system_template", admin, [...standards, mr55], { [mr55.id]: slots });
     const b = await blade("Meeting Room 55, staffed");
     expect(within(b).getByTestId("preview-standard-source")).toHaveTextContent("(yours)");
     expect(within(b).getByText("x2")).toBeInTheDocument();

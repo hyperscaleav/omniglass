@@ -605,10 +605,10 @@ const meetingPlan: SimSystemPlan = {
   standard: "meeting-room",
   alternates: { audio: "ceiling" },
   components: 3,
-  roles: [
-    { role: "display", product: "boreal-edge-55", count: 2 },
-    { role: "ceiling-mic", alternate: "audio/ceiling", product: "polaris-mic-1", count: 1 },
-    { role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" },
+  slots: [
+    { slot: "display", product: "boreal-edge-55", count: 2 },
+    { slot: "ceiling-mic", alternate: "audio/ceiling", product: "polaris-mic-1", count: 1 },
+    { slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" },
   ],
 };
 const systemMaker: Me = {
@@ -691,14 +691,14 @@ describe("adding a simulated system", () => {
     expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
   });
 
-  it("previews the plan once a standard is chosen: each role's product and count, the short role with its reason, the total", async () => {
+  it("previews the plan once a standard is chosen: each slot's product and count, the short slot with its reason, the total", async () => {
     stubFetch();
     await openAddSystem();
     expect(screen.queryByTestId("sim-plan")).toBeNull();
     fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "meeting-room" } });
     const preview = await screen.findByTestId("sim-plan");
-    const rows = within(preview).getAllByTestId("plan-role");
-    expect(rows.map((r) => r.getAttribute("data-role"))).toEqual(["display", "ceiling-mic", "camera"]);
+    const rows = within(preview).getAllByTestId("plan-slot");
+    expect(rows.map((r) => r.getAttribute("data-slot"))).toEqual(["display", "ceiling-mic", "camera"]);
     expect(within(rows[0]).getByText("boreal-edge-55")).toBeTruthy();
     expect(rows[0].lastElementChild!.textContent).toBe("2");
     expect(within(rows[1]).getByText("audio/ceiling")).toBeTruthy();
@@ -709,7 +709,7 @@ describe("adding a simulated system", () => {
   });
 
   it("reads the plan from the API for the chosen standard", async () => {
-    stubFetch({ "GET /simulation/standards/huddle-space:plan": { ...meetingPlan, standard: "huddle-space", components: 1, roles: [{ role: "display", product: "boreal-edge-55", count: 1 }] } });
+    stubFetch({ "GET /simulation/standards/huddle-space:plan": { ...meetingPlan, standard: "huddle-space", components: 1, slots: [{ slot: "display", product: "boreal-edge-55", count: 1 }] } });
     await openAddSystem();
     fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "huddle-space" } });
     await waitFor(() => expect(screen.getByTestId("plan-total").textContent).toBe("1"));
@@ -718,7 +718,7 @@ describe("adding a simulated system", () => {
 
   it("refuses to add when nothing in the standard can be simulated", async () => {
     stubFetch();
-    const empty: SimSystemPlan = { standard: "meeting-room", alternates: {}, components: 0, roles: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }] };
+    const empty: SimSystemPlan = { standard: "meeting-room", alternates: {}, components: 0, slots: [{ slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }] };
     await openAddSystem(admin, empty);
     await fill();
     expect(await screen.findByTestId("plan-empty")).toBeTruthy();
@@ -730,11 +730,11 @@ describe("adding a simulated system", () => {
       "POST /outposts/edge-hq/simulation/systems": new Answer(201, {
         system: "room-system-7", system_id: uuidFor("sys-room-7"), outpost: "edge-hq",
         components: [
-          { component: "display-1", role: "display", product: "boreal-edge-55", address: "127.60.0.4" },
-          { component: "display-2", role: "display", product: "boreal-edge-55", address: "127.60.0.5" },
-          { component: "mic-1", role: "ceiling-mic", product: "polaris-mic-1", address: "127.60.0.6" },
+          { component: "display-1", slot: "display", product: "boreal-edge-55", address: "127.60.0.4" },
+          { component: "display-2", slot: "display", product: "boreal-edge-55", address: "127.60.0.5" },
+          { component: "mic-1", slot: "ceiling-mic", product: "polaris-mic-1", address: "127.60.0.6" },
         ],
-        unstaffed: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }],
+        unstaffed: [{ slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }],
       }),
     });
     const { qc } = await openAddSystem();
@@ -752,7 +752,7 @@ describe("adding a simulated system", () => {
     expect(note.textContent).toContain("room-system-7");
     expect(note.textContent).toContain("3 components");
     expect(note.textContent).toContain("camera");
-    // The short role's reason reads as text, not only on hover.
+    // The short slot's reason reads as text, not only on hover.
     expect(note.textContent).toContain("no simulated product is a camera");
     // The system's name links to its page, by id.
     const link = within(note).getByRole("link", { name: "room-system-7" });
@@ -838,7 +838,7 @@ describe("adding a simulated system", () => {
     fireEvent.change(screen.getByLabelText("Standard"), { target: { value: "huddle-space" } });
     await waitFor(() => expect(add.disabled).toBe(true));
     const preview = screen.getByTestId("sim-plan");
-    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect(within(preview).queryAllByTestId("plan-slot")).toHaveLength(0);
     expect(within(preview).queryByTestId("plan-total")).toBeNull();
   });
 
@@ -852,7 +852,7 @@ describe("adding a simulated system", () => {
     r.qc.setQueryData([...simPlanKey("huddle-space")], meetingPlan);
     await fill("huddle-space");
     const preview = await screen.findByTestId("sim-plan");
-    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect(within(preview).queryAllByTestId("plan-slot")).toHaveLength(0);
     expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

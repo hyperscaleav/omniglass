@@ -328,7 +328,7 @@ The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav
 and 3,000 systems, so it describes an environment once and sizes it with a knob: a **scenario
 manifest** names its kinds of site (one headquarters and the offices repeated around it), the
 buildings each kind's rooms sit in, the standards placed at each kind as ratios, and the product
-filling each role of each standard. The size picks how many sites there are as well as how many
+filling each slot of each standard. The size picks how many sites there are as well as how many
 systems, so a bigger plan is more outposts rather than bigger ones. One manifest ships today, `corporate`
 (a headquarters with regional and branch offices of huddle rooms, meeting rooms, divisible conference
 rooms and lobby signage), in
@@ -471,12 +471,12 @@ containers, so it is not part of `make test` or CI.
 
 A plan seeds as configuration rows through `devseed.SeedPlan` (`internal/devseed/plan.go`), the one
 entry point the scale lab's bring-up calls: the sites, buildings, floors and rooms, the systems in the
-rooms, the components filling each system's roles, and the simulated endpoints on them, each site's on
+rooms, the components filling each system's slots, and the simulated endpoints on them, each site's on
 that site's outpost (`PlanOptions.OutpostFor`; `Outpost` alone puts them all on one). It drives the
 Gateway's own create methods, one row per transaction, so names, labels, audit rows and derived health
 come out as they do for an operator's writes, and the same plan always lands the same names and
 addresses. It seeds no metric history. Measured on a shared worker, the corporate plan takes about 12
-seconds at 100 systems and 2 minutes 13 seconds at 1,000, most of it the health recompute each role
+seconds at 100 systems and 2 minutes 13 seconds at 1,000, most of it the health recompute each slot
 assignment triggers rather than round trips ([#1562](https://github.com/hyperscaleav/omniglass/issues/1562)).
 `PLAN_MEASURE=100,1000 go test -run TestPlanSeedMeasure ./internal/devseed/` reproduces the table.
 
@@ -594,7 +594,7 @@ How to read each row:
 - **system page p50, p95**: the time an operator waits for the console's system page, with
   `--page-clients N` (0, the default, skips it and the rows read `not measured`). A load is every read a
   cold open of the page makes, all at once as the browser makes them, timed from the first request to
-  the last answer: the catalogs it labels with, the system, its health, members, roles and metrics, and
+  the last answer: the catalogs it labels with, the system, its health, members, slots and metrics, and
   then one 24 hour series read for each chart the metrics answer names. N clients each make
   `--page-loads` loads spread over the window, staggered so their loads overlap, against the system
   `--page-system` names or the fleet view's first. A load where any read does not answer 200 is an
@@ -1231,7 +1231,7 @@ sites: { min: 3, max: 30 }      # the fewest and the most sites, whatever the si
 standards:
   - name: mr65                  # a standard template from the catalog
     system_type: meeting        # a registered system type
-    products:                   # role -> catalog product
+    products:                   # slot -> catalog product
       video-bar: kestrel-vroom
       main-display: boreal-edge-65
       touch-control: newtron-panel-7
@@ -1266,9 +1266,9 @@ pushers:                        # outside actors that report by pushing, placed 
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
-[standard template](/architecture/templates/) and staffs its roles the way a system template does, through
-the same planner: a role with a quorum of two takes two of its product, and a choice is answered by
-naming the roles of one alternate. Every product is a catalog product a simulator profile serves, so
+[standard template](/architecture/templates/) and staffs its slots the way a system template does, through
+the same planner: a slot with a quorum of two takes two of its product, and a choice is answered by
+naming the slots of one alternate. Every product is a catalog product a simulator profile serves, so
 the lab can simulate every component it plans. Exactly one archetype is the headquarters, which takes
 no weight; every other archetype repeats and takes one. The site bounds must have a minimum of at least
 one and a maximum no lower than the minimum. A pusher is declared like the devices are: its profile

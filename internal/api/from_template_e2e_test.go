@@ -192,7 +192,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	f := newInstFixture(t)
 	type comp struct {
 		Component string `json:"component"`
-		Role      string `json:"role"`
+		Slot      string `json:"slot"`
 		Attached  bool   `json:"attached"`
 	}
 	type out struct {
@@ -218,7 +218,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	}
 
 	// The owner lands the whole system on a fresh fleet: the standard and its
-	// parent forked, a component per role, one attached.
+	// parent forked, a component per slot, one attached.
 	var got out
 	if err := json.Unmarshal(f.c.do(f.owner, http.MethodPost, "/systems:createFromTemplate", map[string]any{
 		"template": "mr55-system", "location": "hq", "outpost": "edge-1",
@@ -232,18 +232,18 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	if len(got.Components) != 4 || len(got.ToAttach) != 3 {
 		t.Fatalf("components = %+v to_attach %v, want 4 with 3 to attach", got.Components, got.ToAttach)
 	}
-	var roles struct {
-		Roles []struct {
+	var slots struct {
+		Slots []struct {
 			Name         string `json:"name"`
 			Understaffed int    `json:"understaffed"`
-		} `json:"roles"`
+		} `json:"slots"`
 	}
-	if err := json.Unmarshal(f.c.do(f.owner, http.MethodGet, "/systems/"+got.System+"/roles", nil, http.StatusOK), &roles); err != nil {
+	if err := json.Unmarshal(f.c.do(f.owner, http.MethodGet, "/systems/"+got.System+"/slots", nil, http.StatusOK), &slots); err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range roles.Roles {
+	for _, r := range slots.Slots {
 		if r.Understaffed != 0 {
-			t.Errorf("role %s understaffed %d, want the system staffed complete", r.Name, r.Understaffed)
+			t.Errorf("slot %s understaffed %d, want the system staffed complete", r.Name, r.Understaffed)
 		}
 	}
 	if n := f.count(`select count(*) from audit_log where new->>'from_template' = 'mr55-system'`); n < 10 {

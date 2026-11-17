@@ -26,7 +26,7 @@ screenshots:
     steps:
       - action: click
         selector: "text=Meeting Room 55, staffed"
-    alt: "A system template's panel: the standard it is built to, its system type, and a component for each role with the component template that fills it, above the Start from this template action."
+    alt: "A system template's panel: the standard it is built to, its system type, and a component for each slot with the component template that fills it, above the Start from this template action."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -55,11 +55,11 @@ carries it. Each row names its **kind** and, under **Creates**, what it writes.
 
 Pick a row to open its panel, which renders what the template creates **from the template itself**:
 
-- a **standard** template shows its **roles**, each with its quorum, the component types it accepts and
+- a **standard** template shows its **slots**, each with its quorum, the component types it accepts and
   any products it is pinned to, then its **choices** (the first alternate is the template's default)
   and the property and metric lines it declares;
 - a **system** template shows the **standard** it is built to, its **system type**, and a component
-  for each role with the component template that fills it. The counts are the quorums of the standard
+  for each slot with the component template that fills it. The counts are the quorums of the standard
   the system is built to: **yours** of that name when you hold one (your edits to it count), else the
   template's, created from it in the same write;
 - a **location** template shows its subtree as an **indented tree**, each location with its location type and
@@ -96,8 +96,8 @@ address) needs more.
   your secrets by name. Without an address the component lands unattached, to attach later.
 - **A system template** asks for its **location**, a **name** and **label**, the **standard** to build to
   (the template's by default: yours of that name when you hold one, else created from its template in
-  the same write), an **outpost**, and an **address per component** by role. The system, a component for
-  each role filled to its quorum and their assignments land together, or not at all.
+  the same write), an **outpost**, and an **address per component** by slot. The system, a component for
+  each slot filled to its quorum and their assignments land together, or not at all.
 - **A location template** asks for the **parent location** the subtree sits under (or none, for a new top) and
   the root's **name** and **label**. Each location's type must be allowed under its parent's, as your
   fleet has the location types; a placement your types refuse is refused, naming the pair.

@@ -457,7 +457,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerStandardMetricRoutes(api, a, gw)
 	registerLocationTypeMetricRoutes(api, a, gw)
 	registerEffectiveMetricRoutes(api, a, gw)
-	registerRoleRoutes(api, a, gw)
+	registerSlotRoutes(api, a, gw)
 	registerMemberRoutes(api, a, gw)
 	registerIdentityBindingRoutes(api, a, gw)
 	registerComponentDependencyRoutes(api, a, gw)

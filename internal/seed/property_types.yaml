@@ -133,10 +133,10 @@ property_types:
     label: Health
     description: >-
       The rolled-up health verdict for a component, system, or location, worst-wins
-      over its inputs (a component's active alarms, a system's roles, the systems
+      over its inputs (a component's active alarms, a system's slots, the systems
       under a location). Recorded transition-only, so the series is the edges: when
       it broke and when it came back, not a sample per check. incomplete ranks
-      between healthy and degraded and means a commissioning gap: a role short
+      between healthy and degraded and means a commissioning gap: a slot short
       because its hardware was never installed, which no alarm will ever fire for.
   # The server's identity (#1644), on the server's own platform component:
   # its boot writes both, the version when it changes and the start time on

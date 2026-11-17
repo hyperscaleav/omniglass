@@ -45,8 +45,8 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { createToggles } from "../lib/toggles";
 import InfoTip from "../components/InfoTip";
 import { ChevronRight } from "../components/icons";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
+import { systemSlots, systemSlotsKey } from "../lib/system_slots";
+import { componentCrumbs, isRoomOf, slotsOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
@@ -55,7 +55,7 @@ import { describeError, fmtTime } from "../lib/format";
 // standing in for one it does not have, and the card says which); then the
 // component itself: verdict, since-when (what took it down), product, and its
 // three tabs. Overview reads why, what it is, the systems it serves and the
-// role it fills in each, its vitals, and collection in context: the one place
+// slot it fills in each, its vitals, and collection in context: the one place
 // an outpost appears to an operator, because the distinction that matters is
 // stated here plainly (a healthy outpost with a stale sample means the component or
 // the path, not collection), which is why outposts need no view of their own.
@@ -199,20 +199,20 @@ export default function ComponentLeaf() {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const reachByKey = createMemo(() => new Map((reach.data?.endpoints ?? []).map((it, i) => [reachKey(it, i), it])));
-  // The role this component fills in each system it serves: a membership
-  // says THAT it belongs; the system's declared roles say what it does there.
-  const roleReads = useQueries(() => ({
+  // The slot this component fills in each system it serves: a membership
+  // says THAT it belongs; the system's declared slots say what it does there.
+  const slotReads = useQueries(() => ({
     queries: rows().filter((r) => r.systemId).map((r) => ({
-      queryKey: systemRolesKey(r.systemId!),
-      queryFn: () => systemRoles(r.systemId!),
+      queryKey: systemSlotsKey(r.systemId!),
+      queryFn: () => systemSlots(r.systemId!),
       staleTime: 30_000,
     })),
   }));
-  const rolesIn = (systemId: string | null) => {
+  const slotsIn = (systemId: string | null) => {
     if (!systemId) return [];
     const i = rows().filter((r) => r.systemId).findIndex((r) => r.systemId === systemId);
-    const data = i >= 0 ? roleReads[i]?.data : undefined;
-    return data ? rolesOf(component()?.name ?? "", data) : [];
+    const data = i >= 0 ? slotReads[i]?.data : undefined;
+    return data ? slotsOf(component()?.name ?? "", data) : [];
   };
 
   const primary = createMemo(() => rows().find((r) => r.primary) ?? rows()[0]);
@@ -263,7 +263,7 @@ export default function ComponentLeaf() {
                 A component has no transitions read, so since-when is what
                 took it down: the worst active alarm's age (#786). */}
             <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the roles it fills." />
+              <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
               <HealthBadge verdict={verdict() ?? undefined} size="sm" />
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
@@ -357,7 +357,7 @@ export default function ComponentLeaf() {
                 </dl>
               </section>
                   <section data-testid="leaf-memberships" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-                    <Eyebrow label="Systems it serves" hint="Each system this component belongs to, and the role it fills there. The primary is the system answered when a question names none." />
+                    <Eyebrow label="Systems it serves" hint="Each system this component belongs to, and the slot it fills there. The primary is the system answered when a question names none." />
                     <Show when={rows().length > 0} fallback={<p class="mt-2 text-base-content/60">Not in any system yet.</p>}>
                       <ul class="mt-2 divide-y divide-base-300 rounded-field border border-base-300">
                         <For each={rows()}>
@@ -366,7 +366,7 @@ export default function ComponentLeaf() {
                               <Show when={row.systemId} fallback={<span>{row.label}</span>}>
                                 <button type="button" class="cursor-pointer hover:underline" onClick={() => navigate(`/systems/${row.systemId}`)}>{row.label}</button>
                               </Show>
-                              <For each={rolesIn(row.systemId)}>
+                              <For each={slotsIn(row.systemId)}>
                                 {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
                               </For>
                               <Show when={row.where}>

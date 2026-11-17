@@ -18,7 +18,7 @@ import {
   standardBody,
   startNeeds,
   systemBody,
-  systemRoleSlots,
+  systemSlotFills,
   templateSummary,
   templatesHref,
 } from "./templates";
@@ -34,7 +34,7 @@ const std: Template = {
   label: "Meeting Room 55",
   standard: {
     parent: "meeting-room",
-    roles: [
+    slots: [
       { name: "video-bar", label: "Video bar", quorum: 1, capacity: 1 },
       { name: "main-display", label: "Main display", quorum: 2, accepted_types: ["display"], pinned_products: ["boreal-edge-55"] },
     ],
@@ -45,7 +45,7 @@ const sys: Template = {
   kind: "system_template",
   name: "mr55-system",
   label: "Meeting Room 55, staffed",
-  system: { standard: "mr55", roles: { "main-display": { component: "boreal-edge-55" }, "video-bar": { product: "kestrel-vroom" } } },
+  system: { standard: "mr55", slots: { "main-display": { component: "boreal-edge-55" }, "video-bar": { product: "kestrel-vroom" } } },
 };
 const location: Template = {
   kind: "location_template",
@@ -95,7 +95,7 @@ describe("which kinds an address asks for", () => {
 
 describe("what a template creates", () => {
   it("summarizes each kind from its own body", () => {
-    expect(templateSummary(std)).toBe("2 roles, a variant of meeting-room");
+    expect(templateSummary(std)).toBe("2 slots, a variant of meeting-room");
     expect(templateSummary(sys)).toBe("built to mr55, 2 components");
     expect(templateSummary(location)).toBe("3 locations, 3 systems");
     expect(templateSummary(comp)).toBe("boreal-edge-55");
@@ -112,21 +112,21 @@ describe("what a template creates", () => {
     ]);
   });
 
-  it("staffs a system template's roles to the quorum its standard template declares, in declared order", () => {
-    expect(systemRoleSlots(sys, all)).toEqual([
-      { role: "video-bar", label: "Video bar", count: 1, fill: "kestrel-vroom" },
-      { role: "main-display", label: "Main display", count: 2, fill: "Boreal Edge 55 display" },
+  it("staffs a system template's slots to the quorum its standard template declares, in declared order", () => {
+    expect(systemSlotFills(sys, all)).toEqual([
+      { slot: "video-bar", label: "Video bar", count: 1, fill: "kestrel-vroom" },
+      { slot: "main-display", label: "Main display", count: 2, fill: "Boreal Edge 55 display" },
     ]);
     // The fleet's own standard of that name sets the counts when it holds one.
-    expect(systemRoleSlots(sys, all, [{ name: "main-display", label: "Displays", quorum: 3 }, { name: "video-bar", label: "Bar", quorum: 1 }]).map((s) => [s.role, s.label, s.count])).toEqual([
+    expect(systemSlotFills(sys, all, [{ name: "main-display", label: "Displays", quorum: 3 }, { name: "video-bar", label: "Bar", quorum: 1 }]).map((s) => [s.slot, s.label, s.count])).toEqual([
       ["main-display", "Displays", 3],
       ["video-bar", "Bar", 1],
     ]);
-    // A standard the catalog does not hold staffs one per role, by its name.
-    expect(systemRoleSlots({ ...sys, system: { ...sys.system!, standard: "absent" } }, all).map((s) => s.count)).toEqual([1, 1]);
+    // A standard the catalog does not hold staffs one per slot, by its name.
+    expect(systemSlotFills({ ...sys, system: { ...sys.system!, standard: "absent" } }, all).map((s) => s.count)).toEqual([1, 1]);
   });
 
-  it("reads a role's quorum as exact, a range, or a floor", () => {
+  it("reads a slot's quorum as exact, a range, or a floor", () => {
     expect(quorumText({ name: "a", label: "", quorum: 1, capacity: 1 })).toBe("1");
     expect(quorumText({ name: "a", label: "", quorum: 1, capacity: 3 })).toBe("1 to 3");
     expect(quorumText({ name: "a", label: "", quorum: 2 })).toBe("2 or more");
@@ -186,7 +186,7 @@ describe("what each start form posts", () => {
     expect(componentBody("x", { location: "", name: "", label: "", outpost: "", address: "", secrets: {} }).inputs).toBeUndefined();
   });
 
-  it("attaches a system's roles in slot order up to the last address given", () => {
+  it("attaches a system's slots in slot order up to the last address given", () => {
     const body = systemBody("mr55-system", {
       location: "p1", name: "", label: "", standard: "", outpost: "n1",
       addresses: { "main-display": ["", "10.0.0.2"], "video-bar": [""] },

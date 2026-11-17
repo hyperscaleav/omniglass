@@ -471,7 +471,7 @@ func (a *authenticator) requirePlatform(ctx context.Context, action string) erro
 // conditionalGated declares a SECOND permission a route enforces because of a
 // reference the request carries, the way platformGated declares the one a
 // platform-tier write enforces: a component create naming a system (ADR-0107),
-// or a membership or role-assignment route naming a component in its path, which
+// or a membership or slot-assignment route naming a component in its path, which
 // always carries one (ADR-0510). The route keeps its own gate (gated(...) is
 // what admits the request at all); this adds the conditional permission to the
 // catalog so the roles view can report it, and publishes it on the operation as

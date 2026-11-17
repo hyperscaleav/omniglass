@@ -68,10 +68,10 @@ of space a system is (`system.system_type_id`, nullable for now,
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
 **`property`**), **`event`**, and **`command`**,
 and a recorded **[health](/architecture/health/)** series per component, system, and location. A
-system declares **roles** staffed by components whose product is classified within a type the slot
+system declares **slots** staffed by components whose product is classified within a type the slot
 accepts (a **typed-slot** guard,
 [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)),
-each role carrying an **impact**. See [implementation status](/architecture/status/).
+each slot carrying an **impact**. See [implementation status](/architecture/status/).
 :::
 
 ## The fleet: four structural entities
@@ -207,7 +207,7 @@ official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides
 - A **`driver`** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
 - The capability catalog retired (#626): a product's device-class genus is now `component_type`
-  (below), and what a [system role](#system-roles-the-slots-a-system-needs-filled) requires is a
+  (below), and what a [system slot](#system-slots-what-a-system-needs-filled) requires is a
   typed-slot guard over it, not a capability set.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
@@ -336,10 +336,10 @@ system can carry either, both, or neither. Conformance is **not** a copy: the st
 resolve **live** for every conforming system until it overrides one. See the
 [Standards guide](/guides/admin/standards/).
 
-A system also declares **roles** directly on itself (an ad hoc role), which is how a one-off system
-gets any: it inherits none. The console declares them from the system's Roles panel in edit mode,
+A system also declares **slots** directly on itself (an ad hoc slot), which is how a one-off system
+gets any: it inherits none. The console declares them from the system's Slots panel in edit mode,
 where the add row sits under the Ad hoc group (and in the empty state, so a one-off system's first
-role is one click from the copy). An ad hoc role edits and withdraws in place; a name the system's
+slot is one click from the copy). An ad hoc slot edits and withdraws in place; a name the system's
 standard already declares is refused (409) rather than shadowed, and shows on the add row.
 
 ### Declared properties: the classifier contracts and the declared rows
@@ -388,48 +388,49 @@ property with **declared** provenance
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
 See the [Properties guide](/guides/admin/properties/).
 
-### System roles: the slots a system needs filled
+### System slots: what a system needs filled
 
-A contract says what a system **carries**; a **system role** says what it **needs filled**: a table
-microphone, a main display. A role is a **slot**, not a component, so an **unfilled slot is visible**
+A contract says what a system **carries**; a **system slot** says what it **needs filled**: a table
+microphone, a main display. A slot is a position, not a component, so an **unfilled slot is visible**
 rather than absent.
 
 :::note[Not the IAM role]
-A **system role** is a slot in a system; an **[IAM role](/architecture/identity-access/)**
-(viewer / operator / admin / owner) is a capability set granted to a principal. They share only the
-word: the storage methods are `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole`, not
-RBAC's `ListRoles` / `UpsertRole`.
+A **system slot** is a position in a system a component fills; an **[IAM role](/architecture/identity-access/)**
+(viewer / operator / admin / owner) is a capability set granted to a principal. Until
+[ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot) the slot was also
+called a role; the storage methods are `ListSystemSlots` / `SetSystemSlot` / `DeleteSystemSlot`, and
+RBAC keeps `ListRoles` / `UpsertRole`.
 :::
 
-Five tables carry it. `system_member` is the **membership** binding a role attaches to, many-valued
-and cascading from both ends; `system_role` is the slot, on the same arc `property` uses
-(one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_role_type` and
-`system_role_product` are the **typed-slot guard**, the `component_type`s a filling component's
+Five tables carry it. `system_member` is the **membership** binding a slot attaches to, many-valued
+and cascading from both ends; `system_slot` is the slot, on the same arc `property` uses
+(one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_slot_type` and
+`system_slot_product` are the **typed-slot guard**, the `component_type`s a filling component's
 product must be classified within (self or a descendant) and, optionally, the specific products it
-pins; and `system_role_assignment` is who fills the role here.
+pins; and `system_slot_assignment` is who fills the slot here.
 
 <SchemaTable table="system_member" notes={{ is_primary: 'The one membership that carries the system band in the cascade' }} />
 
 <SchemaTable
-  table="system_role"
+  table="system_slot"
   notes={{
     quorum: 'How many fillers the slot wants before health degrades',
     impact: 'What a broken filler does to the rollup',
   }}
 />
 
-<SchemaTable table="system_role_type" />
+<SchemaTable table="system_slot_type" />
 
-<SchemaTable table="system_role_product" />
+<SchemaTable table="system_slot_product" />
 
-<SchemaTable table="system_role_assignment" notes={{ component_id: 'The filler; on delete restrict so a staffed component cannot vanish' }} />
+<SchemaTable table="system_slot_assignment" notes={{ component_id: 'The filler; on delete restrict so a staffed component cannot vanish' }} />
 
-### Membership: what a role attaches to
+### Membership: what a slot attaches to
 
-**A component doing a job in a system is a member of it, and the role is what that membership does**:
+**A component doing a job in a system is a member of it, and the slot is what that membership does**:
 one attachment seen at two levels. Membership is **many-valued** (a rack DSP feeding three rooms is a
-member of all three). **Staffing a role creates the membership**, so nobody says it twice; the
-reverse is not symmetric: giving up a role does not end membership, and a member carrying no role is
+member of all three). **Staffing a slot creates the membership**, so nobody says it twice; the
+reverse is not symmetric: giving up a slot does not end membership, and a member carrying no slot is
 ordinary (the spare on the shelf).
 
 **`is_primary`** marks which membership seeds the
@@ -455,59 +456,59 @@ removable chips. Changing the primary is an add (if the component is not yet in 
 deliberately not a field on the component's update or move.
 
 Membership **cascades from both ends**, and does not restrict the component the way
-`system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
-health); a role-less membership is not worth blocking a delete over.
+`system_slot_assignment` does: that restrict is load-bearing (deleting a filler would silently break
+health); a slot-less membership is not worth blocking a delete over.
 
-**A role is declared on a standard or on a system**, the same exclusive-arc pattern the sample tables use:
-standard-declared roles are **inherited live** by every conforming system, like a contract default;
-system-declared ones are ad-hoc, how a one-off system gets roles and a conforming system adds beyond
-its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
+**A slot is declared on a standard or on a system**, the same exclusive-arc pattern the sample tables use:
+standard-declared slots are **inherited live** by every conforming system, like a contract default;
+system-declared ones are ad-hoc, how a one-off system gets slots and a conforming system adds beyond
+its standard. A slot carries a **`quorum`** (two ceiling mics is one slot with quorum 2), at least
 one.
 
-**A role name means one role in a system.** Staffing, health and the console all address a role by
-its name within the system, so a write that would give a system two roles of one name is refused with
-a 409 naming the role, the standard and the system: a system declaring a name its standard declares, a
+**A slot name means one slot in a system.** Staffing, health and the console all address a slot by
+its name within the system, so a write that would give a system two slots of one name is refused with
+a 409 naming the slot, the standard and the system: a system declaring a name its standard declares, a
 standard declaring a name a conforming system declares itself, and a system moving onto a standard
-that declares a name it declares itself. A system role never shadows an inherited one; a second slot
+that declares a name it declares itself. A system slot never shadows an inherited one; a second slot
 takes a second name
 ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 
-**Changing a system's standard carries its staffing onto the roles that still exist.** In the same
-transaction as the repoint, each occupant of a role the old standard declares moves onto the new
-standard's role of the same name, when it is still a typed match for that role and the role has room
+**Changing a system's standard carries its staffing onto the slots that still exist.** In the same
+transaction as the repoint, each occupant of a slot the old standard declares moves onto the new
+standard's slot of the same name, when it is still a typed match for that slot and the slot has room
 under its capacity (lowest positions first, keeping its own position where that is free). Every other
 occupant is **released**: it loses the assignment and keeps its membership, so it can be unbound,
-restaffed or deleted at once, and nothing is ever left pointing at a role the system no longer has.
-Clearing the standard releases every inherited assignment; the system's own roles are never touched.
+restaffed or deleted at once, and nothing is ever left pointing at a slot the system no longer has.
+Clearing the standard releases every inherited assignment; the system's own slots are never touched.
 Each move and release is audited, and health recomputes after the staffing settles
 ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
 
-**The typed-slot guard is what `AssignRole` checks (#626).** A component fills a slot only when its
-product's `component_type` falls within a type the role's `system_role_type` set names (self or a
-descendant; empty accepts any type), and, if `system_role_product` pins specific products, only when
+**The typed-slot guard is what `AssignSlot` checks (#626).** A component fills a slot only when its
+product's `component_type` falls within a type the slot's `system_slot_type` set names (self or a
+descendant; empty accepts any type), and, if `system_slot_product` pins specific products, only when
 its product is one of them.
 
-The read side is **`EffectiveRoles(system)`**: the standard's roles (marked `from_standard`) UNION
+The read side is **`EffectiveSlots(system)`**: the standard's slots (marked `from_standard`) UNION
 those declared directly, each with its typed-slot requirement, quorum, and fillers **here**, serving
 **assigned** and **understaffed** (quorum minus assignments, floored at zero) so every surface reads
 the same.
 
-**Assignment is refused when the component cannot fill the role**, naming both parties:
+**Assignment is refused when the component cannot fill the slot**, naming both parties:
 
 ```
-component "panel-1" is a display; role "table-mic" wants a video-bar
+component "panel-1" is a display; slot "table-mic" wants a video-bar
 ```
 
 A refusal on **modeled** grounds, and it runs at assignment (and again when a standard change would carry
-the occupant onto the new standard's role); afterward an occupant keeps its slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
+the occupant onto the new standard's slot); afterward an occupant keeps its slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
 it but does not cost it the slot)
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
-**A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role
-(fewer satisfying components than quorum) means for its system. It lives on the role because the same
+**A slot also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** slot
+(fewer satisfying components than quorum) means for its system. It lives on the slot because the same
 broken box matters differently per slot: a dead confidence monitor is not a dead main display. Impact
 is the one input [health](/architecture/health/) takes from the declaration side; **quorum is the
-redundancy knob** beneath it. Staffing stays readable **without** health (a role wanting two with one
+redundancy knob** beneath it. Staffing stays readable **without** health (a slot wanting two with one
 assigned is under-staffed today); health adds whether the assigned components can currently do the job
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
@@ -519,7 +520,7 @@ Shipped content is two kinds, never conflated:
   ([templates](/architecture/templates/), `POST /standards:createFromTemplate`). The copy is
   **one-time, no inheritance**: nothing points back at the template, so it can improve per release
   without touching a tenant. What lands is an **operator-owned** row (`official: false`) with the
-  template's roles, choices and contract lines, written whole in one transaction and audited once as a
+  template's slots, choices and contract lines, written whole in one transaction and audited once as a
   create whose detail carries `from_template`. The boot seed plants **no** standard: a fresh install
   holds none until an operator creates one, and a standard an older release planted is an ordinary
   operator row, renameable and deletable, that no boot brings back
@@ -687,7 +688,7 @@ command's caused `event` stays stamped on the row but is optional
 
 ## Structural multi-membership (a component in N systems)
 
-[`system_member`](#membership-what-a-role-attaches-to) is many-valued; what stays single-valued is
+[`system_member`](#membership-what-a-slot-attaches-to) is many-valued; what stays single-valued is
 **which system chain seeds the cascade**. Why, how `is_primary` picks it, and the per-system
 effective views are stated once, on
 [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems).
@@ -698,25 +699,25 @@ while the only binding was a single pointer on the component. It no longer holds
 member of every system it serves.
 :::
 
-The design below layered the role onto the `system_member` row and pinned it to a frozen template
-BOM; what shipped keeps the row to the binding alone and lets `system_role_assignment` carry the
-role.
+The design below layered the slot onto the `system_member` row and pinned it to a frozen template
+BOM; what shipped keeps the row to the binding alone and lets `system_slot_assignment` carry the
+slot.
 
 :::design[Historical: the original template-pinning proposal, superseded by ADR-0071]
-A [system role](#system-roles-the-slots-a-system-needs-filled) would declare, per slot, a
+A [system slot](#system-slots-what-a-system-needs-filled) would declare, per slot, a
 **requirement** (a capability set a member had to provide, the retired #626 vocabulary,
 [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability))
 plus its `health_role`; any component whose **frozen template** met the requirement could fill the
-role, validated on assignment. Neither half of this shipped: the versioned-shape template model it
+slot, validated on assignment. Neither half of this shipped: the versioned-shape template model it
 depends on retired
 ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)),
 and the capability requirement retired with it (ADR-0087). Kept here as the record of what was
 proposed before the note below states what actually shipped.
 :::
 
-:::note[What is built is the role model above, and it is final for this point]
-The **built** slot is [`system_role`](#system-roles-the-slots-a-system-needs-filled): declared on a
-standard or a system, requiring a **typed-slot** match (#626), assigned through `system_role_assignment`. Its
+:::note[What is built is the slot model above, and it is final for this point]
+The **built** slot is [`system_slot`](#system-slots-what-a-system-needs-filled): declared on a
+standard or a system, requiring a **typed-slot** match (#626), assigned through `system_slot_assignment`. Its
 **`impact`** replaces the `health_role` tag above (`required` / `redundant` / `informational` are
 quorum plus impact, no fourth vocabulary,
 [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
@@ -862,7 +863,7 @@ Every component, system, and location resolves two ways, with different guarante
 The **uuid is the address**: immutable, the only reference the platform itself ever generates or
 persists, surviving every rename and move. A **dotted path is a positional lookup**: location
 segments from a root, an accessor that switches plane (`$comp` into the component tree, `$sys` into
-the system tree, `$role` reserved for a future system-role read but resolved by nothing today), then
+the system tree, `$slot` reserved for a future system-slot read but resolved by nothing today), then
 plane-local segments: `boi.17c.415a.$comp.dsp-1.dante-card-1` is a Dante card inside a DSP chassis in
 room 415a. Where the resource is already known from context (a CLI noun, a REST collection), a bare
 name with no accessor works the same way, resolving within that resource's own placement.

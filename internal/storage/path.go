@@ -32,14 +32,14 @@ const (
 	AddressComponent
 	// AddressSystem is reached via the $sys accessor.
 	AddressSystem
-	// AddressRole is reached via $role, valid only within a system path.
-	// No scopedConfig resolves a role today (roles are not one of the three
+	// AddressSlot is reached via $slot, valid only within a system path.
+	// No scopedConfig resolves a slot today (slots are not one of the three
 	// scoped-CRUD tree entities), so ParseAddress accepts the grammar and
 	// resolvePath's kind-mismatch check refuses it the same way it would
 	// refuse any other plane asked of the wrong table: as ErrPathNotFound,
 	// not a parse failure. The accessor is reserved now so a future caller
-	// that does resolve roles does not have to renegotiate the grammar.
-	AddressRole
+	// that does resolve slots does not have to renegotiate the grammar.
+	AddressSlot
 )
 
 func (k AddressKind) String() string {
@@ -50,8 +50,8 @@ func (k AddressKind) String() string {
 		return "component"
 	case AddressSystem:
 		return "system"
-	case AddressRole:
-		return "role"
+	case AddressSlot:
+		return "slot"
 	default:
 		return "unknown"
 	}
@@ -62,7 +62,7 @@ func (k AddressKind) String() string {
 //	boi.17c.415a.$comp.display-1           Root=[boi 17c 415a] Kind=component Tail=[display-1]
 //	boi.17c.415a.$comp.dsp-1.dante-card-1  Root=[boi 17c 415a] Kind=component Tail=[dsp-1 dante-card-1]
 //	boi.17c.$sys.av                        Root=[boi 17c]      Kind=system    Tail=[av]
-//	boi.17c.$sys.av.$role.primary-dsp      Root=[boi 17c]      Kind=role      Tail=[av]     Role=primary-dsp
+//	boi.17c.$sys.av.$slot.primary-dsp      Root=[boi 17c]      Kind=slot      Tail=[av]     Slot=primary-dsp
 //	$comp.display-1                        Root=[]             Kind=component Tail=[display-1] (unplaced)
 //
 // Root is always the location-tree prefix, root segment first, and may be
@@ -71,7 +71,7 @@ func (k AddressKind) String() string {
 // target-plane descent after the accessor: its first element resolves
 // against the plane's location bucket (or orphan bucket, when Root is
 // empty), each element after that against the plane's parent bucket. Every
-// segment, in Root and in Tail and in Role, has already passed the entity
+// segment, in Root and in Tail and in Slot, has already passed the entity
 // name rule by the time ParseAddress returns one: a percent-encoded slash
 // arrives at the handler already decoded (the #627 preflight probe), so
 // validating here is what keeps it from ever reaching a query.
@@ -79,13 +79,13 @@ type Address struct {
 	Root []string
 	Kind AddressKind
 	Tail []string
-	Role string
+	Slot string
 }
 
 const (
 	accessorComp = "$comp"
 	accessorSys  = "$sys"
-	accessorRole = "$role"
+	accessorSlot = "$slot"
 )
 
 // isAccessor reports whether seg is one of the three reserved plane switches.
@@ -93,7 +93,7 @@ const (
 // segment starting with "$" is either one of these three or malformed;
 // isAccessorLike below is what tells the two apart.
 func isAccessor(seg string) bool {
-	return seg == accessorComp || seg == accessorSys || seg == accessorRole
+	return seg == accessorComp || seg == accessorSys || seg == accessorSlot
 }
 
 // isAccessorLike reports whether seg was clearly MEANT as an accessor (it
@@ -174,21 +174,21 @@ func ParseAddress(ref string) (*Address, error) {
 	}
 
 	for ; i < len(segs); i++ {
-		if segs[i] == accessorRole {
+		if segs[i] == accessorSlot {
 			if addr.Kind != AddressSystem {
 				return nil, invalidAddress(
-					"%q is only valid within a system path, in address %q", accessorRole, ref)
+					"%q is only valid within a system path, in address %q", accessorSlot, ref)
 			}
 			if i != len(segs)-2 {
 				return nil, invalidAddress(
-					"%q must be followed by exactly one role name, in address %q", accessorRole, ref)
+					"%q must be followed by exactly one slot name, in address %q", accessorSlot, ref)
 			}
-			role := segs[i+1]
-			if err := validateEntityName(role); err != nil {
-				return nil, invalidAddress("invalid role name %q in address %q: %s", role, ref, err)
+			slot := segs[i+1]
+			if err := validateEntityName(slot); err != nil {
+				return nil, invalidAddress("invalid slot name %q in address %q: %s", slot, ref, err)
 			}
-			addr.Kind = AddressRole
-			addr.Role = role
+			addr.Kind = AddressSlot
+			addr.Slot = slot
 			return addr, nil
 		}
 		if isAccessorLike(segs[i]) {

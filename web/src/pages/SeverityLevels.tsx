@@ -60,7 +60,7 @@ export const SEVERITY_HINTS = {
   rank:
     "Higher is worse. The shipped levels are spaced ten apart, so a level of your own slots between two without renumbering.",
   outage:
-    "An active alarm at an outage level takes its component out (it stops filling its roles); at any other level it degrades the component and leaves it in place. The line is fixed at the official High level's rank: a level ranked at or above it is an outage level. Re-ranking a level across the line recomputes the health of every component with an open alarm at it.",
+    "An active alarm at an outage level takes its component out (it stops filling its slots); at any other level it degrades the component and leaves it in place. The line is fixed at the official High level's rank: a level ranked at or above it is an outage level. Re-ranking a level across the line recomputes the health of every component with an open alarm at it.",
   name: "A lowercase kebab name, e.g. major. Alarms and rules name the level by it; renaming it carries every alarm and rule with it.",
   color: "The hue every alarm at this level wears, from the console's palette.",
 } as const;

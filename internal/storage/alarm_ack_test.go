@@ -425,10 +425,10 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || len(rep.Roles[0].Alarms) != 1 {
-		t.Fatalf("health report = %+v, want one role naming the one alarm", rep.Roles)
+	if len(rep.Slots) != 1 || len(rep.Slots[0].Alarms) != 1 {
+		t.Fatalf("health report = %+v, want one slot naming the one alarm", rep.Slots)
 	}
-	got := rep.Roles[0].Alarms[0]
+	got := rep.Slots[0].Alarms[0]
 	if got.ID != alarm.ID {
 		t.Fatalf("the report names alarm %s, want %s", got.ID, alarm.ID)
 	}

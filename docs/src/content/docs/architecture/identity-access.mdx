@@ -28,7 +28,7 @@ guard**; **force-logout** revokes every target **session** while API **tokens** 
 its own bearer secret, not password-tied; a self-service change instead revokes the caller's other
 sessions, keeping the current one); **force-change-on-next-login** sets
 `human.must_change_password`, the `authn` choke point 403ing **every** route until the change except
-reading the caller's own principal and the change itself), **role assignment**
+reading the caller's own principal and the change itself), **granting roles**
 (`POST /principals/{id}/grants` / `DELETE /principals/{id}/grants/{grantId}`) with the
 **owner-invariant trigger**, the **principal lifecycle** (reversible
 `POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
@@ -178,13 +178,14 @@ converges.
 
 ## Roles and the role hierarchy
 
-:::note[One word, two models]
+:::note[Role is IAM's word]
 A **role** on this page is an IAM role: a capability set granted to a principal, in the `role` table, on the
-`/roles` routes. A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
-is a slot a system needs filled, in `system_role`, on the `/standards/{id}/roles` and `/systems/{name}/roles`
-routes. They are separate namespaces with no crossing, which is why the fleet-side storage methods are
-named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colliding with `ListRoles` /
-`UpsertRole`.
+`/roles` routes. A place a system needs filled is a
+**[system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)**, in `system_slot`, on
+the `/standards/{id}/slots` and `/systems/{name}/slots` routes, with storage methods `ListSystemSlots` /
+`SetSystemSlot` / `DeleteSystemSlot`. It was also called a role until
+[ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot); the
+word now means only the IAM role.
 :::
 
 A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable catalogs (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
@@ -453,10 +454,10 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 - **Scope (ABAC) in the Storage Gateway is per-action.** Every query carries `visible_set(P, action)` for the **specific action**, filtering rows by their exclusive-arc owner: a read uses `visible_set(P, read)`, a write the write-action's set, never a global union. An `:ack` outside `visible_set(P, ack)` matches **0 rows** even if the handler forgot its check, and a 0-row write is **never a silent success** (a silent 200/no-op is forbidden): the gateway reports the miss and the handler returns 404 or 403 matching the up-front decision. The set is fleet-size-bounded; as an owner filter in app code it works identically on Postgres, the columnar tier, or object storage.
 - The gateway has three query **modes**: **scoped** (an API request carrying a principal's visible set), **outpost** (an outpost-driven write confined to the outpost's placement-derived `visible_set`, so a compromised outpost cannot write arbitrary owners intra-tenant), and **system** (trusted internal work: the CDC publisher, the sample persistence sink, reconcile / migrate / seed, all-visibility; an explicit, audited choice, never the default). There is no fourth path.
 - **Targeted mutation on a known id resolves the target twice: within the read scope, then within the action's own scope.** A custom method against a specific id (`POST /components/{name}/alarms/{id}:acknowledge` is one of twenty-one) resolves that target through the gateway carrying `visible_set(P, read)` to decide whether the caller may know it exists, and `visible_set(P, action)` for **its own action**, never a neighbouring one, to decide whether it may act. The read set decides only which refusal is owed and **grants nothing**, so a wide read still cannot widen a narrow write. The status split is three-way ([below](#the-three-way-status-split)): (a) action in **no** grant -> 403 at the fast-reject; (b) target in `visible_set(P, read)` but outside `visible_set(P, action)` -> **403**; (c) target outside `visible_set(P, read)` -> **404**, non-disclosing.
-- **A refusal names only rows the caller may read.** A write on a catalog row (a standard role declaration, gated by `standard:update`) is checked against every conforming system across the fleet, beyond any scope the caller holds. When that check refuses, the API names a conflicting system only if it is in `visible_set(P, read)`: a role-name collision with an unreadable system says so without naming it, and a capacity lowered below what conforming systems already hold names the worst-exceeding system the caller can read, or else says only that a system it cannot read is in the way, with no name, staffing count or tally of such systems ([#1216](https://github.com/hyperscaleav/omniglass/issues/1216)). The check itself stays fleet-wide, so the refusal is never weakened to fit the caller; only its wording is. That leaves one accepted disclosure: whether a write is refused at all. A caller probing successive capacities learns the highest staffing of the role among systems it cannot read, because the catalog invariant it is editing holds across the whole fleet.
+- **A refusal names only rows the caller may read.** A write on a catalog row (a standard slot declaration, gated by `standard:update`) is checked against every conforming system across the fleet, beyond any scope the caller holds. When that check refuses, the API names a conflicting system only if it is in `visible_set(P, read)`: a slot-name collision with an unreadable system says so without naming it, and a capacity lowered below what conforming systems already hold names the worst-exceeding system the caller can read, or else says only that a system it cannot read is in the way, with no name, staffing count or tally of such systems ([#1216](https://github.com/hyperscaleav/omniglass/issues/1216)). The check itself stays fleet-wide, so the refusal is never weakened to fit the caller; only its wording is. That leaves one accepted disclosure: whether a write is refused at all. A caller probing successive capacities learns the highest staffing of the slot among systems it cannot read, because the catalog invariant it is editing holds across the whole fleet.
 - **Scope is structural, not per-handler**: the principal's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop, the gateway is the sole guarantor.
 - **Beside scope, every key has one writer.** Scope decides which owners a principal's write may reach; it cannot decide that a key's value is an outpost's observation and nobody else's. So the gateway holds a second, data-side invariant on every sample and event write: the key's **writer class** must admit the write's writer (the outpost lane bound to its task's endpoint, the push lane, a calc rule, the health rollup, a command, an operator), refused otherwise with a 422 naming the key ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway), [storage](/architecture/storage/#every-key-has-one-writer)). It is not a permission and no grant confers it: an owner with every permission still cannot write an outpost's probe key through a declared value or a push. Like the scope argument, it is structural, held by a guard that fails on any gateway write path that skips it.
-- **Coverage scales with the surface, by test.** An **authz conformance matrix** runs the full assertion set (capability 403, the over-permit scope 403, the non-disclosing 404, in-scope success, the read/act asymmetry) against **every** scoped entity from a catalog: a new scoped entity is one catalog line. Each entity also declares the mutating routes that hang **off** it and resolve it as their target (its property writes, and for a system its membership and role writes and its telemetry push, for a component its alarm writes, its command issue and its telemetry push), and the matrix drives the whole three-way split through each one, so the truthful 403 is proved per **route** and not merely per entity: the routes are not uniform across the catalog, and a per-entity assertion would have left thirteen of them unproved. A **route-gating guard** drives every generated-OpenAPI operation with a zero-permission principal, asserting 403 outside a short allow-list: `GET /healthz`, `GET /auth/status`, `POST /auth/login`, `POST /auth/logout`, the authn-only `/auth/me` family and `GET /settings/me`, `POST /outposts:claim` (safe unauthenticated because the enrollment token in its body **is** the credential, minted once by an `outpost:enroll`-gated route, only its hash stored; an invalid token is a 401 that discloses nothing), and the webhook route, `POST /webhooks/{token}` with the `GET` and `HEAD` a sender verifies its URL with ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)): public by necessity, since the sender is not a principal; the token names one endpoint, its driver's declared scheme is the authentication, and the write is bound to that endpoint's component on the push lane, whose writer admits only collected keys, so a leaked token writes only collected keys on one component; an unknown or rotated token answers one identical 404. These are the API's **two public writes**. A **published-gate guard** is the spec-side companion: every route outside that allow-list carries an `x-omniglass-permission` stamp and every allow-listed route carries none, so "gated" and "published" are the same set.
+- **Coverage scales with the surface, by test.** An **authz conformance matrix** runs the full assertion set (capability 403, the over-permit scope 403, the non-disclosing 404, in-scope success, the read/act asymmetry) against **every** scoped entity from a catalog: a new scoped entity is one catalog line. Each entity also declares the mutating routes that hang **off** it and resolve it as their target (its property writes, and for a system its membership and slot writes and its telemetry push, for a component its alarm writes, its command issue and its telemetry push), and the matrix drives the whole three-way split through each one, so the truthful 403 is proved per **route** and not merely per entity: the routes are not uniform across the catalog, and a per-entity assertion would have left thirteen of them unproved. A **route-gating guard** drives every generated-OpenAPI operation with a zero-permission principal, asserting 403 outside a short allow-list: `GET /healthz`, `GET /auth/status`, `POST /auth/login`, `POST /auth/logout`, the authn-only `/auth/me` family and `GET /settings/me`, `POST /outposts:claim` (safe unauthenticated because the enrollment token in its body **is** the credential, minted once by an `outpost:enroll`-gated route, only its hash stored; an invalid token is a 401 that discloses nothing), and the webhook route, `POST /webhooks/{token}` with the `GET` and `HEAD` a sender verifies its URL with ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)): public by necessity, since the sender is not a principal; the token names one endpoint, its driver's declared scheme is the authentication, and the write is bound to that endpoint's component on the push lane, whose writer admits only collected keys, so a leaked token writes only collected keys on one component; an unknown or rotated token answers one identical 404. These are the API's **two public writes**. A **published-gate guard** is the spec-side companion: every route outside that allow-list carries an `x-omniglass-permission` stamp and every allow-listed route carries none, so "gated" and "published" are the same set.
 
 - **Every gated resource registers its scope tier, by test.** `visible_set(P, action)` is resolved for a resource, and the resolver only knows which grant kinds can contain a resource it has been told about (`applicableKinds` in `internal/scope`): a tier (`command` and `alarm` on the component tier, `telemetry` on the component and system tiers, `secret` / `variable` on all three), or **fleet-wide** (`outpost`, `rule`, `principal` and the other catalog and directory resources, which only an `all` grant confers). A resource registered nowhere still resolves, to the empty set for every grant but an `all` one, so a route fencing on it denies every scoped caller while an `all`-scoped owner keeps working, and nothing tells an empty grant from the missing registration ([#754](https://github.com/hyperscaleav/omniglass/issues/754)). So `TestEveryGatedResourceRegistersItsScope` (`internal/api`) reads every operation's permission stamps (`x-omniglass-permission` and the platform and conditional second gates) from the generated OpenAPI and fails `make test` on any resource that is unregistered, naming the route and the permission: a new route that forgets its tier, such as a system- or location-level command route, cannot merge. Beneath it, the gateway's resolve paths (the scoped resolve, the reference and placement resolvers) check that each non-`all` set was resolved for a resource the table's tier can contain (`scope.Covers`) and answer a set that was not with a **wiring error**, logged and returned as a **500**, never the 404 or 403 an empty grant earns.
 
@@ -479,7 +480,7 @@ A refusal picks its status from the **difference between two scopes**, not from 
 
 One primitive makes the split for every route that has one, `resolveScoped` in the Storage
 Gateway, so the ordering (read first, then action) exists in one place rather than once per
-route. Routes whose write takes no scope of its own, the alarm verbs, the system-role
+route. Routes whose write takes no scope of its own, the alarm verbs, the system-slot
 declarations, the command issue and the telemetry push, reach the same primitive through
 `ResolveActionTarget`.
 
@@ -525,7 +526,7 @@ it was written.** The three tree entities' own CRUD (update, rename, move, delet
 `system`, `component`) had made the three-way split for some time, and the conformance matrix had
 been asserting it. What actually answered 404 for case (b) was narrower and less obvious: the
 routes that hang **off** a tree entity and resolve it as their target, a property write on it, a
-membership or role write on it, an alarm write on it. Those seventeen routes adopted the existing
+membership or slot write on it, an alarm write on it. Those seventeen routes adopted the existing
 primitive rather than a new one, and the matrix now drives all three branches through each of them.
 :::
 
@@ -552,7 +553,7 @@ caller scope to filter by at all, where the list stays empty by design: the thre
 availability advisories (deliberately scope-blind, so availability answers about the placement bucket
 asked about rather than the caller's own grant) and `ResolveTags`' `for_system` (whose only scope in
 hand is resolved for the other tier, which can never narrow it). The component end of a membership or
-role write used to be one of these; it now resolves in the caller's own `component:read` scope
+slot write used to be one of these; it now resolves in the caller's own `component:read` scope
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)),
 so its refusals list their candidates like any other bind. A dotted address skips this step entirely on its own: the placement-scoped unique
 indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
@@ -633,27 +634,27 @@ promise:
   system's own type, for a create the platform then refused. The draft carries the create's
   conditional permission as well as its scope, so both halves of the gate rehearse.
 
-- **The component end of a membership or a role assignment** is the same bind seen from the other
+- **The component end of a membership or a slot assignment** is the same bind seen from the other
   end, and it costs a write on that end too
   ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends),
   [#510](https://github.com/hyperscaleav/omniglass/issues/510)). Binding a component into a system
   makes that system its primary when it is the first, restamps its label, and seeds the system band of
   every cascade the component reads, so a membership writes onto the component as well as the system.
   The five routes that name a component (add, remove and re-default a member; assign and unassign a
-  role) therefore need `component:update` beside their `system:update` gate: the handler refuses a
+  slot) therefore need `component:update` beside their `system:update` gate: the handler refuses a
   caller holding none with a 403 naming it, and the route publishes it as its conditional permission.
   The gateway scopes the end in sets resolved for the component tier. A **bind** resolves the
   component in `component:read` and requires `component:update`, the same read-then-action split one
   tier over (out of read the non-disclosing 404, readable but not writable a 403); a write naming a
   component **already** a member or an occupant requires `component:update` alone and refuses with a
-  403, because the system's own member list and role read already name it, while a name that is not
+  403, because the system's own member list and slot read already name it, while a name that is not
   bound here answers the same 404 whether it names a component outside the caller's read scope or
   nothing at all. Before this, a principal
   scoped to one system bound a component it could not read and wrote its own variables onto it through
   the cascade. A system-wide act that settles its bindings without naming a component (deleting the
-  system, withdrawing one of its roles, changing its standard) stays gated on the system alone: it acts
+  system, withdrawing one of its slots, changing its standard) stays gated on the system alone: it acts
   only on components the system already holds (a primary moved to another system that holds the
-  member, an occupant carried onto the new standard's role) and binds none it did not.
+  member, an occupant carried onto the new standard's slot) and binds none it did not.
 
 - **An identity binding** is the same rule on a relationship whose owner end may be either tier
   ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends),

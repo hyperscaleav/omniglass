@@ -8,7 +8,7 @@ import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import TemplatePreview from "../components/TemplatePreview";
-import StartFromTemplateForm, { useHeldRoles, useHeldStandards } from "../components/StartFromTemplateForm";
+import StartFromTemplateForm, { useHeldSlots, useHeldStandards } from "../components/StartFromTemplateForm";
 import { identityColumn } from "../components/IdentityCell";
 import { Plus } from "../components/icons";
 import { useMe, can } from "../lib/auth";
@@ -144,7 +144,7 @@ function TemplateBladeBody(p: { name: string }): JSX.Element {
   });
   const mayStart = () => !!row() && missing().length === 0;
   // A system template is staffed to the fleet's standard of that name when it holds one.
-  const heldRoles = useHeldRoles(byName, () => row()?.system?.standard ?? "");
+  const heldSlots = useHeldSlots(byName, () => row()?.system?.standard ?? "");
 
   useBladeEdit().bind({
     primary: () => (row() && mayStart() && ui ? { label: "Start from this template", icon: <Plus size={15} />, onClick: () => ui.openStart(p.name) } : undefined),
@@ -167,8 +167,8 @@ function TemplateBladeBody(p: { name: string }): JSX.Element {
               <KVStacked label="To start one" hint="Starting one writes every piece as you, so it needs each permission those writes need." value={<span data-testid="start-needs" class="font-data text-xs text-base-content/60">needs {permText(missing())}</span>} />
             </Show>
           </div>
-          <Eyebrow label="What it creates" hint="Read from the template itself. A system is staffed to the roles of the standard it is built to: yours of that name when you hold one, which may differ from the template's copy." />
-          <TemplatePreview template={t()} all={templates.data ?? []} heldRoles={heldRoles()} />
+          <Eyebrow label="What it creates" hint="Read from the template itself. A system is staffed to the slots of the standard it is built to: yours of that name when you hold one, which may differ from the template's copy." />
+          <TemplatePreview template={t()} all={templates.data ?? []} heldSlots={heldSlots()} />
         </div>
       )}
     </Show>

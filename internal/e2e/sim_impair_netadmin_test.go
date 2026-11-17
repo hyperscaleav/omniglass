@@ -84,19 +84,19 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	if _, err := conn.Exec(ctx, `update component set product_id = (select id from product where name = $1) where name = 'sim-dev'`, product); err != nil {
 		t.Fatal(err)
 	}
-	// sim-dev is the one occupant of a role whose impairment takes its system
+	// sim-dev is the one occupant of a slot whose impairment takes its system
 	// out, so the official reachability rule's alarm moves the system.
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "impair-std", Label: "Impair standard"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "impair-std", storage.SystemRoleSpec{Name: "target", Quorum: 1, Impact: "outage"}); err != nil {
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "impair-std", storage.SystemSlotSpec{Name: "target", Quorum: 1, Impact: "outage"}); err != nil {
 		t.Fatal(err)
 	}
 	std := "impair-std"
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "impair-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.AssignRole(ctx, "", "impair-sys", "target", "sim-dev", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "impair-sys", "target", "sim-dev", all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
 

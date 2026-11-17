@@ -76,8 +76,8 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: sys, SystemTypeID: &av, LocationName: &p}, all, all); err != nil {
 			t.Fatal(err)
 		}
-		for _, role := range []string{"left", "right"} {
-			if _, err := gw.SetSystemRole(ctx, "", "system", sys, storage.SystemRoleSpec{Name: role, Label: role, Quorum: 1, Impact: "none"}); err != nil {
+		for _, slot := range []string{"left", "right"} {
+			if _, err := gw.SetSystemSlot(ctx, "", "system", sys, storage.SystemSlotSpec{Name: slot, Label: slot, Quorum: 1, Impact: "none"}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -90,7 +90,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	}
 	// sys-e staffed by e1 and by w1 (a member placed in the other place).
 	for _, a := range [][3]string{{"sys-e", "left", "e1"}, {"sys-e", "right", "w1"}, {"sys-w", "left", "w2"}} {
-		if err := gw.AssignRole(ctx, "", a[0], a[1], a[2], all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", a[0], a[1], a[2], all, all, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}

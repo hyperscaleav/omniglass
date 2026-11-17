@@ -11,7 +11,7 @@ import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
-import RoleEditor from "../components/RoleEditor";
+import SlotEditor from "../components/SlotEditor";
 import { Plus } from "../components/icons";
 import TemplateCreate, { CreateModeChoice, useTemplateChoice } from "../components/TemplateCreate";
 import {
@@ -204,7 +204,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
           </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
-          <RoleEditor id={r().id} official={r().official} />
+          <SlotEditor id={r().id} official={r().official} />
         </div>
       )}
     </Show>

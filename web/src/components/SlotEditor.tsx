@@ -5,64 +5,64 @@ import { Check, Pencil, Plus, Trash, X } from "./icons";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import {
-  deleteStandardRole,
-  deleteSystemRole,
-  setStandardRole,
-  setSystemRole,
-  standardRoles,
-  standardRolesKey,
-  type DeclaredRole,
-  type RoleSpec,
-} from "../lib/system_roles";
+  deleteStandardSlot,
+  deleteSystemSlot,
+  setStandardSlot,
+  setSystemSlot,
+  standardSlots,
+  standardSlotsKey,
+  type DeclaredSlot,
+  type SlotSpec,
+} from "../lib/system_slots";
 import { useMe, can } from "../lib/auth";
 import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
 
-// RoleEditor is the standard detail-blade panel for curating the ROLES a standard
+// SlotEditor is the standard detail-blade panel for curating the SLOTS a standard
 // declares: the slots every conforming system needs filled (a table microphone, a
 // main display), each naming the TYPED-SLOT guard a filling component's product
 // must clear (#626) and how many the slot wants (its quorum). Systems inherit
-// these live, so a role declared here appears on every conforming system's Roles
+// these live, so a slot declared here appears on every conforming system's Slots
 // panel at once, and withdrawing one takes every assignment made to it with it.
 //
 // It is a SIBLING of ContractEditor, not a reuse of it: the two share the shape
 // (declare / edit in place / withdraw, immediate writes, no Save of its own, and
 // an official classifier read-only) but not the row. A contract line picks an
 // existing catalog property by name and carries one typed default plus a required
-// flag; a role's name is operator-invented (no catalog to pick from), and it
+// flag; a slot's name is operator-invented (no catalog to pick from), and it
 // carries a label, an integer quorum, and TWO sets (accepted types,
 // pinned products) rather than a single scalar. Parameterizing ContractEditor
 // over both would have meant swapping its picker, its draft shape, its
 // validation, and its whole row body, which is the component, so the honest
 // move is a sibling that reads the same.
 //
-// The editing pieces are OWNER-GENERIC: a role is declared either on a standard
-// or directly on a system (an ad hoc role, the only way a one-off system gets
+// The editing pieces are OWNER-GENERIC: a slot is declared either on a standard
+// or directly on a system (an ad hoc slot, the only way a one-off system gets
 // any), and the two share the declaration, the draft, and the controls; only
-// the write calls differ, chosen by the RoleOwner. RoleEditor is the standard's
-// whole panel; RolesPanel mounts RoleDeclareRow and RoleEditForm for a system's
-// ad hoc roles, where the list itself is the resolved Roles panel's.
+// the write calls differ, chosen by the SlotOwner. SlotEditor is the standard's
+// whole panel; SlotsPanel mounts SlotDeclareRow and SlotEditForm for a system's
+// ad hoc slots, where the list itself is the resolved Slots panel's.
 //
-// Each role is addressed by name, so a write is a PATCH (idempotent: an edit
-// revises the role in place, and declaring is the same route) and a withdraw is
+// Each slot is addressed by name, so a write is a PATCH (idempotent: an edit
+// revises the slot in place, and declaring is the same route) and a withdraw is
 // a DELETE. Writes are immediate, but the blade's edit slot still gates the
 // controls (#621): they render only while the
-// hosting blade is in edit mode, and in read mode the declared roles render as
+// hosting blade is in edit mode, and in read mode the declared slots render as
 // facts alone. Declaring needs the standard's :update, withdrawing its :delete,
-// and an official standard's roles are read-only: the list renders,
+// and an official standard's slots are read-only: the list renders,
 // the controls do not.
 
-// A role's impact, as the draft edits it: what an impaired role means for its
+// A slot's impact, as the draft edits it: what an impaired slot means for its
 // system's verdict. Kept a plain string in the draft (a <select> value) and
-// narrowed only where RoleSpec needs the literal union.
+// narrowed only where SlotSpec needs the literal union.
 type Impact = "outage" | "degraded" | "none";
 
-// The draft a row (or the add row) edits: everything a RoleSpec carries. Every
-// field the write body accepts belongs here; a field added to RoleSpec but not
+// The draft a row (or the add row) edits: everything a SlotSpec carries. Every
+// field the write body accepts belongs here; a field added to SlotSpec but not
 // here is silently cleared on every unrelated edit, which is exactly the bug
 // this type used to carry (#626, predates the epic: impact, capacity, and
 // position_labels were all missing until this commit, see build-log.md).
-export type RoleDraft = {
+export type SlotDraft = {
   display: string;
   quorum: string;
   acceptedTypes: string[];
@@ -75,7 +75,7 @@ export type RoleDraft = {
   positionLabels: string[];
 };
 
-export const emptyDraft = (): RoleDraft => ({
+export const emptyDraft = (): SlotDraft => ({
   display: "",
   quorum: "1",
   acceptedTypes: [],
@@ -85,7 +85,7 @@ export const emptyDraft = (): RoleDraft => ({
   positionLabels: [],
 });
 
-// What an impaired role means for its system: the same three values the
+// What an impaired slot means for its system: the same three values the
 // health chain folds worst-wins.
 const IMPACT_OPTIONS: { value: Impact; label: string }[] = [
   { value: "outage", label: "Outage" },
@@ -99,7 +99,7 @@ const IMPACT_OPTIONS: { value: Impact; label: string }[] = [
 // product, a capacity, the labels) is written empty rather than read as
 // "unchanged", and a field the editor has no control for is left off the mask
 // and so cannot be touched at all. alternate is deliberately absent: it has a
-// read (#640) but no control here, and naming it would clear a role's alternate
+// read (#640) but no control here, and naming it would clear a slot's alternate
 // on an unrelated edit, which is the #626 defect this list exists to prevent.
 const EDITOR_FIELDS = [
   "label",
@@ -116,7 +116,7 @@ const EDITOR_FIELDS = [
 // whole number is reported rather than sent malformed. A blank capacity is a
 // capacity CLEARED, since the mask names the field and the body carries no
 // value for it, which is the one thing the old wholesale PUT could not express.
-export function buildSpec(draft: RoleDraft): RoleSpec | string {
+export function buildSpec(draft: SlotDraft): SlotSpec | string {
   const text = draft.quorum.trim();
   const quorum = text === "" ? 1 : Number(text);
   if (!Number.isInteger(quorum) || quorum < 1) return `"${text}" is not a whole number of components.`;
@@ -138,23 +138,23 @@ export function buildSpec(draft: RoleDraft): RoleSpec | string {
   };
 }
 
-// The party a role is declared on: a standard (every conforming system inherits
-// it) or a system (the role is its own).
-export type RoleOwner = { kind: "standard"; id: string } | { kind: "system"; name: string };
+// The party a slot is declared on: a standard (every conforming system inherits
+// it) or a system (the slot is its own).
+export type SlotOwner = { kind: "standard"; id: string } | { kind: "system"; name: string };
 
-// writeRole declares or revises the role on its owner.
-function writeRole(owner: RoleOwner, role: string, spec: RoleSpec): Promise<DeclaredRole> {
-  return owner.kind === "standard" ? setStandardRole(owner.id, role, spec) : setSystemRole(owner.name, role, spec);
+// writeSlot declares or revises the slot on its owner.
+function writeSlot(owner: SlotOwner, slot: string, spec: SlotSpec): Promise<DeclaredSlot> {
+  return owner.kind === "standard" ? setStandardSlot(owner.id, slot, spec) : setSystemSlot(owner.name, slot, spec);
 }
 
-// withdrawRole removes the role from its owner.
-export function withdrawRole(owner: RoleOwner, role: string): Promise<void> {
-  return owner.kind === "standard" ? deleteStandardRole(owner.id, role) : deleteSystemRole(owner.name, role);
+// withdrawSlot removes the slot from its owner.
+export function withdrawSlot(owner: SlotOwner, slot: string): Promise<void> {
+  return owner.kind === "standard" ? deleteStandardSlot(owner.id, slot) : deleteSystemSlot(owner.name, slot);
 }
 
-// draftOf opens a declared role as a draft. Structural over the fields a
-// standard's line and a system's resolved role share, so either feeds it.
-export function draftOf(r: Pick<DeclaredRole, "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">): RoleDraft {
+// draftOf opens a declared slot as a draft. Structural over the fields a
+// standard's line and a system's resolved slot share, so either feeds it.
+export function draftOf(r: Pick<DeclaredSlot, "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">): SlotDraft {
   return {
     display: r.label ?? "",
     quorum: String(r.quorum),
@@ -167,7 +167,7 @@ export function draftOf(r: Pick<DeclaredRole, "label" | "quorum" | "impact" | "c
 }
 
 // A generic picked-set editor: the picked names as removable chips, plus a
-// picker over what is left in the given catalog. The set replaces the role's
+// picker over what is left in the given catalog. The set replaces the slot's
 // accepted-types or pinned-products set wholesale on save, so this is the
 // whole set, not a delta.
 function TokenSet(p: {
@@ -263,13 +263,13 @@ function LabelSet(p: { labels: string[]; placeholder: string; removeLabel: (v: s
   );
 }
 
-// RoleDraftFields is the editable body of a role: the label, quorum, capacity,
+// SlotDraftFields is the editable body of a slot: the label, quorum, capacity,
 // and impact on one line beside the caller's action buttons, then the two
 // typed-slot sets and the position labels. Declaring and editing differ only in
 // the accessible names and the buttons.
-function RoleDraftFields(p: {
-  draft: RoleDraft;
-  onDraft: (next: RoleDraft) => void;
+function SlotDraftFields(p: {
+  draft: SlotDraft;
+  onDraft: (next: SlotDraft) => void;
   names: { display: string; quorum: string; capacity: string; impact: string };
   actions: JSX.Element;
 }): JSX.Element {
@@ -342,17 +342,17 @@ const ErrorAlert = (p: { message: string | null }): JSX.Element => (
   </Show>
 );
 
-// RoleEditForm is the open edit of one declared role: its own draft, its own
+// SlotEditForm is the open edit of one declared slot: its own draft, its own
 // error (the server's refusal, verbatim), saved in place by a PATCH on the
-// owner. onWritten refreshes whatever the host reads the roles from; onClose
+// owner. onWritten refreshes whatever the host reads the slots from; onClose
 // closes the form, on Cancel and after a successful save.
-export function RoleEditForm(p: {
-  owner: RoleOwner;
-  role: Pick<DeclaredRole, "name" | "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">;
+export function SlotEditForm(p: {
+  owner: SlotOwner;
+  slot: Pick<DeclaredSlot, "name" | "label" | "quorum" | "impact" | "capacity" | "accepted_types" | "pinned_products" | "position_labels">;
   onWritten: () => Promise<unknown>;
   onClose: () => void;
 }): JSX.Element {
-  const [draft, setDraft] = createSignal<RoleDraft>(draftOf(p.role));
+  const [draft, setDraft] = createSignal<SlotDraft>(draftOf(p.slot));
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
 
@@ -362,7 +362,7 @@ export function RoleEditForm(p: {
     if (typeof spec === "string") { setErr(spec); return; }
     setBusy(true);
     try {
-      await writeRole(p.owner, p.role.name, spec);
+      await writeSlot(p.owner, p.slot.name, spec);
       await p.onWritten();
       p.onClose();
     } catch (e) {
@@ -374,19 +374,19 @@ export function RoleEditForm(p: {
 
   return (
     <div class="flex flex-col gap-1.5">
-      <RoleDraftFields
+      <SlotDraftFields
         draft={draft()}
         onDraft={setDraft}
         names={{
-          display: `Name for ${p.role.name}`,
-          quorum: `Quorum for ${p.role.name}`,
-          capacity: `Capacity for ${p.role.name}`,
-          impact: `Impact for ${p.role.name}`,
+          display: `Name for ${p.slot.name}`,
+          quorum: `Quorum for ${p.slot.name}`,
+          capacity: `Capacity for ${p.slot.name}`,
+          impact: `Impact for ${p.slot.name}`,
         }}
         actions={
           <>
-            <Button square size="xs" intent="action" icon={Check} label={`Save ${p.role.name}`} title="Save" disabled={busy()} onClick={save} />
-            <Button square size="xs" icon={X} label="Cancel role edit" title="Cancel" onClick={p.onClose} />
+            <Button square size="xs" intent="action" icon={Check} label={`Save ${p.slot.name}`} title="Save" disabled={busy()} onClick={save} />
+            <Button square size="xs" icon={X} label="Cancel slot edit" title="Cancel" onClick={p.onClose} />
           </>
         }
       />
@@ -395,14 +395,14 @@ export function RoleEditForm(p: {
   );
 }
 
-// RoleDeclareRow is the dashed add row: name the role, then the same fields an
+// SlotDeclareRow is the dashed add row: name the slot, then the same fields an
 // edit carries. The name is operator-invented (no catalog), and a refusal (a
 // name the owner's standard already declares is a 409 on a system) reads inline
 // here and leaves the draft as typed. Its drafts live as long as it is mounted,
 // so a host that unmounts it on leaving edit mode drops them.
-export function RoleDeclareRow(p: { owner: RoleOwner; onWritten: () => Promise<unknown> }): JSX.Element {
+export function SlotDeclareRow(p: { owner: SlotOwner; onWritten: () => Promise<unknown> }): JSX.Element {
   const [name, setName] = createSignal("");
-  const [draft, setDraft] = createSignal<RoleDraft>(emptyDraft());
+  const [draft, setDraft] = createSignal<SlotDraft>(emptyDraft());
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
 
@@ -413,14 +413,14 @@ export function RoleDeclareRow(p: { owner: RoleOwner; onWritten: () => Promise<u
   }
 
   async function declare() {
-    const role = name().trim();
-    if (!role) return;
+    const slot = name().trim();
+    if (!slot) return;
     setErr(null);
     const spec = buildSpec(draft());
     if (typeof spec === "string") { setErr(spec); return; }
     setBusy(true);
     try {
-      await writeRole(p.owner, role, spec);
+      await writeSlot(p.owner, slot, spec);
       await p.onWritten();
       reset();
     } catch (e) {
@@ -434,25 +434,25 @@ export function RoleDeclareRow(p: { owner: RoleOwner; onWritten: () => Promise<u
     <div class="flex flex-col gap-1.5 rounded-box border border-dashed border-base-300 p-2.5">
       <input
         class="input input-bordered input-sm w-full font-data"
-        placeholder="Declare a role: name it, e.g. table-mic…"
-        aria-label="Role name"
+        placeholder="Declare a slot: name it, e.g. table-mic…"
+        aria-label="Slot name"
         value={name()}
         onInput={(e) => setName(e.currentTarget.value)}
       />
       <Show when={name().trim()}>
-        <RoleDraftFields
+        <SlotDraftFields
           draft={draft()}
           onDraft={setDraft}
           names={{
-            display: "Name for the new role",
-            quorum: "Quorum for the new role",
-            capacity: "Capacity for the new role",
-            impact: "Impact for the new role",
+            display: "Name for the new slot",
+            quorum: "Quorum for the new slot",
+            capacity: "Capacity for the new slot",
+            impact: "Impact for the new slot",
           }}
           actions={
             <>
-              <Button square size="xs" intent="action" icon={Plus} label="Declare role" title="Declare" disabled={busy()} onClick={declare} />
-              <Button square size="xs" icon={X} label="Cancel role declaration" title="Cancel" onClick={reset} />
+              <Button square size="xs" intent="action" icon={Plus} label="Declare slot" title="Declare" disabled={busy()} onClick={declare} />
+              <Button square size="xs" icon={X} label="Cancel slot declaration" title="Cancel" onClick={reset} />
             </>
           }
         />
@@ -462,20 +462,20 @@ export function RoleDeclareRow(p: { owner: RoleOwner; onWritten: () => Promise<u
   );
 }
 
-export default function RoleEditor(props: { id: string; official: boolean }): JSX.Element {
+export default function SlotEditor(props: { id: string; official: boolean }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
-  const owner = (): RoleOwner => ({ kind: "standard", id: props.id });
-  const key = () => standardRolesKey(props.id);
+  const owner = (): SlotOwner => ({ kind: "standard", id: props.id });
+  const key = () => standardSlotsKey(props.id);
   const q = useQuery(() => ({
     queryKey: key(),
-    queryFn: () => standardRoles(props.id),
-    // Roles are edited inline; a background window-focus refetch would rebuild the
+    queryFn: () => standardSlots(props.id),
+    // Slots are edited inline; a background window-focus refetch would rebuild the
     // list and discard an in-progress edit.
     refetchOnWindowFocus: false,
   }));
 
-  const rows = createMemo<DeclaredRole[]>(() => [...(q.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
+  const rows = createMemo<DeclaredSlot[]>(() => [...(q.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
 
   // The hosting blade's edit slot, read from the ambient context: the panel's
   // controls are edit-state affordances, rendered only while the blade is in
@@ -490,7 +490,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  // The role whose row is open for editing (one at a time).
+  // The slot whose row is open for editing (one at a time).
   const [editing, setEditing] = createSignal<string | null>(null);
 
   // Leaving blade edit mode (Save or Cancel alike) discards the open edit and
@@ -509,14 +509,14 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
 
   const refresh = () => qc.invalidateQueries({ queryKey: key() });
 
-  async function withdraw(role: string) {
-    if (!confirm(`Withdraw "${role}" from this standard? Every conforming system loses it, and its assignments with it.`)) return;
+  async function withdraw(slot: string) {
+    if (!confirm(`Withdraw "${slot}" from this standard? Every conforming system loses it, and its assignments with it.`)) return;
     setBusy(true);
     setErr(null);
     try {
-      await withdrawRole(owner(), role);
+      await withdrawSlot(owner(), slot);
       await refresh();
-      if (editing() === role) setEditing(null);
+      if (editing() === slot) setEditing(null);
     } catch (e) {
       setErr(describeError(e));
     } finally {
@@ -527,13 +527,13 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
-        <span class="eyebrow">Declared roles</span>
+        <span class="eyebrow">Declared slots</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">
-          {props.official ? "official roles, read-only" : "the standard's roles"}
+          {props.official ? "official slots, read-only" : "the standard's slots"}
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        A role is a slot every system conforming to this standard needs filled. A component may fill one only if its
+        A slot is a slot every system conforming to this standard needs filled. A component may fill one only if its
         product's type falls within an accepted type (any type, if none are named), and, if products are pinned, only
         if its product is one of them.
       </p>
@@ -546,7 +546,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       </Show>
 
       <Show when={!q.isLoading && !q.error && !rows().length}>
-        <p class="text-sm text-base-content/50">This standard declares no roles.</p>
+        <p class="text-sm text-base-content/50">This standard declares no slots.</p>
       </Show>
 
       <Show when={rows().length}>
@@ -571,7 +571,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                   </Show>
                 </div>
 
-                {/* canDeclare in the condition collapses a role left open when
+                {/* canDeclare in the condition collapses a slot left open when
                     the blade drops out of edit mode. */}
                 <Show
                   when={canDeclare() && editing() === r.name}
@@ -595,7 +595,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                     </div>
                   }
                 >
-                  <RoleEditForm owner={owner()} role={r} onWritten={refresh} onClose={() => setEditing(null)} />
+                  <SlotEditForm owner={owner()} slot={r} onWritten={refresh} onClose={() => setEditing(null)} />
                 </Show>
               </div>
             )}
@@ -604,7 +604,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       </Show>
 
       <Show when={canDeclare()}>
-        <RoleDeclareRow owner={owner()} onWritten={refresh} />
+        <SlotDeclareRow owner={owner()} onWritten={refresh} />
       </Show>
     </div>
   );

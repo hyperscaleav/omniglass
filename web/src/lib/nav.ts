@@ -165,7 +165,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   // URL redirects there, but the detail view routes (/locations/{id} and
   // friends) still resolve identity and gate here.
   { path: "/components", label: "Components", resource: "component", hint: "A component's detail view: its declared values, properties, and tags. Device endpoints are a panel on the component." },
-  { path: "/systems", label: "Systems", resource: "system", hint: "A system's detail view: its standard, roles, health, and the components that make it up." },
+  { path: "/systems", label: "Systems", resource: "system", hint: "A system's detail view: its standard, slots, health, and the components that make it up." },
   { path: "/locations", label: "Locations", resource: "location", hint: "A location's detail view: where it sits, what it holds, and the systems placed there." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },

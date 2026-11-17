@@ -170,7 +170,7 @@ layers compete with, reported by the resolve view as a declaration.
 ## Structural multi-membership (a component in N systems)
 
 Distinct from group membership. A component belongs to zero or more systems through
-[`system_member`](/architecture/core-entities/#membership-what-a-role-attaches-to), and the
+[`system_member`](/architecture/core-entities/#membership-what-a-slot-attaches-to), and the
 resolution **takes the system to resolve against**: given one, it resolves against that system, and
 only if the component is a member of it (naming a system it has no binding to must not lend it
 configuration). That is the "config differs per system" case, a **per-system effective view**

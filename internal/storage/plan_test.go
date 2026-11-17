@@ -68,9 +68,9 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	plan := func(lastProduct string) storage.Plan {
 		return storage.Plan{
 			Template: "plan-fixture",
-			Standards: []storage.StandardFromTemplate{{Template: "plan-room-template", Name: std, Label: "Plan Room", Roles: []storage.TemplateRole{
-				{SystemRoleSpec: storage.SystemRoleSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
-				{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
+			Standards: []storage.StandardFromTemplate{{Template: "plan-room-template", Name: std, Label: "Plan Room", Slots: []storage.TemplateSlot{
+				{SystemSlotSpec: storage.SystemSlotSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
+				{SystemSlotSpec: storage.SystemSlotSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
 			}}},
 			Locations: []storage.PlannedLocation{
 				{Key: "b", Location: storage.LocationSpec{Name: "plan-hq", LocationType: "building"}},
@@ -78,8 +78,8 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 			},
 			Systems: []storage.PlannedSystem{{LocationKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
 				Components: []storage.PlannedComponent{
-					{Role: "bar", Component: storage.ComponentSpec{ProductName: &bar.Name}},
-					{Role: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name},
+					{Slot: "bar", Component: storage.ComponentSpec{ProductName: &bar.Name}},
+					{Slot: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name},
 						Properties: []storage.PlannedValue{{Name: "video-input", Value: json.RawMessage(`"hdmi1"`)}}},
 				}}},
 			Components: []storage.PlannedComponent{{LocationKey: "b", Component: storage.ComponentSpec{ProductName: &lastProduct}}},
@@ -107,8 +107,8 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	if made.Locations[1].ParentID == nil || *made.Locations[1].ParentID != made.Locations[0].ID {
 		t.Fatalf("the floor's parent is %v, want the building", made.Locations[1].ParentID)
 	}
-	if got := count(`select count(*) from system_role_assignment`); got != 2 {
-		t.Fatalf("role assignments = %d, want 2", got)
+	if got := count(`select count(*) from system_slot_assignment`); got != 2 {
+		t.Fatalf("slot assignments = %d, want 2", got)
 	}
 	if got := count(`select count(*) from property where provenance = 'declared' and component_id is not null`); got != 1 {
 		t.Fatalf("declared component values = %d, want 1", got)
@@ -142,10 +142,10 @@ func TestCreatePlanChecksEveryPieceInScope(t *testing.T) {
 	sysType := "meeting"
 	std := "scoped-room"
 	plan := storage.Plan{
-		Standards: []storage.StandardFromTemplate{{Name: std, Roles: []storage.TemplateRole{{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
+		Standards: []storage.StandardFromTemplate{{Name: std, Slots: []storage.TemplateSlot{{SystemSlotSpec: storage.SystemSlotSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
 		Locations: []storage.PlannedLocation{{Key: "b", Location: storage.LocationSpec{Name: "scoped-hq", LocationType: "building"}}},
 		Systems: []storage.PlannedSystem{{LocationKey: "b", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
-			Components: []storage.PlannedComponent{{Role: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name}}}}},
+			Components: []storage.PlannedComponent{{Slot: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name}}}}},
 	}
 
 	noFork := allScopes()
@@ -169,33 +169,33 @@ func isStage(err error, stage string) bool {
 }
 
 // slotPlan is a plan for one system of n staffed slots under a building and a
-// floor, on a standard of its own with a role per slot, so the system is
-// healthy the moment its last slot is filled and impaired before. The names
-// carry tag so two plans can share a database.
+// floor, on a standard of its own, so the system is healthy the moment its
+// last slot is filled and impaired before. The names carry tag so two plans can
+// share a database.
 func slotPlan(tag string, n int, product string) storage.Plan {
 	std, sysType := tag+"-room", "meeting"
-	var roles []storage.TemplateRole
-	var slots []storage.PlannedComponent
+	var slots []storage.TemplateSlot
+	var fills []storage.PlannedComponent
 	for i := range n {
-		role := fmt.Sprintf("slot-%d", i)
-		roles = append(roles, storage.TemplateRole{SystemRoleSpec: storage.SystemRoleSpec{Name: role, AcceptedTypes: []string{"display"}}})
-		slots = append(slots, storage.PlannedComponent{Role: role, Component: storage.ComponentSpec{ProductName: &product}})
+		slot := fmt.Sprintf("slot-%d", i)
+		slots = append(slots, storage.TemplateSlot{SystemSlotSpec: storage.SystemSlotSpec{Name: slot, AcceptedTypes: []string{"display"}}})
+		fills = append(fills, storage.PlannedComponent{Slot: slot, Component: storage.ComponentSpec{ProductName: &product}})
 	}
 	return storage.Plan{
 		Template:  tag + "-template",
-		Standards: []storage.StandardFromTemplate{{Template: tag + "-room-template", Name: std, Label: tag, Roles: roles}},
+		Standards: []storage.StandardFromTemplate{{Template: tag + "-room-template", Name: std, Label: tag, Slots: slots}},
 		Locations: []storage.PlannedLocation{
 			{Key: "b", Location: storage.LocationSpec{Name: tag + "-hq", LocationType: "building"}},
 			{Key: "f", ParentKey: "b", Location: storage.LocationSpec{Name: tag + "-f1", LocationType: "floor"}},
 		},
-		Systems: []storage.PlannedSystem{{LocationKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std}, Components: slots}},
+		Systems: []storage.PlannedSystem{{LocationKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std}, Components: fills}},
 	}
 }
 
 // TestCreatePlanRecordsOneHealthEdgePerOwner: a plan's system, staffed slot by
 // slot inside one transaction, records its final verdict once, and so does
 // each location above it. The intermediate impaired state (the system born
-// with every role empty, then each slot filled) is an edge no reader could
+// with every slot empty, then each slot filled) is an edge no reader could
 // have observed, because the write is atomic; recording it put a phantom
 // outage in every composite's history (#915).
 func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {

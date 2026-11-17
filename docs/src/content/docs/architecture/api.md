@@ -30,7 +30,7 @@ and owns no log line, refused a named instance or a log line with a 422, every n
 name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
 [ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type catalogs, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
-role declaration, resolution, and staffing routes, and the component alarm plus system and location
+slot declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
 the same document. The outpost `:enroll` and `:claim` custom methods are the
 first `:verb` routes in the wild. See [implementation status](/architecture/status/).
@@ -258,8 +258,8 @@ a shape implemented twice eventually disagrees, and here the wrong answer would 
 was promised that no create produces. It is a fact about the RULE and not the fleet, so it costs no
 read, reserves no ordinal, and needs no scope.
 
-Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
-/systems/{name}/roles/{role}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
+Built on the slot declarations (`PATCH /standards/{id}/slots/{slot}`, `PATCH
+/systems/{name}/slots/{slot}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
 accept no mask yet, and they do not need one to stay correct: an absent mask is the implied mask,
 which is exactly what they already do.
 
@@ -447,12 +447,12 @@ and `endpoint:create`, each in the caller's own scope) adds a simulated componen
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
 simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
-(gated `simulation:read`) previews each of the standard's roles staffed with a simulated product that fits
+(gated `simulation:read`) previews each of the standard's slots staffed with a simulated product that fits
 (or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
 `outpost:read`, plus `location:read` when it names a location) creates the system, a
-simulated component per staffed role at its own free address with its endpoint on the outpost, and each
-role assignment, in one transaction: it lands whole or not at all.
+simulated component per staffed slot at its own free address with its endpoint on the outpost, and each
+slot assignment, in one transaction: it lands whole or not at all.
 
 **Alarms are raised by rules and graded by a level catalog.** `/severity-levels` (read with
 `severity_level:read` on any grant, written with `severity_level:*` only on an all-scope grant, since a
@@ -808,9 +808,9 @@ kind. `GET /templates` lists what this binary ships, ordered by kind then name, 
 value is a 422); `GET /templates/{template}` reads one whole by name, a 404 when the catalog does not
 hold it. Both are gated `template:read`, which the viewer's `*:read` floor carries, with no scope to
 inject since a template has no owner. The body is the template's own: a kind, a name, a label, a
-description, and the one body its kind names (a standard template's roles, choices, contract lines and
+description, and the one body its kind names (a standard template's slots, choices, contract lines and
 map; a component template's product, attach preset and declared values; a system template's standard
-and role fills; a location template's subtree).
+and slot fills; a location template's subtree).
 
 One custom method, **`:createFromTemplate`**, creates from a template on each of the four
 collections a template creates in: a custom method names what differs from Create, and here the
@@ -820,7 +820,7 @@ permissions its pieces need checked up front (a 403 naming the one missing):
 - **`POST /standards:createFromTemplate`** (`standard:create`): the body names the `template` and
   optionally the `name` (the template's by default), the `label`, and for a variant the `parent` to
   hang it off (the caller's standard named for the template's parent by default). The standard, its
-  choices, roles, contract lines and map land in one transaction, and the answer is the standard as its
+  choices, slots, contract lines and map land in one transaction, and the answer is the standard as its
   `GET` reads it (201). A taken name is a 409, a variant whose parent the caller does not hold is a 422
   naming the template to create from first, a template the catalog does not hold (or one of another
   kind) is a 404, and a template naming a row the fleet's catalogs lack is a 422. The boot seed plants
@@ -831,7 +831,7 @@ permissions its pieces need checked up front (a 403 naming the one missing):
 - **`POST /systems:createFromTemplate`** (`system:create`; plus `system:read`, `system:update`,
   `component:create`, `component:update`, `endpoint:create` to attach, and `standard:create` when the
   template's standard is created from its template): a `location`, optionally `name`, `label`, a
-  `standard` to build to, and `attach` (driver inputs per role, one object per component) with a
+  `standard` to build to, and `attach` (driver inputs per slot, one object per component) with a
   `outpost`.
 - **`POST /locations:createFromTemplate`** (`location:create`; plus the system permissions when the
   subtree carries systems): a `parent`, and optionally the root's `name` and `label`.
@@ -854,7 +854,7 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   product's signals, with an optional `version`.
 - A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class genus a product is
   classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a
-  [system role's typed-slot guard](#roles-a-system-declares-a-slot-a-component-fills-it) accepts.
+  [system slot's type guard](#system-slots-a-system-declares-one-a-component-fills-it) accepts.
 - A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
   concrete **SKU** that ties the leaf catalogs together and the target of `component.product_id`: a
   vendor, a driver, a `kind` of `device` / `app` / `service` / `vm` (default `device`, a 422
@@ -972,62 +972,62 @@ sample (`instance_count`), and, when there is more than one, lists each one's la
 (`instances`, newest first, each marked `endpoint` when it names an endpoint the owner has), a deleted endpoint's frozen reading left out of all three
 ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance), #1020).
 
-## Roles: a system declares a slot, a component fills it
+## System slots: a system declares one, a component fills it
 
-A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** is a slot a
+A **[system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)** is a place a
 system needs filled, in three arcs: **declaration** (what a standard says every conforming system
 needs, and what one system declares ad-hoc), **resolution** (the per-system read merging both with who
-fills each role today), and **staffing** (assign and unassign). It is **not** the
+fills each slot today), and **staffing** (assign and unassign). It is **not** the
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the fleet model.
 
-A role is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
+A slot is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
 revises in place. The body is `{update_mask?, label?, quorum?, capacity?, position_labels?,
 accepted_types?, pinned_products?, impact?, alternate?}`, patched under the
 [write mask](#partial-responses-field-masks): the fields the body populates change and the rest of
 the declaration is left alone, and `update_mask` names the fields that change whether the body
 populates them or not. `accepted_types`, `pinned_products` and `position_labels` each **replace**
 their set wholesale when written, so clearing one means naming it in `update_mask` (an empty list is
-not a populated field, so on its own it means unchanged). `capacity` is the most components the role
+not a populated field, so on its own it means unchanged). `capacity` is the most components the slot
 will accept (at least `quorum`), unbounded on first declare, and naming `capacity` in `update_mask`
 with no value is what clears it back to unbounded. `impact` is `outage` / `degraded` / `none`
-(`degraded` on first declare), what an impaired role does to its system's
+(`degraded` on first declare), what an impaired slot does to its system's
 [health](#health-the-verdict-and-why); an unknown impact is a 422. `alternate` is the
-`choice-name/alternate-name` this role joins, an empty string detaching it; every role read returns it
+`choice-name/alternate-name` this slot joins, an empty string detaching it; every slot read returns it
 in the same form. Gating follows the owner:
 
-- `GET /standards/{id}/roles` plus `PATCH` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
-  `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
-  cascade); a role the standard does not declare is a 404. A standard that does not exist is a 422 on
-  the declaration and writes nothing (`system_role_owner_arc_check` makes an ownerless role
+- `GET /standards/{id}/slots` plus `PATCH` / `DELETE /standards/{id}/slots/{slot}`, gated `standard:read` /
+  `:update` / `:delete`. Withdrawing a slot takes every assignment conforming systems made to it (a
+  cascade); a slot the standard does not declare is a 404. A standard that does not exist is a 422 on
+  the declaration and writes nothing (`system_slot_owner_arc_check` makes an ownerless slot
   unrepresentable), and a 404 on the read, never an empty list
   ([#505](https://github.com/hyperscaleav/omniglass/issues/505)).
-- `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
-  one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
+- `PATCH` / `DELETE /systems/{name}/slots/{slot}`, gated `system:update`, for a slot declared **directly on
+  one system**. A slot the system does not declare **itself** is a 404 here: an inherited slot is
   withdrawn on the standard.
-- A role name means **one role in a system**, so every write that would give a system two of one name
-  is a 409 naming the role, the standard and the system: a system declaring a name its standard
+- A slot name means **one slot in a system**, so every write that would give a system two of one name
+  is a 409 naming the slot, the standard and the system: a system declaring a name its standard
   declares, a standard declaring a name a conforming system declares itself, and `PATCH
   /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
   write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
   ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 - `PATCH /systems/{name}` moving a system's `standard` carries its staffing in the same transaction:
-  each occupant of an inherited role moves onto the new standard's role of the same name when it is
-  still a typed match and the role has room, and is released (a member with no role) otherwise. A
+  each occupant of an inherited slot moves onto the new standard's slot of the same name when it is
+  still a typed match and the slot has room, and is released (a member with no slot) otherwise. A
   staffing write on that system waits for the change and resolves against the new standard
   ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
-- `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
+- `GET /systems/{name}/slots` is the **resolved read**, gated `system:read`: the declaration
   (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based
   position, index for index with `assigned_to`; not assumed dense, since an unassign leaves a gap
   rather than compacting), `assigned`, and **`understaffed`** (how many more before quorum), the
-  counts **served, not computed by the client**. A one-off system returns only its own roles.
-- `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
-  idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
-  `system:update` and also need `component:update`, since staffing a role makes the component a
+  counts **served, not computed by the client**. A one-off system returns only its own slots.
+- `PUT /systems/{name}/slots/{slot}/assignments/{component}` puts a component in the slot (204,
+  idempotent); `DELETE` takes it out (204; a component not filling the slot is a 404). Both gate on
+  `system:update` and also need `component:update`, since staffing a slot makes the component a
   member and writes onto it: the component resolves in `component:read` and must be inside
   `component:update` (an occupant being unassigned needs only the latter, refused with a 403)
   ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
-- `POST /systems/{name}/roles/{role}:swapPositions` exchanges two occupants' positions, from
+- `POST /systems/{name}/slots/{slot}:swapPositions` exchanges two occupants' positions, from
   `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
   position is an ordering attribute of an assignment, not a second address for one, and there is no
   "move to index N" route.
@@ -1037,29 +1037,29 @@ out-of-scope system is a **non-disclosing 404** on read and write alike, and eve
 audited in the same transaction.
 
 **A refusal names both parties, and its status follows what it depends on.** A component fills a
-slot only when its product's `component_type` falls within a type the role's `accepted_types` names
-(self or a descendant, any type if empty), and, if the role pins products, only when its product is
+slot only when its product's `component_type` falls within a type the slot's `accepted_types` names
+(self or a descendant, any type if empty), and, if the slot pins products, only when its product is
 one of them:
 
 ```
-component "panel-1" is a display; role "table-mic" wants a video-bar
+component "panel-1" is a display; slot "table-mic" wants a video-bar
 ```
 
 That guard, and a bad declaration (an unknown type, product, or impact), are **422**: the request is
 invalid on its own, regardless of anything else in the fleet. A component already staffing a
-**different** role in the same system, or an assignment a role's declared `capacity` cannot hold, are
+**different** slot in the same system, or an assignment a slot's declared `capacity` cannot hold, are
 **409** instead:
 
 ```
-component "bar-1" already fills "main-display" in "boardroom-a"; a component fills at most one role per system
+component "bar-1" already fills "main-display" in "boardroom-a"; a component fills at most one slot per system
 ```
 
-the request is fine in isolation, it conflicts with other rows (a component fills at most one role
+the request is fine in isolation, it conflicts with other rows (a component fills at most one slot
 per system; lowering a capacity below the count already assigned is refused the same way, naming
 the worst-exceeding conforming system the caller can read, or none when it can read none of them).
 Both are
 the **semantic**-refusal case in the [status table](#errors-one-problemjson-envelope), not an
-authorization one: the message tells the operator the next move. Around it: an unknown role is a
+authorization one: the message tells the operator the next move. Around it: an unknown slot is a
 **404**, and an unknown (or out-of-scope) system or component the same non-disclosing **404**. The
 guard runs once, at assignment; afterward an occupant keeps its slot unless its own
 [health](#health-the-verdict-and-why) verdict goes to outage (a lesser alarm degrades it but does not
@@ -1070,8 +1070,8 @@ cost it the slot).
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
 component-local, reaching a room only through the component's own verdict. Only an alarm at or above `high`
-takes that verdict to outage and impairs every role the component occupies while it is active; an
-`info` or `warning` alarm degrades the component but leaves it occupying its roles.
+takes that verdict to outage and impairs every slot the component occupies while it is active; an
+`info` or `warning` alarm degrades the component but leaves it occupying its slots.
 
 An alarm hangs off its component and rides that component's gating:
 
@@ -1147,12 +1147,12 @@ principal directory's readers.
 The reports are one shape over two owners:
 
 - `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `incomplete` /
-  `degraded` / `outage`, in rank order, where `incomplete` is a role short because its hardware was
+  `degraded` / `outage`, in rank order, where `incomplete` is a slot short because its hardware was
   never installed rather than because installed hardware is failing)
-  plus `roles`: every role the system needs filled, where `satisfying` counts the assigned
+  plus `slots`: every slot the system needs filled, where `satisfying` counts the assigned
   components currently occupying it (their own verdict is not outage; a degraded one still counts),
   `down` names the **assigned** components whose own verdict is outage, and `alarms` the active
-  alarms on those. An impaired role with an **empty** `down` is **short-staffed**, not broken, a
+  alarms on those. An impaired slot with an **empty** `down` is **short-staffed**, not broken, a
   different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.

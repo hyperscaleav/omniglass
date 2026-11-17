@@ -4,7 +4,7 @@ import Button from "./Button";
 import BladeField from "./BladeField";
 import LabelPenField, { seedLabelPen } from "./LabelPenField";
 import TagAdder from "./TagAdder";
-import RolesPanel from "./RolesPanel";
+import SlotsPanel from "./SlotsPanel";
 import PropertiesPanel, { ownerPropertyBladeId, propertyBladeId } from "./PropertiesPanel";
 import ReconciliationPanel from "./ReconciliationPanel";
 import ResolutionPanel from "./ResolutionPanel";
@@ -52,7 +52,7 @@ import { pathTo, type TreeNode } from "../lib/treeselect";
 // rename LAST (it alone can 409 past the advisory precheck; last means a
 // refusal leaves the rest saved), the invalidation in a finally.
 //
-// The kind panels (roles, properties, reconciliation, reachability, alarms)
+// The kind panels (slots, properties, reconciliation, reachability, alarms)
 // wire their drills through the ambient blade stack (useBlades), so any host
 // that provides one renders them; fleetRegistry carries the blades they push.
 
@@ -360,7 +360,7 @@ export default function EntityForm(props: {
     if (props.kind === "system") {
       return (
         <>
-          <RolesPanel system={id} canUpdate={slot.editing() && canUpdate()} />
+          <SlotsPanel system={id} canUpdate={slot.editing() && canUpdate()} />
           <ReconciliationPanel system={id} />
           <PropertiesPanel system={id} edit={slot} onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id }, property) })} />
         </>
@@ -510,7 +510,7 @@ export default function EntityForm(props: {
           </div>
         </Show>
 
-        {/* The kind's panels are configuration (roles, properties and their
+        {/* The kind's panels are configuration (slots, properties and their
             cascade, reconciliation, endpoints): the page host's Configure tab
             carries them, and the blade stays the glance an operator landed on
             from a row (#872). */}

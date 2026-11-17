@@ -50,15 +50,15 @@ template's job either: that is the driver's spec
 A template is one of four kinds, each naming what it creates:
 
 - **A standard template**: a [standard](/architecture/core-entities/)'s attributes, its
-  [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (accepted
+  [system slots](/architecture/core-entities/#system-slots-what-a-system-needs-filled) (accepted
   types, pinned products, quorum, capacity, choices), and its property and metric contract lines.
-  Creating a standard from one scaffolds the contract and the roles in the same write, which answers what a template
+  Creating a standard from one scaffolds the contract and the slots in the same write, which answers what a template
   carries: everything the standard declares, so "start from a meeting room" yields the slots the
   space needs filled, not only a name.
 - **A component template**: a product, a driver attach preset (every driver input except the address,
   secret inputs as references), and declared property values.
 - **A system template**: a standard (a standard template by name, or an existing standard), a
-  component template or a product per role, and declared system property values.
+  component template or a product per slot, and declared system property values.
 - **A location template**: a nested tree of locations, each naming a location type, an optional label, and
   optional nested locations and system templates.
 
@@ -74,7 +74,7 @@ parent's allowance, and no wording or logic keyed on any particular type.
 **Authored as kind-tagged YAML in the repo and `go:embed`ed into the binary** (an `internal/template`
 package), exactly like the seed files; the difference is the loader. A **seed** inserts rows unasked; a
 **template** inserts nothing. The loader exposes a read-only catalog, validated against the template
-schema at load (an unknown field, a role naming half a choice, a system template leaving a role
+schema at load (an unknown field, a slot naming half a choice, a system template leaving a slot
 unfilled or answering a choice two ways, a component preset setting the address are all refused,
 naming the template), and never writes a row: a template addressable as a row, or inserted wholesale,
 would become shipped data carrying every update-versus-local-edit problem the model exists to avoid.
@@ -114,7 +114,7 @@ row, in **one transaction**. A refused piece is answered as its own route answer
 lands.
 
 - **`POST /standards:createFromTemplate`** (`standard:create`): one operator-owned standard
-  (`official: false`) with the template's roles, choices, property and metric contract lines and map,
+  (`official: false`) with the template's slots, choices, property and metric contract lines and map,
   under a name the operator chooses (the template's by default). A taken name is a 409. A variant is
   created only once the operator holds the standard it hangs off (one they name, or theirs named for
   the template's parent), otherwise a 422 names the template to create from first. Editing the
@@ -133,11 +133,11 @@ lands.
   the standard the caller names, else the template's own: the caller's standard of that name when they
   hold one, otherwise created from its standard template in the same write, with every ancestor of a
   variant the fleet does not hold, parents first (which needs `standard:create`). A component is
-  created for each role, filled to its quorum with the product the template names, and assigned, so the
-  system's staffing reads complete. A role given an address in `attach` (one object per component of
-  the role) lands attached; the rest land unattached and are listed in `to_attach`. A standard the
-  template cannot staff (a fill whose product is not a type its role accepts, or a role it does not
-  fill) is a 422 naming the roles.
+  created for each slot, filled to its quorum with the product the template names, and assigned, so the
+  system's staffing reads complete. A slot given an address in `attach` (one object per component of
+  the slot) lands attached; the rest land unattached and are listed in `to_attach`. A standard the
+  template cannot staff (a fill whose product is not a type its slot accepts, or a slot it does not
+  fill) is a 422 naming the slots.
 - **`POST /locations:createFromTemplate`** (`location:create`, and the system permissions above when
   the subtree carries systems): a subtree of locations from a location template under a parent location, or as
   a new top. Each location's type must be one the fleet holds and must allow its parent's type, read from
@@ -159,7 +159,7 @@ leaves every row created from it reading identically.
 ## In the console
 
 **Catalog > Templates** lists the catalog by kind; each template's blade renders what it creates from
-the template itself (a standard's roles and choices, a system's role fills, a location subtree with its
+the template itself (a standard's slots and choices, a system's slot fills, a location subtree with its
 systems, a component's preset), and **Start from this template** opens the form that calls the
 matching route. The standard, system, location and component create flows each carry **Start from a
 template**, and the row a template created opens with a notice that it is the operator's own and
@@ -169,11 +169,11 @@ nothing follows the template. The walk-through is the
 ## One primitive lands a plan
 
 The simulator's "add a simulated system" and the creates from a template share one primitive in two
-halves. The pure planner (`internal/systemplan`) staffs a standard's roles from each role's candidate
-products: the products the simulator serves, or the one product a template names for the role. It
-fills each role to its quorum (capped by its capacity) and takes one alternate per choice. The planned
+halves. The pure planner (`internal/systemplan`) staffs a standard's slots from each slot's candidate
+products: the products the simulator serves, or the one product a template names for the slot. It
+fills each slot to its quorum (capped by its capacity) and takes one alternate per choice. The planned
 create (`storage.CreatePlan`) then lands the standards to create from their templates, the locations parents first, each system
-with its components, their endpoints, declared values and role assignments, and any standalone
+with its components, their endpoints, declared values and slot assignments, and any standalone
 components, in one transaction.
 
 ## Why this dissolves the shipped-defaults problem

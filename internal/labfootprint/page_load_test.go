@@ -23,7 +23,7 @@ func TestSummarizePage(t *testing.T) {
 	got := SummarizePage(PageRun{Clients: 4, Loads: []PageLoad{
 		{Took: 10 * time.Millisecond, Bytes: 1000},
 		{Took: 30 * time.Millisecond, Bytes: 3000},
-		{Took: 5 * time.Second, Bytes: 10, Err: errors.New("GET /api/v1/systems/x/roles: 503 Service Unavailable")},
+		{Took: 5 * time.Second, Bytes: 10, Err: errors.New("GET /api/v1/systems/x/slots: 503 Service Unavailable")},
 		{Took: 20 * time.Millisecond, Bytes: 2000},
 	}})
 	if got == nil {
@@ -132,10 +132,10 @@ func TestLoadSystemPage(t *testing.T) {
 
 // One non-2xx read fails the whole load, naming the read.
 func TestLoadSystemPageFailsOnANon2xx(t *testing.T) {
-	srv, _ := pageServer(t, "/api/v1/systems/sys-1/roles")
+	srv, _ := pageServer(t, "/api/v1/systems/sys-1/slots")
 	h := &harness{http: srv.Client(), env: map[string]string{"LAB_TOKEN": "tok"}}
 	got := h.loadSystemPage(context.Background(), srv.URL, "sys-1")
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "/systems/sys-1/roles") || !strings.Contains(got.Err.Error(), "503") {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "/systems/sys-1/slots") || !strings.Contains(got.Err.Error(), "503") {
 		t.Errorf("a load with a 503 read: err = %v, want the read and its status", got.Err)
 	}
 }

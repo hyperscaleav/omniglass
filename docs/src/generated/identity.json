@@ -395,12 +395,6 @@
       "labelled": true
     },
     {
-      "table": "role_choice",
-      "shape": "key-bearing",
-      "proved_elsewhere": "seeded only, no create path on the gateway",
-      "labelled": true
-    },
-    {
       "table": "secret",
       "shape": "key-bearing",
       "labelled": true
@@ -435,6 +429,12 @@
       "labelled": false
     },
     {
+      "table": "slot_choice",
+      "shape": "key-bearing",
+      "proved_elsewhere": "seeded only, no create path on the gateway",
+      "labelled": true
+    },
+    {
       "table": "standard",
       "shape": "key-bearing",
       "labelled": true
@@ -460,22 +460,22 @@
       "labelled": false
     },
     {
-      "table": "system_role",
+      "table": "system_slot",
       "shape": "key-bearing",
       "labelled": true
     },
     {
-      "table": "system_role_assignment",
+      "table": "system_slot_assignment",
       "shape": "id only",
       "labelled": false
     },
     {
-      "table": "system_role_product",
+      "table": "system_slot_product",
       "shape": "id only",
       "labelled": false
     },
     {
-      "table": "system_role_type",
+      "table": "system_slot_type",
       "shape": "id only",
       "labelled": false
     },

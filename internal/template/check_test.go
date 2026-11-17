@@ -51,7 +51,7 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
     name: odd-standard
     label: Odd
     standard:
-      roles: [{ name: a, label: A, accepted_types: [hologram] }]
+      slots: [{ name: a, label: A, accepted_types: [hologram] }]
       metrics: [{ name: no-such-metric }]
   - kind: component_template
     name: odd-values
@@ -63,11 +63,11 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
   - kind: standard_template
     name: display-only
     label: Display only
-    standard: { roles: [{ name: panel, label: Panel, accepted_types: [display] }] }
+    standard: { slots: [{ name: panel, label: Panel, accepted_types: [display] }] }
   - kind: system_template
     name: odd-fill
     label: Odd
-    system: { standard: display-only, roles: { panel: { product: boreal-cast-m1 } } }
+    system: { standard: display-only, slots: { panel: { product: boreal-cast-m1 } } }
   - kind: location_template
     name: odd-places
     label: Odd
@@ -84,13 +84,13 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
 	for _, want := range []string{
 		`component_template gone-display: names product "withdrawn-panel"`,
 		`component_template odd-preset: presets input "baud", which driver "boreal-edge-snmp" does not declare`,
-		`standard_template odd-standard: role a accepts component type "hologram"`,
+		`standard_template odd-standard: slot a accepts component type "hologram"`,
 		`standard_template odd-standard: declares metric "no-such-metric"`,
 		`location_template odd-places: places a campus under a floor`,
 		`component_template odd-values: presets input "port" as "four-four-three", which is not a number`,
 		`component_template odd-values: presets input tls-mode`,
 		`component_template odd-values: declares 42 for property "power-state"`,
-		`system_template odd-fill: role panel fills with product "boreal-cast-m1": a media-player`,
+		`system_template odd-fill: slot panel fills with product "boreal-cast-m1": a media-player`,
 		`location_template odd-places: names location type "annex"`,
 	} {
 		if !strings.Contains(all, want) {

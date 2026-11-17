@@ -11,7 +11,7 @@ import (
 
 // A standard created from a template (#827, ADR-0827): a standard written whole from a
 // template, in one transaction. What it writes is an ordinary operator-owned
-// standard (official false) with its choices, roles, contract lines and map,
+// standard (official false) with its choices, slots, contract lines and map,
 // exactly what the standard's own routes would write piece by piece, and
 // nothing that points back at the template: the template's name is recorded
 // in the one audit row and nowhere else, so a release can rewrite the
@@ -23,7 +23,7 @@ import (
 var ErrTemplateParentMissing = errors.New("storage: the standard a variant hangs off does not exist")
 
 // StandardFromTemplate is a whole standard to write. It names everything by value
-// (types, products, properties and metrics by name, a role's alternate by
+// (types, products, properties and metrics by name, a slot's alternate by
 // choice and alternate name), so the caller resolves nothing.
 type StandardFromTemplate struct {
 	// Template is the template this standard is created from, recorded in the audit
@@ -34,18 +34,18 @@ type StandardFromTemplate struct {
 	// Parent is the standard a variant hangs off, by name or uuid; empty for
 	// none. It must exist (ErrTemplateParentMissing).
 	Parent     string
-	Choices    []RoleChoiceSpec
-	Roles      []TemplateRole
+	Choices    []SlotChoiceSpec
+	Slots      []TemplateSlot
 	Properties []StandardPropertySpec
 	Metrics    []StandardMetricSpec
 	// Map is the layout declaration, nil for none.
 	Map json.RawMessage
 }
 
-// TemplateRole is one role of a standard created from a template. Choice and Alternate name the alternate a
-// role joins, both or neither; the spec's AlternateID is ignored.
-type TemplateRole struct {
-	SystemRoleSpec
+// TemplateSlot is one slot of a standard created from a template. Choice and Alternate name the alternate a
+// slot joins, both or neither; the spec's AlternateID is ignored.
+type TemplateSlot struct {
+	SystemSlotSpec
 	Choice    string
 	Alternate string
 }
@@ -56,16 +56,16 @@ type standardFromTemplateAudit struct {
 	*Standard
 	Template   string   `json:"from_template"`
 	Choices    []string `json:"choices,omitempty"`
-	Roles      []string `json:"roles"`
+	Slots      []string `json:"slots"`
 	Properties []string `json:"properties,omitempty"`
 	Metrics    []string `json:"metrics,omitempty"`
 }
 
 // CreateStandardFromTemplate writes f as one standard, audited once as a create carrying from_template, the
 // template. Refusals: an illegal name is the name rule's error; a taken name
-// is ErrTypeExists; a missing parent is ErrTemplateParentMissing; a role, type,
+// is ErrTypeExists; a missing parent is ErrTemplateParentMissing; a slot, type,
 // product, property or metric that does not resolve is the error its own
-// route would give (ErrRoleRefNotFound, ErrPropertyTypeNotFound,
+// route would give (ErrSlotRefNotFound, ErrPropertyTypeNotFound,
 // ErrMetricTypeNotFound); an invalid map is ErrStandardMapInvalid. Nothing
 // lands on a refusal.
 func (p *PG) CreateStandardFromTemplate(ctx context.Context, actorID string, f StandardFromTemplate) (*Standard, error) {
@@ -94,10 +94,10 @@ func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorI
 	if err := validateStandardMap(f.Map); err != nil {
 		return nil, err
 	}
-	// First, before any other lock: see roleNameLockKey. The roles below are
+	// First, before any other lock: see slotNameLockKey. The slots below are
 	// written on a standard no system conforms to yet, so no name can
-	// collide, but the lock order is every role write's.
-	if err := lockRoleNames(ctx, tx); err != nil {
+	// collide, but the lock order is every slot write's.
+	if err := lockSlotNames(ctx, tx); err != nil {
 		return nil, err
 	}
 
@@ -126,7 +126,7 @@ func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorI
 		return nil, mapStandardWriteErr(err)
 	}
 
-	audit := standardFromTemplateAudit{Standard: created, Template: f.Template, Roles: []string{}}
+	audit := standardFromTemplateAudit{Standard: created, Template: f.Template, Slots: []string{}}
 	alts := map[string]string{}
 	for _, c := range f.Choices {
 		ids, err := templateChoice(ctx, tx, created.ID, c)
@@ -138,11 +138,11 @@ func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorI
 		}
 		audit.Choices = append(audit.Choices, c.Name)
 	}
-	for _, r := range f.Roles {
-		if err := templateRole(ctx, tx, created.ID, r, alts); err != nil {
+	for _, r := range f.Slots {
+		if err := templateSlot(ctx, tx, created.ID, r, alts); err != nil {
 			return nil, err
 		}
-		audit.Roles = append(audit.Roles, r.Name)
+		audit.Slots = append(audit.Slots, r.Name)
 	}
 	for _, l := range f.Properties {
 		if _, err := upsertStandardPropertyRow(ctx, tx, created.ID, l); err != nil {
@@ -164,16 +164,16 @@ func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorI
 
 // templateChoice writes one choice and its alternates on a fresh standard,
 // positions in declaration order, and returns the alternate ids by name.
-func templateChoice(ctx context.Context, tx pgx.Tx, standardID string, c RoleChoiceSpec) (map[string]string, error) {
-	if err := ValidateName("role_choice", c.Name); err != nil {
+func templateChoice(ctx context.Context, tx pgx.Tx, standardID string, c SlotChoiceSpec) (map[string]string, error) {
+	if err := ValidateName("slot_choice", c.Name); err != nil {
 		return nil, err
 	}
 	var choiceID string
 	if err := tx.QueryRow(ctx, `
-		insert into role_choice (owner_kind, standard_id, name, label)
+		insert into slot_choice (owner_kind, standard_id, name, label)
 		values ('standard', $1, $2, $3) returning id`,
 		standardID, c.Name, labelOrNull(c.Label)).Scan(&choiceID); err != nil {
-		return nil, mapRoleWriteErr(err)
+		return nil, mapSlotWriteErr(err)
 	}
 	out := make(map[string]string, len(c.Alternates))
 	for i, a := range c.Alternates {
@@ -184,34 +184,34 @@ func templateChoice(ctx context.Context, tx pgx.Tx, standardID string, c RoleCho
 		if err := tx.QueryRow(ctx, `
 			insert into choice_alternate (choice_id, owner_kind, standard_id, system_id, name, label, position)
 			select rc.id, rc.owner_kind, rc.standard_id, rc.system_id, $2, $3, $4
-			from role_choice rc where rc.id = $1
+			from slot_choice rc where rc.id = $1
 			returning id`, choiceID, a.Name, labelOrNull(a.Label), i+1).Scan(&id); err != nil {
-			return nil, mapRoleWriteErr(err)
+			return nil, mapSlotWriteErr(err)
 		}
 		out[a.Name] = id
 	}
 	return out, nil
 }
 
-// templateRole writes one role and its typed slot on a fresh standard. A type or
-// product the catalogs lack is ErrRoleRefNotFound, as SetSystemRole gives.
-func templateRole(ctx context.Context, tx pgx.Tx, standardID string, r TemplateRole, alts map[string]string) error {
-	if err := ValidateName("system_role", r.Name); err != nil {
+// templateSlot writes one slot and its typed slot on a fresh standard. A type or
+// product the catalogs lack is ErrSlotRefNotFound, as SetSystemSlot gives.
+func templateSlot(ctx context.Context, tx pgx.Tx, standardID string, r TemplateSlot, alts map[string]string) error {
+	if err := ValidateName("system_slot", r.Name); err != nil {
 		return err
 	}
 	impact := r.Impact
 	if impact == "" {
 		impact = "degraded"
 	}
-	if !roleImpacts[impact] {
-		return ErrRoleImpact
+	if !slotImpacts[impact] {
+		return ErrSlotImpact
 	}
 	var altID string
 	if r.Choice != "" || r.Alternate != "" {
 		altID = alts[r.Choice+"/"+r.Alternate]
 		if altID == "" {
-			return fmt.Errorf("%w: role %s names choice/alternate %s/%s, which the template does not declare",
-				ErrRoleRefNotFound, r.Name, r.Choice, r.Alternate)
+			return fmt.Errorf("%w: slot %s names choice/alternate %s/%s, which the template does not declare",
+				ErrSlotRefNotFound, r.Name, r.Choice, r.Alternate)
 		}
 	}
 	label := r.Label
@@ -220,11 +220,11 @@ func templateRole(ctx context.Context, tx pgx.Tx, standardID string, r TemplateR
 	}
 	var id string
 	if err := tx.QueryRow(ctx, `
-		insert into system_role (owner_kind, standard_id, name, label, quorum, capacity, position_labels, impact, alternate_id)
+		insert into system_slot (owner_kind, standard_id, name, label, quorum, capacity, position_labels, impact, alternate_id)
 		values ('standard', $1, $2, $3, $4, $5, $6, $7, nullif($8, '')::uuid)
 		returning id`,
 		standardID, r.Name, label, max(r.Quorum, 1), r.Capacity, normalizePositionLabels(r.PositionLabels), impact, altID).Scan(&id); err != nil {
-		return mapRoleWriteErr(err)
+		return mapSlotWriteErr(err)
 	}
-	return insertSeededSlot(ctx, tx, id, r.AcceptedTypes, r.PinnedProducts)
+	return insertSeededGuard(ctx, tx, id, r.AcceptedTypes, r.PinnedProducts)
 }

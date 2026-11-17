@@ -254,9 +254,9 @@ func TestResolveComponentsFollowTheManifest(t *testing.T) {
 	}
 }
 
-// A role's quorum is how many of its product each system takes, through the
+// A slot's quorum is how many of its product each system takes, through the
 // shared system planner.
-func TestResolveStaffsARoleToItsQuorum(t *testing.T) {
+func TestResolveStaffsASlotToItsQuorum(t *testing.T) {
 	m, err := Parse("t.yaml", []byte(`name: t
 standards:
   - name: room
@@ -278,34 +278,34 @@ standards:
 	}
 }
 
-// A system's Roles say which product fills which role and how many, and sum to
+// A system's Slots say which product fills which slot and how many, and sum to
 // the same components its Components count by product, so a seed can staff a
 // planned system without going back to the manifest.
-func TestResolveKeepsEachSystemsRoleFills(t *testing.T) {
+func TestResolveKeepsEachSystemsSlotFills(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range p.allSystems() {
-		if len(s.Roles) == 0 {
-			t.Fatalf("system %s has no role fills", s.Name)
+		if len(s.Slots) == 0 {
+			t.Fatalf("system %s has no slot fills", s.Name)
 		}
 		byProduct := map[string]int{}
-		for _, f := range s.Roles {
-			if f.Role == "" || f.Product == "" || f.Count < 1 {
-				t.Fatalf("system %s has an incomplete role fill %+v", s.Name, f)
+		for _, f := range s.Slots {
+			if f.Slot == "" || f.Product == "" || f.Count < 1 {
+				t.Fatalf("system %s has an incomplete slot fill %+v", s.Name, f)
 			}
 			byProduct[f.Product] += f.Count
 		}
 		for _, c := range s.Components {
 			if byProduct[c.Name] != c.Count {
-				t.Fatalf("system %s: roles fill %d %s, components count %d", s.Name, byProduct[c.Name], c.Name, c.Count)
+				t.Fatalf("system %s: slots fill %d %s, components count %d", s.Name, byProduct[c.Name], c.Name, c.Count)
 			}
 			delete(byProduct, c.Name)
 		}
 		if len(byProduct) != 0 {
-			t.Fatalf("system %s: roles name products its components do not: %v", s.Name, byProduct)
+			t.Fatalf("system %s: slots name products its components do not: %v", s.Name, byProduct)
 		}
 	}
 }
@@ -414,7 +414,7 @@ func TestApportion(t *testing.T) {
 
 // TestValidateNamesTheProblemAndItsLine is the refusal contract: an unknown
 // product, a product no simulator profile serves, an unknown standard, an
-// unknown system type and a role the standard does not declare are each named
+// unknown system type and a slot the standard does not declare are each named
 // with the manifest line to fix.
 func TestValidateNamesTheProblemAndItsLine(t *testing.T) {
 	cat := fakeCatalog()
@@ -478,7 +478,7 @@ standards:
       panel: t-panel-55
       player: t-player
 ` + oneArchetype, `t.yaml:4: unknown system type "signage"`},
-		{"undeclared role", `
+		{"undeclared slot", `
 name: t
 standards:
   - name: sign-55
@@ -487,7 +487,7 @@ standards:
       panel: t-panel-55
       player: t-player
       speaker: t-player
-` + oneArchetype, `t.yaml:8: standard "sign-55" declares no role "speaker"`},
+` + oneArchetype, `t.yaml:8: standard "sign-55" declares no slot "speaker"`},
 		{"product off its pin", `
 name: t
 standards:
@@ -496,15 +496,15 @@ standards:
     products:
       panel: t-panel-75
       player: t-player
-` + oneArchetype, `t.yaml:6: role panel of standard "sign-55" takes t-panel-75: no pinned product (t-panel-55) is named`},
-		{"role left unfilled", `
+` + oneArchetype, `t.yaml:6: slot panel of standard "sign-55" takes t-panel-75: no pinned product (t-panel-55) is named`},
+		{"slot left unfilled", `
 name: t
 standards:
   - name: sign-55
     system_type: sign
     products:
       panel: t-panel-55
-` + oneArchetype, `leaves role "player" unfilled`},
+` + oneArchetype, `leaves slot "player" unfilled`},
 		{"misspelt field", `
 name: t
 standards:
@@ -642,11 +642,11 @@ func fakeCatalog() Catalog {
 		"t-bar": "video-bar", "t-horn": "speaker"}
 	parents := map[string]string{"av": "", "display": "av", "media-player": "av", "video-bar": "av", "speaker": "av"}
 	standards := map[string]*template.Standard{
-		"sign-55": {Roles: []template.Role{
+		"sign-55": {Slots: []template.Slot{
 			{Name: "panel", AcceptedTypes: []string{"display"}, PinnedProducts: []string{"t-panel-55"}},
 			{Name: "player", AcceptedTypes: []string{"media-player"}},
 		}},
-		"room": {Roles: []template.Role{
+		"room": {Slots: []template.Slot{
 			{Name: "screen", Quorum: 2, AcceptedTypes: []string{"display"}},
 			{Name: "bar", AcceptedTypes: []string{"video-bar"}},
 		}},
@@ -696,10 +696,10 @@ func TestWithin(t *testing.T) {
 	}
 }
 
-// Every planned system says which role each of its components fills, as the
-// manifest names the product for the role, and the staffing is exactly the
-// components it takes: the seed staffs each role from it.
-func TestResolveStaffsEveryRoleWithItsProduct(t *testing.T) {
+// Every planned system says which slot each of its components fills, as the
+// manifest names the product for the slot, and the staffing is exactly the
+// components it takes: the seed staffs each slot from it.
+func TestResolveStaffsEverySlotWithItsProduct(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 100)
 	if err != nil {
@@ -708,15 +708,15 @@ func TestResolveStaffsEveryRoleWithItsProduct(t *testing.T) {
 	fills := map[string]map[string]string{}
 	for _, st := range m.Standards {
 		fills[st.Name.Name] = map[string]string{}
-		for role, ref := range st.Products {
-			fills[st.Name.Name][role] = ref.Name
+		for slot, ref := range st.Products {
+			fills[st.Name.Name][slot] = ref.Name
 		}
 	}
 	for _, s := range p.allSystems() {
 		perProduct := map[string]int{}
-		for _, f := range s.Roles {
-			if want := fills[s.Standard][f.Role]; f.Product != want || f.Count < 1 {
-				t.Fatalf("system %s staffs %s with %d %s, want the manifest's %s", s.Name, f.Role, f.Count, f.Product, want)
+		for _, f := range s.Slots {
+			if want := fills[s.Standard][f.Slot]; f.Product != want || f.Count < 1 {
+				t.Fatalf("system %s staffs %s with %d %s, want the manifest's %s", s.Name, f.Slot, f.Count, f.Product, want)
 			}
 			perProduct[f.Product] += f.Count
 		}

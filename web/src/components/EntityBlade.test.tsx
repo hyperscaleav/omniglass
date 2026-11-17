@@ -7,7 +7,7 @@ import { BladesContext, createBladeController, type BladeController } from "../l
 import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { systemHealthKey, SYSTEM_HEALTH_PREFIX, type FleetHealth } from "../lib/health";
-import { systemRolesKey, SYSTEM_ROLES_PREFIX } from "../lib/system_roles";
+import { systemSlotsKey, SYSTEM_SLOTS_PREFIX } from "../lib/system_slots";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
@@ -24,8 +24,8 @@ import { seedSeverityLevels } from "../lib/testseverity";
 // The fleet EntityBlade (#799, refit in #826, the glance since #872): verdict
 // and since lead, the alarms say why with their severity, the context the
 // operator came for follows (a system's location, a component's systems and
-// roles, a location's systems), then the form's identity, placement and tags,
-// read or edit through the blade's own footer. Configuration (roles,
+// slots, a location's systems), then the form's identity, placement and tags,
+// read or edit through the blade's own footer. Configuration (slots,
 // properties, their cascade) is the detail view's Configure tab, one Expand
 // away. Every body self-fetches by id, so the catalog serves any page.
 
@@ -53,7 +53,7 @@ const view: FleetView = {
 
 const health: FleetHealth = {
   verdict: "degraded",
-  roles: [
+  slots: [
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
@@ -80,7 +80,7 @@ function mountBlade(ref: { kind: string; id: string }) {
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...systemHealthKey(uuidFor("eb-sys"))], health);
-  qc.setQueryData([...systemRolesKey(uuidFor("eb-sys"))], declared);
+  qc.setQueryData([...systemSlotsKey(uuidFor("eb-sys"))], declared);
   qc.setQueryData([...systemMetricsKey(uuidFor("eb-sys"))], [
     { metric_type_name: "room-temperature", label: "Room temperature", value: "22.5", is_sampled: true, from_contract: false },
   ]);
@@ -174,12 +174,12 @@ describe("the system blade", () => {
     expect(within(card).getByTestId("location-path").textContent).toBe("Level 2");
   });
 
-  it("renders the form's identity, placement and tags, and leaves the roles to Configure", async () => {
+  it("renders the form's identity, placement and tags, and leaves the slots to Configure", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Identity")).toBeTruthy();
     expect(within(form).getByText("Tags")).toBeTruthy();
-    expect(within(form).queryByText("Roles")).toBeNull();
+    expect(within(form).queryByText("Slots")).toBeNull();
   });
 
   it("expands to the identity route and closes the stack", async () => {
@@ -287,8 +287,8 @@ describe("the location blade", () => {
 });
 
 // Deleting a component from a blade opened on a system workspace (the blade
-// stack is page-level, so the workspace behind it reads the system's roles and
-// health, not just the lists). Left stale, the role card for the deleted
+// stack is page-level, so the workspace behind it reads the system's slots and
+// health, not just the lists). Left stale, the slot card for the deleted
 // component stays on the page and opens a blade stuck loading.
 describe("the component blade's delete", () => {
   const deletable = (r: ReturnType<typeof mountBlade>) =>
@@ -296,7 +296,7 @@ describe("the component blade's delete", () => {
       { id: uuidFor("eb-c-mic"), name: "mic-1", label: "", component_type: "ceiling-mic", location_id: uuidFor("eb-room"), actions: ["update", "delete"] },
     ]);
 
-  it("refreshes the system's roles and health reads as well as the lists", async () => {
+  it("refreshes the system's slots and health reads as well as the lists", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
@@ -307,22 +307,22 @@ describe("the component blade's delete", () => {
     const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: readonly unknown[] }).queryKey);
     expect(keys).toContainEqual([...COMPONENTS_KEY]);
     expect(keys).toContainEqual([...FLEET_VIEW_KEY]);
-    expect(keys).toContainEqual([...SYSTEM_ROLES_PREFIX]);
+    expect(keys).toContainEqual([...SYSTEM_SLOTS_PREFIX]);
     expect(keys).toContainEqual([...SYSTEM_HEALTH_PREFIX]);
   });
 
-  // The server refuses a component that staffs a role (409, a restrict FK on
-  // system_role_assignment): the blade stays open and says so.
-  it("keeps the blade open and shows the server's refusal for a component that staffs a role", async () => {
+  // The server refuses a component that staffs a slot (409, a restrict FK on
+  // system_slot_assignment): the blade stays open and says so.
+  it("keeps the blade open and shows the server's refusal for a component that staffs a slot", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    const detail = "component is still referenced by another record, for example a system role it staffs";
+    const detail = "component is still referenced by another record, for example a system slot it staffs";
     vi.spyOn(globalThis, "fetch").mockImplementation(
       async () => new Response(JSON.stringify({ title: "Conflict", status: 409, detail }), { status: 409, headers: { "Content-Type": "application/problem+json" } }),
     );
     const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     deletable(r);
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("system role it staffs");
+    expect((await screen.findByRole("alert")).textContent).toContain("system slot it staffs");
     expect(r.controller().stack().length).toBe(1);
   });
 });

@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Role and staffing integrity (#504), driven over the real HTTP handler against
+// Slot and staffing integrity (#504), driven over the real HTTP handler against
 // a real Postgres: each test is the regression for one of the epic's defects,
 // reproduced the way an operator or an integrator would hit it.
 
@@ -68,11 +68,11 @@ func (f *staffingFixture) count(sql string, args ...any) int {
 	return n
 }
 
-func (f *staffingFixture) roles(tok, system string) systemRolesWire {
+func (f *staffingFixture) slots(tok, system string) systemSlotsWire {
 	f.t.Helper()
-	var w systemRolesWire
-	if err := json.Unmarshal(f.c.do(tok, http.MethodGet, "/systems/"+system+"/roles", nil, http.StatusOK), &w); err != nil {
-		f.t.Fatalf("decode system roles: %v", err)
+	var w systemSlotsWire
+	if err := json.Unmarshal(f.c.do(tok, http.MethodGet, "/systems/"+system+"/slots", nil, http.StatusOK), &w); err != nil {
+		f.t.Fatalf("decode system slots: %v", err)
 	}
 	return w
 }
@@ -99,7 +99,7 @@ func (f *staffingFixture) component(name, product string) {
 	f.c.do(f.owner, http.MethodPost, "/components", map[string]any{"name": name, "product": product}, http.StatusCreated)
 }
 
-// TestStaffingWritesNeedTheComponentInScope is #510: a membership or a role
+// TestStaffingWritesNeedTheComponentInScope is #510: a membership or a slot
 // assignment writes onto its component (its primary membership, its label, the
 // system band of its cascade, its contribution to health), so every route that
 // names one needs component:update over the component as well as system:update
@@ -124,8 +124,8 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	conn.Close(f.ctx)
 
 	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "probe-room"}, http.StatusCreated)
-	c.do(owner, http.MethodPatch, "/systems/probe-room/roles/spare", map[string]any{"label": "Spare"}, http.StatusOK)
-	c.do(owner, http.MethodPatch, "/systems/probe-room/roles/second", map[string]any{"label": "Second"}, http.StatusOK)
+	c.do(owner, http.MethodPatch, "/systems/probe-room/slots/spare", map[string]any{"label": "Spare"}, http.StatusOK)
+	c.do(owner, http.MethodPatch, "/systems/probe-room/slots/second", map[string]any{"label": "Second"}, http.StatusOK)
 	roomID := entityID(t, c, owner, "/systems", "probe-room")
 	// The component the principal has no authority over, and a rack of its own.
 	f.component("victim-dsp", f.display)
@@ -136,7 +136,7 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	f.component("victim-member", f.display)
 	f.component("victim-staffed", f.display)
 	c.do(owner, http.MethodPut, "/systems/probe-room/members/victim-member", nil, http.StatusNoContent)
-	c.do(owner, http.MethodPut, "/systems/probe-room/roles/second/assignments/victim-staffed", nil, http.StatusNoContent)
+	c.do(owner, http.MethodPut, "/systems/probe-room/slots/second/assignments/victim-staffed", nil, http.StatusNoContent)
 
 	// The issue's principal: one system, and no component authority at all.
 	blind := principalWithGrants(t, f.ctx, f.dsn, "room-staffer-blind", []grant{
@@ -160,10 +160,10 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 		racked, floored        int
 	}{
 		{"PUT /systems/{name}/members/{component}", "add-member", http.MethodPut, "/systems/probe-room/members/victim-dsp", http.StatusNotFound, http.StatusForbidden},
-		{"PUT /systems/{name}/roles/{role}/assignments/{component}", "assign-role", http.MethodPut, "/systems/probe-room/roles/spare/assignments/victim-dsp", http.StatusNotFound, http.StatusForbidden},
+		{"PUT /systems/{name}/slots/{slot}/assignments/{component}", "assign-slot", http.MethodPut, "/systems/probe-room/slots/spare/assignments/victim-dsp", http.StatusNotFound, http.StatusForbidden},
 		{"POST /systems/{name}/members/{component}:setPrimary", "set-primary", http.MethodPost, "/systems/probe-room/members/victim-member:setPrimary", http.StatusForbidden, http.StatusForbidden},
 		{"DELETE /systems/{name}/members/{component}", "remove-member", http.MethodDelete, "/systems/probe-room/members/victim-member", http.StatusForbidden, http.StatusForbidden},
-		{"DELETE /systems/{name}/roles/{role}/assignments/{component}", "unassign-role", http.MethodDelete, "/systems/probe-room/roles/second/assignments/victim-staffed", http.StatusForbidden, http.StatusForbidden},
+		{"DELETE /systems/{name}/slots/{slot}/assignments/{component}", "unassign-slot", http.MethodDelete, "/systems/probe-room/slots/second/assignments/victim-staffed", http.StatusForbidden, http.StatusForbidden},
 	}
 	// Every cross-tier write the spec carries is driven here: a new one fails
 	// this until it gets a row (TestEveryCrossTierPathWriteGuardsBothEnds finds
@@ -208,7 +208,7 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	if members := f.memberNames("probe-room"); len(members) != 2 {
 		t.Fatalf("probe-room members = %v, want the two the owner bound, untouched", members)
 	}
-	if mic := f.roles(owner, "probe-room").find(t, "second"); len(mic.AssignedTo) != 1 {
+	if mic := f.slots(owner, "probe-room").find(t, "second"); len(mic.AssignedTo) != 1 {
 		t.Fatalf("second = %+v, want victim-staffed still in it", mic)
 	}
 
@@ -216,8 +216,8 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	// refusals above are the component end and not the routes being broken.
 	c.do(racked, http.MethodPut, "/systems/probe-room/members/own-dsp", nil, http.StatusNoContent)
 	c.do(racked, http.MethodPost, "/systems/probe-room/members/own-dsp:setPrimary", nil, http.StatusNoContent)
-	c.do(racked, http.MethodPut, "/systems/probe-room/roles/spare/assignments/own-dsp", nil, http.StatusNoContent)
-	c.do(racked, http.MethodDelete, "/systems/probe-room/roles/spare/assignments/own-dsp", nil, http.StatusNoContent)
+	c.do(racked, http.MethodPut, "/systems/probe-room/slots/spare/assignments/own-dsp", nil, http.StatusNoContent)
+	c.do(racked, http.MethodDelete, "/systems/probe-room/slots/spare/assignments/own-dsp", nil, http.StatusNoContent)
 	c.do(racked, http.MethodDelete, "/systems/probe-room/members/own-dsp", nil, http.StatusNoContent)
 }
 

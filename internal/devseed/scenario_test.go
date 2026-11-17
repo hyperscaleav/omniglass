@@ -121,7 +121,7 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 	for _, s := range doc.Systems {
 		sysAt[s.Key] = s.Location
 	}
-	for _, ra := range doc.RoleAssignments[len(base.RoleAssignments):] {
+	for _, ra := range doc.SlotAssignments[len(base.SlotAssignments):] {
 		if sysAt[ra.System] != compAt[ra.Component] {
 			t.Errorf("copied assignment %+v staffs a component from another room", ra)
 		}
@@ -312,7 +312,7 @@ func countFleet(t *testing.T, ctx context.Context, conn *pgx.Conn) fleetCounts {
 		`select count(*) from location`:               &c.locations,
 		fleetComponentCount:                           &c.components,
 		fleetSystemCount:                              &c.systems,
-		`select count(*) from system_role_assignment`: &c.assignments,
+		`select count(*) from system_slot_assignment`: &c.assignments,
 		`select count(*) from alarm`:                  &c.alarms,
 	} {
 		if err := conn.QueryRow(ctx, q).Scan(dst); err != nil {

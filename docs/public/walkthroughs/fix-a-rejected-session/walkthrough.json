@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This location's system. Its touch panel fills no role, but an outpost collects it.",
+      "caption": "This location's system. Its touch panel fills no slot, but an outpost collects it.",
       "still": "step-01.png"
     },
     {
@@ -61,8 +61,8 @@
   "poster": "step-09.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 35,
-    "bytes": 660685,
-    "previewBytes": 458700
+    "seconds": 32.2,
+    "bytes": 658660,
+    "previewBytes": 488400
   }
 }

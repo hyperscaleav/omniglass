@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import RolesPanel from "./RolesPanel";
-import { systemRolesKey, type EffectiveRole } from "../lib/system_roles";
+import SlotsPanel from "./SlotsPanel";
+import { systemSlotsKey, type EffectiveSlot } from "../lib/system_slots";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -11,12 +11,12 @@ import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { PRODUCTS_KEY } from "../lib/products";
 
-// The panel resolves a system's roles: what its standard declares plus what the
+// The panel resolves a system's slots: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
 // at assignment, its quorum, and who fills it. Rows are seeded into the query
 // cache so no server is needed; the assign / unassign writes are faked where a
 // test drives one.
-const roles: EffectiveRole[] = [
+const slots: EffectiveSlot[] = [
   // Inherited and short a component: the standard wants two, one is in place.
   {
     name: "table-mic",
@@ -73,8 +73,8 @@ const components: Comp[] = [
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
 
-// The health read's own arithmetic for the same three roles above, the
-// occupancy-aware counterpart of the roles read's understaffed: satisfying,
+// The health read's own arithmetic for the same three slots above, the
+// occupancy-aware counterpart of the slots read's understaffed: satisfying,
 // short, and spare replace assigned/understaffed once health has loaded (#626
 // Task 9). table-mic is short one occupant beyond its assignment count would
 // suggest, which is the case understaffed alone cannot express.
@@ -84,7 +84,7 @@ const health: FleetHealth = {
   verdict: "degraded",
   transitions: [],
   systems: [],
-  roles: [
+  slots: [
     {
       name: "table-mic", label: "Table microphone", impact: "degraded",
       quorum: 2, satisfying: 1, short: 1, spare: 0, impaired: true, active: true,
@@ -107,9 +107,9 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: FleetHealth | null } = {}) {
+function mount(opts: { rows?: EffectiveSlot[]; canUpdate?: boolean; health?: FleetHealth | null } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...systemRolesKey("boardroom")], opts.rows ?? roles);
+  qc.setQueryData([...systemSlotsKey("boardroom")], opts.rows ?? slots);
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...SYSTEMS_KEY], [system]);
   qc.setQueryData([...ME_KEY], owner);
@@ -119,62 +119,62 @@ function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: Fle
   if (opts.health !== null) qc.setQueryData([...systemHealthKey("boardroom")], opts.health ?? health);
   const result = render(() => (
     <QueryClientProvider client={qc}>
-      <RolesPanel system="boardroom" canUpdate={opts.canUpdate ?? true} />
+      <SlotsPanel system="boardroom" canUpdate={opts.canUpdate ?? true} />
     </QueryClientProvider>
   ));
   return { ...result, qc };
 }
 
-// A role's row is the block its label sits in.
-const roleRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLElement;
+// A slot's row is the block its label sits in.
+const slotRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLElement;
 
-describe("RolesPanel", () => {
+describe("SlotsPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("shows a role's typed-slot guard, its staffing, and who fills it", () => {
+  it("shows a slot's typed-slot guard, its staffing, and who fills it", () => {
     const { getByText } = mount();
-    const row = roleRow(getByText("Table microphone"));
+    const row = slotRow(getByText("Table microphone"));
     expect(within(row).getByText("table-mic")).toBeTruthy(); // the address, beside the label
     expect(within(row).getByText("video-bar")).toBeTruthy();
-    // The health read's arithmetic (1 of 2 satisfying), not the roles read's
+    // The health read's arithmetic (1 of 2 satisfying), not the slots read's
     // assignment count: see the divergence test below for why they can differ.
     expect(within(row).getByText("1 of 2 satisfying")).toBeTruthy();
     expect(within(row).getByText("mic-1")).toBeTruthy();
   });
 
-  it("marks a short role from the health read, and leaves a satisfied one unmarked", () => {
+  it("marks a short slot from the health read, and leaves a satisfied one unmarked", () => {
     const { getByText } = mount();
-    expect(within(roleRow(getByText("Table microphone"))).getByText("short 1")).toBeTruthy();
-    const staffed = roleRow(getByText("Main display"));
+    expect(within(slotRow(getByText("Table microphone"))).getByText("short 1")).toBeTruthy();
+    const staffed = slotRow(getByText("Main display"));
     expect(within(staffed).queryByText(/short/)).toBeNull();
     expect(within(staffed).getByText("1 of 1 satisfying")).toBeTruthy();
   });
 
-  it("falls back to the roles read's assignment arithmetic while health has not loaded yet", () => {
+  it("falls back to the slots read's assignment arithmetic while health has not loaded yet", () => {
     const { getByText } = mount({ health: null });
     // No health seeded: the lens must not render undefined, so it falls back
-    // to the health-blind figures the roles read already carries.
-    expect(within(roleRow(getByText("Table microphone"))).getByText("understaffed")).toBeTruthy();
-    expect(within(roleRow(getByText("Table microphone"))).getByText("2 wanted, 1 assigned")).toBeTruthy();
-    const staffed = roleRow(getByText("Main display"));
+    // to the health-blind figures the slots read already carries.
+    expect(within(slotRow(getByText("Table microphone"))).getByText("understaffed")).toBeTruthy();
+    expect(within(slotRow(getByText("Table microphone"))).getByText("2 wanted, 1 assigned")).toBeTruthy();
+    const staffed = slotRow(getByText("Main display"));
     expect(within(staffed).queryByText("understaffed")).toBeNull();
     expect(within(staffed).getByText("1 wanted, 1 assigned")).toBeTruthy();
   });
 
   it("reads short from health, not assignment count: a down occupant still counts as assigned", () => {
-    // main-display's sole assignee carries a high alarm: the roles read
+    // main-display's sole assignee carries a high alarm: the slots read
     // would still call it fully staffed (understaffed 0), but health's
     // satisfying/short is occupancy-aware and must win on screen.
     const degradedMainDisplay: FleetHealth = {
       ...health,
-      roles: health.roles!.map((r) =>
+      slots: health.slots!.map((r) =>
         r.name === "main-display"
           ? { ...r, satisfying: 0, short: 1, impaired: true, down: ["disp-1"], alarms: [{ id: "a-1", severity: "high", message: "HDMI failed", component: "disp-1", component_id: uuidFor("disp-1"), raised_at: new Date().toISOString(), acknowledged: false }] }
           : r,
       ),
     };
     const { getByText } = mount({ health: degradedMainDisplay });
-    const row = roleRow(getByText("Main display"));
+    const row = slotRow(getByText("Main display"));
     expect(within(row).getByText("short 1")).toBeTruthy();
     expect(within(row).getByText("0 of 1 satisfying")).toBeTruthy();
     // The occupant is marked down, not silently dropped from "filled by".
@@ -183,48 +183,48 @@ describe("RolesPanel", () => {
     expect(downBadge.textContent).toContain("down");
   });
 
-  // #626 choices: a role belonging to a choice's losing alternate can read
+  // #626 choices: a slot belonging to a choice's losing alternate can read
   // impaired on its own terms, but its own figures never counted toward the
   // verdict. Rendering short/spare/impact for it anyway is the exact
   // contradiction commit 5472723 fixed on HealthPanel; task 9 review, finding
   // C5, caught it reintroduced here.
-  it("does not render short/spare/impact for a role whose alternate lost its choice", () => {
+  it("does not render short/spare/impact for a slot whose alternate lost its choice", () => {
     const withInactiveChoice: FleetHealth = {
       ...health,
-      roles: health.roles!.map((r) =>
+      slots: health.slots!.map((r) =>
         r.name === "table-mic"
           ? { ...r, active: false, choice: "conferencing", alternate: "component-built" }
           : r,
       ),
     };
     const { getByText } = mount({ health: withInactiveChoice });
-    const row = roleRow(getByText("Table microphone"));
+    const row = slotRow(getByText("Table microphone"));
     expect(within(row).queryByText("short 1")).toBeNull();
     expect(within(row).queryByText("degraded")).toBeNull(); // the impact badge
     expect(within(row).getByText("not counted")).toBeTruthy();
     // Only table-mic is inactive; main-display's own active figures still render.
-    const mainDisplayRow = roleRow(getByText("Main display"));
+    const mainDisplayRow = slotRow(getByText("Main display"));
     expect(within(mainDisplayRow).queryByText("not counted")).toBeNull();
     expect(within(mainDisplayRow).getByText("1 of 1 satisfying")).toBeTruthy();
   });
 
   // Whether an alarm took a component down is a fact about the COMPONENT,
-  // not about whether this role's choice currently answers it: suppressing
-  // short/spare/impact for an inactive role (the fix above) must not also
+  // not about whether this slot's choice currently answers it: suppressing
+  // short/spare/impact for an inactive slot (the fix above) must not also
   // suppress the down marker on its occupant chips, or the operator loses
   // the one signal that would tell them the unbuilt alternate has a real
   // fault, not just an unstaffed slot (task 9 re-review, over-correction of C5).
-  it("still marks a down occupant on a role whose alternate lost its choice", () => {
+  it("still marks a down occupant on a slot whose alternate lost its choice", () => {
     const inactiveWithDownOccupant: FleetHealth = {
       ...health,
-      roles: health.roles!.map((r) =>
+      slots: health.slots!.map((r) =>
         r.name === "table-mic"
           ? { ...r, active: false, choice: "conferencing", alternate: "component-built", down: ["mic-1"], alarms: [{ id: "a-2", severity: "high", message: "mic failed", component: "mic-1", component_id: uuidFor("mic-1"), raised_at: new Date().toISOString(), acknowledged: false }] }
           : r,
       ),
     };
     const { getByText } = mount({ health: inactiveWithDownOccupant });
-    const row = roleRow(getByText("Table microphone"));
+    const row = slotRow(getByText("Table microphone"));
     // Still not counted, no short/impact badge (the C5 fix stands).
     expect(within(row).queryByText("short 1")).toBeNull();
     expect(within(row).getByText("not counted")).toBeTruthy();
@@ -234,7 +234,7 @@ describe("RolesPanel", () => {
     expect(downBadge.textContent).toContain("down");
   });
 
-  it("groups a role declared on the system apart from the ones its standard declares", () => {
+  it("groups a slot declared on the system apart from the ones its standard declares", () => {
     const { getByRole, getByText } = mount();
     const adhoc = getByRole("group", { name: /ad hoc/i });
     expect(within(adhoc).getByText("Spare panel")).toBeTruthy();
@@ -242,33 +242,33 @@ describe("RolesPanel", () => {
     expect(getByText("declared on this system, not by its standard")).toBeTruthy();
   });
 
-  // A one-off system conforms to no standard, so it inherits no roles: the
-  // roles it needs are the ones an operator declares on it, and the empty copy
+  // A one-off system conforms to no standard, so it inherits no slots: the
+  // slots it needs are the ones an operator declares on it, and the empty copy
   // promises exactly that, so edit mode has to carry the control.
-  describe("declaring a role on the system", () => {
-    const lectern: EffectiveRole = {
+  describe("declaring a slot on the system", () => {
+    const lectern: EffectiveSlot = {
       name: "lectern-mic", label: "Lectern mic", quorum: 1, impact: "degraded",
       accepted_types: [], pinned_products: [], position_labels: [], from_standard: false,
       assigned_to: [], positions: [], assigned: 0, understaffed: 1,
     };
 
-    it("offers an add row from the empty state, and the declared role renders under Ad hoc", async () => {
+    it("offers an add row from the empty state, and the declared slot renders under Ad hoc", async () => {
       let patch: Request | undefined;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const req = input as Request;
         if (req.method === "PATCH") { patch = req.clone(); return json({ ...lectern }); }
-        return json({ system: "boardroom", roles: patch ? [lectern] : [] });
+        return json({ system: "boardroom", slots: patch ? [lectern] : [] });
       });
 
       const { getByText, getByLabelText, getByRole, queryByRole } = mount({ rows: [] });
-      expect(getByText(/No roles yet/)).toBeTruthy();
+      expect(getByText(/No slots yet/)).toBeTruthy();
       expect(queryByRole("group", { name: /ad hoc/i })).toBeTruthy(); // the add row's home
-      fireEvent.input(getByLabelText("Role name"), { target: { value: "lectern-mic" } });
-      fireEvent.input(getByLabelText("Name for the new role"), { target: { value: "Lectern mic" } });
-      fireEvent.click(getByLabelText("Declare role"));
+      fireEvent.input(getByLabelText("Slot name"), { target: { value: "lectern-mic" } });
+      fireEvent.input(getByLabelText("Name for the new slot"), { target: { value: "Lectern mic" } });
+      fireEvent.click(getByLabelText("Declare slot"));
 
       await waitFor(() => expect(patch).toBeTruthy());
-      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/roles/lectern-mic");
+      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/slots/lectern-mic");
       const body = await patch!.json();
       expect(body.label).toBe("Lectern mic");
       expect(body.quorum).toBe(1);
@@ -276,17 +276,17 @@ describe("RolesPanel", () => {
       await waitFor(() => expect(within(adhoc).getByText("Lectern mic")).toBeTruthy());
     });
 
-    it("offers the add row beside inherited roles too, under Ad hoc", () => {
-      const { getByRole } = mount({ rows: roles.filter((r) => r.from_standard) });
-      expect(within(getByRole("group", { name: /ad hoc/i })).getByLabelText("Role name")).toBeTruthy();
+    it("offers the add row beside inherited slots too, under Ad hoc", () => {
+      const { getByRole } = mount({ rows: slots.filter((r) => r.from_standard) });
+      expect(within(getByRole("group", { name: /ad hoc/i })).getByLabelText("Slot name")).toBeTruthy();
     });
 
-    it("edits an ad hoc role in place with a PATCH", async () => {
+    it("edits an ad hoc slot in place with a PATCH", async () => {
       let patch: Request | undefined;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const req = input as Request;
         if (req.method === "PATCH") { patch = req.clone(); return json({ name: "spare-panel" }); }
-        return json({ system: "boardroom", roles });
+        return json({ system: "boardroom", slots });
       });
 
       const { getByLabelText } = mount();
@@ -295,27 +295,27 @@ describe("RolesPanel", () => {
       fireEvent.click(getByLabelText("Save spare-panel"));
 
       await waitFor(() => expect(patch).toBeTruthy());
-      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/roles/spare-panel");
+      expect(new URL(patch!.url).pathname).toBe("/api/v1/systems/boardroom/slots/spare-panel");
       expect((await patch!.json()).quorum).toBe(3);
     });
 
-    it("withdraws an ad hoc role after confirmation with a DELETE", async () => {
+    it("withdraws an ad hoc slot after confirmation with a DELETE", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       let del: Request | undefined;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const req = input as Request;
         if (req.method === "DELETE") { del = req.clone(); return new Response(null, { status: 204 }); }
-        return json({ system: "boardroom", roles });
+        return json({ system: "boardroom", slots });
       });
 
       const { getByLabelText } = mount();
       fireEvent.click(getByLabelText("Withdraw spare-panel"));
 
       await waitFor(() => expect(del).toBeTruthy());
-      expect(new URL(del!.url).pathname).toBe("/api/v1/systems/boardroom/roles/spare-panel");
+      expect(new URL(del!.url).pathname).toBe("/api/v1/systems/boardroom/slots/spare-panel");
     });
 
-    it("offers an inherited role neither edit nor withdraw", () => {
+    it("offers an inherited slot neither edit nor withdraw", () => {
       const { queryByLabelText } = mount();
       expect(queryByLabelText("Edit table-mic")).toBeNull();
       expect(queryByLabelText("Withdraw table-mic")).toBeNull();
@@ -327,50 +327,50 @@ describe("RolesPanel", () => {
         const req = input as Request;
         if (req.method === "PATCH") {
           return json(
-            { title: "Conflict", status: 409, detail: 'role "table-mic" is already declared by this system\'s standard' },
+            { title: "Conflict", status: 409, detail: 'slot "table-mic" is already declared by this system\'s standard' },
             409,
             "application/problem+json",
           );
         }
-        return json({ system: "boardroom", roles });
+        return json({ system: "boardroom", slots });
       });
 
       const { getByLabelText, getByRole } = mount();
       const adhoc = getByRole("group", { name: /ad hoc/i });
-      fireEvent.input(getByLabelText("Role name"), { target: { value: "table-mic" } });
-      fireEvent.click(getByLabelText("Declare role"));
+      fireEvent.input(getByLabelText("Slot name"), { target: { value: "table-mic" } });
+      fireEvent.click(getByLabelText("Declare slot"));
 
       const alert = await waitFor(() => within(adhoc).getByRole("alert"));
-      expect(alert.textContent).toBe('role "table-mic" is already declared by this system\'s standard');
-      expect((getByLabelText("Role name") as HTMLInputElement).value).toBe("table-mic"); // still editable
+      expect(alert.textContent).toBe('slot "table-mic" is already declared by this system\'s standard');
+      expect((getByLabelText("Slot name") as HTMLInputElement).value).toBe("table-mic"); // still editable
     });
 
     it("renders no declare, edit, or withdraw control outside edit", () => {
       const { queryByLabelText, queryByRole } = mount({ canUpdate: false });
-      expect(queryByLabelText("Role name")).toBeNull();
+      expect(queryByLabelText("Slot name")).toBeNull();
       expect(queryByLabelText("Edit spare-panel")).toBeNull();
       expect(queryByLabelText("Withdraw spare-panel")).toBeNull();
-      expect(queryByRole("group", { name: /ad hoc/i })).toBeTruthy(); // the role itself still reads
+      expect(queryByRole("group", { name: /ad hoc/i })).toBeTruthy(); // the slot itself still reads
     });
 
-    it("shows no add row, and no empty Ad hoc group, to a reader on a roleless system", () => {
+    it("shows no add row, and no empty Ad hoc group, to a reader on a slotless system", () => {
       const { queryByLabelText, queryByRole } = mount({ rows: [], canUpdate: false });
-      expect(queryByLabelText("Role name")).toBeNull();
+      expect(queryByLabelText("Slot name")).toBeNull();
       expect(queryByRole("group", { name: /ad hoc/i })).toBeNull();
     });
   });
 
-  it("says a role nobody fills is unfilled rather than showing an empty list", () => {
+  it("says a slot nobody fills is unfilled rather than showing an empty list", () => {
     const { getByText } = mount();
-    expect(within(roleRow(getByText("Spare panel"))).getByText("nobody yet")).toBeTruthy();
+    expect(within(slotRow(getByText("Spare panel"))).getByText("nobody yet")).toBeTruthy();
   });
 
-  it("assigns the picked component to the role", async () => {
+  it("assigns the picked component to the slot", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") { put = req.clone(); return new Response(null, { status: 204 }); }
-      return json({ system: "boardroom", roles });
+      return json({ system: "boardroom", slots });
     });
 
     const { getByText, getByLabelText } = mount();
@@ -379,7 +379,7 @@ describe("RolesPanel", () => {
     // dedicated test below), so it stays out of this equality's true values.
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
     // Options carry the component's uuid, not its name (#627 review, the
-    // pre-existing surface: staffing a role resolves the component
+    // pre-existing surface: staffing a slot resolves the component
     // fleet-wide via scopedByName, ADR-0062, so a duplicate-named component
     // 404s on a bare name regardless of scope; the picker must submit the
     // unambiguous uuid to keep the promise Task 15 already made elsewhere).
@@ -389,21 +389,21 @@ describe("RolesPanel", () => {
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
     await waitFor(() => expect(put).toBeTruthy());
-    expect(put!.url).toContain(`/systems/boardroom/roles/table-mic/assignments/${uuidFor("c-2")}`);
+    expect(put!.url).toContain(`/systems/boardroom/slots/table-mic/assignments/${uuidFor("c-2")}`);
     expect(getByText("Table microphone")).toBeTruthy(); // the panel stays put
   });
 
   // short/spare/impact, this panel's primary readout since task 9, come from
-  // the health read, not the roles read. Invalidating only the roles key
+  // the health read, not the slots read. Invalidating only the slots key
   // after a write left those badges frozen at their pre-write values (task 9
-  // review, finding C6): a role reading "short 1" that just got its
+  // review, finding C6): a slot reading "short 1" that just got its
   // component assigned kept showing "short 1" with two occupant chips below
   // it, since nothing ever told the health query it was stale.
-  it("invalidates the health key too, not just the roles key, on a successful write", async () => {
+  it("invalidates the health key too, not just the slots key, on a successful write", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") return new Response(null, { status: 204 });
-      return json({ system: "boardroom", roles });
+      return json({ system: "boardroom", slots });
     });
     const { qc, getByLabelText } = mount();
     const spy = vi.spyOn(qc, "invalidateQueries");
@@ -413,7 +413,7 @@ describe("RolesPanel", () => {
 
     await waitFor(() => {
       const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
-      expect(invalidated).toContain(JSON.stringify(systemRolesKey("boardroom")));
+      expect(invalidated).toContain(JSON.stringify(systemSlotsKey("boardroom")));
       expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom")));
     });
   });
@@ -427,7 +427,7 @@ describe("RolesPanel", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") return json({ detail: "refused" }, 422);
-      return json({ system: "boardroom", roles });
+      return json({ system: "boardroom", slots });
     });
     const { qc, getByLabelText } = mount();
     const spy = vi.spyOn(qc, "invalidateQueries");
@@ -437,18 +437,18 @@ describe("RolesPanel", () => {
 
     await waitFor(() => {
       const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
-      expect(invalidated).toContain(JSON.stringify(systemRolesKey("boardroom")));
+      expect(invalidated).toContain(JSON.stringify(systemSlotsKey("boardroom")));
       expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom")));
     });
   });
 
-  // #626: a component fills at most one role per system. Once a picker lets
-  // an operator pick a component already staffing a DIFFERENT role here, the
+  // #626: a component fills at most one slot per system. Once a picker lets
+  // an operator pick a component already staffing a DIFFERENT slot here, the
   // server's 422 refusal is one the operator could not have anticipated,
   // which the panel's own stated principle (the refusal teaches) forbids.
   // Excluding it silently would be worse: showing it disabled, with the
   // reason, is what the panel already does for the typed-slot guard.
-  it("disables a component already staffing a different role here, naming which one", () => {
+  it("disables a component already staffing a different slot here, naming which one", () => {
     const { getByLabelText } = mount();
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
     const disp1 = Array.from(picker.options).find((o) => o.value === uuidFor("c-3"))!;
@@ -460,7 +460,7 @@ describe("RolesPanel", () => {
     expect(panel1.disabled).toBe(false);
   });
 
-  // The refusal is the lesson: a component may fill a role only if its product's
+  // The refusal is the lesson: a component may fill a slot only if its product's
   // type falls within an accepted type, and the server's 422 names both parties.
   // The panel must show that message, not a generic failure, or the operator
   // learns nothing about why the assignment did not take.
@@ -472,50 +472,50 @@ describe("RolesPanel", () => {
           {
             title: "Unprocessable Entity",
             status: 422,
-            detail: 'component "panel-1" is a touch-panel; role "table-mic" wants a video-bar',
+            detail: 'component "panel-1" is a touch-panel; slot "table-mic" wants a video-bar',
           },
           422,
           "application/problem+json",
         );
       }
-      return json({ system: "boardroom", roles });
+      return json({ system: "boardroom", slots });
     });
 
     const { getByText, getByLabelText, queryByText } = mount();
     fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: uuidFor("c-2") } });
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
-    // The refusal belongs to the role that refused, and reads as the server sent it.
-    const row = roleRow(getByText("Table microphone"));
+    // The refusal belongs to the slot that refused, and reads as the server sent it.
+    const row = slotRow(getByText("Table microphone"));
     const alert = await waitFor(() => within(row).getByRole("alert"));
-    expect(alert.textContent).toBe('component "panel-1" is a touch-panel; role "table-mic" wants a video-bar');
+    expect(alert.textContent).toBe('component "panel-1" is a touch-panel; slot "table-mic" wants a video-bar');
     expect(queryByText("The operation failed.")).toBeNull(); // never swallowed into a generic line
-    expect(within(roleRow(getByText("Main display"))).queryByRole("alert")).toBeNull();
+    expect(within(slotRow(getByText("Main display"))).queryByRole("alert")).toBeNull();
   });
 
-  it("unassigns a component from the role", async () => {
+  it("unassigns a component from the slot", async () => {
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "DELETE") { del = req.clone(); return new Response(null, { status: 204 }); }
-      return json({ system: "boardroom", roles });
+      return json({ system: "boardroom", slots });
     });
 
     const { getByLabelText } = mount();
     fireEvent.click(getByLabelText("Unassign mic-1 from table-mic"));
 
     await waitFor(() => expect(del).toBeTruthy());
-    expect(del!.url).toContain("/systems/boardroom/roles/table-mic/assignments/mic-1");
+    expect(del!.url).toContain("/systems/boardroom/slots/table-mic/assignments/mic-1");
   });
 
   // Drag-to-reorder, gated on TestAssignedToIsPositionOrdered (Go, green):
   // reuses moveItem's shape (listmodel.ts) via swapPath, but the wire call is
   // the server's actual primitive, a single pairwise swap.
   it("drag-reorders two occupants via the position-swap route", async () => {
-    const twoOccupants: EffectiveRole[] = [
-      { ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 2] },
-      roles[1],
-      roles[2],
+    const twoOccupants: EffectiveSlot[] = [
+      { ...slots[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 2] },
+      slots[1],
+      slots[2],
     ];
     const swaps: Request[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -524,7 +524,7 @@ describe("RolesPanel", () => {
         swaps.push(req.clone());
         return new Response(null, { status: 204 });
       }
-      return json({ system: "boardroom", roles: twoOccupants });
+      return json({ system: "boardroom", slots: twoOccupants });
     });
 
     const { getByText } = mount({ rows: twoOccupants });
@@ -536,20 +536,20 @@ describe("RolesPanel", () => {
     fireEvent.drop(to);
 
     await waitFor(() => expect(swaps.length).toBe(1));
-    expect(swaps[0].url).toContain("/systems/boardroom/roles/table-mic:swapPositions");
+    expect(swaps[0].url).toContain("/systems/boardroom/slots/table-mic:swapPositions");
     expect(await swaps[0].json()).toEqual({ position: 1, with: 2 });
   });
 
-  // #626: an unassign leaves a gap rather than compacting, so a role's real
+  // #626: an unassign leaves a gap rather than compacting, so a slot's real
   // positions are not assumed dense. Task 9 review, finding C3: an
   // index-plus-one assumption would have swapped position 2 here, which
   // nobody holds, either 404ing or silently misordering. mic-1 and panel-1
   // hold real positions 1 and 3 (position 2 vacant).
   it("drags across a position gap, addressing the real positions, not index-plus-one", async () => {
-    const gapped: EffectiveRole[] = [
-      { ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 3] },
-      roles[1],
-      roles[2],
+    const gapped: EffectiveSlot[] = [
+      { ...slots[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 3] },
+      slots[1],
+      slots[2],
     ];
     const swaps: Request[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -558,7 +558,7 @@ describe("RolesPanel", () => {
         swaps.push(req.clone());
         return new Response(null, { status: 204 });
       }
-      return json({ system: "boardroom", roles: gapped });
+      return json({ system: "boardroom", slots: gapped });
     });
 
     const { getByText } = mount({ rows: gapped });
@@ -579,11 +579,11 @@ describe("RolesPanel", () => {
     expect(badge.draggable).toBe(false);
   });
 
-  it("does not wire dragging when the cached role predates the positions field", () => {
+  it("does not wire dragging when the cached slot predates the positions field", () => {
     // A stale cache entry (or a test fixture that forgot positions) must
     // disable dragging rather than guess, since the length mismatch is
     // exactly the signal that index-plus-one cannot be trusted.
-    const stale: EffectiveRole[] = [{ ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: null }, roles[1], roles[2]];
+    const stale: EffectiveSlot[] = [{ ...slots[0], assigned_to: ["mic-1", "panel-1"], positions: null }, slots[1], slots[2]];
     const { getByText } = mount({ rows: stale });
     const badge = getByText("mic-1").closest("span.badge") as HTMLElement;
     expect(badge.draggable).toBe(false);
@@ -596,7 +596,7 @@ describe("RolesPanel", () => {
     expect(queryByLabelText("Unassign mic-1 from table-mic")).toBeNull();
   });
 
-  it("explains what a role is when the system has none", () => {
+  it("explains what a slot is when the system has none", () => {
     const { getByText } = mount({ rows: [] });
     expect(getByText(/a slot this system needs filled/i)).toBeTruthy();
   });

@@ -14,49 +14,49 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// SystemRole is a slot a system needs filled, declared either on a standard (and
+// SystemSlot is a slot a system needs filled, declared either on a standard (and
 // inherited by every conforming system) or directly on one system.
-type SystemRole struct {
+type SystemSlot struct {
 	ID        string
 	OwnerKind string // standard | system
 	OwnerID   string // the standard id or the system name
 	Name      string
 	Label     string
 	Quorum    int
-	// AcceptedTypes is the component_type names the role's typed-slot guard
+	// AcceptedTypes is the component_type names the slot's typed-slot guard
 	// accepts (a component's product's component_type_id must fall within one
 	// of these subtrees, self-inclusive); empty means any type. PinnedProducts
 	// optionally narrows further to specific products within an accepted type;
 	// empty means any product of an accepted type. This pair is what
-	// AssignRole checks (#626); once assigned, an occupant satisfies the slot
+	// AssignSlot checks (#626); once assigned, an occupant satisfies the slot
 	// unless its own verdict is outage (internal/health); a merely degraded
 	// occupant still counts.
 	AcceptedTypes  []string
 	PinnedProducts []string
-	// Capacity is the most components the role will accept, an optional upper
+	// Capacity is the most components the slot will accept, an optional upper
 	// bound above Quorum's floor; nil means unbounded. A pointer so "omitted"
 	// (leave whatever is already declared alone) is distinguishable from "an
-	// explicit small number": SetSystemRole otherwise wholesale-replaces a
+	// explicit small number": SetSystemSlot otherwise wholesale-replaces a
 	// declaration on every write, which would silently reset capacity to
 	// unbounded on any edit that does not resend it.
 	Capacity *int
-	// PositionLabels names each position within the role, by index (position 1
+	// PositionLabels names each position within the slot, by index (position 1
 	// is PositionLabels[0]); empty means unlabeled. Unlike Capacity this
 	// wholesale-replaces on every write, the same rule AcceptedTypes and
 	// PinnedProducts already follow: a label set is a list, not a single bound,
 	// and there is no "leave unchanged" reading for one.
 	PositionLabels []string
-	// Impact is what an impaired role means for its system: outage, degraded, or
-	// none. It lives on the role because the same broken component matters
+	// Impact is what an impaired slot means for its system: outage, degraded, or
+	// none. It lives on the slot because the same broken component matters
 	// differently depending on the slot it was filling, and it is the only input
 	// the rollup takes from the declaration side beyond the requirement itself.
 	Impact string
-	// AlternateID is the choice_alternate this role joins (#626); nil means
+	// AlternateID is the choice_alternate this slot joins (#626); nil means
 	// unconditional. It is the id the write stores and the audit
-	// before/after images (systemRoleCols) record a change to.
+	// before/after images (systemSlotCols) record a change to.
 	AlternateID *string
 	// Alternate is the same membership as an address, "choice-name/alternate-name",
-	// empty when the role is unconditional: the exact form the write body
+	// empty when the slot is unconditional: the exact form the write body
 	// takes, so a read round-trips into a write without translation. Every
 	// read fills it (#640); a field a caller can write and no caller can
 	// read is not a contract, and it cannot be confirmed by the generated
@@ -66,33 +66,33 @@ type SystemRole struct {
 	UpdatedAt time.Time
 }
 
-// The field names a role declaration patches, spelled the way the wire body
+// The field names a slot declaration patches, spelled the way the wire body
 // spells them, because an update_mask path IS a wire field name (#666). They
 // are constants rather than literals at each site so a write-set check and the
 // mask the API resolves can never drift into naming different fields, which
 // would silently stop writing one.
 const (
-	RoleFieldLabel          = "label"
-	RoleFieldQuorum         = "quorum"
-	RoleFieldCapacity       = "capacity"
-	RoleFieldPositionLabels = "position_labels"
-	RoleFieldAcceptedTypes  = "accepted_types"
-	RoleFieldPinnedProducts = "pinned_products"
-	RoleFieldImpact         = "impact"
-	RoleFieldAlternate      = "alternate"
+	SlotFieldLabel          = "label"
+	SlotFieldQuorum         = "quorum"
+	SlotFieldCapacity       = "capacity"
+	SlotFieldPositionLabels = "position_labels"
+	SlotFieldAcceptedTypes  = "accepted_types"
+	SlotFieldPinnedProducts = "pinned_products"
+	SlotFieldImpact         = "impact"
+	SlotFieldAlternate      = "alternate"
 )
 
-// RolePatchFields is every field a role declaration lets a write set, in the
+// SlotPatchFields is every field a slot declaration lets a write set, in the
 // order a refusal lists them.
-var RolePatchFields = []string{
-	RoleFieldLabel, RoleFieldQuorum, RoleFieldCapacity, RoleFieldPositionLabels,
-	RoleFieldAcceptedTypes, RoleFieldPinnedProducts, RoleFieldImpact, RoleFieldAlternate,
+var SlotPatchFields = []string{
+	SlotFieldLabel, SlotFieldQuorum, SlotFieldCapacity, SlotFieldPositionLabels,
+	SlotFieldAcceptedTypes, SlotFieldPinnedProducts, SlotFieldImpact, SlotFieldAlternate,
 }
 
-// SystemRoleSpec is the declaration input. Which of its fields a write writes
-// is Write's business: a field outside the write set keeps whatever the role
-// already has, or, when the write creates the role, takes its default.
-type SystemRoleSpec struct {
+// SystemSlotSpec is the declaration input. Which of its fields a write writes
+// is Write's business: a field outside the write set keeps whatever the slot
+// already has, or, when the write creates the slot, takes its default.
+type SystemSlotSpec struct {
 	Name           string
 	Label          string
 	Quorum         int
@@ -101,7 +101,7 @@ type SystemRoleSpec struct {
 	Capacity       *int
 	PositionLabels []string
 	Impact         string // outage | degraded | none; empty means degraded
-	// AlternateID joins this role to one alternate of a choice (#626): nil
+	// AlternateID joins this slot to one alternate of a choice (#626): nil
 	// means "the caller did not mention this field", so an update leaves
 	// whatever is already declared alone, the same reading Capacity already
 	// gets one field up. A pointer to "" is the explicit detach path
@@ -110,7 +110,7 @@ type SystemRoleSpec struct {
 	// pointer to empty, or a pointer to a value on purpose: a plain string
 	// (the pre-#626-fix-round shape) cannot tell "omitted" apart from
 	// "explicitly detach" once both would write NULL, and every write that
-	// wholesale-replaced this field silently promoted a role from
+	// wholesale-replaced this field silently promoted a slot from
 	// conditional to mandatory on any edit that did not resend it, the exact
 	// failure amendment 7.1 blocked on the DELETE path re-entering through
 	// the UPDATE path. Set from a choice_alternate.id the caller already
@@ -118,8 +118,8 @@ type SystemRoleSpec struct {
 	// layer resolves a "choice/alternate" wire reference through
 	// PG.ResolveAlternate before building this spec), never from a raw name
 	// the write itself would have to look up: the composite FK
-	// (system_role_alternate_fk) is what refuses an id that belongs to a
-	// different owner, mapped to ErrRoleRefNotFound the same way an unknown
+	// (system_slot_alternate_fk) is what refuses an id that belongs to a
+	// different owner, mapped to ErrSlotRefNotFound the same way an unknown
 	// accepted type or pinned product is.
 	AlternateID *string
 	// Write is the resolved update_mask (#666): the fields this write
@@ -141,92 +141,92 @@ type SystemRoleSpec struct {
 // house's explicit-clear sentinel for an optional reference (emptyPtrToNil,
 // internal/api/products.go), and reading it as unpopulated would take the
 // detach path away.
-func (s SystemRoleSpec) Populated() updatemask.Fields {
+func (s SystemSlotSpec) Populated() updatemask.Fields {
 	p := updatemask.Fields{}
 	set := func(name string, on bool) {
 		if on {
 			p[name] = true
 		}
 	}
-	set(RoleFieldLabel, s.Label != "")
-	set(RoleFieldQuorum, s.Quorum != 0)
-	set(RoleFieldCapacity, s.Capacity != nil)
-	set(RoleFieldPositionLabels, len(s.PositionLabels) > 0)
-	set(RoleFieldAcceptedTypes, len(s.AcceptedTypes) > 0)
-	set(RoleFieldPinnedProducts, len(s.PinnedProducts) > 0)
-	set(RoleFieldImpact, s.Impact != "")
-	set(RoleFieldAlternate, s.AlternateID != nil)
+	set(SlotFieldLabel, s.Label != "")
+	set(SlotFieldQuorum, s.Quorum != 0)
+	set(SlotFieldCapacity, s.Capacity != nil)
+	set(SlotFieldPositionLabels, len(s.PositionLabels) > 0)
+	set(SlotFieldAcceptedTypes, len(s.AcceptedTypes) > 0)
+	set(SlotFieldPinnedProducts, len(s.PinnedProducts) > 0)
+	set(SlotFieldImpact, s.Impact != "")
+	set(SlotFieldAlternate, s.AlternateID != nil)
 	return p
 }
 
 // writeFields is the write set this spec actually writes: the explicit mask
 // when the caller resolved one, otherwise the implied mask over what the spec
 // populated.
-func (s SystemRoleSpec) writeFields() updatemask.Fields {
+func (s SystemSlotSpec) writeFields() updatemask.Fields {
 	if s.Write != nil {
 		return s.Write
 	}
 	return updatemask.Implied(s.Populated())
 }
 
-// EffectiveRole is one role resolved for a system: the declaration plus who fills
-// it here. FromStandard distinguishes a role inherited from the system's standard
+// EffectiveSlot is one slot resolved for a system: the declaration plus who fills
+// it here. FromStandard distinguishes a slot inherited from the system's standard
 // from one declared directly on the system, so the surface can show which is which.
 // Understaffed is Quorum minus the number of assignments, floored at zero.
-type EffectiveRole struct {
-	SystemRole
+type EffectiveSlot struct {
+	SystemSlot
 	FromStandard bool
-	AssignedTo   []string // component names filling this role in this system
+	AssignedTo   []string // component names filling this slot in this system
 	// Positions is AssignedTo's own 1-based position, index for index: a
-	// role's occupants persist gaps (an unassign never compacts, #626), so
+	// slot's occupants persist gaps (an unassign never compacts, #626), so
 	// AssignedTo[i]'s real position is Positions[i], never i+1. A caller that
 	// needs to address a specific occupant's slot (SwapPositions) must read
 	// this rather than assume the array is dense.
 	Positions []int
 }
 
-// Assigned reports how many components fill the role.
-func (e EffectiveRole) Assigned() int { return len(e.AssignedTo) }
+// Assigned reports how many components fill the slot.
+func (e EffectiveSlot) Assigned() int { return len(e.AssignedTo) }
 
-// Understaffed reports how many more components the role wants before its quorum
-// is met. Zero means the role is adequately staffed.
-func (e EffectiveRole) Understaffed() int {
+// Understaffed reports how many more components the slot wants before its quorum
+// is met. Zero means the slot is adequately staffed.
+func (e EffectiveSlot) Understaffed() int {
 	if short := e.Quorum - len(e.AssignedTo); short > 0 {
 		return short
 	}
 	return 0
 }
 
-// Role sentinels. A typed-slot refusal is its own error so the API can name
+// Slot sentinels. A typed-slot refusal is its own error so the API can name
 // WHICH type or product is wanted: an operator cannot act on a bare refusal.
 var (
-	ErrRoleNotFound      = errors.New("storage: system role not found")
-	ErrRoleExists        = errors.New("storage: a role with this name is already declared here")
-	ErrRoleRefNotFound   = errors.New("storage: role references a missing owner, type, or product")
-	ErrAssignmentMissing = errors.New("storage: role assignment not found")
-	ErrRoleImpact        = errors.New("storage: unknown role impact")
+	ErrSlotNotFound      = errors.New("storage: system slot not found")
+	ErrSlotExists        = errors.New("storage: a slot with this name is already declared here")
+	ErrSlotRefNotFound   = errors.New("storage: slot references a missing owner, type, or product")
+	ErrAssignmentMissing = errors.New("storage: slot assignment not found")
+	ErrSlotImpact        = errors.New("storage: unknown slot impact")
 	// ErrComponentAlreadyStaffed is the constraint-violation fallback for the
-	// one-role-per-component rule (#626): AssignRole's own pre-check normally
+	// one-slot-per-component rule (#626): AssignSlot's own pre-check normally
 	// catches this first and returns the richer ComponentStaffedShortfall, so
 	// this sentinel only fires under a genuine race the pre-check's snapshot
 	// missed.
-	ErrComponentAlreadyStaffed = errors.New("storage: component already fills a different role in this system")
-	// ErrRolePositionTaken is the constraint-violation fallback for a position
+	ErrComponentAlreadyStaffed = errors.New("storage: component already fills a different slot in this system")
+	// ErrSlotPositionTaken is the constraint-violation fallback for a position
 	// race: two concurrent assignments (or a swap) computed the same slot.
-	ErrRolePositionTaken = errors.New("storage: that position is already taken")
+	ErrSlotPositionTaken = errors.New("storage: that position is already taken")
 	// ErrCapacityBelowQuorum is the declaration-alone refusal (422): a capacity
-	// under the role's own quorum can never be satisfied by any staffing.
-	ErrCapacityBelowQuorum = errors.New("storage: capacity must be at least the role's quorum")
+	// under the slot's own quorum can never be satisfied by any staffing.
+	ErrCapacityBelowQuorum = errors.New("storage: capacity must be at least the slot's quorum")
 )
 
-// RoleNameCollision is the refusal when a write would leave one system with two
-// roles of one name, one inherited from its standard and one declared on it
+// SlotNameCollision is the refusal when a write would leave one system with two
+// slots of one name, one inherited from its standard and one declared on it
 // (#503, ADR-0503), and the refusal a staffing write gives when it finds such a
 // pair already there (a collision written before the rule). Every staffing
-// route addresses a role by its name within a system, so the name must mean one
-// role there; picking a winner between the two is the bug, not a resolution.
-type RoleNameCollision struct {
-	Role     string
+// route addresses a slot by its name within a system, so the name must mean one
+// slot there; picking a winner between the two is the bug, not a resolution.
+type SlotNameCollision struct {
+	Slot     string
 	Standard string
 	System   string
 	// SystemID is the system's id, so a caller can check it may read the
@@ -235,30 +235,30 @@ type RoleNameCollision struct {
 	SystemID string
 }
 
-func (e *RoleNameCollision) Error() string {
-	return fmt.Sprintf("storage: role %q would mean two roles in system %q: standard %q declares it and so does the system itself",
-		e.Role, e.System, e.Standard)
+func (e *SlotNameCollision) Error() string {
+	return fmt.Sprintf("storage: slot %q would mean two slots in system %q: standard %q declares it and so does the system itself",
+		e.Slot, e.System, e.Standard)
 }
 
-// roleNameLockKey serializes every write that changes which roles a system
-// has: a declaration or a withdrawal on either arc, a standard change, the role
+// slotNameLockKey serializes every write that changes which slots a system
+// has: a declaration or a withdrawal on either arc, a standard change, the slot
 // seed, and a standard's delete (#503, #506). A collision check reads one arc
 // and the write lands on the other (or on the system's standard pointer), so it
 // is compare-then-act across tables and needs one lock all of them take; and a
 // standard change carrying staffing must not interleave with a withdrawal or a
-// delete of the roles it carries between. It is taken FIRST in each of those
+// delete of the slots it carries between. It is taken FIRST in each of those
 // transactions, before any other lock (plain reads before it take none), so it
 // adds no edge to any lock order. These are rare acts, and an edit that leaves
 // a system's standard where it is takes no part (UpdateSystem), so serializing
 // them install-wide costs nothing anyone waits on.
-const roleNameLockKey = "system_role/name"
+const slotNameLockKey = "system_slot/name"
 
-func lockRoleNames(ctx context.Context, q txQuerier) error {
-	return lockAdvisory(ctx, q, roleNameLockKey)
+func lockSlotNames(ctx context.Context, q txQuerier) error {
+	return lockAdvisory(ctx, q, slotNameLockKey)
 }
 
 // systemArcCollision is the refusal for declaring name on a system whose
-// standard already declares it. systemArg is the owner roleOwnerArg resolved:
+// standard already declares it. systemArg is the owner slotOwnerArg resolved:
 // a system's id, or an unresolved reference, which matches nothing here and is
 // left to the owner arc CHECK to refuse.
 func systemArcCollision(ctx context.Context, q querier, systemArg, name string) error {
@@ -269,15 +269,15 @@ func systemArcCollision(ctx context.Context, q querier, systemArg, name string) 
 	err := q.QueryRow(ctx, `
 		select s.name, st.name from system s
 		join standard st on st.id = s.standard_id
-		join system_role r on r.owner_kind = 'standard' and r.standard_id = s.standard_id and r.name = $2
+		join system_slot r on r.owner_kind = 'standard' and r.standard_id = s.standard_id and r.name = $2
 		where s.id = $1::uuid`, systemArg, name).Scan(&systemName, &standardName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: role name check %s/%s: %w", systemArg, name, err)
+		return fmt.Errorf("storage: slot name check %s/%s: %w", systemArg, name, err)
 	}
-	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemArg}
+	return &SlotNameCollision{Slot: name, Standard: standardName, System: systemName, SystemID: systemArg}
 }
 
 // standardArcCollision is the refusal for declaring name on a standard one of
@@ -287,93 +287,93 @@ func standardArcCollision(ctx context.Context, q querier, standardID, standardNa
 	var systemID, systemName string
 	err := q.QueryRow(ctx, `
 		select s.id, s.name from system s
-		join system_role r on r.owner_kind = 'system' and r.system_id = s.id and r.name = $2
+		join system_slot r on r.owner_kind = 'system' and r.system_id = s.id and r.name = $2
 		where s.standard_id = $1::uuid
 		order by s.name, s.id limit 1`, standardID, name).Scan(&systemID, &systemName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: role name check %s/%s: %w", standardName, name, err)
+		return fmt.Errorf("storage: slot name check %s/%s: %w", standardName, name, err)
 	}
-	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemID}
+	return &SlotNameCollision{Slot: name, Standard: standardName, System: systemName, SystemID: systemID}
 }
 
 // standardMoveCollision is the refusal for moving a system onto a standard
-// that declares a name the system declares itself, naming the first such role.
+// that declares a name the system declares itself, naming the first such slot.
 func standardMoveCollision(ctx context.Context, q querier, systemID, systemName, standardID string) error {
-	var role, standardName string
+	var slot, standardName string
 	err := q.QueryRow(ctx, `
-		select r.name, st.name from system_role r
+		select r.name, st.name from system_slot r
 		join standard st on st.id = r.standard_id
 		where r.owner_kind = 'standard' and r.standard_id = $2::uuid
-		  and exists (select 1 from system_role a
+		  and exists (select 1 from system_slot a
 		               where a.owner_kind = 'system' and a.system_id = $1::uuid and a.name = r.name)
-		order by r.name limit 1`, systemID, standardID).Scan(&role, &standardName)
+		order by r.name limit 1`, systemID, standardID).Scan(&slot, &standardName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: role name check on move %s: %w", systemID, err)
+		return fmt.Errorf("storage: slot name check on move %s: %w", systemID, err)
 	}
-	return &RoleNameCollision{Role: role, Standard: standardName, System: systemName, SystemID: systemID}
+	return &SlotNameCollision{Slot: slot, Standard: standardName, System: systemName, SystemID: systemID}
 }
 
-// roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
+// slotImpacts is the impact domain, mirroring the table's CHECK. Validating here
 // turns a typo into a named refusal rather than a constraint violation.
-var roleImpacts = map[string]bool{"outage": true, "degraded": true, "none": true}
+var slotImpacts = map[string]bool{"outage": true, "degraded": true, "none": true}
 
 // TypeShortfall is the assignment refusal when the component's product's
-// component_type is not within the subtree of any type the role accepts. It
+// component_type is not within the subtree of any type the slot accepts. It
 // names both parties in operator vocabulary: what the component actually is,
-// and what the role wants, so the refusal is something an operator can act on.
+// and what the slot wants, so the refusal is something an operator can act on.
 type TypeShortfall struct {
 	Component     string
 	ComponentType string
-	Role          string
+	Slot          string
 	WantTypes     []string
 }
 
 func (e *TypeShortfall) Error() string {
-	return fmt.Sprintf("storage: component %q is a %s; role %q wants a %s",
-		e.Component, e.ComponentType, e.Role, strings.Join(e.WantTypes, " or a "))
+	return fmt.Sprintf("storage: component %q is a %s; slot %q wants a %s",
+		e.Component, e.ComponentType, e.Slot, strings.Join(e.WantTypes, " or a "))
 }
 
-// ProductPinShortfall is the assignment refusal when the role pins the slot to
+// ProductPinShortfall is the assignment refusal when the slot pins the slot to
 // specific products and the component's product is not one of them: the
 // component is the right type, just not one of the named products.
 type ProductPinShortfall struct {
 	Component        string
 	ComponentProduct string
-	Role             string
+	Slot             string
 	WantProducts     []string
 }
 
 func (e *ProductPinShortfall) Error() string {
-	return fmt.Sprintf("storage: component %q is product %q; role %q wants product %s",
-		e.Component, e.ComponentProduct, e.Role, strings.Join(e.WantProducts, " or "))
+	return fmt.Sprintf("storage: component %q is product %q; slot %q wants product %s",
+		e.Component, e.ComponentProduct, e.Slot, strings.Join(e.WantProducts, " or "))
 }
 
 // ComponentStaffedShortfall is the assignment refusal when the component
-// already fills a DIFFERENT role in the same system: #626 permits a
-// component at most one role per system, so this names which role it
+// already fills a DIFFERENT slot in the same system: #626 permits a
+// component at most one slot per system, so this names which slot it
 // already holds rather than leaving the operator to guess. Assigning it to
-// the SAME role it already holds is unaffected (idempotent, as before).
+// the SAME slot it already holds is unaffected (idempotent, as before).
 type ComponentStaffedShortfall struct {
 	Component string
-	HeldRole  string
+	HeldSlot  string
 	System    string
 }
 
 func (e *ComponentStaffedShortfall) Error() string {
-	return fmt.Sprintf("storage: component %q already fills %q in %q; a component fills at most one role per system",
-		e.Component, e.HeldRole, e.System)
+	return fmt.Sprintf("storage: component %q already fills %q in %q; a component fills at most one slot per system",
+		e.Component, e.HeldSlot, e.System)
 }
 
-// CapacityShortfall is the declaration refusal when lowering a role's
+// CapacityShortfall is the declaration refusal when lowering a slot's
 // capacity would put it below the number of components some conforming
-// system already has assigned to it. A standard-owned role is staffed
-// independently in every conforming system (assignments carry both role_id
+// system already has assigned to it. A standard-owned slot is staffed
+// independently in every conforming system (assignments carry both slot_id
 // and system_id), so the pre-check refuses if ANY conforming system would
 // exceed the new cap, naming whichever one exceeds it by the widest margin.
 // Exceeding lists every system over the new cap, worst first, so a caller
@@ -381,14 +381,14 @@ func (e *ComponentStaffedShortfall) Error() string {
 // fleet-wide, beyond any scope the declarer holds (#1216). System and Have
 // are the named one; an empty System means none is nameable to this caller.
 type CapacityShortfall struct {
-	Role      string
+	Slot      string
 	System    string
 	Have      int
 	Want      int
 	Exceeding []CapacityExcess
 }
 
-// CapacityExcess is one conforming system holding more components in a role
+// CapacityExcess is one conforming system holding more components in a slot
 // than a proposed capacity allows.
 type CapacityExcess struct {
 	SystemID string
@@ -397,11 +397,11 @@ type CapacityExcess struct {
 }
 
 func (e *CapacityShortfall) Error() string {
-	return fmt.Sprintf("storage: role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
-		e.Role, e.System, e.Have, e.Want)
+	return fmt.Sprintf("storage: slot %q in system %q is filled by %d components; capacity cannot be lowered to %d",
+		e.Slot, e.System, e.Have, e.Want)
 }
 
-// CapacityFullShortfall is the assignment refusal when a role already holds
+// CapacityFullShortfall is the assignment refusal when a slot already holds
 // as many components as its declared capacity allows. It is checked
 // explicitly, before a position is even computed, rather than left to
 // emerge from a position collision: a collision only reliably happens when
@@ -412,23 +412,23 @@ func (e *CapacityShortfall) Error() string {
 // find a free slot within the gap and silently exceed the cap instead of
 // colliding at all, so the explicit count is the only reliable enforcement.
 type CapacityFullShortfall struct {
-	Role     string
+	Slot     string
 	System   string
 	Have     int
 	Capacity int
 }
 
 func (e *CapacityFullShortfall) Error() string {
-	return fmt.Sprintf("storage: role %q in system %q already holds %d of its %d-component capacity",
-		e.Role, e.System, e.Have, e.Capacity)
+	return fmt.Sprintf("storage: slot %q in system %q already holds %d of its %d-component capacity",
+		e.Slot, e.System, e.Have, e.Capacity)
 }
 
-// EffectiveRoles resolves the roles a system needs filled: those its standard
+// EffectiveSlots resolves the slots a system needs filled: those its standard
 // declares (inherited) plus those declared directly on it (ad-hoc), each with
 // its typed-slot requirement and current assignments. A one-off system has
 // only the ad-hoc arm. The system must be within the read scope; out of scope
 // is the non-disclosing ErrSystemNotFound.
-func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error) {
+func (p *PG) EffectiveSlots(ctx context.Context, systemName string, read scope.Set) ([]EffectiveSlot, error) {
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (ruling 2, #627: ambiguity judged inside read, not
 	// fleet-wide): the query below binds sys.ID instead of re-deriving it
@@ -449,83 +449,83 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		with sys as (
 			select id, name, standard_id from system where id = $1::uuid
 		),
-		roles as (
+		slots as (
 			-- inherited: declared on the standard this system conforms to
 			select r.*, true as from_standard
-			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
+			from sys join system_slot r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
 			union all
 			-- ad-hoc: declared directly on this system
 			select r.*, false as from_standard
-			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
+			from sys join system_slot r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
-		select roles.id, roles.name, coalesce(roles.label, ''), roles.quorum, roles.capacity, roles.position_labels,
-		       roles.impact, `+alternateRefExpr("roles")+` as alternate,
-		       roles.from_standard, roles.created_at, roles.updated_at,
+		select slots.id, slots.name, coalesce(slots.label, ''), slots.quorum, slots.capacity, slots.position_labels,
+		       slots.impact, `+alternateRefExpr("slots")+` as alternate,
+		       slots.from_standard, slots.created_at, slots.updated_at,
 		       coalesce((select array_agg(ct.name order by ct.name)
-		                   from system_role_type rt join component_type ct on ct.id = rt.component_type_id
-		                  where rt.role_id = roles.id), '{}') as types,
+		                   from system_slot_type rt join component_type ct on ct.id = rt.component_type_id
+		                  where rt.slot_id = slots.id), '{}') as types,
 		       coalesce((select array_agg(pr.name order by pr.name)
-		                   from system_role_product rp join product pr on pr.id = rp.product_id
-		                  where rp.role_id = roles.id), '{}') as products,
+		                   from system_slot_product rp join product pr on pr.id = rp.product_id
+		                  where rp.slot_id = slots.id), '{}') as products,
 		       coalesce((select array_agg(ac.name order by ra.position)
-		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as assigned,
+		                   from system_slot_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.slot_id = slots.id and ra.system_id = sys.id), '{}') as assigned,
 		       coalesce((select array_agg(ra.position order by ra.position)
-		                   from system_role_assignment ra
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as positions
-		from roles, sys
-		order by roles.name`, sys.ID)
+		                   from system_slot_assignment ra
+		                  where ra.slot_id = slots.id and ra.system_id = sys.id), '{}') as positions
+		from slots, sys
+		order by slots.name`, sys.ID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: effective roles %s: %w", systemName, err)
+		return nil, fmt.Errorf("storage: effective slots %s: %w", systemName, err)
 	}
 	defer rows.Close()
 
-	var out []EffectiveRole
+	var out []EffectiveSlot
 	for rows.Next() {
-		var e EffectiveRole
+		var e EffectiveSlot
 		if err := rows.Scan(&e.ID, &e.Name, &e.Label, &e.Quorum, &e.Capacity, &e.PositionLabels,
 			&e.Impact, &e.Alternate, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
 			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo, &e.Positions); err != nil {
-			return nil, fmt.Errorf("storage: scan effective role: %w", err)
+			return nil, fmt.Errorf("storage: scan effective slot: %w", err)
 		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
 }
 
-// AssignRole binds a component to a role in a system, refusing the assignment
+// AssignSlot binds a component to a slot in a system, refusing the assignment
 // when the component is not a typed match: its product's component_type must
-// fall within the subtree of a type the role accepts (any type, if the role
-// accepts none), and if the role pins specific products, the component's
+// fall within the subtree of a type the slot accepts (any type, if the slot
+// accepts none), and if the slot pins specific products, the component's
 // product must be one of them. The guard is the point of the typed-slot
-// model: it names both parties (what the component is, what the role wants)
+// model: it names both parties (what the component is, what the slot wants)
 // so the operator can act on the refusal rather than guess.
 //
-// Idempotent: assigning the same component to the same role twice is a no-op.
+// Idempotent: assigning the same component to the same slot twice is a no-op.
 //
 // Both ends are scope-checked, the way AddMember checks them (#510): read and
 // action are the caller's system:read and system:update sets, componentRead and
-// componentAction its component:read and component:update sets. Staffing a role
+// componentAction its component:read and component:update sets. Staffing a slot
 // is membership, so it writes onto the component as well as the system.
-func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
+func (p *PG) AssignSlot(ctx context.Context, actorID, systemName, slotName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin assign role: %w", err)
+		return fmt.Errorf("storage: begin assign slot: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction, nil); err != nil {
+	if err := p.assignSlotTx(ctx, tx, actorID, systemName, slotName, componentName, read, action, componentRead, componentAction, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit assign role: %w", err)
+		return fmt.Errorf("storage: commit assign slot: %w", err)
 	}
 	return nil
 }
 
-// assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
+// assignSlotTx is AssignSlot inside a transaction the caller owns, so a composite write (adding
 // a simulated system) can create it alongside the rest and commit once. A composite passes a
 // non-nil deferred to recompute health once at its own end (#915); nil recomputes here.
-func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set, deferred *healthDeferral) error {
+func (p *PG) assignSlotTx(ctx context.Context, tx pgx.Tx, actorID, systemName, slotName, componentName string, read, action, componentRead, componentAction scope.Set, deferred *healthDeferral) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -545,17 +545,17 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 		return err
 	}
 
-	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
+	slotID, slotDisplay, acceptedTypes, pinnedProducts, err := p.resolveSlot(ctx, tx, sys.ID, slotName)
 	if err != nil {
 		return err
 	}
-	// Position allocation reads and acts on the same (system, role) staffing
-	// snapshot it is about to change, so it takes this role's advisory lock
+	// Position allocation reads and acts on the same (system, slot) staffing
+	// snapshot it is about to change, so it takes this slot's advisory lock
 	// for the rest of the transaction (#626): two concurrent assigns must
-	// not compute the same next-free position, and UnassignRole and
+	// not compute the same next-free position, and UnassignSlot and
 	// SwapPositions take the same key, so allocation and reordering
 	// serialize against each other too.
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, slotPositionLockKey(sys.ID, slotID)); err != nil {
 		return err
 	}
 	// Resolve the component on its own tier before judging what it is (#510):
@@ -572,63 +572,63 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err != nil {
 		return err
 	}
-	if err := p.slotShortfall(ctx, tx, component.ID, componentName, roleDisplay, acceptedTypes, pinnedProducts); err != nil {
+	if err := p.slotShortfall(ctx, tx, component.ID, componentName, slotDisplay, acceptedTypes, pinnedProducts); err != nil {
 		return err
 	}
 
-	// A component fills at most one role per system (#626). This pre-check runs
+	// A component fills at most one slot per system (#626). This pre-check runs
 	// ahead of the unique index so the refusal can name BOTH parties: the
-	// component and the role it already holds, which a constraint name alone
-	// cannot do. Excluded is the target role itself, so re-assigning to the
-	// role a component already holds stays idempotent.
-	var heldRole string
+	// component and the slot it already holds, which a constraint name alone
+	// cannot do. Excluded is the target slot itself, so re-assigning to the
+	// slot a component already holds stays idempotent.
+	var heldSlot string
 	err = tx.QueryRow(ctx, `
-		select coalesce(r.label, '') from system_role_assignment ra
-		join system_role r on r.id = ra.role_id
+		select coalesce(r.label, '') from system_slot_assignment ra
+		join system_slot r on r.id = ra.slot_id
 		where ra.system_id = $1::uuid
 		  and ra.component_id = $2::uuid
-		  and ra.role_id <> $3`, sys.ID, component.ID, roleID).Scan(&heldRole)
+		  and ra.slot_id <> $3`, sys.ID, component.ID, slotID).Scan(&heldSlot)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		// not staffed elsewhere in this system
 	case err != nil:
 		return fmt.Errorf("storage: check existing staffing %s/%s: %w", systemName, componentName, err)
 	default:
-		return &ComponentStaffedShortfall{Component: componentName, HeldRole: heldRole, System: systemName}
+		return &ComponentStaffedShortfall{Component: componentName, HeldSlot: heldSlot, System: systemName}
 	}
 
 	// Capacity is enforced here explicitly, counting assignment rows for
-	// this (system, role): with a component fully staffed at most once per
+	// this (system, slot): with a component fully staffed at most once per
 	// system (the constraint above) and its position column unique per
-	// (system, role, position) and NOT NULL, a row, an occupied position,
+	// (system, slot, position) and NOT NULL, a row, an occupied position,
 	// and a distinct component all count the same thing here, so this is
-	// the same count SetSystemRole's lowering pre-check already makes.
-	// Skipped when the component already holds this exact role, so a full
-	// role's existing occupants stay idempotent.
+	// the same count SetSystemSlot's lowering pre-check already makes.
+	// Skipped when the component already holds this exact slot, so a full
+	// slot's existing occupants stay idempotent.
 	var alreadyHere bool
 	if err := tx.QueryRow(ctx, `select exists (
-		select 1 from system_role_assignment
+		select 1 from system_slot_assignment
 		 where system_id = $1::uuid
-		   and role_id = $2 and component_id = $3::uuid)`,
-		sys.ID, roleID, component.ID).Scan(&alreadyHere); err != nil {
-		return fmt.Errorf("storage: check existing assignment %s/%s: %w", systemName, roleID, err)
+		   and slot_id = $2 and component_id = $3::uuid)`,
+		sys.ID, slotID, component.ID).Scan(&alreadyHere); err != nil {
+		return fmt.Errorf("storage: check existing assignment %s/%s: %w", systemName, slotID, err)
 	}
 	if !alreadyHere {
 		var capacity *int
 		var have int
 		if err := tx.QueryRow(ctx, `
 			select r.capacity, (
-				select count(*) from system_role_assignment ra
-				 where ra.system_id = $1::uuid and ra.role_id = $2
-			) from system_role r where r.id = $2`, sys.ID, roleID).Scan(&capacity, &have); err != nil {
-			return fmt.Errorf("storage: role capacity check %s/%s: %w", systemName, roleID, err)
+				select count(*) from system_slot_assignment ra
+				 where ra.system_id = $1::uuid and ra.slot_id = $2
+			) from system_slot r where r.id = $2`, sys.ID, slotID).Scan(&capacity, &have); err != nil {
+			return fmt.Errorf("storage: slot capacity check %s/%s: %w", systemName, slotID, err)
 		}
 		if capacity != nil && have >= *capacity {
-			return &CapacityFullShortfall{Role: roleDisplay, System: systemName, Have: have, Capacity: *capacity}
+			return &CapacityFullShortfall{Slot: slotDisplay, System: systemName, Have: have, Capacity: *capacity}
 		}
 	}
 
-	// Staffing a role IS membership, so the binding is created here rather than
+	// Staffing a slot IS membership, so the binding is created here rather than
 	// asked of the operator as a separate step. A component filling a job in a
 	// system that the system does not count as a member is the contradiction
 	// system_member exists to make impossible. The label lock goes first (see
@@ -649,7 +649,7 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 		return err
 	}
 	// Next free position: the lowest unused positive integer within
-	// (system, role), capped at capacity when the role declares one. Not
+	// (system, slot), capped at capacity when the slot declares one. Not
 	// max(position)+1: TestUnassignLeavesGapThenRefills requires a vacated
 	// slot to be reused rather than growing without bound while the
 	// occupant count stays under capacity.
@@ -657,46 +657,46 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	// The search space is bounded by count+1 (pigeonhole: with n existing
 	// occupants there are at most n gaps below the maximum, so a free slot
 	// always exists at or before position n+1), further capped at capacity
-	// when the role declares one. This is what keeps generate_series small
-	// (proportional to the role's own occupancy, never a materialized
-	// billion-row series for an unbounded role) while still finding a gap
-	// rather than skipping past it. At a role already full to its capacity,
+	// when the slot declares one. This is what keeps generate_series small
+	// (proportional to the slot's own occupancy, never a materialized
+	// billion-row series for an unbounded slot) while still finding a gap
+	// rather than skipping past it. At a slot already full to its capacity,
 	// count+1 exceeds capacity, so the bound collapses to capacity itself;
 	// every slot in [1, capacity] is occupied, nothing is found free, and
 	// this resolves to position 1 (occupied), which then collides on the
 	// deferrable uniqueness constraint below and is refused as
-	// ErrRolePositionTaken rather than silently exceeding the declared cap.
+	// ErrSlotPositionTaken rather than silently exceeding the declared cap.
 	var position int
 	if err := tx.QueryRow(ctx, `
 		with cnt as (
-			select count(*) as n from system_role_assignment
-			 where system_id = $1::uuid and role_id = $2
+			select count(*) as n from system_slot_assignment
+			 where system_id = $1::uuid and slot_id = $2
 		)
 		select coalesce(min(g.n), 1)
-		  from cnt, generate_series(1, least(coalesce((select capacity from system_role where id = $2), cnt.n + 1), cnt.n + 1)) g(n)
+		  from cnt, generate_series(1, least(coalesce((select capacity from system_slot where id = $2), cnt.n + 1), cnt.n + 1)) g(n)
 		 where not exists (
-		     select 1 from system_role_assignment ra
+		     select 1 from system_slot_assignment ra
 		      where ra.system_id = $1::uuid
-		        and ra.role_id = $2 and ra.position = g.n)`,
-		sys.ID, roleID).Scan(&position); err != nil {
-		return fmt.Errorf("storage: next free position %s/%s: %w", systemName, roleID, err)
+		        and ra.slot_id = $2 and ra.position = g.n)`,
+		sys.ID, slotID).Scan(&position); err != nil {
+		return fmt.Errorf("storage: next free position %s/%s: %w", systemName, slotID, err)
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into system_role_assignment (system_id, role_id, component_id, position)
+		insert into system_slot_assignment (system_id, slot_id, component_id, position)
 		values ($1::uuid, $2, $3::uuid, $4)
-		on conflict (system_id, role_id, component_id) do nothing`,
-		sys.ID, roleID, component.ID, position); err != nil {
-		return mapRoleWriteErr(err)
+		on conflict (system_id, slot_id, component_id) do nothing`,
+		sys.ID, slotID, component.ID, position); err != nil {
+		return mapSlotWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
-		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_slot_assignment", slotID, nil,
+		map[string]string{"system": systemName, "slot": slotName, "component": componentName}); err != nil {
 		return err
 	}
 	// The system's members moved: its calc rules recompute on the next tick.
 	if err := markSystemCalcRules(ctx, tx, sys.ID); err != nil {
 		return err
 	}
-	// Staffing changes health: the role may have just reached quorum. The system is
+	// Staffing changes health: the slot may have just reached quorum. The system is
 	// named explicitly rather than left to the component's assignments, so assign
 	// and unassign take the same path.
 	if err := p.recomputeOrDefer(ctx, tx, deferred, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}); err != nil {
@@ -705,21 +705,21 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	return nil
 }
 
-// UnassignRole removes a component from a role, returning ErrAssignmentMissing
+// UnassignSlot removes a component from a slot, returning ErrAssignmentMissing
 // when it was not filling it. The occupant must be inside componentAction, the
 // caller's component:update set (#510), or the write is ErrComponentForbidden;
 // like RemoveMember an occupant gets no non-disclosing not-found, because the
-// role's own read names its occupants to anyone who reads the system, and a
+// slot's own read names its occupants to anyone who reads the system, and a
 // name that occupies nothing here is told apart from a missing one only within
 // componentRead (see resolveMembershipEndsForRemoval).
-func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
+func (p *PG) UnassignSlot(ctx context.Context, actorID, systemName, slotName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin unassign role: %w", err)
+		return fmt.Errorf("storage: begin unassign slot: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Resolved once (see AssignRole's comment): every statement below binds an
+	// Resolved once (see AssignSlot's comment): every statement below binds an
 	// id rather than re-deriving one from a name, and the resolve makes the
 	// read-then-action split (#736) with ambiguity judged inside the read scope
 	// rather than fleet-wide (ruling 2, #627).
@@ -730,30 +730,30 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
 		return err
 	}
-	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
+	slotID, _, _, _, err := p.resolveSlot(ctx, tx, sys.ID, slotName)
 	if err != nil {
 		return err
 	}
-	// Resolved within THIS role's current occupants, not fleet-wide (#627
+	// Resolved within THIS slot's current occupants, not fleet-wide (#627
 	// review round 3, closing #645 without a wire change): the caller is
 	// naming a component it already believes fills this slot, so a
 	// same-named component elsewhere in the fleet that never occupied it
 	// was never actually a candidate, only ambiguous under the coarser
 	// scopedByName resolve this replaced. A name matching nothing anywhere
 	// is ErrComponentNotFound; a name matching something real that just
-	// does not occupy this role is ErrAssignmentMissing, the more specific
+	// does not occupy this slot is ErrAssignmentMissing, the more specific
 	// (and pre-existing) not-found the unfiltered "all" set preserves.
 	// withoutCandidates still applies to a genuine occupancy-scoped
-	// ambiguity (two same-named components both occupying this role, only
+	// ambiguity (two same-named components both occupying this slot, only
 	// possible at quorum > 1): defense in depth, even though every
-	// candidate here is already visible to this caller via the role's own
+	// candidate here is already visible to this caller via the slot's own
 	// assigned_to read.
 	all, occupying, err := loadByRefWithin(ctx, tx, componentConfig, componentName, func(id string) (bool, error) {
 		var ok bool
 		err := tx.QueryRow(ctx, `select exists(
-			select 1 from system_role_assignment
-			where system_id = $1::uuid and role_id = $2 and component_id = $3::uuid)`,
-			sys.ID, roleID, id).Scan(&ok)
+			select 1 from system_slot_assignment
+			where system_id = $1::uuid and slot_id = $2 and component_id = $3::uuid)`,
+			sys.ID, slotID, id).Scan(&ok)
 		return ok, err
 	})
 	if err != nil {
@@ -776,25 +776,25 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err := requireComponentAction(ctx, tx, component.ID, componentAction); err != nil {
 		return err
 	}
-	// Same key AssignRole and SwapPositions take: an unassign vacating a
+	// Same key AssignSlot and SwapPositions take: an unassign vacating a
 	// position must serialize against a concurrent assign that could
 	// otherwise compute the same now-free slot as its "next free" before
 	// this transaction's delete commits.
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, slotPositionLockKey(sys.ID, slotID)); err != nil {
 		return err
 	}
 	var assignmentID string
 	if err := tx.QueryRow(ctx, `
-		delete from system_role_assignment
-		where system_id = $1::uuid and role_id = $2
+		delete from system_slot_assignment
+		where system_id = $1::uuid and slot_id = $2
 		  and component_id = $3::uuid
-		returning id`, sys.ID, roleID, component.ID).Scan(&assignmentID); err != nil {
+		returning id`, sys.ID, slotID, component.ID).Scan(&assignmentID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAssignmentMissing
 		}
-		return fmt.Errorf("storage: unassign role: %w", err)
+		return fmt.Errorf("storage: unassign slot: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", assignmentID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_slot_assignment", assignmentID, nil, nil); err != nil {
 		return err
 	}
 	// The system's members moved: its calc rules recompute on the next tick.
@@ -807,18 +807,18 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit unassign role: %w", err)
+		return fmt.Errorf("storage: commit unassign slot: %w", err)
 	}
 	return nil
 }
 
-// rolePositionLockKey is the advisory-lock key AssignRole, UnassignRole and
-// SwapPositions all take on a (system, role) pair, so position allocation and
+// slotPositionLockKey is the advisory-lock key AssignSlot, UnassignSlot and
+// SwapPositions all take on a (system, slot) pair, so position allocation and
 // reordering serialize against each other (#626). Both halves are ids, not
-// names: two systems (like two roles across different owners) can share a
+// names: two systems (like two slots across different owners) can share a
 // name, but never an id.
-func rolePositionLockKey(systemID, roleID string) string {
-	return "system_role_assignment/" + systemID + "/" + roleID
+func slotPositionLockKey(systemID, slotID string) string {
+	return "system_slot_assignment/" + systemID + "/" + slotID
 }
 
 // systemStaffingLockKey is the advisory-lock key that serializes a system's
@@ -830,10 +830,10 @@ func systemStaffingLockKey(systemID string) string {
 }
 
 // lockSystemForStaffing takes the system's staffing lock SHARED for the rest of
-// a staffing write (#506, ADR-0506), before the write resolves its role. A
+// a staffing write (#506, ADR-0506), before the write resolves its slot. A
 // standard change holds the same lock exclusive while it carries the system's
-// staffing onto the new standard's roles, so a staffing write either finishes
-// before the change reads the assignments or resolves its role after the change
+// staffing onto the new standard's slots, so a staffing write either finishes
+// before the change reads the assignments or resolves its slot after the change
 // commits, against the new standard. Without it, an assign resolved against the
 // standard being left could land after the change had settled the rest,
 // stranding exactly the row the change exists to carry. Staffing writes share
@@ -852,7 +852,7 @@ func lockSystemForStaffing(ctx context.Context, q txQuerier, systemID string) er
 }
 
 // lockSystemStandardChange takes the system's staffing lock EXCLUSIVE for the
-// rest of a standard change, after the role-name lock and before the change
+// rest of a standard change, after the slot-name lock and before the change
 // touches the system's row, so no staffing write on the system is mid-flight
 // while the change carries its staffing (see lockSystemForStaffing).
 func lockSystemStandardChange(ctx context.Context, q txQuerier, systemID string) error {
@@ -860,20 +860,20 @@ func lockSystemStandardChange(ctx context.Context, q txQuerier, systemID string)
 }
 
 // SwapPositions exchanges the positions of whichever components currently
-// hold positions a and b within a role. It is an ordering change only: who
-// occupies the role and the system's health are unaffected, so this does
-// not recompute health the way AssignRole and UnassignRole do. Either
+// hold positions a and b within a slot. It is an ordering change only: who
+// occupies the slot and the system's health are unaffected, so this does
+// not recompute health the way AssignSlot and UnassignSlot do. Either
 // position not currently held by an occupant is ErrAssignmentMissing, the
 // same not-found the rest of the staffing surface uses for "there is
 // nothing here to act on". Swapping a position with itself is a no-op.
-func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, read, action scope.Set) error {
+func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, slotName string, a, b int, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin swap positions: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Resolved once (see AssignRole's comment), with the same read-then-action
+	// Resolved once (see AssignSlot's comment), with the same read-then-action
 	// split (#736) and ambiguity judged inside the read scope (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
@@ -882,43 +882,43 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
 		return err
 	}
-	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
+	slotID, _, _, _, err := p.resolveSlot(ctx, tx, sys.ID, slotName)
 	if err != nil {
 		return err
 	}
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, slotPositionLockKey(sys.ID, slotID)); err != nil {
 		return err
 	}
 	if a == b {
 		return nil
 	}
 
-	// The uniqueness constraint on (system_id, role_id, position) is
+	// The uniqueness constraint on (system_id, slot_id, position) is
 	// DEFERRABLE INITIALLY IMMEDIATE precisely for this statement: a plain
 	// unique index is checked per updated tuple, so a single UPDATE moving
 	// two rows into each other's slots would raise the moment the first row
 	// lands on the other's position. Deferring it to end-of-transaction
 	// lets both land before either is checked. No ON CONFLICT may ever name
 	// this constraint as its arbiter (Postgres refuses a deferrable
-	// constraint as an arbiter); AssignRole's own arbiter is the unrelated,
-	// non-deferrable (system_id, role_id, component_id) key.
-	if _, err := tx.Exec(ctx, `set constraints system_role_assignment_position_key deferred`); err != nil {
+	// constraint as an arbiter); AssignSlot's own arbiter is the unrelated,
+	// non-deferrable (system_id, slot_id, component_id) key.
+	if _, err := tx.Exec(ctx, `set constraints system_slot_assignment_position_key deferred`); err != nil {
 		return fmt.Errorf("storage: defer position uniqueness: %w", err)
 	}
 	tag, err := tx.Exec(ctx, `
-		update system_role_assignment
+		update system_slot_assignment
 		   set position = case position when $3 then $4 when $4 then $3 end
 		 where system_id = $1::uuid
-		   and role_id = $2
-		   and position in ($3, $4)`, sys.ID, roleID, a, b)
+		   and slot_id = $2
+		   and position in ($3, $4)`, sys.ID, slotID, a, b)
 	if err != nil {
-		return mapRoleWriteErr(err)
+		return mapSlotWriteErr(err)
 	}
 	if tag.RowsAffected() != 2 {
 		return ErrAssignmentMissing
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
-		map[string]any{"system": systemName, "role": roleName, "swap": [2]int{a, b}}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_slot_assignment", slotID, nil,
+		map[string]any{"system": systemName, "slot": slotName, "swap": [2]int{a, b}}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -927,18 +927,18 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	return nil
 }
 
-// roleRef pairs a catalog row's id (for the subtree/membership check) with
-// its name (for a refusal message): shared shape for a role's accepted
+// slotRef pairs a catalog row's id (for the subtree/membership check) with
+// its name (for a refusal message): shared shape for a slot's accepted
 // component_types and its pinned products.
-type roleRef struct {
+type slotRef struct {
 	ID   uuid.UUID
 	Name string
 }
 
-// roleRefNames projects a []roleRef to its names, in the order resolved
-// (alphabetical, per resolveRole's queries), so a multi-type or multi-product
+// slotRefNames projects a []slotRef to its names, in the order resolved
+// (alphabetical, per resolveSlot's queries), so a multi-type or multi-product
 // refusal reads deterministically.
-func roleRefNames(refs []roleRef) []string {
+func slotRefNames(refs []slotRef) []string {
 	names := make([]string, len(refs))
 	for i, r := range refs {
 		names[i] = r.Name
@@ -946,32 +946,32 @@ func roleRefNames(refs []roleRef) []string {
 	return names
 }
 
-// resolveRole finds a role by name for a system, looking at both arcs (the
-// system's own roles and those its standard declares), and returns its id,
+// resolveSlot finds a slot by name for a system, looking at both arcs (the
+// system's own slots and those its standard declares), and returns its id,
 // label, and the typed-slot guard's requirements: the component_types
 // it accepts (empty means any) and the products it pins (empty means any
 // product of an accepted type). Takes the system's id directly: every caller
-// has already resolved it (AssignRole, UnassignRole, SwapPositions), and the
-// role name it looks up within stays scoped to a single owner arc either way,
+// has already resolved it (AssignSlot, UnassignSlot, SwapPositions), and the
+// slot name it looks up within stays scoped to a single owner arc either way,
 // so binding the id here avoids one more name-subquery that would raise
 // SQLSTATE 21000 the moment two systems share a name (#627).
 //
 // Every match is read, not just the first (#503, ADR-0503): a name declared on
 // both arcs, which the declaration paths now refuse but a database from before
-// that rule can still hold, is a RoleNameCollision naming both owners, never
+// that rule can still hold, is a SlotNameCollision naming both owners, never
 // whichever row the database happened to return.
-func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, label string, acceptedTypes, pinnedProducts []roleRef, err error) {
+func (p *PG) resolveSlot(ctx context.Context, q txQuerier, systemID, slotName string) (id, label string, acceptedTypes, pinnedProducts []slotRef, err error) {
 	rows, err := q.Query(ctx, `
 		with sys as (select id, name, standard_id from system where id = $1::uuid)
 		select r.id, coalesce(r.label, ''), sys.name,
 		       coalesce((select st.name from standard st where st.id = r.standard_id), '')
 		from sys
-		join system_role r
+		join system_slot r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		where r.name = $2`, systemID, roleName)
+		where r.name = $2`, systemID, slotName)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
+		return "", "", nil, nil, fmt.Errorf("storage: resolve slot %s/%s: %w", systemID, slotName, err)
 	}
 	var matches int
 	var systemName, standardName string
@@ -979,7 +979,7 @@ func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName st
 		var mID, mLabel, mSystem, mStandard string
 		if err := rows.Scan(&mID, &mLabel, &mSystem, &mStandard); err != nil {
 			rows.Close()
-			return "", "", nil, nil, fmt.Errorf("storage: scan role %s/%s: %w", systemID, roleName, err)
+			return "", "", nil, nil, fmt.Errorf("storage: scan slot %s/%s: %w", systemID, slotName, err)
 		}
 		matches++
 		systemName = mSystem
@@ -990,38 +990,38 @@ func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName st
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
+		return "", "", nil, nil, fmt.Errorf("storage: resolve slot %s/%s: %w", systemID, slotName, err)
 	}
 	switch {
 	case matches == 0:
-		return "", "", nil, nil, ErrRoleNotFound
+		return "", "", nil, nil, ErrSlotNotFound
 	case matches > 1:
-		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName, SystemID: systemID}
+		return "", "", nil, nil, &SlotNameCollision{Slot: slotName, Standard: standardName, System: systemName, SystemID: systemID}
 	}
 
-	acceptedTypes, pinnedProducts, err = roleSlot(ctx, q, id)
+	acceptedTypes, pinnedProducts, err = slotGuardSets(ctx, q, id)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
 	return id, label, acceptedTypes, pinnedProducts, nil
 }
 
-// roleSlot loads one role's typed-slot requirements, the two sets the guard
+// slotGuardSets loads one slot's typed-slot requirements, the two sets the guard
 // compares a component against: the component_types it accepts (empty means
 // any) and the products it pins (empty means any product of an accepted type),
 // each alphabetical so a refusal naming them reads deterministically.
-func roleSlot(ctx context.Context, q querier, roleID string) (acceptedTypes, pinnedProducts []roleRef, err error) {
+func slotGuardSets(ctx context.Context, q querier, slotID string) (acceptedTypes, pinnedProducts []slotRef, err error) {
 	typeRows, err := q.Query(ctx, `
 		select ct.id, ct.name
-		from system_role_type rt join component_type ct on ct.id = rt.component_type_id
-		where rt.role_id = $1
-		order by ct.name`, roleID)
+		from system_slot_type rt join component_type ct on ct.id = rt.component_type_id
+		where rt.slot_id = $1
+		order by ct.name`, slotID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("storage: role accepted types %s: %w", roleID, err)
+		return nil, nil, fmt.Errorf("storage: slot accepted types %s: %w", slotID, err)
 	}
 	defer typeRows.Close()
 	for typeRows.Next() {
-		var t roleRef
+		var t slotRef
 		if err := typeRows.Scan(&t.ID, &t.Name); err != nil {
 			return nil, nil, fmt.Errorf("storage: scan accepted type: %w", err)
 		}
@@ -1033,15 +1033,15 @@ func roleSlot(ctx context.Context, q querier, roleID string) (acceptedTypes, pin
 
 	prodRows, err := q.Query(ctx, `
 		select pr.id, pr.name
-		from system_role_product rp join product pr on pr.id = rp.product_id
-		where rp.role_id = $1
-		order by pr.name`, roleID)
+		from system_slot_product rp join product pr on pr.id = rp.product_id
+		where rp.slot_id = $1
+		order by pr.name`, slotID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("storage: role pinned products %s: %w", roleID, err)
+		return nil, nil, fmt.Errorf("storage: slot pinned products %s: %w", slotID, err)
 	}
 	defer prodRows.Close()
 	for prodRows.Next() {
-		var pr roleRef
+		var pr slotRef
 		if err := prodRows.Scan(&pr.ID, &pr.Name); err != nil {
 			return nil, nil, fmt.Errorf("storage: scan pinned product: %w", err)
 		}
@@ -1051,14 +1051,14 @@ func roleSlot(ctx context.Context, q querier, roleID string) (acceptedTypes, pin
 }
 
 // slotShortfall is the typed-slot guard (#626), the one judgment of whether a
-// component may fill a role: its product's component_type must fall within
-// the subtree of a type the role accepts (any type, if the role accepts none),
-// and if the role pins products, its product must be one of them. It returns
+// component may fill a slot: its product's component_type must fall within
+// the subtree of a type the slot accepts (any type, if the slot accepts none),
+// and if the slot pins products, its product must be one of them. It returns
 // the refusal naming both parties (TypeShortfall, ProductPinShortfall), or nil
-// when the component fits. AssignRole runs it before staffing, and a standard
+// when the component fits. AssignSlot runs it before staffing, and a standard
 // change runs it again before carrying an occupant onto the new standard's
-// role of the same name (ADR-0506), so no path staffs a mismatch.
-func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componentName, roleDisplay string, acceptedTypes, pinnedProducts []roleRef) error {
+// slot of the same name (ADR-0506), so no path staffs a mismatch.
+func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componentName, slotDisplay string, acceptedTypes, pinnedProducts []slotRef) error {
 	cls, err := p.classifyComponent(ctx, q, componentID)
 	if err != nil {
 		return err
@@ -1078,7 +1078,7 @@ func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componen
 		if !within {
 			return &TypeShortfall{
 				Component: componentName, ComponentType: cls.TypeName,
-				Role: roleDisplay, WantTypes: roleRefNames(acceptedTypes),
+				Slot: slotDisplay, WantTypes: slotRefNames(acceptedTypes),
 			}
 		}
 	}
@@ -1093,7 +1093,7 @@ func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componen
 		if !pinned {
 			return &ProductPinShortfall{
 				Component: componentName, ComponentProduct: cls.ProductName,
-				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
+				Slot: slotDisplay, WantProducts: slotRefNames(pinnedProducts),
 			}
 		}
 	}
@@ -1101,7 +1101,7 @@ func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componen
 }
 
 // componentClassification is the pair the typed-slot guard compares against a
-// role's accepted types and pinned products: the component's product and that
+// slot's accepted types and pinned products: the component's product and that
 // product's component_type. Every component carries a product and every
 // product a component_type (both NOT NULL floors, #614), so this always
 // resolves once the component itself is confirmed to exist.
@@ -1113,7 +1113,7 @@ type componentClassification struct {
 }
 
 // classifyComponent resolves a component's typed-slot classification. Takes
-// the component's id directly: AssignRole has already resolved it (see its
+// the component's id directly: AssignSlot has already resolved it (see its
 // comment).
 func (p *PG) classifyComponent(ctx context.Context, q querier, componentID string) (*componentClassification, error) {
 	var c componentClassification
@@ -1129,37 +1129,37 @@ func (p *PG) classifyComponent(ctx context.Context, q querier, componentID strin
 	return &c, nil
 }
 
-// mapRoleWriteErr discriminates a role write's Postgres error by constraint
+// mapSlotWriteErr discriminates a slot write's Postgres error by constraint
 // name (#626): a plain isUniqueViolation check cannot tell a name collision
 // from a double-staffing race from a position race, and would report all
-// three as "a role with this name is already declared here".
-func mapRoleWriteErr(err error) error {
+// three as "a slot with this name is already declared here".
+func mapSlotWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch {
 		case pgErr.Code == "23505":
 			switch pgErr.ConstraintName {
-			case "system_role_assignment_component_key":
+			case "system_slot_assignment_component_key":
 				return ErrComponentAlreadyStaffed
-			case "system_role_assignment_position_key":
-				return ErrRolePositionTaken
+			case "system_slot_assignment_position_key":
+				return ErrSlotPositionTaken
 			}
-			return ErrRoleExists
-		case pgErr.Code == "23514" && pgErr.ConstraintName == "system_role_capacity_check":
+			return ErrSlotExists
+		case pgErr.Code == "23514" && pgErr.ConstraintName == "system_slot_capacity_check":
 			return ErrCapacityBelowQuorum
-		case pgErr.Code == "23514" && (pgErr.ConstraintName == "system_role_owner_arc_check" || pgErr.ConstraintName == "role_choice_owner_arc_check"):
-			// A bogus owner name resolves to NULL through roleOwnerExpr rather
+		case pgErr.Code == "23514" && (pgErr.ConstraintName == "system_slot_owner_arc_check" || pgErr.ConstraintName == "slot_choice_owner_arc_check"):
+			// A bogus owner name resolves to NULL through slotOwnerExpr rather
 			// than failing outright (#626): the arc CHECK is what catches it, so
 			// the same unknown-reference sentinel a bad accepted type or pinned
 			// product gets applies here too.
-			return ErrRoleRefNotFound
+			return ErrSlotRefNotFound
 		case pgErr.Code == "23503",
 			// an unknown component_type, product, or alternate id resolves to
-			// null (or, for the four-column system_role_alternate_fk, a
+			// null (or, for the four-column system_slot_alternate_fk, a
 			// foreign owner) on a guarded reference
 			pgErr.Code == "23502" && (pgErr.ColumnName == "component_type_id" || pgErr.ColumnName == "product_id"):
-			return ErrRoleRefNotFound
+			return ErrSlotRefNotFound
 		}
 	}
-	return fmt.Errorf("storage: role write: %w", err)
+	return fmt.Errorf("storage: slot write: %w", err)
 }

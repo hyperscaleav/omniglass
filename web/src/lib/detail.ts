@@ -69,31 +69,31 @@ export function isRoomOf(view: FleetView, locationId: string | null | undefined,
   return here.length === 1 && systemIds.includes(here[0].id);
 }
 
-// The roles a component staffs in one system, by label: read from the
-// system's declared roles, since a membership says THAT a component belongs,
-// and the role says what it does there.
-export function rolesOf(componentName: string, declared: { name: string; label?: string; assigned_to?: string[] | null }[]): string[] {
+// The slots a component staffs in one system, by label: read from the
+// system's declared slots, since a membership says THAT a component belongs,
+// and the slot says what it does there.
+export function slotsOf(componentName: string, declared: { name: string; label?: string; assigned_to?: string[] | null }[]): string[] {
   return declared.filter((r) => (r.assigned_to ?? []).includes(componentName)).map((r) => entityLabel({ name: r.name, label: r.label }));
 }
 
 // A system's components as rows (#872), the outline's row idiom rather than a
-// grid of cards. A member reads its role in a column; a role earns a group
+// grid of cards. A member reads its slot in a column; a slot earns a group
 // (a header with its arithmetic, its occupants beneath, its gap as empty
 // slots) only where it says something a column cannot: a quorum beyond one,
-// a shortfall, or nobody staffing it. An unstaffed role is a commissioning
+// a shortfall, or nobody staffing it. An unstaffed slot is a commissioning
 // gap and reads incomplete; a short staffed one reads its impact.
 
 export type MemberRow = {
   id: string;
   name: string;
   label: string;
-  role: string;
+  slot: string;
   product: string;
   icon: string;
   health: Verdict | null;
   alarm?: string;
   also: string[];
-  noRole: boolean;
+  noSlot: boolean;
 };
 export type MemberGroup = {
   key: string;
@@ -112,19 +112,19 @@ export type MemberContext = {
 };
 
 export function memberModel(body: SystemBody, ctx: MemberContext): { rows: MemberRow[]; groups: MemberGroup[] } {
-  const row = (c: ComponentCard, role: string): MemberRow => ({
+  const row = (c: ComponentCard, slot: string): MemberRow => ({
     id: c.componentId,
     name: c.name,
     label: ctx.label(c.componentId, c.name),
-    role,
+    slot,
     product: ctx.product(c.componentId),
     icon: ctx.icon(c.componentId),
     health: ctx.verdict(c.componentId),
     alarm: ctx.alarm(c.componentId),
     also: c.shared,
-    noRole: c.noRole && c.roles.length === 0,
+    noSlot: c.noSlot && c.slots.length === 0,
   });
-  const rows = body.cards.map((c) => row(c, c.roles.map((r) => (r.position ? `${r.label} (${r.position})` : r.label)).join(", ")));
+  const rows = body.cards.map((c) => row(c, c.slots.map((r) => (r.position ? `${r.label} (${r.position})` : r.label)).join(", ")));
   const groups = body.groups.map((g) => {
     const tone: MemberGroup["tone"] = g.short === 0 ? null : g.members.length === 0 ? "incomplete" : g.impact === "outage" ? "outage" : "degraded";
     return {
@@ -132,12 +132,12 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
       label: g.label,
       arithmetic: `${g.satisfying} of ${g.quorum}${g.spare > 0 ? `, ${g.spare} spare` : ""}`,
       tone,
-      // Inside its group a member's role is the group; the column names its
+      // Inside its group a member's slot is the group; the column names its
       // position, if any (what tells it from its siblings),
-      // and the other roles it fills, since its one home is this group.
+      // and the other slots it fills, since its one home is this group.
       members: g.memberCards.map((c) => row(c, [
-        c.roles.find((r) => r.label === g.label)?.position ?? "",
-        ...c.roles.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
+        c.slots.find((r) => r.label === g.label)?.position ?? "",
+        ...c.slots.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
       ].filter(Boolean).join(", "))),
       // Seats nobody staffs: a down occupant still holds its seat, and its
       // failure is the alarms' to explain, not a gap.

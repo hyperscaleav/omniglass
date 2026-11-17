@@ -276,7 +276,7 @@ omniglass component event list panel-1                       # what it said: its
 omniglass component log list panel-1 --severity warning      # its log lines at warning or worse (RFC 5424's levels)
 omniglass component log list panel-1 --source tcp            # only what arrived on one channel; the answer lists them all
 omniglass simulation add-component edge-hq --name panel-9 --product newtron-panel-7       # served on the next pull
-omniglass simulation plan-system meeting-room                                               # each role and the product it would get
+omniglass simulation plan-system meeting-room                                               # each slot and the product it would get
 omniglass simulation add-system edge-hq --standard meeting-room --system-type meeting --location boardroom-a   # the whole system
 ```
 
@@ -601,7 +601,7 @@ omniglass standard delete lecture-hall                              # 409 if a s
 
 A fresh install holds **no standards**: start one from a template in the catalog the binary ships, or
 create one from nothing as above. `omniglass template list --kind standard_template` lists the
-templates, and creating from one writes a standard of your own (`official: false`) with the template's roles,
+templates, and creating from one writes a standard of your own (`official: false`) with the template's slots,
 choices and contract lines:
 
 ```sh

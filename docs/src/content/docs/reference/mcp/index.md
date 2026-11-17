@@ -1124,7 +1124,7 @@ Compiles an expression against a registered site's environment and answers wheth
 |---|---|---|---|
 | `inputs` | array | no | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
 | `key` | string | no | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
-| `owner_kind` | string | no | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
+| `owner_kind` | string | no | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component |
 | `site` | string | yes | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `source` | string | yes | The expression |
 
@@ -1195,7 +1195,7 @@ Patches a location's label or location_type. The name is not patchable: renaming
 
 Read a location's health
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/health`
 - Gate: `location:read`
@@ -1389,7 +1389,7 @@ Lists the secrets the caller may see, with masked fields, filtered to the read s
 
 Create a standard from a template
 
-Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
 
 - Route: `POST /api/v1/standards:createFromTemplate`
 - Gate: `standard:create`
@@ -1434,7 +1434,7 @@ Fetches a system by name within the caller's read scope. Out of scope is a non-d
 
 Update a system
 
-Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 - Route: `PATCH /api/v1/systems/{name}`
 - Gate: `system:update`
@@ -1482,7 +1482,7 @@ Returns the system's own events and its members', newest first, bounded to the l
 
 Read a system's health
 
-The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`
@@ -1514,7 +1514,7 @@ Returns the members' raw log lines merged newest first, bounded to the last 24 h
 
 List the components in a system
 
-The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/members`
 - Gate: `system:read`
@@ -1615,7 +1615,7 @@ The change history behind the effective value for one property series, newest fi
 
 Start a whole system from a template
 
-Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.
 
 - Route: `POST /api/v1/systems:createFromTemplate`
 - Gate: `system:create`
@@ -1624,7 +1624,7 @@ Creates a system from a system template at a location, built to the standard you
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `attach` | object | no | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
+| `attach` | object | no | Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached |
 | `label` | string | no | The system's label |
 | `location` | string | no | The location the system and its components sit in, by name or dotted path |
 | `name` | string | no | The system's name; minted from its type when empty |

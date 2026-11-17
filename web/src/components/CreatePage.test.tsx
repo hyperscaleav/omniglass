@@ -28,8 +28,8 @@ import { treeValue } from "../components/TreeSelect.testkit";
 // lands on the created row's id with the notice. ?under= is the default location.
 
 const catalog: Template[] = [
-  { kind: "standard_template", name: "mr55", label: "Meeting Room 55", standard: { roles: [{ name: "main-display", label: "Main display", quorum: 1 }] } },
-  { kind: "system_template", name: "mr55-system", label: "Meeting Room 55, staffed", system: { standard: "mr55", roles: { "main-display": { component: "boreal-edge-55" } } } },
+  { kind: "standard_template", name: "mr55", label: "Meeting Room 55", standard: { slots: [{ name: "main-display", label: "Main display", quorum: 1 }] } },
+  { kind: "system_template", name: "mr55-system", label: "Meeting Room 55, staffed", system: { standard: "mr55", slots: { "main-display": { component: "boreal-edge-55" } } } },
   { kind: "location_template", name: "meeting-floor", label: "A floor of meeting rooms", location: { type: "floor", label: "Meeting floor" } },
   { kind: "component_template", name: "boreal-edge-55", label: "Boreal Edge 55 display", component: { product: "boreal-edge-55", inputs: { port: "161" } } },
 ];

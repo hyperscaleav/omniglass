@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentCrumbs, contentsOf, landingFor, memberModel, rolesOf, systemCrumbs, systemsAtLocation } from "./detail";
+import { componentCrumbs, contentsOf, landingFor, memberModel, slotsOf, systemCrumbs, systemsAtLocation } from "./detail";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -73,30 +73,30 @@ describe("the path names each location once", () => {
   });
 });
 
-describe("the roles a component fills", () => {
+describe("the slots a component fills", () => {
   const declared = [
     { name: "dsp", label: "DSP", assigned_to: ["dsp-1"] },
     { name: "amp", label: "Amplifier", assigned_to: ["amp-1", "dsp-1"] },
     { name: "cam", label: "", assigned_to: [] },
   ];
-  it("names every role the component staffs, by label", () => {
-    expect(rolesOf("dsp-1", declared)).toEqual(["DSP", "Amplifier"]);
+  it("names every slot the component staffs, by label", () => {
+    expect(slotsOf("dsp-1", declared)).toEqual(["DSP", "Amplifier"]);
   });
-  it("says nothing for a member filling no role", () => {
-    expect(rolesOf("panel-1", declared)).toEqual([]);
+  it("says nothing for a member filling no slot", () => {
+    expect(slotsOf("panel-1", declared)).toEqual([]);
   });
 });
 
 describe("a system's components as rows", () => {
   const body = {
     cards: [
-      { componentId: "c-bar", name: "videobar-1", down: false, shared: ["Overflow Room"], roles: [{ label: "Conferencing Bar" }], noRole: false },
-      { componentId: "c-pow", name: "device-1", down: false, shared: [], roles: [], noRole: true },
+      { componentId: "c-bar", name: "videobar-1", down: false, shared: ["Overflow Room"], slots: [{ label: "Conferencing Bar" }], noSlot: false },
+      { componentId: "c-pow", name: "device-1", down: false, shared: [], slots: [], noSlot: true },
     ],
     groups: [
       { name: "mic", label: "Room Microphone", quorum: 2, satisfying: 1, short: 1, spare: 1, impact: "degraded", members: ["mic-1"], memberCards: [
-        { componentId: "c-mic", name: "mic-1", down: true, shared: [], roles: [{ label: "Room Microphone", position: "Left" }], noRole: false },
-        { componentId: "c-bar2", name: "bar-2", down: false, shared: [], roles: [{ label: "Room Microphone" }, { label: "Conferencing Bar" }], noRole: false },
+        { componentId: "c-mic", name: "mic-1", down: true, shared: [], slots: [{ label: "Room Microphone", position: "Left" }], noSlot: false },
+        { componentId: "c-bar2", name: "bar-2", down: false, shared: [], slots: [{ label: "Room Microphone" }, { label: "Conferencing Bar" }], noSlot: false },
       ] },
       { name: "disp", label: "Main Display", quorum: 1, satisfying: 0, short: 1, spare: 0, impact: "outage", members: [], memberCards: [] },
     ],
@@ -109,38 +109,38 @@ describe("a system's components as rows", () => {
     icon: () => "box",
   };
 
-  it("names each ungrouped member's role, product and the systems it also serves", () => {
+  it("names each ungrouped member's slot, product and the systems it also serves", () => {
     const m = memberModel(body, ctx);
-    expect(m.rows.map((r) => [r.label, r.role, r.product, r.also.join(",")])).toEqual([
+    expect(m.rows.map((r) => [r.label, r.slot, r.product, r.also.join(",")])).toEqual([
       ["Video Bar", "Conferencing Bar", "Lyra Bar 80", "Overflow Room"],
       ["device-1", "", "", ""],
     ]);
-    expect(m.rows[1].noRole).toBe(true);
+    expect(m.rows[1].noSlot).toBe(true);
   });
 
   // A staffed seat whose occupant is down is a failure the alarms explain,
-  // not an empty slot: the live console drew "empty slot" under a role whose
+  // not an empty slot: the live console drew "empty slot" under a slot whose
   // one device had dropped off the network.
   it("draws an empty slot only for a seat nobody staffs, never for a down occupant", () => {
     const m = memberModel({ cards: [], groups: [
       { name: "dsp", label: "DSP", quorum: 1, satisfying: 0, short: 1, spare: 0, impact: "degraded", members: ["dsp-1"], memberCards: [
-        { componentId: "c-dsp", name: "dsp-1", down: true, shared: [], roles: [{ label: "DSP" }], noRole: false },
+        { componentId: "c-dsp", name: "dsp-1", down: true, shared: [], slots: [{ label: "DSP" }], noSlot: false },
       ] },
     ] }, ctx);
     expect(m.groups[0].empty).toBe(0);
     expect(m.groups[0].tone).toBe("degraded");
   });
 
-  it("groups a role only where it says something a column cannot, with its arithmetic and its gap", () => {
+  it("groups a slot only where it says something a column cannot, with its arithmetic and its gap", () => {
     const m = memberModel(body, ctx);
     expect(m.groups.map((g) => [g.label, g.arithmetic, g.tone, g.empty])).toEqual([
       ["Room Microphone", "1 of 2, 1 spare", "degraded", 1],
       ["Main Display", "0 of 1", "incomplete", 1],
     ]);
-    expect(m.groups[0].members[0]).toMatchObject({ label: "mic-1", role: "Left", health: "outage", alarm: "No route to host" });
-    // A grouped member keeps the other roles it fills: its one home is the
+    expect(m.groups[0].members[0]).toMatchObject({ label: "mic-1", slot: "Left", health: "outage", alarm: "No route to host" });
+    // A grouped member keeps the other slots it fills: its one home is the
     // group, so the column names what the group's header does not.
-    expect(m.groups[0].members[1].role).toBe("Conferencing Bar");
+    expect(m.groups[0].members[1].slot).toBe("Conferencing Bar");
   });
 });
 

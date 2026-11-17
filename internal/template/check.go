@@ -45,15 +45,15 @@ func checkOne(ctx context.Context, c *Catalog, gw storage.Gateway, t *Template) 
 
 func checkStandard(ctx context.Context, gw storage.Gateway, s *Standard) []error {
 	var errs []error
-	for _, r := range s.Roles {
+	for _, r := range s.Slots {
 		for _, ct := range r.AcceptedTypes {
 			if _, err := gw.GetComponentType(ctx, ct); err != nil {
-				errs = append(errs, fmt.Errorf("role %s accepts component type %q: %w", r.Name, ct, err))
+				errs = append(errs, fmt.Errorf("slot %s accepts component type %q: %w", r.Name, ct, err))
 			}
 		}
 		for _, p := range r.PinnedProducts {
 			if _, err := gw.GetProduct(ctx, p); err != nil {
-				errs = append(errs, fmt.Errorf("role %s pins product %q: %w", r.Name, p, err))
+				errs = append(errs, fmt.Errorf("slot %s pins product %q: %w", r.Name, p, err))
 			}
 		}
 	}
@@ -153,43 +153,43 @@ func checkSystem(ctx context.Context, c *Catalog, gw storage.Gateway, s *System)
 			errs = append(errs, fmt.Errorf("names system type %q: %w", s.SystemType, err))
 		}
 	}
-	declared := map[string]Role{}
+	declared := map[string]Slot{}
 	if st, err := c.GetKind(s.Standard, KindStandard); err == nil {
-		for _, r := range st.Standard.Roles {
+		for _, r := range st.Standard.Slots {
 			declared[r.Name] = r
 		}
 	}
-	for _, role := range sortedKeys(s.Roles) {
-		product := s.Roles[role].Product
-		if comp := s.Roles[role].Component; comp != "" {
+	for _, slot := range sortedKeys(s.Slots) {
+		product := s.Slots[slot].Product
+		if comp := s.Slots[slot].Component; comp != "" {
 			ct, err := c.GetKind(comp, KindComponent)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("role %s: %w", role, err))
+				errs = append(errs, fmt.Errorf("slot %s: %w", slot, err))
 				continue
 			}
 			product = ct.Component.Product
 		}
 		prod, err := gw.GetProduct(ctx, product)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("role %s names product %q: %w", role, product, err))
+			errs = append(errs, fmt.Errorf("slot %s names product %q: %w", slot, product, err))
 			continue
 		}
-		r := declared[role]
+		r := declared[slot]
 		if p := r.PinnedProducts; len(p) > 0 && !slices.Contains(p, product) {
-			errs = append(errs, fmt.Errorf("role %s fills with product %q, but the standard pins %v", role, product, p))
+			errs = append(errs, fmt.Errorf("slot %s fills with product %q, but the standard pins %v", slot, product, p))
 		}
 		if err := checkAccepts(ctx, gw, r, prod); err != nil {
-			errs = append(errs, fmt.Errorf("role %s fills with product %q: %w", role, product, err))
+			errs = append(errs, fmt.Errorf("slot %s fills with product %q: %w", slot, product, err))
 		}
 	}
 	errs = append(errs, checkValues(ctx, gw, s.Properties)...)
 	return errs
 }
 
-// checkAccepts holds a fill to the role's typed slot, as an assignment does:
-// the product's component type must be one the role accepts or a subtype of
-// one. A role accepting no type takes any.
-func checkAccepts(ctx context.Context, gw storage.Gateway, r Role, prod *storage.Product) error {
+// checkAccepts holds a fill to the slot's typed slot, as an assignment does:
+// the product's component type must be one the slot accepts or a subtype of
+// one. A slot accepting no type takes any.
+func checkAccepts(ctx context.Context, gw storage.Gateway, r Slot, prod *storage.Product) error {
 	if len(r.AcceptedTypes) == 0 {
 		return nil
 	}
@@ -206,7 +206,7 @@ func checkAccepts(ctx context.Context, gw storage.Gateway, r Role, prod *storage
 			return nil
 		}
 	}
-	return fmt.Errorf("a %s, which the role (accepting %v) does not take", prod.ComponentType, r.AcceptedTypes)
+	return fmt.Errorf("a %s, which the slot (accepting %v) does not take", prod.ComponentType, r.AcceptedTypes)
 }
 
 // checkLocation holds each location's type to the shipped location types: the

@@ -122,10 +122,10 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: s, Label: "X", Stem: &stem})
 			return err
 		},
-		// A role's key arrives as a bare {role} path param on PUT
-		// /systems/{name}/roles/{role}, so an operator types it directly.
-		"system_role": func(s string) error {
-			_, err := gw.SetSystemRole(ctx, "", "system", "sysrole-host", storage.SystemRoleSpec{Name: s, Quorum: 1})
+		// A slot's key arrives as a bare {slot} path param on PUT
+		// /systems/{name}/slots/{slot}, so an operator types it directly.
+		"system_slot": func(s string) error {
+			_, err := gw.SetSystemSlot(ctx, "", "system", "sysslot-host", storage.SystemSlotSpec{Name: s, Quorum: 1})
 			return err
 		},
 		// A group name was validated only by the Huma pattern, on a looser rule that

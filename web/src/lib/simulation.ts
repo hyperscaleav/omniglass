@@ -28,7 +28,7 @@ export type FireInput = Omit<S.FireSimInputBody, "$schema">;
 export type AddSimComponent = Omit<S.AddSimComponentInputBody, "$schema">;
 export type AddSimComponentResult = S.AddSimComponentOutputBody;
 export type SimSystemPlan = S.SimSystemPlanOutputBody;
-export type SimRoleFill = S.SimRoleFillBody;
+export type SimSlotFill = S.SimSlotFillBody;
 export type AddSimSystem = Omit<S.AddSimSystemInputBody, "$schema">;
 export type AddSimSystemResult = S.AddSimSystemOutputBody;
 
@@ -327,10 +327,10 @@ export function addSystemBody(d: AddSystemDraft): AddSimSystem {
   };
 }
 
-// planShortfall: the roles a plan leaves short, and by how many in all.
-export function planShortfall(p: SimSystemPlan | undefined): { roles: SimRoleFill[]; missing: number } {
-  const roles = (p?.roles ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
-  return { roles, missing: roles.reduce((n, r) => n + (r.missing ?? 0), 0) };
+// planShortfall: the slots a plan leaves short, and by how many in all.
+export function planShortfall(p: SimSystemPlan | undefined): { slots: SimSlotFill[]; missing: number } {
+  const slots = (p?.slots ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
+  return { slots, missing: slots.reduce((n, r) => n + (r.missing ?? 0), 0) };
 }
 
 // surfaceKind says which fire form a surface takes: an HTTP call, a command

@@ -507,9 +507,9 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 
 // activeAlarms is the health report's read: what is currently wrong with a
 // component, so the report can name the alarm behind a down occupant. Takes the
-// component's id directly (resolveHealthRoles' assignee join already has it;
-// see resolvedRole.AssignedIDs), not its name: two components can share a name
-// once #627 lands, but system_role_assignment.component_id never does.
+// component's id directly (resolveHealthSlots' assignee join already has it;
+// see resolvedSlot.AssignedIDs), not its name: two components can share a name
+// once #627 lands, but system_slot_assignment.component_id never does.
 func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) ([]Alarm, error) {
 	rows, err := q.Query(ctx, `
 		select `+alarmCols+`

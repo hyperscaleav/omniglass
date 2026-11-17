@@ -12,14 +12,14 @@ import {
 } from "./system_map";
 import type { SystemZoomVM } from "./system_zoom";
 
-// The map join (#791): the standard declares where each role position sits;
+// The map join (#791): the standard declares where each slot position sits;
 // the system's staffing says who is there. A marker is the pair.
 const decl = JSON.stringify({
   aspect: 1.5,
   positions: [
-    { role: "main-display", position: 1, x: 0.5, y: 0.06 },
-    { role: "room-mic", position: 1, x: 0.32, y: 0.52 },
-    { role: "room-mic", position: 2, x: 0.68, y: 0.52 },
+    { slot: "main-display", position: 1, x: 0.5, y: 0.06 },
+    { slot: "room-mic", position: 1, x: 0.32, y: 0.52 },
+    { slot: "room-mic", position: 2, x: 0.68, y: 0.52 },
   ],
 });
 
@@ -40,7 +40,7 @@ const vm = {
     },
   ],
   choices: [],
-  noRole: [],
+  noSlot: [],
 } as unknown as SystemZoomVM;
 
 describe("the system map", () => {
@@ -54,7 +54,7 @@ describe("the system map", () => {
   it("joins each declared position to its occupant, empty positions included", () => {
     const markers = mapMarkers(parseStandardMap(decl)!, vm);
     expect(markers).toHaveLength(3);
-    const mic1 = markers.find((m) => m.roleLabel === "Room Microphone" && m.position === 1)!;
+    const mic1 = markers.find((m) => m.slotLabel === "Room Microphone" && m.position === 1)!;
     expect(mic1.occupant).toMatchObject({ name: "mic-1", componentId: "c-mic", down: true });
     expect(mic1.positionLabel).toBe("Left");
     expect(mic1.x).toBe(0.32);
@@ -62,8 +62,8 @@ describe("the system map", () => {
     expect(markers.filter((m) => !m.occupant)).toHaveLength(2);
   });
 
-  it("ignores a declared position for a role the build in use does not carry", () => {
-    const declGhost = JSON.stringify({ aspect: 1, positions: [{ role: "ghost-role", position: 1, x: 0.5, y: 0.5 }] });
+  it("ignores a declared position for a slot the build in use does not carry", () => {
+    const declGhost = JSON.stringify({ aspect: 1, positions: [{ slot: "ghost-slot", position: 1, x: 0.5, y: 0.5 }] });
     expect(mapMarkers(parseStandardMap(declGhost)!, vm)).toHaveLength(0);
   });
 });

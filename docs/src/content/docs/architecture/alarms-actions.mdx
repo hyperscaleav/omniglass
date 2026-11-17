@@ -23,7 +23,7 @@ Built today: the **alarm as a held row**, raised on a **component** by a caller 
 (a level of the [severity catalog](#severity-a-catalog-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
 through the component's own verdict (any active alarm degrades it, one at or above the `high` level
-is an outage), and such an alarm impairs every [role](/architecture/health/) that component occupies
+is an outage), and such an alarm impairs every [slot](/architecture/health/) that component occupies
 while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
 (#626: an alarm no longer names what it degrades).
@@ -145,7 +145,7 @@ person:
 
 The acknowledgement is readable wherever an alarm is read as a cause. A system's
 [health report](/architecture/health/) carries `acknowledged`, `acknowledged_at` and `acknowledged_by` on
-each role alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
+each slot alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
 causing alarm in place, for an operator holding `alarm:acknowledge`, without opening each affected
 component (#990). It calls the same verb above; the strip refreshes with the report.
 
@@ -384,9 +384,9 @@ passes and then dropped with an error logged, while the pass moves on. The platf
 
 An endpoint whose verdict reads `down` for the sustain opens a `high` alarm on its component, and
 reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
-operator in between. That takes the system out only when the component fills a role whose impact
-is `outage` and losing it drops the role below quorum; otherwise the system reads whatever the role's
-impact says, and a component that fills no role moves no system. The second, `ingest-lag-high`,
+operator in between. That takes the system out only when the component fills a slot whose impact
+is `outage` and losing it drops the slot below quorum; otherwise the system reads whatever the slot's
+impact says, and a component that fills no slot moves no system. The second, `ingest-lag-high`,
 watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 minutes opens a
 `warning` alarm on the server's platform component, and a window back at 30 s or under clears it
 ([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a `high` alarm on
@@ -481,9 +481,9 @@ nothing. It names no component, so it is not fenced by the read scope.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
-occupying the [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+occupying the [system slots](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
-that matters is the role's **impact** ([health](/architecture/health/)).
+that matters is the slot's **impact** ([health](/architecture/health/)).
 
 :::design[The rest of the event rule (ADR-0050)]
 Still design: an **expression selector** (`scope:

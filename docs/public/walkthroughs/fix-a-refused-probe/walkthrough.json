@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This location's system. Its touch panel fills the touch-control role, and an outpost collects it.",
+      "caption": "This location's system. Its touch panel fills the touch-control slot, and an outpost collects it.",
       "still": "step-01.png"
     },
     {
@@ -73,8 +73,8 @@
   "poster": "step-11.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 39.6,
-    "bytes": 722382,
-    "previewBytes": 507420
+    "seconds": 36.5,
+    "bytes": 747210,
+    "previewBytes": 598788
   }
 }
