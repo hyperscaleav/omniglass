@@ -87,7 +87,7 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   `component.product_id`. Operators add components **to a system**: membership is how a component
   belongs ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing)).
 - A **location** is the **physical** grouping: where things sit, in the customer's own tree, and
-  how support and inventory go and find a box on site. It ties systems and components to a place, classified by `location_type`, its
+  how support and asset tracking go and find a box on site. It ties systems and components to a place, classified by `location_type`, its
   only shape-definer (no template). A starter type set ships seeded and platform-owned, an
   operator's change to one held as a fork over it
   ([the seed model](#the-seed-model-templates-versus-canonical-catalogs)), read at

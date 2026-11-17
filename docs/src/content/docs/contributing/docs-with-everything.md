@@ -45,8 +45,14 @@ declares. A new transport's row, such as snmp's, appears with its registry entry
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, and the current decisions. Each official term is defined once in the
-  [glossary](/architecture/glossary/) and not redefined in the leaves.
+  documents, and the current decisions. Each official term is defined once and not redefined in
+  the leaves. A word an operator or an admin reads (an entity, a nav label, a verdict) is a row
+  in `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API
+  collection, schema and permission noun, its nav entry, and any word it retired. `make gen`
+  renders the [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec
+  from it, and the guards fail a new collection, nav entry or verdict that names no row, or a
+  retired word back in console strings or docs prose. Internal architecture terms stay in the
+  frozen [architecture glossary](/architecture/glossary/).
 - **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
   audience: the **operator guide** (running the fleet from the console and the CLI), the
   **admin guide** (managing accounts, access, audit, and config), and **deployment**

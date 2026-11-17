@@ -129,6 +129,7 @@ gen: gen-proto
 	go run ./cmd/cligen
 	go run ./cmd/mcpgen
 	go run ./cmd/docsgen
+	go run ./cmd/vocabgen
 	go run ./cmd/erdgen
 	go run ./cmd/seedgen
 	go run ./cmd/writerclassgen

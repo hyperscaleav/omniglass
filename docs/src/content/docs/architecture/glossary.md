@@ -7,6 +7,14 @@ sidebar:
     variant: note
 ---
 
+:::note[Frozen internal reference]
+The words an operator or an admin reads are now defined once in the generated
+[glossary](/reference/glossary/), rendered from `internal/vocab/terms.yaml` by `make gen`
+([ADR-2029](/architecture/decisions/#adr-2029-the-vocabulary-is-a-go-table-and-make-gen-writes-the-glossary-and-the-schema-descriptions)).
+This page stays as the architecture's internal reference for the terms that table does not
+carry, and a new product word goes in the table, not here.
+:::
+
 The **authoritative glossary**: every official term in the architecture, defined once; the other pages introduce them in **bold** as the story reaches them. A term the code does not implement yet is not a plain row here: design-only terms live in the `:::design` fences at the bottom, or on the sketch page that owns their domain ([templates](/architecture/templates/), [calculations](/architecture/calculations/), [expressions](/architecture/expressions/), [time](/architecture/time/), [views](/architecture/views/), [AI](/architecture/ai/)).
 
 | Term | Definition |

@@ -747,7 +747,7 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   per-entity effective-tags detail, not the row.
 
 The **classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
-are official-vs-custom registries the inventory layer references, on the same pattern as the
+are official-vs-custom registries the fleet entities reference, on the same pattern as the
 `*_type` registries; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
 ([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
 `system_type` its system-side counterpart, the coarse taxonomy of what kind of space a system is

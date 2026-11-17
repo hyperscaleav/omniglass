@@ -166,7 +166,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
-            { label: 'Visualization inventory', slug: 'contributing/visualization-inventory' },
+            { label: 'Visualization survey', slug: 'contributing/visualization-inventory' },
             { label: 'Demos', slug: 'contributing/demos' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },
@@ -230,8 +230,9 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            // All generated: the CLI page by cmd/docsgen, the MCP tools page by
+            // All generated: the glossary by cmd/vocabgen, the CLI page by cmd/docsgen, the MCP tools page by
             // cmd/mcpgen (and its skills page from the embedded skills), the API groups by starlight-openapi. None is hand-maintained.
+            { label: 'Glossary', slug: 'reference/glossary' },
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'MCP tools', slug: 'reference/mcp' },
             { label: 'MCP skills', slug: 'reference/mcp/skills' },

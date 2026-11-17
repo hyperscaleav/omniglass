@@ -245,7 +245,7 @@ column).
 it bottom right, a polite live region, each toast a raised card edged in its tone's hue (a soft fill
 alone sinks into the dark page). It goes away by itself, or when dismissed, and a burst keeps the
 newest four. Its body is a render function, so it can show something that moves (a command's phase,
-#1155) rather than a string frozen when it was raised; its action opens where the outcome lives. New inventory pages consume these; new
+#1155) rather than a string frozen when it was raised; its action opens where the outcome lives. New fleet list pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
 

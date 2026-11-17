@@ -67,11 +67,11 @@ export const navItems: NavItem[] = [
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
-  // the Inventory group dissolved into the entry above, whose outline lists
+  // the old fleet group dissolved into the entry above, whose outline lists
   // every location, system and component, and the old index URLs redirect
-  // there. Their workspace routes, gates, and top-bar identities
+  // there. Their detail view routes, gates, and top-bar identities
   // survive through OFF_RAIL below, the same move the catalog registries made
-  // (#608). Nodes is infrastructure, not fleet inventory; setting one up is
+  // (#608). Nodes is infrastructure, not part of the fleet; setting one up is
   // administration, so its door is under Admin below (#1767).
   // Simulation (#890): the simulated fleet a simulator beside a node serves,
   // its live hits, impairments and each component's API surface. A lab and demo
@@ -162,11 +162,11 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // through navByPath exactly as a rail entry's would be.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
-  // URL redirects there, but the workspace routes (/locations/{id} and
+  // URL redirects there, but the detail view routes (/locations/{id} and
   // friends) still resolve identity and gate here.
-  { path: "/components", label: "Components", resource: "component", hint: "A component's workspace: its declared config, props, and tags. Device endpoints are a panel on the component." },
-  { path: "/systems", label: "Systems", resource: "system", hint: "A system's workspace: its standard, roles, health, and the components that make it up." },
-  { path: "/locations", label: "Locations", resource: "location", hint: "A location's workspace: where it sits, what it holds, and the systems placed there." },
+  { path: "/components", label: "Components", resource: "component", hint: "A component's detail view: its declared values, properties, and tags. Device endpoints are a panel on the component." },
+  { path: "/systems", label: "Systems", resource: "system", hint: "A system's detail view: its standard, roles, health, and the components that make it up." },
+  { path: "/locations", label: "Locations", resource: "location", hint: "A location's detail view: where it sits, what it holds, and the systems placed there." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
@@ -179,7 +179,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
   { path: "/event-types", label: "Events", resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by." },
   { path: "/command-types", label: "Commands", resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window." },
-  { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
+  { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the fleet." },
   { path: "/rules", label: "Rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
   { path: "/severity-levels", label: "Severity", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },

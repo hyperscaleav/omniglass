@@ -39,6 +39,9 @@ export type AcceptedStruct = {
   properties: number;
 };
 
+/**
+ * A rule that decides when a notification about an alarm is sent, and to which targets.
+ */
 export type ActionRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -166,6 +169,9 @@ export type AddSimSystemOutputBody = {
   unstaffed: SimRoleFillBody[] | null;
 };
 
+/**
+ * A raised problem on a component, with a severity, from the moment it raises until it clears.
+ */
 export type AlarmBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -277,6 +283,9 @@ export type AlarmTimelineOutputBody = {
   entries: AlarmTimelineEntryBody[] | null;
 };
 
+/**
+ * One recorded privileged action or sign-in, with who did it, when and to what.
+ */
 export type AuditEventBody = {
   actor?: string;
   actor_name?: string;
@@ -646,6 +655,9 @@ export const CalcRuleBodyOwnerKind = {
   system: 'system',
 } as const;
 
+/**
+ * A rule that derives a new value from other signals on each owner it applies to.
+ */
 export type CalcRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -875,6 +887,9 @@ export type CommandObservation = {
   value: unknown;
 };
 
+/**
+ * One instruction sent to a component, typed by a command type, and its outcome.
+ */
 export type CommandBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -948,6 +963,9 @@ export type CommandBody = {
   target_kind?: CommandBodyTargetKind;
 };
 
+/**
+ * Something a component can be told to do in the catalog, with its target and how long it takes to settle.
+ */
 export type CommandTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -987,6 +1005,9 @@ export type RenderBody = {
   dash: string;
 };
 
+/**
+ * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
+ */
 export type ComponentBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1333,6 +1354,9 @@ export type ComponentSimOutputBody = {
   variants?: string[] | null;
 };
 
+/**
+ * The device class a product belongs to, such as display, projector or microphone.
+ */
 export type ComponentTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2765,6 +2789,9 @@ export type DraftLabelOutputBody = {
   rule: string;
 };
 
+/**
+ * The declared recipe that collects from a product, what to fetch, how to read it and what it can set.
+ */
 export type DriverBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2934,6 +2961,9 @@ export type EndpointWebhookBody = {
   signed: boolean;
 };
 
+/**
+ * A connection to a component over one transport, the API Omniglass reaches it through.
+ */
 export type EndpointBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3140,6 +3170,9 @@ export type ErrorModel = {
   type?: string;
 };
 
+/**
+ * One point-in-time occurrence on a component, typed by an event type.
+ */
 export type EventBody = {
   /** The alarm a rule's fire event opened or its clear event resolved; absent for most events */
   alarm_id?: string;
@@ -3178,6 +3211,9 @@ export const EventRuleBodySampleLane = {
   metric: 'metric',
 } as const;
 
+/**
+ * A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity.
+ */
 export type EventRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3314,6 +3350,9 @@ export const EventTypeBodyWriterClass = {
   collected: 'collected',
 } as const;
 
+/**
+ * A kind of discrete occurrence in the catalog, what an event is typed by.
+ */
 export type EventTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3413,6 +3452,9 @@ export type ExpressionDiagnostic = {
   unbound?: string;
 };
 
+/**
+ * Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.
+ */
 export type FileBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3648,6 +3690,9 @@ export type GrantBody = {
   scope_op?: GrantBodyScopeOp;
 };
 
+/**
+ * A set of users granted roles together, each member inheriting the group's grants.
+ */
 export type GroupBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4015,6 +4060,9 @@ export const NotificationBodyTransition = {
   cleared: 'cleared',
 } as const;
 
+/**
+ * One message about an alarm sent on one channel, such as a webhook, an email or the inbox.
+ */
 export type NotificationBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4122,6 +4170,9 @@ export type NameRuleReadBody = {
   stem: string;
 };
 
+/**
+ * What kind of location a location is, and which kinds it may sit under.
+ */
 export type LocationTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4155,6 +4206,9 @@ export type ListLocationTypesOutputBody = {
  */
 export type LocationBodyEffectiveTags = {[key: string]: string};
 
+/**
+ * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
+ */
 export type LocationBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4281,6 +4335,9 @@ export const MetricTypeBodyWriterClass = {
   collected: 'collected',
 } as const;
 
+/**
+ * A numeric signal in the catalog, the series a sample measures, with its unit and precision.
+ */
 export type MetricTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4315,6 +4372,9 @@ export type ListMetricTypesOutputBody = {
  */
 export type NodeBodyEffectiveTags = {[key: string]: string};
 
+/**
+ * A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
+ */
 export type NodeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4368,6 +4428,9 @@ export const NotificationTargetBodyKind = {
   principal: 'principal',
 } as const;
 
+/**
+ * Where a notification goes, a webhook, a mailbox, a group or a person.
+ */
 export type NotificationTargetBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4416,6 +4479,9 @@ export type ListNotificationTargetsOutputBody = {
   notification_targets: NotificationTargetBody[] | null;
 };
 
+/**
+ * What a notification about an alarm says, as a subject and a text.
+ */
 export type NotificationTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4503,6 +4569,9 @@ export type SvcBody = {
   name: string;
 };
 
+/**
+ * A user, a person or a machine, that roles are granted to.
+ */
 export type PrincipalBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4575,6 +4644,9 @@ export const ProductBodyKind = {
   service: 'service',
 } as const;
 
+/**
+ * A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under.
+ */
 export type ProductBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4627,6 +4699,9 @@ export const PropertyBodyWriterClass = {
   collected: 'collected',
 } as const;
 
+/**
+ * A categorical signal in the catalog, a value a component reports or is declared to have.
+ */
 export type PropertyBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4662,6 +4737,9 @@ export type SecretTypeFieldBody = {
   type: string;
 };
 
+/**
+ * A shape a secret can take, such as a password or an API key, built into Omniglass.
+ */
 export type SecretTypeBody = {
   /** The admin_sensitive value the create form seeds for this type */
   default_admin_sensitive: boolean;
@@ -4682,6 +4760,9 @@ export type ListSecretTypesOutputBody = {
   secret_types: SecretTypeBody[] | null;
 };
 
+/**
+ * An encrypted credential set at one level of the fleet and inherited below it.
+ */
 export type SecretBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4726,6 +4807,9 @@ export const SeverityLevelBodyColor = {
   darkred: 'darkred',
 } as const;
 
+/**
+ * How bad an alarm is, ranked, with its color and whether it takes its component out.
+ */
 export type SeverityLevelBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4830,6 +4914,9 @@ export type ListStandardRolesOutputBody = {
   roles: SystemRoleBody[] | null;
 };
 
+/**
+ * A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes.
+ */
 export type StandardBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4870,6 +4957,9 @@ export type ListSystemRolesOutputBody = {
   system: string;
 };
 
+/**
+ * What kind of space a system is, such as a boardroom, a classroom or a video wall.
+ */
 export type SystemTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4919,6 +5009,9 @@ export type ListSystemTypesOutputBody = {
  */
 export type SystemBodyEffectiveTags = {[key: string]: string};
 
+/**
+ * The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict.
+ */
 export type SystemBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4972,6 +5065,9 @@ export type ListSystemsOutputBody = {
   systems: SystemBody[] | null;
 };
 
+/**
+ * An operator's key and value on a location, system or component, its key governed install-wide.
+ */
 export type TagBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5000,6 +5096,9 @@ export type ListTagsOutputBody = {
   tags: TagBody[] | null;
 };
 
+/**
+ * A node's unit of collection, a poll it runs or a listener it holds on one endpoint.
+ */
 export type TaskBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5215,6 +5314,9 @@ export type TemplateSystemBody = {
   system_type?: string;
 };
 
+/**
+ * An example you clone to start a standard, a component, a system or a set of locations, then own what you get.
+ */
 export type TemplateBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5264,6 +5366,9 @@ export type ListTransportsOutputBody = {
   transports: Transport[] | null;
 };
 
+/**
+ * A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored.
+ */
 export type UnclaimedSourceBody = {
   /** How many messages it sent that nothing claimed */
   count: number;
@@ -5288,6 +5393,9 @@ export type ListUnclaimedSourcesOutputBody = {
   sources: UnclaimedSourceBody[] | null;
 };
 
+/**
+ * A named value set at one level of the fleet and inherited below it, written into text as $var.
+ */
 export type VariableBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5320,6 +5428,9 @@ export const VendorBodyKind = {
   developer: 'developer',
 } as const;
 
+/**
+ * An organization behind products, a manufacturer, an integrator or a developer.
+ */
 export type VendorBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7001,6 +7112,9 @@ export type RevokeAllPrincipalSessionsOutputBody = {
   revoked: number;
 };
 
+/**
+ * A named bundle of permissions granted to users, which may inherit another role's.
+ */
 export type RoleBody = {
   description?: string;
   /** @nullable */

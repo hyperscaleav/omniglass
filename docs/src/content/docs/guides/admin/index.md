@@ -5,7 +5,7 @@ description: "Administering an Omniglass platform: the people who can sign in, t
 
 This is the how-to for **administering the platform**, the standing job of deciding who may
 sign in, what each account can see and do, and the config and credentials the fleet runs on.
-It is a different job from **operating** the fleet (running the inventory, reading the data),
+It is a different job from **operating** the fleet (running its locations, systems and components, reading the data),
 which is the [operator guide](/guides/operator/), and from **standing the platform up**, which
 is [deployment](/guides/deployment/).
 

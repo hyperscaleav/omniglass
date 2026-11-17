@@ -34,7 +34,7 @@ denied**), so you can spot a brute-force attempt; attempts on usernames that do 
 
 ::screenshot{#audit}
 
-The page uses the same faceted search as the inventory lists: filter by **who**, **action**, **resource**, or
+The page uses the same faceted search as the fleet lists: filter by **who**, **action**, **resource**, or
 **id** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
 Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
 up short is a cue to load older and look deeper. The rows scroll inside the list's card, so the count and

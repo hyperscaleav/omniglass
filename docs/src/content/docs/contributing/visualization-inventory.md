@@ -1,5 +1,5 @@
 ---
-title: Visualization inventory
+title: Visualization survey
 description: Every chart, sparkline, metric card, status pill, health indicator, inline-viz table and log or event list in the console today, where each gets its data, how live it is, and the dashboard widget it maps to.
 ---
 
