@@ -56,7 +56,10 @@ drawer. See [implementation status](/architecture/status/).
   call carries neither. The MCP dispatch sets them on the request context, which no HTTP header or body
   reaches, so a caller cannot claim a channel, and a check holds the column to the channels the server
   knows ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
-  `GET /audit-log` returns both.
+  `GET /audit-log` returns and filters on both ([reading the trail](#reading-the-trail)), and the
+  console's [audit page](/guides/admin/audit/) shows them: a Channel column with a pill over the
+  declared client (empty on a direct row), the agent tagged beside the person, `channel`, `client`
+  and `agent` facets, and a drawer that names the client as the agent reported it.
 - **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
   principal, so the actor is that principal, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
