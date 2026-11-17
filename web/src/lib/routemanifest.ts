@@ -70,7 +70,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/inbox", shell: "protected", page: "Inbox", smoke: "/inbox" },
   { path: "/users", shell: "protected", page: "Users", smoke: "/users" },
   { path: "/roles", shell: "protected", page: "Roles", smoke: "/roles" },
-  { path: "/groups", shell: "protected", page: "Groups", smoke: "/groups" },
+  { path: "/user-groups", shell: "protected", page: "Groups", smoke: "/user-groups" },
   { path: "/secrets", shell: "protected", page: "Secrets", smoke: "/secrets" },
   { path: "/variables", shell: "protected", page: "Variables", smoke: "/variables" },
   { path: "/audit", shell: "protected", page: "Audit", smoke: "/audit" },

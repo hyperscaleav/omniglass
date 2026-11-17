@@ -19,7 +19,7 @@ import {
   PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
   archivePrincipal, restorePrincipal, purgePrincipal, resetPrincipalPassword,
   setPrincipalAvatar, removePrincipalAvatar, principalAvatarUrl,
-  principalName, kindBadge, principalInitials,
+  principalName, kindBadge, kindLabel, principalInitials,
 } from "../lib/principals";
 import { useMe, can } from "../lib/auth";
 import { useEditParam } from "../lib/editurl";
@@ -30,8 +30,8 @@ import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
 
-// UserDetail is a principal's blade body under the read -> Edit -> Save contract.
-// Read mode shows the profile facts, the groups the user belongs to (a drill to the
+// UserDetail is a user's blade body under the read -> Edit -> Save contract.
+// Read mode shows the profile facts, the user groups the user belongs to (a drill to the
 // group when the Users page is the root), the grants (read-only chips), and the
 // impersonate actions. The header pencil opens edit mode: the profile becomes
 // inputs, the grant builder goes live, and the footer reveals Disable / Enable;
@@ -63,7 +63,7 @@ export function UserDetail(props: { id: string }) {
   const [resetBusy, setResetBusy] = createSignal(false);
   const [resetPwErr, setResetPwErr] = createSignal<string | null>(null);
   const [resetDone, setResetDone] = createSignal(false);
-  // Fetch by id, not from the directory list (which hides archived principals),
+  // Fetch by id, not from the directory list (which hides archived users),
   // so the blade still resolves a user it just soft-deleted and can offer Restore
   // / Purge. Mutations invalidate the PRINCIPALS_KEY prefix, covering this and the list.
   const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
@@ -71,7 +71,7 @@ export function UserDetail(props: { id: string }) {
   const refresh = () => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
   const [actErr, setActErr] = createSignal<string | null>(null);
 
-  // The profile picture, fetched as a data URL only when the principal has one
+  // The profile picture, fetched as a data URL only when the user has one
   // (has_avatar rides on the detail read, so a pictureless user fires no request).
   // Shown in the header, and (for an admin who can set it) managed in the edit blade.
   const [avatarUrl, { refetch: refetchAvatar }] = createResource(
@@ -116,7 +116,7 @@ export function UserDetail(props: { id: string }) {
   let grantCommit: () => Promise<void> = async () => {};
   let grantCancel: () => void = () => {};
 
-  // Seed the profile inputs from the principal when edit mode opens.
+  // Seed the profile inputs from the user when edit mode opens.
   createEffect(on(() => edit.editing(), (isEditing) => {
     if (isEditing) {
       const h = p()?.human;
@@ -247,7 +247,7 @@ export function UserDetail(props: { id: string }) {
     setActErr(null);
     try {
       await purgePrincipal(pr.id);
-      // The principal is gone, so close the blade first (this unmounts the body and
+      // The user is gone, so close the blade first (this unmounts the body and
       // deactivates its detail query) and drop the dead detail cache, then refresh the
       // directory. Refreshing before closing would refetch the purged id and 404,
       // leaving the blade open on a broken state.
@@ -323,7 +323,7 @@ export function UserDetail(props: { id: string }) {
               </div>
             </Show>
             <span class="flex items-center gap-1.5">
-              <span class={kindBadge(pr().kind)}>{pr().kind}</span>
+              <span class={kindBadge(pr().kind)}>{kindLabel(pr().kind)}</span>
               <Show when={pr().archived_at} fallback={<Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>}>
                 <span class="badge badge-soft badge-error badge-sm">archived</span>
               </Show>
@@ -426,9 +426,9 @@ export function UserDetail(props: { id: string }) {
               on the Users page. Membership is edited from the group, not here. */}
           <Show when={pr().groups?.length}>
             <RelatedList
-              label="Groups"
+              label="User groups"
               items={(pr().groups ?? []).map((g) => ({ id: g.id, kind: "group", name: g.name }))}
-              empty="In no groups."
+              empty="In no user groups."
               onOpen={!editing() && canDrillGroups() ? (item) => blades.push({ kind: "group", id: item.id }) : undefined}
             />
           </Show>
@@ -569,17 +569,17 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
       />
       <Show when={inherited().length}>
         <div class="flex flex-col gap-1">
-          <div class="eyebrow">Inherited from groups</div>
+          <div class="eyebrow">Inherited from user groups</div>
           <div class="flex flex-wrap gap-1.5">
             <For each={inherited()}>
               {(g) => (
                 <span
                   class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
-                  title={`Inherited from the group "${g.group_label ?? g.group}". Edit the group to change it.`}
+                  title={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <button class="text-primary hover:underline" title="Open this group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
+                  <button class="text-primary hover:underline" title="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
                 </span>
               )}
             </For>

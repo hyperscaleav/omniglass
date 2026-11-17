@@ -10,6 +10,7 @@ import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/va
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
+import { kindLabel } from "../lib/principals";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
@@ -381,7 +382,7 @@ export default function Profile() {
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Access</h2>
             <p class="text-xs text-base-content/50">
-              You are a <span class="font-data text-base-content/70">{me.data?.principal.kind}</span> principal. Your
+              You are a <span class="font-data text-base-content/70">{kindLabel(me.data?.principal.kind ?? "")}</span> user. Your
               permissions are the flattened union of the roles granted to you; the server enforces them on every request
               (this is a hint, not the authority).
             </p>

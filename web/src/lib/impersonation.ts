@@ -41,7 +41,7 @@ export async function impersonate(
     body: { mode },
   });
   if (error || !data?.token) {
-    if (response.status === 403) return { ok: false, message: "You cannot impersonate this principal (it exceeds your authority)." };
+    if (response.status === 403) return { ok: false, message: "You cannot impersonate this user (it exceeds your authority)." };
     if (response.status === 422) return { ok: false, message: "You cannot impersonate yourself." };
     return { ok: false, message: "Could not start impersonation." };
   }

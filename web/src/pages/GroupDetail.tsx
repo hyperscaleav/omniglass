@@ -16,7 +16,7 @@ import {
 } from "../lib/groups";
 import { useSearchParams } from "@solidjs/router";
 import { useEditParam } from "../lib/editurl";
-import { type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, listRoles, principalName } from "../lib/principals";
+import { type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, listRoles, principalName, kindLabel } from "../lib/principals";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
@@ -47,7 +47,7 @@ export function GroupDetail(props: { id: string }) {
   const editing = () => edit.editing();
   const canDrillMembers = () => blades.stack()[0]?.kind === "group";
 
-  // Staged member changes (applied on Save): principals to add, and current members
+  // Staged member changes (applied on Save): users to add, and current members
   // to remove. The list below always shows the effective post-save membership.
   const [pendAdd, setPendAdd] = createSignal<string[]>([]);
   const [pendRemove, setPendRemove] = createSignal<Set<string>>(new Set());
@@ -70,10 +70,10 @@ export function GroupDetail(props: { id: string }) {
   const memberItems = createMemo(() => {
     const kept = (members.data ?? [])
       .filter((m) => !pendRemove().has(m.principal_id))
-      .map((m) => ({ id: m.principal_id, kind: "user", name: memberName(m), badge: m.kind }));
+      .map((m) => ({ id: m.principal_id, kind: "user", name: memberName(m), badge: kindLabel(m.kind) }));
     const added = pendAdd().map((id) => {
       const p = principalById(id);
-      return { id, kind: "user", name: p ? principalName(p) : id, badge: p?.kind ?? "" };
+      return { id, kind: "user", name: p ? principalName(p) : id, badge: p ? kindLabel(p.kind) : "" };
     });
     return [...kept, ...added];
   });
@@ -95,7 +95,7 @@ export function GroupDetail(props: { id: string }) {
 
   edit.bind({
     editable: canManage,
-    destructive: () => (canDelete() ? { label: "Delete group", tone: "danger", onClick: removeGroup } : undefined),
+    destructive: () => (canDelete() ? { label: "Delete user group", tone: "danger", onClick: removeGroup } : undefined),
     save: async () => {
       setErr(null);
       try {
@@ -132,7 +132,7 @@ export function GroupDetail(props: { id: string }) {
   useEditParam(edit, { ready: () => !!group.data && linked(), canUpdate: canManage });
 
   async function removeGroup() {
-    if (!confirm(`Delete the group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
+    if (!confirm(`Delete the user group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
     try {
       await deleteGroup(props.id);
       // The group is gone, so close the blade first (unmounting its detail, members,
@@ -255,7 +255,7 @@ function GroupGrantEditor(props: { id: string; editing: boolean; canGrant: boole
 
 function GroupTitle(props: { id: string }) {
   const group = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id], queryFn: () => getGroup(props.id) }));
-  return <>{group.data ? groupName(group.data) : "Group"}</>;
+  return <>{group.data ? groupName(group.data) : "User group"}</>;
 }
 
 export const groupBlade: BladeDef = {

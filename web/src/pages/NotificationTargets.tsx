@@ -60,12 +60,12 @@ import {
 // the caller's all-scope permissions (canFleet).
 
 export const TARGET_HINTS = {
-  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. Group tells every member of a group, read at each alarm; Person tells one person. A person is told only about alarms on components they can read.",
+  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. User group tells every member of a user group, read at each alarm; Person tells one person. A person is told only about alarms on components they can read.",
   url: "Masked to its scheme and host on every read, since a chat webhook's URL is often itself a credential. Reveal shows it whole and is audited. A private address is refused until Settings > notification > egress_allow names it.",
   urlEdit: "Leave blank to keep the stored URL. A new one is judged against the egress allow list as it is saved.",
   secret: "A platform hmac-key signs each body (X-Omniglass-Signature); a bearer-token is presented as Authorization: Bearer. None sends unsigned. Binding one takes the right to reveal it.",
   addresses: "The mailbox addresses it sends to, separated by commas or new lines, through the install's mail relay.",
-  group: "Every human member, read at each alarm transition: add someone to the group and they are told next time.",
+  group: "Every person in the user group, read at each alarm transition: add someone to the group and they are told next time.",
   person: "The one person it tells.",
   channels: "Inbox puts an entry in each person's console inbox (the bell in the top bar). Email sends to each person's directory email.",
   enabled: "A disabled target is skipped: a rule sending to it queues nothing for it. It can still be tested.",
@@ -129,7 +129,7 @@ export default function NotificationTargets(): JSX.Element {
             ],
             filterPlaceholder: "filter targets by name, kind…",
             columns,
-            empty: "No notification targets. A target is where a message about an alarm goes: a chat webhook, a mailbox, a group or a person.",
+            empty: "No notification targets. A target is where a message about an alarm goes: a chat webhook, a mailbox, a user group or a person.",
             rowId: (t) => t.name,
             blades: { registry: { notification_target: targetBlade }, rootKind: "notification_target", controller: blades },
             railExtra: () => (
@@ -295,7 +295,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
               <Match when={t().kind === "principal_group" || t().kind === "principal"}>
                 <div class="grid grid-cols-2 gap-3 text-sm">
                   <KVStacked
-                    label={t().kind === "principal" ? "Person" : "Group"}
+                    label={t().kind === "principal" ? "Person" : "User group"}
                     hint={t().kind === "principal" ? TARGET_HINTS.person : TARGET_HINTS.group}
                     value={<span class="font-data">{(t().kind === "principal" ? t().principal : t().principal_group) || "withheld"}</span>}
                   />
@@ -578,12 +578,12 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
         <Match when={kind() === "principal_group"}>
           <Show
             when={!editing}
-            fallback={<KVStacked label="Group" hint={TARGET_HINTS.group} mono value={p.target!.principal_group || "withheld"} />}
+            fallback={<KVStacked label="User group" hint={TARGET_HINTS.group} mono value={p.target!.principal_group || "withheld"} />}
           >
             <div class="flex flex-col gap-1">
-              <FieldRow label="Group" info={TARGET_HINTS.group}>
+              <FieldRow label="User group" info={TARGET_HINTS.group}>
                 <select ref={bindSelectValue(group, () => groups.data)} class="select select-bordered w-full" onChange={(e) => setGroup(e.currentTarget.value)} aria-required="true" data-testid="target-group-select">
-                  <option value="">Choose a group</option>
+                  <option value="">Choose a user group</option>
                   <For each={groups.data ?? []}>{(g) => <option value={g.name}>{entityLabel(g) === g.name ? g.name : `${entityLabel(g)} (${g.name})`}</option>}</For>
                 </select>
               </FieldRow>

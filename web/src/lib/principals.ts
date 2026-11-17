@@ -203,7 +203,7 @@ export const roleFilterKeys: FilterKey<Role>[] = [
 // NOT entityLabel, and deliberately: a principal is addressed by uuid and each
 // kind carries its identifier under its own column, and the precedence here runs
 // the other way round from an entity's (a username is the identifier, and it
-// outranks a service account's name). Widening entityLabel to express it would
+// outranks a machine user's name). Widening entityLabel to express it would
 // make the entity rule answer a question it does not have the columns for.
 //
 // It takes the structural shape rather than a Principal so the sidebar's `me`
@@ -221,6 +221,16 @@ export function principalName(p: Principal | PrincipalIdentity): string {
 }
 
 // Presentational helpers shared by the directory columns and the detail body, so a
-// principal reads the same in the list and its blade.
+// user reads the same in the list and its blade.
+//
+// kindLabel is the word an operator reads for a user's kind (ADR-2036): a person
+// or a machine. The API still says human and service until #2075 renames the
+// values; the console speaks the new words now, so the badge and the filter read
+// person and machine while the wire does not.
+export function kindLabel(kind: string): string {
+  if (kind === "human") return "person";
+  if (kind === "service") return "machine";
+  return kind;
+}
 export const kindBadge = (kind: string) => `badge badge-soft badge-sm capitalize ${kind === "service" ? "badge-info" : "badge-primary"}`;
 export const principalInitials = (p: Principal): string => principalName(p).slice(0, 2).toUpperCase();
