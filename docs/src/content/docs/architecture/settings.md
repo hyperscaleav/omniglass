@@ -90,7 +90,8 @@ platform-domain namespace is admin-write by definition, and `label` is `platform
 console renders a label from the same dictionary the server did, which an ordinary viewer has to be
 able to read. `retention` is `platform,client` too: a window is no secret, and a chart of a series'
 history can say how far back it reaches ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). Omitting `client` on a platform namespace
-makes it admin-only-read as well (`integrations`; `agent`, the install's policy for what an agent
+makes it admin-only-read as well (`integrations`; `assistant`, whose `conversation_days` is how long a
+stored omnibot conversation outlives its last change ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone-and-a-paused-run-keeps-only-its-transcript)); `agent`, the install's policy for what an agent
 may do in each class of operation, which a caller reads only as it applies to them through
 `GET /auth/me/agent-policy` ([ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent)); and `database`, whose `slow_query_ms` is the
 threshold past which the server logs and counts a query as slow, re-read each report window:

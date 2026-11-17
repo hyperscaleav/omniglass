@@ -1473,6 +1473,98 @@
    }
   },
   "config": {
+   "assistant_conversation": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "principal_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "pending",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "input_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "output_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "assistant_conversation_principal_id_name_key",
+      "definition": "CREATE UNIQUE INDEX assistant_conversation_principal_id_name_key ON public.assistant_conversation USING btree (principal_id, name)"
+     }
+    ]
+   },
+   "assistant_message": {
+    "columns": [
+     {
+      "name": "conversation_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "assistant_conversation.id"
+     },
+     {
+      "name": "seq",
+      "type": "integer",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "role",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "body",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "credential": {
     "columns": [
      {
@@ -6507,100 +6599,6 @@
       "name": "outpost_loss",
       "type": "jsonb",
       "nullable": true
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "assistant_conversation": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "gen_random_uuid()",
-      "pk": true
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "pending",
-      "type": "jsonb",
-      "nullable": true
-     },
-     {
-      "name": "input_tokens",
-      "type": "bigint",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "output_tokens",
-      "type": "bigint",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "assistant_conversation_principal_id_name_key",
-      "definition": "CREATE UNIQUE INDEX assistant_conversation_principal_id_name_key ON public.assistant_conversation USING btree (principal_id, name)"
-     }
-    ]
-   },
-   "assistant_message": {
-    "columns": [
-     {
-      "name": "conversation_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "assistant_conversation.id"
-     },
-     {
-      "name": "seq",
-      "type": "integer",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "role",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "body",
-      "type": "jsonb",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
      }
     ]
    }

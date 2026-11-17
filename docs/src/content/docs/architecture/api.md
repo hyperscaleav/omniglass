@@ -1297,6 +1297,10 @@ own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-cli
 those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:
 [connect an agent](/guides/agents/).
 
+omnibot's conversations are a person's own resource under `/assistant/conversations` (list, get,
+create, `{name}:append`, delete), gated by `assistant:use` and owner-only: anyone else's is a 404, and
+an append that does not name the conversation's last message is a 409 ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone-and-a-paused-run-keeps-only-its-transcript)).
+
 The catalog is **credential-blind**
 ([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).
 An operation whose request or answer carries a credential in plaintext (a secret's values, a minted

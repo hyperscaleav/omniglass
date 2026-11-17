@@ -172,6 +172,23 @@ conversation the last one left. `/exit` or Ctrl-D ends it.
 omniglass omnibot --replay recording.yaml
 ```
 
+### Carrying a conversation on
+
+`--resume <name>` keeps the conversation on the server under that name, yours alone, and carries it
+on: a later run with the same name starts where the last one stopped.
+
+```bash
+omniglass omnibot --replay recording.yaml --resume triage "what is down"
+omniglass omnibot --replay recording.yaml --resume triage
+omnibot: conversation triage, 2 messages kept
+```
+
+The name is lowercase kebab, unique among your own conversations; a new name starts one. Nobody else
+can read it, an admin or the platform owner included. If the run it was kept from stopped on a write it
+was waiting to ask you about, the resumed run asks that first (`Run it? [y/N]`) and carries on from
+your answer. `omniglass assistant conversation list`, `get` and `delete` manage them, and a conversation
+nobody touches for `assistant.conversation_days` (30 by default) is deleted.
+
 ### Giving omnibot a credential
 
 omnibot can bind a credential to a device without ever seeing it. In the chat, `/secret` hands it one:
