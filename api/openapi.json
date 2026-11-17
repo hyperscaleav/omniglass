@@ -16126,7 +16126,7 @@
             "type": "string"
           },
           "system_type": {
-            "description": "The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to.",
+            "description": "The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to.",
             "type": "string"
           },
           "system_type_id": {
@@ -32537,7 +32537,7 @@
     },
     "/system-types": {
       "get": {
-        "description": "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
+        "description": "Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
         "operationId": "list-system-types",
         "responses": {
           "200": {

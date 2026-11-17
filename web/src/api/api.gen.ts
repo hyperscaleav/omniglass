@@ -5300,7 +5300,7 @@ export type SystemBody = {
   standard?: string;
   /** The standard's uuid; the stable form of standard */
   standard_id?: string;
-  /** The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
+  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
   system_type?: string;
   /** The system_type's uuid; the stable form of system_type */
   system_type_id?: string;
@@ -24087,7 +24087,7 @@ export const getListSystemTypesUrl = () => {
 }
 
 /**
- * Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
+ * Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
  * @summary List system types
  */
 export const listSystemTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemTypesResponse> => {
