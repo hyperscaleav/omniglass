@@ -2313,6 +2313,7 @@ export type CreateMeTokenInputBodyChannelsItem = typeof CreateMeTokenInputBodyCh
 export const CreateMeTokenInputBodyChannelsItem = {
   api: 'api',
   mcp: 'mcp',
+  omnibot: 'omnibot',
 } as const;
 
 export type CreateMeTokenInputBody = {
@@ -2325,8 +2326,8 @@ export type CreateMeTokenInputBody = {
      */
   agent?: string;
   /**
-     * The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both.
-     * @maxItems 2
+     * The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp.
+     * @maxItems 3
      * @nullable
      */
   channels?: CreateMeTokenInputBodyChannelsItem[] | null;

@@ -2789,13 +2789,14 @@ components:
           pattern: ^[A-Za-z0-9][A-Za-z0-9 ._-]*$
           type: string
         channels:
-          description: "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both."
+          description: "The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp."
           items:
             enum:
               - api
               - mcp
+              - omnibot
             type: string
-          maxItems: 2
+          maxItems: 3
           type:
             - array
             - "null"

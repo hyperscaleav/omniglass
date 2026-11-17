@@ -283,7 +283,7 @@ Mints a CLI/API token for the caller and returns it once (store it now; it canno
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--agent` | string | (none) | Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate. |
-| `--channels` | string | (none) | The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both. |
+| `--channels` | string | (none) | The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp. |
 | `--description` | string | (none) | What the token is for (required) |
 | `--roles` | string | (none) | An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling. |
 | `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365; required for an agent token) |
@@ -4379,6 +4379,27 @@ Example:
 
 ```sh
 omniglass notification-type update <name>
+```
+
+## `omniglass omnibot`
+
+Run omnibot, the built-in assistant, on a prompt
+
+```
+omniglass omnibot <prompt...> [flags]
+```
+
+Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. The model is a recording (--replay) until a live provider lands.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--max-steps` | int | `10` | the most model turns the run takes before it stops |
+| `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+
+Example:
+
+```sh
+omniglass omnibot --replay lobby.yaml "add a display to the lobby"
 ```
 
 ## `omniglass outpost`
