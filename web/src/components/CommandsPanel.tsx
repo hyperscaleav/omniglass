@@ -229,7 +229,7 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
         <Show when={props.c.target}>
           <KVStacked label="Sets" value={props.c.target} mono />
         </Show>
-        <KVStacked label="Issued by" value={props.c.issuer || "a purged principal"} />
+        <KVStacked label="Issued by" value={props.c.issuer || "a purged user"} />
       </div>
       <Show when={props.c.reply}>
         <div class="flex flex-col gap-1">

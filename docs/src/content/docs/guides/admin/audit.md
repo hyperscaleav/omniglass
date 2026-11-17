@@ -30,7 +30,7 @@ screenshots:
 **Admin > Audit** (with `audit:read:admin`, so **administrators and owners** only) is the read-only audit trail:
 every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
 and the resource. An action taken while impersonating shows the **real administrator** as the actor, with an
-`as <account>` tag naming the principal whose identity they assumed (for example `admin as bob`), so
+`as <account>` tag naming the user whose identity they assumed (for example `admin as bob`), so
 accountability lands on the human who acted and impersonation never hides them. A read-only user (a viewer) does not
 see this page: the audit trail is admin-level information, so a plain "read everything" grant does not open it.
 Failed sign-ins on a real account show as **login failed** (and a sign-in to a disabled account as **login
@@ -44,7 +44,7 @@ Filtering runs over the rows already loaded; **Load older** pages further back i
 up short is a cue to load older and look deeper. The rows scroll inside the list's card, so the count and
 **Load older** stay at its foot however many pages you have loaded.
 
-The **Id** column shows the resource's **name** (a principal's username), resolved from the row's own
+The **Id** column shows the resource's **name** (a user's username), resolved from the row's own
 change images; hovering it reveals the stable uuid the trail actually stores, which is what keeps a row
 attributable after a rename. `resource_id` is always the resource's primary key, so a row whose images
 carry no name (an older catalog delete) falls back to that raw uuid.

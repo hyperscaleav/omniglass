@@ -9993,7 +9993,7 @@
       },
       "NotificationTargetBody": {
         "additionalProperties": false,
-        "description": "Where a notification goes, a webhook, a mailbox, a group or a person.",
+        "description": "Where a notification goes, a webhook, a mailbox, a user group or a person.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
@@ -11947,7 +11947,7 @@
       },
       "PrincipalBody": {
         "additionalProperties": false,
-        "description": "A user, a person or a machine, that roles are granted to.",
+        "description": "Who a role is granted to, a person who signs in or a machine user that holds tokens.",
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",

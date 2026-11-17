@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, roleFilterKeys, type Principal, type Role } from "./principals";
+import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, kindLabel, roleFilterKeys, type Principal, type Role } from "./principals";
 import { buildPredicate, type Chip } from "./predicate";
 import { uuidFor } from "./testids";
 
@@ -158,5 +158,17 @@ describe("roleFilterKeys", () => {
     expect(byKey.id.values!(roles)).toEqual(["admin", "operator", "owner", "viewer"]);
     // The permission catalog is the distinct resource heads plus the superuser tail.
     expect(byKey.permission.values!(roles)).toEqual(["*", ">", "alarm", "audit", "principal"]);
+  });
+});
+
+// ADR-2036: a user's kind reads person or machine on every console surface,
+// while the wire still carries human and service until #2075.
+describe("kindLabel", () => {
+  it("reads the wire kinds as person and machine", () => {
+    expect(kindLabel("human")).toBe("person");
+    expect(kindLabel("service")).toBe("machine");
+  });
+  it("passes any other kind through", () => {
+    expect(kindLabel("outpost")).toBe("outpost");
   });
 });

@@ -166,7 +166,7 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
 
   // The rail: Save and Repair for whoever may impair, Remove for whoever may
   // delete; a reader who may do neither gets no rail at all. Bound inside an
-  // effect so it follows the principal (an impersonation swaps it); each run's
+  // effect so it follows the user (an impersonation swaps it); each run's
   // binding clears itself when the next replaces it.
   const actions = useFormActions();
   createEffect(() => {

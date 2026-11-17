@@ -2,14 +2,14 @@ import { api } from "../api/client";
 import { entityLabel } from "./entities";
 import type { Grant, CreateGrant } from "./principals";
 
-// The principal-groups data layer: a group holds role x scope grants that its
+// The user-groups data layer: a group holds role x scope grants that its
 // members inherit. A thin typed wrapper over the generated client, gated by
 // principal_group (management) and principal_grant (granting) on the server.
 
 export type Group = { id: string; name: string; label?: string; description?: string; member_count?: number; grant_count?: number };
 // A roster row carries the two facts apart: `name` is the member's identifier
-// (a human's username, a service account's name) and `label` is the
-// friendly string, which only a human has. They used to arrive as one field
+// (a person's username, a machine user's name) and `label` is the
+// friendly string, which only a person has. They used to arrive as one field
 // carrying either, which is what #563 ended.
 export type GroupMember = { principal_id: string; kind: string; name?: string; label?: string };
 

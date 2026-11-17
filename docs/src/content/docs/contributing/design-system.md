@@ -119,7 +119,7 @@ a location holding none or several renders its own subject card,
   thin staged combobox over it; the genuinely tricky list derivations (index, ancestor paths,
   flatten-vs-tree rows, client-preference parsing) are pure in `lib/listmodel`. Both are unit
   tested; `FilterBar` has a component test.
-- **`can(me, resource, action)` from `/auth/me`.** The console reads the principal's flat,
+- **`can(me, resource, action)` from `/auth/me`.** The console reads the user's flat,
   wildcard-expanded `permissions` once and gates UI affordances with O(1) checks; `ListShell`
   gates create/update/delete by the entity's resource name. The server is the authority; this is
   a hint only.
@@ -138,7 +138,7 @@ a location holding none or several renders its own subject card,
   cannot. Full-page create forms still draw their own inline rail and converge when the CRUD form
   primitive lands.
 - **Client preferences in localStorage, for now.** Column order/visibility
-  persists per browser; the eventual home is a per-principal user-preferences endpoint (a
+  persists per browser; the eventual home is a per-user preferences endpoint (a
   read/write swap), not the cascade.
 - **Learning surfaces ride the real engine.** A concept page renders the actual pipeline against
   real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
@@ -496,7 +496,7 @@ differently for a row whose rule rendered nothing and must still open locked.
 **One renderer, pinned by a source guard.** `entityLabel` is the only place `label || name` is
 written. `one-label-renderer.test.ts` scans every non-test source file for a hand-rolled fallback and
 for the raw column interpolated into a string, and fails on either outside a short, line-precise
-allowlist of rules that are genuinely not this one (a principal's name, which has no `name` column;
+allowlist of rules that are genuinely not this one (a user's name, which has no `name` column;
 a picker that renders both facts as `name (Label)`). Both directions are asserted, so an allowlist
 entry that stops describing anything fails too. The scan catches what no page test can: a facet
 that spelled its haystack `` `${r.name} ${r.label}` `` searched the literal text "undefined"

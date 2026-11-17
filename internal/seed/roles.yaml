@@ -103,7 +103,7 @@ roles:
     label: Administrator
     description: >-
       Manages the fleet, users, roles, and grants: full create, update, and
-      delete on locations, systems, and components, and on principals,
+      delete on locations, systems, and components, and on users,
       credentials, grants, and roles. Deliberately NOT the superuser: it cannot
       grant a role above its own tier, so it cannot make itself owner. Inherits
       Operator.

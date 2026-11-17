@@ -87,7 +87,7 @@ describe("NotificationTargets", () => {
     mount();
     expect(screen.getByText("Ops chat")).toBeTruthy();
     expect(screen.getByText("https://chat.example.com/…")).toBeTruthy();
-    expect(screen.getByText("Group")).toBeTruthy();
+    expect(screen.getByText("User group")).toBeTruthy();
     expect(screen.getByText("enabled")).toBeTruthy();
     expect(screen.getByText("disabled")).toBeTruthy();
   });
@@ -176,7 +176,7 @@ describe("NotificationTargets", () => {
     const kind = (await screen.findByTestId("target-kind-select")) as HTMLSelectElement;
     fireEvent.change(kind, { target: { value: "principal_group" } });
     fireEvent.input(screen.getByPlaceholderText("Ops chat"), { target: { value: "Night shift" } });
-    const group = (await screen.findByText("Choose a group")).closest("select") as HTMLSelectElement;
+    const group = (await screen.findByText("Choose a user group")).closest("select") as HTMLSelectElement;
     fireEvent.change(group, { target: { value: "on-call" } });
     const submit = screen.getByRole("button", { name: /Create target/ });
     await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));

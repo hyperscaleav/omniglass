@@ -288,7 +288,7 @@ entities, and enrolling one is an admin's job, so their entry sits in Admin (liv
 `outpost:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on an outpost, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, Groups, Audit, Outposts, Status (the Platform
+Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Status (the Platform
 health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
 here behind the same `outpost:read` gate as Outposts, whose rows it reads), plus the live Settings leaf, the
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child

@@ -75,7 +75,7 @@ describe("Groups page", () => {
     });
     // Read mode footer: Delete is always available (not gated by edit); Edit present;
     // but the body has no member Remove and no Save yet.
-    expect(within(blade).getByText("Delete group")).toBeTruthy();
+    expect(within(blade).getByText("Delete user group")).toBeTruthy();
     expect(within(blade).getByLabelText("Edit")).toBeTruthy();
     expect(within(blade).queryByLabelText("Remove")).toBeNull();
     expect(within(blade).queryByText("Save")).toBeNull();
@@ -84,7 +84,7 @@ describe("Groups page", () => {
     expect(within(blade).getByText("Save")).toBeTruthy();
     expect(within(blade).getByText("Cancel")).toBeTruthy();
     expect(within(blade).getAllByLabelText("Remove").length).toBeGreaterThan(0);
-    expect(within(blade).getByText("Delete group")).toBeTruthy(); // still there in edit
+    expect(within(blade).getByText("Delete user group")).toBeTruthy(); // still there in edit
   });
 
   it("stages a member removal in edit mode and Cancel reverts it", async () => {
@@ -130,16 +130,16 @@ describe("Groups page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    fireEvent.click(within(blade).getByText("Delete group"));
+    fireEvent.click(within(blade).getByText("Delete user group"));
     await waitFor(() => expect(asides().length).toBe(0));
     expect(detailRefetched).toBe(false);
   });
 
   it("disables Create and shows an inline error for an invalid group name", async () => {
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
-    const createBtn = () => screen.getByText("Create group").closest("button") as HTMLButtonElement;
+    const createBtn = () => screen.getByText("Create user group").closest("button") as HTMLButtonElement;
     fireEvent.input(name, { target: { value: "Field Crew" } }); // caps + space
     expect(screen.getByText(/space|capital/i)).toBeTruthy();
     expect(createBtn().disabled).toBe(true);
@@ -160,10 +160,10 @@ describe("Groups page", () => {
       return new Response(JSON.stringify({ groups: [created] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
     fireEvent.input(name, { target: { value: "field-crew" } });
-    fireEvent.click(screen.getByText("Create group"));
+    fireEvent.click(screen.getByText("Create user group"));
     // The new group's blade opens already in edit mode: Save / Cancel and the
     // edit-only member add control are present without clicking Edit.
     const blade = await waitFor(() => {
@@ -211,7 +211,7 @@ describe("Groups page", () => {
 describe("Groups create identity", () => {
   const openCreate = async () => {
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const display = (await screen.findByPlaceholderText("Field Crew")) as HTMLInputElement;
     return { display, name: screen.getByPlaceholderText("field-crew") as HTMLInputElement };
   };

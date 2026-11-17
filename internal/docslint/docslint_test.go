@@ -2,6 +2,7 @@ package docslint
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -605,5 +606,89 @@ func TestADR2033LabelTemplateAndBlueprintFire(t *testing.T) {
 		if fires(line) {
 			t.Errorf("kept sense fired: %q", line)
 		}
+	}
+}
+
+// TestADR2036TheUserFires proves the ADR-2036 entries catch the retired IAM
+// words in prose (principal, principal group, service account, and human as a
+// kind) and pass what the words keep until the schema, API and permission
+// rename (#2075) lands: a backticked identifier, a route, a permission, a
+// command, a JSON field, and the English senses of principal and human.
+func TestADR2036TheUserFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2036") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"a principal holds grants",
+		"Principals sign in with a password or a token.",
+		"every principal in the install",
+		"add a principal group for the night shift",
+		"a principal-group's members inherit its grants",
+		"a service account calls the API with a token",
+		"Service accounts never sign in to the console.",
+		"a service-account token",
+		"a human principal signs in with a password",
+		"human users and machine users alike",
+		"the human kind carries a username",
+		"humans and service principals",
+		"a human or machine user",
+	} {
+		if !fires(line) {
+			t.Errorf("retired IAM word passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a user holds grants",
+		"a machine user calls the API with a token",
+		"add a user group for the night shift",
+		"a person signs in with a password",
+		"the `principal` table keys every user",
+		"`GET /principals` lists them",
+		"`/principal-groups/{group}/members` adds one",
+		"a role granting `principal:read`",
+		"principal:read:admin gates the page",
+		`perm: "principal_group:read:admin"`,
+		"run `omniglass principal list`",
+		"the `principal_id` column",
+		"each grant row carries principal_id",
+		"the `human` table holds the username",
+		"`kind=human` filters the list",
+		"me.principal.id is the caller",
+		"omniglass principal-group member create night-shift --principal-id alice",
+		"  --principal-group on-call --channels inbox",
+		"  principal: {",
+		`<SchemaTable table="principal" />`,
+		"the principal reason is cost",
+		"the principal axes of the design",
+		"the three principal surfaces",
+		"a human-in-the-loop gate",
+		"a human reads the label",
+		"the name is a human identifier",
+		"a human approves the PR",
+	} {
+		if fires(line) {
+			t.Errorf("IAM word in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestPendingRenameKeepsOnlyADR2036 proves the #2075 carve-out waves through
+// only ADR-2036 hits, and only in the generated files that rename rewrites.
+func TestPendingRenameKeepsOnlyADR2036(t *testing.T) {
+	adr := "principal is retired (ADR-2036); write user"
+	other := "node is retired (ADR-2031); write outpost"
+	if !pendingRenameHit("openapi.json", adr) || !pendingRenameHit(filepath.Join("reference", "mcp", "index.md"), adr) {
+		t.Error("an ADR-2036 hit in a generated file the rename rewrites was reported")
+	}
+	if pendingRenameHit("openapi.json", other) {
+		t.Error("another ADR's hit in openapi.json was waved through")
+	}
+	if pendingRenameHit(filepath.Join("architecture", "identity-access.mdx"), adr) {
+		t.Error("an ADR-2036 hit in hand-written docs was waved through")
 	}
 }

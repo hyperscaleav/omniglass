@@ -57,14 +57,17 @@ afterEach(() => window.history.pushState({}, "", "/"));
 describe("Users page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders a directory row per principal: name, username, kind, and grant count", () => {
-    const { getByText, getAllByText } = mount();
+  it("renders a directory row per user: name, username, kind, and grant count", () => {
+    const { getByText, getAllByText, queryByText } = mount();
     expect(getByText("Alice Ng")).toBeTruthy();
     expect(getByText("alice")).toBeTruthy(); // the username under the label
-    expect(getByText("ingest-bot")).toBeTruthy(); // a service principal is shown by its name
-    // Both a human and a service badge render (capitalized via CSS, text is the kind).
-    expect(getAllByText("human").length).toBeGreaterThan(0);
-    expect(getByText("service")).toBeTruthy();
+    expect(getByText("ingest-bot")).toBeTruthy(); // a machine user is shown by its name
+    // Both a person and a machine badge render (capitalized via CSS): the kind reads
+    // person or machine (ADR-2036), never the wire's human or service.
+    expect(getAllByText("person").length).toBeGreaterThan(0);
+    expect(getByText("machine")).toBeTruthy();
+    expect(queryByText("human")).toBeNull();
+    expect(queryByText("service")).toBeNull();
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
@@ -500,10 +503,10 @@ describe("Users page", () => {
     expect(await within(blade).findByText(/password set/i)).toBeTruthy();
   });
 
-  it("narrows the directory through the FilterBar (kind:service keeps only the bot)", async () => {
+  it("narrows the directory through the FilterBar (kind:machine keeps only the bot)", async () => {
     const { queryByText } = mount();
     const input = screen.getByRole("combobox") as HTMLInputElement;
-    fireEvent.input(input, { target: { value: "kind:service" } });
+    fireEvent.input(input, { target: { value: "kind:machine" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("ingest-bot")).toBeTruthy();
     expect(queryByText("Alice Ng")).toBeNull();

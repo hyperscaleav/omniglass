@@ -12,7 +12,7 @@ export type NavChild = {
   live?: boolean;
   issue?: number; // tracking issue for a not-yet-built section, shown on its stub
   // The authorization resource this tab needs to read. When set, the sidebar hides
-  // the tab from a principal without <resource>:read. Set it when the entity goes
+  // the tab from a user without <resource>:read. Set it when the entity goes
   // live (its server route already gates on the same resource); leave unset while
   // the section is a stub so its "soon" entry stays visible.
   resource?: string;
@@ -39,7 +39,7 @@ export type NavItem = {
   issue?: number;
   resource?: string;
   perm?: string;
-  // An any-of gate: the entry (and its route) opens for a principal who can
+  // An any-of gate: the entry (and its route) opens for a user who can
   // read ANY of these resources. For the one entry that replaced several
   // sidebar doors (#798: Fleet swallowed the Components/Systems/Locations
   // entries), a single resource would silently lock a reader of only one kind
@@ -100,11 +100,11 @@ export const navItems: NavItem[] = [
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
-    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
+    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, user groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
     children: [
-      { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "Users and service accounts: status, grants, and tokens." },
+      { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "People and machine users: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
-      { label: "Groups", path: "/groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
+      { label: "User groups", path: "/user-groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
       // Outposts and Platform health (#1644) are administration: enrolling an outpost
       // is an admin's job, and whether Omniglass itself is well is read off the
@@ -118,7 +118,7 @@ export const navItems: NavItem[] = [
   },
 ];
 
-// filterNav drops the tabs a principal cannot reach: an ungated leaf is always
+// filterNav drops the tabs a user cannot reach: an ungated leaf is always
 // kept; a gated leaf is kept only when `allow` passes its required permission
 // tokens (an explicit `perm`, else `<resource>:read`); a group is kept only if it
 // has at least one kept child (with its children filtered). The server gates the
@@ -186,7 +186,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
-  { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a group or a person. Admin-only." },
+  { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a user group or a person. Admin-only." },
   // The template catalog (#1329), live inside the catalog shell: the
   // Components, Systems and Locations groups' Templates slots open it filtered.
   { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of locations from one, then own what you get." },
@@ -284,13 +284,13 @@ const navPerms: Record<string, string[][]> = (() => {
 // detail route (/locations/hq) inherits its section's gate (/locations). The route
 // guard denies a route whose tokens the caller lacks; the server is still the
 // authority, this only keeps the console from rendering a page the caller cannot
-// use (and, under impersonation, from painting stale cross-principal data).
+// use (and, under impersonation, from painting stale cross-user data).
 export function routeTokens(pathname: string): string[] | null {
   const alts = routeAlternatives(pathname);
   return alts ? alts[0] : null;
 }
 
-// routeAllowed is the guard's question: may this principal open this route?
+// routeAllowed is the guard's question: may this user open this route?
 // True for an ungated route; for a gated one, true when `allow` passes ANY of
 // the route's alternatives (a simple gate has exactly one). Built on the same
 // nav map as routeTokens and the sidebar, so the three cannot diverge.

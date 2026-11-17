@@ -21,12 +21,12 @@ export const TARGET_KINDS: readonly TargetKind[] = ["webhook", "email", "princip
 export const PEOPLE_CHANNELS = ["inbox", "email"] as const;
 export type PeopleChannel = (typeof PEOPLE_CHANNELS)[number];
 
-// The words a kind reads as on the page: an operator picks "Group", the wire
+// The words a kind reads as on the page: an operator picks "User group", the wire
 // says principal_group.
 export const KIND_WORDS: Record<TargetKind, string> = {
   webhook: "Webhook",
   email: "Email",
-  principal_group: "Group",
+  principal_group: "User group",
   principal: "Person",
 };
 
@@ -130,7 +130,7 @@ export function targetDraftErrors(d: TargetDraft, editing = false): TargetDraftE
       break;
     }
     case "principal_group":
-      if (!editing && !d.principalGroup) out.principalGroup = "Pick the group it tells.";
+      if (!editing && !d.principalGroup) out.principalGroup = "Pick the user group it tells.";
       if (d.channels.length === 0) out.channels = "Pick at least one way to tell them.";
       break;
     case "principal":

@@ -12,7 +12,7 @@ Slice-0 ships the **platform** rung end to end: the pure `settings` merge and re
 :::
 
 Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
-most-specific-wins, with provenance, but on the **principal** axis (platform to group to user)
+most-specific-wins, with provenance, but on the **user** axis (platform to group to user)
 rather than the [fleet cascade](/architecture/cascade/)'s location to system to component. Same
 primitive (doctrine 5) pointed at identity; the least-specific level is `platform`, an admin's
 **install-wide** value
@@ -62,7 +62,7 @@ more-specific level from overriding it: lock `ui.theme` at `platform` and no gro
 change it.
 
 **Lock conflict: broader wins.** A `platform` lock supersedes a `group` lock. The editability rule
-falls out: a principal may edit a key at level L if and only if no broader level has locked it.
+falls out: a user may edit a key at level L if and only if no broader level has locked it.
 
 ## Provenance
 
@@ -113,12 +113,12 @@ diverging from the scaling page's "materialized in Postgres" sketch.
 ### The unscoped-Gateway carve-out
 
 The two-layer authorization model has one exception here: Settings Gateway methods are
-**unscoped**. Settings describe the platform and its principals, not the fleet, so the ABAC
+**unscoped**. Settings describe the platform and its users, not the fleet, so the ABAC
 storage-scope invariant is **not applicable** (as with the catalog-type reads, `GET /property-types` and its catalog siblings);
 only the `settings:<action>` permission gates them, a recorded carve-out
 ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
 not a missed invariant. The group and user levels will constrain override reads and writes by the
-acting principal (a user edits only their own `user` row), a per-principal ownership check distinct
+acting user (a user edits only their own `user` row), a per-user ownership check distinct
 from fleet ABAC. Every override write and delete writes an `audit_log` row in the same transaction
 (the existing `writeAuditRes` pattern).
 
@@ -271,7 +271,7 @@ Two read audiences, two read endpoints, and merge-patch writes:
 
 Every settings write lands at the **platform** tier by definition, so all three writes carry
 `platform:update` on top of `settings:update`, the same install-wide authority a platform-tier
-variable, secret, or tag binding needs. The console gates Edit and Restore on **both**; a principal
+variable, secret, or tag binding needs. The console gates Edit and Restore on **both**; a user
 holding only `settings:update` reads a note naming the missing capability rather than a 403 on
 Save.
 
@@ -297,7 +297,7 @@ not from the OpenAPI document the CLI generates from, so the generator cannot de
 `settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
 store is a singleton, so there is no create or delete-of-resource permission.
 
-## The cascade-over-principals model
+## The cascade-over-users model
 
 Reusing the [cascade](/architecture/cascade/) primitive on the principal axis is the deliberate call
 ([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)):

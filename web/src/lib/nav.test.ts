@@ -70,9 +70,11 @@ describe("filterNav", () => {
 
   // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
   // A tab needing two words is a sign it names a page rather than a door.
+  // User groups is the one exception: IAM gave up the bare word group (ADR-2036)
+  // and no single word names a set of users without colliding with the fleet's.
   it("labels every sidebar tab with one word", () => {
     const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
-    expect(labels.filter((l) => /\s/.test(l))).toEqual([]);
+    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups")).toEqual([]);
   });
 
   it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Outposts", () => {
@@ -99,18 +101,18 @@ describe("filterNav", () => {
     expect(section("Admin", [">"])).toContain("Audit");
   });
 
-  // The Users, Roles, and Groups directories are admin-tier reads
+  // The Users, Roles, and User groups directories are admin-tier reads
   // (<resource>:read:admin), matching the server routes: a viewer's *:read cannot
   // reach them, while admin's explicit read:admin grants (and owner's >) do.
-  it("hides Users, Roles, and Groups from a *:read principal, keeps them for admin", () => {
+  it("hides Users, Roles, and User groups from a *:read user, keeps them for admin", () => {
     const floor = section("Admin", ["*:read"]);
     expect(floor).not.toContain("Users");
     expect(floor).not.toContain("Roles");
-    expect(floor).not.toContain("Groups");
+    expect(floor).not.toContain("User groups");
     const adm = section("Admin", ["principal:read:admin", "role:read:admin", "principal_group:read:admin"]);
     expect(adm).toContain("Users");
     expect(adm).toContain("Roles");
-    expect(adm).toContain("Groups");
+    expect(adm).toContain("User groups");
   });
 
   // Secrets is a sensitive resource: the server takes secret off the *:read floor,
@@ -168,7 +170,7 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
     expect(routeTokens("/web/users")).toEqual(["principal", "read", "admin"]);
     expect(routeTokens("/web/roles")).toEqual(["role", "read", "admin"]);
-    expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
+    expect(routeTokens("/web/user-groups")).toEqual(["principal_group", "read", "admin"]);
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
     // The split catalogs (#598): each page's URL carries its own gate, and
@@ -225,7 +227,7 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Outposts", "Status", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Status", "Settings"]);
   });
 
   it("shows a bare *:read viewer only Outposts, Status and the ungated Settings under Admin", () => {

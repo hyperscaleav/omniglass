@@ -396,7 +396,7 @@ rather than absent.
 
 :::note[Not the IAM role]
 A **system slot** is a position in a system a component fills; an **[IAM role](/architecture/identity-access/)**
-(viewer / operator / admin / owner) is a capability set granted to a principal. Until
+(viewer / operator / admin / owner) is a capability set granted to a user. Until
 [ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot) the slot was also
 called a role; the storage methods are `ListSystemSlots` / `SetSystemSlot` / `DeleteSystemSlot`, and
 RBAC keeps `ListRoles` / `UpsertRole`.
@@ -446,7 +446,7 @@ An `operator` holds no system permission, so it creates components and a `deploy
 into systems. The reverse holds as well: a membership writes onto its component (its primary, its
 label, the system band of its cascade), so every route that binds, unbinds, re-defaults or staffs a
 component needs `component:update` over it as well as `system:update` over the system, and a
-principal scoped to one system binds nothing it cannot write
+user scoped to one system binds nothing it cannot write
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
 The console edits membership from the component, over the routes above and no others: a component's

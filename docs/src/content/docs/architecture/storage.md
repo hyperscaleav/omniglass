@@ -835,7 +835,7 @@ transactions each revoking the second-to-last owner grant both see one remaining
 Everything else composes at the gateway. The last stored function that was NOT that guard retired
 with
 [ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions):
-what names a principal (a human's username, else a service account's name, else an outpost's name) is now declared once in
+what names a user (a person's username, else a machine user's name, else an outpost's name) is now declared once in
 the gateway and rendered into every statement that needs it, so a caller picks a SHAPE and never a
 column. A read over many rows LEFT JOINs the sources and folds them in Go; the two positions a join
 cannot reach (an `UPDATE ... RETURNING`, and the audit insert that denormalizes the actor inside the
@@ -844,7 +844,7 @@ the sources as correlated sub-selects instead. Which shape is not a taste: measu
 500-member group roster, the sub-select shape projected AND sorted on costs 3011 shared buffer hits
 where the join costs 18, because Postgres does not common up two identical scalar sub-selects. Every
 shape of one policy drifts unless something compares them, so an invariant test drives every
-principal kind through all of them and fails on the first disagreement, the same
+user kind through all of them and fails on the first disagreement, the same
 recompute-and-compare shape a derived column is held to above.
 
 The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate, the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety is **structural, not by discipline**: values are always bound parameters, never interpolated; identifiers are typed constants from the generated schema, so a wrong or attacker-supplied column name is a **compile error** (the filter language's field names resolve against those same generated columns); operators are a closed set. All dynamic construction lives in this one module, a single reviewable chokepoint. The one carve-out, the high-volume sample insert (the persistence consumer), may use `pgx` `COPY` for throughput, still inside the gateway: it runs in all-visibility **system mode**, its safety resting on the typed column targets plus the upstream **admission consumer** having already confined owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.

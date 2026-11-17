@@ -245,7 +245,7 @@ export default function GrantBuilder(props: {
       <div class="eyebrow mb-1.5">Role grants</div>
       {/* Chip row: existing grants (kept or marked for removal) then staged adds. */}
       <div class="flex flex-wrap items-center gap-1.5">
-        <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
+        <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This user can sign in but has no permissions.</span>}>
           {(c) => (
             <span
               class="inline-flex items-center gap-1 rounded-field border py-[3px] pl-2.5 pr-1 font-data text-[11px]"

@@ -99,11 +99,11 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): the request carries the same
   `parent`/`location` fields a create would, and availability is checked against that specific
   placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
-  a deploy principal scoped to one subtree still gets a correct answer for a placement it cannot
+  a deploy user scoped to one subtree still gets a correct answer for a placement it cannot
   read via `GET`, because the check queries the target bucket directly rather than reading the row.
-- **A principal is addressable by uuid, username, or service account name.** Every
+- **A user is addressable by uuid, username, or machine user name.** Every
   `/principals/{id}` route resolves any of them server-side (a value that parses as a uuid is used
-  directly, else a username or a service account's name, an unknown one a 404, and a word that is
+  directly, else a username or a machine user's name, an unknown one a 404, and a word that is
   both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
   may list the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the
   all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
@@ -122,8 +122,8 @@ The forms, by what the name is unique within:
 | endpoint | `{endpoint}` | `<component>/<endpoint name>`, the component in any form above | `boi.17c.415a.$comp.display-1/https` |
 | secret, variable | `{secret}`, `{variable}` | a bare name, or `<owner>/<name>`, the owner a location, system or component in any form above, or `$platform` | `demo-panel-login`, `$platform/demo-panel-login` |
 | file | `{file}` | its filename | `codec-firmware-2.1.4.txt` |
-| principal group | `{group}` | its name | `night-shift` |
-| principal, group member | `{id}`, `{principal}` | a username, a service account's name | `alice` |
+| user group | `{group}` | its name | `night-shift` |
+| user, group member | `{id}`, `{principal}` | a username, a machine user's name | `alice` |
 | a grant's scope root | `scope_id` (body) | a bare name, a dotted address | `boi.17c` |
 
 The slash in an endpoint, secret or variable reference is one path segment, so a URL percent-encodes
@@ -147,7 +147,7 @@ name is a lookup: automation that must never drift addresses `<owner>/<name>` or
 
 **What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
 have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
-unique, since only a component makes it so; an outpost principal on `/principals` is reached by its name on
+unique, since only a component makes it so; an outpost user on `/principals` is reached by its name on
 `/outposts` instead.
 
 ## Lists: filter, order, page
@@ -280,16 +280,16 @@ status mapping:
 |---|---|
 | 400 | malformed request (bad JSON, an undeclared param) |
 | 401 | unauthenticated |
-| 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
+| 403 | **action denied on this target**: the user lacks the capability entirely, or can read the target but not perform this action on it (below) |
 | 404 | not found, **including out-of-read-scope** (below), and a name no single visible row answers to, which lists the rows that do |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
 | 422 | semantic validation (a driver attach missing a required input) |
 | 429 | throttled |
 
 **The 403/404 split is three-way, by where the target sits in the caller's
-[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the principal
+[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the user
 holds: **403**, capability missing entirely. (b) The target is in the caller's **read-scope** but outside
-`visible_set(P, action)` (the principal can `GET` it but cannot `:ack` it): **403**, which leaks nothing
+`visible_set(P, action)` (the user can `GET` it but cannot `:ack` it): **403**, which leaks nothing
 because the caller can already read the row. (c) The target is **outside the caller's read-scope**
 entirely: **404**, the only 404 case, so the API never discloses that an entity exists outside the
 caller's visible set.
@@ -664,7 +664,7 @@ returns it beside the computed settlement verdict (none/pending/settled/failed);
 actuates over the per-outpost command queue
 ([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
 holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits
-at once and 4 per principal, a wait past either a 429 refused before anything is issued.
+at once and 4 per user, a wait past either a 429 refused before anything is issued.
 `GET /components/{name}/commands` and `GET /components/{name}/commands/{id}` read commands back whole (#1155): one by its id under its
 component, or the history newest first, narrowed by `status`, `since`, `until` and `limit`, each
 carrying a time per transition, the derived in-flight `phase`, the settle mode, what carried it, the
@@ -1136,7 +1136,7 @@ a saved rule or, `POST /auth/me/action-rules:testDraft`, on a draft not yet save
 under `notification:subscribe`, which `viewer` carries; another user's rule is a 404. A member of a
 group a rule targets opts out with `POST /action-rules/{name}:optOut` and back in with `:optIn`, where
 the rule allows it. A person-addressed row names its `recipient` only to that person and to the
-principal directory's readers.
+user directory's readers.
 
 - `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
   injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
@@ -1218,7 +1218,7 @@ Two properties are worth stating because they are easy to lose:
   says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
   what lets a grouping (by location, by standard, by vendor, by tag) be a mapper rather than a second
   endpoint. Explore's outline of locations is one such mapper (ADR-0137).
-- **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
+- **Scoped per tier.** The three tiers resolve their own read scope, so a user who may read the
   location tree but not its components gets the shape of their fleet with no contents, and one with no
   fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
   theirs to draw.
@@ -1290,8 +1290,8 @@ problem+json. Each tool also carries an **agent class** (read, write, destructiv
 destination), and the listing stamps the caller's resolved policy for it into the tool's `_meta`
 (`omniglass/agent_policy`); the server refuses a class the install sets to `never` for any agent
 request, MCP or REST, before the route runs, and `GET /auth/me/agent-policy` answers the caller's
-policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated `human` or `service` principal's** token, so its
-reach is exactly that principal's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
+policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated person's or machine user's** token, so its
+reach is exactly that user's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
 that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
 own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));
 those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:

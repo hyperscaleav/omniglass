@@ -184,7 +184,7 @@ The journey rides on a few foundations:
 - the **[Storage Gateway](/architecture/storage/)** is the one door to the database; every read and
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
   is enforced: a permission on every route, a visibility filter on every query. A grant can target a
-  **[group](/architecture/groups/)** of principals as well as a single one.
+  **[group](/architecture/groups/)** of users as well as a single one.
 - the **[workers](/architecture/workers/)** are durable JetStream consumers over the
   **[messaging](/architecture/messaging/)** subject contract; the built one is the telemetry
   consumer. Not all background work rides one yet: the event rule sweep closes sustains and

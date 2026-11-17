@@ -155,8 +155,8 @@ what each page draws itself.
 | `Explore.tsx` | `/explore` | V10, V19 (blades only otherwise) |
 | `Files.tsx` | `/files`, `/files/<id>` | none checked: config chips only (`Sensitive`, content type) |
 | `FleetRedirect.tsx` | `/fleet`, `/locations`, `/systems`, `/components` | none checked: redirects to `/explore` |
-| `GroupDetail.tsx` | `/groups` (blade) | none checked: member list with kind chips |
-| `Groups.tsx` | `/groups` | none checked |
+| `GroupDetail.tsx` | `/user-groups` (blade) | none checked: member list with kind chips |
+| `Groups.tsx` | `/user-groups` | none checked |
 | `Home.tsx` | `/` | V06 |
 | `Inbox.tsx` | `/inbox` | V44 |
 | `LocationTypes.tsx` | `/location-types` | none checked: config chips only |
@@ -189,7 +189,7 @@ what each page draws itself.
 | `Systems.tsx` | `/systems/<id>` | wrapper: mounts `SystemZoom` |
 | `Tags.tsx` | `/tags` | none checked: config chips only |
 | `Templates.tsx` | `/templates` | none checked: config chips only |
-| `UserDetail.tsx` | `/users` (blade) | none checked: principal kind chips and grants |
+| `UserDetail.tsx` | `/users` (blade) | none checked: user kind chips and grants |
 | `Users.tsx` | `/users` | none checked: config chips only |
 | `Variables.tsx` | `/variables` | none checked: config chips only |
 | `Vendors.tsx` | `/vendors` | none checked: config chips only |

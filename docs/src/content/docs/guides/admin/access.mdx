@@ -30,7 +30,7 @@ grant or deny the other.
 :::
 
 **Admin > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
-and Groups: a directory row per role (its **name**, whether it is **official**, what it inherits, and how many
+and User groups: a directory row per role (its **name**, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
 its read-only **blade**, which shows the role's permissions as a **net** view against the full set of
 capabilities the platform enforces (the **permission universe**). A `Held / Missing / All` toggle switches
@@ -47,14 +47,14 @@ the read floor resolved exactly as the authorizer resolves them at runtime:
 
 <SeededSet kind="roles" />
 
-## Groups
+## User groups
 
-**Admin > Groups** (with `principal_group:read:admin`) is the admin surface for **user groups**: a group holds
+**Admin > User groups** (with `principal_group:read:admin`) is the admin surface for **user groups**: a group holds
 `role @ scope` grants, and every member **inherits** them, so you assign access to a team once instead of per
-user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
+user. Pick a row to open the group's **blade**: its **members** (add any user, remove one, or open a member to
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
-**New group** creates one (name, label, description); the **name** is an ordinary entity name
+**New user group** creates one (name, label, description); the **name** is an ordinary entity name
 (lowercase letters, digits, and hyphens, no dots and no underscores), while the label is free
 text. The name is not patchable once the group exists: moving it is `POST /principal-groups/{group}:rename`,
 gated by `principal_group:rename` rather than `:update` ([ADR-0077](/architecture/decisions/)), and the
@@ -64,7 +64,7 @@ are attached to the group once it exists, so creating and populating stay one fl
 the memberships and the inherited grants, but members keep their own direct grants.
 
 On a **user's** detail, grants split into two: the ones you granted the user **directly** (editable in the grant
-builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear
+builder) and the ones **inherited from a user group** (shown read-only, tagged `from <group>`), so it is always clear
 where a user's access comes from. To change an inherited grant, edit the group, not the user.
 
 From the CLI the surface is `omniglass principal-group list` / `get` / `create` / `update` / `rename` /
@@ -73,7 +73,7 @@ member and grant subcommands (see the [CLI reference](/reference/cli/)).
 
 ## The grant builder
 
-Users and Groups share one control for assigning access. With `principal_grant:create` / `:delete`, the
+Users and User groups share one control for assigning access. With `principal_grant:create` / `:delete`, the
 detail panel's **grant builder** stages a set of changes and applies them only on **Save**, so there are no
 accidental edits.
 
@@ -98,4 +98,4 @@ locked out of administration.
 Hovering a role in the picker shows its description and the permissions it grants, so you can see what
 you are assigning before you stage it.
 
-From the CLI a direct grant is `omniglass principal grant create alice --role viewer --scope-kind location --scope-id boi.17c` (the principal by username or service account name, the scope root by name or dotted address) / `omniglass principal grant delete alice <grantId>`; a grant has no name, so it alone is addressed by its uuid.
+From the CLI a direct grant is `omniglass principal grant create alice --role viewer --scope-kind location --scope-id boi.17c` (the user by username or machine user name, the scope root by name or dotted address) / `omniglass principal grant delete alice <grantId>`; a grant has no name, so it alone is addressed by its uuid.

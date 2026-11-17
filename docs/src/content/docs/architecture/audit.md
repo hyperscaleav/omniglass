@@ -33,7 +33,7 @@ drawer. See [implementation status](/architecture/status/).
   every `writeAuditRes` call site and fails on an argument that is not primary-key **shaped**, which
   catches the two ways this went wrong (a name, and a dual-accept route's reference) without being
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
-  password change or reset row (`resource = 'credential'`) is keyed on its principal's uuid rather
+  password change or reset row (`resource = 'credential'`) is keyed on its user's uuid rather
   than the credential's own; a token's rows are keyed on the token's credential id.
 - **A row outlives its subject.** `resource_id` is stored as text and is never a foreign key, so
   deleting or aging out the thing a row is about never deletes or rewrites the row. What makes the row
@@ -43,11 +43,11 @@ drawer. See [implementation status](/architecture/status/).
   keeps their rows, and alarm retention (#1339) will remove cleared ones. Several other writers still
   write an update with no before image or a delete with no image (#1444) ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or outpost. The read resolves it to the actor's **identifier**, a human's username, a
-  service account's name, or an outpost's name, through the gateway's one resolution
+  person, machine user, or outpost. The read resolves it to the actor's **identifier**, a person's username, a
+  machine user's name, or an outpost's name, through the gateway's one resolution
   ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)),
-  falling back to the snapshot on the row once that principal is purged. All three profiled kinds
-  resolve, so only a principal with no profile row at all reads empty; an **outpost** actor read blank
+  falling back to the snapshot on the row once that user is purged. All three profiled kinds
+  resolve, so only a user with no profile row at all reads empty; an **outpost** actor read blank
   until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `outpost.name` the third
   source. Nothing here surfaces a raw uuid where a name was expected.
 - **How it arrived rides beside the actor.** A row carries `channel` and `client`: an
@@ -63,8 +63,8 @@ drawer. See [implementation status](/architecture/status/).
   console's [audit page](/guides/admin/audit/) shows them: a Channel column with a pill over the
   declared client (empty on a direct row), the agent tagged beside the person, `channel`, `client`
   and `agent` facets, and a drawer that names the client as the agent reported it.
-- **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
-  principal, so the actor is that principal, and the channel is the AI-sourced marking riding
+- **An AI-taken action is one row.** An AI tool acts with a bearer token as a person or a machine
+  user, so the actor is that user, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
 - **An agent token names its agent.** A row written with an
   [agent token](/architecture/identity-access/#agent-tokens) carries `agent`, the name fixed when
@@ -117,18 +117,18 @@ Auth events ride a **second write lane**: login and logout run on read / no-tran
 they emit through a standalone non-transactional seam under `resource = 'auth'`,
 with the verbs `login`, `logout`, `login_failed` (a wrong password on a real account),
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
-lockout window), `revoke_session` (an admin ending another principal's session), and
+lockout window), `revoke_session` (an admin ending another user's session), and
 `agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
 sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
 agent's with its channel). Self-service
 logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
-`resource_id` set to the target principal's id so the trail answers "whose sessions did this admin
-revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated principal,
+`resource_id` set to the target user's id so the trail answers "whose sessions did this admin
+revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated user,
 `real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
-What gets written there is the actor's **identifier**, a human's username, a service account's name,
+What gets written there is the actor's **identifier**, a person's username, a machine user's name,
 or an outpost's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
 stored function that used to resolve it retired, so the order is stated once in Go and rendered into
 the statements the gateway binds

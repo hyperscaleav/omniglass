@@ -1,6 +1,6 @@
 ---
 title: Groups
-description: "Named sets of component, system, location, or principal: static or dynamic membership, weighted, a cascade overlay and an access scope."
+description: "Named sets of component, system, location, or user: static or dynamic membership, weighted, a cascade overlay and an access scope."
 sidebar:
   badge:
     text: Partial
@@ -10,10 +10,10 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Implementation status]
-Built end to end: the **principal** kind of group (`principal_group` plus membership,
+Built end to end: the **user** kind of group (`principal_group` plus membership,
 group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
 `/principal-groups` CRUD gated by `principal_group:*`, the `:rename` custom method, and the console
-Groups pages), as a grant **subject** only (see below).
+User groups pages), as a grant **subject** only (see below).
 :::
 
 A **group** is a named set of entities cutting across the structural trees: the tree handles config
@@ -26,7 +26,7 @@ serves two jobs, a [cascade](/architecture/cascade/) overlay and an
 :::design[The general group table, tracked in #10]
 A group:
 
-- is **component / system / location / principal** kind;
+- is **component / system / location / user** kind;
 - has **static** membership (an explicit list) or **dynamic** membership (a filter, re-evaluated
   live, so a device leaves the moment it stops matching);
 - has a **weight**, its specificity on the shared scale (see *Placement*; the only weights in the
@@ -38,7 +38,7 @@ A group:
 The general `group` table carries the id, kind, membership, and **weight**.
 :::
 
-What is **built** is the principal arm: `principal_group` and its membership, a **grant subject**
+What is **built** is the user arm: `principal_group` and its membership, a **grant subject**
 (grants attach to the group and reach its members), not an access scope (`scope_kind='group'` is
 refused today with a 422).
 

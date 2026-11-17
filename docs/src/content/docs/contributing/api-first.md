@@ -130,7 +130,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `:rename`, gated `<resource>:rename` and not `<resource>:update`, because moving a name breaks the
   bookmarks, runbooks, and integration config held outside the platform while nothing inside it
   breaks (every reference stores the uuid). That is why `name` is absent from the `PATCH` body of a
-  component, a system, a location, and a principal group
+  component, a system, a location, and a user group
   ([ADR-0076](/architecture/decisions/)).
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.

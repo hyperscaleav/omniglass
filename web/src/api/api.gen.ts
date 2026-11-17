@@ -4641,7 +4641,7 @@ export const NotificationTargetBodyKind = {
 } as const;
 
 /**
- * Where a notification goes, a webhook, a mailbox, a group or a person.
+ * Where a notification goes, a webhook, a mailbox, a user group or a person.
  */
 export type NotificationTargetBody = {
   /** A URL to the JSON Schema for this object. */
@@ -4818,7 +4818,7 @@ export type SvcBody = {
 };
 
 /**
- * A user, a person or a machine, that roles are granted to.
+ * Who a role is granted to, a person who signs in or a machine user that holds tokens.
  */
 export type PrincipalBody = {
   /** A URL to the JSON Schema for this object. */

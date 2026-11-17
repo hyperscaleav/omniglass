@@ -1538,9 +1538,9 @@ it, so a binding naming the conduit is refused (422).
 A binding is a relationship with two ends, so it costs a write on both, the
 [ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
 rule: `component:update` on the conduit and the owner's update (`component:update`, or
-`system:update` for a system). One end alone is not enough in either direction. A principal scoped to
+`system:update` for a system). One end alone is not enough in either direction. A user scoped to
 a system could otherwise claim an identity that belongs to another owner and pull a conduit it cannot read onto its own
-system; a principal scoped to the conduit could write onto systems it cannot update. A move to another
+system; a user scoped to the conduit could write onto systems it cannot update. A move to another
 owner also costs update on the owner it leaves. Consent is given at write: a binding persists if its
 author later loses scope, as a membership does, and deleting the conduit or the owner deletes it. The
 [identity and access](/architecture/identity-access/) page has the refusal each end gives.
