@@ -538,7 +538,7 @@ export type AuditEventBody = {
   actor_name?: string;
   /** The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly */
   agent?: string;
-  /** How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller */
+  /** How the action arrived: mcp for a tool call on the MCP server, omnibot for one omnibot made; absent for a direct API call. Set by the server, never by the caller */
   channel?: string;
   /** The name and version the MCP client declared about itself, recorded as asserted; absent when there is none */
   client?: string;

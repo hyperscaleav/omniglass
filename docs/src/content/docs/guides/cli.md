@@ -832,7 +832,9 @@ omniglass metric-type get tcp-connect-time | jq .retention_days
   (`bootstrap`, `token`, `set-password`), the idempotent dev-fleet seeder
   (`seed-dev`, the same trusted lane, never for production), and `mcp`, which serves the
   [MCP tools](/reference/mcp/) over stdio for a local agent, with `mcp tools` and `mcp call`
-  as a small client of it ([connect an agent](/guides/agents/)). The MCP tools are generated
+  as a small client of it ([connect an agent](/guides/agents/)), and `omnibot`, the assistant
+  that drives those tools as its own agent token and asks you on the terminal before any write
+  ([omnibot](/guides/agents/#omnibot-the-assistant-in-the-cli)). The MCP tools are generated
   too, by `cmd/mcpgen` from the same OpenAPI document.
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add
