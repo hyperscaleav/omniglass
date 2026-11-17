@@ -246,7 +246,7 @@ type LocationType struct {
 	Label              string
 	Icon               string
 	AllowedParentTypes []string
-	// LabelRule is this type's label template (#682), nullable: null defers to
+	// LabelRule is this type's label rule (#682), nullable: null defers to
 	// the global tier. A location_type is flat (no parent link), so there is
 	// nothing to inherit from and the two tiers are the whole ladder.
 	LabelRule *string

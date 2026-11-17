@@ -4096,15 +4096,15 @@
  "label_rules": [
   {
    "entity_kind": "component",
-   "template": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
+   "rule": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
   },
   {
    "entity_kind": "system",
-   "template": "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
+   "rule": "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
   },
   {
    "entity_kind": "location",
-   "template": "{{title (words .Name)}}"
+   "rule": "{{title (words .Name)}}"
   }
  ],
  "severity_levels": [

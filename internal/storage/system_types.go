@@ -35,7 +35,7 @@ const maxSystemTypeDepth = 32
 // system is (a boardroom, a classroom, a video wall): a stable id, the official
 // flag, a label, and an optional parent for a tree of arbitrary depth.
 // It is the system-side counterpart of ComponentType, and it does NOT replace
-// standard: a standard is the blueprint a system conforms to, this is what kind
+// standard: a standard is the contract a system is built to, this is what kind
 // of space the system is.
 //
 // Stem, Icon, and Abbrev are nullable: null means "inherit from parent",
@@ -54,7 +54,7 @@ type SystemType struct {
 	Stem   *string
 	Icon   *string
 	Abbrev *string
-	// LabelRule is this node's label template (#682), nullable on the same
+	// LabelRule is this node's label rule (#682), nullable on the same
 	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
 	// nearest ancestor that sets one, and then to the global tier.
 	LabelRule *string
