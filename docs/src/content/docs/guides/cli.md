@@ -896,7 +896,7 @@ jq -r '[.seq, .healthy, (.reasons | join("; "))] | @tsv' health.jsonl
 **`platform health` or `lab measure`?** Both read the same figures; they differ in what they may
 touch. [`lab measure`](/guides/lab/#measuring-a-scale-lab) drives a scale lab, reading its
 database and containers through Docker, to measure what a fleet costs, so it runs on the lab's host.
-`platform health` only reads, through the API, as the token's principal, so it is the one to point at
+`platform health` only reads, through the API, as the token's user, so it is the one to point at
 a server you did not start: a deployment, a soak, a support call. It is the same read an operator gets
 on the page, minus the browser.
 

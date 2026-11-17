@@ -28,7 +28,7 @@ guard**; **force-logout** revokes every target **session** while API **tokens** 
 its own bearer secret, not password-tied; a self-service change instead revokes the caller's other
 sessions, keeping the current one); **force-change-on-next-login** sets
 `human.must_change_password`, the `authn` choke point 403ing **every** route until the change except
-reading the caller's own user and the change itself), **role assignment**
+reading the caller's own user and the change itself), **granting roles**
 (`POST /principals/{id}/grants` / `DELETE /principals/{id}/grants/{grantId}`) with the
 **owner-invariant trigger**, the **user lifecycle** (reversible
 `POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
