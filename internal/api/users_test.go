@@ -51,7 +51,7 @@ func TestUserDirectoryAPI(t *testing.T) {
 	}
 	assertNoSecret(t, created)
 	var made struct {
-		ID    string `json:"id"`
+		ID     string `json:"id"`
 		Person struct {
 			Username string `json:"username"`
 		} `json:"person"`
