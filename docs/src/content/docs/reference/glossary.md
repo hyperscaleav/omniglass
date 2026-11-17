@@ -61,7 +61,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **setting** | A platform or user preference, resolved from the user up to the platform default. | `/settings` | `settings` |  |
 | **severity level** | How bad an alarm is, ranked, with its color and whether it takes its component out. | `/severity-levels` | `severity_level` |  |
 | **standard** | The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes. | `/standards` | `standard` | blueprint |
-| **system slot** | A place in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means. |  |  | system role |
+| **system slot** | A position in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means. |  |  | system role |
 | **system type** | What kind of space a system is, such as a boardroom, a classroom or a video wall. | `/system-types` | `system_type` |  |
 | **task** | An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
 | **transport** | The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass. | `/transports` | `endpoint` |  |

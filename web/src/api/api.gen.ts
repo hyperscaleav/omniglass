@@ -117,7 +117,7 @@ export type AddSimSystemComponentBody = {
   address: string;
   component: string;
   product: string;
-  role: string;
+  slot: string;
 };
 
 export type AddSimSystemInputBody = {
@@ -128,7 +128,7 @@ export type AddSimSystemInputBody = {
   /** The system's name; minted from its type when empty */
   name?: string;
   /**
-     * The standard the system is built to; its roles decide the components
+     * The standard the system is built to; its slots decide the components
      * @minLength 1
      */
   standard: string;
@@ -139,18 +139,18 @@ export type AddSimSystemInputBody = {
   system_type: string;
 };
 
-export type SimRoleFillBody = {
-  /** The choice alternate the role belongs to, choice/alternate; empty when unconditional. */
+export type SimSlotFillBody = {
+  /** The choice alternate the slot belongs to, choice/alternate; empty when unconditional. */
   alternate?: string;
-  /** How many simulated components the role gets: its quorum, at least one, capped at its capacity. */
+  /** How many simulated components the slot gets: its quorum, at least one, capped at its capacity. */
   count: number;
-  /** How many the role stays short when nothing simulated fits. */
+  /** How many the slot stays short when nothing simulated fits. */
   missing?: number;
-  /** The simulated product chosen for the role; empty when nothing simulated fits. */
+  /** The simulated product chosen for the slot; empty when nothing simulated fits. */
   product?: string;
-  /** Why the role is left unstaffed. */
+  /** Why the slot is left unstaffed. */
   reason?: string;
-  role: string;
+  slot: string;
 };
 
 export type AddSimSystemOutputBody = {
@@ -163,10 +163,10 @@ export type AddSimSystemOutputBody = {
   /** The new system's id, the stable address a link to it uses. */
   system_id: string;
   /**
-     * The roles nothing simulated could fill, left short.
+     * The slots nothing simulated could fill, left short.
      * @nullable
      */
-  unstaffed: SimRoleFillBody[] | null;
+  unstaffed: SimSlotFillBody[] | null;
 };
 
 /**
@@ -716,7 +716,7 @@ export type CalcOwnerStateBody = {
      * @nullable
      */
   missing: string[] | null;
-  /** A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported */
+  /** A system with no slot-bound members since then: the rule writes nothing and its last value stands, unsupported */
   no_members_since?: string;
   /** The owner, by name, resolved now */
   owner: string;
@@ -836,7 +836,7 @@ export type CalcPreviewOwnerBody = {
      * @nullable
      */
   missing: string[] | null;
-  /** A system with no role-bound members: the rule would write nothing */
+  /** A system with no slot-bound members: the rule would write nothing */
   no_members: boolean;
   /** The owner, by name */
   owner: string;
@@ -892,7 +892,7 @@ export const CalcRuleBodyOutputLane = {
 } as const;
 
 /**
- * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)
+ * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members)
  */
 export type CalcRuleBodyOwnerKind = typeof CalcRuleBodyOwnerKind[keyof typeof CalcRuleBodyOwnerKind];
 
@@ -938,7 +938,7 @@ export type CalcRuleBody = {
   output_key: string;
   /** Which lane the output key is on, derived from the catalogs */
   output_lane: CalcRuleBodyOutputLane;
-  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members) */
+  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members) */
   owner_kind: CalcRuleBodyOwnerKind;
   /** How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read) */
   owners_computed: number;
@@ -1684,7 +1684,7 @@ export type CreateActionRuleInputBody = {
 };
 
 /**
- * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create
+ * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create
  */
 export type CreateCalcRuleInputBodyOwnerKind = typeof CreateCalcRuleInputBodyOwnerKind[keyof typeof CreateCalcRuleInputBodyOwnerKind];
 
@@ -1722,7 +1722,7 @@ export type CreateCalcRuleInputBody = {
      * @minLength 1
      */
   output_key: string;
-  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create */
+  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create */
   owner_kind: CreateCalcRuleInputBodyOwnerKind;
   /** An expression over the inputs by alias */
   reduce: CalcReduceBody;
@@ -2732,14 +2732,14 @@ export type CreateStandardInputBody = {
 export type CreateSystemFromTemplateInputBodyAttachItem = {[key: string]: string};
 
 /**
- * Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached
+ * Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached
  */
 export type CreateSystemFromTemplateInputBodyAttach = {[key: string]: CreateSystemFromTemplateInputBodyAttachItem[] | null};
 
 export type CreateSystemFromTemplateInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached */
+  /** Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached */
   attach?: CreateSystemFromTemplateInputBodyAttach;
   /** The system's label */
   label?: string;
@@ -2767,15 +2767,15 @@ export type CreatedComponentBody = {
   component_id: string;
   /** Its product */
   product: string;
-  /** The role it fills in its system */
-  role?: string;
+  /** The slot it fills in its system */
+  slot?: string;
 };
 
 export type CreateSystemFromTemplateOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * A component per role, filled to quorum and assigned
+     * A component per slot, filled to quorum and assigned
      * @nullable
      */
   components: CreatedComponentBody[] | null;
@@ -3054,49 +3054,6 @@ export type DriverBody = {
   version?: string;
 };
 
-export type EffectiveRoleBody = {
-  /**
-     * The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
-     * @nullable
-     */
-  accepted_types: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
-  alternate?: string;
-  /** How many components fill the role */
-  assigned: number;
-  /**
-     * The component names filling this role in this system
-     * @nullable
-     */
-  assigned_to: string[] | null;
-  /** The most components the role will accept; null means no upper bound beyond quorum */
-  capacity?: number;
-  /** True when the role is inherited from the system's standard; false when declared on the system */
-  from_standard: boolean;
-  /** What an impaired role means for its system: outage, degraded, or none */
-  impact: string;
-  label: string;
-  name: string;
-  /**
-     * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
-     * @nullable
-     */
-  pinned_products: string[] | null;
-  /**
-     * Human labels for each position within the role, by index; empty when unlabeled
-     * @nullable
-     */
-  position_labels: string[] | null;
-  /**
-     * AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
-     * @nullable
-     */
-  positions: number[] | null;
-  quorum: number;
-  /** How many more assignment rows the role wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure */
-  understaffed: number;
-};
-
 export type SecretFieldBody = {
   name: string;
   /** Whether the field is encrypted at rest and masked here */
@@ -3132,6 +3089,49 @@ export type EffectiveSecretsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   secrets: ResolvedSecretBody[] | null;
+};
+
+export type EffectiveSlotBody = {
+  /**
+     * The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
+     * @nullable
+     */
+  accepted_types: string[] | null;
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626); absent when the slot is unconditional. The same form the write body takes, so a read round-trips into a write */
+  alternate?: string;
+  /** How many components fill the slot */
+  assigned: number;
+  /**
+     * The component names filling this slot in this system
+     * @nullable
+     */
+  assigned_to: string[] | null;
+  /** The most components the slot will accept; null means no upper bound beyond quorum */
+  capacity?: number;
+  /** True when the slot is inherited from the system's standard; false when declared on the system */
+  from_standard: boolean;
+  /** What an impaired slot means for its system: outage, degraded, or none */
+  impact: string;
+  label: string;
+  name: string;
+  /**
+     * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
+     * @nullable
+     */
+  pinned_products: string[] | null;
+  /**
+     * Human labels for each position within the slot, by index; empty when unlabeled
+     * @nullable
+     */
+  position_labels: string[] | null;
+  /**
+     * AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
+     * @nullable
+     */
+  positions: number[] | null;
+  quorum: number;
+  /** How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure */
+  understaffed: number;
 };
 
 export type ResolvedTagBody = {
@@ -3793,37 +3793,37 @@ export type HealthAlarmBody = {
   severity: string;
 };
 
-export type HealthRoleBody = {
-  /** True for an unconditional role, or a role whose alternate is the one currently answering its choice. False means this role's own impaired/short/spare figures did not contribute to the system's verdict */
+export type HealthSlotBody = {
+  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict */
   active: boolean;
   /**
      * The active alarms on those down components
      * @nullable
      */
   alarms: HealthAlarmBody[] | null;
-  /** The alternate within choice this role belongs to; absent when the role is unconditional */
+  /** The alternate within choice this slot belongs to; absent when the slot is unconditional */
   alternate?: string;
   /** @nullable */
   assigned_to: string[] | null;
-  /** The choice this role belongs to; absent when the role is unconditional */
+  /** The choice this slot belongs to; absent when the slot is unconditional */
   choice?: string;
   /**
-     * The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded
+     * The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded
      * @nullable
      */
   down: string[] | null;
-  /** What an impaired role means for its system: outage, degraded, or none */
+  /** What an impaired slot means for its system: outage, degraded, or none */
   impact: string;
   /** True when satisfying is below quorum */
   impaired: boolean;
   label: string;
   name: string;
   quorum: number;
-  /** How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies) */
+  /** How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies) */
   satisfying: number;
-  /** How many more occupants the role needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the roles read's understaffed when an assigned component is down */
+  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
   short: number;
-  /** How many occupants the role has beyond quorum; zero at or below quorum */
+  /** How many occupants the slot has beyond quorum; zero at or below quorum */
   spare: number;
 };
 
@@ -3843,10 +3843,10 @@ export type FleetHealthOutputBody = {
   owner: string;
   owner_kind: string;
   /**
-     * The contributing roles; empty for a location
+     * The contributing slots; empty for a location
      * @nullable
      */
-  roles: HealthRoleBody[] | null;
+  slots: HealthSlotBody[] | null;
   /**
      * The systems beneath a location with their verdicts; empty for a system
      * @nullable
@@ -3857,7 +3857,7 @@ export type FleetHealthOutputBody = {
      * @nullable
      */
   transitions: HealthTransitionBody[] | null;
-  /** healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
+  /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   verdict: string;
 };
 
@@ -5123,7 +5123,7 @@ export type ListStandardPropertiesOutputBody = {
   properties: StandardPropertyBody[] | null;
 };
 
-export type SystemRoleBody = {
+export type SystemSlotBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
@@ -5131,15 +5131,15 @@ export type SystemRoleBody = {
      * @nullable
      */
   accepted_types: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626); absent when the slot is unconditional. The same form the write body takes, so a read round-trips into a write */
   alternate?: string;
-  /** The most components the role will accept; null means no upper bound beyond quorum */
+  /** The most components the slot will accept; null means no upper bound beyond quorum */
   capacity?: number;
-  /** What an impaired role means for its system: outage, degraded, or none */
+  /** What an impaired slot means for its system: outage, degraded, or none */
   impact: string;
-  /** The role's human label */
+  /** The slot's human label */
   label: string;
-  /** The role's name within its owner (the address) */
+  /** The slot's name within its owner (the address) */
   name: string;
   /**
      * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
@@ -5147,23 +5147,23 @@ export type SystemRoleBody = {
      */
   pinned_products: string[] | null;
   /**
-     * Human labels for each position within the role, by index; empty when unlabeled
+     * Human labels for each position within the slot, by index; empty when unlabeled
      * @nullable
      */
   position_labels: string[] | null;
-  /** How many components must fill the role */
+  /** How many components must fill the slot */
   quorum: number;
 };
 
-export type ListStandardRolesOutputBody = {
+export type ListStandardSlotsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** @nullable */
-  roles: SystemRoleBody[] | null;
+  slots: SystemSlotBody[] | null;
 };
 
 /**
- * The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes.
+ * The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes.
  */
 export type StandardBody = {
   /** A URL to the JSON Schema for this object. */
@@ -5171,7 +5171,7 @@ export type StandardBody = {
   /** The standard's uuid, the stable handle that survives a rename */
   id: string;
   label: string;
-  /** The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared */
+  /** The standard's room layout: aspect (width over height) and one normalized position per slot position; absent when undeclared */
   map?: unknown;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -5197,11 +5197,11 @@ export type ListSystemMembersOutputBody = {
   system: string;
 };
 
-export type ListSystemRolesOutputBody = {
+export type ListSystemSlotsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** @nullable */
-  roles: EffectiveRoleBody[] | null;
+  slots: EffectiveSlotBody[] | null;
   system: string;
 };
 
@@ -5451,10 +5451,10 @@ export type TemplateChoiceBody = {
 };
 
 export type TemplateMapPositionBody = {
-  /** Which of the role's components, from 1 */
+  /** Which of the slot's components, from 1 */
   position: number;
-  /** The role placed */
-  role: string;
+  /** The slot placed */
+  slot: string;
   /** Horizontal position, 0 to 1 from the left */
   x: number;
   /** Vertical position, 0 to 1 from the top */
@@ -5465,7 +5465,7 @@ export type TemplateMapBody = {
   /** The layout's width over its height */
   aspect: number;
   /**
-     * Where each role's components sit
+     * Where each slot's components sit
      * @nullable
      */
   positions: TemplateMapPositionBody[] | null;
@@ -5480,36 +5480,36 @@ export type TemplateContractBody = {
   required?: boolean;
 };
 
-export type TemplateRoleBody = {
+export type TemplateSlotBody = {
   /**
-     * The component types that may fill the role; empty accepts any
+     * The component types that may fill the slot; empty accepts any
      * @nullable
      */
   accepted_types?: string[] | null;
-  /** The alternate of that choice the role belongs to */
+  /** The alternate of that choice the slot belongs to */
   alternate?: string;
-  /** The most components the role takes; omitted for no cap */
+  /** The most components the slot takes; omitted for no cap */
   capacity?: number;
-  /** The choice the role belongs to, when it is one way of answering a choice */
+  /** The choice the slot belongs to, when it is one way of answering a choice */
   choice?: string;
-  /** What the system loses when the role is below quorum: outage, degraded (the default) or none */
+  /** What the system loses when the slot is below quorum: outage, degraded (the default) or none */
   impact?: string;
-  /** What an operator reads for the role */
+  /** What an operator reads for the slot */
   label: string;
-  /** The role's name, unique within the standard */
+  /** The slot's name, unique within the standard */
   name: string;
   /**
-     * The products the role is pinned to; empty pins none
+     * The products the slot is pinned to; empty pins none
      * @nullable
      */
   pinned_products?: string[] | null;
-  /** How many components must fill the role (at least one) */
+  /** How many components must fill the slot (at least one) */
   quorum: number;
 };
 
 export type TemplateStandardBody = {
   /**
-     * The exclusive-or groups of roles a conforming system answers one way
+     * The exclusive-or groups of slots a conforming system answers one way
      * @nullable
      */
   choices?: TemplateChoiceBody[] | null;
@@ -5528,16 +5528,16 @@ export type TemplateStandardBody = {
      */
   properties?: TemplateContractBody[] | null;
   /**
-     * The roles a conforming system needs filled
+     * The slots a conforming system needs filled
      * @nullable
      */
-  roles: TemplateRoleBody[] | null;
+  slots: TemplateSlotBody[] | null;
 };
 
-export type TemplateRoleFillBody = {
-  /** The component template that fills the role */
+export type TemplateSlotFillBody = {
+  /** The component template that fills the slot */
   component?: string;
-  /** The product that fills the role, when no component template does */
+  /** The product that fills the slot, when no component template does */
   product?: string;
 };
 
@@ -5547,15 +5547,15 @@ export type TemplateRoleFillBody = {
 export type TemplateSystemBodyProperties = {[key: string]: unknown};
 
 /**
- * What fills each role, by role name
+ * What fills each slot, by slot name
  */
-export type TemplateSystemBodyRoles = {[key: string]: TemplateRoleFillBody};
+export type TemplateSystemBodySlots = {[key: string]: TemplateSlotFillBody};
 
 export type TemplateSystemBody = {
   /** Declared system property values, by property name */
   properties?: TemplateSystemBodyProperties;
-  /** What fills each role, by role name */
-  roles: TemplateSystemBodyRoles;
+  /** What fills each slot, by slot name */
+  slots: TemplateSystemBodySlots;
   /** The standard the system conforms to, a standard template's name */
   standard: string;
   /** The system type the system is classified as */
@@ -7381,59 +7381,6 @@ export type RoleBody = {
   permissions: string[] | null;
 };
 
-/**
- * What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
- */
-export type RoleSpecBodyImpact = typeof RoleSpecBodyImpact[keyof typeof RoleSpecBodyImpact];
-
-
-export const RoleSpecBodyImpact = {
-  outage: 'outage',
-  degraded: 'degraded',
-  none: 'none',
-} as const;
-
-export type RoleSpecBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask
-     * @nullable
-     */
-  accepted_types?: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
-  alternate?: string;
-  /**
-     * The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
-     * @minimum 1
-     */
-  capacity?: number;
-  /** What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display */
-  impact?: RoleSpecBodyImpact;
-  /** The role's human label; defaults to the role name on first declare */
-  label?: string;
-  /**
-     * If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask
-     * @nullable
-     */
-  pinned_products?: string[] | null;
-  /**
-     * Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask
-     * @nullable
-     */
-  position_labels?: string[] | null;
-  /**
-     * How many components must fill the role; one on first declare
-     * @minimum 0
-     */
-  quorum?: number;
-  /**
-     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it
-     * @nullable
-     */
-  update_mask?: string[] | null;
-};
-
 export type RolesOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7736,7 +7683,7 @@ export type SimSystemPlanOutputBody = {
   /** How many simulated components the system would get. */
   components: number;
   /** @nullable */
-  roles: SimRoleFillBody[] | null;
+  slots: SimSlotFillBody[] | null;
   standard: string;
 };
 
@@ -7753,6 +7700,59 @@ export type SimulationOutputBody = {
   last_seen?: string;
 };
 
+/**
+ * What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
+ */
+export type SlotSpecBodyImpact = typeof SlotSpecBodyImpact[keyof typeof SlotSpecBodyImpact];
+
+
+export const SlotSpecBodyImpact = {
+  outage: 'outage',
+  degraded: 'degraded',
+  none: 'none',
+} as const;
+
+export type SlotSpecBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask
+     * @nullable
+     */
+  accepted_types?: string[] | null;
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422 */
+  alternate?: string;
+  /**
+     * The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
+     * @minimum 1
+     */
+  capacity?: number;
+  /** What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display */
+  impact?: SlotSpecBodyImpact;
+  /** The slot's human label; defaults to the slot name on first declare */
+  label?: string;
+  /**
+     * If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask
+     * @nullable
+     */
+  pinned_products?: string[] | null;
+  /**
+     * Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask
+     * @nullable
+     */
+  position_labels?: string[] | null;
+  /**
+     * How many components must fill the slot; one on first declare
+     * @minimum 0
+     */
+  quorum?: number;
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
+};
+
 export type SnoozeAlarmInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7760,7 +7760,7 @@ export type SnoozeAlarmInputBody = {
   duration: string;
 };
 
-export type SwapRolePositionsInputBody = {
+export type SwapSlotPositionsInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
@@ -8435,7 +8435,7 @@ export type UpdateStandardInputBody = {
   readonly $schema?: string;
   /** A new operator-facing label */
   label?: string;
-  /** The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair */
+  /** The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair */
   map?: unknown;
   /** A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard */
   parent_standard_id?: string;
@@ -8552,7 +8552,7 @@ export type ValidateDriverOutputBody = {
 };
 
 /**
- * For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component
+ * For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component
  */
 export type ValidateExpressionInputBodyOwnerKind = typeof ValidateExpressionInputBodyOwnerKind[keyof typeof ValidateExpressionInputBodyOwnerKind];
 
@@ -8584,7 +8584,7 @@ export type ValidateExpressionInputBody = {
   inputs?: CalcInputBody[] | null;
   /** The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield */
   key?: string;
-  /** For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component */
+  /** For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component */
   owner_kind?: ValidateExpressionInputBodyOwnerKind;
   /** Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria */
   site: ValidateExpressionInputBodySite;
@@ -11858,7 +11858,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -12058,7 +12058,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -16987,7 +16987,7 @@ export const getGetLocationHealthUrl = (name: string,) => {
 }
 
 /**
- * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
 export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
@@ -19403,7 +19403,7 @@ export const getAddOutpostSimulationSystemUrl = (name: string,) => {
 }
 
 /**
- * Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+ * Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
  * @summary Add a simulated system
  */
 export const addOutpostSimulationSystem = async (name: string,
@@ -23224,7 +23224,7 @@ export const getPlanSimulationSystemUrl = (standard: string,) => {
 }
 
 /**
- * Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
+ * Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
  * @summary Plan a simulated system to a standard
  */
 export const planSimulationSystem = async (standard: string, options?: Parameters<typeof ogFetch>[1]): Promise<planSimulationSystemResponse> => {
@@ -23791,40 +23791,40 @@ return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(id,propert
 
 
 
-export type listStandardRolesResponse200 = {
-  data: ListStandardRolesOutputBody
+export type listStandardSlotsResponse200 = {
+  data: ListStandardSlotsOutputBody
   status: 200
 }
 
-export type listStandardRolesResponseDefault = {
+export type listStandardSlotsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listStandardRolesResponseSuccess = (listStandardRolesResponse200) & {
+export type listStandardSlotsResponseSuccess = (listStandardSlotsResponse200) & {
   headers: Headers;
 };
-export type listStandardRolesResponseError = (listStandardRolesResponseDefault) & {
+export type listStandardSlotsResponseError = (listStandardSlotsResponseDefault) & {
   headers: Headers;
 };
 
-export type listStandardRolesResponse = (listStandardRolesResponseSuccess | listStandardRolesResponseError)
+export type listStandardSlotsResponse = (listStandardSlotsResponseSuccess | listStandardSlotsResponseError)
 
-export const getListStandardRolesUrl = (id: string,) => {
-
-
+export const getListStandardSlotsUrl = (id: string,) => {
 
 
-  return `/standards/${id}/roles`
+
+
+  return `/standards/${id}/slots`
 }
 
 /**
- * Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
- * @summary List a standard's declared roles
+ * Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
+ * @summary List a standard's declared slots
  */
-export const listStandardRoles = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardRolesResponse> => {
+export const listStandardSlots = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardSlotsResponse> => {
 
-  return ogFetch<listStandardRolesResponse>(getListStandardRolesUrl(id),
+  return ogFetch<listStandardSlotsResponse>(getListStandardSlotsUrl(id),
   {
     ...options,
     method: 'GET'
@@ -23835,42 +23835,42 @@ export const listStandardRoles = async (id: string, options?: Parameters<typeof 
 
 
 
-export type deleteStandardRoleResponse204 = {
+export type deleteStandardSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteStandardRoleResponseDefault = {
+export type deleteStandardSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type deleteStandardRoleResponseSuccess = (deleteStandardRoleResponse204) & {
+export type deleteStandardSlotResponseSuccess = (deleteStandardSlotResponse204) & {
   headers: Headers;
 };
-export type deleteStandardRoleResponseError = (deleteStandardRoleResponseDefault) & {
+export type deleteStandardSlotResponseError = (deleteStandardSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type deleteStandardRoleResponse = (deleteStandardRoleResponseSuccess | deleteStandardRoleResponseError)
+export type deleteStandardSlotResponse = (deleteStandardSlotResponseSuccess | deleteStandardSlotResponseError)
 
-export const getDeleteStandardRoleUrl = (id: string,
-    role: string,) => {
-
-
+export const getDeleteStandardSlotUrl = (id: string,
+    slot: string,) => {
 
 
-  return `/standards/${id}/roles/${role}`
+
+
+  return `/standards/${id}/slots/${slot}`
 }
 
 /**
- * Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
- * @summary Withdraw a role from a standard
+ * Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.
+ * @summary Withdraw a slot from a standard
  */
-export const deleteStandardRole = async (id: string,
-    role: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardRoleResponse> => {
+export const deleteStandardSlot = async (id: string,
+    slot: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardSlotResponse> => {
 
-  return ogFetch<deleteStandardRoleResponse>(getDeleteStandardRoleUrl(id,role),
+  return ogFetch<deleteStandardSlotResponse>(getDeleteStandardSlotUrl(id,slot),
   {
     ...options,
     method: 'DELETE'
@@ -23881,41 +23881,41 @@ export const deleteStandardRole = async (id: string,
 
 
 
-export type setStandardRoleResponse200 = {
-  data: SystemRoleBody
+export type setStandardSlotResponse200 = {
+  data: SystemSlotBody
   status: 200
 }
 
-export type setStandardRoleResponseDefault = {
+export type setStandardSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type setStandardRoleResponseSuccess = (setStandardRoleResponse200) & {
+export type setStandardSlotResponseSuccess = (setStandardSlotResponse200) & {
   headers: Headers;
 };
-export type setStandardRoleResponseError = (setStandardRoleResponseDefault) & {
+export type setStandardSlotResponseError = (setStandardSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type setStandardRoleResponse = (setStandardRoleResponseSuccess | setStandardRoleResponseError)
+export type setStandardSlotResponse = (setStandardSlotResponseSuccess | setStandardSlotResponseError)
 
-export const getSetStandardRoleUrl = (id: string,
-    role: string,) => {
-
-
+export const getSetStandardSlotUrl = (id: string,
+    slot: string,) => {
 
 
-  return `/standards/${id}/roles/${role}`
+
+
+  return `/standards/${id}/slots/${slot}`
 }
 
 /**
- * Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
- * @summary Declare a role on a standard
+ * Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
+ * @summary Declare a slot on a standard
  */
-export const setStandardRole = async (id: string,
-    role: string,
-    roleSpecBody: NonReadonly<RoleSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardRoleResponse> => {
+export const setStandardSlot = async (id: string,
+    slot: string,
+    slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardSlotResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -23931,12 +23931,12 @@ export const setStandardRole = async (id: string,
     }
     return headers;
   };
-return ogFetch<setStandardRoleResponse>(getSetStandardRoleUrl(id,role),
+return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(id,slot),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(roleSpecBody)
+    body: JSON.stringify(slotSpecBody)
   }
 );}
 
@@ -24029,7 +24029,7 @@ export const getCreateStandardFromTemplateUrl = () => {
 }
 
 /**
- * Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+ * Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
  * @summary Create a standard from a template
  */
 export const createStandardFromTemplate = async (createStandardFromTemplateInputBody: NonReadonly<CreateStandardFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createStandardFromTemplateResponse> => {
@@ -24482,7 +24482,7 @@ export const getUpdateSystemUrl = (name: string,) => {
 }
 
 /**
- * Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
  * @summary Update a system
  */
 export const updateSystem = async (name: string,
@@ -24629,7 +24629,7 @@ export const getGetSystemHealthUrl = (name: string,) => {
 }
 
 /**
- * The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
@@ -24726,7 +24726,7 @@ export const getListSystemMembersUrl = (name: string,) => {
 }
 
 /**
- * The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List the components in a system
  */
 export const listSystemMembers = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemMembersResponse> => {
@@ -24771,7 +24771,7 @@ export const getRemoveSystemMemberUrl = (name: string,
 }
 
 /**
- * Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
+ * Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
  * @summary Take a component out of a system
  */
 export const removeSystemMember = async (name: string,
@@ -25185,40 +25185,40 @@ export const listSystemPropertySeries = async (name: string,
 
 
 
-export type listSystemRolesResponse200 = {
-  data: ListSystemRolesOutputBody
+export type listSystemSlotsResponse200 = {
+  data: ListSystemSlotsOutputBody
   status: 200
 }
 
-export type listSystemRolesResponseDefault = {
+export type listSystemSlotsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listSystemRolesResponseSuccess = (listSystemRolesResponse200) & {
+export type listSystemSlotsResponseSuccess = (listSystemSlotsResponse200) & {
   headers: Headers;
 };
-export type listSystemRolesResponseError = (listSystemRolesResponseDefault) & {
+export type listSystemSlotsResponseError = (listSystemSlotsResponseDefault) & {
   headers: Headers;
 };
 
-export type listSystemRolesResponse = (listSystemRolesResponseSuccess | listSystemRolesResponseError)
+export type listSystemSlotsResponse = (listSystemSlotsResponseSuccess | listSystemSlotsResponseError)
 
-export const getListSystemRolesUrl = (name: string,) => {
-
-
+export const getListSystemSlotsUrl = (name: string,) => {
 
 
-  return `/systems/${name}/roles`
+
+
+  return `/systems/${name}/slots`
 }
 
 /**
- * Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
- * @summary List a system's effective roles
+ * Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * @summary List a system's effective slots
  */
-export const listSystemRoles = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemRolesResponse> => {
+export const listSystemSlots = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemSlotsResponse> => {
 
-  return ogFetch<listSystemRolesResponse>(getListSystemRolesUrl(name),
+  return ogFetch<listSystemSlotsResponse>(getListSystemSlotsUrl(name),
   {
     ...options,
     method: 'GET'
@@ -25229,42 +25229,42 @@ export const listSystemRoles = async (name: string, options?: Parameters<typeof 
 
 
 
-export type deleteSystemRoleResponse204 = {
+export type deleteSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteSystemRoleResponseDefault = {
+export type deleteSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type deleteSystemRoleResponseSuccess = (deleteSystemRoleResponse204) & {
+export type deleteSystemSlotResponseSuccess = (deleteSystemSlotResponse204) & {
   headers: Headers;
 };
-export type deleteSystemRoleResponseError = (deleteSystemRoleResponseDefault) & {
+export type deleteSystemSlotResponseError = (deleteSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type deleteSystemRoleResponse = (deleteSystemRoleResponseSuccess | deleteSystemRoleResponseError)
+export type deleteSystemSlotResponse = (deleteSystemSlotResponseSuccess | deleteSystemSlotResponseError)
 
-export const getDeleteSystemRoleUrl = (name: string,
-    role: string,) => {
-
-
+export const getDeleteSystemSlotUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}`
+
+
+  return `/systems/${name}/slots/${slot}`
 }
 
 /**
- * Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Withdraw a role from a system
+ * Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Withdraw a slot from a system
  */
-export const deleteSystemRole = async (name: string,
-    role: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemRoleResponse> => {
+export const deleteSystemSlot = async (name: string,
+    slot: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemSlotResponse> => {
 
-  return ogFetch<deleteSystemRoleResponse>(getDeleteSystemRoleUrl(name,role),
+  return ogFetch<deleteSystemSlotResponse>(getDeleteSystemSlotUrl(name,slot),
   {
     ...options,
     method: 'DELETE'
@@ -25275,41 +25275,41 @@ export const deleteSystemRole = async (name: string,
 
 
 
-export type setSystemRoleResponse200 = {
-  data: SystemRoleBody
+export type setSystemSlotResponse200 = {
+  data: SystemSlotBody
   status: 200
 }
 
-export type setSystemRoleResponseDefault = {
+export type setSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type setSystemRoleResponseSuccess = (setSystemRoleResponse200) & {
+export type setSystemSlotResponseSuccess = (setSystemSlotResponse200) & {
   headers: Headers;
 };
-export type setSystemRoleResponseError = (setSystemRoleResponseDefault) & {
+export type setSystemSlotResponseError = (setSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type setSystemRoleResponse = (setSystemRoleResponseSuccess | setSystemRoleResponseError)
+export type setSystemSlotResponse = (setSystemSlotResponseSuccess | setSystemSlotResponseError)
 
-export const getSetSystemRoleUrl = (name: string,
-    role: string,) => {
-
-
+export const getSetSystemSlotUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}`
+
+
+  return `/systems/${name}/slots/${slot}`
 }
 
 /**
- * Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Declare a role on a system
+ * Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Declare a slot on a system
  */
-export const setSystemRole = async (name: string,
-    role: string,
-    roleSpecBody: NonReadonly<RoleSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemRoleResponse> => {
+export const setSystemSlot = async (name: string,
+    slot: string,
+    slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemSlotResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -25325,55 +25325,55 @@ export const setSystemRole = async (name: string,
     }
     return headers;
   };
-return ogFetch<setSystemRoleResponse>(getSetSystemRoleUrl(name,role),
+return ogFetch<setSystemSlotResponse>(getSetSystemSlotUrl(name,slot),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(roleSpecBody)
+    body: JSON.stringify(slotSpecBody)
   }
 );}
 
 
 
-export type unassignSystemRoleResponse204 = {
+export type unassignSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type unassignSystemRoleResponseDefault = {
+export type unassignSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type unassignSystemRoleResponseSuccess = (unassignSystemRoleResponse204) & {
+export type unassignSystemSlotResponseSuccess = (unassignSystemSlotResponse204) & {
   headers: Headers;
 };
-export type unassignSystemRoleResponseError = (unassignSystemRoleResponseDefault) & {
+export type unassignSystemSlotResponseError = (unassignSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type unassignSystemRoleResponse = (unassignSystemRoleResponseSuccess | unassignSystemRoleResponseError)
+export type unassignSystemSlotResponse = (unassignSystemSlotResponseSuccess | unassignSystemSlotResponseError)
 
-export const getUnassignSystemRoleUrl = (name: string,
-    role: string,
+export const getUnassignSystemSlotUrl = (name: string,
+    slot: string,
     component: string,) => {
 
 
 
 
-  return `/systems/${name}/roles/${role}/assignments/${component}`
+  return `/systems/${name}/slots/${slot}/assignments/${component}`
 }
 
 /**
- * Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).
- * @summary Unassign a component from a role
+ * Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).
+ * @summary Unassign a component from a slot
  */
-export const unassignSystemRole = async (name: string,
-    role: string,
-    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<unassignSystemRoleResponse> => {
+export const unassignSystemSlot = async (name: string,
+    slot: string,
+    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<unassignSystemSlotResponse> => {
 
-  return ogFetch<unassignSystemRoleResponse>(getUnassignSystemRoleUrl(name,role,component),
+  return ogFetch<unassignSystemSlotResponse>(getUnassignSystemSlotUrl(name,slot,component),
   {
     ...options,
     method: 'DELETE'
@@ -25384,44 +25384,44 @@ export const unassignSystemRole = async (name: string,
 
 
 
-export type assignSystemRoleResponse204 = {
+export type assignSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type assignSystemRoleResponseDefault = {
+export type assignSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type assignSystemRoleResponseSuccess = (assignSystemRoleResponse204) & {
+export type assignSystemSlotResponseSuccess = (assignSystemSlotResponse204) & {
   headers: Headers;
 };
-export type assignSystemRoleResponseError = (assignSystemRoleResponseDefault) & {
+export type assignSystemSlotResponseError = (assignSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type assignSystemRoleResponse = (assignSystemRoleResponseSuccess | assignSystemRoleResponseError)
+export type assignSystemSlotResponse = (assignSystemSlotResponseSuccess | assignSystemSlotResponseError)
 
-export const getAssignSystemRoleUrl = (name: string,
-    role: string,
+export const getAssignSystemSlotUrl = (name: string,
+    slot: string,
     component: string,) => {
 
 
 
 
-  return `/systems/${name}/roles/${role}/assignments/${component}`
+  return `/systems/${name}/slots/${slot}/assignments/${component}`
 }
 
 /**
- * Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
- * @summary Assign a component to a role
+ * Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+ * @summary Assign a component to a slot
  */
-export const assignSystemRole = async (name: string,
-    role: string,
-    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<assignSystemRoleResponse> => {
+export const assignSystemSlot = async (name: string,
+    slot: string,
+    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<assignSystemSlotResponse> => {
 
-  return ogFetch<assignSystemRoleResponse>(getAssignSystemRoleUrl(name,role,component),
+  return ogFetch<assignSystemSlotResponse>(getAssignSystemSlotUrl(name,slot,component),
   {
     ...options,
     method: 'PUT'
@@ -25432,41 +25432,41 @@ export const assignSystemRole = async (name: string,
 
 
 
-export type swapRolePositionsResponse204 = {
+export type swapSlotPositionsResponse204 = {
   data: void
   status: 204
 }
 
-export type swapRolePositionsResponseDefault = {
+export type swapSlotPositionsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type swapRolePositionsResponseSuccess = (swapRolePositionsResponse204) & {
+export type swapSlotPositionsResponseSuccess = (swapSlotPositionsResponse204) & {
   headers: Headers;
 };
-export type swapRolePositionsResponseError = (swapRolePositionsResponseDefault) & {
+export type swapSlotPositionsResponseError = (swapSlotPositionsResponseDefault) & {
   headers: Headers;
 };
 
-export type swapRolePositionsResponse = (swapRolePositionsResponseSuccess | swapRolePositionsResponseError)
+export type swapSlotPositionsResponse = (swapSlotPositionsResponseSuccess | swapSlotPositionsResponseError)
 
-export const getSwapRolePositionsUrl = (name: string,
-    role: string,) => {
-
-
+export const getSwapSlotPositionsUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}:swapPositions`
+
+
+  return `/systems/${name}/slots/${slot}:swapPositions`
 }
 
 /**
- * Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Exchange two occupants' positions within a role
+ * Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Exchange two occupants' positions within a slot
  */
-export const swapRolePositions = async (name: string,
-    role: string,
-    swapRolePositionsInputBody: NonReadonly<SwapRolePositionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<swapRolePositionsResponse> => {
+export const swapSlotPositions = async (name: string,
+    slot: string,
+    swapSlotPositionsInputBody: NonReadonly<SwapSlotPositionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<swapSlotPositionsResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -25482,12 +25482,12 @@ export const swapRolePositions = async (name: string,
     }
     return headers;
   };
-return ogFetch<swapRolePositionsResponse>(getSwapRolePositionsUrl(name,role),
+return ogFetch<swapSlotPositionsResponse>(getSwapSlotPositionsUrl(name,slot),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(swapRolePositionsInputBody)
+    body: JSON.stringify(swapSlotPositionsInputBody)
   }
 );}
 
@@ -25903,7 +25903,7 @@ export const getCreateSystemFromTemplateUrl = () => {
 }
 
 /**
- * Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+ * Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.
  * @summary Start a whole system from a template
  */
 export const createSystemFromTemplate = async (createSystemFromTemplateInputBody: NonReadonly<CreateSystemFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemFromTemplateResponse> => {
@@ -25961,7 +25961,7 @@ export const getListSystemVerdictsUrl = () => {
 }
 
 /**
- * The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+ * The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
  * @summary Read every system's health verdict
  */
 export const listSystemVerdicts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemVerdictsResponse> => {
