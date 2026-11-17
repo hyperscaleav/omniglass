@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
@@ -189,8 +190,19 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// ADR-1647): a bracket a minute (a lab's faster), read as a sliding
 	// window on the Platform health page.
 	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw, loop.Cadence), time.Now, closedloop.RingSpan, loop.Every)
+	apiOpts := []api.Option{api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithOutpostRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)}
+	// A recorded model, when one is named, is the omnibot a run plays
+	// (#2121); a live provider is its own slice.
+	if c.OmnibotReplay != "" {
+		r, err := provider.LoadReplay(c.OmnibotReplay)
+		if err != nil {
+			return fmt.Errorf("server: OMNIGLASS_OMNIBOT_REPLAY: %w", err)
+		}
+		apiOpts = append(apiOpts, api.WithOmnibotModel(r.Positioned()))
+		log.Info("omnibot plays a recording", "path", c.OmnibotReplay)
+	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithOutpostRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
+		Handler:           api.NewHandler(gw, apiOpts...),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())

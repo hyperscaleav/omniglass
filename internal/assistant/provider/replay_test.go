@@ -62,3 +62,39 @@ func TestParseReplayRefusesMalformed(t *testing.T) {
 		}
 	}
 }
+
+// A positioned replay plays the turn after the model turns the conversation
+// already holds, its calls numbered after the calls already made, so a run
+// picked up from a stored conversation plays on from there, and the same
+// conversation always gets the same turn.
+func TestPositionedReplayPlaysFromTheConversation(t *testing.T) {
+	t.Parallel()
+	r, err := ParseReplay([]byte(recording))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := r.Positioned()
+	ctx := context.Background()
+	start := []Message{{Role: RoleUser, Text: "add a display"}}
+	for range 2 {
+		first, err := p.Next(ctx, start, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(first.ToolCalls) != 2 || first.ToolCalls[0].ID != "call-1" || first.ToolCalls[1].ID != "call-2" {
+			t.Fatalf("first turn = %+v, want call-1 and call-2 every time", first)
+		}
+	}
+	held := append(start,
+		Message{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call-1", Name: "list-components"}, {ID: "call-2", Name: "create-component"}}},
+		Message{Role: RoleTool, ToolCallID: "call-1", Text: "[]"},
+		Message{Role: RoleTool, ToolCallID: "call-2", Text: "{}"},
+	)
+	second, err := p.Next(ctx, held, nil)
+	if err != nil || second.Text != "Created lobby-display." {
+		t.Fatalf("second turn = %+v, %v", second, err)
+	}
+	if _, err := p.Next(ctx, append(held, Message{Role: RoleAssistant, Text: "Created lobby-display."}), nil); err == nil || !strings.Contains(err.Error(), "recording") {
+		t.Errorf("past the end = %v, want an error naming the recording", err)
+	}
+}

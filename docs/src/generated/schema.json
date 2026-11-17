@@ -1522,6 +1522,16 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "run_id",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "run_until",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "uniques": [

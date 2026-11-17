@@ -81,3 +81,32 @@ func (r *Replay) Next(_ context.Context, _ []Message, _ []Tool) (Turn, error) {
 	}
 	return out, nil
 }
+
+// Positioned is the recording played by where the conversation is, not by
+// how often it was asked: the turn after the model turns the conversation
+// already holds, its calls numbered after the calls already made. It keeps
+// no state, so the server can play one recording to every run, and a run
+// picked up from a stored conversation plays on from there (#2121).
+func (r *Replay) Positioned() Provider { return positioned{turns: r.turns} }
+
+type positioned struct{ turns []Turn }
+
+func (p positioned) Next(_ context.Context, messages []Message, _ []Tool) (Turn, error) {
+	at, calls := 0, 0
+	for _, m := range messages {
+		if m.Role == RoleAssistant {
+			at++
+			calls += len(m.ToolCalls)
+		}
+	}
+	if at >= len(p.turns) {
+		return Turn{}, fmt.Errorf("the recording ran out after %d turns", len(p.turns))
+	}
+	t := p.turns[at]
+	out := Turn{Text: t.Text, ToolCalls: make([]ToolCall, len(t.ToolCalls))}
+	for i, c := range t.ToolCalls {
+		calls++
+		out.ToolCalls[i] = ToolCall{ID: "call-" + strconv.Itoa(calls), Name: c.Name, Arguments: c.Arguments}
+	}
+	return out, nil
+}

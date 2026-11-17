@@ -658,6 +658,11 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the outpost.",
 	}
+	if !o.Scale() {
+		// The seed writes the lab's omnibot recording (#2121); a scale
+		// lab's seed writes none, so its server is not pointed at one.
+		spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
+	}
 	outpostCmd := []string{"outpost", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
 	outpostService := func(service, name, token string, components int, role string) Service {
