@@ -316,7 +316,7 @@ func applicableKinds(resource string) map[string]bool {
 		// the specific owner within it.
 		return map[string]bool{"location": true, "system": true, "component": true}
 	case "audit", "command_type", "component_type", "driver", "event_type", "file",
-		"location_type", "metric_type", "node", "notification_target",
+		"location_type", "metric_type", "outpost", "notification_target",
 		"notification_type", "platform", "principal", "principal_grant",
 		"principal_group", "product", "property_type", "role", "rule", "settings",
 		"severity_level", "simulation", "standard", "system_type", "tag", "template",

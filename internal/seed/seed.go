@@ -280,7 +280,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedProducts(ctx, gw); err != nil {
 		return err
 	}
-	// The platform system last: it is of a seeded system type, and the node
+	// The platform system last: it is of a seeded system type, and the outpost
 	// components it adopts are of a seeded product (#1625).
 	if err := gw.EnsurePlatform(ctx); err != nil {
 		return fmt.Errorf("seed: platform system: %w", err)

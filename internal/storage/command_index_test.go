@@ -17,13 +17,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// commandDeliverableVersion is the migration that adds the index a node's
+// commandDeliverableVersion is the migration that adds the index an outpost's
 // command pull reads by (#1631).
 const commandDeliverableVersion = "20261109231119"
 
-// commandPullFixture is one node with one driver-attached component, the
+// commandPullFixture is one outpost with one driver-attached component, the
 // gateway counting every statement it issues, and an actor to issue commands
-// as: the smallest fleet a node's command pull has anything to deliver in.
+// as: the smallest fleet an outpost's command pull has anything to deliver in.
 type commandPullFixture struct {
 	ctx     context.Context
 	dsn     string
@@ -46,18 +46,18 @@ func newCommandPullFixture(t *testing.T) *commandPullFixture {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	comp, drv, node := "pull-switcher", "line-proto", "pull-edge"
+	comp, drv, outpost := "pull-switcher", "line-proto", "pull-edge"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: drv, Label: "Line Proto", Version: "1.0.0", Spec: []byte(lineProtoSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.4.50"},
+		Driver: &drv, Component: &comp, Outpost: &outpost, Inputs: map[string]string{"host": "10.20.4.50"},
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -83,25 +83,25 @@ func (f *commandPullFixture) issue(t *testing.T, n int) {
 	}
 }
 
-// pull runs one command pull for the fixture's node with the counter reset, so
+// pull runs one command pull for the fixture's outpost with the counter reset, so
 // the counter holds exactly the statements that one pull issued.
 func (f *commandPullFixture) pull(t *testing.T) []storage.CommandDelivery {
 	t.Helper()
 	f.counter.Reset()
-	got, err := f.gw.PendingNodeCommands(f.ctx, "pull-edge")
+	got, err := f.gw.PendingOutpostCommands(f.ctx, "pull-edge")
 	if err != nil {
-		t.Fatalf("PendingNodeCommands: %v", err)
+		t.Fatalf("PendingOutpostCommands: %v", err)
 	}
 	return got
 }
 
-// TestCommandPullReachesTheDeliverableIndex holds a node's command pull to an
-// access path keyed by its own components (#1631). Every node pulls once a
+// TestCommandPullReachesTheDeliverableIndex holds an outpost's command pull to an
+// access path keyed by its own components (#1631). Every outpost pulls once a
 // heartbeat, so a pull that read the fleet's pending commands and filtered to
-// the node afterwards cost every node the whole fleet's backlog. The proof is
+// the outpost afterwards cost every outpost the whole fleet's backlog. The proof is
 // the accesspath instrument's usability question, not a preference: the scan
 // of command reaches command_deliverable_idx with an index condition on
-// component_id, so the rows the pull reads are found BY the node's own
+// component_id, so the rows the pull reads are found BY the outpost's own
 // components rather than read and discarded. The statement is the one the
 // gateway really issued, captured off the pool tracer.
 //
@@ -140,7 +140,7 @@ func TestCommandPullReachesTheDeliverableIndex(t *testing.T) {
 	}
 	for _, s := range scans {
 		if s.Disabled || !strings.Contains(s.Cond, "component_id") {
-			t.Errorf("the command scan is not searched by component, so a pull still reads other nodes' commands: %s", s)
+			t.Errorf("the command scan is not searched by component, so a pull still reads other outposts' commands: %s", s)
 		}
 	}
 

@@ -38,7 +38,7 @@ drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
 A worked example of the rule: the collection page's per-transport probe table (each transport's
 rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
-and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/node`
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/outpost`
 drives each built transport's probe and fails when what it lands differs from what its entry
 declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
 
@@ -182,7 +182,7 @@ screenshots:
 
 That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
 the real console (the same binary an operator runs, never a mock, served by a throwaway lab with
-no node collecting, so the pages hold still; the capture hides the lab's banner), and writes
+no outpost collecting, so the pages hold still; the capture hides the lab's banner), and writes
 `public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
 capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.

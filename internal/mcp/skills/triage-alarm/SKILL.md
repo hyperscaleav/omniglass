@@ -27,10 +27,10 @@ Say which alarm you are triaging, when it was raised, and its severity.
 ## 2. Is the component reachable?
 
 Read `tool:get-component-reachability`. An unreachable component explains
-most alarms on it at once: the cause is the path to it (the node, the network,
+most alarms on it at once: the cause is the path to it (the outpost, the network,
 the endpoint), not the thing the alarm names. If it is unreachable, read the
 endpoint it is polled through with `tool:list-endpoints` and `tool:get-endpoint`,
-and the node that polls it with `tool:get-node`.
+and the outpost that polls it with `tool:get-outpost`.
 
 ## 3. Find what changed
 

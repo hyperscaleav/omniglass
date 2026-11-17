@@ -303,7 +303,7 @@ export type ComponentDraft = {
   location: string;
   name: string;
   label: string;
-  node: string;
+  outpost: string;
   address: string;
   // A driver secret input's name -> the name of a secret of yours; empty omits it.
   secrets: Record<string, string>;
@@ -321,7 +321,7 @@ export function componentBody(template: string, d: ComponentDraft): ComponentFro
     location: opt(d.location),
     name: opt(d.name),
     label: opt(d.label),
-    node: opt(d.node),
+    outpost: opt(d.outpost),
     inputs: Object.keys(inputs).length ? inputs : undefined,
   };
 }
@@ -331,7 +331,7 @@ export type SystemDraft = {
   name: string;
   label: string;
   standard: string;
-  node: string;
+  outpost: string;
   // Per role, one address per component slot in order; an empty one leaves
   // that component unattached.
   addresses: Record<string, string[]>;
@@ -353,7 +353,7 @@ export function systemBody(template: string, d: SystemDraft): SystemFromTemplate
     name: opt(d.name),
     label: opt(d.label),
     standard: opt(d.standard),
-    node: opt(d.node),
+    outpost: opt(d.outpost),
     attach: Object.keys(attach).length ? attach : undefined,
   };
 }
@@ -364,10 +364,10 @@ export function locationsBody(template: string, d: LocationsDraft): LocationsFro
   return { template, parent: opt(d.parent), name: opt(d.name), label: opt(d.label) };
 }
 
-// An address with no node to place its endpoint on is refused by the API
-// (422); the form says so beside the node before submit.
-export function needsNode(d: { node: string; address?: string; addresses?: Record<string, string[]> }): boolean {
-  if (opt(d.node)) return false;
+// An address with no outpost to place its endpoint on is refused by the API
+// (422); the form says so beside the outpost before submit.
+export function needsOutpost(d: { outpost: string; address?: string; addresses?: Record<string, string[]> }): boolean {
+  if (opt(d.outpost)) return false;
   if (opt(d.address)) return true;
   return Object.values(d.addresses ?? {}).some((l) => l.some((a) => !!opt(a)));
 }

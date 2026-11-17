@@ -23,8 +23,8 @@ import (
 // The push-ingest write BFF: a first-party route that accepts telemetry in OUR
 // schema (a webhook, by contrast, is the case where we do not control the payload
 // and something has to normalize it, which is driver work). It is the second ingest
-// lane beside the node's, and the two differ in exactly one respect: where the owner
-// comes from. A node cannot be trusted to name its own owner, so the server derives
+// lane beside the outpost's, and the two differ in exactly one respect: where the owner
+// comes from. An outpost cannot be trusted to name its own owner, so the server derives
 // it from the task's interface; a scoped principal can be, because the scope check
 // is the fence.
 //
@@ -126,8 +126,8 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is " +
 			"rejected and reported in the response rather than silently dropped, and a property or event payload " +
 			"violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push " +
-			"writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric " +
-			"or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own " +
+			"writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric " +
+			"or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own " +
 			"observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected " +
 			"by name on every lane; a key a calc rule outputs is rejected " +
 			"naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is " +
@@ -231,7 +231,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// the caller guessing which rows exist.
 		//
 		// A reserved key is refused first, by name and on every lane (#1080,
-		// ADR-0161): a native probe key is a node's own observation and a
+		// ADR-0161): a native probe key is an outpost's own observation and a
 		// platform key the platform's, so its reason names that, not a lane the
 		// caller could switch to. A registered key is then held to its writer
 		// class, which refuses a calc rule's output naming the rule. The
@@ -395,7 +395,7 @@ func resolvePushOwner(ctx context.Context, a *authenticator, gw storage.Gateway,
 // reservedRejection refuses a key of the reserved family on every lane, by
 // name (#1080, ADR-0161): a native probe key (read from probekeys, the one
 // declaration the probes emit from, collection-failed among them) is the
-// node's own observation, which the console reads as the node's, and a
+// outpost's own observation, which the console reads as the outpost's, and a
 // platform key is the platform's (health, the rollup's verdict, and the
 // webhook receiver's counts, #1369). The match is
 // case-insensitive and ignores surrounding space, failing closed. The reason

@@ -176,10 +176,10 @@ func TestCreateLocationDottedMissingParentMatchesBareNameForm(t *testing.T) {
 	assertNotLeakedPathNotFound(t, dottedErr)
 }
 
-// TestCreateNodeDottedMissingLocationMatchesBareNameForm covers nodes.go's
-// nodeLocationID, another explicit-fold call site, using a genuine
+// TestCreateOutpostDottedMissingLocationMatchesBareNameForm covers outposts.go's
+// outpostLocationID, another explicit-fold call site, using a genuine
 // structural miss under a real root ("boi.nope") like the location test.
-func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
+func TestCreateOutpostDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
@@ -189,18 +189,18 @@ func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 		t.Fatalf("create boi: %v", err)
 	}
 
-	_, bareErr := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "node-bare-loc", LocationName: strptr("ghost-loc"),
+	_, bareErr := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
+		Name: "outpost-bare-loc", LocationName: strptr("ghost-loc"),
 	}, all, all)
 	if !errors.Is(bareErr, storage.ErrLocationNotFound) {
-		t.Fatalf("bare-name missing node location = %v, want ErrLocationNotFound", bareErr)
+		t.Fatalf("bare-name missing outpost location = %v, want ErrLocationNotFound", bareErr)
 	}
 
-	_, dottedErr := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "node-dotted-loc", LocationName: strptr("boi.nope"),
+	_, dottedErr := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
+		Name: "outpost-dotted-loc", LocationName: strptr("boi.nope"),
 	}, all, all)
 	if !errors.Is(dottedErr, storage.ErrLocationNotFound) {
-		t.Fatalf("dotted missing node location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
+		t.Fatalf("dotted missing outpost location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
 	}
 	assertNotLeakedPathNotFound(t, dottedErr)
 }

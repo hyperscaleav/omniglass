@@ -2,7 +2,7 @@
 #
 # A simulated Kestrel bar serves a control socket over wss. A websocket driver attached to it
 # subscribes on connect, lands a change the bar pushes at once, sends a command answered by the id
-# the node minted into it, recovers and subscribes again after a drop, and reads rejected after
+# the outpost minted into it, recovers and subscribes again after a drop, and reads rejected after
 # one refused upgrade until the secret is fixed in place (#1034).
 
 Type "# Boardroom B's Kestrel bar, by its dotted address, and the shipped control-socket driver"
@@ -33,7 +33,7 @@ Wait
 Type `omniglass secret create --name boardroom-ws-login --owner-kind platform --secret-type basic-auth --fields '{"username":"admin","password":"kestrel"}' | jq -c '{name}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$bar" --driver kestrel-ws --node edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"boardroom-ws-login\"}" | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$bar" --driver kestrel-ws --outpost edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"boardroom-ws-login\"}" | jq -c '{name, driver}'`
 Enter
 Wait
 
@@ -52,7 +52,7 @@ Wait
 Type "# The subscription went out on connect, and the bar acknowledged it"
 Enter
 Wait
-Type `armed() { omniglass node log list edge-hq | jq -c '[.logs[] | select(.message == "session armed" and .attributes.endpoint == "wss") | .attributes | {sent: (.line | fromjson | .type), answered: (.reply | fromjson | .type)}]'; }`
+Type `armed() { omniglass outpost log list edge-hq | jq -c '[.logs[] | select(.message == "session armed" and .attributes.endpoint == "wss") | .attributes | {sent: (.line | fromjson | .type), answered: (.reply | fromjson | .type)}]'; }`
 Enter
 Wait
 Type `armed`
@@ -108,7 +108,7 @@ Type `omniglass component simulation fire "$bar" --surface http-api --method POS
 Enter
 Wait
 Hide
-Type `demo_until 30 '[ "$(omniglass node log list edge-hq | jq "[.logs[] | select(.message == \"session armed\" and .attributes.endpoint == \"wss\")] | length")" -ge 2 ]'`
+Type `demo_until 30 '[ "$(omniglass outpost log list edge-hq | jq "[.logs[] | select(.message == \"session armed\" and .attributes.endpoint == \"wss\")] | length")" -ge 2 ]'`
 Enter
 Wait@40s
 Show

@@ -10,7 +10,7 @@ sidebar:
 :::note[Partial]
 The **binding chain** is built for the three cells that ride it: a [tag](/architecture/tags/), a
 [variable](/architecture/variables/), and a secret each own a value on the exclusive arc
-`platform | location | system | component` (the tag arc has a fifth kind, `node`) and resolve
+`platform | location | system | component` (the tag arc has a fifth kind, `outpost`) and resolve
 most-specific-wins down the location, system, and component trees (union-on-key for tags), the
 least-specific tier named **`platform`** and gated by its own `platform:<action>` permission
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
@@ -74,7 +74,7 @@ component tree        chassis -> card -> ...                   (deepest wins, = 
   ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
 - **There is no root location.** The location tree is a forest with N unparented tops, and a top is
   an ordinary location: binding at `earth` misses `mars`, and a top added next quarter starts
-  uncovered. A tier above today's tops is a new `location_type` and a real node, never a magic one;
+  uncovered. A tier above today's tops is a new `location_type` and a real outpost, never a magic one;
   "everything" is `platform`, not a location.
 - **Philosophy: deployment beats the classifier.** HQ's location credential overrides what the Room
   Kit product binds; "Standard Huddle Room" overrides what the bare Room Kit binds.

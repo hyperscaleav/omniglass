@@ -308,36 +308,36 @@ func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
 	}
 }
 
-// TestACollectingNodeStartsItsOwnSeries: a node's samples record the node that
+// TestACollectingOutpostStartsItsOwnSeries: an outpost's samples record the outpost that
 // collected them on their series, so the same key, owner and instance
-// collected by another node is a series of its own; every read of the key
+// collected by another outpost is a series of its own; every read of the key
 // merges them, reading the newest of either.
-func TestACollectingNodeStartsItsOwnSeries(t *testing.T) {
+func TestACollectingOutpostStartsItsOwnSeries(t *testing.T) {
 	t.Parallel()
 	f := newWriterFixture(t)
 	comp, err := f.gw.GetComponent(f.ctx, "disp-1", scope.Set{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nodeA string
-	if err := f.conn.QueryRow(f.ctx, `select principal_id::text from node where name = 'node-a'`).Scan(&nodeA); err != nil {
+	var outpostA string
+	if err := f.conn.QueryRow(f.ctx, `select principal_id::text from outpost where name = 'outpost-a'`).Scan(&outpostA); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	for i, node := range []string{nodeA, "00000000-0000-7000-8000-000000000001"} {
-		w := storage.NodeWriter(comp.ID, "ssh")
-		w.Node = node
+	for i, outpost := range []string{outpostA, "00000000-0000-7000-8000-000000000001"} {
+		w := storage.OutpostWriter(comp.ID, "ssh")
+		w.Outpost = outpost
 		if err := f.gw.InsertMetricSamples(f.ctx, w, []storage.MetricSampleWrite{
 			{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: float64(10 + i), TS: now.Add(time.Duration(i) * time.Second)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if n := f.count(t, `select count(*) from metric_series s join metric_type t on t.id = s.metric_type_id
-		where t.name = 'tcp-connect-time' and s.collector_node_id is not null`); n != 2 {
-		t.Fatalf("%d collected series, want one per collecting node", n)
+		where t.name = 'tcp-connect-time' and s.collector_outpost_id is not null`); n != 2 {
+		t.Fatalf("%d collected series, want one per collecting outpost", n)
 	}
 	if m, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-connect-time", "ssh"); err != nil || m == nil || m.Value != 11 {
-		t.Fatalf("the latest across both nodes' series = %+v (%v), want the newer 11", m, err)
+		t.Fatalf("the latest across both outposts' series = %+v (%v), want the newer 11", m, err)
 	}
 }
 

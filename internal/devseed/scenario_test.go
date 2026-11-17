@@ -297,10 +297,10 @@ func openSeededGateway(t *testing.T) (context.Context, *storage.PG, *pgx.Conn) {
 type fleetCounts struct{ locations, components, systems, assignments, alarms int }
 
 // The operator's fleet, without the platform's own rows (#1625): the boot
-// seed's platform system, each node's platform component, and the membership
+// seed's platform system, each outpost's platform component, and the membership
 // that joins them. Devseed seeds a fleet; the platform is not part of it.
 const (
-	fleetComponentCount = `select count(*) from component where id not in (select platform_component_id from node where platform_component_id is not null)`
+	fleetComponentCount = `select count(*) from component where id not in (select platform_component_id from outpost where platform_component_id is not null)`
 	fleetSystemCount    = `select count(*) from system where name <> 'platform'`
 	fleetMemberCount    = `select count(*) from system_member m join system s on s.id = m.system_id where s.name <> 'platform'`
 )

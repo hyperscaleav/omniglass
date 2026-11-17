@@ -23,7 +23,7 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-udp"
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Outpost: &f.outpost,
 		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all)
 	if err != nil {
 		t.Fatalf("attach newtron-nvp-udp: %v", err)
@@ -69,22 +69,22 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 }
 
 // A bare udp endpoint's params carry the listen port as given, so one the
-// node cannot bind is refused where it is written.
+// outpost cannot bind is refused where it is written.
 func TestABareUDPEndpointsListenPortIsCheckedAtWrite(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
-	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "udp", Component: &f.component, Node: &f.node,
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "udp", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:51327","listen-port":"any"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), driver.ListenPortInput) {
 		t.Fatalf("a bare udp endpoint with listen port any = %v, want ErrEndpointParamsInvalid naming %s", err, driver.ListenPortInput)
 	}
-	// The write accepts exactly what the node binds (driver.ParseListenPort):
+	// The write accepts exactly what the outpost binds (driver.ParseListenPort):
 	// a numeral, a whole number however written, or unset.
 	for i, good := range []string{`"51400"`, `51400`, `51400.0`, `null`, `""`} {
 		comp := []string{"panel-u1", "panel-u2", "panel-u3", "panel-u4", "panel-u5"}[i]
 		if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: comp}, f.all, f.all, f.all, f.all); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "udp", Component: &comp, Node: &f.node,
+		if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "udp", Component: &comp, Outpost: &f.outpost,
 			Params: []byte(`{"target":"10.0.0.9:51327","listen-port":` + good + `}`)}, f.all); err != nil {
 			t.Fatalf("a bare udp endpoint with listen port %s: %v", good, err)
 		}
@@ -108,7 +108,7 @@ func TestAUDPCommandDeliveryCarriesItsRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	for comp, drv := range map[string]string{f.component: "newtron-nvp-udp", other: "udp-no-retry"} {
-		if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &f.node,
+		if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &f.outpost,
 			Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all); err != nil {
 			t.Fatalf("attach %s: %v", drv, err)
 		}
@@ -119,7 +119,7 @@ func TestAUDPCommandDeliveryCarriesItsRetries(t *testing.T) {
 			t.Fatalf("issue on %s: %v", comp, err)
 		}
 	}
-	got, err := f.gw.PendingNodeCommands(f.ctx, f.node)
+	got, err := f.gw.PendingOutpostCommands(f.ctx, f.outpost)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("pending = %+v (err %v), want both commands", got, err)
 	}

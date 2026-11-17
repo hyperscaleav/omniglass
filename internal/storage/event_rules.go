@@ -281,7 +281,7 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 	}
 	resolve := func(field, name string) (string, error) {
 		// A rule's event is the rule's: never a key another writer owns
-		// (ADR-0161), such as the node's collection-failed.
+		// (ADR-0161), such as the outpost's collection-failed.
 		if c, ok := writerclass.Reserved(name); ok {
 			return "", invalidRule("%s %q: %s", field, name, writerclass.Refusal(c, name, writerclass.EventRule, ""))
 		}

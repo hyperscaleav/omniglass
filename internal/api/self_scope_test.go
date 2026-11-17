@@ -51,7 +51,7 @@ func TestSelfScopeAPI(t *testing.T) {
 
 	// A deploy grant scoped to exactly room-42 (self): read + update on the tree
 	// tiers, read via the viewer floor, but only the one row.
-	selfTok := principalWithGrants(t, ctx, dsn, "single-node",
+	selfTok := principalWithGrants(t, ctx, dsn, "single-outpost",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "self"}})
 	patch := map[string]any{"label": "x"}
 
@@ -61,7 +61,7 @@ func TestSelfScopeAPI(t *testing.T) {
 	c.do(selfTok, http.MethodPatch, "/locations/room-42", patch, http.StatusOK)
 
 	// But self is a leaf-lock: it grants no create-placement, so a child cannot be
-	// added under the node even though the role carries location:create. The room is
+	// added under the outpost even though the role carries location:create. The room is
 	// readable but outside the create scope, so this is a 403 (not a 404).
 	if code, _ := c.send(selfTok, http.MethodPost, "/locations", body("under-self", "room-42")); code != http.StatusForbidden {
 		t.Fatalf("self grant creating a child: want 403 (no create-placement), got %d", code)

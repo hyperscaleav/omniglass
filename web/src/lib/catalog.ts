@@ -150,7 +150,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
       // "Types": the Components header already says where it lives (mirrors
       // Locations' own Types entry below). The device-class genus registry
-      // (ADR-0085): a product is classified under one of its nodes.
+      // (ADR-0085): a product is classified under one of its outposts.
       { label: "Types", path: "/component-types", gate: ["component_type", "read"], key: COMPONENT_TYPES_KEY, list: listComponentTypes },
       templatesSlot(["component_template"]),
     ],
@@ -162,7 +162,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
       // "Types": the Systems header already says where it lives (mirrors the
       // Components and Locations groups). The coarse space taxonomy
-      // (ADR-0096): a system is classified as one of its nodes.
+      // (ADR-0096): a system is classified as one of its outposts.
       { label: "Types", path: "/system-types", gate: ["system_type", "read"], key: SYSTEM_TYPES_KEY, list: listSystemTypes },
       templatesSlot(["standard_template", "system_template"]),
     ],

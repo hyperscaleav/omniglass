@@ -31,7 +31,7 @@ import (
 )
 
 // TestImpairingASimulatedDeviceShowsInCollection drives the operator's
-// loop: a simulated device collected by a real node, unplugged through the
+// loop: a simulated device collected by a real outpost, unplugged through the
 // CLI (its ping and TCP checks fail and both endpoints read down),
 // replugged (all recover), then slowed (the delay shows in its TCP connect
 // time).
@@ -63,11 +63,11 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-i"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-i"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "impair-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "impair-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-i", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -110,19 +110,19 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		return out
 	}
 	ip := "127.62.0.10"
-	as("endpoint", "create", "--component", "sim-dev", "--node", "edge-i", "--transport", "tcp",
+	as("endpoint", "create", "--component", "sim-dev", "--outpost", "edge-i", "--transport", "tcp",
 		"--params", fmt.Sprintf(`{"target":"%s:%d"}`, ip, port))
-	as("endpoint", "create", "--component", "sim-dev", "--node", "edge-i", "--transport", "icmp",
+	as("endpoint", "create", "--component", "sim-dev", "--outpost", "edge-i", "--transport", "icmp",
 		"--params", fmt.Sprintf(`{"target":%q}`, ip))
 
-	nodeEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-i", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	outpostEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-i", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	for _, args := range [][]string{
 		{"sim", "run", "--impairments", "--poll", "300ms"},
-		{"node", "run", "--server", server, "--name", "edge-i", "--token", nodeTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
+		{"outpost", "run", "--server", server, "--name", "edge-i", "--token", outpostTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
 	} {
 		pctx, stop := context.WithCancel(ctx)
 		p := exec.CommandContext(pctx, binPath, args...)
-		p.Env = nodeEnv
+		p.Env = outpostEnv
 		p.Stdout, p.Stderr = os.Stderr, os.Stderr
 		if err := p.Start(); err != nil {
 			t.Fatal(err)
@@ -329,7 +329,7 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	as("component", "impairment", "set", "sim-dev")
 	as("secret", "create", "--name", "sim-community", "--secret-type", "snmp-community",
 		"--owner-kind", "platform", "--fields", `{"community":"public"}`)
-	as("endpoint", "create", "--component", "sim-dev", "--node", "edge-i", "--driver", "snmp-generic",
+	as("endpoint", "create", "--component", "sim-dev", "--outpost", "edge-i", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, ip, e2eSNMPPort(t, product)))
 	snmp := func(v string) func() bool { return func() bool { return reach()["snmp"] == v } }
 	waitFor(t, "the snmp endpoint to read up", snmp("up"))

@@ -36,29 +36,29 @@ rules:
     severity: warning
     fire_event_type: condition-started
     clear_event_type: condition-ended
-  # A claimed node gone quiet (#1094, #1707): the server's check-in timer
-  # writes each claimed node's checkin-age every 15 s, and an age past 90 s is
-  # three of a node's 30 s heartbeats missed. The age is itself the sustain, so
+  # A claimed outpost gone quiet (#1094, #1707): the server's check-in timer
+  # writes each claimed outpost's checkin-age every 15 s, and an age past 90 s is
+  # three of an outpost's 30 s heartbeats missed. The age is itself the sustain, so
   # the rule fires on the first reading past it, with no fire_sustain of its
-  # own. Raised on the node's platform component; it clears on the first
-  # reading back at or under 90, which a node's next heartbeat brings.
-  - name: node-silent
-    label: Node silent
-    description: A claimed node has not checked in for more than 90 seconds, three missed heartbeats.
+  # own. Raised on the outpost's platform component; it clears on the first
+  # reading back at or under 90, which an outpost's next heartbeat brings.
+  - name: outpost-silent
+    label: Outpost silent
+    description: A claimed outpost has not checked in for more than 90 seconds, three missed heartbeats.
     sample_key: checkin-age
     fire: 'value > 90'
     clear: 'value <= 90'
     severity: high
     fire_event_type: condition-started
     clear_event_type: condition-ended
-  # A node running a stale worklist (#1868): every worklist pull in its report
+  # An outpost running a stale worklist (#1868): every worklist pull in its report
   # window refused (the bus gave no worklist it could read), so it ran the
   # whole window on its last one, unaware of any edit since. Sustained, so a
-  # server restart's brief refusals do not page. Raised on the node's platform
+  # server restart's brief refusals do not page. Raised on the outpost's platform
   # component; it clears on the first window with a pull served.
   - name: worklist-stale
     label: Worklist stale
-    description: Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.
+    description: Every worklist pull the outpost made for two minutes was refused, so it is running its last worklist and misses every change since.
     sample_key: worklist-pull-loss-ratio
     fire: 'value == 1'
     fire_sustain: 2m

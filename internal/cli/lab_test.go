@@ -17,7 +17,7 @@ import (
 // recorders and the probe, and stay out of a learner's help.
 func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	cmd := newLabRunCmd("test", "")
-	for _, name := range []string{"project", "ephemeral", "ready-file", "while-pid", "no-node"} {
+	for _, name := range []string{"project", "ephemeral", "ready-file", "while-pid", "no-outpost"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("lab run has no --%s", name)
@@ -81,22 +81,22 @@ func TestWalkthroughSetupCommandsAreRealCommands(t *testing.T) {
 	}
 }
 
-// The lab's node runs a command this binary has, with every flag it names
+// The lab's outpost runs a command this binary has, with every flag it names
 // (#1273 added --probe-every to both): a learner's lab and a script's.
-func TestLabNodeCommandIsARealCommand(t *testing.T) {
+func TestLabOutpostCommandIsARealCommand(t *testing.T) {
 	for _, ephemeral := range []bool{false, true} {
 		s, err := lab.Plan(lab.Options{Image: "omniglass:dev", Project: "check", Port: lab.DefaultPort,
-			NodeToken: "tok", NodeTokenHash: "abc", Ephemeral: ephemeral})
+			OutpostToken: "tok", OutpostTokenHash: "abc", Ephemeral: ephemeral})
 		if err != nil {
 			t.Fatal(err)
 		}
-		cmd, rest, err := newRoot("test", "").Find(s.Node.Cmd)
-		if err != nil || cmd.CommandPath() != "omniglass node run" {
-			t.Fatalf("lab node %v is not node run: %v", s.Node.Cmd, err)
+		cmd, rest, err := newRoot("test", "").Find(s.Outpost.Cmd)
+		if err != nil || cmd.CommandPath() != "omniglass outpost run" {
+			t.Fatalf("lab outpost %v is not outpost run: %v", s.Outpost.Cmd, err)
 		}
 		for _, word := range rest {
 			if name, ok := strings.CutPrefix(word, "--"); ok && cmd.Flags().Lookup(name) == nil {
-				t.Errorf("the lab's node passes --%s, which node run lacks", name)
+				t.Errorf("the lab's outpost passes --%s, which outpost run lacks", name)
 			}
 		}
 	}
@@ -200,7 +200,7 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		want     []string
 	}{
 		"fits": {1000, "", host, []string{
-			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components)",
+			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, an outpost for each of 18 sites, 3016 simulated components)",
 				lab.FormatMiB(need.MemMiB), need.CPU),
 			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, come to 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
 			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
@@ -264,9 +264,9 @@ func TestLabRunScaleKeepReachesTheRunConfig(t *testing.T) {
 			t.Errorf("keep %v fresh %v: run config Ephemeral %v Fresh %v, want Ephemeral %v Fresh %v",
 				tc.keep, tc.fresh, got.Ephemeral, got.Fresh, tc.wantEphemeral, tc.fresh)
 		}
-		if got.Project != lab.ScaleProject || got.ScaleRun == nil || len(got.SiteNodes) == 0 {
-			t.Errorf("keep %v: project %q, scale run %v, %d site nodes; want the scale lab's own project and its nodes",
-				tc.keep, got.Project, got.ScaleRun != nil, len(got.SiteNodes))
+		if got.Project != lab.ScaleProject || got.ScaleRun == nil || len(got.SiteOutposts) == 0 {
+			t.Errorf("keep %v: project %q, scale run %v, %d site outposts; want the scale lab's own project and its outposts",
+				tc.keep, got.Project, got.ScaleRun != nil, len(got.SiteOutposts))
 		}
 	}
 }

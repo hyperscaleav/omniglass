@@ -116,7 +116,7 @@ type ResolvedField struct {
 // winning-or-shadowed secret, the owner it comes from, and where that owner sits
 // in the chain. Band orders the tiers (0 platform, 1 location, 2 system, 3
 // component) and Depth is the distance up that tier's tree (0 at the nearest
-// node); the highest band then lowest depth wins. Winner marks the resolved
+// outpost); the highest band then lowest depth wins. Winner marks the resolved
 // value; the shadowed entries are returned too so the surface can teach the
 // override.
 type ResolvedSecret struct {
@@ -271,7 +271,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 		return nil, mapSecretWriteErr(err)
 	}
 	// A new secret can win an endpoint's input from the one it resolved before.
-	if err := announceNodesOf(ctx, tx, secretUserNodesSQL, s.ID); err != nil {
+	if err := announceOutpostsOf(ctx, tx, secretUserOutpostsSQL, s.ID); err != nil {
 		return nil, err
 	}
 	// The audit records the metadata only; the sealed value is never logged.
@@ -354,7 +354,7 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, ref string, read, action
 		return err
 	}
 	// Announced before the row goes, while the endpoints it served still match.
-	if err := announceNodesOf(ctx, tx, secretUserNodesSQL, before.ID); err != nil {
+	if err := announceOutpostsOf(ctx, tx, secretUserOutpostsSQL, before.ID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from secret where id = $1`, before.ID); err != nil {
@@ -433,7 +433,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	// A rotation reseals the value, which the task's secret version hashes; a
 	// label edit leaves the worklist as it was.
 	if len(patch.Fields) > 0 {
-		if err := announceNodesOf(ctx, tx, secretUserNodesSQL, s.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, secretUserOutpostsSQL, s.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -965,43 +965,43 @@ func mapSecretWriteErr(err error) error {
 	return fmt.Errorf("storage: secret write: %w", err)
 }
 
-// nodeSecretFields unseals a secret's fields by name for worklist delivery
+// outpostSecretFields unseals a secret's fields by name for worklist delivery
 // (#814), with the secret's version: a driver task's secret inputs must reach
-// the placed node as usable credentials, so the server unseals them into the
-// per-node worklist reply (the node's NATS grant is the isolation boundary).
-// It is a one-element call of nodeSecrets, which carries the delivery rules.
-func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, string, error) {
-	got, err := p.nodeSecretShapedOne(ctx, name, componentID)
+// the placed outpost as usable credentials, so the server unseals them into the
+// per-outpost worklist reply (the outpost's NATS grant is the isolation boundary).
+// It is a one-element call of outpostSecrets, which carries the delivery rules.
+func (p *PG) outpostSecretFields(ctx context.Context, name, componentID string) (map[string]string, string, error) {
+	got, err := p.outpostSecretShapedOne(ctx, name, componentID)
 	return got.fields, got.version, err
 }
 
-// nodeSecretShaped is nodeSecretFields with the secret row and the secret
+// outpostSecretShaped is outpostSecretFields with the secret row and the secret
 // type's shape, which says which of the unsealed fields are the secret ones (a
 // password, not the username beside it).
-func (p *PG) nodeSecretShaped(ctx context.Context, name, componentID string) (map[string]string, *secretRow, secret.Shape, error) {
-	got, err := p.nodeSecretShapedOne(ctx, name, componentID)
+func (p *PG) outpostSecretShaped(ctx context.Context, name, componentID string) (map[string]string, *secretRow, secret.Shape, error) {
+	got, err := p.outpostSecretShapedOne(ctx, name, componentID)
 	return got.fields, got.row, got.shape, err
 }
 
-func (p *PG) nodeSecretShapedOne(ctx context.Context, name, componentID string) (nodeSecret, error) {
-	got, err := p.nodeSecrets(ctx, []nodeSecretRef{{name, componentID}})
+func (p *PG) outpostSecretShapedOne(ctx context.Context, name, componentID string) (outpostSecret, error) {
+	got, err := p.outpostSecrets(ctx, []outpostSecretRef{{name, componentID}})
 	if err != nil {
-		return nodeSecret{}, err
+		return outpostSecret{}, err
 	}
 	return got[0], got[0].err
 }
 
-// nodeSecretRef is one secret a node needs: the name an endpoint's input
+// outpostSecretRef is one secret an outpost needs: the name an endpoint's input
 // references, and the endpoint's component ("" for none).
-type nodeSecretRef struct{ name, componentID string }
+type outpostSecretRef struct{ name, componentID string }
 
-// nodeSecret is one reference resolved: the unsealed fields, the secret's
+// outpostSecret is one reference resolved: the unsealed fields, the secret's
 // version (a digest of its stored, sealed value and id, which a rotation moves
 // and which carries nothing derived from the plaintext of a secret field: the
 // #1056 connection fingerprint), its row and its type's shape. err is the
 // reference's absence, ErrSecretNotFound or *ErrAmbiguousName, and the rest is
 // empty.
-type nodeSecret struct {
+type outpostSecret struct {
 	fields  map[string]string
 	version string
 	row     *secretRow
@@ -1009,14 +1009,14 @@ type nodeSecret struct {
 	err     error
 }
 
-// nodeSecrets resolves and unseals many references in one statement, in the
-// order given (#1581): a node's worklist needs one per (reference, component)
+// outpostSecrets resolves and unseals many references in one statement, in the
+// order given (#1581): an outpost's worklist needs one per (reference, component)
 // pair, and a resolve each made a large site's pull cost a thousand
 // statements. Delivery is confined to a secret that CASCADES onto the
-// reference's own component (nodeSecretsSQL): the attach scoped the reference
+// reference's own component (outpostSecretsSQL): the attach scoped the reference
 // to the operator, and this re-check keeps a rename or a name collision from
-// drifting a node onto a secret its component does not own. There is no
-// per-pull audit row (the node re-pulls at heartbeat pace, and a row per pull
+// drifting an outpost onto a secret its component does not own. There is no
+// per-pull audit row (the outpost re-pulls at heartbeat pace, and a row per pull
 // would bury the log; the attach was the audited operator action) and no
 // admin-sensitivity gate (that was the attach's job). A name that resolves to
 // nothing the component owns is ErrSecretNotFound on that element; one that
@@ -1024,8 +1024,8 @@ type nodeSecret struct {
 // (*ErrAmbiguousName). The uuid-stable binding that removes the name-drift
 // class is #820. The returned error is a real failure (no key provider, a DB
 // error, an envelope that will not open), never absence.
-func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecret, error) {
-	out := make([]nodeSecret, len(refs))
+func (p *PG) outpostSecrets(ctx context.Context, refs []outpostSecretRef) ([]outpostSecret, error) {
+	out := make([]outpostSecret, len(refs))
 	if len(refs) == 0 {
 		return out, nil
 	}
@@ -1036,9 +1036,9 @@ func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecre
 	for i, r := range refs {
 		names[i], comps[i] = r.name, r.componentID
 	}
-	rows, err := p.pool.Query(ctx, nodeSecretsSQL, names, comps)
+	rows, err := p.pool.Query(ctx, outpostSecretsSQL, names, comps)
 	if err != nil {
-		return nil, fmt.Errorf("storage: node secrets: %w", err)
+		return nil, fmt.Errorf("storage: outpost secrets: %w", err)
 	}
 	defer rows.Close()
 	type candidate struct {
@@ -1050,15 +1050,15 @@ func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecre
 		var i int
 		var c candidate
 		if err := rows.Scan(&i, &c.row.id, &c.row.name, &c.row.ownerKind, &c.row.ownerID, &c.row.value, &c.typeName); err != nil {
-			return nil, fmt.Errorf("storage: scan node secret: %w", err)
+			return nil, fmt.Errorf("storage: scan outpost secret: %w", err)
 		}
 		found[i] = append(found[i], c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: node secrets: %w", err)
+		return nil, fmt.Errorf("storage: outpost secrets: %w", err)
 	}
 	var shapes map[string]secret.Shape
-	opened := map[string]nodeSecret{} // secret id -> its unsealed fields, version, row and shape
+	opened := map[string]outpostSecret{} // secret id -> its unsealed fields, version, row and shape
 	for i, cs := range found {
 		switch {
 		case len(cs) == 0:
@@ -1081,24 +1081,24 @@ func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecre
 		row := cs[0].row
 		shape, ok := shapes[cs[0].typeName]
 		if !ok {
-			return nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", row.name, cs[0].typeName)
+			return nil, fmt.Errorf("storage: outpost secret %q: unknown secret type %q", row.name, cs[0].typeName)
 		}
 		fields, _, err := p.unsealSecretFields(ctx, row, shape)
 		if err != nil {
-			return nil, fmt.Errorf("storage: node secret %q: %w", row.name, err)
+			return nil, fmt.Errorf("storage: outpost secret %q: %w", row.name, err)
 		}
 		b, _ := json.Marshal(struct {
 			ID    string                     `json:"id"`
 			Value map[string]json.RawMessage `json:"value"`
 		}{row.id, row.value})
 		sum := sha256.Sum256(b)
-		out[i] = nodeSecret{fields: fields, version: hex.EncodeToString(sum[:]), row: &row, shape: shape}
+		out[i] = outpostSecret{fields: fields, version: hex.EncodeToString(sum[:]), row: &row, shape: shape}
 		opened[row.id] = out[i]
 	}
 	return out, nil
 }
 
-// nodeSecretsSQL returns, for each (name, component) reference ($1, $2 in
+// outpostSecretsSQL returns, for each (name, component) reference ($1, $2 in
 // step), every secret of that name that cascades onto THAT component, the same
 // cascade resolveSecretsSQL ranks: platform always covers; a location owner
 // covers when it is in the component's location chain; a component owner
@@ -1109,7 +1109,7 @@ func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecre
 // target, so the chains run once for the whole batch and a sibling's chain
 // never covers a component. The CYCLE guards protect against a corrupted
 // parent edge.
-const nodeSecretsSQL = `
+const outpostSecretsSQL = `
 with recursive
 want(ord, name, component_id) as (
     select k.ord - 1, k.name, nullif(k.comp, '')::uuid

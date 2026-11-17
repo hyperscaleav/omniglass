@@ -10,7 +10,7 @@ import (
 )
 
 // The connection fingerprint's table check (#1056 ruling): every field the
-// worklist delivers to a node, and so every field a dialer or probe can read
+// worklist delivers to an outpost, and so every field a dialer or probe can read
 // to connect, is either an input of the fingerprint or declared not one, with
 // why. A field added to a task without a decision here fails, so a new
 // transport cannot read an endpoint, secret or driver field the fingerprint

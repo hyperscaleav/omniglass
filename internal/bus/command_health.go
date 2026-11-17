@@ -9,14 +9,14 @@ import (
 )
 
 // commandHealthEvery is how often the server reads the fleet's command queues
-// and writes their health on each node's platform component (#1626), on the
+// and writes their health on each outpost's platform component (#1626), on the
 // check-in age's cadence. commandHealthTimeout bounds one pass.
 const (
 	commandHealthEvery   = 15 * time.Second
 	commandHealthTimeout = 10 * time.Second
 )
 
-// recordCommandQueueHealth reads every node's command queue over the window
+// recordCommandQueueHealth reads every outpost's command queue over the window
 // since the previous pass's read and writes it as platform metrics. It answers
 // the read's time, the next pass's since; a failed read keeps since, so the
 // next pass's window covers this one's. A failed write after a good read

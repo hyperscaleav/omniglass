@@ -122,7 +122,7 @@ describe("Audit page", () => {
 
     const { findByText, getByText } = render(() => <Audit />);
     await findByText("Load older");
-    // Re-query each poll: the footer re-renders (replacing the button node) as the
+    // Re-query each poll: the footer re-renders (replacing the button outpost) as the
     // loaded-count updates, so a captured reference would go stale. Wait for the
     // first load to finish so the button is live (not the no-op it is in flight).
     const btn = () => getByText("Load older") as HTMLButtonElement;

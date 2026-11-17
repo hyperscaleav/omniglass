@@ -23,13 +23,13 @@ import (
 // declared expired text) logs in once more and is replayed once; a lapse
 // right after a fresh login is the credential's terminal refusal, never a
 // second login. A login the component refuses is held as refused for the
-// life of the state, so no later request logs in again under it: the node
+// life of the state, so no later request logs in again under it: the outpost
 // drops the state when the endpoint's fingerprint moves, and the gate holds
 // every request until then.
 
 // HTTPAuthState is one http endpoint's learned auth: the cookies the
 // component set, the digest challenge it last issued, and a login's
-// session. It lives in the node's memory alone (decision 3 of #1113):
+// session. It lives in the outpost's memory alone (decision 3 of #1113):
 // never logged, published or persisted, dropped whole when the endpoint's
 // fingerprint moves, on a terminal refusal, and with the process. Safe for
 // concurrent use: a poll and a command share it, and one login serves both.
@@ -55,7 +55,7 @@ type HTTPAuthState struct {
 
 	// OnLogin is told of each login the state starts and why ("opening",
 	// "renewing before expiry", "the session lapsed"), never a value: the
-	// node's log line. Set before the state is shared.
+	// outpost's log line. Set before the state is shared.
 	OnLogin func(why string)
 
 	// now is the clock a session's lifetime is read against; time.Now

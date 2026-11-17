@@ -105,10 +105,10 @@ func TestPrincipalDirectory(t *testing.T) {
 }
 
 // TestPrincipalListGroupsKinds pins the directory ordering rule: humans list
-// before nodes no matter which was created first. Creation stamps are not a
+// before outposts no matter which was created first. Creation stamps are not a
 // stable cross-kind order (bootstrap, seeding, and enrollment write in separate
 // transactions), and a stamp-led sort flapped the screenshot gate when a run's
-// node landed an earlier stamp than its humans. Skipped under -short.
+// outpost landed an earlier stamp than its humans. Skipped under -short.
 func TestPrincipalListGroupsKinds(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
@@ -132,10 +132,10 @@ func TestPrincipalListGroupsKinds(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// The node lands first, so its created_at precedes the second human's: the
-	// exact shape that put a node above the humans under a stamp-led sort.
-	if _, err := gw.CreateNode(ctx, owner.ID, storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	// The outpost lands first, so its created_at precedes the second human's: the
+	// exact shape that put an outpost above the humans under a stamp-led sort.
+	if _, err := gw.CreateOutpost(ctx, owner.ID, storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "later-human"}, all); err != nil {
 		t.Fatalf("create human: %v", err)
@@ -149,7 +149,7 @@ func TestPrincipalListGroupsKinds(t *testing.T) {
 	for _, pr := range list {
 		kinds = append(kinds, pr.Kind)
 	}
-	want := []string{"human", "human", "node"}
+	want := []string{"human", "human", "outpost"}
 	if len(kinds) != 3 || kinds[0] != want[0] || kinds[1] != want[1] || kinds[2] != want[2] {
 		t.Fatalf("kind order: want %v, got %v", want, kinds)
 	}

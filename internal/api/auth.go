@@ -125,6 +125,11 @@ type authenticator struct {
 	index  rbac.RoleIndex
 	idxErr error
 
+	// ops is every registered operation by ID, built on first use (after
+	// registration), for the agent policy's per-tool layer (#2088).
+	opsOnce sync.Once
+	ops     map[string]*huma.Operation
+
 	// perms is the set of every capability the route surface declares through
 	// gated(), keyed by the ":"-joined token string ("location:read",
 	// "audit:read:admin"). It is the permission universe: the read side (the roles
@@ -234,7 +239,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	// The install's agent policy (#2063): a request under the agent ceiling is
 	// refused an operation whose class is set to never, here in authn so a REST
 	// call with an agent token and a tool call over MCP are refused alike.
-	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID) {
+	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID, roleIDs) {
 		return
 	}
 	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))
@@ -273,7 +278,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 // agentCeilingActions are the actions an agent principal never holds, whatever
 // its roles (#1179): each puts a credential's plaintext in the caller's hands,
 // and an agent's hands are a model's context. reveal (and the copy gated by it)
-// returns a secret's plaintext; enroll mints a node's enrollment token, itself
+// returns a secret's plaintext; enroll mints an outpost's enrollment token, itself
 // a credential. Everything else the person may do, their agent may do (#2047):
 // secret:bind hands a credential to a target without showing it, so an agent
 // binds what its person may bind, audited as the agent's and approved on the

@@ -16,12 +16,12 @@ import (
 )
 
 // IngestBatch is everything one ingest batch writes, landed as one unit
-// (#311, ADR-0311): a node's self-logs, a component's log lines, and the
+// (#311, ADR-0311): an outpost's self-logs, a component's log lines, and the
 // three typed sample lanes, all for Writer.
 //
 // BatchID is the batch's idempotency key: the publishing subject and the
 // batch's Nats-Msg-Id, or its stream sequence when it carries none. A batch
-// id lands once; the same id again (a JetStream redelivery, a node's retry
+// id lands once; the same id again (a JetStream redelivery, an outpost's retry
 // past the stream's duplicate window) writes nothing. Empty lands the batch
 // with no receipt: atomic, but not idempotent.
 //
@@ -29,13 +29,13 @@ import (
 // latest is not written (the guard is the insert's own condition, held per
 // series by a lock, writePropertySamples).
 type IngestBatch struct {
-	BatchID    string
-	Writer     KeyWriter
-	NodeLogs   []NodeLogWrite
-	LogLines   []LogLineWrite
-	Metrics    []MetricSampleWrite
-	Events     []EventWrite
-	Properties []PropertySampleWrite
+	BatchID     string
+	Writer      KeyWriter
+	OutpostLogs []OutpostLogWrite
+	LogLines    []LogLineWrite
+	Metrics     []MetricSampleWrite
+	Events      []EventWrite
+	Properties  []PropertySampleWrite
 	// CommandTargeted is the property type names some command type targets,
 	// as the caller last read them (CommandTargetedProperties), so the
 	// property lane need not read them in the batch's transaction (#1299).
@@ -51,20 +51,20 @@ type IngestBatch struct {
 	// transaction under the fan-out writer. Nil on a batch that names no
 	// bound identity, which then costs exactly what it did before.
 	Fanned *FannedRows
-	// Groups is a node's tick (#1582): each task's rows under its own
+	// Groups is an outpost's tick (#1582): each task's rows under its own
 	// writer, all landed in the batch's one transaction under its one
 	// receipt. A group a row of which is refused (IsRefusedWrite) is dropped
 	// on its own and reported in LandResult.Refused; its siblings land.
 	Groups []IngestGroup
-	// NodeSelf is a node's report of itself (#1625), landed on the node's
-	// platform component under the node-self writer, beside the tick's
+	// OutpostSelf is an outpost's report of itself (#1625), landed on the outpost's
+	// platform component under the outpost-self writer, beside the tick's
 	// groups and dropped on its own like one of them (its refusal carries
-	// NodeSelfIndex). Nil on every batch but a node's tick.
-	NodeSelf *NodeSelfReport
-	// Node is the node whose tick this is, recorded on the receipt so a read
-	// can name a boot's node (#1641). Empty on the push lane.
-	Node string
-	// Ledger is the delivery ledger the node stamped the batch with (#1641),
+	// OutpostSelfIndex). Nil on every batch but an outpost's tick.
+	OutpostSelf *OutpostSelfReport
+	// Outpost is the outpost whose tick this is, recorded on the receipt so a read
+	// can name a boot's outpost (#1641). Empty on the push lane.
+	Outpost string
+	// Ledger is the delivery ledger the outpost stamped the batch with (#1641),
 	// or on the push lane the server's (#1696), recorded on the receipt with
 	// the batch's outcome. Nil from a publisher that stamps none, which
 	// records no outcome.
@@ -155,7 +155,7 @@ func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (LandResult, error) {
 }
 
 // landRetryingDays lands the batch, and on a metric sample whose day has no
-// partition (the roll is late, or a node's clock is far out) makes the days
+// partition (the roll is late, or an outpost's clock is far out) makes the days
 // the batch needs and lands it again, once (#420). A batch that misses again
 // is the ingest's to redeliver.
 func (p *PG) landRetryingDays(ctx context.Context, b IngestBatch, isolate bool, drop map[int]error) (LandResult, error) {
@@ -220,15 +220,15 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 			}
 		}
 		groups := b.groups()
-		var selfNode string
-		if b.NodeSelf != nil && len(b.NodeSelf.Metrics) > 0 {
-			selfNode = b.NodeSelf.Node
+		var selfOutpost string
+		if b.OutpostSelf != nil && len(b.OutpostSelf.Metrics) > 0 {
+			selfOutpost = b.OutpostSelf.Outpost
 		}
-		if err := p.preloadArcs(ctx, bt, groups, b.NodeLogs, selfNode); err != nil {
+		if err := p.preloadArcs(ctx, bt, groups, b.OutpostLogs, selfOutpost); err != nil {
 			return err
 		}
-		if g, refused, ok := b.nodeSelfGroup(bt); refused != nil {
-			res.Refused = append(res.Refused, GroupRefusal{Index: NodeSelfIndex, Err: refused})
+		if g, refused, ok := b.outpostSelfGroup(bt); refused != nil {
+			res.Refused = append(res.Refused, GroupRefusal{Index: OutpostSelfIndex, Err: refused})
 		} else if ok {
 			groups = append(groups, g)
 		}
@@ -276,8 +276,8 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 			}
 			coalesced = n
 		}
-		if len(b.NodeLogs) > 0 {
-			if err := p.writeNodeLogs(ctx, bt, b.NodeLogs); err != nil {
+		if len(b.OutpostLogs) > 0 {
+			if err := p.writeOutpostLogs(ctx, bt, b.OutpostLogs); err != nil {
 				return err
 			}
 		}
@@ -376,7 +376,7 @@ func (p *PG) landIsolated(ctx context.Context, bt *batchTx, live []landGroup, re
 }
 
 // landGroups lands the groups' rows lane by lane, each lane in the statements
-// one group's rows would take: the sets of each row identity (a node's tasks
+// one group's rows would take: the sets of each row identity (an outpost's tasks
 // share one, a conduit's fanned rows another) in one writer call, every log
 // line in one, every unbound identity in one. coalesced is the property rows
 // the transition guard held back as unchanged.
@@ -567,7 +567,7 @@ const pruneReceiptsBatch = 10000
 // before, at most batch per statement (zero takes pruneReceiptsBatch), and
 // returns how many it deleted. A receipt only has to outlive every copy of
 // its batch that could still arrive: the server prunes past a horizon well
-// beyond the stream's redelivery and the node's retry (ADR-0311).
+// beyond the stream's redelivery and the outpost's retry (ADR-0311).
 func (p *PG) PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error) {
 	if batch <= 0 {
 		batch = pruneReceiptsBatch

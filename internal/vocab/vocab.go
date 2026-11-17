@@ -27,12 +27,14 @@ const (
 
 // Retired is a word a term replaced. Pattern is the regexp the docs and
 // console denylist matches it with; Replacement, when set, is the denylist's
-// hint in place of the term's word.
+// hint in place of the term's word. Allow, when set, is the regexp of the
+// senses the word keeps: a match lying wholly inside an Allow match passes.
 type Retired struct {
 	Word        string `yaml:"word"`
 	Pattern     string `yaml:"pattern"`
 	Origin      string `yaml:"origin"`
 	Replacement string `yaml:"replacement"`
+	Allow       string `yaml:"allow"`
 }
 
 // Term is one row of the vocabulary.
@@ -136,6 +138,9 @@ func (v Vocabulary) validate() error {
 			if _, err := regexp.Compile(r.Pattern); err != nil {
 				return fmt.Errorf("vocab: term %q retired %q: %w", t.Word, r.Word, err)
 			}
+			if _, err := regexp.Compile(r.Allow); err != nil {
+				return fmt.Errorf("vocab: term %q retired %q allow: %w", t.Word, r.Word, err)
+			}
 		}
 	}
 	for _, n := range v.NotTerms {
@@ -215,6 +220,7 @@ type BannedWord struct {
 	Pattern     *regexp.Regexp
 	Replacement string
 	Origin      string
+	Allow       *regexp.Regexp // nil when the word keeps no sense
 }
 
 // Banned lists every retired word, in table order.
@@ -226,10 +232,15 @@ func (v Vocabulary) Banned() []BannedWord {
 			if hint == "" {
 				hint = t.Word
 			}
+			var allow *regexp.Regexp
+			if r.Allow != "" {
+				allow = regexp.MustCompile(r.Allow)
+			}
 			out = append(out, BannedWord{
 				Pattern:     regexp.MustCompile(r.Pattern),
 				Replacement: hint,
 				Origin:      r.Origin,
+				Allow:       allow,
 			})
 		}
 	}

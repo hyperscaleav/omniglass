@@ -17,9 +17,9 @@ runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kube
 
 :::note[Partial]
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
-`set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
-JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
-Helm chart. Today one stream and its ingest lanes, one serial lane a partition of the nodes ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
+`set-password`, `seed-dev`, and `outpost run`), the embedded NATS server (in-process `nats-server` with
+JetStream, `internal/cli/server.go`), the `outpost` run mode, the multi-arch container image, and the
+Helm chart. Today one stream and its ingest lanes, one serial lane a partition of the outposts ([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
 do confinement and persistence inline; the
 design fences below mark the parts of this page that are target design, each naming its tracker. See
 [implementation status](/architecture/status/).
@@ -49,13 +49,13 @@ over NATS and the gateway. The roles:
   necessarily its own pod.
 :::
 
-- **node**: collection; runs **at the sites** (outside the cluster) and connects back, plus a central
-  `node` for cloud-API and SaaS sources (`placement: central`, [nodes](/architecture/nodes/)).
+- **outpost**: collection; runs **at the sites** (outside the cluster) and connects back, plus a central
+  `outpost` for cloud-API and SaaS sources (`placement: central`, [outposts](/architecture/outposts/)).
 
 ## Embedded services (single-binary mode)
 
 Until embedded Postgres lands, the one-command way to run omniglass on a laptop is the
-[lab](/guides/lab/): Docker runs Postgres, the server and a node with its simulated fleet as three
+[lab](/guides/lab/): Docker runs Postgres, the server and an outpost with its simulated fleet as three
 containers of one project. It is a place to learn, not the all-in-one deployment this section
 describes: its data is disposable, its login is well known, and its database refuses a real server.
 
@@ -125,7 +125,7 @@ binary: "one Omniglass binary: modular monolith (1..N replicas)" {
   nats: "embedded NATS: JetStream · KV · Object store" { class: key }
 }
 pg: "PostgreSQL: system of record" { class: node; shape: cylinder }
-edge_nodes: "edge nodes (distributed · NATS clients)" { class: node }
+edge_outposts: "edge outposts (distributed · NATS clients)" { class: node }
 ext: "external NATS cluster (optional BYO at scale)" { class: node }
 north -> binary.api: "HTTPS"
 binary.api -> binary.gw
@@ -135,7 +135,7 @@ binary.cdc -> binary.nats: "publish committed changes"
 binary.nats -> binary.wk: "east-west: work + events"
 binary.wk -> binary.gw
 binary.clk -> binary.nats: "schedule fires"
-binary.nats <-> edge_nodes: "South: telemetry up · commands down" { style.stroke-width: 3 }
+binary.nats <-> edge_outposts: "South: telemetry up · commands down" { style.stroke-width: 3 }
 binary.nats -- binary.clk: "KV: config · locks · leader-elect" { style.stroke-dash: 4 }
 binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 ```
@@ -150,11 +150,11 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 - **workers** are **JetStream consumers**: a work-queue stream delivers each message to exactly one
   consumer, so adding replicas adds throughput (NATS is the coordinator,
   [workers](/architecture/workers/)).
-- **edge nodes**: one or many per site, connecting back; adding sites adds nodes
-  ([nodes](/architecture/nodes/)). Within a site, adding a node adds capacity: the server spreads the
-  site's unpinned components across its nodes by expected cost, guarded by each node's measured
-  headroom, and moves a lost node's components to its peers
-  ([load distribution across a site's nodes](/architecture/nodes/#load-distribution-across-a-sites-nodes), #1638).
+- **edge outposts**: one or many per site, connecting back; adding sites adds outposts
+  ([outposts](/architecture/outposts/)). Within a site, adding an outpost adds capacity: the server spreads the
+  site's unpinned components across its outposts by expected cost, guarded by each outpost's measured
+  headroom, and moves a lost outpost's components to its peers
+  ([load distribution across a site's outposts](/architecture/outposts/#load-distribution-across-a-sites-outposts), #1638).
 - **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
   active, failover by re-election. No separate election service.
 - **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
@@ -164,7 +164,7 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   parallel without a second subscriber
   ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
   The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
-  second server exists. The worklist's target design leaves nothing to hand over: a node syncs it endpoint by
+  second server exists. The worklist's target design leaves nothing to hand over: an outpost syncs it endpoint by
   endpoint against a manifest any server can answer (#1586,
   [ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)).
 
@@ -172,16 +172,16 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 
 ## Ingest: one batch per tick
 
-What a node costs the server is set by how many transactions its telemetry makes, not by its sample
-count. Before, a node published one batch per task per tick, and each batch landed in its own
+What an outpost costs the server is set by how many transactions its telemetry makes, not by its sample
+count. Before, an outpost published one batch per task per tick, and each batch landed in its own
 transaction: about twenty statements (begin, receipt, writer lookup, arcs, locks, the database clock,
 the targeted-property read, rules, marks, a property lock and insert, a metric insert, judged, commit,
 plus the task-owner lookup and the endpoint stamp), at about one sample a batch. That is `20 x G`
 statements a tick for `G` tasks, and one receipt row per sample, so the receipt table grew as fast as
 the metric table.
 
-Now a node publishes one batch per tick, a group per task
-([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and it lands in one transaction
+Now an outpost publishes one batch per tick, a group per task
+([outposts](/architecture/outposts/#delivery-a-batch-lands-once)), and it lands in one transaction
 ([storage](/architecture/storage/)) whose cost is a fixed `C1` (about a dozen statements since #1928, the seen stamp among them) plus `R`
 (series the batch carries twice), `J` (judged samples that fire a rule), `T` (settled targeted
 properties) and three per conduit group that carries identified samples. With none of those it is
@@ -189,11 +189,11 @@ the same for one group and for fifty. Before the transaction, the identity bindi
 in the tick resolve in one read, however many conduits its groups name. A refused group costs its siblings nothing
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
-| Corporate at 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
+| Corporate at 1,000 systems, the busiest outpost (18 outposts, about 3,000 tasks) | Before | After (target) |
 | --- | --- | --- |
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
-| Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
+| Batches a second, all outposts | one per task per tick | 18 or fewer (one flush a second per outpost) |
 | Receipts a day | grows with the sample count | under 1.2 GiB ([ADR-1699](/architecture/decisions/#adr-1699-the-receipt-packs-its-accounting-and-its-target-is-12-gib-a-day)) |
 | Ingest lag p99 | | under 5 s |
 
@@ -208,12 +208,12 @@ the `corporate` scenario on the ladder of 20 (the smoke run), 300, 1,000 and 3,0
 fleet is the showcase, never a measurement basis
 ([which fleet each level measures](/guides/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the
 single consumer is the ceiling: the stream is a work queue with one message in flight, so the handler's
-share of the wall clock is the lane's utilisation, and a lag that sits at the node's one-second spool
+share of the wall clock is the lane's utilisation, and a lag that sits at the outpost's one-second spool
 flush while the lane is mostly idle is not a consumer bottleneck
 ([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
 
 A faster lane is only a win if it still lands everything, so the same run reads every telemetry
-kind's **loss ratio** across the node hop and the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
+kind's **loss ratio** across the outpost hop and the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
 batch carries on its receipt
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
 delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
@@ -250,9 +250,9 @@ not a lab run. Read them together:
   the server has, while the lane is not saturated: the server is starved, not the design. Scale up (more
   cores, a larger pool, a faster database) before adding a replica that would share the same database.
 - **The lag is not the server's.** `ingest-lag` high while `ingest-lane-busy` is low and the backlog
-  near 0: the samples arrive late (a node's spool holding through an outage, a slow WAN) or the node's
-  clock is behind the server's. The lag is commit time minus the node's `ts`, two clocks
-  subtracted, so a skew reads as lag and a negative lag is a node clock ahead; fix the clock, not the
+  near 0: the samples arrive late (an outpost's spool holding through an outage, a slow WAN) or the outpost's
+  clock is behind the server's. The lag is commit time minus the outpost's `ts`, two clocks
+  subtracted, so a skew reads as lag and a negative lag is an outpost clock ahead; fix the clock, not the
   server (#419).
 - **A tick is the ceiling.** `calc-pending-depth` growing while `calc-pass-duration` nears its second,
   or `outbox-due-age` growing, says that tick, not ingest, has fallen behind.
@@ -261,14 +261,14 @@ The seeded `ingest-lag-high` rule opens a warning alarm on the server's componen
 `ingest-lag-max` holds over 30 s for 2 minutes, the point at which a reader of any panel is looking at
 data at least half a minute old.
 
-## What a driver costs a node
+## What a driver costs an outpost
 
-A node's size is the sum of what its tasks cost it, and that cost differs by driver: a poll that parses
+An outpost's size is the sum of what its tasks cost it, and that cost differs by driver: a poll that parses
 a large JSON answer, one that walks an SNMP table, and one that asks a held session a short question do
-different work. Each shipped driver's cost per task on one node is measured by the lab's
-[driver cost sweep](/guides/lab/#measuring-each-drivers-cost) on a node with no simulator in its
+different work. Each shipped driver's cost per task on one outpost is measured by the lab's
+[driver cost sweep](/guides/lab/#measuring-each-drivers-cost) on an outpost with no simulator in its
 process, and rendered from the sweep's committed result by `make gen`. The first table rolls the drivers
-up by the unit a node is sized in, a **kind** of work (the transport a driver speaks) at a poll
+up by the unit an outpost is sized in, a **kind** of work (the transport a driver speaks) at a poll
 **interval**; the second is each driver on its own.
 
 - **Kind and interval** key the first table. A run of a poll costs what its kind costs, whatever its
@@ -278,13 +278,13 @@ up by the unit a node is sized in, a **kind** of work (the transport a driver sp
   that poll at it. Each figure is the median across the kind's measured drivers, with their range in
   parentheses where more than one measured it, since a driver that parses a large answer costs more per
   run than one that reads a short one.
-- **Memory per endpoint** is what one endpoint on the driver holds on the node: its memory per task
+- **Memory per endpoint** is what one endpoint on the driver holds on the outpost: its memory per task
   times the driver's polls, one task each. For a session transport such as `tcp` this is the held
   session, near-constant whatever the driver asks of it. It includes the endpoint's share of the
-  node's probes, which grow with endpoints as the polls do.
-- To size a node, add the memory per endpoint over its endpoints, and the CPU per run over the interval
-  over its tasks: a node of N endpoints on a driver of a kind holds N times the kind's memory per
-  endpoint beyond the idle node, and spends N times the sum, over the driver's polls, of the kind's
+  outpost's probes, which grow with endpoints as the polls do.
+- To size an outpost, add the memory per endpoint over its endpoints, and the CPU per run over the interval
+  over its tasks: an outpost of N endpoints on a driver of a kind holds N times the kind's memory per
+  endpoint beyond the idle outpost, and spends N times the sum, over the driver's polls, of the kind's
   millicores per task at each poll's interval.
 - A kind's CPU per run is measured across all of a driver's polls at once, weighted by how often each
   runs, so a heavy poll that runs rarely beside light ones that run often is costed at nearer the light
@@ -293,10 +293,10 @@ up by the unit a node is sized in, a **kind** of work (the transport a driver sp
 
 In the driver table:
 
-- **Memory per task** and **millicores per task** are slopes: what the node's container gains in working
-  set and CPU for each task of the driver it adds. Multiply by a node's task count for that driver,
-  and add across its drivers, to read what its worklist costs beyond the idle node. **Warm memory** is
-  paid once rather than per task: the jump a node's working set takes when its first tasks of the
+- **Memory per task** and **millicores per task** are slopes: what the outpost's container gains in working
+  set and CPU for each task of the driver it adds. Multiply by an outpost's task count for that driver,
+  and add across its drivers, to read what its worklist costs beyond the idle outpost. **Warm memory** is
+  paid once rather than per task: the jump an outpost's working set takes when its first tasks of the
   driver land, before the slope.
 - **Step** is how many tasks the sweep added at a time for that driver. A cheap driver's memory rise
   hides inside the heap's own swing at a small step, so the sweep grows the step for such a driver
@@ -305,9 +305,9 @@ In the driver table:
   polls compare per poll. A driver with polls at more than one interval runs them all on every
   component the sweep adds, so its CPU per run is the mean over its runs, weighted by how often each
   poll runs.
-- **Thread CPU per run** is the node's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
+- **Thread CPU per run** is the outpost's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
   it over the cgroup's figure: the part of a run the polling thread does itself
-  ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). A low share is a transport
+  ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)). A low share is a transport
   that does its I/O on another goroutine, not a cheap driver.
 
 <DriverCostSource />
@@ -318,15 +318,15 @@ In the driver table:
 
 The figures hold for the host and build named above the tables and for the simulated devices, whose answers
 are smaller and quicker than many real ones; read them as the relative cost of drivers and the order
-of a node's footprint, not a promise for a given site. A kind with no swept driver has a row with no
+of an outpost's footprint, not a promise for a given site. A kind with no swept driver has a row with no
 figures, and a shipped driver the sweep has not measured reads as such, with why, and so does a figure the sweep could not fit when the driver's other one stands. A driver no shipped product defaults to (a session or listener transport an endpoint picks
 instead) has no product to sweep on; the per-kind cost card (#1943) is where a held session or a bound
 listener is costed.
 
-One limit on a node's size is not its cost: the server sends a node its worklist as one bus reply, and
-a reply over the bus's maximum payload after compression is refused, leaving the node on its last
-worklist. At the default 1 MiB that is about 18,000 tasks on one node; syncing the worklist endpoint
-by endpoint (#1586) removes the ceiling. Split a site's devices across nodes well before it.
+One limit on an outpost's size is not its cost: the server sends an outpost its worklist as one bus reply, and
+a reply over the bus's maximum payload after compression is refused, leaving the outpost on its last
+worklist. At the default 1 MiB that is about 18,000 tasks on one outpost; syncing the worklist endpoint
+by endpoint (#1586) removes the ceiling. Split a site's devices across outposts well before it.
 
 ## Platform configuration
 
@@ -366,7 +366,7 @@ fast-follow; `retention` has landed with sample retention ([ADR-0417](/architect
 Replicas are the **HA** story: the server and worker tiers have no single point of failure, the
 singletons re-elect on the NATS KV lock, Postgres HA is the database's concern (CNPG, a managed
 cluster), NATS HA is the JetStream cluster's, and the **edge survives a WAN outage on its own** (the
-bounded buffer plus the durable command queue, [nodes](/architecture/nodes/)). Vertical scale is the
+bounded buffer plus the durable command queue, [outposts](/architecture/outposts/)). Vertical scale is the
 simple first lever; horizontal removes the ceiling.
 
 :::

@@ -25,7 +25,7 @@ import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { DRIVERS_KEY, listDrivers, type Driver } from "../lib/drivers";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { NODES_KEY, listNodes } from "../lib/nodes";
+import { OUTPOSTS_KEY, listOutposts } from "../lib/outposts";
 import { bindSelectValue } from "../lib/selectvalue";
 import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
@@ -35,7 +35,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // The endpoint blades, salvaged from the retired standalone page and folded
 // onto the component detail's shared blade stack (an endpoint belongs to its
 // component, so it surfaces as a panel there, not a top-level tab). Two kinds:
-//   endpoint         the read -> edit -> save detail blade (edit node placement and
+//   endpoint         the read -> edit -> save detail blade (edit outpost placement and
 //                    target, Delete), addressed by the endpoint's surrogate id.
 //   endpoint-create   the new-endpoint Drawer body, addressed by the OWNING
 //                    component's name (an endpoint added from a component always
@@ -51,24 +51,24 @@ function useEndpointById(id: string): () => Endpoint | null {
   return () => endpoints.data?.find((x) => x.id === id) ?? null;
 }
 
-// A node-placement select shared by the create and edit forms: the enrolled nodes
-// plus an unassigned option. The value is the node's name (its address).
-function NodeSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
-  // The enrolled-node list answers on its own schedule, and the edit face is
+// An outpost-placement select shared by the create and edit forms: the enrolled outposts
+// plus an unassigned option. The value is the outpost's name (its address).
+function OutpostSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
+  const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
+  // The enrolled-outpost list answers on its own schedule, and the edit face is
   // routinely on screen first, so the control takes its value through the shared
   // binder rather than a value= prop (lib/selectvalue.ts, #772).
   return (
-    <select id={props.id} ref={bindSelectValue(() => props.value, () => nodes.data)} class="select select-bordered w-full" disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
+    <select id={props.id} ref={bindSelectValue(() => props.value, () => outposts.data)} class="select select-bordered w-full" disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
       <Show when={props.allowNone ?? true}><option value="">Unassigned</option></Show>
-      <For each={nodes.data}>{(n) => <option value={n.name}>{n.name}</option>}</For>
+      <For each={outposts.data}>{(n) => <option value={n.name}>{n.name}</option>}</For>
     </select>
   );
 }
 
 // endpointBlade renders an endpoint on the shared blade stack (same chrome and
 // footer action rail as the identity blades): read-only facts, a pencil into an
-// inline edit of the mutable fields (node placement, target), and Delete as the one
+// inline edit of the mutable fields (outpost placement, target), and Delete as the one
 // destructive action.
 export const endpointBlade: BladeDef = {
   Title: (p) => <EndpointBladeTitle id={p.id} />,
@@ -86,7 +86,7 @@ function EndpointBladeTitle(props: { id: string }): JSX.Element {
 }
 
 // EndpointBladeBody re-derives the endpoint from the live query by id (not a row
-// snapshot), so an edit reflects after the invalidate. Only the node placement and
+// snapshot), so an edit reflects after the invalidate. Only the outpost placement and
 // the probed target are mutable (name, type, and owning component are fixed at
 // creation); the edit slot seeds its inputs each time edit begins, and a Cancel
 // reverts by leaving edit (the next begin re-seeds).
@@ -96,7 +96,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   const blades = useBlades();
   const edit = useBladeEdit();
   const i = useEndpointById(props.id);
-  const [node, setNode] = createSignal("");
+  const [outpost, setOutpost] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [label, setLabel] = createSignal("");
   // A driver-attached endpoint's inputs edit in place (#1061): the host, the
@@ -144,7 +144,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   // on entering edit and again on reseed (#748).
   const seedDrafts = () => {
     const iface = i();
-    setNode(iface?.node ?? "");
+    setOutpost(iface?.outpost ?? "");
     setTarget(iface ? endpointTarget(iface) : "");
     // The RAW column, never entityLabel: seeding the editor with the fallback
     // would turn "no label" into a label the operator never typed.
@@ -172,10 +172,10 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function save() {
     const iface = i();
     if (!iface) return;
-    // Patch only the changed mutable fields. A blank node or target selection is left
-    // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
+    // Patch only the changed mutable fields. A blank outpost or target selection is left
+    // unchanged: the API has no clear-placement, so an empty outpost would FK-fault (422).
     const patch: UpdateEndpoint = {};
-    if (node() && node() !== (iface.node ?? "")) patch.node = node();
+    if (outpost() && outpost() !== (iface.outpost ?? "")) patch.outpost = outpost();
     // A driver-attached endpoint's target derives from its host and port
     // inputs (edited below, #1061), so a raw target patch is a bare probe
     // endpoint's alone.
@@ -229,7 +229,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
               <section data-testid="endpoint-session" class="flex flex-col gap-2">
                 <Eyebrow
                   label="Connection"
-                  hint="The node checks an endpoint bottom up: a ping (informational only), the transport answering (the gate), then the login. A held session's state sits beside the ladder. Hover a rung for what it checks and what it says now."
+                  hint="The outpost checks an endpoint bottom up: a ping (informational only), the transport answering (the gate), then the login. A held session's state sits beside the ladder. Hover a rung for what it checks and what it says now."
                 />
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <SessionPill iface={h()} now={now()} />
@@ -255,7 +255,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                 <KVStacked bind="name" value={<span class="font-data">{iface().name}</span>} />
                 <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().transport}</span>} />
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
-                <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
+                <KVStacked label="Outpost" value={iface().outpost ? <span class="font-data">{iface().outpost}</span> : <span class="text-base-content/40">unassigned</span>} />
                 <KVStacked label="Target" value={endpointTarget(iface()) ? <span class="font-data">{endpointTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
                 <Show when={iface().driver}>
                   <KVStacked label="Driver" value={<span class="font-data">{iface().driver}</span>} />
@@ -264,14 +264,14 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
             }
           >
             <div class="flex flex-col gap-3">
-              <p class="text-xs text-base-content/50">Set the label an operator reads, reassign the node placement, or change where the endpoint connects. The name, type, and component are fixed after creation.</p>
+              <p class="text-xs text-base-content/50">Set the label an operator reads, reassign the outpost placement, or change where the endpoint connects. The name, type, and component are fixed after creation.</p>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-iface-label">Label</label>
                 <input id="edit-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} />
               </div>
               <div>
-                <label class="eyebrow mb-1.5 block" for="edit-iface-node">Node</label>
-                <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} />
+                <label class="eyebrow mb-1.5 block" for="edit-iface-outpost">Outpost</label>
+                <OutpostSelect id="edit-iface-outpost" value={outpost()} onChange={setOutpost} />
               </div>
               {/* A driver-attached endpoint's target is DERIVED from its inputs
                   (its host and port), so it edits through them, in place
@@ -346,7 +346,7 @@ function EndpointCreateBody(props: { component: string }): JSX.Element {
 }
 
 // CreateEndpointForm is the new-endpoint form: transport or driver attach, owning
-// component (or server-hosted), node placement, and the probed target. When
+// component (or server-hosted), outpost placement, and the probed target. When
 // `component` is set the endpoint always belongs to it, so the form pre-sets that
 // component and hides the picker. On success it invalidates the list and hands the
 // created endpoint to onCreated, which opens its detail blade.
@@ -365,7 +365,7 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
   // The transports come from the code registry the server ships (GET
   // /transports), so the picker can never drift from what a create refuses;
   // only the built ones are offered, since an unbuilt transport would author
-  // a check no node can run yet.
+  // a check no outpost can run yet.
   const transports = useQuery(() => ({ queryKey: TRANSPORTS_KEY, queryFn: listTransports }));
   const builtTransports = () => (transports.data ?? []).filter((t) => t.built);
   // The attachable drivers: the registry rows that carry a spec (#813). A
@@ -379,7 +379,7 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
   const [type, setType] = createSignal<string>("icmp");
   const [label, setLabel] = createSignal("");
   const [component, setComponent] = createSignal(props.component ?? "");
-  const [node, setNode] = createSignal("");
+  const [outpost, setOutpost] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -416,13 +416,13 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
               inputs: supplied,
               label: label().trim() || undefined,
               component: component() || undefined,
-              node: node() || undefined,
+              outpost: outpost() || undefined,
             }
           : {
               transport: type(),
               label: label().trim() || undefined,
               component: component() || undefined,
-              node: node() || undefined,
+              outpost: outpost() || undefined,
               params: target().trim() ? { target: target().trim() } : undefined,
             },
       );
@@ -448,7 +448,7 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
       <div role="tablist" class="tabs tabs-border tabs-sm">
         {/* Probe first: a bare reachability check needs no driver. Attach
             derives the endpoint from a driver's spec (#813), whose poll
-            functions the node then collects over the transport (#814). */}
+            functions the outpost then collects over the transport (#814). */}
         <button type="button" role="tab" aria-selected={mode() === "probe" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
         <button type="button" role="tab" aria-selected={mode() === "attach" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
       </div>
@@ -518,8 +518,8 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
         </div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-node">Node</label>
-        <NodeSelect id="new-iface-node" value={node()} onChange={setNode} disabled={busy()} />
+        <label class="eyebrow mb-1.5 block" for="new-iface-outpost">Outpost</label>
+        <OutpostSelect id="new-iface-outpost" value={outpost()} onChange={setOutpost} disabled={busy()} />
       </div>
       <Show when={mode() === "probe"}>
         <div>

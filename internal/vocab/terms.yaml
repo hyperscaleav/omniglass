@@ -137,24 +137,35 @@ terms:
     audience: admin
     collection: transports
     permission: endpoint
-  - word: node
-    plural: nodes
+  - word: outpost
+    plural: outposts
     definition: A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
     audience: admin
-    collection: nodes
-    schema: NodeBody
-    permission: node
-    nav: /nodes
+    collection: outposts
+    schema: OutpostBody
+    permission: outpost
+    nav: /outposts
+    retired:
+      # Banned as the bare word and every identifier spelling it (node_id, OMNIGLASS_NODE_,
+      # /nodes, node:read, omniglass node), since the collector had too many phrasings to list.
+      # Allow carries the senses the word keeps: a node of a tree, the DOM or a query plan, the Node.js
+      # runtime (its node: imports, node_modules, a node script.mjs invocation), the explore
+      # ?node= parameter, the D2 shape class the diagrams share, and a grant on this node only.
+      - word: node
+        pattern: '(?i)(?:\b|_)nodes?(?:\b|_)'
+        origin: ADR-2031
+        replacement: outpost (the collecting process; OMNIGLASS_OUTPOST_, /outposts, outpost:read, omniglass outpost)
+        allow: '(?i)\bnode_modules\b|\bnode:(?:fs|path|url|os|crypto|child_process|test|assert|util|https?|net|stream|events|readline|process|buffer|zlib|module|timers|worker_threads|perf_hooks)\b|[?&]node=|\bnode\.?js\b|\bnode (?:--?[\w-]+(?:=\S+)? )*\S+\.(?:m?js|cjs|ts)\b|\bclass: node\b|\bnode: \{ style\b|\b(?:tree|leaf|root|child|parent|ancestor|descendant|sibling|dom|text|deepest|interior|ast|jsx|forest|element|graph|focusable|scan|plan) nodes?\b|\bthis node only\b'
   - word: unclaimed source
     plural: unclaimed sources
-    definition: A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored.
+    definition: A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.
     audience: admin
     collection: unclaimed-sources
     schema: UnclaimedSourceBody
-    permission: node
+    permission: outpost
   - word: task
     plural: tasks
-    definition: A node's unit of collection, a poll it runs or a listener it holds on one endpoint.
+    definition: An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint.
     audience: admin
     collection: tasks
     schema: TaskBody
@@ -415,7 +426,7 @@ not_terms:
   - collection: expressions
     reason: the expression engine's evaluate and explain verbs
   - collection: telemetry
-    reason: the ingest path a node writes samples through
+    reason: the ingest path an outpost writes samples through
   - collection: webhooks
     reason: inbound webhook delivery, a mechanism
   - collection: simulation

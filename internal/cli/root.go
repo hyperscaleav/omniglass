@@ -1,6 +1,6 @@
 // Package cli is the single binary's command surface: the run modes (server,
 // migrate) for the walking skeleton. Operator/dev subcommands (thin API
-// clients, never direct Postgres) and the node run mode arrive in later slices.
+// clients, never direct Postgres) and the outpost run mode arrive in later slices.
 package cli
 
 import (
@@ -42,13 +42,13 @@ func newRoot(version, imageDigest string) *cobra.Command {
 	addClientFlags(root)
 	root.AddCommand(generatedCommands()...)
 
-	// The edge run mode hangs off the generated `node` group rather than the
-	// root, so `node run` sits beside `node list`. Attached after generation
-	// because the group is generated; if the API ever stops exposing node
-	// routes the mode would vanish silently, which TestNodeRunIsReachable
+	// The edge run mode hangs off the generated `outpost` group rather than the
+	// root, so `outpost run` sits beside `outpost list`. Attached after generation
+	// because the group is generated; if the API ever stops exposing outpost
+	// routes the mode would vanish silently, which TestOutpostRunIsReachable
 	// catches.
-	if g, _, err := root.Find([]string{"node"}); err == nil && g != root {
-		g.AddCommand(newNodeRunCmd())
+	if g, _, err := root.Find([]string{"outpost"}); err == nil && g != root {
+		g.AddCommand(newOutpostRunCmd())
 	}
 
 	return root

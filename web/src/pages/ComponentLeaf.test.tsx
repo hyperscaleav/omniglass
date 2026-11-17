@@ -10,7 +10,7 @@ import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { componentAlarmsReadKey } from "../lib/alarms";
 import { effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetricsKey } from "../lib/component_metrics";
-import { nodeKey, type Node } from "../lib/nodes";
+import { outpostKey, type Outpost } from "../lib/outposts";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -34,7 +34,7 @@ vi.mock("../lib/alarms", async (orig) => {
 // The component leaf (#637): direct arrival renders the breadcrumb from the
 // ancestor chain, memberships list with the primary marked, and the
 // collection card states the distinction plainly: a stale sample under a
-// healthy node blames the component or the path, never collection.
+// healthy outpost blames the component or the path, never collection.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -64,27 +64,27 @@ const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOStrin
 const reach: Reachability = {
   component: "videobar-1",
   endpoints: [
-    // A stale sample: last verdict long ago, but the node below is alive.
-    { endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
+    // A stale sample: last verdict long ago, but the outpost below is alive.
+    { endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
       { layer: "ping", check: "icmp-reachable", value: "up", ts: iso(600) },
       { layer: "port", check: "tcp-open", value: "open", ts: iso(600) },
     ], history: [] },
   ],
 } as unknown as Reachability;
 
-const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
+const outposts: Outpost[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Outpost];
 
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[]; view?: FleetView; alarmsVerdict?: string }, components?: Component[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; outposts?: Outpost[]; commands?: Command[]; metrics?: unknown[]; view?: FleetView; alarmsVerdict?: string }, components?: Component[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], seed?.view ?? view);
   qc.setQueryData([...COMPONENTS_KEY], components ?? [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
-  for (const n of seed?.nodes ?? nodes) qc.setQueryData([...nodeKey(n.name)], n);
+  for (const n of seed?.outposts ?? outposts) qc.setQueryData([...outpostKey(n.name)], n);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
@@ -193,7 +193,7 @@ describe("the component leaf", () => {
     expect(within(card).queryByText(/Location follows/)).toBeNull();
   });
 
-  it("distinguishes a stale sample under a healthy node from an offline node", () => {
+  it("distinguishes a stale sample under a healthy outpost from an offline outpost", () => {
     mount();
     const chip = screen.getByTestId("collection-ssh");
     expect(chip.textContent).toContain("check the component or the path");
@@ -246,7 +246,7 @@ describe("the component leaf", () => {
 });
 
 // A device nothing has ever collected from reads the same on every surface
-// (#1454): an unknown verdict, no node offline when no node exists, and no
+// (#1454): an unknown verdict, no outpost offline when no outpost exists, and no
 // ladder chip standing in for a probe that never ran. The outline reads the
 // same device as a verdict-less row, which the badge words as unknown.
 describe("a device nothing has collected from (#1454)", () => {
@@ -255,7 +255,7 @@ describe("a device nothing has collected from (#1454)", () => {
     component: "videobar-1",
     endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: null, layers: [], history: [] }],
   } as unknown as Reachability;
-  const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, nodes: [], view: looseView, alarmsVerdict: "unknown" });
+  const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, outposts: [], view: looseView, alarmsVerdict: "unknown" });
 
   it("wears an unknown badge, not healthy, as the outline does", () => {
     mountNever();
@@ -264,11 +264,11 @@ describe("a device nothing has collected from (#1454)", () => {
     expect(within(header).queryByText("healthy")).toBeNull();
   });
 
-  it("says no node collects it, never that a node is offline", () => {
+  it("says no outpost collects it, never that an outpost is offline", () => {
     mountNever();
     const chip = screen.getByTestId("collection-icmp");
-    expect(chip.textContent).toBe("no node collecting it");
-    expect(screen.queryByText("node offline")).toBeNull();
+    expect(chip.textContent).toBe("no outpost collecting it");
+    expect(screen.queryByText("outpost offline")).toBeNull();
   });
 
   it("shows no reachability rung without a stored verdict", () => {
@@ -281,7 +281,7 @@ describe("a device nothing has collected from (#1454)", () => {
   it("shows the rung once a probe has answered", () => {
     mount(undefined, [], bar, me, [], {
       reach: { ...neverProbed, endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: { value: "up", ts: iso(5) }, last_seen: iso(5), layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(5) }], history: [] }] } as unknown as Reachability,
-      nodes: [], view: looseView, alarmsVerdict: "healthy",
+      outposts: [], view: looseView, alarmsVerdict: "healthy",
     });
     expect(within(screen.getByTestId("leaf-collection")).getByText("reachable")).toBeTruthy();
   });
@@ -439,7 +439,7 @@ describe("the leaf's dispatch facts (#786)", () => {
   const rejectedReach = {
     component: "videobar-1",
     endpoints: [{
-      id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", node: "edge-1", last_seen: iso(2),
+      id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", outpost: "edge-1", last_seen: iso(2),
       verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
       session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
@@ -460,7 +460,7 @@ describe("the leaf's dispatch facts (#786)", () => {
   const probeGatedReach = {
     component: "videobar-1",
     endpoints: [{
-      id: uuidFor("cf-ep-snmp"), endpoint: "snmp", transport: "snmp", node: "edge-1", last_seen: iso(2),
+      id: uuidFor("cf-ep-snmp"), endpoint: "snmp", transport: "snmp", outpost: "edge-1", last_seen: iso(2),
       verdict: { value: "down", ts: iso(60) }, responsive: { value: "down", ts: iso(60) }, authenticated: { value: "no", ts: iso(60) },
       rejection: { rung: "authenticated", class: "auth", ts: iso(60), reason: "auth: the agent answered authorizationError for the community" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
@@ -629,7 +629,7 @@ describe("the component leaf refreshes (#934)", () => {
       const url = (input as Request).url;
       gets.push(new URL(url).pathname);
       if (url.includes("/reachability")) {
-        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
+        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
       }
       if (url.includes("/metrics")) {
         return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
@@ -638,8 +638,8 @@ describe("the component leaf refreshes (#934)", () => {
         return json({ verdict: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
       }
       if (url.endsWith("/views/fleet")) return json(view);
-      if (url.endsWith("/nodes")) return json({ nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
-      if (url.endsWith("/nodes/edge-1")) return json({ name: "edge-1", enrolled: true, last_heartbeat_at: later });
+      if (url.endsWith("/outposts")) return json({ outposts: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
+      if (url.endsWith("/outposts/edge-1")) return json({ name: "edge-1", enrolled: true, last_heartbeat_at: later });
       return json({ simulated: false });
     });
     mount();
@@ -656,13 +656,13 @@ describe("the component leaf refreshes (#934)", () => {
     expect(screen.getByTestId("leaf-header").textContent).toContain("degraded");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each read polled, as one request, not one per endpoint or per series.
-    for (const p of ["/reachability", "/metrics", "/alarms", "/nodes/edge-1"]) {
+    for (const p of ["/reachability", "/metrics", "/alarms", "/outposts/edge-1"]) {
       expect(count(p)).toBeGreaterThanOrEqual(1);
       expect(count(p)).toBeLessThanOrEqual(2);
     }
-    // Nothing the tab polls grows with the fleet: no fleet view, no node list.
+    // Nothing the tab polls grows with the fleet: no fleet view, no outpost list.
     expect(count("/views/fleet")).toBe(0);
-    expect(count("/nodes")).toBe(0);
+    expect(count("/outposts")).toBe(0);
   });
 
   it("holds the poll while the tab is hidden", async () => {
@@ -683,20 +683,20 @@ describe("the component leaf refreshes (#934)", () => {
   });
 
   // A poll that returns the same data changes nothing TanStack can see, so
-  // the card's ages must move with a clock of their own: a node that dies
+  // the card's ages must move with a clock of their own: an outpost that dies
   // leaves the last answer standing, and only time says it is old.
   it("ages the card with the clock when the polled data stays the same", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     const t0 = new Date().toISOString();
-    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
+    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
     // Every read stays in flight: nothing the queries hold ever changes, so
     // only a clock can move the card.
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
     // Seeded with exactly what every poll returns, so no read ever changes.
-    mount(undefined, undefined, undefined, undefined, [], { reach: frozen as unknown as Reachability, nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: t0, tags: {} } as Node] });
+    mount(undefined, undefined, undefined, undefined, [], { reach: frozen as unknown as Reachability, outposts: [{ name: "edge-1", enrolled: true, last_heartbeat_at: t0, tags: {} } as Outpost] });
     expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
     await vi.advanceTimersByTimeAsync(200_000);
-    expect(screen.getByTestId("collection-ssh").textContent).toBe("node offline");
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("outpost offline");
   });
 });
 

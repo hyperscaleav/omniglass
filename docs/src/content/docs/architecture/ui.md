@@ -25,13 +25,13 @@ location from `allowed_parent_types`, never from a type's name (ADR-0137). **Pla
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
 verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
 figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
-alarm on its keys) and a row per node of its platform figures, each row opening onto the node's
+alarm on its keys) and a row per outpost of its platform figures, each row opening onto the outpost's
 platform component. Its panels and columns are the groups the view returns, named with each key's
 catalog description, so the page holds no key list. Above the table it draws **where work is lost**
 (#1646): the hops the view returns, each read from the same three delivery keys with one loss rule,
 and a hop's explainer naming its keys and its components (`components/PipelineFlow.tsx`). With a
 simulator connected the page gains a closed-loop section (#1647, `GET /views/platform/simulation`):
-each node's hops as loss ratios over a sliding window, with impaired, restarted and warming-up
+each outpost's hops as loss ratios over a sliding window, with impaired, restarted and warming-up
 readings, its protocols and its simulated devices. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
@@ -208,7 +208,7 @@ Two layers, deliberately decoupled:
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
    door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Nodes, Values (variables, secrets, config, files),
+   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
    Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
@@ -283,23 +283,23 @@ interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
-outline of locations. **Nodes**, the collection daemons, are infrastructure rather than fleet
+outline of locations. **Outposts**, the collection daemons, are infrastructure rather than fleet
 entities, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
-`node:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
-panel on a component, a task a panel on a node, facets of the owning entity's detail page.
+`outpost:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
+panel on a component, a task a panel on an outpost, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, Groups, Audit, Nodes, Status (the Platform
+Admin is the renamed Settings group: Users, Roles, Groups, Audit, Outposts, Status (the Platform
 health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
-here behind the same `node:read` gate as Nodes, whose rows it reads), plus the live Settings leaf, the
+here behind the same `outpost:read` gate as Outposts, whose rows it reads), plus the live Settings leaf, the
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
 alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
 longer title.
 
 **Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
 placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
-`open_alarms` counts the alarms open on the components the caller may read), Collectors (the node
-list, shown to a caller who can read nodes) and Platform (the platform system's verdict and the
-nodes not up, same gate). Locations, Systems and Collectors open their lists; Open alarms is a plain
+`open_alarms` counts the alarms open on the components the caller may read), Outposts (the outpost
+list, shown to a caller who can read outposts) and Platform (the platform system's verdict and the
+outposts not up, same gate). Locations, Systems and Outposts open their lists; Open alarms is a plain
 figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
 permission it needs), never a dash.
 

@@ -28,8 +28,8 @@ Work out whether a component's alarm is real, what caused it, and what the opera
 - Arguments:
   - `component` (required): The component carrying the alarm, by name
   - `alarm` (optional): The alarm to triage, by its rule or message, when the component has more than one
-- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`list-endpoints`](/reference/mcp/#list-endpoints) (`endpoint:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`)
-- Permissions: `component:read`, `endpoint:read`, `node:read`, `endpoint:run`, `driver:read`, `command:read`, `command:issue`
+- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`list-endpoints`](/reference/mcp/#list-endpoints) (`endpoint:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-outpost`](/reference/mcp/#get-outpost) (`outpost:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`)
+- Permissions: `component:read`, `endpoint:read`, `outpost:read`, `endpoint:run`, `driver:read`, `command:read`, `command:issue`
 
 ### Triage an alarm
 
@@ -48,10 +48,10 @@ Say which alarm you are triaging, when it was raised, and its severity.
 #### 2. Is the component reachable?
 
 Read [`get-component-reachability`](/reference/mcp/#get-component-reachability). An unreachable component explains
-most alarms on it at once: the cause is the path to it (the node, the network,
+most alarms on it at once: the cause is the path to it (the outpost, the network,
 the endpoint), not the thing the alarm names. If it is unreachable, read the
 endpoint it is polled through with [`list-endpoints`](/reference/mcp/#list-endpoints) and [`get-endpoint`](/reference/mcp/#get-endpoint),
-and the node that polls it with [`get-node`](/reference/mcp/#get-node).
+and the outpost that polls it with [`get-outpost`](/reference/mcp/#get-outpost).
 
 #### 3. Find what changed
 
@@ -100,8 +100,8 @@ Diagnose a component that is misbehaving, from whether omniglass can reach it to
 - Arguments:
   - `component` (required): The component to troubleshoot, by name
   - `symptom` (optional): What the operator saw, in their words
-- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`get-system-health`](/reference/mcp/#get-system-health) (`system:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-node`](/reference/mcp/#get-node) (`node:read`), [`list-node-logs`](/reference/mcp/#list-node-logs) (`node:read`), [`list-component-properties`](/reference/mcp/#list-component-properties) (`component:read`), [`list-component-metrics`](/reference/mcp/#list-component-metrics) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`)
-- Permissions: `component:read`, `system:read`, `endpoint:read`, `node:read`, `endpoint:run`, `command:issue`, `driver:read`, `command:read`
+- Tools: [`get-component`](/reference/mcp/#get-component) (`component:read`), [`get-system-health`](/reference/mcp/#get-system-health) (`system:read`), [`get-component-reachability`](/reference/mcp/#get-component-reachability) (`component:read`), [`get-endpoint`](/reference/mcp/#get-endpoint) (`endpoint:read`), [`get-outpost`](/reference/mcp/#get-outpost) (`outpost:read`), [`list-outpost-logs`](/reference/mcp/#list-outpost-logs) (`outpost:read`), [`list-component-properties`](/reference/mcp/#list-component-properties) (`component:read`), [`list-component-metrics`](/reference/mcp/#list-component-metrics) (`component:read`), [`list-component-property-series`](/reference/mcp/#list-component-property-series) (`component:read`), [`list-component-metric-series`](/reference/mcp/#list-component-metric-series) (`component:read`), [`list-component-alarms`](/reference/mcp/#list-component-alarms) (`component:read`), [`list-component-events`](/reference/mcp/#list-component-events) (`component:read`), [`list-component-logs`](/reference/mcp/#list-component-logs) (`component:read`), [`list-component-dependencies`](/reference/mcp/#list-component-dependencies) (`component:read`), [`run-endpoint-poll`](/reference/mcp/#run-endpoint-poll) (`endpoint:run`), [`issue-component-command`](/reference/mcp/#issue-component-command) (`command:issue`), [`get-driver`](/reference/mcp/#get-driver) (`driver:read`), [`list-component-commands`](/reference/mcp/#list-component-commands) (`command:read`)
+- Permissions: `component:read`, `system:read`, `endpoint:read`, `outpost:read`, `endpoint:run`, `command:issue`, `driver:read`, `command:read`
 
 ### Troubleshoot a component
 
@@ -123,9 +123,9 @@ Read [`get-component-reachability`](/reference/mcp/#get-component-reachability).
 - the reachability answer is per endpoint: its verdict and the probe layers
   under it say whether the path failed (no answer to a ping or a port) or the
   endpoint answered and was refused. Read that endpoint with [`get-endpoint`](/reference/mcp/#get-endpoint)
-  for the node it is placed on and the driver it is attached through;
-- read the node that polls it with [`get-node`](/reference/mcp/#get-node), and that node's logs with
-  [`list-node-logs`](/reference/mcp/#list-node-logs): a node that is down or cannot route to the component
+  for the outpost it is placed on and the driver it is attached through;
+- read the outpost that polls it with [`get-outpost`](/reference/mcp/#get-outpost), and that outpost's logs with
+  [`list-outpost-logs`](/reference/mcp/#list-outpost-logs): an outpost that is down or cannot route to the component
   makes every component behind it unreachable.
 
 #### 3. What does it say about itself?

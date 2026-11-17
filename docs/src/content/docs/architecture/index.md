@@ -57,14 +57,14 @@ system -> c3
 ## Collect
 
 AV gear is **agentless**: nothing can be installed inside it, so the reading comes from outside.
-Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
+Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[outpost](/architecture/outposts/)** running close to the gear reaches a
 component over an **[endpoint](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
 SSH, a control processor's own command language) and reads.
 
 How to reach a class of component, and what to read from it, is declared once in its
 **[driver](/architecture/collection/#drivers-the-declarative-menu)**: a declarative spec of the
 inputs an attachment supplies, the polls to run, the pushes to listen for, and the commands it can
-send. Attaching a driver to a component's endpoint derives the node's work from that spec. The node
+send. Attaching a driver to a component's endpoint derives the outpost's work from that spec. The outpost
 runs it and **parses the answer at the edge**, turning a vendor's raw response into a normalized reading on
 the spot.
 
@@ -150,7 +150,7 @@ direction: right
 
 # Shape colors are deliberately omitted: the inline SVG is themed from the site's
 # brand tokens in custom.css so it follows Starlight's light/dark toggle. Only
-# structure (rounding, dashes, the highlighted key node) lives here.
+# structure (rounding, dashes, the highlighted key outpost) lives here.
 classes: {
   node: { style.border-radius: 8 }
   key: { style: { border-radius: 8; bold: true } }
@@ -165,7 +165,7 @@ action: "action\nnotify · remediate · ticket" { class: node }
 declared: "declared\noperator-set" { class: node }
 views: "views → console" { class: node }
 
-gear -> sample: collect (node + edge parse)
+gear -> sample: collect (outpost + edge parse)
 sample -> event: event_rule
 event -> alarm: fire / clear
 alarm -> health: impairs the component
@@ -216,7 +216,7 @@ A handful of patterns hold everywhere:
   and its siblings) gated on its own, so it moves one column and nothing else
   ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
-  system, location, or node), so system-level signals are first-class (a location's are its declared properties and its health).
+  system, location, or outpost), so system-level signals are first-class (a location's are its declared properties and its health).
 - **Templates fork, nothing pins**: creating from a [template](/architecture/templates/) is a
   one-time clone with no back-pointer, so a template can be rewritten in any release without
   migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).

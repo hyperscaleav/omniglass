@@ -123,11 +123,11 @@ lands.
   primitive, so their fleets have the standards their systems conform to.
 - **`POST /components:createFromTemplate`** (`component:create`): one component from a component
   template at a location, with its product and the template's declared values (which also need
-  `component:update`). When the request's `inputs` carry the address (`host`) and a `node`, its endpoint
+  `component:update`). When the request's `inputs` carry the address (`host`) and an `outpost`, its endpoint
   attaches through the driver, the template's preset under the inputs given (which also needs
   `endpoint:create`). A secret input names a secret the caller may read, resolved exactly as an attach
   resolves it, so one the caller cannot use is refused indistinguishably from one that does not exist.
-  Inputs with no address, or an address with no node, are a 422.
+  Inputs with no address, or an address with no outpost, are a 422.
 - **`POST /systems:createFromTemplate`** (`system:create`, and `system:read`, `system:update`,
   `component:create`, `component:update`): a whole system from a system template at a location, built to
   the standard the caller names, else the template's own: the caller's standard of that name when they

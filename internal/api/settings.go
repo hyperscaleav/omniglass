@@ -94,6 +94,11 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			}
 			return nil, err
 		}
+		if in.Namespace == "agent" {
+			if err := a.checkAgentOverrides(ctx, in.Body); err != nil {
+				return nil, err
+			}
+		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		// The notification namespace's mail relay binds a secret, so its patch

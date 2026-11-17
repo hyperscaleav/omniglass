@@ -394,13 +394,13 @@ func TestExampleShowsThePathParamExample(t *testing.T) {
 func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 	const opRaw = `{"operationId":"list-system-alarms","description":"Lists the alarms.","parameters":[
 	  {"name":"name","in":"path","required":true,"description":"The system's name, or a dotted address (e.g. boi.17c.$sys.av)","schema":{"type":"string"}},
-	  {"name":"node","in":"path","required":true,"description":"The node's name","schema":{"type":"string"}}
+	  {"name":"outpost","in":"path","required":true,"description":"The outpost's name","schema":{"type":"string"}}
 	]}`
 	var op operation
 	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
 		t.Fatalf("op: %v", err)
 	}
-	cmd := buildCommand(spec{}, "/api/v1", "/systems/{name}/nodes/{node}/alarms", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/systems/{name}/outposts/{outpost}/alarms", "get", op)
 	if !strings.HasPrefix(cmd.Long, "Lists the alarms.\n\nArguments:\n") {
 		t.Errorf("long = %q, want the description then an Arguments section", cmd.Long)
 	}
@@ -409,8 +409,8 @@ func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 			t.Errorf("long = %q, want %q", cmd.Long, want)
 		}
 	}
-	if strings.Contains(cmd.Long, "<node>") {
-		t.Errorf("long = %q, documents <node>, which has no address form", cmd.Long)
+	if strings.Contains(cmd.Long, "<outpost>") {
+		t.Errorf("long = %q, documents <outpost>, which has no address form", cmd.Long)
 	}
 	if got := buildCommand(spec{}, "/api/v1", "/healthz", "get", operation{Description: "ok"}).Long; got != "ok" {
 		t.Errorf("long of an argless command = %q, want it untouched", got)

@@ -44,29 +44,29 @@ func platformGatewayDSN(t *testing.T) (*storage.PG, context.Context, string) {
 	return gw, ctx, dsn
 }
 
-// platformNode registers a node and returns its platform component.
-func platformNode(t *testing.T, ctx context.Context, gw *storage.PG, name string) *storage.Component {
+// platformOutpost registers an outpost and returns its platform component.
+func platformOutpost(t *testing.T, ctx context.Context, gw *storage.PG, name string) *storage.Component {
 	t.Helper()
-	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
+	n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all)
 	if err != nil {
-		t.Fatalf("create node %s: %v", name, err)
+		t.Fatalf("create outpost %s: %v", name, err)
 	}
 	if n.PlatformComponentID == nil {
-		t.Fatalf("node %s has no platform component", name)
+		t.Fatalf("outpost %s has no platform component", name)
 	}
 	c, err := gw.GetComponent(ctx, *n.PlatformComponentID, all)
 	if err != nil {
-		t.Fatalf("read node %s's platform component: %v", name, err)
+		t.Fatalf("read outpost %s's platform component: %v", name, err)
 	}
 	return c
 }
 
-func TestCreateNodeCreatesItsPlatformComponent(t *testing.T) {
+func TestCreateOutpostCreatesItsPlatformComponent(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-a")
+	c := platformOutpost(t, ctx, gw, "edge-a")
 	if c.Name != "edge-a" {
-		t.Errorf("platform component name = %q, want the node's name edge-a", c.Name)
+		t.Errorf("platform component name = %q, want the outpost's name edge-a", c.Name)
 	}
 	if c.PrimarySystem == nil || *c.PrimarySystem != storage.PlatformSystemName {
 		t.Errorf("platform component's primary system = %v, want %s", c.PrimarySystem, storage.PlatformSystemName)
@@ -74,35 +74,35 @@ func TestCreateNodeCreatesItsPlatformComponent(t *testing.T) {
 	if c.ParentID != nil || c.LocationID != nil {
 		t.Errorf("platform component is placed (parent %v, location %v); it is unplaced like its system", c.ParentID, c.LocationID)
 	}
-	if c.ProductHandle == nil || *c.ProductHandle != storage.NodeProductName {
-		t.Errorf("platform component product = %v, want %s", c.ProductHandle, storage.NodeProductName)
+	if c.ProductHandle == nil || *c.ProductHandle != storage.OutpostProductName {
+		t.Errorf("platform component product = %v, want %s", c.ProductHandle, storage.OutpostProductName)
 	}
 }
 
-func TestDeleteNodeRemovesItsPlatformComponent(t *testing.T) {
+func TestDeleteOutpostRemovesItsPlatformComponent(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-gone")
-	if err := gw.DeleteNode(ctx, "", "edge-gone", all, all); err != nil {
-		t.Fatalf("delete node: %v", err)
+	c := platformOutpost(t, ctx, gw, "edge-gone")
+	if err := gw.DeleteOutpost(ctx, "", "edge-gone", all, all); err != nil {
+		t.Fatalf("delete outpost: %v", err)
 	}
 	if _, err := gw.GetComponent(ctx, c.ID, all); !errors.Is(err, storage.ErrComponentNotFound) {
-		t.Errorf("read the deleted node's component = %v, want ErrComponentNotFound", err)
+		t.Errorf("read the deleted outpost's component = %v, want ErrComponentNotFound", err)
 	}
 }
 
-// A node whose name an operator's unplaced component already holds cannot
+// An outpost whose name an operator's unplaced component already holds cannot
 // take it for its platform component; the create is refused whole, so no
-// node exists without its component.
-func TestCreateNodeRefusesANameAnUnplacedComponentHolds(t *testing.T) {
+// outpost exists without its component.
+func TestCreateOutpostRefusesANameAnUnplacedComponentHolds(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "edge-taken"}, all)
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-taken"}, all, all); !errors.Is(err, storage.ErrPlatformComponentNameTaken) {
-		t.Fatalf("create node = %v, want ErrPlatformComponentNameTaken", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-taken"}, all, all); !errors.Is(err, storage.ErrPlatformComponentNameTaken) {
+		t.Fatalf("create outpost = %v, want ErrPlatformComponentNameTaken", err)
 	}
-	if _, err := gw.GetNode(ctx, "edge-taken", all); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Errorf("the refused node exists: %v", err)
+	if _, err := gw.GetOutpost(ctx, "edge-taken", all); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Errorf("the refused outpost exists: %v", err)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestPlatformSystemRefusesMove(t *testing.T) {
 func TestPlatformSystemRefusesDelete(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	platformNode(t, ctx, gw, "edge-held")
+	platformOutpost(t, ctx, gw, "edge-held")
 	if err := gw.DeleteSystem(ctx, "", storage.PlatformSystemName, all, all); !errors.Is(err, storage.ErrPlatformSystemReserved) {
 		t.Errorf("delete = %v, want ErrPlatformSystemReserved", err)
 	}
@@ -170,7 +170,7 @@ func TestPlatformTypeRefusedOnAnOperatorSystem(t *testing.T) {
 func TestPlatformComponentRefusesRename(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-r")
+	c := platformOutpost(t, ctx, gw, "edge-r")
 	if _, err := gw.RenameComponent(ctx, "", c.Name, "edge-renamed", all, all); !errors.Is(err, storage.ErrPlatformComponentReserved) {
 		t.Errorf("rename = %v, want ErrPlatformComponentReserved", err)
 	}
@@ -190,7 +190,7 @@ func TestPlatformComponentRefusesRename(t *testing.T) {
 func TestPlatformComponentRefusesDelete(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-d")
+	c := platformOutpost(t, ctx, gw, "edge-d")
 	if err := gw.DeleteComponent(ctx, "", c.Name, all, all); !errors.Is(err, storage.ErrPlatformComponentReserved) {
 		t.Errorf("delete = %v, want ErrPlatformComponentReserved", err)
 	}
@@ -199,7 +199,7 @@ func TestPlatformComponentRefusesDelete(t *testing.T) {
 func TestPlatformComponentRefusesReparent(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-m")
+	c := platformOutpost(t, ctx, gw, "edge-m")
 	host := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "rack-host"}, all)
 	if _, err := gw.MoveComponent(ctx, "", c.Name, storage.ComponentMove{ParentName: &host.Name}, all, all, all); !errors.Is(err, storage.ErrPlatformComponentReserved) {
 		t.Errorf("re-parent the platform component = %v, want ErrPlatformComponentReserved", err)
@@ -216,7 +216,7 @@ func TestPlatformComponentRefusesReparent(t *testing.T) {
 func TestPlatformSystemRefusesAnOperatorComponent(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-p")
+	c := platformOutpost(t, ctx, gw, "edge-p")
 	platform := storage.PlatformSystemName
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "intruder", SystemName: &platform}, all, all, all, all); !errors.Is(err, storage.ErrPlatformMemberReserved) {
 		t.Errorf("create into the platform system = %v, want ErrPlatformMemberReserved", err)
@@ -226,7 +226,7 @@ func TestPlatformSystemRefusesAnOperatorComponent(t *testing.T) {
 		t.Errorf("add a member to the platform system = %v, want ErrPlatformMemberReserved", err)
 	}
 	if err := gw.RemoveMember(ctx, "", platform, c.Name, all, all, all, all); !errors.Is(err, storage.ErrPlatformMemberReserved) {
-		t.Errorf("remove a node's component from the platform system = %v, want ErrPlatformMemberReserved", err)
+		t.Errorf("remove an outpost's component from the platform system = %v, want ErrPlatformMemberReserved", err)
 	}
 	// A platform component joins no operator system either.
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "borrower"}, all, all); err != nil {
@@ -238,10 +238,10 @@ func TestPlatformSystemRefusesAnOperatorComponent(t *testing.T) {
 }
 
 // TestEnsurePlatformSerializesConcurrentBoots proves two servers booting at
-// once leave one platform system and one component per node (#1625): each
-// boot's platform step reads "no platform system" and "this node has no
+// once leave one platform system and one component per outpost (#1625): each
+// boot's platform step reads "no platform system" and "this outpost has no
 // component" before it writes, so without one lock across the step the
-// second boot mints `platform-2` beside the first, and re-adopts a node the
+// second boot mints `platform-2` beside the first, and re-adopts an outpost the
 // first already gave a component, orphaning that component.
 func TestEnsurePlatformSerializesConcurrentBoots(t *testing.T) {
 	t.Parallel()
@@ -261,14 +261,14 @@ func TestEnsurePlatformSerializesConcurrentBoots(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	// A database from the release before the platform: seeded, no platform
-	// system, and nodes registered with no component.
+	// system, and outposts registered with no component.
 	if _, err := conn.Exec(ctx, `delete from system where name = 'platform'`); err != nil {
 		t.Fatalf("take the database back before the platform: %v", err)
 	}
-	const nodes = 4
-	for i := 0; i < nodes; i++ {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: fmt.Sprintf("early-%d", i)}, all, all); err != nil {
-			t.Fatalf("create node %d: %v", i, err)
+	const outposts = 4
+	for i := 0; i < outposts; i++ {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: fmt.Sprintf("early-%d", i)}, all, all); err != nil {
+			t.Fatalf("create outpost %d: %v", i, err)
 		}
 	}
 
@@ -302,20 +302,20 @@ func TestEnsurePlatformSerializesConcurrentBoots(t *testing.T) {
 	if systems != 1 {
 		t.Errorf("systems of the platform type = %d after %d concurrent boots, want 1", systems, boots)
 	}
-	// Every member of a platform system is a node's component, one per node,
-	// and every one is the component its node names.
+	// Every member of a platform system is an outpost's component, one per outpost,
+	// and every one is the component its outpost names.
 	var members, named int
 	if err := conn.QueryRow(ctx, `
 		select count(*), count(n.name) from system_member m
 		join system s on s.id = m.system_id
 		join system_type st on st.id = s.system_type_id and st.namespace = 'og' and st.name = 'platform'
-		left join node n on n.platform_component_id = m.component_id`).Scan(&members, &named); err != nil {
+		left join outpost n on n.platform_component_id = m.component_id`).Scan(&members, &named); err != nil {
 		t.Fatalf("count platform members: %v", err)
 	}
-	if members != nodes {
-		t.Errorf("platform members = %d after %d concurrent boots, want one per node (%d)", members, boots, nodes)
+	if members != outposts {
+		t.Errorf("platform members = %d after %d concurrent boots, want one per outpost (%d)", members, boots, outposts)
 	}
 	if named != members {
-		t.Errorf("%d of %d platform members are no node's component; a second boot re-adopted a node", members-named, members)
+		t.Errorf("%d of %d platform members are no outpost's component; a second boot re-adopted an outpost", members-named, members)
 	}
 }

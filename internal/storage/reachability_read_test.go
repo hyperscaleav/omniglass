@@ -67,7 +67,7 @@ func TestReachabilityReads(t *testing.T) {
 	// older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
 	newer := older.Add(time.Minute)
-	// One batch per endpoint: a node writes a probe key only under the
+	// One batch per endpoint: an outpost writes a probe key only under the
 	// endpoint its task ran against (ADR-0161).
 	for _, w := range []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: "open", Source: "tcp", TS: older},

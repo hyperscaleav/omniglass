@@ -159,7 +159,7 @@ func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) 
 }
 
 // LabelRuleKinds are the entity kinds that carry a global label rule, matching
-// the label_rule table's CHECK. Node is deliberately absent: its name is a NATS
+// the label_rule table's CHECK. Outpost is deliberately absent: its name is a NATS
 // subject kept globally unique, it has no type and no parent, so it is not a
 // labelled entity in this sense.
 var LabelRuleKinds = []string{"component", "system", "location"}

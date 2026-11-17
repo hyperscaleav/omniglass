@@ -6,25 +6,25 @@ import (
 )
 
 func TestAServiceJoinsTheLabNetworkByItsName(t *testing.T) {
-	o, err := createOptions(Service{Name: "node", Container: "p-node-1", Image: "img",
+	o, err := createOptions(Service{Name: "outpost", Container: "p-outpost-1", Image: "img",
 		User: "0:0", CapAdd: []string{"NET_ADMIN"}, Restart: "on-failure"}, "p_default")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o.Name != "p-node-1" || o.Config.User != "0:0" || !slices.Equal(o.HostConfig.CapAdd, []string{"NET_ADMIN"}) {
+	if o.Name != "p-outpost-1" || o.Config.User != "0:0" || !slices.Equal(o.HostConfig.CapAdd, []string{"NET_ADMIN"}) {
 		t.Fatalf("the container lost its spec: %+v %+v", o.Config, o.HostConfig)
 	}
 	if o.HostConfig.NetworkMode != "" {
 		t.Fatalf("network mode = %q, want the default", o.HostConfig.NetworkMode)
 	}
 	ep := o.NetworkingConfig.EndpointsConfig["p_default"]
-	if ep == nil || !slices.Equal(ep.Aliases, []string{"node"}) {
-		t.Fatalf("want the lab network with the alias node, got %+v", o.NetworkingConfig)
+	if ep == nil || !slices.Equal(ep.Aliases, []string{"outpost"}) {
+		t.Fatalf("want the lab network with the alias outpost, got %+v", o.NetworkingConfig)
 	}
 }
 
 // A sidecar shares another container's network namespace: its loopback is
-// that container's, which is how a simulator serves components a node
+// that container's, which is how a simulator serves components an outpost
 // reaches on its own loopback. Docker refuses aliases or a network of its own
 // on such a container, so it is given none.
 func TestAServiceCanShareAnotherContainersNetwork(t *testing.T) {

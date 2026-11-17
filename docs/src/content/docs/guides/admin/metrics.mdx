@@ -76,7 +76,7 @@ held in the metric siblings of the property contract tables (`product_metric`,
 components, a [standard](/guides/admin/standards/) for its systems, and a
 [location type](/guides/admin/location-types/) for the locations of that type. Each line names a catalog
 metric, optionally gives it a **default**, and optionally marks it **required**: a product ships a
-default sample rate, a standard requires a seat count. A node's own probe metric (`tcp-connect-time`,
+default sample rate, a standard requires a seat count. An outpost's own probe metric (`tcp-connect-time`,
 `icmp-rtt-avg` and the rest) is a reserved key no contract declares, as on the property side.
 
 Type, unit, and precision are **not** repeated in the contract; they stay on the catalog entry, so
@@ -108,7 +108,7 @@ A metric's values are **telemetry**, not something typed on an instance's detail
 
 Each metric has exactly one **writer class**, shown on the catalog row as `writer_class`
 ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)): the probe metrics
-above are `node-probe`, written only by the node that probed the endpoint, a calc rule's output is
+above are `outpost-probe`, written only by the outpost that probed the endpoint, a calc rule's output is
 `calc`, and a metric you register is `collected`, written by a driver's emits or a push. A write from
 anyone the class does not admit is refused naming the key, and a new metric cannot take a native probe
 key's name.

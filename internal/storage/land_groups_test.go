@@ -13,10 +13,10 @@ import (
 )
 
 // groupFixture is a land fixture with a second component, and the ids a
-// node's tick names its owners and itself by.
+// outpost's tick names its owners and itself by.
 type groupFixture struct {
 	landFixture
-	disp1, disp2, node string
+	disp1, disp2, outpost string
 }
 
 func newGroupFixture(t *testing.T) groupFixture {
@@ -30,18 +30,18 @@ func newGroupFixture(t *testing.T) groupFixture {
 	err := f.conn.QueryRow(ctx, `select
 		(select id::text from component where name = 'disp-1'),
 		(select id::text from component where name = 'disp-2'),
-		(select principal_id::text from node where name = 'edge-1')`).Scan(&f.disp1, &f.disp2, &f.node)
+		(select principal_id::text from outpost where name = 'edge-1')`).Scan(&f.disp1, &f.disp2, &f.outpost)
 	if err != nil {
 		t.Fatalf("read ids: %v", err)
 	}
 	return f
 }
 
-// taskGroup is one task's rows on component, collected by node: a sample on
+// taskGroup is one task's rows on component, collected by outpost: a sample on
 // every lane a task reaches.
-func taskGroup(task, component, node, power string, ts time.Time) storage.IngestGroup {
-	w := storage.NodeWriter(component, "ep-"+task)
-	w.Node = node
+func taskGroup(task, component, outpost, power string, ts time.Time) storage.IngestGroup {
+	w := storage.OutpostWriter(component, "ep-"+task)
+	w.Outpost = outpost
 	return storage.IngestGroup{
 		TaskID: task,
 		Writer: w,
@@ -70,7 +70,7 @@ func (f groupFixture) receipts(t *testing.T, id string) int {
 }
 
 // TestLandBatchRefusedGroupDoesNotBlockSiblings is the tick's contract
-// (#1582): a node's tick lands as one batch of task groups, under one
+// (#1582): an outpost's tick lands as one batch of task groups, under one
 // receipt, and a group the gateway refuses is dropped on its own, named in
 // the result, while its siblings land. A refusal decided before anything is
 // written (a row on a component the task does not collect for) and one
@@ -99,10 +99,10 @@ func TestLandBatchRefusedGroupDoesNotBlockSiblings(t *testing.T) {
 			ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
 			b := storage.IngestBatch{
 				BatchID: "tick-1",
-				Writer:  storage.NodeWriter("", ""),
+				Writer:  storage.OutpostWriter("", ""),
 				Groups: []storage.IngestGroup{
-					taskGroup("task-a", f.disp1, f.node, "on", ts),
-					tc.refuse(f, taskGroup("task-b", f.disp2, f.node, "on", ts)),
+					taskGroup("task-a", f.disp1, f.outpost, "on", ts),
+					tc.refuse(f, taskGroup("task-b", f.disp2, f.outpost, "on", ts)),
 				},
 			}
 			res, err := f.gw.LandBatch(ctx, b)
@@ -163,10 +163,10 @@ func TestLandBatchRefusedGroupLeavesNoCalcMark(t *testing.T) {
 		t.Fatalf("calc rule: %v", err)
 	}
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
-	refused := taskGroup("task-b", f.disp2, f.node, "on", ts)
+	refused := taskGroup("task-b", f.disp2, f.outpost, "on", ts)
 	refused.Events[0].Attributes = []byte("{not json")
-	res, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "tick-1", Writer: storage.NodeWriter("", ""),
-		Groups: []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts), refused}})
+	res, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "tick-1", Writer: storage.OutpostWriter("", ""),
+		Groups: []storage.IngestGroup{taskGroup("task-a", f.disp1, f.outpost, "on", ts), refused}})
 	if err != nil || !res.Landed || len(res.Refused) != 1 || res.Refused[0].TaskID != "task-b" {
 		t.Fatalf("land = %+v, %v; want task-b alone refused", res, err)
 	}
@@ -194,7 +194,7 @@ func TestLandBatchRefusedWholeBatchFails(t *testing.T) {
 	ts := time.Now().UTC().Add(-time.Minute)
 	b := fullBatch("whole-1", "on", ts)
 	b.Metrics[0].OwnerID = "no-such-display"
-	b.Groups = []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts)}
+	b.Groups = []storage.IngestGroup{taskGroup("task-a", f.disp1, f.outpost, "on", ts)}
 	if _, err := f.gw.LandBatch(ctx, b); !storage.IsRefusedWrite(err) {
 		t.Fatalf("err = %v, want the batch refused", err)
 	}
@@ -255,9 +255,9 @@ func landStatementsDoNotGrow(t *testing.T, distinct bool) {
 	}
 	t.Cleanup(gw.Close)
 	tick := func(id string, n int, power string, ts time.Time) storage.IngestBatch {
-		b := storage.IngestBatch{BatchID: id, Writer: storage.NodeWriter("", "")}
+		b := storage.IngestBatch{BatchID: id, Writer: storage.OutpostWriter("", "")}
 		for i := range n {
-			g := taskGroup(fmt.Sprintf("task-%d", i), ids[i], f.node, power, ts)
+			g := taskGroup(fmt.Sprintf("task-%d", i), ids[i], f.outpost, power, ts)
 			if distinct {
 				g.Metrics[0].Key = fmt.Sprintf("tick-metric-%d", i)
 				g.Properties[0].Key = fmt.Sprintf("tick-property-%d", i)

@@ -7,7 +7,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/fingerprint"
 )
 
-// A node's fingerprints are computed once per endpoint, however many tasks it
+// An outpost's fingerprints are computed once per endpoint, however many tasks it
 // runs, and every task of the endpoint carries its endpoint's (#1583).
 func TestAnEndpointIsFingerprintedOnce(t *testing.T) {
 	t.Parallel()

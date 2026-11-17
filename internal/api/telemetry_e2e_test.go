@@ -149,7 +149,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("reject-not-project failed: not-a-registered-metric landed as %+v", m)
 	}
 
-	// A native probe key (a node's own observation, its gate, its session) is
+	// A native probe key (an outpost's own observation, its gate, its session) is
 	// refused by name on every lane: TestTelemetryPushRefusesNativeKeys.
 
 	// SCHEMA VIOLATION IS A 422 (#594 acceptance): the name resolves, so the

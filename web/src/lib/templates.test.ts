@@ -4,7 +4,7 @@ import {
   componentBody,
   kindChip,
   landingHref,
-  needsNode,
+  needsOutpost,
   ofKinds,
   parseKinds,
   locationRef,
@@ -180,31 +180,31 @@ describe("what each start form posts", () => {
   });
 
   it("puts the address on the host input and a secret by its input name", () => {
-    expect(componentBody("boreal-edge-55", { location: "p1", name: "", label: "Lobby", node: "n1", address: " 10.0.0.9 ", secrets: { community: "snmp-ro", other: "" } })).toEqual({
-      template: "boreal-edge-55", location: "p1", name: undefined, label: "Lobby", node: "n1", inputs: { host: "10.0.0.9", community: "snmp-ro" },
+    expect(componentBody("boreal-edge-55", { location: "p1", name: "", label: "Lobby", outpost: "n1", address: " 10.0.0.9 ", secrets: { community: "snmp-ro", other: "" } })).toEqual({
+      template: "boreal-edge-55", location: "p1", name: undefined, label: "Lobby", outpost: "n1", inputs: { host: "10.0.0.9", community: "snmp-ro" },
     });
-    expect(componentBody("x", { location: "", name: "", label: "", node: "", address: "", secrets: {} }).inputs).toBeUndefined();
+    expect(componentBody("x", { location: "", name: "", label: "", outpost: "", address: "", secrets: {} }).inputs).toBeUndefined();
   });
 
   it("attaches a system's roles in slot order up to the last address given", () => {
     const body = systemBody("mr55-system", {
-      location: "p1", name: "", label: "", standard: "", node: "n1",
+      location: "p1", name: "", label: "", standard: "", outpost: "n1",
       addresses: { "main-display": ["", "10.0.0.2"], "video-bar": [""] },
     });
     expect(body.attach).toEqual({ "main-display": [{}, { host: "10.0.0.2" }] });
     expect(body.standard).toBeUndefined();
-    expect(systemBody("s", { location: "", name: "", label: "", standard: "mine", node: "", addresses: {} })).toMatchObject({ standard: "mine", attach: undefined });
+    expect(systemBody("s", { location: "", name: "", label: "", standard: "mine", outpost: "", addresses: {} })).toMatchObject({ standard: "mine", attach: undefined });
   });
 
   it("starts locations under a parent, or as a new top", () => {
     expect(locationsBody("meeting-floor", { parent: "", name: "level-9", label: "" })).toEqual({ template: "meeting-floor", parent: undefined, name: "level-9", label: undefined });
   });
 
-  it("asks for a node exactly when an address is given", () => {
-    expect(needsNode({ node: "", address: "10.0.0.1" })).toBe(true);
-    expect(needsNode({ node: "n1", address: "10.0.0.1" })).toBe(false);
-    expect(needsNode({ node: "", addresses: { a: ["", " "] } })).toBe(false);
-    expect(needsNode({ node: "", addresses: { a: ["", "h"] } })).toBe(true);
+  it("asks for an outpost exactly when an address is given", () => {
+    expect(needsOutpost({ outpost: "", address: "10.0.0.1" })).toBe(true);
+    expect(needsOutpost({ outpost: "n1", address: "10.0.0.1" })).toBe(false);
+    expect(needsOutpost({ outpost: "", addresses: { a: ["", " "] } })).toBe(false);
+    expect(needsOutpost({ outpost: "", addresses: { a: ["", "h"] } })).toBe(true);
   });
 });
 

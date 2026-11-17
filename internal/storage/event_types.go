@@ -27,7 +27,7 @@ type EventType struct {
 	Description   string
 	PayloadSchema []byte
 	Official      bool
-	// WriterClass is who may write this event (ADR-0161): node-probe for
+	// WriterClass is who may write this event (ADR-0161): outpost-probe for
 	// collection-failed, collected otherwise (no calc rule outputs an event).
 	// Resolved from the name, never stored.
 	WriterClass writerclass.Class `json:"-"`

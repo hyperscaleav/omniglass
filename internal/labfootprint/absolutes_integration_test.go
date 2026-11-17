@@ -67,17 +67,17 @@ func TestAbsolutesQuery(t *testing.T) {
 		for values from ('%s') to ('%s')`, day.Format(time.RFC3339), day.AddDate(0, 0, 1).Format(time.RFC3339))); err != nil {
 		t.Fatal(err)
 	}
-	var nodeID string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('node') returning id`).Scan(&nodeID); err != nil {
+	var outpostID string
+	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('outpost') returning id`).Scan(&outpostID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into node (principal_id, name) values ($1, 'edge-x')`, nodeID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into outpost (principal_id, name) values ($1, 'edge-x')`, outpostID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into node_log (node_id, message) select $1, 'x' from generate_series(1, 50)`, nodeID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into outpost_log (outpost_id, message) select $1, 'x' from generate_series(1, 50)`, outpostID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `delete from node_log`); err != nil {
+	if _, err := conn.Exec(ctx, `delete from outpost_log`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx, `select pg_stat_force_next_flush()`); err != nil {
@@ -91,8 +91,8 @@ func TestAbsolutesQuery(t *testing.T) {
 	if after.MetricOldestDay != "2001-01-02" {
 		t.Errorf("oldest metric partition = %q, want the one just added", after.MetricOldestDay)
 	}
-	if after.DeadTuples.NodeLog < 50 {
-		t.Errorf("node_log dead tuples = %d after deleting 50 rows", after.DeadTuples.NodeLog)
+	if after.DeadTuples.OutpostLog < 50 {
+		t.Errorf("outpost_log dead tuples = %d after deleting 50 rows", after.DeadTuples.OutpostLog)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestParseAbsolutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Absolutes{DatabaseBytes: 1000, MetricPartitions: 4, MetricOldestDay: "2026-11-06", MetricBlockBytes: 200, MetricTrendBytes: 300,
-		DeadTuples: DeadTuples{Property: 5, LogLine: 6, NodeLog: 7}}
+		DeadTuples: DeadTuples{Property: 5, LogLine: 6, OutpostLog: 7}}
 	if got != want {
 		t.Errorf("parsed %+v, want %+v", got, want)
 	}

@@ -63,7 +63,7 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   holds concrete data types (no interface, so no value whose behavior is chosen at run time). A `$`
   name (Expr's dynamic `$env`, or the engine's own plumbing) is refused, so a site's bindings are
   the whole namespace.
-- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax nodes, and a list or map
+- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax outposts, and a list or map
   literal at most 64 entries. A run is bounded by **its site's budget** of what it allocates and
   what it walks, deterministically; a criteria's is small, and no site's exceeds a fixed ceiling. A
   wall-clock deadline backs the budget for charged work only: it cannot interrupt a native call,
@@ -204,7 +204,7 @@ expressions run.
 No driver site evaluates an expression today: a [driver spec](/architecture/collection/#drivers-the-declarative-menu)
 locates and transforms with declared selectors and a `cast` / `scale` / enum `map`, and the expression
 engine is not its dependency. Its configuration values are typed **inputs** supplied at attach, a
-secret input a reference resolved under the caller's own secret scope and delivered to the node
+secret input a reference resolved under the caller's own secret scope and delivered to the outpost
 unsealed in its worklist, so an operator value is always data the interpreter reads, never text it
 runs.
 :::
@@ -216,7 +216,7 @@ runs.
 When a driver site gains an expression ([#1331](https://github.com/hyperscaleav/omniglass/issues/1331)),
 its environment exposes: `$var:<name>` (a variable through the cascade), `$prop.<key>` (properties,
 readable for branching; was `$dp.<key>`, renamed with the ADR-0065 vocabulary), `$event` (a
-listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `node`,
+listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `outpost`,
 `item`). Rule and view contexts bind their own documented environments (the candidate entity, the
 property, the resource row).
 

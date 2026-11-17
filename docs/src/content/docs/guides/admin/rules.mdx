@@ -40,9 +40,9 @@ Five rules ship with Omniglass, rendered here from the seed itself:
 All five are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
 and Delete with that reason. Four of them watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
 the server's own component when the server lands telemetry more than 30 s behind its samples for 2
-minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `node-silent` opens a high
-alarm on a node's own component once the node has gone 90 s, three heartbeats, without checking in,
-and clears when it next does ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)).
+minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a high
+alarm on an outpost's own component once the outpost has gone 90 s, three heartbeats, without checking in,
+and clears when it next does ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)).
 `disk-nearly-full` opens a warning alarm on the server's component when the filesystem holding its
 data directory stays over 90% used for 2 minutes, and clears once it is back at 85% or under
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).

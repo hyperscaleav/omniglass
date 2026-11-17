@@ -51,25 +51,25 @@ func TestPipelineComposesAHopFromItsCountsNeverItsRatios(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
-	samples = append(samples, pipelineWindow("c1", "edge-alpha", PlatformClassNode, "metric", 2, 1, 2, 1, at)...)
-	samples = append(samples, pipelineWindow("c2", "edge-bravo", PlatformClassNode, "metric", 98, 98, 98, 98, at)...)
+	samples = append(samples, pipelineWindow("c1", "edge-alpha", PlatformClassOutpost, "metric", 2, 1, 2, 1, at)...)
+	samples = append(samples, pipelineWindow("c2", "edge-bravo", PlatformClassOutpost, "metric", 98, 98, 98, 98, at)...)
 	p := composePipeline(PlatformPipelineHops, samples)
 
-	node := hopOf(t, p, delivery.Node)
-	m, ok := kindOf(node.Kinds, delivery.Metric)
+	outpost := hopOf(t, p, delivery.Outpost)
+	m, ok := kindOf(outpost.Kinds, delivery.Metric)
 	if !ok {
-		t.Fatalf("node hop kinds = %+v, want a metric row", node.Kinds)
+		t.Fatalf("outpost hop kinds = %+v, want a metric row", outpost.Kinds)
 	}
 	if m.Newest.In != 100 || m.Newest.Out != 99 || m.Newest.Loss == nil || !near(*m.Newest.Loss, 0.01) {
-		t.Errorf("node metric newest = %+v (loss %v), want 100 in, 99 out, loss 0.01", m.Newest, lossText(m.Newest.Loss))
+		t.Errorf("outpost metric newest = %+v (loss %v), want 100 in, 99 out, loss 0.01", m.Newest, lossText(m.Newest.Loss))
 	}
 	if m.LastHour.In != 100 || m.LastHour.Out != 99 || m.LastHour.Loss == nil || !near(*m.LastHour.Loss, 0.01) {
-		t.Errorf("node metric last hour = %+v (loss %v), want 100 in, 99 out, loss 0.01", m.LastHour, lossText(m.LastHour.Loss))
+		t.Errorf("outpost metric last hour = %+v (loss %v), want 100 in, 99 out, loss 0.01", m.LastHour, lossText(m.LastHour.Loss))
 	}
-	if len(node.ByComponent) != 2 {
-		t.Fatalf("by component = %+v, want edge-alpha and edge-bravo", node.ByComponent)
+	if len(outpost.ByComponent) != 2 {
+		t.Fatalf("by component = %+v, want edge-alpha and edge-bravo", outpost.ByComponent)
 	}
-	alpha := node.ByComponent[0]
+	alpha := outpost.ByComponent[0]
 	if alpha.Name != "edge-alpha" {
 		t.Fatalf("first component = %s, want edge-alpha (name order)", alpha.Name)
 	}
@@ -77,12 +77,12 @@ func TestPipelineComposesAHopFromItsCountsNeverItsRatios(t *testing.T) {
 		t.Errorf("edge-alpha newest loss = %v, want its own key's 0.5", lossText(am.Newest.Loss))
 	}
 	var in, out uint64
-	for _, c := range node.ByComponent {
+	for _, c := range outpost.ByComponent {
 		in += c.Total.LastHour.In
 		out += c.Total.LastHour.Out
 	}
-	if in != node.Total.LastHour.In || out != node.Total.LastHour.Out {
-		t.Errorf("components sum to %d in, %d out, hop total %+v", in, out, node.Total.LastHour)
+	if in != outpost.Total.LastHour.In || out != outpost.Total.LastHour.Out {
+		t.Errorf("components sum to %d in, %d out, hop total %+v", in, out, outpost.Total.LastHour)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestPipelineEndToEndComposesEveryHopsSurvival(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 9, 10, 9, at)...)
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "metric", 10, 9, 10, 9, at)...)
 	samples = append(samples, pipelineWindow("s1", "lab-server", PlatformClassServer, "metric", 9, 6, 9, 6, at)...)
 	p := composePipeline(PlatformPipelineHops, samples)
 
@@ -117,19 +117,19 @@ func TestPipelineReadsAnAbsentKindAsAbsent(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 10, 10, 10, at)...)
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "log", 0, 0, 0, 0, at)...)
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "metric", 10, 10, 10, 10, at)...)
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "log", 0, 0, 0, 0, at)...)
 	samples = append(samples, pipelineWindow("s1", "lab-server", PlatformClassServer, "metric", 10, 8, 10, 8, at)...)
 	samples = append(samples, pipelineWindow("s1", "lab-server", PlatformClassServer, "event", 4, 2, 4, 2, at)...)
 	p := composePipeline(PlatformPipelineHops, samples)
 
-	node := hopOf(t, p, delivery.Node)
-	if _, ok := kindOf(node.Kinds, delivery.Event); ok {
-		t.Errorf("node hop has an event row with no event series: %+v", node.Kinds)
+	outpost := hopOf(t, p, delivery.Outpost)
+	if _, ok := kindOf(outpost.Kinds, delivery.Event); ok {
+		t.Errorf("outpost hop has an event row with no event series: %+v", outpost.Kinds)
 	}
-	l, ok := kindOf(node.Kinds, delivery.Log)
+	l, ok := kindOf(outpost.Kinds, delivery.Log)
 	if !ok || l.Newest.In != 0 || l.Newest.Loss != nil || l.LastHour.Loss != nil {
-		t.Errorf("node log = %+v (ok %v), want a row with nothing in and no ratio", l, ok)
+		t.Errorf("outpost log = %+v (ok %v), want a row with nothing in and no ratio", l, ok)
 	}
 	e, ok := endOf(p.EndToEnd, delivery.Event)
 	if !ok || e.LastHour == nil || !near(*e.LastHour, 0.5) {
@@ -141,7 +141,7 @@ func TestPipelineReadsAnAbsentKindAsAbsent(t *testing.T) {
 	if _, ok := endOf(p.EndToEnd, delivery.Property); ok {
 		t.Error("property end to end present with no property series on any hop")
 	}
-	if c := node.ByComponent[0]; len(c.Kinds) != 2 {
+	if c := outpost.ByComponent[0]; len(c.Kinds) != 2 {
 		t.Errorf("edge-alpha kinds = %+v, want metric and log only", c.Kinds)
 	}
 }
@@ -152,7 +152,7 @@ func TestPipelineReadsAnAbsentKindAsAbsent(t *testing.T) {
 func TestPipelineIgnoresAnInstanceNoHopSelects(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
-	samples := pipelineWindow("n1", "edge-alpha", PlatformClassNode, "widget", 10, 1, 10, 1, at)
+	samples := pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "widget", 10, 1, 10, 1, at)
 	p := composePipeline(PlatformPipelineHops, samples)
 	for _, h := range p.Hops {
 		if len(h.Kinds) != 0 || len(h.ByComponent) != 0 {
@@ -161,27 +161,27 @@ func TestPipelineIgnoresAnInstanceNoHopSelects(t *testing.T) {
 	}
 }
 
-// TestNodeLossComposesTheNodesOwnHops: a node's Loss is the end to end, over
+// TestOutpostLossComposesTheOutpostsOwnHops: an outpost's Loss is the end to end, over
 // the last hour, of the hops its own component records, all kinds summed per
-// hop; a node with no samples on any node-recorded hop has none.
-func TestNodeLossComposesTheNodesOwnHops(t *testing.T) {
+// hop; an outpost with no samples on any outpost-recorded hop has none.
+func TestOutpostLossComposesTheOutpostsOwnHops(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 3, 3, 30, 27, at)...)
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "log", 0, 0, 70, 70, at)...)
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "metric", 3, 3, 30, 27, at)...)
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "log", 0, 0, 70, 70, at)...)
 	samples = append(samples, pipelineWindow("s1", "lab-server", PlatformClassServer, "metric", 9, 0, 90, 0, at)...)
 	p := composePipeline(PlatformPipelineHops, samples)
 
-	if l := nodeLoss(p, "n1"); l == nil || !near(*l, 0.03) {
-		t.Errorf("edge-alpha loss = %v, want 3 lost of 100 over the hour, 0.03; the server's ingest is not the node's", lossText(l))
+	if l := outpostLoss(p, "n1"); l == nil || !near(*l, 0.03) {
+		t.Errorf("edge-alpha loss = %v, want 3 lost of 100 over the hour, 0.03; the server's ingest is not the outpost's", lossText(l))
 	}
-	if l := nodeLoss(p, "n2"); l != nil {
-		t.Errorf("a node with no samples reads %v, want absent", *l)
+	if l := outpostLoss(p, "n2"); l != nil {
+		t.Errorf("an outpost with no samples reads %v, want absent", *l)
 	}
-	hops := nodeLossHops()
-	if len(hops) != 1 || hops[0] != delivery.Node {
-		t.Errorf("node loss hops = %v, want the node hop alone", hops)
+	hops := outpostLossHops()
+	if len(hops) != 1 || hops[0] != delivery.Outpost {
+		t.Errorf("outpost loss hops = %v, want the outpost hop alone", hops)
 	}
 }
 
@@ -201,41 +201,41 @@ func lossText(f *float64) any {
 	return *f
 }
 
-// TestPipelineNewestLeavesOutAWindowPastTheHorizon: a node that stopped
+// TestPipelineNewestLeavesOutAWindowPastTheHorizon: an outpost that stopped
 // reporting keeps its last window as its newest sample forever. That window
 // is not the hop's newest: the hop's newest and the end to end's sum only the
-// windows still current, while the stopped node's last hour still counts and
+// windows still current, while the stopped outpost's last hour still counts and
 // its row still reads, with no newest figure of its own.
 func TestPipelineNewestLeavesOutAWindowPastTheHorizon(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
 	var samples []pipelineSample
-	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 10, 30, 30, at)...)
-	gone := pipelineWindow("n2", "edge-bravo", PlatformClassNode, "metric", 10, 0, 10, 0, at.Add(-30*time.Minute))
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassOutpost, "metric", 10, 10, 30, 30, at)...)
+	gone := pipelineWindow("n2", "edge-bravo", PlatformClassOutpost, "metric", 10, 0, 10, 0, at.Add(-30*time.Minute))
 	for i := range gone {
 		gone[i].Stale = true
 	}
 	samples = append(samples, gone...)
 	p := composePipeline(PlatformPipelineHops, samples)
 
-	node := hopOf(t, p, delivery.Node)
-	m, ok := kindOf(node.Kinds, delivery.Metric)
+	outpost := hopOf(t, p, delivery.Outpost)
+	m, ok := kindOf(outpost.Kinds, delivery.Metric)
 	if !ok {
-		t.Fatalf("node hop kinds = %+v, want a metric row", node.Kinds)
+		t.Fatalf("outpost hop kinds = %+v, want a metric row", outpost.Kinds)
 	}
 	if m.Newest.In != 10 || m.Newest.Out != 10 || m.Newest.Loss == nil || *m.Newest.Loss != 0 {
-		t.Errorf("node metric newest = %+v (loss %v), want edge-alpha's current 10 of 10, 0", m.Newest, lossText(m.Newest.Loss))
+		t.Errorf("outpost metric newest = %+v (loss %v), want edge-alpha's current 10 of 10, 0", m.Newest, lossText(m.Newest.Loss))
 	}
 	if m.LastHour.In != 40 || m.LastHour.Out != 30 {
-		t.Errorf("node metric last hour = %+v, want both nodes' hour, 40 in, 30 out", m.LastHour)
+		t.Errorf("outpost metric last hour = %+v, want both outposts' hour, 40 in, 30 out", m.LastHour)
 	}
 	if e, ok := endOf(p.EndToEnd, delivery.Metric); !ok || e.Newest == nil || *e.Newest != 0 {
-		t.Errorf("metric end to end newest = %+v, want 0: the stopped node's last window is not current", e)
+		t.Errorf("metric end to end newest = %+v, want 0: the stopped outpost's last window is not current", e)
 	}
-	if len(node.ByComponent) != 2 {
-		t.Fatalf("by component = %+v, want both nodes", node.ByComponent)
+	if len(outpost.ByComponent) != 2 {
+		t.Fatalf("by component = %+v, want both outposts", outpost.ByComponent)
 	}
-	bravo := node.ByComponent[1]
+	bravo := outpost.ByComponent[1]
 	bm, _ := kindOf(bravo.Kinds, delivery.Metric)
 	if bravo.Name != "edge-bravo" || bm.Newest.In != 0 || bm.Newest.Loss != nil || bm.LastHour.In != 10 {
 		t.Errorf("edge-bravo = %+v, want no newest figure and its hour's 10 in", bravo)

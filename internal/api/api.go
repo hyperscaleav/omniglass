@@ -52,7 +52,7 @@ type options struct {
 	// egress_allow says, so an unauthenticated authorize never reaches a
 	// private address. A test names its loopback document server here.
 	metadataPolicy egress.Policy
-	// natsURL is the address the node-claim reply hands back, so a node needs only
+	// natsURL is the address the outpost-claim reply hands back, so an outpost needs only
 	// the server URL to reach both the API and the bus.
 	natsURL     string
 	settingsSvc *settings.Service
@@ -60,7 +60,7 @@ type options struct {
 	// the handler runs without a bus, and the push route then answers 503 rather
 	// than pretending to accept telemetry nothing will ever consume.
 	telemetryPub TelemetryPublisher
-	// simStatus reports the simulators beside the server's nodes. Nil reads
+	// simStatus reports the simulators beside the server's outposts. Nil reads
 	// as no simulator anywhere.
 	simStatus SimStatusFunc
 	// simHub is the server's line to its simulators: the fleet view and
@@ -68,11 +68,11 @@ type options struct {
 	simHub SimHub
 	// version is the server's build version, reported to MCP clients.
 	version string
-	// nodeRunner reaches the nodes for on-demand runs (#1163); nil answers
-	// those routes 503. nodeRuns and nodeRunsPerPrincipal bound the runs in
+	// outpostRunner reaches the outposts for on-demand runs (#1163); nil answers
+	// those routes 503. outpostRuns and outpostRunsPerPrincipal bound the runs in
 	// flight, in all and per caller; zero takes the defaults.
-	nodeRunner                     NodeRunner
-	nodeRuns, nodeRunsPerPrincipal int
+	outpostRunner                        OutpostRunner
+	outpostRuns, outpostRunsPerPrincipal int
 	// commandWaiters and commandWaitersPerPrincipal bound the command issues
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
@@ -90,8 +90,8 @@ type options struct {
 	// requestRecorder times every API request into the server's platform
 	// metrics (#1627). Nil records nothing: a test's handler.
 	requestRecorder *platformmetric.Recorder
-	// ring is the server's closed-loop window over each node with a
-	// simulator (#1647). Nil reads as no node measured.
+	// ring is the server's closed-loop window over each outpost with a
+	// simulator (#1647). Nil reads as no outpost measured.
 	ring *closedloop.Ring
 	// log is where a route logs a failure it answers without its cause.
 	// Unset is slog.Default.
@@ -143,7 +143,7 @@ func WithLogger(l *slog.Logger) Option { return func(o *options) { o.log = l } }
 // WithVersion sets the build version the MCP server reports to its clients.
 func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 
-// WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
+// WithNatsURL sets the advertised NATS URL returned by the outpost-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
 // WithCommandWaitLimits bounds how many command issues may wait on their
@@ -296,7 +296,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodGet,
 		Path:        "/auth/me/agent-policy",
 		Summary:     "What the install lets an agent do",
-		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.agentPolicyHandler)
 
@@ -446,7 +446,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerOptOutRoutes(api, a, gw)
 	registerDraftTestRoute(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
-	registerNodeRunRoutes(api, a, gw, o.nodeRunner, newRunLimiter(o.nodeRuns, o.nodeRunsPerPrincipal))
+	registerOutpostRunRoutes(api, a, gw, o.outpostRunner, newRunLimiter(o.outpostRuns, o.outpostRunsPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)
 	registerComponentPropertyRoutes(api, a, gw)
 	registerStandardPropertyRoutes(api, a, gw)
@@ -470,7 +470,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	}
 	registerViewRoutes(api, a, gw, viewLog)
 	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
-	registerNodeRoutes(api, a, gw, o.natsURL, o.simHub)
+	registerOutpostRoutes(api, a, gw, o.natsURL, o.simHub)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
 	registerPropertyRoutes(api, a, gw)

@@ -401,13 +401,13 @@ func TestAttachDriverRefusals(t *testing.T) {
 	}
 }
 
-// TestNodeWorklistDeliversSecretInputs pins the credential delivery contract
+// TestOutpostWorklistDeliversSecretInputs pins the credential delivery contract
 // (#814): a driver task whose spec declares a secret input reaches its placed
-// node with that input's fields unsealed (the node must present the community
+// outpost with that input's fields unsealed (the outpost must present the community
 // to the device), while the reachability task and non-driver tasks carry none.
-// Delivery rides the per-node worklist subject, whose NATS grant is the
+// Delivery rides the per-outpost worklist subject, whose NATS grant is the
 // isolation boundary; the attach audit row is the record of the binding.
-func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
+func TestOutpostWorklistDeliversSecretInputs(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -426,8 +426,8 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-3"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-3"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-3"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
@@ -438,16 +438,16 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "amp-3", "snmp-scalar", "edge-3"
+	comp, drv, outpost := "amp-3", "snmp-scalar", "edge-3"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
 
-	wl, err := gw.NodeWorklist(ctx, "edge-3")
+	wl, err := gw.OutpostWorklist(ctx, "edge-3")
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}
@@ -476,15 +476,15 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	}
 }
 
-// TestNodeWorklistPropagatesUnsealFailure pins the other half of the delivery
+// TestOutpostWorklistPropagatesUnsealFailure pins the other half of the delivery
 // contract: a driver task references a real, in-scope secret, but the credential
 // can no longer be unsealed (here the key provider cannot open the envelope,
 // standing in for a provider outage or envelope corruption). That is NOT
 // absence, so the worklist pull FAILS rather than delivering a phantom-absent
 // credential. Swallowing it would mask an infra fault as a missing secret and
-// send operators chasing a credential that exists. The node keeps its last-good
+// send operators chasing a credential that exists. The outpost keeps its last-good
 // worklist on a failed pull and retries.
-func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
+func TestOutpostWorklistPropagatesUnsealFailure(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -502,8 +502,8 @@ func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-3"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-3"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-3"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
@@ -514,9 +514,9 @@ func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "amp-3", "snmp-scalar", "edge-3"
+	comp, drv, outpost := "amp-3", "snmp-scalar", "edge-3"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
@@ -532,16 +532,16 @@ func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
 		t.Fatalf("reopen gateway: %v", err)
 	}
 	defer bad.Close()
-	if _, err := bad.NodeWorklist(ctx, "edge-3"); err == nil {
-		t.Fatalf("NodeWorklist succeeded despite an unopenable credential; a real unseal failure must not be masked as an absent secret")
+	if _, err := bad.OutpostWorklist(ctx, "edge-3"); err == nil {
+		t.Fatalf("OutpostWorklist succeeded despite an unopenable credential; a real unseal failure must not be masked as an absent secret")
 	}
 }
 
 // TestCommandWireDelivery pins the storage side of the actuation path (#815):
-// a node's pending queue resolves the commands its placed endpoints can
+// an outpost's pending queue resolves the commands its placed endpoints can
 // actuate, renders the binding's request against the intended value, marks
 // them dispatched (redelivered only after silence), and records the execution
-// report once, under the same per-node confinement the worklist carries.
+// report once, under the same per-outpost confinement the worklist carries.
 func TestCommandWireDelivery(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -563,16 +563,16 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	for _, n := range []string{"edge-9", "edge-idle"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
-			t.Fatalf("create node %s: %v", n, err)
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
+			t.Fatalf("create outpost %s: %v", n, err)
 		}
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "line-proto", Label: "Line Proto", Version: "1.0.0", Spec: []byte(lineProtoSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "switcher-9", "line-proto", "edge-9"
+	comp, drv, outpost := "switcher-9", "line-proto", "edge-9"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.50"},
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
@@ -603,13 +603,13 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatalf("status = %q, want issued (settleable, unsettled)", cmd.Status)
 	}
 
-	// A node the endpoint is NOT placed on sees nothing.
-	if got, err := gw.PendingNodeCommands(ctx, "edge-idle"); err != nil || len(got) != 0 {
-		t.Fatalf("idle node queue = %v (err %v), want empty", got, err)
+	// An outpost the endpoint is NOT placed on sees nothing.
+	if got, err := gw.PendingOutpostCommands(ctx, "edge-idle"); err != nil || len(got) != 0 {
+		t.Fatalf("idle outpost queue = %v (err %v), want empty", got, err)
 	}
 
-	// The placed node gets the rendered actuation, once.
-	got, err := gw.PendingNodeCommands(ctx, "edge-9")
+	// The placed outpost gets the rendered actuation, once.
+	got, err := gw.PendingOutpostCommands(ctx, "edge-9")
 	if err != nil {
 		t.Fatalf("pending: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestCommandWireDelivery(t *testing.T) {
 	if d.Target != "10.20.4.50:4998" {
 		t.Fatalf("target = %q, want the endpoint's derived target", d.Target)
 	}
-	// #817: the delivery names its endpoint (a node holding a session there
+	// #817: the delivery names its endpoint (an outpost holding a session there
 	// actuates over it) and carries the binding's reply shape.
 	if d.EndpointID == "" || d.Reply == nil || d.Reply.Prefix != "INPUT " {
 		t.Fatalf("delivery endpoint %q reply %+v, want the endpoint and the declared reply shape", d.EndpointID, d.Reply)
@@ -647,15 +647,15 @@ func TestCommandWireDelivery(t *testing.T) {
 
 	// Dispatched: an immediate re-pull redelivers nothing (at-least-once
 	// means silence redelivers, not every pull).
-	if again, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
+	if again, err := gw.PendingOutpostCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
 		t.Fatalf("immediate re-pull = %v (err %v), want empty", again, err)
 	}
 
-	// Another node cannot stamp the execution: a report from a node the command
+	// Another outpost cannot stamp the execution: a report from an outpost the command
 	// was not dispatched to is rejected (not a silent no-op), so a stray or
-	// forged status cannot close a command a different node owns.
+	// forged status cannot close a command a different outpost owns.
 	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, "", ""); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
-		t.Fatalf("record from wrong node: err = %v, want ErrCommandNotDispatchedHere", err)
+		t.Fatalf("record from wrong outpost: err = %v, want ErrCommandNotDispatchedHere", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -671,7 +671,7 @@ func TestCommandWireDelivery(t *testing.T) {
 		return ts
 	}
 	if executed = row(); executed != nil {
-		t.Fatalf("wrong node stamped execution")
+		t.Fatalf("wrong outpost stamped execution")
 	}
 	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "", ""); err != nil {
 		t.Fatalf("record: %v", err)
@@ -701,7 +701,7 @@ func TestCommandWireDelivery(t *testing.T) {
 	}
 	ffComp, ffDrv := "switcher-ff", "ff-proto"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &ffDrv, Component: &ffComp, Node: &node, Inputs: map[string]string{"host": "10.20.4.51"},
+		Driver: &ffDrv, Component: &ffComp, Outpost: &outpost, Inputs: map[string]string{"host": "10.20.4.51"},
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -712,14 +712,14 @@ func TestCommandWireDelivery(t *testing.T) {
 	if _, err := conn.Exec(ctx, `update command set status = 'timed-out', settled_at = now(), settled_by = 'window' where id = $1`, timedOut.ID); err != nil {
 		t.Fatalf("time out: %v", err)
 	}
-	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+	if got, err := gw.PendingOutpostCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
 		t.Fatalf("a timed-out command inside its delivery window was delivered: %+v (err %v)", got, err)
 	}
 	unrenderable, err := gw.IssueCommand(ctx, actor, "component", "switcher-ff", "reboot", "", nil, nil)
 	if err != nil {
 		t.Fatalf("issue reboot: %v", err)
 	}
-	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+	if got, err := gw.PendingOutpostCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
 		t.Fatalf("an unrenderable command was delivered: %+v (err %v)", got, err)
 	}
 	var ffStatus, ffBy, ffReason, ffEvent string
@@ -740,29 +740,29 @@ func TestCommandWireDelivery(t *testing.T) {
 	if _, err := gw.IssueCommand(ctx, actor, "component", "switcher-9", "reboot", "", nil, nil); err != nil {
 		t.Fatalf("issue reboot: %v", err)
 	}
-	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+	if got, err := gw.PendingOutpostCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
 		t.Fatalf("unbound command delivered: %v (err %v)", got, err)
 	}
 
-	// #1631: a pull reads and stamps only its own node's commands. edge-b
+	// #1631: a pull reads and stamps only its own outpost's commands. edge-b
 	// carries switcher-b alone, and switcher-dual binds set-input on two
 	// endpoints: tcp on edge-b and udp on edge-9. The actuating endpoint is the
 	// first binding one by name over ALL of the component's endpoints (tcp),
 	// so switcher-dual's command is edge-b's and never edge-9's, even though
 	// edge-9 holds an endpoint that binds it.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-b"}, all, all); err != nil {
-		t.Fatalf("create node edge-b: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-b"}, all, all); err != nil {
+		t.Fatalf("create outpost edge-b: %v", err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "udp-no-retry", Label: "UDP no retry", Version: "1.0.0", Spec: []byte(udpNoRetrySpec)}); err != nil {
 		t.Fatalf("create udp driver: %v", err)
 	}
-	attach := func(comp, drv, node string) string {
+	attach := func(comp, drv, outpost string) string {
 		t.Helper()
 		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.4.51"},
+			Driver: &drv, Component: &comp, Outpost: &outpost, Inputs: map[string]string{"host": "10.20.4.51"},
 		}, all)
 		if err != nil {
-			t.Fatalf("attach %s to %s on %s: %v", drv, comp, node, err)
+			t.Fatalf("attach %s to %s on %s: %v", drv, comp, outpost, err)
 		}
 		return ep.ID
 	}
@@ -791,7 +791,7 @@ func TestCommandWireDelivery(t *testing.T) {
 		}
 		return ts != nil
 	}
-	gotA, err := gw.PendingNodeCommands(ctx, "edge-9")
+	gotA, err := gw.PendingOutpostCommands(ctx, "edge-9")
 	if err != nil {
 		t.Fatalf("edge-9 pull: %v", err)
 	}
@@ -799,9 +799,9 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatalf("edge-9 pulled %+v, want only its own command %d", gotA, mine)
 	}
 	if dispatched(theirs) || dispatched(dual) {
-		t.Fatalf("edge-9's pull stamped another node's command dispatched (switcher-b %v, switcher-dual %v)", dispatched(theirs), dispatched(dual))
+		t.Fatalf("edge-9's pull stamped another outpost's command dispatched (switcher-b %v, switcher-dual %v)", dispatched(theirs), dispatched(dual))
 	}
-	gotB, err := gw.PendingNodeCommands(ctx, "edge-b")
+	gotB, err := gw.PendingOutpostCommands(ctx, "edge-b")
 	if err != nil {
 		t.Fatalf("edge-b pull: %v", err)
 	}
@@ -816,8 +816,8 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatalf("switcher-dual's command rides %+v, want its first endpoint by name (tcp %s)", byID[dual], dualTCP)
 	}
 	// The one batched stamp pairs each command with the endpoint it was
-	// delivered over: two commands on two endpoints of one node, so a stamp
-	// that crossed the pairs would still pass the node confinement and leave
+	// delivered over: two commands on two endpoints of one outpost, so a stamp
+	// that crossed the pairs would still pass the outpost confinement and leave
 	// each row naming the other's endpoint.
 	for _, d := range gotB {
 		var ep *string
@@ -828,7 +828,7 @@ func TestCommandWireDelivery(t *testing.T) {
 			t.Fatalf("command %d stamped dispatched over %v, want the endpoint it was delivered over %s", d.ID, deref(ep), d.EndpointID)
 		}
 	}
-	if again, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
+	if again, err := gw.PendingOutpostCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
 		t.Fatalf("edge-9 re-pull = %+v (err %v), want nothing: switcher-dual's command is edge-b's", again, err)
 	}
 }

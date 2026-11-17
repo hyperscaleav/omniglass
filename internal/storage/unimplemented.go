@@ -478,7 +478,7 @@ func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Du
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
 	return nil
 }
-func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
+func (UnimplementedGateway) InsertOutpostLogs(context.Context, []OutpostLogWrite) error {
 	return nil
 }
 func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult, error) {
@@ -502,16 +502,16 @@ func (UnimplementedGateway) ListComponentLogSources(context.Context, string, tim
 func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Duration, int, LogFilter) ([]LogLine, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListOutpostLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set, scope.Set) (*Node, error) {
+func (UnimplementedGateway) CreateOutpost(context.Context, string, OutpostSpec, scope.Set, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatch, scope.Set, scope.Set, scope.Set) (*Node, error) {
+func (UnimplementedGateway) UpdateOutpost(context.Context, string, string, OutpostPatch, scope.Set, scope.Set, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteNode(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteOutpost(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) EnsurePlatform(context.Context) error {
@@ -520,23 +520,23 @@ func (UnimplementedGateway) EnsurePlatform(context.Context) error {
 func (UnimplementedGateway) EnsureServerComponent(context.Context, string) (string, error) {
 	return "", nil
 }
-func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
+func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ClaimNode(context.Context, string, string) (*Node, error) {
+func (UnimplementedGateway) ClaimOutpost(context.Context, string, string) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (bool, error) {
+func (UnimplementedGateway) AuthenticateOutpost(context.Context, string, string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
 func (UnimplementedGateway) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
 	return nil
 }
-func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
+func (UnimplementedGateway) OutpostWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
-func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]CommandDelivery, error) {
+func (UnimplementedGateway) PendingOutpostCommands(context.Context, string) ([]CommandDelivery, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string, string) error {
@@ -549,7 +549,7 @@ func (UnimplementedGateway) GetSimImpairment(context.Context, string) (impair.Im
 func (UnimplementedGateway) SetSimImpairment(context.Context, string, string, impair.Impairment) (impair.Impairment, error) {
 	return impair.Impairment{}, nil
 }
-func (UnimplementedGateway) ComponentSimNode(context.Context, string) (string, error) {
+func (UnimplementedGateway) ComponentSimOutpost(context.Context, string) (string, error) {
 	return "", nil
 }
 func (UnimplementedGateway) SimAddressesInUse(context.Context) (map[string]bool, error) {
@@ -565,13 +565,13 @@ func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {
 	return fn()
 }
-func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
+func (UnimplementedGateway) OutpostSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
+func (UnimplementedGateway) OutpostSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
@@ -580,10 +580,10 @@ func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (T
 func (UnimplementedGateway) ResolveTaskOwners(context.Context, string, []string) (map[string]TaskOwner, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
+func (UnimplementedGateway) GetOutpost(context.Context, string, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
+func (UnimplementedGateway) ListOutposts(context.Context, scope.Set) ([]Outpost, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpsertVendor(context.Context, Vendor) error    { return nil }
@@ -838,7 +838,7 @@ func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettin
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }
-func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
+func (UnimplementedGateway) OutpostCheckins(context.Context) ([]OutpostCheckin, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CommandQueueHealth(context.Context, time.Time) (CommandQueueRead, error) {

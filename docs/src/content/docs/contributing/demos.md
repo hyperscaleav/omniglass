@@ -4,7 +4,7 @@ description: "A demo is a recording of a PR's feature working, made on the lab (
 ---
 
 A **demo** is a short recording of a pull request's feature working, made on the
-[lab](/guides/lab/) (the server, and a node collecting from the simulator in its own process, all in
+[lab](/guides/lab/) (the server, and an outpost collecting from the simulator in its own process, all in
 Docker: the same lab a learner runs, "lab instance" banner and all) and posted on the PR, so a reviewer watches the feature work rather than
 reading a transcript of it. A demo is one concept with two recorders, one for each way the product
 is driven:
@@ -103,8 +103,8 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
   `demo_until <seconds> '<code>'` retries code until it succeeds (and fails the demo if it never
   does), and `demo_hush '<code>'` runs a lookup unseen; each erases its own line, so the screen
   shows nothing of the block when `Show` resumes. A wait never costs the GIF any frames.
-- **Read the lab's logs.** The server's and the node's logs are files (`/stack/logs/server.log`,
-  `/stack/logs/node.log`; the node's carries its in-process simulator's lines too): grep them for
+- **Read the lab's logs.** The server's and the outpost's logs are files (`/stack/logs/server.log`,
+  `/stack/logs/outpost.log`; the outpost's carries its in-process simulator's lines too): grep them for
   what the API does not show, keeping to the stable part of each line.
 - **Expect a failure out loud.** A command the tape types that exits non-zero fails the demo. One
   that is meant to fail says so on screen, with `|| true`.
@@ -226,7 +226,7 @@ The browser e2e tier (`make test-e2e`) and the docs screenshots (`make docs-shot
 `make docs-shots-check`) ride the same throwaway lab, through the same `lab.sh` (#1267), so the repo
 stands omniglass up in Docker one way. Each fits the lab to what it checks: the e2e tier's is
 seeded with the `empty` scenario, so its CRUD round-trips start from a fresh install, and the
-screenshots' runs with `--no-node`, the dev fleet without the simulated wiring and with no node
+screenshots' runs with `--no-outpost`, the dev fleet without the simulated wiring and with no outpost
 collecting from it, so a page photographed twice is the same page, and with `--platform-history`, an
 hour of made-up server figures, so platform health's sparklines draw full lines (#1790). The lab's banner is a fact about
 the lab rather than the product the docs teach, so the screenshot capture hides it.

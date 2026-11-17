@@ -136,12 +136,12 @@ func TestAnEmptyTableWritesEmptyLists(t *testing.T) {
 func TestADriversFactsCarryItsStepAndAMissingWarm(t *testing.T) {
 	targets := []DriverTarget{{Driver: "a", Product: "pa", Polls: []time.Duration{time.Minute}}}
 	f := driverCostFacts(targets, nil, nil, DriverCostTable{Rows: []DriverCost{{Driver: "a", Polls: []string{"1m0s"}, StepTasks: 1600,
-		MemoryPerTaskBytes: 4096, WarmNotMeasured: "a memory: the loaded line starts below the idle node"}}})
+		MemoryPerTaskBytes: 4096, WarmNotMeasured: "a memory: the loaded line starts below the idle outpost"}}})
 	d := f.Drivers[0]
 	if d.StepTasks != 1600 {
 		t.Fatalf("step %d, want 1600", d.StepTasks)
 	}
-	if d.MemoryWarmMiB != nil || d.MemoryPerTaskKiB == nil || !strings.Contains(d.Reason, "below the idle node") {
+	if d.MemoryWarmMiB != nil || d.MemoryPerTaskKiB == nil || !strings.Contains(d.Reason, "below the idle outpost") {
 		t.Fatalf("fact %+v, want memory per task, no warm, and the warm's reason", d)
 	}
 }

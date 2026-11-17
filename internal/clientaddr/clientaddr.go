@@ -18,7 +18,7 @@ type Trust []netip.Prefix
 
 // Default is the trust an unset OMNIGLASS_TRUSTED_PROXIES gives: the loopback
 // and the private ranges, where the chart's ingress (Traefik, which overwrites
-// the header from an untrusted client) and a node on the same host sit.
+// the header from an untrusted client) and an outpost on the same host sit.
 var Default = Trust{
 	netip.MustParsePrefix("127.0.0.0/8"),
 	netip.MustParsePrefix("10.0.0.0/8"),

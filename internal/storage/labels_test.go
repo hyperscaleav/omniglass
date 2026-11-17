@@ -361,7 +361,7 @@ func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
 }
 
 // A rule inherits down the component_type chain by the same first-non-null walk
-// stem, icon and abbrev follow, and the walk crosses the fork boundary PER NODE
+// stem, icon and abbrev follow, and the walk crosses the fork boundary PER OUTPOST
 // (ADR-0095 decision 3). interactive-display sets nothing of its own and sits
 // under display, so forking the PARENT's rule reaches it, and a rule of its own
 // then overrides for itself alone.

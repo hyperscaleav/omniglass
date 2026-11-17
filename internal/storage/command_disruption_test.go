@@ -25,8 +25,8 @@ var rebootProtoSpec = strings.Replace(lineProtoSpec,
 // TestDisruptiveDeliveryNamesItsHoldSet pins the storage side of #1651: a
 // disruptive command's delivery says so and names the endpoints whose gates
 // it closes, which is every endpoint of the component placed on the
-// delivering node (the device behind them all is the one going down) and
-// none placed on another node (that node's gates are its own). A
+// delivering outpost (the device behind them all is the one going down) and
+// none placed on another outpost (that outpost's gates are its own). A
 // non-disruptive delivery names none.
 func TestDisruptiveDeliveryNamesItsHoldSet(t *testing.T) {
 	t.Parallel()
@@ -48,8 +48,8 @@ func TestDisruptiveDeliveryNamesItsHoldSet(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	for _, n := range []string{"edge-4", "edge-far"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
-			t.Fatalf("create node %s: %v", n, err)
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
+			t.Fatalf("create outpost %s: %v", n, err)
 		}
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "reboot-proto", Label: "Reboot Proto", Version: "1.0.0", Spec: []byte(rebootProtoSpec)}); err != nil {
@@ -57,16 +57,16 @@ func TestDisruptiveDeliveryNamesItsHoldSet(t *testing.T) {
 	}
 	comp, drv, near, far := "codec-4", "reboot-proto", "edge-4", "edge-far"
 	actuating, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &near, Inputs: map[string]string{"host": "10.20.4.60"},
+		Driver: &drv, Component: &comp, Outpost: &near, Inputs: map[string]string{"host": "10.20.4.60"},
 	}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
-	beside, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "icmp", Component: &comp, Node: &near}, all)
+	beside, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "icmp", Component: &comp, Outpost: &near}, all)
 	if err != nil {
 		t.Fatalf("create icmp endpoint: %v", err)
 	}
-	elsewhere, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "http", Component: &comp, Node: &far}, all)
+	elsewhere, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "http", Component: &comp, Outpost: &far}, all)
 	if err != nil {
 		t.Fatalf("create far endpoint: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestDisruptiveDeliveryNamesItsHoldSet(t *testing.T) {
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp, "set-input", "", json.RawMessage(`"hdmi-1"`), nil); err != nil {
 		t.Fatalf("issue set-input: %v", err)
 	}
-	got, err := gw.PendingNodeCommands(ctx, near)
+	got, err := gw.PendingOutpostCommands(ctx, near)
 	if err != nil {
 		t.Fatalf("pending: %v", err)
 	}

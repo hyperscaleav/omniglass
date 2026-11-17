@@ -13,9 +13,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// TestAWorklistCarriesTheCollectionReportWindow: a node's worklist carries the
+// TestAWorklistCarriesTheCollectionReportWindow: an outpost's worklist carries the
 // platform's collection report window (#1369), the default a minute, so an
-// admin's change reaches every node on its next pull with nothing cached.
+// admin's change reaches every outpost on its next pull with nothing cached.
 func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -27,7 +27,7 @@ func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	wl, err := gw.NodeWorklist(ctx, "edge-unknown")
+	wl, err := gw.OutpostWorklist(ctx, "edge-unknown")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatalf("override: %v", err)
 	}
-	if wl, err = gw.NodeWorklist(ctx, "edge-unknown"); err != nil || wl.ReportSeconds != 30 {
+	if wl, err = gw.OutpostWorklist(ctx, "edge-unknown"); err != nil || wl.ReportSeconds != 30 {
 		t.Fatalf("after an override, the worklist's report window = %d seconds (err %v), want 30", wl.ReportSeconds, err)
 	}
 }

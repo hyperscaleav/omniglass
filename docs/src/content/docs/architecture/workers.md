@@ -8,10 +8,10 @@ sidebar:
 ---
 
 :::note[Implementation status]
-Built today: the ingest lanes, a durable JetStream work-queue consumer per partition of the node's name
+Built today: the ingest lanes, a durable JetStream work-queue consumer per partition of the outpost's name
 (`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, a growing nak delay, one batch in flight a lane,
 [ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
-which does owner confinement and persistence inline, each batch (a tick of a node's task groups) landing once, in one transaction under
+which does owner confinement and persistence inline, each batch (a tick of an outpost's task groups) landing once, in one transaction under
 its receipt, a refused group skipped and its siblings landed
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 The consumer and the calc, notification and settlement ticks report their depth, pace and failures
@@ -22,7 +22,7 @@ Workers are how Omniglass means to do the steady background work (deriving sampl
 
 ## One machinery, several consumers
 
-The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). Each lane keeps one batch in flight, and the property lane's transition guard depends on that order: the guard is a conditional insert held per series by a transaction lock (ADR-0311), which stops two concurrent batches writing one value twice but cannot reorder them. The stream gives the sequencing per publishing subject a pool needs: it files each node's batches under a partition of its name, so a node's batches share one lane and land in order while the lanes land side by side (ADR-1896). It instantiates over several consumers rather than separate loops:
+The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). Each lane keeps one batch in flight, and the property lane's transition guard depends on that order: the guard is a conditional insert held per series by a transaction lock (ADR-0311), which stops two concurrent batches writing one value twice but cannot reorder them. The stream gives the sequencing per publishing subject a pool needs: it files each outpost's batches under a partition of its name, so an outpost's batches share one lane and land in order while the lanes land side by side (ADR-1896). It instantiates over several consumers rather than separate loops:
 
 :::design[Target design, tracked in #430; the clock is #419]
 - **the admission consumer**: the owner-confinement gate at the head of the data lane, running in
@@ -46,10 +46,10 @@ A subsystem that consumes the same message is **a stage, not a second loop**; co
 scale horizontally with no leader (JetStream hands each message to exactly one member).
 :::
 
-A down node produces no message, so its liveness is a *poll*, not a drain, and the poll is the
-server's: a 15 s timer writes every claimed node's `checkin-age`, the seconds since it last spoke, and
-the seeded `node-silent` rule reads that series like any other. The design had a
-node-liveness sweep of its own raise a `node-down` alarm directly; the rule over a server-written age
+A down outpost produces no message, so its liveness is a *poll*, not a drain, and the poll is the
+server's: a 15 s timer writes every claimed outpost's `checkin-age`, the seconds since it last spoke, and
+the seeded `outpost-silent` rule reads that series like any other. The design had a
+outpost-liveness sweep of its own raise an `outpost-down` alarm directly; the rule over a server-written age
 replaced it
 ([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 
@@ -79,15 +79,15 @@ attempts, so a loss reads as a ratio where 0 is healthy.
   and a duration well under the 5 s it repeats on. A pass that succeeds writes its failure count 0,
   so Platform health's Queues panel reads each sweep's failures against its passes as `0 / n` (#1769).
 
-These are all the server's own clock against its own database, so unlike ingest lag no node clock is
+These are all the server's own clock against its own database, so unlike ingest lag no outpost clock is
 in them and no skew moves them. The definitions are
 [ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
 
 The `event-rule` sweep is also how the server's self-monitoring alarms hold their sustain. Four
 official rules watch Omniglass itself: `ingest-lag-high`, `retention-behind`, `disk-nearly-full`
 (the server's data directory disk, `data-dir-disk-used-ratio`, over 0.9 for 2 minutes, cleared at
-0.85 or under) on the server's component, and `node-silent` (a claimed node's `checkin-age` past
-90 s, three missed heartbeats, with no sustain) on the node's
+0.85 or under) on the server's component, and `outpost-silent` (a claimed outpost's `checkin-age` past
+90 s, three missed heartbeats, with no sustain) on the outpost's
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 
 :::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
@@ -170,7 +170,7 @@ drift, the system-level form of [config](/architecture/variables/)'s `reconcile:
 - **Inputs**: the desired declarations (templates, component assignments, config declared values)
   plus observed state; config changes commit in PG and CDC publishes them
   ([audit](/architecture/audit/)), so reconcile is a CDC consumer plus the current projections.
-- **Output**: the delta, asserted as **node config** (which tasks and commands each node runs,
+- **Output**: the delta, asserted as **outpost config** (which tasks and commands each outpost runs,
   derived from placements) and as **reconciled `run` actions** (desired-state commands that stay
   asserted, e.g. a codec's feedback registration).
 - **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging a

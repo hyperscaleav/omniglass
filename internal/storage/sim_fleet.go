@@ -8,21 +8,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ComponentSimNode is the node whose simulator would serve a component (by
-// its already-resolved id): the node of its first endpoint, by name, placed
-// on one. Empty when no endpoint of the component is placed on a node, so
+// ComponentSimOutpost is the outpost whose simulator would serve a component (by
+// its already-resolved id): the outpost of its first endpoint, by name, placed
+// on one. Empty when no endpoint of the component is placed on an outpost, so
 // nothing simulates it.
-func (p *PG) ComponentSimNode(ctx context.Context, componentID string) (string, error) {
-	var node string
-	err := p.pool.QueryRow(ctx, `select n.name from endpoint i join node n on n.principal_id = i.node_name
-		where i.component = $1 order by i.name limit 1`, componentID).Scan(&node)
+func (p *PG) ComponentSimOutpost(ctx context.Context, componentID string) (string, error) {
+	var outpost string
+	err := p.pool.QueryRow(ctx, `select n.name from endpoint i join outpost n on n.principal_id = i.outpost_id
+		where i.component = $1 order by i.name limit 1`, componentID).Scan(&outpost)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("storage: sim node of %s: %w", componentID, err)
+		return "", fmt.Errorf("storage: sim outpost of %s: %w", componentID, err)
 	}
-	return node, nil
+	return outpost, nil
 }
 
 // SimAddressesInUse is every host an endpoint targets, so a new simulated

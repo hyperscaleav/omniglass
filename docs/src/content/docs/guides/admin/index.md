@@ -82,22 +82,22 @@ on **Admin > Settings**, each from 1 to 36,500 days:
 - `trend_days`, 730 by default: how long the hourly trends of each metric (count, minimum, maximum,
   sum, first and last value of every hour) are kept, counted from the hour, like `metric_days`. It is
   a window of its own: set it below `metric_days` and an hour's trend goes before its samples do.
-- Log lines, from your components and from your nodes, by severity:
+- Log lines, from your components and from your outposts, by severity:
   - `log_debug_days`, 3 by default;
   - `log_info_days`, 14 by default, which also covers notice and a line with no severity;
   - `log_warning_days`, 30 by default;
   - `log_error_days`, 90 by default, which also covers critical, alert and emergency.
-- Your nodes' own logs, if you want them kept for a different window than your components' lines:
-  `node_log_debug_days`, `node_log_info_days`, `node_log_warning_days` and `node_log_error_days`.
-  Each reads **not set** until you set it, and while it is not set a node's lines of that severity
-  follow the shared window above. Restore one to go back to the shared window. Drop a node's debug
-  chatter after a day while keeping a component's for three, say, or keep a node's for a month
-  while chasing a node problem. Over the API it is a merge patch, where a `null` restores the
+- Your outposts' own logs, if you want them kept for a different window than your components' lines:
+  `outpost_log_debug_days`, `outpost_log_info_days`, `outpost_log_warning_days` and `outpost_log_error_days`.
+  Each reads **not set** until you set it, and while it is not set an outpost's lines of that severity
+  follow the shared window above. Restore one to go back to the shared window. Drop an outpost's debug
+  chatter after a day while keeping a component's for three, say, or keep an outpost's for a month
+  while chasing an outpost problem. Over the API it is a merge patch, where a `null` restores the
   shared window (the CLI's `setting update` cannot send a body yet, #1333):
 
   ```sh
   curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: Bearer $OMNIGLASS_TOKEN" \
-    -H 'Content-Type: application/merge-patch+json' -d '{"node_log_debug_days": 1}'
+    -H 'Content-Type: application/merge-patch+json' -d '{"outpost_log_debug_days": 1}'
   ```
 
 Three things are never removed, however old:
@@ -129,7 +129,7 @@ its window and none past it, so a series no longer measured shows no reading wit
 Every endpoint reports on its own collection once a **report window**. This is built-in data: every
 endpoint gets it, whatever its driver, with nothing to set up
 ([built-in and collected data](/guides/admin/drivers/#built-in-and-collected-data)):
-- how long its polls took, how much CPU they cost the node, and how many failed;
+- how long its polls took, how much CPU they cost the outpost, and how many failed;
 - how many pushed messages its listeners claimed, and how many they did not;
 - for a webhook endpoint, how many posts the server accepted and refused.
 
@@ -138,7 +138,7 @@ These show beside the device's own values on the component's page (`poll-duratio
 still has telemetry. The window is the **collection** setting `report_seconds` on
 **Admin > Settings**: 60 by default, from 10 to 3,600. A shorter window shows a stall sooner and costs
 more rows; each endpoint lands a few rows per window, however fast its driver polls. A change nudges
-every node to pull its worklist at once, so it is in force within a second. See
+every outpost to pull its worklist at once, so it is in force within a second. See
 [collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
 for what each count means.
 

@@ -96,7 +96,7 @@ Each tool also has an **agent class**, the one the install's [agent policy](/gui
 sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
 stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
 ` + "`tools/list`, each tool's `_meta` carries `omniglass/agent_policy`" + `, its class and the policy the install resolves
-for it.
+for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
 `)
 	fmt.Fprintf(&b, "%d tools.\n\n", len(defs))

@@ -11,8 +11,8 @@ import (
 )
 
 // The task read surface: DERIVED collection work, viewable but never operator-
-// authored. A task is derived when an endpoint is created (the node's unit of
-// work over that connection) and carries no node column of its own (its placement
+// authored. A task is derived when an endpoint is created (the outpost's unit of
+// work over that connection) and carries no outpost column of its own (its placement
 // projects from the endpoint). Both authz layers apply on every route: a
 // task:read permission AND scope injected by the gateway, cascading through the
 // task's endpoint's owning component (an out-of-scope component's task is a
@@ -24,8 +24,8 @@ type taskBody struct {
 	Label      string          `json:"label,omitempty"`
 	Mode       string          `json:"mode"`
 	EndpointID string          `json:"endpoint_id" doc:"The endpoint's surrogate id this task runs over"`
-	Node       *string         `json:"node,omitempty" doc:"The node placement name, projected from the endpoint"`
-	NodeID     *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
+	Outpost    *string         `json:"outpost,omitempty" doc:"The outpost placement name, projected from the endpoint"`
+	OutpostID  *string         `json:"outpost_id,omitempty" doc:"The placed outpost's id; the stable form of outpost"`
 	Spec       json.RawMessage `json:"spec,omitempty" doc:"The inline probe settings (jsonb)"`
 	Enabled    bool            `json:"enabled"`
 }
@@ -33,7 +33,7 @@ type taskBody struct {
 func toTaskBody(t *storage.Task) taskBody {
 	b := taskBody{
 		ID: t.ID, Label: t.Label, Mode: t.Mode,
-		EndpointID: t.EndpointID, Node: t.Node, NodeID: t.NodeID, Enabled: t.Enabled,
+		EndpointID: t.EndpointID, Outpost: t.Outpost, OutpostID: t.OutpostID, Enabled: t.Enabled,
 	}
 	if len(t.Spec) > 0 {
 		b.Spec = json.RawMessage(t.Spec)

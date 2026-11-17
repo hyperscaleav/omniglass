@@ -95,7 +95,7 @@ func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 }
 
 // clearsARootStem is the one rule both nesting registries enforce on the clear
-// path (#716): the three-state sentinel takes a node back to inheriting, and a
+// path (#716): the three-state sentinel takes an outpost back to inheriting, and a
 // ROOT has nothing to inherit from, so clearing its stem is refused rather than
 // stored. Create already refuses a stemless root on both registries
 // (ErrRootComponentTypeNeedsStem, ErrRootSystemTypeNeedsStem); the clear is the

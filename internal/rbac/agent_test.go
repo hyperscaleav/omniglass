@@ -43,7 +43,7 @@ func TestWithoutDropsActions(t *testing.T) {
 		{"secret", "reveal"},
 		{"secret", "reveal", "admin"},
 		{"notification_target", "reveal"},
-		{"node", "enroll"},
+		{"outpost", "enroll"},
 	} {
 		if owner.Allows(tokens...) {
 			t.Errorf("ceilinged owner must not allow %v", tokens)

@@ -30,7 +30,7 @@ func TestAnnotate(t *testing.T) {
 		{"a put overwrites and repeats to the same end", "PUT", "component:update", tooldef.Hints{}, tooldef.Annotations{Destructive: true, Idempotent: true}},
 		{"a delete destroys and repeats to the same end", "DELETE", "endpoint:delete", tooldef.Hints{}, tooldef.Annotations{Destructive: true, Idempotent: true}},
 		{"a stamp marks an acting post destructive", "POST", "command:issue", tooldef.Hints{Destructive: true}, tooldef.Annotations{Destructive: true}},
-		{"a stamp marks a read that touches the network open-world", "GET", "node:read", tooldef.Hints{OpenWorld: true}, tooldef.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true}},
+		{"a stamp marks a read that touches the network open-world", "GET", "outpost:read", tooldef.Hints{OpenWorld: true}, tooldef.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true}},
 		{"a patch read-gated is still a write", "PATCH", "rule:read", tooldef.Hints{}, tooldef.Annotations{Destructive: true}},
 		{"a delete read-gated is still a write", "DELETE", "rule:read", tooldef.Hints{}, tooldef.Annotations{Destructive: true, Idempotent: true}},
 	} {
@@ -71,7 +71,7 @@ func TestCredentialBlind(t *testing.T) {
 		{"", false, true},
 		{"secret:reveal", false, false},
 		{"notification_target:reveal:admin", false, false},
-		{"node:enroll", true, false},
+		{"outpost:enroll", true, false},
 		{"", true, false},
 	} {
 		if err := tooldef.CredentialBlind(c.permission, c.plaintext); (err == nil) != c.ok {

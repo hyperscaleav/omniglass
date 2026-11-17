@@ -63,12 +63,12 @@ func rederiveFixture(t *testing.T) (context.Context, *storage.PG, *pgx.Conn, *st
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-r"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-r"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-r"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, drv, node := "panel-r", "newtron-panel-nvp", "edge-r"
+	comp, drv, outpost := "panel-r", "newtron-panel-nvp", "edge-r"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.60"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatal(err)
 	}
-	wl, err := gw.NodeWorklist(ctx, "edge-r")
+	wl, err := gw.OutpostWorklist(ctx, "edge-r")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,12 +218,12 @@ func TestDriverUpdateRederivesAttachedEndpoints(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-u"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-u"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-u"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, name, node := "panel-u", "panel-proto", "edge-u"
+	comp, name, outpost := "panel-u", "panel-proto", "edge-u"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &name, Component: &comp, Node: &node,
+		Driver: &name, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -312,7 +312,7 @@ func compactJSON(t *testing.T, raw []byte) string {
 }
 
 // raceFixture is a custom driver with a digits-only poll regex, a component
-// and a node, for the concurrency tests.
+// and an outpost, for the concurrency tests.
 func raceFixture(t *testing.T) (context.Context, *storage.PG, string) {
 	t.Helper()
 	if testing.Short() {
@@ -336,7 +336,7 @@ func raceFixture(t *testing.T) (context.Context, *storage.PG, string) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-x"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-x"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-x"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	return ctx, gw, dsn
@@ -344,9 +344,9 @@ func raceFixture(t *testing.T) (context.Context, *storage.PG, string) {
 
 func attachRace(ctx context.Context, gw *storage.PG) (*storage.Endpoint, error) {
 	all := scope.Set{All: true}
-	comp, name, node := "panel-x", "panel-race", "edge-x"
+	comp, name, outpost := "panel-x", "panel-race", "edge-x"
 	return gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &name, Component: &comp, Node: &node,
+		Driver: &name, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.80"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 }

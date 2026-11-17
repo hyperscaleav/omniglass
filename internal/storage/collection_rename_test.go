@@ -18,7 +18,7 @@ import (
 // tier's do: every arc stores the owner's primary key, so a rename touches nothing.
 //
 // This is the tier where getting it wrong is least visible. An orphaned interface
-// does not raise an error, it stops being collected: the node's worklist quietly
+// does not raise an error, it stops being collected: the outpost's worklist quietly
 // comes back one task shorter, and the component's reachability panel goes blank
 // rather than red. That silence is why the assertions below read the resolved
 // worklist and the component's interface list, not just the row count.
@@ -52,15 +52,15 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		Name: "old-codec", LocationName: strptr("old-room")}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
 		Name: "edge", LocationName: strptr("old-room")}, all, all); err != nil {
-		t.Fatalf("node: %v", err)
+		t.Fatalf("outpost: %v", err)
 	}
 	// One interface carrying both arcs at once: owned by the component, placed on
-	// the node. Creating it derives the reachability task, so the worklist below is
+	// the outpost. Creating it derives the reachability task, so the worklist below is
 	// the real resolved thing rather than a hand-built row.
 	iface, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Transport: "icmp", Component: strptr("old-codec"), Node: strptr("edge"),
+		Transport: "icmp", Component: strptr("old-codec"), Outpost: strptr("edge"),
 		Params: []byte(`{"target":"10.0.0.1"}`)}, all)
 	if err != nil {
 		t.Fatalf("interface: %v", err)
@@ -70,8 +70,8 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("sample: %v", err)
 	}
 
-	// The renames an operator can actually perform. A node's name is immutable (it
-	// is the enrollment identity), so the node arc is exercised below instead.
+	// The renames an operator can actually perform. An outpost's name is immutable (it
+	// is the enrollment identity), so the outpost arc is exercised below instead.
 	if _, err := gw.RenameComponent(ctx, "", "old-codec", "new-codec", all, all); err != nil {
 		t.Fatalf("rename component: %v", err)
 	}
@@ -89,8 +89,8 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if got.ComponentID == nil || *got.ComponentID != *iface.ComponentID {
 		t.Errorf("interface component id = %v, want unchanged %v", got.ComponentID, iface.ComponentID)
 	}
-	if got.Node == nil || *got.Node != "edge" {
-		t.Errorf("interface node = %v, want edge", deref(got.Node))
+	if got.Outpost == nil || *got.Outpost != "edge" {
+		t.Errorf("interface outpost = %v, want edge", deref(got.Outpost))
 	}
 
 	// The reachability read addresses the component by its new name; before the
@@ -102,17 +102,17 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if len(ifaces) != 1 {
 		t.Fatalf("interfaces on the renamed component = %d, want 1", len(ifaces))
 	}
-	if ifaces[0].NodeName != "edge" {
-		t.Errorf("projected node = %q, want edge", ifaces[0].NodeName)
+	if ifaces[0].OutpostName != "edge" {
+		t.Errorf("projected outpost = %q, want edge", ifaces[0].OutpostName)
 	}
 
-	// The node's placement follows its location's rename.
-	n, err := gw.GetNode(ctx, "edge", all)
+	// The outpost's placement follows its location's rename.
+	n, err := gw.GetOutpost(ctx, "edge", all)
 	if err != nil {
-		t.Fatalf("get node: %v", err)
+		t.Fatalf("get outpost: %v", err)
 	}
 	if n.LocationName == nil || *n.LocationName != "new-room" {
-		t.Errorf("node location = %v, want new-room", deref(n.LocationName))
+		t.Errorf("outpost location = %v, want new-room", deref(n.LocationName))
 	}
 
 	// The sample still resolves under the component's new name.
@@ -124,7 +124,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatal("no sample under the new name: the owner arc did not follow the rename")
 	}
 
-	// The node arc, at the level it is actually guaranteed. A node's name is not
+	// The outpost arc, at the level it is actually guaranteed. An outpost's name is not
 	// patchable, so this renames it underneath the gateway: the point is that the
 	// interface placement is keyed by principal_id and therefore has nothing to
 	// rewrite. The worklist resolving under the new name is the observable proof.
@@ -133,15 +133,15 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `update node set name = 'edge-2' where name = 'edge'`); err != nil {
-		t.Fatalf("rename node: %v", err)
+	if _, err := conn.Exec(ctx, `update outpost set name = 'edge-2' where name = 'edge'`); err != nil {
+		t.Fatalf("rename outpost: %v", err)
 	}
-	wl, err := gw.NodeWorklist(ctx, "edge-2")
+	wl, err := gw.OutpostWorklist(ctx, "edge-2")
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}
 	if len(wl.Tasks) != 1 {
-		t.Fatalf("tasks for the renamed node = %d, want 1 (its interface lost its placement)", len(wl.Tasks))
+		t.Fatalf("tasks for the renamed outpost = %d, want 1 (its interface lost its placement)", len(wl.Tasks))
 	}
 	if wl.Tasks[0].EndpointName != iface.Name {
 		t.Errorf("worklist interface = %q, want %q", wl.Tasks[0].EndpointName, iface.Name)

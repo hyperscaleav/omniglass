@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
 
-// SimDevice is one component a simulator beside a node may serve: the
+// SimDevice is one component a simulator beside an outpost may serve: the
 // component, its product's name (which selects the simulator profile), and
 // the host its endpoints target.
 type SimDevice struct {
@@ -22,12 +22,12 @@ type SimDevice struct {
 	Impairment *impair.Impairment
 }
 
-// NodeSimDevices lists each component with an endpoint placed on the node,
-// once, within the read scope: all-scope for the node's own simulator (the
-// subject grant has already confined it to its node), the caller's component
+// OutpostSimDevices lists each component with an endpoint placed on the outpost,
+// once, within the read scope: all-scope for the outpost's own simulator (the
+// subject grant has already confined it to its outpost), the caller's component
 // scope for an operator. The address is the host of the component's first
-// endpoint, by name, that targets one. An unknown node lists nothing.
-func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error) {
+// endpoint, by name, that targets one. An unknown outpost lists nothing.
+func (p *PG) OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error) {
 	if read.Empty() {
 		return nil, nil
 	}
@@ -51,10 +51,10 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 		join component c on c.id = i.component
 		join product pr on pr.id = c.product_id
 		left join sim_impairment si on si.component_id = c.id
-		where i.node_name = (select principal_id from node where name = $1)
+		where i.outpost_id = (select principal_id from outpost where name = $1)
 		order by c.id, i.name`, name)
 	if err != nil {
-		return nil, fmt.Errorf("storage: node sim devices %q: %w", name, err)
+		return nil, fmt.Errorf("storage: outpost sim devices %q: %w", name, err)
 	}
 	defer rows.Close()
 	var out []SimDevice
@@ -83,7 +83,7 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: node sim devices %q: %w", name, err)
+		return nil, fmt.Errorf("storage: outpost sim devices %q: %w", name, err)
 	}
 	return out, nil
 }
@@ -116,16 +116,16 @@ type SimWebhook struct {
 // else does.
 var simulatedBlock = &net.IPNet{IP: net.IPv4(127, 60, 0, 0), Mask: net.CIDRMask(16, 32)}
 
-// NodeSimWebhooks reads, for each simulated component on the node, the
+// OutpostSimWebhooks reads, for each simulated component on the outpost, the
 // subscription of its webhook endpoint, keyed by component id (ADR-1370). The
 // simulator plays the external service that posts to it, so it is handed what
-// that service would hold. Any node credential may pull its device list, so
-// the fence is two facts the server holds and a node cannot assert: the
+// that service would hold. Any outpost credential may pull its device list, so
+// the fence is two facts the server holds and an outpost cannot assert: the
 // database carries the lab mark (set only by the lab's trusted seed), and the
 // component's address is in the simulated block, which only the seed
 // allocates. A database with no lab mark hands out nothing, and a component on
 // the network or on any other address never appears.
-func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error) {
+func (p *PG) OutpostSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error) {
 	st, err := p.LabState(ctx)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWe
 	if !st.Marked {
 		return nil, nil
 	}
-	devices, err := p.NodeSimDevices(ctx, name, scope.Set{All: true})
+	devices, err := p.OutpostSimDevices(ctx, name, scope.Set{All: true})
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWe
 		select e.component::text from webhook_token w join endpoint e on e.id = w.endpoint_id
 		where e.component = any($1::uuid[])`, ids)
 	if err != nil {
-		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+		return nil, fmt.Errorf("storage: outpost sim webhooks %q: %w", name, err)
 	}
 	var comps []string
 	for rows.Next() {
@@ -167,15 +167,15 @@ func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWe
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+		return nil, fmt.Errorf("storage: outpost sim webhooks %q: %w", name, err)
 	}
 	bound, err := p.boundValues(ctx, comps)
 	if err != nil {
-		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+		return nil, fmt.Errorf("storage: outpost sim webhooks %q: %w", name, err)
 	}
 	out := map[string]SimWebhook{}
 	for _, c := range comps {
-		tok, _, err := p.nodeSecretFields(ctx, WebhookTokenSecret, c)
+		tok, _, err := p.outpostSecretFields(ctx, WebhookTokenSecret, c)
 		if err != nil {
 			continue // the token was deleted: nothing to post to until it is minted again
 		}

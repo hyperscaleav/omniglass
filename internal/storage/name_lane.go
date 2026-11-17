@@ -31,7 +31,7 @@ type NameHolder struct {
 //   - with no local holder, exactly one og holder resolves;
 //   - two or more holders in the answering tier resolve to nothing (a
 //     collision): picking one would silently make the other unwritable;
-//   - a reserved key, the node's or the platform's own, is never shadowed:
+//   - a reserved key, the outpost's or the platform's own, is never shadowed:
 //     held in both tiers, it resolves to nothing;
 //   - a holder in any other namespace never answers a bare name.
 //

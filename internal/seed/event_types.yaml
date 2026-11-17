@@ -32,7 +32,7 @@ event_types:
     description: >-
       A command's settle window closed with no evidence either way: no reply that
       decided it and no observation of its target. Its message says where it
-      stopped (never taken by a node, delivered with no report, or answered with
+      stopped (never taken by an outpost, delivered with no report, or answered with
       nothing observed after).
   - name: call-ended
     label: Call Ended

@@ -20,8 +20,8 @@ func TestParseReceiptCountReadsThePsqlRow(t *testing.T) {
 	}
 }
 
-// A node name is quoted as a literal, never spliced as SQL.
-func TestReceiptCountQueryQuotesTheNodeName(t *testing.T) {
+// An outpost name is quoted as a literal, never spliced as SQL.
+func TestReceiptCountQueryQuotesTheOutpostName(t *testing.T) {
 	q := receiptCountQuery("o'brien", time.Unix(100, 5000), time.Unix(130, 0), time.Unix(200, 0))
 	if !strings.Contains(q, "'og.v1.telemetry.o''brien '") {
 		t.Fatalf("query does not quote the name:\n%s", q)
