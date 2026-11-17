@@ -330,7 +330,7 @@ func (p *PG) ReleaseAssistantRun(ctx context.Context, ownerID, name, run string)
 		return ErrAssistantConversationNotFound
 	}
 	if _, err := p.pool.Exec(ctx, `update assistant_conversation set run_id = null, run_until = null
-		where principal_id = $1::uuid and name = $2 and run_id = $3`, ownerID, name, run); err != nil {
+		where user_id = $1::uuid and name = $2 and run_id = $3`, ownerID, name, run); err != nil {
 		return fmt.Errorf("storage: release assistant run: %w", err)
 	}
 	return nil

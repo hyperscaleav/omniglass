@@ -117,7 +117,7 @@ func interruptOf(evs []map[string]any) map[string]any {
 func TestOmnibotRunsAConversationOnTheServer(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 
 	in := prompt("add the lobby display")
@@ -227,7 +227,7 @@ func TestOmnibotRunsAConversationOnTheServer(t *testing.T) {
 func TestOmnibotRunDeclinedRunsNothing(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	for _, c := range []struct{ name, status string }{{"declined", "resolved"}, {"cancelled", "cancelled"}} {
 		p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": c.name}, http.StatusCreated)
 		if _, evs := p.run(p.toks["olga"], c.name, prompt("add the lobby display")); interruptOf(evs) == nil {
@@ -247,7 +247,7 @@ func TestOmnibotRunDeclinedRunsNothing(t *testing.T) {
 func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "race"}, http.StatusCreated)
 	if _, evs := p.run(p.toks["olga"], "race", prompt("add the lobby display")); interruptOf(evs) == nil {
 		t.Fatalf("no interrupt: %s", eventTypes(evs))
@@ -307,10 +307,10 @@ func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
 func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
-	p.human("alice", "operator", "all", "")
-	p.human("ada", "admin", "all", "")
-	p.human("rita", "reader", "all", "")
+	p.person("olga", "operator", "all", "")
+	p.person("alice", "operator", "all", "")
+	p.person("ada", "admin", "all", "")
+	p.person("rita", "reader", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 	if _, evs := p.run(p.toks["olga"], "lobby", prompt("add the lobby display")); interruptOf(evs)["id"] != "call-2" {
 		t.Fatalf("olga's run = %v, want it waiting on call-2", evs)
@@ -343,7 +343,7 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 		var imp struct {
 			Token string `json:"token"`
 		}
-		if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/principals/"+p.ids["olga"]+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &imp); err != nil {
+		if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/users/"+p.ids["olga"]+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &imp); err != nil {
 			t.Fatal(err)
 		}
 		if status, _ := p.run(imp.Token, "lobby", prompt("hi")); status != http.StatusForbidden {
@@ -362,7 +362,7 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 	}
 
 	bare := newPeople(t)
-	bare.human("olga", "operator", "all", "")
+	bare.person("olga", "operator", "all", "")
 	bare.c.do(bare.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 	if status, evs := bare.run(bare.toks["olga"], "lobby", prompt("hi")); status != http.StatusServiceUnavailable || !strings.Contains(evs[0]["message"].(string), "no model") {
 		t.Errorf("a server with no model = %d %v, want 503", status, evs)
