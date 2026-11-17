@@ -173,6 +173,8 @@ func mapAssistantErr(err error) error {
 		return huma.Error404NotFound("no such conversation of yours")
 	case errors.Is(err, storage.ErrAssistantConversationExists):
 		return huma.Error409Conflict("you already have a conversation by that name")
+	case errors.Is(err, storage.ErrAssistantConversationBusy):
+		return huma.Error409Conflict("another run holds this conversation; wait for it to end and read it again")
 	case errors.Is(err, storage.ErrAssistantConversationMoved):
 		return huma.Error409Conflict("the conversation has moved on since you read it; read it again and append after its last message")
 	case errors.Is(err, storage.ErrInvalidEntityName):

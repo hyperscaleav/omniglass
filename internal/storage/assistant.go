@@ -49,15 +49,29 @@ type AssistantMessage struct {
 
 // AssistantAppend is one append: the messages after the one the client last
 // saw (After, 0 for an empty conversation), the pending write the run paused
-// on (nil clears it), and the tokens the turn spent.
+// on (nil clears it), and the tokens the turn spent. Run, when set, is the
+// server run appending: the conversation must still be its claim, and the
+// append frees it.
 type AssistantAppend struct {
+	Run      string
 	After    int
 	Messages []AssistantMessage
 	Pending  json.RawMessage
 	Usage    AssistantUsage
 }
 
+// AssistantRunClaim is a server run's claim on a conversation (#2121): the
+// run's id, the last message it read (0 for an empty conversation), and when
+// its lease lapses.
+type AssistantRunClaim struct {
+	Run   string
+	After int
+	Until time.Time
+}
+
 var (
+	// ErrAssistantConversationBusy is a conversation another run holds.
+	ErrAssistantConversationBusy = errors.New("storage: another run holds the assistant conversation")
 	// ErrAssistantConversationNotFound is a conversation the caller does not
 	// own or that does not exist; the two read the same.
 	ErrAssistantConversationNotFound = errors.New("storage: assistant conversation not found")
@@ -225,6 +239,15 @@ func (p *PG) AppendAssistantMessages(ctx context.Context, actorID, ownerID, name
 	if err := tx.QueryRow(ctx, `select coalesce(max(seq), 0) from assistant_message where conversation_id = $1::uuid`, before.ID).Scan(&last); err != nil {
 		return nil, fmt.Errorf("storage: last assistant message: %w", err)
 	}
+	if in.Run != "" {
+		var held *string
+		if err := tx.QueryRow(ctx, `select run_id from assistant_conversation where id = $1::uuid`, before.ID).Scan(&held); err != nil {
+			return nil, fmt.Errorf("storage: read the assistant run: %w", err)
+		}
+		if held == nil || *held != in.Run {
+			return nil, ErrAssistantConversationBusy
+		}
+	}
 	if last != in.After {
 		return nil, ErrAssistantConversationMoved
 	}
@@ -239,8 +262,10 @@ func (p *PG) AppendAssistantMessages(ctx context.Context, actorID, ownerID, name
 		pending = in.Pending
 	}
 	if _, err := tx.Exec(ctx, `update assistant_conversation set pending = $2, input_tokens = input_tokens + $3,
-		output_tokens = output_tokens + $4, updated_at = now() where id = $1::uuid`,
-		before.ID, pending, in.Usage.InputTokens, in.Usage.OutputTokens); err != nil {
+		output_tokens = output_tokens + $4, updated_at = now(),
+		run_id = case when $5 <> '' then null else run_id end,
+		run_until = case when $5 <> '' then null else run_until end where id = $1::uuid`,
+		before.ID, pending, in.Usage.InputTokens, in.Usage.OutputTokens, in.Run); err != nil {
 		return nil, fmt.Errorf("storage: update assistant conversation: %w", err)
 	}
 	after, err := getAssistantConversation(ctx, tx, ownerID, name, false)
@@ -254,6 +279,58 @@ func (p *PG) AppendAssistantMessages(ctx context.Context, actorID, ownerID, name
 		return nil, fmt.Errorf("storage: commit append assistant messages: %w", err)
 	}
 	return after, nil
+}
+
+// ClaimAssistantRun claims one of the owner's conversations for a server run
+// before any tool runs: refused as busy while another run's lease is live, and
+// as moved when the conversation has gained a message since the run read it.
+// The lease is bookkeeping, not a change to the conversation, so it is not
+// audited; the run's append is.
+func (p *PG) ClaimAssistantRun(ctx context.Context, ownerID, name string, in AssistantRunClaim) error {
+	if !isUUID(ownerID) {
+		return ErrAssistantConversationNotFound
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin claim assistant run: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	c, err := getAssistantConversation(ctx, tx, ownerID, name, true)
+	if err != nil {
+		return err
+	}
+	var last int
+	var held bool
+	if err := tx.QueryRow(ctx, `select coalesce((select max(seq) from assistant_message where conversation_id = $1::uuid), 0),
+		run_id is not null and run_until > now() from assistant_conversation where id = $1::uuid`, c.ID).Scan(&last, &held); err != nil {
+		return fmt.Errorf("storage: read the assistant run: %w", err)
+	}
+	if held {
+		return ErrAssistantConversationBusy
+	}
+	if last != in.After {
+		return ErrAssistantConversationMoved
+	}
+	if _, err := tx.Exec(ctx, `update assistant_conversation set run_id = $2, run_until = $3 where id = $1::uuid`, c.ID, in.Run, in.Until); err != nil {
+		return fmt.Errorf("storage: claim assistant run: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit claim assistant run: %w", err)
+	}
+	return nil
+}
+
+// ReleaseAssistantRun frees a conversation run's claim, if it is still that
+// run's; anyone else's claim is left alone.
+func (p *PG) ReleaseAssistantRun(ctx context.Context, ownerID, name, run string) error {
+	if !isUUID(ownerID) {
+		return ErrAssistantConversationNotFound
+	}
+	if _, err := p.pool.Exec(ctx, `update assistant_conversation set run_id = null, run_until = null
+		where principal_id = $1::uuid and name = $2 and run_id = $3`, ownerID, name, run); err != nil {
+		return fmt.Errorf("storage: release assistant run: %w", err)
+	}
+	return nil
 }
 
 // DeleteAssistantConversation deletes one of the owner's conversations and

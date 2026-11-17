@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -237,6 +238,65 @@ func TestOmnibotRunDeclinedRunsNothing(t *testing.T) {
 			t.Fatalf("%s resume = %d %v", c.name, status, evs)
 		}
 		p.c.do(p.toks["olga"], http.MethodGet, "/components/lobby-display", nil, http.StatusNotFound)
+	}
+}
+
+// Resumes that race on one waiting call are one resume (#2121): the run
+// claims the conversation before any tool runs, so exactly one runs the
+// approved write and every other is a 409 that ran nothing.
+func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t, runModel(t))
+	p.human("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "race"}, http.StatusCreated)
+	if _, evs := p.run(p.toks["olga"], "race", prompt("add the lobby display")); interruptOf(evs) == nil {
+		t.Fatalf("no interrupt: %s", eventTypes(evs))
+	}
+	const n = 8
+	statuses := make(chan int, n)
+	var wg sync.WaitGroup
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			status, evs := p.run(p.toks["olga"], "race", resume("call-2", "resolved", true))
+			if status == http.StatusOK && evs[len(evs)-1]["type"] != "RUN_FINISHED" {
+				t.Errorf("a resume that ran ended on %v", evs[len(evs)-1])
+			}
+			statuses <- status
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	var ran int
+	for s := range statuses {
+		switch s {
+		case http.StatusOK:
+			ran++
+		case http.StatusConflict:
+		default:
+			t.Errorf("a racing resume = %d, want 200 or 409", s)
+		}
+	}
+	if ran != 1 {
+		t.Fatalf("%d resumes ran the call, want exactly one", ran)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/race", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	var results int
+	for _, m := range conv.Messages {
+		if m.Role == "tool" {
+			results++
+		}
+	}
+	if results != 2 {
+		t.Fatalf("%d tool results kept, want the read's and the write's once", results)
 	}
 }
 

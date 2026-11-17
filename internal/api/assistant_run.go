@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -25,10 +26,13 @@ import (
 // A write the person's agent policy asks about ends the run on an interrupt,
 // kept as the conversation's pending call; a resume naming that call answers
 // it. The stored transcript is the conversation: the history a client sends
-// is not believed.
+// is not believed. A run claims its conversation before any tool runs, so two
+// runs, two resumes of one waiting call included, never act on it at once.
 
-// runTokenLifetime bounds a run's own token should its revoke never land.
-const runTokenLifetime = 24 * time.Hour
+// runLifetime bounds a run: its deadline, its claim on the conversation, and
+// its own token should the revoke never land. A run that died frees its
+// conversation when the claim lapses.
+const runLifetime = 30 * time.Minute
 
 type aguiMessageInput struct {
 	_       struct{}        `additionalProperties:"true"`
@@ -64,7 +68,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		Description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). " +
 			"A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. " +
 			"The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, " +
-			"and an agent or an impersonation session is a 403. A resume that names no waiting call, or a prompt while one waits, is a 409. " +
+			"and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. " +
 			"A server with no model is a 503. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *runAssistantConversationInput) (*huma.StreamResponse, error) {
 		if o.omnibotModel == nil {
@@ -91,7 +95,19 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		if err != nil {
 			return nil, huma.Error500InternalServerError("start the run")
 		}
-		exp := time.Now().Add(runTokenLifetime)
+		exp := time.Now().Add(runLifetime)
+		claim := storage.AssistantRunClaim{Run: rand.Text(), Until: exp}
+		if len(ms) > 0 {
+			claim.After = ms[len(ms)-1].Seq
+		}
+		if err := gw.ClaimAssistantRun(ctx, callerID(ctx), conv.Name, claim); err != nil {
+			return nil, mapAssistantErr(err)
+		}
+		release := func() {
+			if err := gw.ReleaseAssistantRun(context.WithoutCancel(ctx), callerID(ctx), conv.Name, claim.Run); err != nil {
+				o.log.Error("omnibot run: release the conversation", "err", err)
+			}
+		}
 		ua, ip := clientMetaFrom(ctx)
 		issued, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{
 			ActorID: actorID(ctx), Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
@@ -99,12 +115,14 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			Agent: "omnibot", AgentChannels: []string{"omnibot"},
 		})
 		if err != nil || !issued {
+			release()
 			return nil, huma.Error500InternalServerError("start the run")
 		}
 		revoke := func() {
 			if err := gw.RevokeBearer(context.WithoutCancel(ctx), hash); err != nil {
 				o.log.Error("omnibot run: revoke the run's token", "err", err)
 			}
+			release()
 		}
 		l := &assistant.Loop{Provider: o.omnibotModel, Tools: mcpserver.NewLocal(o.self, "Bearer "+tok), Pause: true}
 
@@ -135,7 +153,8 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			hctx.SetHeader("Content-Type", "text/event-stream")
 			hctx.SetHeader("Cache-Control", "no-cache")
 			hctx.SetStatus(http.StatusOK)
-			rctx := hctx.Context()
+			rctx, cancel := context.WithDeadline(hctx.Context(), exp)
+			defer cancel()
 			run := agui.NewRun(hctx.BodyWriter(), conv.Name, runID)
 			l.Events = run.Hear
 			run.Start()
@@ -153,7 +172,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 				run.Error("the run stopped: "+err.Error(), "run")
 			}
 			if len(out.Messages) > len(history) {
-				if err := keepRun(rctx, gw, conv.Name, ms, out); err != nil {
+				if err := keepRun(rctx, gw, conv.Name, claim.Run, ms, out); err != nil {
 					o.log.Error("omnibot run: keep the transcript", "conversation", conv.Name, "err", err)
 					run.Error("the run could not be kept", "store")
 					return
@@ -182,9 +201,9 @@ func runHistory(ms []storage.AssistantMessage) ([]provider.Message, error) {
 }
 
 // keepRun appends what the run added after the stored transcript, and keeps
-// or clears the call it paused on.
-func keepRun(ctx context.Context, gw storage.Gateway, name string, ms []storage.AssistantMessage, out assistant.Outcome) error {
-	app := storage.AssistantAppend{}
+// or clears the call it paused on, under the run's claim.
+func keepRun(ctx context.Context, gw storage.Gateway, name, run string, ms []storage.AssistantMessage, out assistant.Outcome) error {
+	app := storage.AssistantAppend{Run: run}
 	if len(ms) > 0 {
 		app.After = ms[len(ms)-1].Seq
 	}

@@ -1312,6 +1312,12 @@ func (UnimplementedGateway) GetAssistantConversation(context.Context, string, st
 func (UnimplementedGateway) AppendAssistantMessages(context.Context, string, string, string, AssistantAppend) (*AssistantConversation, error) {
 	return nil, ErrAssistantConversationNotFound
 }
+func (UnimplementedGateway) ClaimAssistantRun(context.Context, string, string, AssistantRunClaim) error {
+	return ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) ReleaseAssistantRun(context.Context, string, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) DeleteAssistantConversation(context.Context, string, string, string) error {
 	return ErrAssistantConversationNotFound
 }

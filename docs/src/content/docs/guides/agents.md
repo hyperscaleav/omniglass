@@ -201,7 +201,7 @@ omniglass assistant conversation run lobby --messages '[{"role":"user","content"
 ```
 
 The answer is the event stream: `RUN_STARTED`, the model's text, each tool call and its result, and
-`RUN_FINISHED`. The run holds a one-day `omnibot` token of its own, revoked when the stream ends, and
+`RUN_FINISHED`. The run holds an `omnibot` token of its own, revoked when the stream ends, and
 its writes are audited as `agent omnibot` acting for you, as the CLI's are. A write your agent policy
 asks about ends the run on an interrupt naming the call (`outcome.type` is `interrupt`) and keeps it
 with the conversation. Answer it with the next run:
@@ -211,8 +211,9 @@ omniglass assistant conversation run lobby --resume '[{"interruptId":"call-2","s
 ```
 
 `{"approved": true}` runs the call; `false`, or a `cancelled` status, declines it, and the model hears
-that you declined. A run that names a call that is not waiting, or a new prompt while one waits, is a
-409. Only you run your conversations, as yourself: an agent token or an impersonation session is
+that you declined. A run that names a call that is not waiting, a new prompt while one waits, or a
+run while another still holds the conversation is a 409: a call runs once, however many clients answer
+it. A run lasts 30 minutes at most. Only you run your conversations, as yourself: an agent token or an impersonation session is
 refused. The server runs omnibot only with a model: until a live provider lands, it plays the
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.

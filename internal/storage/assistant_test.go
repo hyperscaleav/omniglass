@@ -155,6 +155,68 @@ func TestAnAppendNamesTheLastMessageItSaw(t *testing.T) {
 	}
 }
 
+// A server run claims the conversation before any tool runs (#2121): the
+// claim names the last message the run read and holds a lease until the run
+// appends or releases it, so a second run, a resume racing a resume included,
+// is refused before it acts. A lease that ran out is claimable again, so a
+// run that died does not lock its conversation for good.
+func TestARunClaimsItsConversation(t *testing.T) {
+	t.Parallel()
+	f := newPeopleFixture(t)
+	bob := f.ids["bob"]
+	if _, err := f.gw.CreateAssistantConversation(f.ctx, bob, bob, "chat"); err != nil {
+		t.Fatal(err)
+	}
+	soon := time.Now().Add(time.Minute)
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r1", After: 0, Until: soon}); err != nil {
+		t.Fatalf("claim = %v", err)
+	}
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r2", After: 0, Until: soon}); !errors.Is(err, storage.ErrAssistantConversationBusy) {
+		t.Fatalf("a second claim = %v, want busy", err)
+	}
+	if err := f.gw.ClaimAssistantRun(f.ctx, f.ids["alice"], "chat", storage.AssistantRunClaim{Run: "r3", Until: soon}); !errors.Is(err, storage.ErrAssistantConversationNotFound) {
+		t.Fatalf("another's claim = %v, want not found", err)
+	}
+	// An append by another run is refused while the lease is r1's; r1's
+	// append lands and frees the conversation.
+	if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
+		Run: "r2", After: 0, Messages: []storage.AssistantMessage{msg("user", "two")},
+	}); !errors.Is(err, storage.ErrAssistantConversationBusy) {
+		t.Fatalf("an append under another's lease = %v, want busy", err)
+	}
+	if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
+		Run: "r1", After: 0, Messages: []storage.AssistantMessage{msg("user", "one")},
+	}); err != nil {
+		t.Fatalf("the claimant's append = %v", err)
+	}
+	// A claim names the last message it read: one that read before the
+	// append is stale.
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r4", After: 0, Until: soon}); !errors.Is(err, storage.ErrAssistantConversationMoved) {
+		t.Fatalf("a stale claim = %v, want moved", err)
+	}
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r5", After: 1, Until: soon}); err != nil {
+		t.Fatalf("a claim after the append = %v", err)
+	}
+	// Release frees it; releasing a lease that is not yours changes nothing.
+	if err := f.gw.ReleaseAssistantRun(f.ctx, bob, "chat", "r9"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r6", After: 1, Until: soon}); !errors.Is(err, storage.ErrAssistantConversationBusy) {
+		t.Fatalf("a claim after a stranger's release = %v, want busy", err)
+	}
+	if err := f.gw.ReleaseAssistantRun(f.ctx, bob, "chat", "r5"); err != nil {
+		t.Fatal(err)
+	}
+	gone := time.Now().Add(-time.Second)
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r7", After: 1, Until: gone}); err != nil {
+		t.Fatalf("a claim after release = %v", err)
+	}
+	// r7's lease has run out: the next claim takes the conversation.
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r8", After: 1, Until: soon}); err != nil {
+		t.Fatalf("a claim over a lapsed lease = %v", err)
+	}
+}
+
 func TestRetentionPrunesAConversationByWhenItLastMoved(t *testing.T) {
 	t.Parallel()
 	f := newPeopleFixture(t)
@@ -208,5 +270,18 @@ func TestAssistantConversationMigrationRoundTrips(t *testing.T) {
 	}
 	if n := count(t, conn, `select count(*) from information_schema.tables where table_name in ('assistant_conversation','assistant_message')`); n != 2 {
 		t.Fatalf("after up, %d assistant tables, want 2", n)
+	}
+	const runCols = `select count(*) from information_schema.columns where table_name = 'assistant_conversation' and column_name in ('run_id','run_until')`
+	if err := migrate.RollbackBelow(dsn, "20261117210000"); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, conn, runCols); n != 0 {
+		t.Fatalf("after down, %d run columns remain", n)
+	}
+	if err := migrate.Run(dsn); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, conn, runCols); n != 2 {
+		t.Fatalf("after up, %d run columns, want 2", n)
 	}
 }

@@ -1224,6 +1224,10 @@ type Gateway interface {
 	ListAssistantConversations(ctx context.Context, ownerID string) ([]AssistantConversation, error)
 	GetAssistantConversation(ctx context.Context, ownerID, name string) (*AssistantConversation, []AssistantMessage, error)
 	AppendAssistantMessages(ctx context.Context, actorID, ownerID, name string, in AssistantAppend) (*AssistantConversation, error)
+	// ClaimAssistantRun and ReleaseAssistantRun hold a conversation for one
+	// server run at a time (#2121).
+	ClaimAssistantRun(ctx context.Context, ownerID, name string, in AssistantRunClaim) error
+	ReleaseAssistantRun(ctx context.Context, ownerID, name, run string) error
 	DeleteAssistantConversation(ctx context.Context, actorID, ownerID, name string) error
 	// PruneAssistantConversations deletes up to limit conversations last
 	// changed before before (#2113).
