@@ -72,7 +72,7 @@ export async function listAuditLog(params?: {
 
 // actorLabel resolves an event's actor to something human: the username if the
 // actor is a human, else the id, else "system" (a platform-internal write). Under
-// impersonation the actor is the principal whose identity was assumed (the target).
+// impersonation the actor is the user whose identity was assumed (the target).
 export function actorLabel(e: AuditEvent): string {
   return e.actor_name || e.actor || "system";
 }
@@ -97,7 +97,7 @@ const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
   alarm: ["component", "Component"],
   command: ["command_type"],
   system_slot_assignment: ["slot"],
-  principal_grant: ["Role", "role"],
+  user_grant: ["Role", "role"],
 };
 
 // resourceLabel resolves the friendly handle an operator reads for a row's
@@ -121,7 +121,7 @@ const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].
 
 // auditFilterKeys are the faceted-search fields for the audit trail, consumed by
 // the shared FilterBar exactly as the inventory list views do: who (the acting
-// principal), action (the verb), resource (the kind), id (the resource id), and
+// user), action (the verb), resource (the kind), id (the resource id), and
 // how it arrived: channel (direct or mcp), the client an MCP caller declared,
 // and the agent that acted.
 // Matching is client-side over the loaded rows via lib/predicate. `who` is the

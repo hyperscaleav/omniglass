@@ -33,7 +33,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 |---|---|---|---|
 | [`list-alarms`](#list-alarms) | List the fleet's active alarms | `component:read` | read-only, idempotent |
 | [`list-audit-log`](#list-audit-log) | List audit-trail events | `audit:read:admin` | read-only, idempotent |
-| [`get-auth-me`](#get-auth-me) | The authenticated principal, its permissions, and grants | authn only | read-only, idempotent |
+| [`get-auth-me`](#get-auth-me) | The authenticated user, its permissions, and grants | authn only | read-only, idempotent |
 | [`get-auth-me-agent-policy`](#get-auth-me-agent-policy) | What the install lets an agent do | authn only | read-only, idempotent |
 | [`list-auth-me-notifications`](#list-auth-me-notifications) | List your inbox | `notification:read` | read-only, idempotent |
 | [`list-calc-rule`](#list-calc-rule) | List calc rules | `rule:read` | read-only, idempotent |
@@ -165,14 +165,14 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 | `channel` | string | no | Filter to the events that arrived through one channel; direct is a plain API call, with no channel |
 | `client` | string | no | Filter to the events whose declared MCP client contains this term, case-insensitively |
 | `limit` | integer | no | Max rows to return, newest first (default 100, capped at 500) |
-| `resource` | string | no | Filter to one resource kind (e.g. auth, principal_grant) |
+| `resource` | string | no | Filter to one resource kind (e.g. auth, user_grant) |
 | `verb` | string | no | Filter to one verb (e.g. login, create) |
 
 ## `get-auth-me`
 
-The authenticated principal, its permissions, and grants
+The authenticated user, its permissions, and grants
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 - Route: `GET /api/v1/auth/me`
 - Gate: authn only
@@ -196,7 +196,7 @@ Returns the install's resolved agent policy, always, ask or never for each opera
 
 List your inbox
 
-The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
 
 - Route: `GET /api/v1/auth/me/notifications`
 - Gate: `notification:read`
@@ -1278,7 +1278,7 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 
 List notifications
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
 
 - Route: `GET /api/v1/notifications`
 - Gate: `notification:read`

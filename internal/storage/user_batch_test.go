@@ -10,22 +10,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// The batched principal load (#671), measured against the single-row loader it
+// The batched user load (#671), measured against the single-row loader it
 // replaces on the LIST path. Internal (package storage) for the same reason
-// path_batch_test.go is: loadPrincipals and loadPrincipal are unexported, and no
+// path_batch_test.go is: loadUsers and loadUser are unexported, and no
 // exported entry point reaches the single-row one for a whole page, which is the
 // comparison that matters.
 //
 // Equality, not improvement. A batched loader that costs three statements but
 // answers differently from the loader every other read path still uses is not a
-// fix, it is a second implementation of the same fact. loadPrincipal is the
+// fix, it is a second implementation of the same fact. loadUser is the
 // oracle here exactly as PathOf was after #648, and it stays in the tree for
-// that reason as much as for GetPrincipal's sake.
+// that reason as much as for GetUser's sake.
 
-// principalBatchPool opens a pool on a fresh migrated database. Not boot-seeded:
+// userBatchPool opens a pool on a fresh migrated database. Not boot-seeded:
 // the fixture inserts the two roles it needs itself, so the directory it builds
 // is exactly the shape being asserted.
-func principalBatchPool(t *testing.T) *pgxpool.Pool {
+func userBatchPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	if HarnessDSN == nil {
 		t.Fatal("HarnessDSN is nil: the external TestMain no longer assigns it")
@@ -38,25 +38,25 @@ func principalBatchPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// principalBatchFixture builds a directory carrying every shape the two loaders
+// userBatchFixture builds a directory carrying every shape the two loaders
 // could disagree about:
 //
-//   - all three profiled kinds (human, service, outpost), because the batch reads
+//   - all three profiles (person, machine, outpost), because the batch reads
 //     them as one union over three differently shaped tables where the single-row
 //     path branches on kind;
-//   - a principal with direct grants only, one with inherited grants only, one
+//   - a user with direct grants only, one with inherited grants only, one
 //     with both, and one with neither, because the effective-grant read is a
-//     union of two disjoint sources and the ORDER within a principal (direct
+//     union of two disjoint sources and the ORDER within a user (direct
 //     first, then each group's, oldest first) is part of the answer;
 //   - two groups, one with a label and one without, because the label is
 //     a coalesce and only a null one proves which arm ran;
-//   - an archived principal, which the directory hides by default but GetPrincipal
+//   - an archived user, which the directory hides by default but GetUser
 //     still loads.
 //
 // Grant created_at values are set explicitly and distinctly. Both queries order
 // by created_at within a group and neither breaks a tie, so a fixture whose
 // grants shared a timestamp would compare two unspecified orderings.
-func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
+func userBatchFixture(t *testing.T, pool *pgxpool.Pool) []User {
 	t.Helper()
 	ctx := context.Background()
 
@@ -74,32 +74,32 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 
 	var withLabel, bare string
 	if err := pool.QueryRow(ctx,
-		`insert into principal_group (name, label) values ('alpha', 'Alpha Team') returning id`).Scan(&withLabel); err != nil {
+		`insert into user_group (name, label) values ('alpha', 'Alpha Team') returning id`).Scan(&withLabel); err != nil {
 		t.Fatalf("insert group alpha: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
-		`insert into principal_group (name) values ('bravo') returning id`).Scan(&bare); err != nil {
+		`insert into user_group (name) values ('bravo') returning id`).Scan(&bare); err != nil {
 		t.Fatalf("insert group bravo: %v", err)
 	}
 
 	mint := func(kind string) string {
 		t.Helper()
 		var id string
-		if err := pool.QueryRow(ctx, `insert into principal (kind) values ($1) returning id`, kind).Scan(&id); err != nil {
-			t.Fatalf("insert %s principal: %v", kind, err)
+		if err := pool.QueryRow(ctx, `insert into users (kind) values ($1) returning id`, kind).Scan(&id); err != nil {
+			t.Fatalf("insert %s user: %v", kind, err)
 		}
 		return id
 	}
 	human := func(username, email, display string, mustChange bool, avatar bool) string {
 		t.Helper()
-		id := mint("human")
+		id := mint("person")
 		var av *string
 		if avatar {
 			s := "data"
 			av = &s
 		}
 		if _, err := pool.Exec(ctx,
-			`insert into human (principal_id, username, email, label, must_change_password, avatar, avatar_updated_at)
+			`insert into person (user_id, username, email, label, must_change_password, avatar, avatar_updated_at)
 			 values ($1, $2, $3, $4, $5, $6::text, case when $6::text is null then null else now() end)`,
 			id, username, email, display, mustChange, av); err != nil {
 			t.Fatalf("insert human %s: %v", username, err)
@@ -112,15 +112,15 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 		t.Helper()
 		seq++
 		if _, err := pool.Exec(ctx,
-			fmt.Sprintf(`insert into principal_grant (%s, role_id, scope_kind, scope_id, scope_op, created_at) values ($1, $2, $3, $4, $5, $6)`, col),
+			fmt.Sprintf(`insert into user_grant (%s, role_id, scope_kind, scope_id, scope_op, created_at) values ($1, $2, $3, $4, $5, $6)`, col),
 			owner, roleID, scopeKind, scopeID, op, base.Add(time.Duration(seq)*time.Minute)); err != nil {
 			t.Fatalf("insert grant on %s: %v", owner, err)
 		}
 	}
-	join := func(groupID, principalID string) {
+	join := func(groupID, userID string) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`insert into principal_group_member (group_id, principal_id) values ($1, $2)`, groupID, principalID); err != nil {
+			`insert into user_group_member (group_id, user_id) values ($1, $2)`, groupID, userID); err != nil {
 			t.Fatalf("join group: %v", err)
 		}
 	}
@@ -133,8 +133,8 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 
 	// direct grants only
 	direct := human("dana", "dana@example.test", "Dana", false, true)
-	grantTo("principal_id", direct, viewerID, "system", strptr2("22222222-2222-2222-2222-222222222222"), "subtree")
-	grantTo("principal_id", direct, editorID, "all", nil, "subtree")
+	grantTo("user_id", direct, viewerID, "system", strptr2("22222222-2222-2222-2222-222222222222"), "subtree")
+	grantTo("user_id", direct, editorID, "all", nil, "subtree")
 
 	// inherited only, from both groups (so the per-group ordering is exercised)
 	inherited := human("ivan", "", "", true, false)
@@ -143,36 +143,36 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 
 	// both, plus membership of one group
 	both := human("bella", "bella@example.test", "Bella", false, false)
-	grantTo("principal_id", both, editorID, "component", strptr2("33333333-3333-3333-3333-333333333333"), "subtree_excl_root")
+	grantTo("user_id", both, editorID, "component", strptr2("33333333-3333-3333-3333-333333333333"), "subtree_excl_root")
 	join(withLabel, both)
 
 	// neither: no grants, no groups
 	quiet := human("quinn", "", "Quinn", false, false)
 
-	svc := mint("service")
-	if _, err := pool.Exec(ctx, `insert into service (principal_id, name) values ($1, 'ingest')`, svc); err != nil {
+	svc := mint("machine")
+	if _, err := pool.Exec(ctx, `insert into machine (user_id, name) values ($1, 'ingest')`, svc); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
-	grantTo("principal_id", svc, viewerID, "all", nil, "subtree")
+	grantTo("user_id", svc, viewerID, "all", nil, "subtree")
 
-	nd := mint("outpost")
-	if _, err := pool.Exec(ctx, `insert into outpost (principal_id, name) values ($1, 'edge-1')`, nd); err != nil {
+	nd := mint("machine")
+	if _, err := pool.Exec(ctx, `insert into outpost (user_id, name) values ($1, 'edge-1')`, nd); err != nil {
 		t.Fatalf("insert outpost: %v", err)
 	}
 	join(bare, nd)
 
 	archived := human("zed", "", "Zed", false, false)
-	if _, err := pool.Exec(ctx, `update principal set archived_at = now(), active = false where id = $1`, archived); err != nil {
-		t.Fatalf("archive principal: %v", err)
+	if _, err := pool.Exec(ctx, `update users set archived_at = now(), active = false where id = $1`, archived); err != nil {
+		t.Fatalf("archive user: %v", err)
 	}
 
 	ids := []string{direct, inherited, both, quiet, svc, nd, archived}
-	out := make([]Principal, 0, len(ids))
+	out := make([]User, 0, len(ids))
 	for _, id := range ids {
-		pr := Principal{ID: id}
-		if err := pool.QueryRow(ctx, `select kind, active, archived_at from principal where id = $1`, id).
+		pr := User{ID: id}
+		if err := pool.QueryRow(ctx, `select kind, active, archived_at from users where id = $1`, id).
 			Scan(&pr.Kind, &pr.Active, &pr.ArchivedAt); err != nil {
-			t.Fatalf("read principal %s: %v", id, err)
+			t.Fatalf("read user %s: %v", id, err)
 		}
 		out = append(out, pr)
 	}
@@ -181,70 +181,70 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 
 func strptr2(s string) *string { return &s }
 
-// TestBatchPrincipalLoadMatchesSingle is the equivalence gate: loadPrincipals
-// must fill a page exactly as loadPrincipal fills each of its rows, field for
+// TestBatchUserLoadMatchesSingle is the equivalence gate: loadUsers
+// must fill a page exactly as loadUser fills each of its rows, field for
 // field and grant for grant, in order.
-func TestBatchPrincipalLoadMatchesSingle(t *testing.T) {
+func TestBatchUserLoadMatchesSingle(t *testing.T) {
 	t.Parallel()
-	pool := principalBatchPool(t)
+	pool := userBatchPool(t)
 	ctx := context.Background()
 	pg := &PG{pool: pool}
 
-	bases := principalBatchFixture(t, pool)
+	bases := userBatchFixture(t, pool)
 
-	batched := append([]Principal(nil), bases...)
-	if err := pg.loadPrincipals(ctx, batched); err != nil {
-		t.Fatalf("loadPrincipals: %v", err)
+	batched := append([]User(nil), bases...)
+	if err := pg.loadUsers(ctx, batched); err != nil {
+		t.Fatalf("loadUsers: %v", err)
 	}
 	for i := range bases {
 		want := bases[i]
-		if err := pg.loadPrincipal(ctx, &want); err != nil {
-			t.Fatalf("loadPrincipal %s: %v", want.ID, err)
+		if err := pg.loadUser(ctx, &want); err != nil {
+			t.Fatalf("loadUser %s: %v", want.ID, err)
 		}
 		got := batched[i]
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("principal %s (%s) loaded differently by the two paths\n  batch:  %s\n  single: %s",
-				want.ID, want.Kind, describePrincipal(got), describePrincipal(want))
+			t.Errorf("user %s (%s) loaded differently by the two paths\n  batch:  %s\n  single: %s",
+				want.ID, want.Kind, describeUser(got), describeUser(want))
 		}
 	}
 }
 
-// TestBatchPrincipalLoadRejectsAProfilelessPrincipal holds the batch to the
-// single-row path's failure as well as its success. A principal row of a
-// profiled kind with no profile row is a broken invariant that loadPrincipal
+// TestBatchUserLoadRejectsAProfilelessUser holds the batch to the
+// single-row path's failure as well as its success. A user row of a
+// profiled kind with no profile row is a broken invariant that loadUser
 // raises as an error, and a batch that answered it with a nil profile would turn
 // a loud 500 into a directory row missing its username.
-func TestBatchPrincipalLoadRejectsAProfilelessPrincipal(t *testing.T) {
+func TestBatchUserLoadRejectsAProfilelessUser(t *testing.T) {
 	t.Parallel()
-	pool := principalBatchPool(t)
+	pool := userBatchPool(t)
 	ctx := context.Background()
 	pg := &PG{pool: pool}
 
 	var id string
-	if err := pool.QueryRow(ctx, `insert into principal (kind) values ('human') returning id`).Scan(&id); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := pool.QueryRow(ctx, `insert into users (kind) values ('person') returning id`).Scan(&id); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	orphan := []Principal{{ID: id, Kind: "human", Active: true}}
+	orphan := []User{{ID: id, Kind: "person", Active: true}}
 
-	single := pg.loadPrincipal(ctx, &Principal{ID: id, Kind: "human"})
-	batch := pg.loadPrincipals(ctx, orphan)
+	single := pg.loadUser(ctx, &User{ID: id, Kind: "person"})
+	batch := pg.loadUsers(ctx, orphan)
 	if single == nil {
-		t.Fatal("loadPrincipal accepted a human with no human row: the oracle no longer refuses this, so the comparison below is vacuous")
+		t.Fatal("loadUser accepted a human with no human row: the oracle no longer refuses this, so the comparison below is vacuous")
 	}
 	if batch == nil {
-		t.Errorf("loadPrincipals accepted a human with no human row (loadPrincipal refused it with %v): the batch must not soften a broken invariant into a nil profile", single)
+		t.Errorf("loadUsers accepted a human with no human row (loadUser refused it with %v): the batch must not soften a broken invariant into a nil profile", single)
 	}
 }
 
-// describePrincipal renders the fields the two loaders fill, so a failure names
+// describeUser renders the fields the two loaders fill, so a failure names
 // the field that differs rather than printing two pointer-laden structs.
-func describePrincipal(pr Principal) string {
+func describeUser(pr User) string {
 	s := fmt.Sprintf("kind=%s active=%v", pr.Kind, pr.Active)
 	switch {
-	case pr.Human != nil:
-		s += fmt.Sprintf(" human=%+v", *pr.Human)
-	case pr.Service != nil:
-		s += fmt.Sprintf(" service=%+v", *pr.Service)
+	case pr.Person != nil:
+		s += fmt.Sprintf(" human=%+v", *pr.Person)
+	case pr.Machine != nil:
+		s += fmt.Sprintf(" service=%+v", *pr.Machine)
 	case pr.Outpost != nil:
 		s += fmt.Sprintf(" outpost=%+v", *pr.Outpost)
 	default:

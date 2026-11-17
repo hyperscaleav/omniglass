@@ -45,7 +45,7 @@ func TestOutpostWriterBindsItsComponentAndEndpoint(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-2'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.2:22"}'::jsonb)`); err != nil {
+		('ssh', 'ssh', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	d1, d2 := f.componentID(t, "disp-1"), f.componentID(t, "disp-2")

@@ -239,8 +239,8 @@ describe("endpoint blade, held session", () => {
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
-  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
-  const viewer: Me = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] };
+  const operator: Me = { user: { id: "op", kind: "person" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+  const viewer: Me = { user: { id: "vw", kind: "person" }, permissions: ["*:read"], grants: [] };
 
   function mountHeld(me: Me) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -315,7 +315,7 @@ describe("endpoint blade, a probe's gate with no held session", () => {
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
-  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+  const operator: Me = { user: { id: "op", kind: "person" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
 
   it("reads the refusal and fixes the community in place", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

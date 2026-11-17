@@ -7,10 +7,10 @@
 # (#2088).
 
 Hide
-Type `demo_hush 'omniglass principal create --username ops --email ops@example.com && omniglass principal grant create ops --role operator --scope-kind all'`
+Type `demo_hush 'omniglass user create --username ops --email ops@example.com && omniglass user grant create ops --role operator --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'ops=$(OMNIGLASS_TOKEN=$(omniglass principal impersonate ops --mode act_as | jq -r .token) omniglass auth create-token --description "ops agent" --agent claude-code --ttl-days 7 | jq -r .token)'`
+Type `demo_hush 'ops=$(OMNIGLASS_TOKEN=$(omniglass user impersonate ops --mode act_as | jq -r .token) omniglass auth create-token --description "ops agent" --agent claude-code --ttl-days 7 | jq -r .token)'`
 Enter
 Wait
 Type `demo_hush 'mine=$(omniglass auth create-token --description "admin agent" --agent claude-code --ttl-days 7 | jq -r .token)'`

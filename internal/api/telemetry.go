@@ -25,7 +25,7 @@ import (
 // and something has to normalize it, which is driver work). It is the second ingest
 // lane beside the outpost's, and the two differ in exactly one respect: where the owner
 // comes from. An outpost cannot be trusted to name its own owner, so the server derives
-// it from the task's interface; a scoped principal can be, because the scope check
+// it from the task's interface; a scoped user can be, because the scope check
 // is the fence.
 //
 // The route authorizes, resolves and validates, then publishes onto the data lane
@@ -164,7 +164,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// system owner by ADR-0422): the owner is a component or a system
 		// target, resolved the way every route that acts on one is (#736,
 		// ADR-0116), each on its own tier. The ACTION scope is the one that
-		// confers telemetry:push, never a read: a principal routinely holds a
+		// confers telemetry:push, never a read: a user routinely holds a
 		// wide read and a narrow write (viewer over the fleet plus operator on
 		// one component), so fencing with the read scope would let it push to
 		// anything it can see. Push is the stronger grant, so its own scope is

@@ -13,14 +13,14 @@ import (
 // tool, so this is the only place the channel rule is observable.
 func TestAgentCeilingCoversTheMCPChannel(t *testing.T) {
 	t.Parallel()
-	person := &storage.Principal{}
+	person := &storage.User{}
 	if agentCeiling(person, "") {
 		t.Error("a personal token over REST is not ceilinged")
 	}
 	if !agentCeiling(person, storage.AuditChannelMCP) {
 		t.Error("a personal token over MCP is ceilinged")
 	}
-	agent := &storage.Principal{Agent: &storage.AgentCredential{Name: "claude"}}
+	agent := &storage.User{Agent: &storage.AgentCredential{Name: "claude"}}
 	if !agentCeiling(agent, "") {
 		t.Error("an agent token is ceilinged on every channel")
 	}
@@ -97,7 +97,7 @@ func TestRequestChannel(t *testing.T) {
 			t.Errorf("requestChannel(%+v, %q) = %q, want %q", c.agent, c.channel, got, c.want)
 		}
 	}
-	if !agentCeiling(&storage.Principal{}, storage.AuditChannelOmnibot) {
+	if !agentCeiling(&storage.User{}, storage.AuditChannelOmnibot) {
 		t.Error("a request on the omnibot channel is not held to the agent ceiling")
 	}
 }

@@ -50,7 +50,7 @@ func TestProductsAPI(t *testing.T) {
 
 	// A plain viewer (read everywhere, write nothing) reads the seeded official
 	// products via the product:read floor (*:read).
-	viewerTok := principalWithGrants(t, ctx, dsn, "product-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "product-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	out := c.do(viewerTok, http.MethodGet, "/products", nil, http.StatusOK)
 	var listed struct {
 		Products []struct {

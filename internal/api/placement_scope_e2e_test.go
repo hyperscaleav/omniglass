@@ -23,18 +23,18 @@ import (
 // to read, which is exactly what #699's draft route already refuses. These tests
 // hold the two to the same answer.
 //
-// Every one of them drives a NARROW-scoped principal and asserts the owner
+// Every one of them drives a NARROW-scoped user and asserts the owner
 // succeeding alongside on the identical body. Three scope defects in this arc
 // survived review because every fixture held an all scope, so an assertion that
-// a narrow principal is refused proves nothing on its own: a broken route
+// a narrow user is refused proves nothing on its own: a broken route
 // refuses everyone.
 
 // placementFixture is the fleet every test below shares: one campus, two wings
-// under it, and a component and a system inside wing-a for a narrow principal to
+// under it, and a component and a system inside wing-a for a narrow user to
 // write against. wing-b is the one it must never be able to read, and its label
 // is the string that must never appear in an answer it receives.
 //
-// The narrow principal carries ONE grant, deploy at wing-a, the shape a field
+// The narrow user carries ONE grant, deploy at wing-a, the shape a field
 // tech's grant takes (#1498). A location-scoped grant reaches the systems and
 // components placed in its subtree for read and create, so that one grant is
 // both halves of every assertion below: its create scope says which rows it may
@@ -63,7 +63,7 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	// The product every component below is created from: minted for the
 	// fixture rather than borrowed from the seeded catalog (#804).
 	product := storagetest.MintProduct(t, ctx, gw, "")
@@ -85,9 +85,9 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 		"name": "wing-b", "location_type": "building", "parent": "hq", "label": "Secret Wing",
 	}, http.StatusCreated)
 
-	// The owner builds the two rows the narrow principal then writes under. The
+	// The owner builds the two rows the narrow user then writes under. The
 	// rack and av-a sit in wing-a, which is what puts them inside that
-	// principal's own scope.
+	// user's own scope.
 	rack := c.do(owner, http.MethodPost, "/components", map[string]any{
 		"name": "rack", "product": product.Name, "location": "wing-a",
 	}, http.StatusCreated)
@@ -100,7 +100,7 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	c.do(owner, http.MethodPost, "/systems", map[string]any{
 		"name": "av-a", "system_type_id": "board", "location": "wing-a",
 	}, http.StatusCreated)
-	// The system in the wing the narrow principal cannot read. A component
+	// The system in the wing the narrow user cannot read. A component
 	// created into it would carry its TYPE label, the second placement fact a
 	// component's map reads.
 	c.do(owner, http.MethodPost, "/systems", map[string]any{
@@ -108,7 +108,7 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	}, http.StatusCreated)
 
 	sysAID := entityID(t, c, owner, "/systems", "av-a")
-	narrow := principalWithGrants(t, ctx, dsn, "wing-a-deploy", []grant{
+	narrow := userWithGrants(t, ctx, dsn, "wing-a-deploy", []grant{
 		{role: "deploy", scopeKind: "location", scopeID: entityID(t, c, owner, "/locations", "wing-a")},
 	})
 	return &placementFixture{
@@ -135,7 +135,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	t.Parallel()
 	f := newPlacementFixture(t)
 
-	// Inside its own wing the narrow principal creates normally, and the answer
+	// Inside its own wing the narrow user creates normally, and the answer
 	// carries the label of the location it may read.
 	got := f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
 		"name": "panel-a", "product": f.product.Name, "parent": f.rackID, "location": "wing-a",
@@ -160,7 +160,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	f.c.do(f.narrow, http.MethodPost, "/components", leakBody, http.StatusUnprocessableEntity)
 
 	// The system reference is the component map's other placement fact, and it
-	// leaks the same way: av-b sits in the wing this principal cannot read.
+	// leaks the same way: av-b sits in the wing this user cannot read.
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
 		"name": "panel-c", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusUnprocessableEntity)
@@ -212,7 +212,7 @@ func TestASystemCreateRefusesALocationTheCallerCannotRead(t *testing.T) {
 //
 // A location-scoped grant reaches a system or a component for read and create
 // only (#1498); the modify half of the cross-tier expansion is #10. So the move
-// is driven by a mover that holds the narrow principal's location grant plus
+// is driven by a mover that holds the narrow user's location grant plus
 // deploy on the tier of each row it moves: the tier grants are what admit the
 // move, the location grant is still the only read scope over wing-a, and the
 // 422 is the placement bind refusing wing-b.
@@ -231,7 +231,7 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 	f.c.do(f.narrow, http.MethodPost, "/components/panel-a:move",
 		map[string]any{"location": "wing-a"}, http.StatusForbidden)
 
-	mover := principalWithGrants(t, f.c.ctx, f.dsn, "wing-a-mover", []grant{
+	mover := userWithGrants(t, f.c.ctx, f.dsn, "wing-a-mover", []grant{
 		{role: "deploy", scopeKind: "location", scopeID: entityID(t, f.c, f.owner, "/locations", "wing-a")},
 		{role: "deploy", scopeKind: "component", scopeID: f.rackID},
 		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
@@ -267,7 +267,7 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 // alone (internal/scope/scope.go). The cross-tier reach runs one way only (a
 // location grant reaches the systems and components placed in it, #1498), never
 // this way: a grant scoped to a COMPONENT or a
-// SYSTEM contributes nothing to a location-tier resolve, so a principal holding
+// SYSTEM contributes nothing to a location-tier resolve, so a user holding
 // exactly one such grant resolves location:read to the empty set. Since #700
 // binds a placement within that set, it can create only what it places nowhere,
 // and is refused even the location its own scope root sits in.
@@ -277,7 +277,7 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 // The refusal cannot be a false negative: resolvePlacementRef and scopedGet are
 // the same call on the same scope (internal/storage/scopedcrud.go), so anything
 // this caller could GET it can still bind, and an empty location:read means it
-// can GET no location at all. And it is not the shape a real principal has: the
+// can GET no location at all. And it is not the shape a real user has: the
 // last stanza puts the ordinary viewer read floor beside the IDENTICAL narrow
 // write grant, which changes no write scope (viewer carries no create), and the
 // same refused body is created.
@@ -287,7 +287,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 
 	// One grant, on the component tier, at the rack that sits in wing-a.
 	// component:create resolves to that rack; location:read resolves to nothing.
-	componentOnly := principalWithGrants(t, f.c.ctx, f.dsn, "rack-operator", []grant{
+	componentOnly := userWithGrants(t, f.c.ctx, f.dsn, "rack-operator", []grant{
 		{role: "operator", scopeKind: "component", scopeID: f.rackID},
 	})
 
@@ -304,7 +304,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 	}, http.StatusUnprocessableEntity)
 
 	// The other verb answers the same, and its control is a move that names only
-	// a component-tier reference, which the same principal is served.
+	// a component-tier reference, which the same user is served.
 	f.c.do(componentOnly, http.MethodPost, "/components/panel-unplaced:move",
 		map[string]any{"parent": f.rackID}, http.StatusOK)
 	f.c.do(componentOnly, http.MethodPost, "/components/panel-unplaced:move",
@@ -312,7 +312,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 
 	// The system tier is the same sentence with the other scope kind: a grant at
 	// av-a resolves system:create there and location:read nowhere.
-	systemOnly := principalWithGrants(t, f.c.ctx, f.dsn, "av-a-deploy", []grant{
+	systemOnly := userWithGrants(t, f.c.ctx, f.dsn, "av-a-deploy", []grant{
 		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
 	})
 	f.c.do(systemOnly, http.MethodPost, "/systems", map[string]any{
@@ -323,9 +323,9 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 	}, http.StatusUnprocessableEntity)
 
 	// The read floor restores the bind. Same narrow write grant, plus the
-	// all-scoped viewer a real principal carries beside it, and the body refused
+	// all-scoped viewer a real user carries beside it, and the body refused
 	// above is created with wing-a's label stamped into it.
-	withFloor := principalWithGrants(t, f.c.ctx, f.dsn, "rack-operator-with-floor", []grant{
+	withFloor := userWithGrants(t, f.c.ctx, f.dsn, "rack-operator-with-floor", []grant{
 		{role: "operator", scopeKind: "component", scopeID: f.rackID},
 		{role: "viewer", scopeKind: "all"},
 	})
@@ -348,7 +348,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 // with. Since #700 the bind resolves inside the caller's own location:read
 // scope, so every candidate is a row that caller already may read.
 //
-// The narrow principal runs first and the owner runs the identical body second:
+// The narrow user runs first and the owner runs the identical body second:
 // the same reference is ambiguous between TWO rooms for the one and THREE for
 // the other, off the same fleet, which is what makes the filtering a property of
 // the caller's scope rather than of the fixture.
@@ -370,7 +370,7 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	westOne := createdID(t, f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
 		"name": "1", "location_type": "room", "parent": "west",
 	}, http.StatusCreated))
-	// The third "1", in the wing this principal cannot read at all.
+	// The third "1", in the wing this user cannot read at all.
 	hiddenOne := createdID(t, f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
 		"name": "1", "location_type": "room", "parent": "wing-b",
 	}, http.StatusCreated))

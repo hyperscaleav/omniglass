@@ -66,7 +66,7 @@ export function sidebarPollMs(f: SimFleet | undefined): number {
   return f?.connected ? SIDEBAR_POLL_MS : SIDEBAR_IDLE_POLL_MS;
 }
 
-// simulatorConnected is the nav's "simulator" condition (#890): a principal
+// simulatorConnected is the nav's "simulator" condition (#890): a user
 // who can read simulation, with a simulator connected to the server. The
 // sidebar's Simulation door and Platform health's simulation section (#1647)
 // both wait on it, so they appear and disappear together.

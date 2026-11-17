@@ -21,7 +21,7 @@ import (
 //
 // The name at the time of the action is not lost: it is in the old and new row
 // images, which is the right place for it. A point-in-time snapshot, not a lookup
-// key. This mirrors actor_username, which is snapshotted beside actor_principal_id
+// key. This mirrors actor_username, which is snapshotted beside actor_user_id
 // for exactly this reason.
 
 // auditedRename is one renameable, dual-addressable resource: how to create it, how
@@ -87,8 +87,8 @@ func auditedRenames() []auditedRename {
 				if err != nil {
 					return "", err
 				}
-				// An outpost IS a principal: principal_id is the outpost table's primary key.
-				return n.PrincipalID, nil
+				// An outpost IS a user: user_id is the outpost table's primary key.
+				return n.UserID, nil
 			},
 		},
 	}

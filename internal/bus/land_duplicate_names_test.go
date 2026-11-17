@@ -83,7 +83,7 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 
 	// A task bound to compA's interface, on outpost-a.
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('display-1-tcp', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb)`,
+		('display-1-tcp', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb)`,
 		compA.ID); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}

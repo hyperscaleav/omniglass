@@ -45,8 +45,8 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('ip-control', 'tcp', $1::uuid, (select principal_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
-		('serial', 'tcp', $1::uuid, (select principal_id from outpost where name = 'edge'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID)
+		('ip-control', 'tcp', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
+		('serial', 'tcp', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID)
 
 	// want: the operator's owner-level declaration.
 	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "video-input", "", json.RawMessage(`"hdmi1"`), all, all); err != nil {
@@ -98,7 +98,7 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "serial", json.RawMessage(`"dp1"`), nil); err != nil {
@@ -140,8 +140,8 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
-		('ssh', 'ssh', $1::uuid, (select principal_id from outpost where name = 'edge'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID)
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
+		('ssh', 'ssh', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID)
 	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "video-input", "", json.RawMessage(`"hdmi1"`), all, all); err != nil {
 		t.Fatalf("declare video-input: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {

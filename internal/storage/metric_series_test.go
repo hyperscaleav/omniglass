@@ -320,7 +320,7 @@ func TestACollectingOutpostStartsItsOwnSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 	var outpostA string
-	if err := f.conn.QueryRow(f.ctx, `select principal_id::text from outpost where name = 'outpost-a'`).Scan(&outpostA); err != nil {
+	if err := f.conn.QueryRow(f.ctx, `select user_id::text from outpost where name = 'outpost-a'`).Scan(&outpostA); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()

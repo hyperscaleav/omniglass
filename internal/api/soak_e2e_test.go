@@ -116,7 +116,7 @@ func TestSoakVerdictReadsThePlatformThroughItsAPI(t *testing.T) {
 
 	// A token that cannot read the whole page cannot judge it: a verdict
 	// from part of the page would pass what it could not see.
-	narrow := getAs(principalWithGrants(t, r.ctx, r.dsn, "soak-outpost-reader", []grant{{role: "outpost-reader", scopeKind: "all"}}))
+	narrow := getAs(userWithGrants(t, r.ctx, r.dsn, "soak-outpost-reader", []grant{{role: "outpost-reader", scopeKind: "all"}}))
 	until := time.Now().UTC()
 	if _, err := lab.ReadSoak(r.ctx, narrow, until.Add(-lab.SoakMinWindow), until); err == nil || !strings.Contains(err.Error(), "cannot read the whole platform health page") {
 		t.Errorf("an outpost-read-only token: err = %v, want a refusal naming the page", err)

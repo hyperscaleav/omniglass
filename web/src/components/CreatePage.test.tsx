@@ -38,10 +38,10 @@ const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_ty
 const west: Location = { id: uuidFor("l-west"), name: "west", label: "West", location_type: "building", parent_id: hq.id, path: "hq.west" };
 const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 // The seeded deploy role over viewer's read floor: no standard:create, no endpoint:create.
 const deploy: Me = {
-  principal: { id: "u-deploy", kind: "human" }, human: { username: "deploy" }, grants: [],
+  user: { id: "u-deploy", kind: "person" }, person: { username: "deploy" }, grants: [],
   permissions: ["*:read", ...["location", "system", "component"].flatMap((r) => ["create", "update", "rename", "move"].map((a) => `${r}:${a}`))],
 };
 

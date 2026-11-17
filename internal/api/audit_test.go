@@ -66,7 +66,7 @@ func TestAuditLogAPI(t *testing.T) {
 	var created struct {
 		ID string `json:"id"`
 	}
-	_ = json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created)
+	_ = json.Unmarshal(c.do(ownerTok, http.MethodPost, "/users", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created)
 	loginBody, _ := json.Marshal(map[string]string{"username": "alice", "password": "orange-boat-42x"})
 	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(loginBody))
 	if err != nil || resp.StatusCode != http.StatusNoContent {
@@ -75,13 +75,13 @@ func TestAuditLogAPI(t *testing.T) {
 	resp.Body.Close()
 
 	// The owner sees the login event (captured as verb=login, resource=auth,
-	// attributed to alice) and the create-principal event.
+	// attributed to alice) and the create-user event.
 	all := list(ownerTok, "")
 	if !has(all, func(e auditEvent) bool { return e.Verb == "login" && e.Resource == "auth" && e.ActorName == "alice" }) {
 		t.Fatalf("no login event for alice in %+v", all)
 	}
-	if !has(all, func(e auditEvent) bool { return e.Verb == "create" && e.Resource == "principal" }) {
-		t.Fatalf("no create-principal event in the audit log")
+	if !has(all, func(e auditEvent) bool { return e.Verb == "create" && e.Resource == "user" }) {
+		t.Fatalf("no create-user event in the audit log")
 	}
 
 	// A wrong password on a REAL account is audited as login_failed, attributed to
@@ -118,7 +118,7 @@ func TestAuditLogAPI(t *testing.T) {
 	}
 
 	// audit:read gates the surface: a viewer (read on everything else) cannot read it.
-	viewerTok := principalWithGrants(t, ctx, dsn, "an-auditor-not", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "an-auditor-not", []grant{{role: "viewer", scopeKind: "all"}})
 	if code, _ := c.send(viewerTok, http.MethodGet, "/audit-log", nil); code != http.StatusForbidden {
 		t.Fatalf("viewer reading audit-log: want 403 (no audit:read), got %d", code)
 	}
@@ -126,7 +126,7 @@ func TestAuditLogAPI(t *testing.T) {
 	// An action taken while impersonating records the real actor. The owner acts as
 	// alice and edits alice's profile; the audit row names alice as actor and the
 	// owner (root) as the real actor.
-	code, body := c.send(ownerTok, http.MethodPost, "/principals/"+created.ID+":impersonate", map[string]any{"mode": "act_as"})
+	code, body := c.send(ownerTok, http.MethodPost, "/users/"+created.ID+":impersonate", map[string]any{"mode": "act_as"})
 	if code != http.StatusCreated {
 		t.Fatalf("impersonate alice: %d (%s)", code, body)
 	}

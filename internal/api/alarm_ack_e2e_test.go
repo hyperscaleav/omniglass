@@ -13,14 +13,14 @@ import (
 
 // The acknowledge route end to end (#734), driven as a caller drives it.
 //
-// Every principal here is NARROW. Three scope defects in this arc reached review
+// Every user here is NARROW. Three scope defects in this arc reached review
 // because the fixture drove an owner holding `all`, under which every scope
 // question answers yes; an owner runs beside them only as the control that proves
 // a refusal is a scope boundary and not a broken route.
 //
 // The two layers are separate, and the fixture separates them: `alarm:acknowledge`
 // is the capability (a fast reject in middleware), and the component tier the
-// grant is scoped at is the reach. A principal can hold the capability everywhere
+// grant is scoped at is the reach. A user can hold the capability everywhere
 // and the reach nowhere, or read a component fleet-wide and acknowledge on none
 // of it, and both must refuse.
 
@@ -29,7 +29,7 @@ type ackFixture struct {
 	dsn   string
 	owner string
 	// responder holds operator (which carries alarm:acknowledge) scoped to ONE
-	// component, beside the all-scoped viewer floor a real principal carries. The
+	// component, beside the all-scoped viewer floor a real user carries. The
 	// floor is what makes the test meaningful: it can READ every component in the
 	// fleet and must be able to acknowledge on only one of them.
 	responder string
@@ -56,7 +56,7 @@ func newAckFixture(t *testing.T) *ackFixture {
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	f := &ackFixture{c: c, dsn: dsn, owner: owner, mine: "codec-mine", theirs: "codec-theirs"}
 
 	for _, name := range []string{f.mine, f.theirs} {
@@ -70,10 +70,10 @@ func newAckFixture(t *testing.T) *ackFixture {
 	f.theirsAlarm = raiseFor(t, c, owner, f.theirs, "high", "no-signal", "no signal")
 
 	floor := grant{role: "viewer", scopeKind: "all"}
-	f.responder = principalWithGrants(t, ctx, dsn, "responder", []grant{
+	f.responder = userWithGrants(t, ctx, dsn, "responder", []grant{
 		{role: "operator", scopeKind: "component", scopeID: f.mineCompID}, floor,
 	})
-	f.watcher = principalWithGrants(t, ctx, dsn, "watcher", []grant{floor})
+	f.watcher = userWithGrants(t, ctx, dsn, "watcher", []grant{floor})
 	return f
 }
 
@@ -123,7 +123,7 @@ func ackPath(component, id string) string {
 }
 
 // TestAnOperatorAcknowledgesInScope is the happy path, driven by the narrow
-// principal rather than by the owner.
+// user rather than by the owner.
 func TestAnOperatorAcknowledgesInScope(t *testing.T) {
 	t.Parallel()
 	f := newAckFixture(t)
@@ -137,7 +137,7 @@ func TestAnOperatorAcknowledgesInScope(t *testing.T) {
 		t.Fatalf("acknowledge returned %+v, want an acknowledgement", got)
 	}
 	if got.AcknowledgedBy != "responder" {
-		t.Errorf("acknowledged by %q, want the calling principal", got.AcknowledgedBy)
+		t.Errorf("acknowledged by %q, want the calling user", got.AcknowledgedBy)
 	}
 	if !got.Active || got.ClearedAt != nil {
 		t.Error("acknowledging cleared the alarm: the raised state belongs to the condition, not to the person")
@@ -152,7 +152,7 @@ func TestAnOperatorAcknowledgesInScope(t *testing.T) {
 
 // TestAcknowledgeRefusesWithoutTheCapability drives the fast-reject layer: the
 // watcher can READ this alarm perfectly well and holds no acknowledgement, so it
-// is a 403 rather than a non-disclosing 404. It is not an owner-shaped principal
+// is a 403 rather than a non-disclosing 404. It is not an owner-shaped user
 // and the refusal is not a broken route, which the owner control below proves.
 func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
 	t.Parallel()
@@ -164,7 +164,7 @@ func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
 	}
 	f.c.do(f.watcher, http.MethodPost, ackPath(f.mine, f.mineAlarm), nil, http.StatusForbidden)
 
-	// Control: the same body, from a principal that holds the capability, lands.
+	// Control: the same body, from a user that holds the capability, lands.
 	f.c.do(f.owner, http.MethodPost, ackPath(f.mine, f.mineAlarm), nil, http.StatusOK)
 
 	// And the refusal really refused: the alarm the watcher was turned away from
@@ -198,7 +198,7 @@ func TestAcknowledgeRefusesOutsideTheScope(t *testing.T) {
 	}
 	f.c.do(f.responder, http.MethodPost, ackPath(f.theirs, f.theirsAlarm), nil, http.StatusForbidden)
 
-	// The near one, same principal, same verb: allowed. So the refusal above is
+	// The near one, same user, same verb: allowed. So the refusal above is
 	// the scope boundary and not the route.
 	f.c.do(f.responder, http.MethodPost, ackPath(f.mine, f.mineAlarm), nil, http.StatusOK)
 

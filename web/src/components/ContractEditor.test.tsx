@@ -31,9 +31,9 @@ const catalog: PropertyRow[] = [
   { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 // A reader of everything: it can see a contract but never write one.
-const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["*:read"], grants: [] };
+const reader: Me = { user: { id: "r", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -149,7 +149,7 @@ describe("ContractEditor on a standard", () => {
     expect(queryByLabelText("Withdraw seat_count")).toBeNull();
   });
 
-  it("hides the write controls from a principal without standard:update", () => {
+  it("hides the write controls from a user without standard:update", () => {
     const { getByText, queryByLabelText } = mount("standard", { me: reader });
     expect(getByText("seat_count")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();
@@ -200,11 +200,11 @@ describe("ContractEditor on a location type", () => {
   });
 
   // A location type's contract is part of the location_type catalog, so the
-  // server gates it on location_type:update, not location:update. A principal
+  // server gates it on location_type:update, not location:update. A user
   // holding only location writes must not see the write controls.
   it("gates its write controls on location_type:update, not location:update", () => {
-    const locationWriter: Me = { principal: { id: "l", kind: "human" }, permissions: ["*:read", "location:update", "location:delete"], grants: [] };
-    const typeWriter: Me = { principal: { id: "t", kind: "human" }, permissions: ["*:read", "location_type:update", "location_type:delete"], grants: [] };
+    const locationWriter: Me = { user: { id: "l", kind: "person" }, permissions: ["*:read", "location:update", "location:delete"], grants: [] };
+    const typeWriter: Me = { user: { id: "t", kind: "person" }, permissions: ["*:read", "location_type:update", "location_type:delete"], grants: [] };
     expect(mount("location-type", { me: locationWriter }).queryByLabelText("Property to declare")).toBeNull();
     expect(mount("location-type", { me: typeWriter }).getByLabelText("Property to declare")).toBeTruthy();
   });

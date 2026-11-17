@@ -50,7 +50,7 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('pj-ip', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
+		('pj-ip', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -61,7 +61,7 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "lamp-mode", Label: "Lamp mode", DataType: "string"}); err != nil {

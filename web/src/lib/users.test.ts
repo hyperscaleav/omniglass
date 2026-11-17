@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, kindLabel, roleFilterKeys, type Principal, type Role } from "./principals";
+import { listUsers, createUser, updateUser, createGrant, revokeGrant, setUserActive, userName, kindLabel, roleFilterKeys, type User, type Role } from "./users";
 import { buildPredicate, type Chip } from "./predicate";
 import { uuidFor } from "./testids";
 
@@ -9,35 +9,35 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-describe("principals data layer", () => {
+describe("users data layer", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("lists principals and unwraps the envelope", async () => {
+  it("lists users and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ principals: [{ id: "1", kind: "human", human: { username: "ops" }, grants: [] }] }),
+      jsonResponse({ users: [{ id: "1", kind: "person", person: { username: "ops" }, grants: [] }] }),
     );
-    const ps = await listPrincipals();
+    const ps = await listUsers();
     expect(ps).toHaveLength(1);
-    expect(ps[0].human?.username).toBe("ops");
+    expect(ps[0].person?.username).toBe("ops");
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/principals");
+    expect(req.url).toContain("/api/v1/users");
   });
 
   it("passes the kind filter as a query param", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ principals: [] }));
-    await listPrincipals("human");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ users: [] }));
+    await listUsers("person");
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("kind=human");
+    expect(req.url).toContain("kind=person");
   });
 
-  it("posts the create body and returns the created principal", async () => {
+  it("posts the create body and returns the created user", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "2", kind: "human", human: { username: "bob" }, grants: [] }, 201),
+      jsonResponse({ id: "2", kind: "person", person: { username: "bob" }, grants: [] }, 201),
     );
-    const created = await createPrincipal({ username: "bob", password: "brand-new-pw" });
-    expect(created.human?.username).toBe("bob");
+    const created = await createUser({ username: "bob", password: "brand-new-pw" });
+    expect(created.person?.username).toBe("bob");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(await req.json()).toMatchObject({ username: "bob" });
@@ -45,22 +45,22 @@ describe("principals data layer", () => {
 
   it("throws on an error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "username already exists" }, 409));
-    await expect(createPrincipal({ username: "dup" })).rejects.toBeTruthy();
+    await expect(createUser({ username: "dup" })).rejects.toBeTruthy();
   });
 
   it("PATCHes the changed fields to the id path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "p1", kind: "human", human: { username: "renamed" }, grants: [] }, 200),
+      jsonResponse({ id: "p1", kind: "person", person: { username: "renamed" }, grants: [] }, 200),
     );
-    const out = await updatePrincipal("p1", { username: "renamed", label: "New" });
-    expect(out.human?.username).toBe("renamed");
+    const out = await updateUser("p1", { username: "renamed", label: "New" });
+    expect(out.person?.username).toBe("renamed");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
-    expect(req.url).toContain("/api/v1/principals/p1");
+    expect(req.url).toContain("/api/v1/users/p1");
     expect(await req.json()).toMatchObject({ username: "renamed", label: "New" });
   });
 
-  it("POSTs a grant to the principal's grants path", async () => {
+  it("POSTs a grant to the user's grants path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: "g1", role: "viewer", scope_kind: "all" }, 201),
     );
@@ -68,7 +68,7 @@ describe("principals data layer", () => {
     expect(g.id).toBe("g1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
-    expect(req.url).toContain("/api/v1/principals/p1/grants");
+    expect(req.url).toContain("/api/v1/users/p1/grants");
     expect(await req.json()).toMatchObject({ role: "viewer", scope_kind: "all" });
   });
 
@@ -77,7 +77,7 @@ describe("principals data layer", () => {
     await revokeGrant("p1", "g1");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
-    expect(req.url).toContain("/api/v1/principals/p1/grants/g1");
+    expect(req.url).toContain("/api/v1/users/p1/grants/g1");
   });
 
   it("disable and enable POST to the right custom method", async () => {
@@ -86,17 +86,17 @@ describe("principals data layer", () => {
       calls.push((input as Request).url);
       return Promise.resolve(new Response(null, { status: 204 }));
     });
-    await setPrincipalActive("p1", false);
-    await setPrincipalActive("p1", true);
-    expect(calls[0]).toContain("/api/v1/principals/p1:disable");
-    expect(calls[1]).toContain("/api/v1/principals/p1:enable");
+    await setUserActive("p1", false);
+    await setUserActive("p1", true);
+    expect(calls[0]).toContain("/api/v1/users/p1:disable");
+    expect(calls[1]).toContain("/api/v1/users/p1:enable");
   });
 
-  it("principalName prefers label, then username, then the service name", () => {
-    const human = (h: Partial<Principal["human"]>): Principal => ({ id: "x", kind: "human", active: true, human: h as never, grants: [] });
-    expect(principalName(human({ username: "u", label: "Dee" }))).toBe("Dee");
-    expect(principalName(human({ username: "u" }))).toBe("u");
-    expect(principalName({ id: uuidFor("p-svc"), kind: "service", active: true, service: { name: "svc" }, grants: [] })).toBe("svc");
+  it("userName prefers label, then username, then the service name", () => {
+    const human = (h: Partial<User["person"]>): User => ({ id: "x", kind: "person", active: true, person: h as never, grants: [] });
+    expect(userName(human({ username: "u", label: "Dee" }))).toBe("Dee");
+    expect(userName(human({ username: "u" }))).toBe("u");
+    expect(userName({ id: uuidFor("p-svc"), kind: "machine", active: true, machine: { name: "svc" }, grants: [] })).toBe("svc");
   });
 });
 
@@ -110,7 +110,7 @@ const role = (p: Partial<Role>): Role => ({ id: p.id ?? "x", name: p.id ?? "x", 
 const roles: Role[] = [
   role({ id: "viewer", label: "Viewer", effective_permissions: ["*:read"] }),
   role({ id: "operator", label: "Operator", effective_permissions: ["*:read", "alarm:ack"] }),
-  role({ id: "admin", label: "Administrator", effective_permissions: ["*:read", "principal:*", "audit:read:admin"] }),
+  role({ id: "admin", label: "Administrator", effective_permissions: ["*:read", "user:*", "audit:read:admin"] }),
   role({ id: "owner", label: "Owner", effective_permissions: [">"] }),
 ];
 
@@ -157,7 +157,7 @@ describe("roleFilterKeys", () => {
     expect(byKey.name.values!(roles)).toEqual(["Administrator", "Operator", "Owner", "Viewer"]);
     expect(byKey.id.values!(roles)).toEqual(["admin", "operator", "owner", "viewer"]);
     // The permission catalog is the distinct resource heads plus the superuser tail.
-    expect(byKey.permission.values!(roles)).toEqual(["*", ">", "alarm", "audit", "principal"]);
+    expect(byKey.permission.values!(roles)).toEqual(["*", ">", "alarm", "audit", "user"]);
   });
 });
 
@@ -165,8 +165,8 @@ describe("roleFilterKeys", () => {
 // while the wire still carries human and service until #2075.
 describe("kindLabel", () => {
   it("reads the wire kinds as person and machine", () => {
-    expect(kindLabel("human")).toBe("person");
-    expect(kindLabel("service")).toBe("machine");
+    expect(kindLabel("person")).toBe("person");
+    expect(kindLabel("machine")).toBe("machine");
   });
   it("passes any other kind through", () => {
     expect(kindLabel("outpost")).toBe("outpost");

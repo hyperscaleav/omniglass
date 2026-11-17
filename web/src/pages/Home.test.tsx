@@ -30,7 +30,7 @@ const view: PlatformView = {
     { name: "edge-c", label: "", enrolled: false },
   ],
 };
-const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, human: { username: "ada" }, permissions, grants: [] });
+const meWith = (permissions: string[]): Me => ({ user: { id: "p", kind: "person" }, person: { username: "ada" }, permissions, grants: [] });
 
 const fleet = (openAlarms?: number): FleetView => ({
   locations: [],

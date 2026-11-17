@@ -24,7 +24,7 @@ func TestMigrateRoundTrip(t *testing.T) {
 	defer conn.Close(ctx)
 
 	want := []string{
-		"principal", "human", "service", "credential", "role", "principal_grant", "audit_log",
+		"users", "person", "machine", "credential", "role", "user_grant", "audit_log",
 	}
 	// platform_setting was a decoy with zero readers and writers (settings live
 	// in setting_override); #462 dropped it, so it must not exist after up.

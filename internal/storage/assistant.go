@@ -15,7 +15,7 @@ import (
 // Omnibot conversations (#2113): a person's named conversations with omnibot,
 // kept so a later session, or the person's own client after an unattended run
 // paused, carries one on. A conversation is its owner's alone: every query
-// carries the ownership predicate, and anyone else, an owner-role principal
+// carries the ownership predicate, and anyone else, an owner-role user
 // included, finds nothing (the non-disclosing ErrAssistantConversationNotFound,
 // ADR-2113). Its pending field holds the write a paused run waits on; it is
 // the transcript's last word, not a server-side approval, since nothing on the
@@ -102,7 +102,7 @@ func scanAssistantConversation(row pgx.Row) (*AssistantConversation, error) {
 }
 
 func getAssistantConversation(ctx context.Context, q querier, ownerID, name string, lock bool) (*AssistantConversation, error) {
-	sql := `select ` + assistantConversationCols + ` from assistant_conversation c where c.principal_id = $1::uuid and c.name = $2`
+	sql := `select ` + assistantConversationCols + ` from assistant_conversation c where c.user_id = $1::uuid and c.name = $2`
 	if lock {
 		sql += ` for update`
 	}
@@ -137,7 +137,7 @@ func (p *PG) CreateAssistantConversation(ctx context.Context, actorID, ownerID, 
 		return nil, fmt.Errorf("storage: begin create assistant conversation: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	err = tx.QueryRow(ctx, `insert into assistant_conversation (principal_id, name)
+	err = tx.QueryRow(ctx, `insert into assistant_conversation (user_id, name)
 		values ($1::uuid, coalesce(nullif($2, ''), 'c-' || left(replace(gen_random_uuid()::text, '-', ''), 10)))
 		returning name`, ownerID, name).Scan(&name)
 	if isUniqueViolation(err) {
@@ -167,7 +167,7 @@ func (p *PG) ListAssistantConversations(ctx context.Context, ownerID string) ([]
 		return out, nil
 	}
 	rows, err := p.pool.Query(ctx, `select `+assistantConversationCols+` from assistant_conversation c
-		where c.principal_id = $1::uuid order by c.updated_at desc, c.name`, ownerID)
+		where c.user_id = $1::uuid order by c.updated_at desc, c.name`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list assistant conversations: %w", err)
 	}
@@ -330,7 +330,7 @@ func (p *PG) ReleaseAssistantRun(ctx context.Context, ownerID, name, run string)
 		return ErrAssistantConversationNotFound
 	}
 	if _, err := p.pool.Exec(ctx, `update assistant_conversation set run_id = null, run_until = null
-		where principal_id = $1::uuid and name = $2 and run_id = $3`, ownerID, name, run); err != nil {
+		where user_id = $1::uuid and name = $2 and run_id = $3`, ownerID, name, run); err != nil {
 		return fmt.Errorf("storage: release assistant run: %w", err)
 	}
 	return nil

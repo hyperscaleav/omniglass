@@ -494,7 +494,7 @@ func TestPlatformViewAPIOmitsWhatTheCallerCannotRead(t *testing.T) {
 	}
 	r := newPlatformViewRig(t)
 	hq := r.location(t, "hq")
-	tok := principalWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
+	tok := userWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
 		{role: "outpost-reader", scopeKind: "all"},
 		{role: "placed-reader", scopeKind: "location", scopeID: hq},
 	})
@@ -533,10 +533,10 @@ func TestPlatformViewAPIRefusesWithoutAFleetWideOutpostRead(t *testing.T) {
 	}
 	r := newPlatformViewRig(t)
 	hq := r.location(t, "hq")
-	none := principalWithGrants(t, r.ctx, r.dsn, "no-outpost-read", []grant{{role: "component-reader", scopeKind: "all"}})
+	none := userWithGrants(t, r.ctx, r.dsn, "no-outpost-read", []grant{{role: "component-reader", scopeKind: "all"}})
 	r.c.do(none, http.MethodGet, "/views/platform", nil, http.StatusForbidden)
 
-	located := principalWithGrants(t, r.ctx, r.dsn, "hq-viewer", []grant{{role: "viewer", scopeKind: "location", scopeID: hq}})
+	located := userWithGrants(t, r.ctx, r.dsn, "hq-viewer", []grant{{role: "viewer", scopeKind: "location", scopeID: hq}})
 	r.c.do(located, http.MethodGet, "/views/platform", nil, http.StatusForbidden)
 }
 
@@ -609,7 +609,7 @@ func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
 	}
 
 	hq := r.location(t, "hq")
-	scoped := r.read(t, principalWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
+	scoped := r.read(t, userWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
 		{role: "outpost-reader", scopeKind: "all"},
 		{role: "placed-reader", scopeKind: "location", scopeID: hq},
 	}))
@@ -782,11 +782,11 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 
 	hq := r.location(t, "hq")
 	r.c.do("", http.MethodGet, path, nil, http.StatusUnauthorized)
-	noSim := principalWithGrants(t, ctx, dsn, "loop-no-sim", []grant{{role: "loop-component-reader", scopeKind: "all"}})
+	noSim := userWithGrants(t, ctx, dsn, "loop-no-sim", []grant{{role: "loop-component-reader", scopeKind: "all"}})
 	r.c.do(noSim, http.MethodGet, path, nil, http.StatusForbidden)
-	located := principalWithGrants(t, ctx, dsn, "loop-located", []grant{{role: "loop-sim-reader", scopeKind: "location", scopeID: hq}})
+	located := userWithGrants(t, ctx, dsn, "loop-located", []grant{{role: "loop-sim-reader", scopeKind: "location", scopeID: hq}})
 	r.c.do(located, http.MethodGet, path, nil, http.StatusNotFound)
-	reader := principalWithGrants(t, ctx, dsn, "loop-reader", []grant{{role: "loop-sim-reader", scopeKind: "all"}})
+	reader := userWithGrants(t, ctx, dsn, "loop-reader", []grant{{role: "loop-sim-reader", scopeKind: "all"}})
 
 	// Before the ring has bracketed anything, an admin reads no outpost.
 	if w := read(r.owner); len(w.Outposts) != 0 || w.WindowSeconds != 120 || w.BracketSeconds != 60 {

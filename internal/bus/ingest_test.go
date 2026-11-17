@@ -89,8 +89,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), $1::jsonb),
-		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), $1::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
@@ -393,9 +393,9 @@ func TestOutpostTickLandsEveryGroupOverNATS(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb),
-		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb),
-		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

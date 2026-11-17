@@ -171,8 +171,8 @@ func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, o
 	rows, err := bt.Query(ctx, `select 'component', id::text, id::text from component where id = any($1::uuid[])
 		union all select 'system', id::text, id::text from system where id = any($2::uuid[])
 		union all select 'location', id::text, id::text from location where id = any($3::uuid[])
-		union all select 'outpost', principal_id::text, principal_id::text from outpost where principal_id = any($4::uuid[])
-		union all select 'outpost', name, principal_id::text from outpost where name = any($5::text[])
+		union all select 'outpost', user_id::text, user_id::text from outpost where user_id = any($4::uuid[])
+		union all select 'outpost', name, user_id::text from outpost where name = any($5::text[])
 		union all select 'platform', name, platform_component_id::text from outpost
 			where name = any($6::text[]) and platform_component_id is not null`,
 		ids["component"], ids["system"], ids["location"], ids["outpost"], outpostNames, selfOutposts)

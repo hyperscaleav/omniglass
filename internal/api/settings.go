@@ -56,7 +56,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/settings/me",
 		Summary:     "Get the caller's effective settings",
-		Description: "The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+		Description: "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, func(ctx context.Context, _ *struct{}) (*settingsMeOutput, error) {
 		vals, err := svc.ClientEffective(ctx)

@@ -212,7 +212,7 @@ func endpointOutposts(t *testing.T, ctx context.Context, conn *pgx.Conn) map[str
 		from endpoint e
 		join component c on c.id = e.component
 		join up site on site.start_id = c.location_id and site.parent_id is null
-		left join outpost n on n.principal_id = e.outpost_id
+		left join outpost n on n.user_id = e.outpost_id
 		where not exists (select 1 from webhook_token w where w.endpoint_id = e.id)
 		group by 1, 2`)
 	if err != nil {
@@ -293,7 +293,7 @@ func TestSeedPlanPlacesEachSitesEndpointsOnItsOutpost(t *testing.T) {
 }
 
 // SeedPlan seeds each pusher the plan declares (#1743) as its own service
-// principal holding the pusher role (telemetry:push alone) on exactly the
+// user holding the pusher role (telemetry:push alone) on exactly the
 // systems the plan scoped it to, and no token: the lab mints one per run.
 func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	t.Parallel()
@@ -321,7 +321,7 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	}
 	rows, err := conn.Query(ctx, `
 		select s.name, r.name, r.permissions::text, g.scope_kind, g.scope_op, y.name
-		from service s join principal_grant g on g.principal_id = s.principal_id
+		from machine s join user_grant g on g.user_id = s.user_id
 		join role r on r.id = g.role_id
 		left join system y on y.id::text = g.scope_id::text`)
 	if err != nil {
@@ -351,7 +351,7 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 		t.Errorf("pusher grants = %v, want %v", got, want)
 	}
 	var tokens int
-	if err := conn.QueryRow(ctx, `select count(*) from credential c join service s on s.principal_id = c.principal_id`).Scan(&tokens); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from credential c join machine s on s.user_id = c.user_id`).Scan(&tokens); err != nil {
 		t.Fatal(err)
 	}
 	if tokens != 0 {

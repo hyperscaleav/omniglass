@@ -58,7 +58,7 @@ func TestOutpostRunOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'site-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'site-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, true)`); err != nil {
@@ -186,7 +186,7 @@ func TestOutpostVerdictPerInterface(t *testing.T) {
 			t.Fatalf("create component %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into endpoint (name, transport, component, outpost_id, params) values ('api', $1, (select id from component where name = $2), (select principal_id from outpost where name = 'site-a'), $3::jsonb)`,
+			`insert into endpoint (name, transport, component, outpost_id, params) values ('api', $1, (select id from component where name = $2), (select user_id from outpost where name = 'site-a'), $3::jsonb)`,
 			c.itype, c.comp, fmt.Sprintf(`{"target":%q}`, target)); err != nil {
 			t.Fatalf("insert interface for %s: %v", c.comp, err)
 		}

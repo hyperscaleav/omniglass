@@ -42,7 +42,7 @@ func scanOAuthClient(row pgx.Row) (OAuthClient, error) {
 type OAuthCode struct {
 	Hash          []byte
 	ClientID      string
-	PrincipalID   string
+	UserID        string
 	RedirectURI   string
 	CodeChallenge string
 	Resource      string
@@ -54,7 +54,7 @@ type OAuthCode struct {
 // client, its secret's hash and prefix, its expiry, and the agent's bounds,
 // with the refresh token that renews it (#2073).
 type OAuthTokenIssue struct {
-	PrincipalID      string
+	UserID           string
 	ClientID         string
 	SecretHash       []byte
 	Prefix           string
@@ -175,9 +175,9 @@ func (p *PG) CreateOAuthCode(ctx context.Context, c OAuthCode) error {
 		return fmt.Errorf("storage: sweep oauth codes: %w", err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into oauth_code (code_hash, client_id, principal_id, redirect_uri, code_challenge, resource, roles, expires_at)
+		insert into oauth_code (code_hash, client_id, user_id, redirect_uri, code_challenge, resource, roles, expires_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		c.Hash, c.ClientID, c.PrincipalID, c.RedirectURI, c.CodeChallenge, c.Resource, c.Roles, c.ExpiresAt); err != nil {
+		c.Hash, c.ClientID, c.UserID, c.RedirectURI, c.CodeChallenge, c.Resource, c.Roles, c.ExpiresAt); err != nil {
 		return fmt.Errorf("storage: create oauth code: %w", err)
 	}
 	return nil
@@ -189,8 +189,8 @@ func (p *PG) ConsumeOAuthCode(ctx context.Context, hash []byte) (OAuthCode, bool
 	c := OAuthCode{Hash: hash}
 	err := p.pool.QueryRow(ctx, `
 		delete from oauth_code where code_hash = $1
-		returning client_id, principal_id, redirect_uri, code_challenge, resource, roles, expires_at`, hash).
-		Scan(&c.ClientID, &c.PrincipalID, &c.RedirectURI, &c.CodeChallenge, &c.Resource, &c.Roles, &c.ExpiresAt)
+		returning client_id, user_id, redirect_uri, code_challenge, resource, roles, expires_at`, hash).
+		Scan(&c.ClientID, &c.UserID, &c.RedirectURI, &c.CodeChallenge, &c.Resource, &c.Roles, &c.ExpiresAt)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return OAuthCode{}, false, nil
@@ -215,8 +215,8 @@ func (p *PG) IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx,
-		`delete from credential where principal_id = $1 and oauth_client_id = $2 and kind = 'bearer' `+revokedCols,
-		spec.PrincipalID, spec.ClientID)
+		`delete from credential where user_id = $1 and oauth_client_id = $2 and kind = 'bearer' `+revokedCols,
+		spec.UserID, spec.ClientID)
 	if err != nil {
 		return fmt.Errorf("storage: replace oauth token: %w", err)
 	}
@@ -224,16 +224,16 @@ func (p *PG) IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error {
 	if err != nil {
 		return err
 	}
-	if err := auditRevokedTokens(ctx, tx, spec.PrincipalID, revoked); err != nil {
+	if err := auditRevokedTokens(ctx, tx, spec.UserID, revoked); err != nil {
 		return err
 	}
 	channels := []string{string(AuditChannelMCP)}
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels, oauth_client_id)
+		`insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels, oauth_client_id)
 			values ($1, 'bearer', $2, $3, $4, $5, $6, nullif($7,''), nullif($8,''), $9, $10, $11, $12)
 			returning id`,
-		spec.PrincipalID, spec.SecretHash, spec.Prefix, credentialPurposeToken, spec.ExpiresAt, "OAuth: "+spec.Agent,
+		spec.UserID, spec.SecretHash, spec.Prefix, credentialPurposeToken, spec.ExpiresAt, "OAuth: "+spec.Agent,
 		spec.UserAgent, spec.ClientIP, spec.Agent, emptySliceNil(spec.AgentRoles), channels, spec.ClientID).Scan(&credID); err != nil {
 		return fmt.Errorf("storage: issue oauth token: %w", err)
 	}
@@ -242,9 +242,9 @@ func (p *PG) IssueOAuthToken(ctx context.Context, spec OAuthTokenIssue) error {
 		return fmt.Errorf("storage: issue oauth refresh token: %w", err)
 	}
 	exp := spec.ExpiresAt
-	img := credentialAuditImage{PrincipalID: spec.PrincipalID, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "OAuth: " + spec.Agent,
+	img := credentialAuditImage{UserID: spec.UserID, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "OAuth: " + spec.Agent,
 		ExpiresAt: &exp, Agent: spec.Agent, AgentRoles: emptySliceNil(spec.AgentRoles), AgentChannels: channels}
-	if err := writeAuditRes(ctx, tx, spec.PrincipalID, "create", "credential", credID, nil, img); err != nil {
+	if err := writeAuditRes(ctx, tx, spec.UserID, "create", "credential", credID, nil, img); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -271,7 +271,7 @@ func (p *PG) RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRef
 	err = tx.QueryRow(ctx, `
 		update oauth_refresh r set spent_at = now()
 		from credential c
-		join principal pr on pr.id = c.principal_id
+		join users pr on pr.id = c.user_id
 		join oauth_client o on o.id = c.oauth_client_id
 		where r.token_hash = $1 and r.spent_at is null and r.expires_at > now()
 			and c.id = r.credential_id and c.oauth_client_id::text = $2 and pr.active
@@ -287,9 +287,9 @@ func (p *PG) RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRef
 	var oldExp *time.Time
 	var description, agent *string
 	if err := tx.QueryRow(ctx, `
-		select principal_id, prefix, expires_at, description, agent, agent_roles, agent_channels
+		select user_id, prefix, expires_at, description, agent, agent_roles, agent_channels
 		from credential where id = $1 for update`, credID).
-		Scan(&old.PrincipalID, &old.Prefix, &oldExp, &description, &agent, &old.AgentRoles, &old.AgentChannels); err != nil {
+		Scan(&old.UserID, &old.Prefix, &oldExp, &description, &agent, &old.AgentRoles, &old.AgentChannels); err != nil {
 		return OAuthRefreshRefused, fmt.Errorf("storage: read oauth credential: %w", err)
 	}
 	old.Purpose, old.ExpiresAt = credentialPurposeToken, oldExp
@@ -313,7 +313,7 @@ func (p *PG) RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRef
 	img = old
 	exp := spec.ExpiresAt
 	img.Prefix, img.ExpiresAt = spec.Prefix, &exp
-	if err := writeAuditRes(ctx, tx, old.PrincipalID, "update", "credential", credID, old, img); err != nil {
+	if err := writeAuditRes(ctx, tx, old.UserID, "update", "credential", credID, old, img); err != nil {
 		return OAuthRefreshRefused, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -349,7 +349,7 @@ func (p *PG) refuseOrEndGrant(ctx context.Context, tx pgx.Tx, spec OAuthRefresh)
 		return OAuthRefreshRefused, err
 	}
 	for _, r := range revoked {
-		if err := auditRevokedTokens(WithAgent(ctx, clientName), tx, r.img.PrincipalID, []revokedCredential{r}); err != nil {
+		if err := auditRevokedTokens(WithAgent(ctx, clientName), tx, r.img.UserID, []revokedCredential{r}); err != nil {
 			return OAuthRefreshRefused, err
 		}
 	}

@@ -32,8 +32,8 @@ import type { SimProfile } from "../lib/simulation";
 // stubbed so the page's polls read the same fixtures back, and each write's
 // request is recorded for the assertions.
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
 
 const DISPLAY = uuidFor("sim-display");
 const DSP = uuidFor("sim-dsp");
@@ -396,11 +396,11 @@ describe("the component page's Simulation section", () => {
   });
 });
 
-// A principal who may remove a component but not impair one, and one who may add
+// A user who may remove a component but not impair one, and one who may add
 // simulated components but not read locations.
-const remover: Me = { principal: { id: "u-rm", kind: "human" }, human: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
+const remover: Me = { user: { id: "u-rm", kind: "person" }, person: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
 const placeless: Me = {
-  principal: { id: "u-np", kind: "human" }, human: { username: "placeless" },
+  user: { id: "u-np", kind: "person" }, person: { username: "placeless" },
   permissions: ["simulation:read", "simulation:update", "component:read", "component:create", "endpoint:create"], grants: [],
 };
 
@@ -612,11 +612,11 @@ const meetingPlan: SimSystemPlan = {
   ],
 };
 const systemMaker: Me = {
-  principal: { id: "u-sm", kind: "human" }, human: { username: "system-maker" },
+  user: { id: "u-sm", kind: "person" }, person: { username: "system-maker" },
   permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "outpost:read"], grants: [],
 };
 const noSystemUpdate: Me = {
-  principal: { id: "u-ns", kind: "human" }, human: { username: "no-system-update" },
+  user: { id: "u-ns", kind: "person" }, person: { username: "no-system-update" },
   permissions: ["*:read", "simulation:update", "system:create", "component:create", "endpoint:create"], grants: [],
 };
 
@@ -636,7 +636,7 @@ describe("adding a simulated system", () => {
     fireEvent.change(screen.getByLabelText("System type"), { target: { value: "room-system" } });
   }
 
-  it("offers the action beside Add simulated component, quiet, to a principal holding every permission it needs", async () => {
+  it("offers the action beside Add simulated component, quiet, to a user holding every permission it needs", async () => {
     stubFetch();
     mount(() => <Simulation />);
     const sys = await screen.findByRole("button", { name: /Add simulated system/ });
@@ -644,7 +644,7 @@ describe("adding a simulated system", () => {
     expect(screen.getByRole("button", { name: /Add simulated component/ }).classList.contains("btn-action")).toBe(true);
   });
 
-  it("hides the action from a principal missing system:update, though it may add a component", async () => {
+  it("hides the action from a user missing system:update, though it may add a component", async () => {
     stubFetch();
     mount(() => <Simulation />, noSystemUpdate);
     await screen.findAllByTestId("sim-row");
@@ -652,7 +652,7 @@ describe("adding a simulated system", () => {
     expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
   });
 
-  it("offers the action to a principal holding exactly the permissions it needs", async () => {
+  it("offers the action to a user holding exactly the permissions it needs", async () => {
     stubFetch();
     mount(() => <Simulation />, systemMaker);
     expect(await screen.findByRole("button", { name: /Add simulated system/ })).toBeTruthy();
@@ -661,12 +661,12 @@ describe("adding a simulated system", () => {
   // Each permission the add needs, the writes and the reads its form and the
   // server depend on: without any one, the action is not offered. system:read is
   // gated too, but can() reads any system:<action> grant as including it, so a
-  // principal holding system:create is never without it and it has no row here.
+  // user holding system:create is never without it and it has no row here.
   for (const perm of [
     "simulation:update", "system:create", "system:update", "component:create", "endpoint:create",
     "standard:read", "system_type:read", "outpost:read",
   ]) {
-    it(`hides the action from a principal missing ${perm}`, async () => {
+    it(`hides the action from a user missing ${perm}`, async () => {
       stubFetch();
       const me: Me = { ...systemMaker, permissions: systemMaker.permissions.filter((p) => p !== perm) };
       mount(() => <Simulation />, me);
@@ -910,7 +910,7 @@ describe("adding a simulated system", () => {
     expect(screen.getByText(/No system types yet/)).toBeTruthy();
   });
 
-  it("offers no Location to a principal who cannot read locations, and never asks for them", async () => {
+  it("offers no Location to a user who cannot read locations, and never asks for them", async () => {
     stubFetch();
     await openAddSystem(systemMaker);
     await screen.findByLabelText("Standard");

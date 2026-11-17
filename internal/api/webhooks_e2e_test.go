@@ -264,7 +264,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get component: %v", err)
 	}
-	scoped := principalWithGrants(t, ctx, dsn, "scoped-viewer", []grant{{role: "viewer", scopeKind: "component", scopeID: uccComp.ID}})
+	scoped := userWithGrants(t, ctx, dsn, "scoped-viewer", []grant{{role: "viewer", scopeKind: "component", scopeID: uccComp.ID}})
 	c.do(scoped, http.MethodGet, "/unclaimed-sources", nil, http.StatusForbidden)
 
 	// A wrong signature and a stale timestamp are refused, counted, and

@@ -2296,7 +2296,7 @@ sim_identity_bindings:
 # declares its pushers: each an emulator device of a profile with a push
 # face. The booking service is a scheduling platform's integration that
 # posts a location's bookings (booking-count, booking-state) to POST
-# /telemetry:push, owned by the location's system. Its principal holds
+# /telemetry:push, owned by the location's system. Its user holds
 # telemetry:push alone, scoped to its systems, so it can push nowhere else
 # and read nothing. The lab mints its token on every run, as it does the
 # outpost's, and the emulator beside the outpost pushes with it. A push has no

@@ -34,7 +34,7 @@ func TestVendorsAPI(t *testing.T) {
 
 	// A plain viewer (read everywhere, write nothing) reads the seeded
 	// official makes via the vendor:read floor (*:read).
-	viewerTok := principalWithGrants(t, ctx, dsn, "make-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "make-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	out := c.do(viewerTok, http.MethodGet, "/vendors", nil, http.StatusOK)
 	var listed struct {
 		Vendors []struct {

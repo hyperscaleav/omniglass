@@ -74,7 +74,7 @@ func TestNotificationTypeAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	viewer := setupAllViewer(t, ctx, dsn, "nt-viewer")
-	operator := principalWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
+	operator := userWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
 
 	var list struct {
 		NotificationTypes []notificationTypeWire `json:"notification_types"`

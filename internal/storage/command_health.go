@@ -87,8 +87,8 @@ var commandHealthSQL = `
 		coalesce(q.pending, 0), q.oldest, coalesce(q.stuck, 0), coalesce(r.n, 0),
 		coalesce(q.expired_undelivered, 0), coalesce(q.expired_unexecuted, 0)
 	from outpost n
-	left join queue q on q.outpost_id = n.principal_id
-	left join redelivered r on r.outpost_id = n.principal_id
+	left join queue q on q.outpost_id = n.user_id
+	left join redelivered r on r.outpost_id = n.user_id
 	where n.platform_component_id is not null
 	order by n.name`
 

@@ -48,26 +48,26 @@ func TestOutpostGateway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create outpost: %v", err)
 	}
-	if n.Name != "outpost-a" || n.Enrolled || n.PrincipalID == "" {
-		t.Fatalf("fresh outpost: want name outpost-a, not enrolled, with a principal id, got %+v", n)
+	if n.Name != "outpost-a" || n.Enrolled || n.UserID == "" {
+		t.Fatalf("fresh outpost: want name outpost-a, not enrolled, with a user id, got %+v", n)
 	}
 	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); !errors.Is(err, storage.ErrOutpostExists) {
 		t.Fatalf("duplicate outpost: want ErrOutpostExists, got %v", err)
 	}
 
-	// The outpost is a first-class principal of kind='outpost' (not a standalone island):
-	// its detail row's principal_id points to a principal row of that kind.
+	// The outpost is a first-class user of kind='outpost' (not a standalone island):
+	// its detail row's user_id points to a user row of that kind.
 	probe, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer probe.Close(ctx)
 	var kind string
-	if err := probe.QueryRow(ctx, `select kind from principal where id = $1`, n.PrincipalID).Scan(&kind); err != nil {
-		t.Fatalf("load outpost principal: %v", err)
+	if err := probe.QueryRow(ctx, `select kind from users where id = $1`, n.UserID).Scan(&kind); err != nil {
+		t.Fatalf("load outpost user: %v", err)
 	}
-	if kind != "outpost" {
-		t.Fatalf("outpost principal kind = %q, want outpost", kind)
+	if kind != "machine" {
+		t.Fatalf("outpost user kind = %q, want machine", kind)
 	}
 
 	// Mint: store the token hash.
@@ -79,11 +79,11 @@ func TestOutpostGateway(t *testing.T) {
 		t.Fatalf("mint unknown outpost: want ErrOutpostNotFound, got %v", err)
 	}
 
-	// The enrollment secret is a bearer credential ROW on the outpost principal (the
+	// The enrollment secret is a bearer credential ROW on the outpost user (the
 	// same machinery a service token uses), not a bespoke column.
 	var credKind string
 	if err := probe.QueryRow(ctx,
-		`select kind from credential where principal_id = $1`, n.PrincipalID).Scan(&credKind); err != nil {
+		`select kind from credential where user_id = $1`, n.UserID).Scan(&credKind); err != nil {
 		t.Fatalf("load outpost credential: %v", err)
 	}
 	if credKind != "bearer" {
@@ -134,7 +134,7 @@ func TestOutpostGateway(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
@@ -376,7 +376,7 @@ func TestOutpostIdentityAndEdit(t *testing.T) {
 }
 
 // TestDeleteOutpost covers outpost decommission (N3): a hard delete of the outpost
-// principal cascades its interfaces, their derived tasks, and its outpost-owned tag
+// user cascades its interfaces, their derived tasks, and its outpost-owned tag
 // bindings, while a component's own telemetry (owner arc = component, outpost_id
 // null) survives. Plus the all-scope gate and the unknown-outpost not-found.
 func TestDeleteOutpost(t *testing.T) {
@@ -431,13 +431,13 @@ func TestDeleteOutpost(t *testing.T) {
 		}
 		return n
 	}
-	if count(`select count(*) from endpoint where outpost_id = (select principal_id from outpost where name = $1)`, outpostName) != 1 {
+	if count(`select count(*) from endpoint where outpost_id = (select user_id from outpost where name = $1)`, outpostName) != 1 {
 		t.Fatalf("precondition: want 1 interface on the outpost")
 	}
 	if count(`select count(*) from task`) != 1 {
 		t.Fatalf("precondition: want 1 derived task")
 	}
-	if count(`select count(*) from tag_binding where outpost_id = $1`, outpost.PrincipalID) != 1 {
+	if count(`select count(*) from tag_binding where outpost_id = $1`, outpost.UserID) != 1 {
 		t.Fatalf("precondition: want 1 outpost tag binding")
 	}
 
@@ -452,23 +452,23 @@ func TestDeleteOutpost(t *testing.T) {
 		t.Fatalf("delete outpost: %v", err)
 	}
 
-	// The outpost and everything keyed to it are gone; the outpost principal too.
+	// The outpost and everything keyed to it are gone; the outpost user too.
 	if _, err := gw.GetOutpost(ctx, outpostName, all); !errors.Is(err, storage.ErrOutpostNotFound) {
 		t.Errorf("outpost still present after delete: %v", err)
 	}
 	if n := count(`select count(*) from outpost where name = $1`, outpostName); n != 0 {
 		t.Errorf("outpost rows = %d, want 0", n)
 	}
-	if n := count(`select count(*) from principal where id = $1`, outpost.PrincipalID); n != 0 {
-		t.Errorf("outpost principal rows = %d, want 0", n)
+	if n := count(`select count(*) from users where id = $1`, outpost.UserID); n != 0 {
+		t.Errorf("outpost user rows = %d, want 0", n)
 	}
-	if n := count(`select count(*) from endpoint where outpost_id = (select principal_id from outpost where name = $1)`, outpostName); n != 0 {
+	if n := count(`select count(*) from endpoint where outpost_id = (select user_id from outpost where name = $1)`, outpostName); n != 0 {
 		t.Errorf("interfaces = %d, want 0 (cascade)", n)
 	}
 	if n := count(`select count(*) from task`); n != 0 {
 		t.Errorf("tasks = %d, want 0 (cascade through the interface)", n)
 	}
-	if n := count(`select count(*) from tag_binding where outpost_id = $1`, outpost.PrincipalID); n != 0 {
+	if n := count(`select count(*) from tag_binding where outpost_id = $1`, outpost.UserID); n != 0 {
 		t.Errorf("outpost tag bindings = %d, want 0 (cascade)", n)
 	}
 	// The component's own telemetry survives (owner arc = component, not the outpost).

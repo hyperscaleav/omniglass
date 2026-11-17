@@ -34,9 +34,9 @@ import { TEMPLATES_KEY } from "../lib/templates";
 // Templates slots link to the one Templates page filtered to their kinds, each
 // counting its own (#1329).
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "view" }, permissions: ["*:read"], grants: [] };
-const meWith = (permissions: string[]): Me => ({ principal: { id: "u-x", kind: "human" }, permissions, grants: [] });
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "view" }, permissions: ["*:read"], grants: [] };
+const meWith = (permissions: string[]): Me => ({ user: { id: "u-x", kind: "person" }, permissions, grants: [] });
 
 // Rows only need a length: the page renders counts, never row fields.
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `row-${i}` }));

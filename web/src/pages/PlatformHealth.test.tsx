@@ -17,7 +17,7 @@ import { uuidFor } from "../lib/testids";
 const readAt = "2026-11-09T12:00:00Z";
 const readMs = Date.parse(readAt);
 const ago = (ms: number) => new Date(readMs - ms).toISOString();
-const viewer: Me = { principal: { id: "v", kind: "human" }, permissions: ["*:read"], grants: [] };
+const viewer: Me = { user: { id: "v", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 const full: PlatformView = {
   read_at: readAt,
@@ -465,8 +465,8 @@ describe("PlatformHealth with a simulator", () => {
     expect(screen.queryByTestId("platform-simulation")).toBeNull();
   });
 
-  it("is absent for a principal who cannot read simulation", () => {
-    const outpostReader: Me = { principal: { id: "n", kind: "human" }, permissions: ["outpost:read", "component:read"], grants: [] };
+  it("is absent for a user who cannot read simulation", () => {
+    const outpostReader: Me = { user: { id: "n", kind: "person" }, permissions: ["outpost:read", "component:read"], grants: [] };
     mount(full, { me: outpostReader, fleet: connected, body: simBody([measured]) });
     expect(screen.queryByTestId("platform-simulation")).toBeNull();
   });

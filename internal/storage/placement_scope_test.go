@@ -101,7 +101,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 // exotic, it is the ordinary shape today: applicableKinds("system") is
 // {"system"} alone (internal/scope/scope.go) and the cross-tier expansion is
 // unbuilt (#10), so a location-scoped deploy grant beside the all-scoped viewer
-// floor a real principal carries resolves to exactly it. Answering
+// floor a real user carries resolves to exactly it. Answering
 // ErrSystemNotFound there tells a caller that a row it can GET does not exist.
 func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
 	t.Parallel()

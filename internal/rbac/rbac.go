@@ -1,6 +1,6 @@
 // Package rbac is the pure capability logic: parsing permission strings into
-// topic patterns, resolving role inheritance, flattening a principal's grants
-// into a permission set, and answering "may this principal perform this action on
+// topic patterns, resolving role inheritance, flattening a user's grants
+// into a permission set, and answering "may this user perform this action on
 // this resource" with the :read floor. It has no I/O and no storage dependency,
 // so it is unit-testable in isolation. Scope (which entities) is the Storage
 // Gateway's job, not this package's; rbac answers capability only.
@@ -46,7 +46,7 @@ func NewRoleIndex(roles []Role) RoleIndex {
 
 // Flatten unions the permissions of the named roles (resolving inheritance
 // transitively) into one Set. Scope is intentionally ignored: the flattened set
-// is the principal's capability anywhere, the fast-reject input; the gateway
+// is the user's capability anywhere, the fast-reject input; the gateway
 // applies scope per query.
 func (idx RoleIndex) Flatten(roleIDs []string) Set {
 	var perms []string
@@ -81,7 +81,7 @@ type pattern []string
 // lists the sets it must ALSO be allowed by (the minting person's capability, so
 // an agent never exceeds the person it acts for), and denied lists the actions it
 // is refused whatever pattern names them (the agent ceiling: reveal and use, so
-// an agent principal can never decrypt a credential). A plain set has neither.
+// an agent user can never decrypt a credential). A plain set has neither.
 type Set struct {
 	patterns []pattern
 	within   []Set
@@ -199,7 +199,7 @@ func parse(p string) ([]pattern, error) {
 }
 
 // sensitiveResources are resources a bare single-token `*` wildcard does not
-// reach: a principal holds them only through an explicit (scoped) grant, never
+// reach: a user holds them only through an explicit (scoped) grant, never
 // through the `*:read` floor, so a viewer cannot enumerate them. The tail wildcard
 // `>` (owner) and a literal grant still name them. Secrets are sensitive so a
 // field tech does not see the platform-credential directory; per-secret

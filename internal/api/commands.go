@@ -21,7 +21,7 @@ import (
 //
 // The fence is the ISSUE scope, not the read scope (#749). This route actuates a
 // physical device, so the set that decides which components it reaches has to come
-// from the permission that authorizes the actuation: a principal holding a wide
+// from the permission that authorizes the actuation: a user holding a wide
 // component read beside a room-scoped command grant may command that room and no
 // more. The read scope is still passed, and still grants nothing: it decides only
 // which refusal the caller is owed (ADR-0116).
@@ -77,7 +77,7 @@ type commandBody struct {
 	EndpointID          string              `json:"endpoint_id,omitempty" doc:"The endpoint's uuid"`
 	Outpost             string              `json:"outpost,omitempty" doc:"The outpost that endpoint is placed on, by name"`
 	Driver              string              `json:"driver,omitempty" doc:"The driver whose binding renders and settles it, by name"`
-	Issuer              string              `json:"issuer,omitempty" doc:"Who issued it, by name; empty once that principal is purged (the audit log keeps the name)"`
+	Issuer              string              `json:"issuer,omitempty" doc:"Who issued it, by name; empty once that user is purged (the audit log keeps the name)"`
 	IssuerID            string              `json:"issuer_id,omitempty" doc:"The issuer's uuid, the actor on the command's audit row"`
 	CausedEventID       *int64              `json:"caused_event_id,omitempty" doc:"The command-issued event it put on the component's timeline"`
 	SettledEventID      *int64              `json:"settled_event_id,omitempty" doc:"The event its terminal status put there: command-settled, command-failed or command-timed-out"`
@@ -133,22 +133,22 @@ type listCommandsOutput struct {
 
 // Waiting on an issue holds a request open, so it is bounded: in time (the
 // wait_timeout ceiling), in how many waits run at once across the server,
-// and in how many one principal holds, so one caller cannot take every slot.
+// and in how many one user holds, so one caller cannot take every slot.
 const (
-	defaultCommandWaiters             = 64
-	defaultCommandWaitersPerPrincipal = 4
+	defaultCommandWaiters        = 64
+	defaultCommandWaitersPerUser = 4
 	// The poll behind a wait starts quick (a reply settles a command within
 	// an outpost's cycle) and backs off to once a second.
 	commandWaitFirstPoll = 100 * time.Millisecond
 	commandWaitMaxPoll   = time.Second
 )
 
-// waitLimiter counts the waits in flight, in all and per principal.
+// waitLimiter counts the waits in flight, in all and per user.
 type waitLimiter struct {
-	mu          sync.Mutex
-	total, per  int
-	inFlight    int
-	byPrincipal map[string]int
+	mu         sync.Mutex
+	total, per int
+	inFlight   int
+	byUser     map[string]int
 }
 
 func newWaitLimiter(total, per int) *waitLimiter {
@@ -156,29 +156,29 @@ func newWaitLimiter(total, per int) *waitLimiter {
 		total = defaultCommandWaiters
 	}
 	if per <= 0 {
-		per = defaultCommandWaitersPerPrincipal
+		per = defaultCommandWaitersPerUser
 	}
-	return &waitLimiter{total: total, per: per, byPrincipal: map[string]int{}}
+	return &waitLimiter{total: total, per: per, byUser: map[string]int{}}
 }
 
-// acquire takes a slot for principal, or reports none is free.
-func (l *waitLimiter) acquire(principal string) bool {
+// acquire takes a slot for user, or reports none is free.
+func (l *waitLimiter) acquire(user string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.inFlight >= l.total || l.byPrincipal[principal] >= l.per {
+	if l.inFlight >= l.total || l.byUser[user] >= l.per {
 		return false
 	}
 	l.inFlight++
-	l.byPrincipal[principal]++
+	l.byUser[user]++
 	return true
 }
 
-func (l *waitLimiter) release(principal string) {
+func (l *waitLimiter) release(user string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.inFlight--
-	if l.byPrincipal[principal]--; l.byPrincipal[principal] <= 0 {
-		delete(l.byPrincipal, principal)
+	if l.byUser[user]--; l.byUser[user] <= 0 {
+		delete(l.byUser, user)
 	}
 }
 
@@ -196,7 +196,7 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 		// The ACTION scope comes from command:issue, so only the grants whose
 		// role actually carries the actuation contribute their scope. The READ
 		// scope is the caller's own component:read and decides only which
-		// refusal that principal is owed (#749, ADR-0116): a component outside
+		// refusal that user is owed (#749, ADR-0116): a component outside
 		// it is the non-disclosing 404, and one inside it that the issue scope
 		// does not reach is the truthful 403. It grants nothing.
 		//
@@ -216,11 +216,11 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 		if in.Wait {
 			// The slot is taken before anything is issued, so a refused wait
 			// leaves nothing behind to retry around.
-			principal := actorID(ctx)
-			if !waits.acquire(principal) {
+			user := actorID(ctx)
+			if !waits.acquire(user) {
 				return nil, huma.NewError(http.StatusTooManyRequests, "too many commands are being waited on: issue without wait and read the command back, or retry")
 			}
-			defer waits.release(principal)
+			defer waits.release(user)
 		}
 		cmd, err := gw.IssueCommand(ctx, actorID(ctx), "component", compID, in.Body.CommandType, in.Body.Instance,
 			in.Body.Value, in.Body.Params)

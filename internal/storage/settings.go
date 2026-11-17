@@ -36,7 +36,7 @@ func settingOverridesOn(ctx context.Context, q querier, scope string) ([]Setting
 	rows, err := q.Query(ctx, `
 		select namespace, doc, locks
 		from setting_override
-		where scope = $1 and principal_id is null
+		where scope = $1 and user_id is null
 		order by namespace`, scope)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list setting overrides: %w", err)
@@ -61,8 +61,8 @@ func settingOverridesOn(ctx context.Context, q querier, scope string) ([]Setting
 }
 
 // UpsertSettingOverride inserts or replaces the (scope, namespace) platform row and
-// audits it. principal_id is NULL (platform-wide, no principal). The ON CONFLICT
-// target is the identity constraint, which treats the NULL principal as one value.
+// audits it. user_id is NULL (platform-wide, no user). The ON CONFLICT
+// target is the identity constraint, which treats the NULL user as one value.
 func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -134,7 +134,7 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 
 	var docRaw []byte
 	err = tx.QueryRow(ctx,
-		`select doc from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		`select doc from setting_override where scope = $1 and user_id is null and namespace = $2`,
 		scope, namespace).Scan(&docRaw)
 	current := map[string]any{}
 	switch {
@@ -178,9 +178,9 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 }
 
 // upsertOverrideTx inserts or replaces the (scope, namespace) platform row and audits
-// it, inside the caller's transaction. principal_id is NULL (platform-wide, no
-// principal); the ON CONFLICT target is the identity constraint, which treats the
-// NULL principal as one value.
+// it, inside the caller's transaction. user_id is NULL (platform-wide, no
+// user); the ON CONFLICT target is the identity constraint, which treats the
+// NULL user as one value.
 func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
 	if doc == nil {
 		doc = map[string]any{}
@@ -197,7 +197,7 @@ func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace 
 		return nil, fmt.Errorf("storage: marshal override locks: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into setting_override (scope, principal_id, namespace, doc, locks, updated_by)
+		insert into setting_override (scope, user_id, namespace, doc, locks, updated_by)
 		values ($1, null, $2, $3, $4, $5)
 		on conflict on constraint setting_override_identity
 		do update set doc = excluded.doc, locks = excluded.locks,
@@ -226,7 +226,7 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`delete from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		`delete from setting_override where scope = $1 and user_id is null and namespace = $2`,
 		scope, namespace); err != nil {
 		return fmt.Errorf("storage: delete setting override: %w", err)
 	}
@@ -253,7 +253,7 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`delete from setting_override where scope = $1 and principal_id is null`, scope); err != nil {
+		`delete from setting_override where scope = $1 and user_id is null`, scope); err != nil {
 		return fmt.Errorf("storage: reset setting overrides: %w", err)
 	}
 	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {

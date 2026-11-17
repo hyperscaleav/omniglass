@@ -66,8 +66,8 @@ func TestListClosedLoopPollTargets(t *testing.T) {
 	f := newLandFixture(t)
 	ctx := context.Background()
 	for _, q := range []string{
-		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-http', 'http', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
-		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-http', 'http', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-drv', 'poll', (select id from endpoint where name = 'disp-1-http'), '{"driver":"d","schedule":{"every":"15s"}}'::jsonb, true)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-probe', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, true)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-off', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, false)`,

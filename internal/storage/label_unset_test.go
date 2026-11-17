@@ -41,8 +41,8 @@ var labelUnsetExempt = map[string]string{
 	"slot_choice":      "written as part of a slot declaration, covered by the system_slot prover on the same write",
 	"choice_alternate": "written inside its choice, covered by the same write as slot_choice",
 	"system_slot":      "written by SetStandardSlot with a label the declaration carries; the arc is keyed by owner, not by a bare name",
-	"human":            "keyed by username rather than name; covered by the human profile prover below",
-	"principal_group":  "covered by the group prover below, which is keyed by name like the rest",
+	"person":           "keyed by username rather than name; covered by the human profile prover below",
+	"user_group":       "covered by the group prover below, which is keyed by name like the rest",
 	// The three PENNED tables. A create with no label does not leave the column
 	// unset on these: the platform holds the pen and a label rule renders one,
 	// so the row lands with "Generic Device" rather than with NULL and this
@@ -286,21 +286,21 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 	}
 
 	// The other half: the human profile, keyed by username rather than name.
-	t.Run("human", func(t *testing.T) {
-		if _, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{Username: "lbl-human", Label: blank}, all); err != nil {
+	t.Run("person", func(t *testing.T) {
+		if _, err := gw.CreatePerson(ctx, "", storage.PersonSpec{Username: "lbl-human", Label: blank}, all); err != nil {
 			t.Fatalf("create human: %v", err)
 		}
-		if got := rawLabelOf(t, "human", "username", "lbl-human"); got != nil {
+		if got := rawLabelOf(t, "person", "username", "lbl-human"); got != nil {
 			t.Errorf("human.label = %q after a create with a whitespace label, want SQL NULL", *got)
 		}
 	})
 
-	t.Run("principal_group", func(t *testing.T) {
+	t.Run("user_group", func(t *testing.T) {
 		if _, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: "lbl-group", Label: blank}, all); err != nil {
 			t.Fatalf("create group: %v", err)
 		}
-		if got := rawLabelOf(t, "principal_group", "name", "lbl-group"); got != nil {
-			t.Errorf("principal_group.label = %q after a create with a whitespace label, want SQL NULL", *got)
+		if got := rawLabelOf(t, "user_group", "name", "lbl-group"); got != nil {
+			t.Errorf("user_group.label = %q after a create with a whitespace label, want SQL NULL", *got)
 		}
 	})
 }

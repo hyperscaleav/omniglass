@@ -26,7 +26,7 @@ const BASE_URL = `${origin}/api/v1`;
 // onUnauthorized fires when a request to a protected route is rejected with 401,
 // which means a session that WAS valid has ended (expired, revoked by a password
 // reset, or the account locked out). The app registers a handler (in index.tsx)
-// that drops the cached principal so the AuthGuard bounces to /login immediately,
+// that drops the cached user so the AuthGuard bounces to /login immediately,
 // rather than waiting for /auth/me to refetch on its own. Nil until registered.
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void): void {

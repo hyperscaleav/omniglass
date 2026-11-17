@@ -10,16 +10,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// What names a principal is now the gateway's answer and not the database's
+// What names a user is now the gateway's answer and not the database's
 // (#564). These are the three things that has to be true: the order is what it
 // was, the two shapes the gateway renders agree with each other, and the stored
 // function is actually gone rather than merely unused.
 
-// TestPrincipalIdentPrefersTheUsername pins the order in the one place it can
-// be checked without a database at all: a human's username outranks a service
-// account's name, which outranks an outpost's name, and a principal with none of
+// TestUserIdentPrefersTheUsername pins the order in the one place it can
+// be checked without a database at all: a person's username outranks a service
+// account's name, which outranks an outpost's name, and a user with none of
 // the three reads as empty rather than as something invented.
-func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
+func TestUserIdentPrefersTheUsername(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name     string
@@ -29,9 +29,9 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 		want     string
 	}{
 		{"a human", strp("jordan"), nil, nil, "jordan"},
-		{"a service account", nil, strp("ingest-bot"), nil, "ingest-bot"},
+		{"a machine user", nil, strp("ingest-bot"), nil, "ingest-bot"},
 		{"an outpost", nil, nil, strp("edge-1"), "edge-1"},
-		{"none of them, which is a purged principal", nil, nil, nil, ""},
+		{"none of them, which is a purged user", nil, nil, nil, ""},
 		{"a human that somehow also has a service row", strp("jordan"), strp("ingest-bot"), nil, "jordan"},
 		{"a service row that somehow also has an outpost row", nil, strp("ingest-bot"), strp("edge-1"), "ingest-bot"},
 		// Absence is NULL and nothing else, which is what the bound coalesce
@@ -41,23 +41,23 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 		{"an empty username is present, not absent, exactly as coalesce reads it", strp(""), strp("ingest-bot"), nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := storage.ExportPrincipalIdent(tc.username, tc.service, tc.outpost); got != tc.want {
-				t.Errorf("principalIdent(%v, %v, %v) = %q, want %q",
+			if got := storage.ExportUserIdent(tc.username, tc.service, tc.outpost); got != tc.want {
+				t.Errorf("userIdent(%v, %v, %v) = %q, want %q",
 					deref(tc.username), deref(tc.service), deref(tc.outpost), got, tc.want)
 			}
 		})
 	}
 }
 
-// TestPrincipalIdentAgreesWithTheExpressionItBinds is the invariant that makes
+// TestUserIdentAgreesWithTheExpressionItBinds is the invariant that makes
 // two shapes of one policy safe.
 //
 // The read paths project both sources and resolve them in Go; the audit insert
 // binds the same order as one expression, because resolving it in Go there
 // would cost a round trip inside the caller's transaction. Two readers of one
-// fact drift unless something compares them, so this drives every principal
+// fact drift unless something compares them, so this drives every user
 // kind through both and fails on the first disagreement.
-func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
+func TestUserIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -70,34 +70,34 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 	// Each case carries the answer it expects as well as the agreement it
 	// asserts. An agreement test alone cannot fail when BOTH shapes are wrong the
 	// same way, which is exactly what naming the wrong column in
-	// principalIdentSources would do, so the expected value is stated here rather
+	// userIdentSources would do, so the expected value is stated here rather
 	// than left to the callers' tests to imply.
 	//
 	// An outpost's answer is its own name (#738): it is the third profiled kind and
 	// the third source, so every kind the schema can produce resolves to
-	// something an operator recognises and only a purged principal reads empty.
+	// something an operator recognises and only a purged user reads empty.
 	for _, tc := range []struct {
 		kind string
 		id   string
 		want string
 	}{
-		{"human", insertPrincipalOfKind(t, conn, "human"), "jordan-ops"},
-		{"service", insertPrincipalOfKind(t, conn, "service"), "ingest-bot"},
-		{"outpost", insertPrincipalOfKind(t, conn, "outpost"), "edge-1"},
+		{"person", insertUserOfKind(t, conn, "person"), "jordan-ops"},
+		{"machine", insertUserOfKind(t, conn, "machine"), "ingest-bot"},
+		{"outpost", insertUserOfKind(t, conn, "outpost"), "edge-1"},
 		{"unknown", "00000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			// The sub-select shape: projected, then folded in Go.
 			var subUser, subSvc, subOutpost *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&subUser, &subSvc, &subOutpost); err != nil {
+				`select `+storage.ExportUserIdentCols("$1::uuid"), tc.id).Scan(&subUser, &subSvc, &subOutpost); err != nil {
 				t.Fatalf("project the sub-select sources: %v", err)
 			}
 			// The same shape folded into one bound expression, which is what a
 			// write binds where Go cannot reach.
 			var bound *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentSQL("$1::uuid"), tc.id).Scan(&bound); err != nil {
+				`select `+storage.ExportUserIdentSQL("$1::uuid"), tc.id).Scan(&bound); err != nil {
 				t.Fatalf("bind the expression: %v", err)
 			}
 			// The JOIN shape, which is a different PLAN of the same policy and
@@ -105,22 +105,22 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 			// the ORDER BY position.
 			var joinUser, joinSvc, joinOutpost, joinFold *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentJoinedCols("pi")+`, `+storage.ExportPrincipalIdentJoinedSQL("pi")+
-					` from principal p`+storage.ExportPrincipalIdentJoins("pi", "p.id")+` where p.id = $1::uuid`,
+				`select `+storage.ExportUserIdentJoinedCols("pi")+`, `+storage.ExportUserIdentJoinedSQL("pi")+
+					` from users p`+storage.ExportUserIdentJoins("pi", "p.id")+` where p.id = $1::uuid`,
 				tc.id).Scan(&joinUser, &joinSvc, &joinOutpost, &joinFold); err != nil && tc.kind != "unknown" {
 				t.Fatalf("project the joined sources: %v", err)
 			}
 
-			inGo := storage.ExportPrincipalIdent(subUser, subSvc, subOutpost)
+			inGo := storage.ExportUserIdent(subUser, subSvc, subOutpost)
 			for _, other := range []struct {
 				shape string
 				got   string
 			}{
 				{"the expression it binds", orEmpty(bound)},
-				{"the join it projects", storage.ExportPrincipalIdent(joinUser, joinSvc, joinOutpost)},
+				{"the join it projects", storage.ExportUserIdent(joinUser, joinSvc, joinOutpost)},
 				{"the join it sorts on", orEmpty(joinFold)},
 			} {
-				// The unknown id matches no principal row at all, so the join
+				// The unknown id matches no user row at all, so the join
 				// shape returns no ROW rather than a null one; the sub-select
 				// shape is what resolves an id with nothing behind it, and it is
 				// the shape the audit write uses for exactly that reason.
@@ -128,12 +128,12 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 					continue
 				}
 				if inGo != other.got {
-					t.Errorf("the gateway resolves a %s principal to %q in Go and %q in %s: "+
+					t.Errorf("the gateway resolves a %s user to %q in Go and %q in %s: "+
 						"the shapes of one policy have drifted", tc.kind, inGo, other.got, other.shape)
 				}
 			}
 			if inGo != tc.want {
-				t.Errorf("a %s principal resolves to %q, want %q: the sources name the wrong column, "+
+				t.Errorf("a %s user resolves to %q, want %q: the sources name the wrong column, "+
 					"and they name it in every shape so the agreements above cannot see it", tc.kind, inGo, tc.want)
 			}
 		})
@@ -148,7 +148,7 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 // every one of them projects the sources and folds them in Go, so a fold reading
 // one column fewer than its query returned is a defect only a surface can show.
 // An outpost acting is the reason to write it (it read blank everywhere before this
-// slice), and a human and a service account ride beside it because a surface
+// slice), and a human and a machine user ride beside it because a surface
 // that named nobody would otherwise pass on the outpost row alone.
 func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 	t.Parallel()
@@ -164,13 +164,13 @@ func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 		kind string
 		want string
 	}{
-		{"human", "jordan-ops"},
-		{"service", "ingest-bot"},
+		{"person", "jordan-ops"},
+		{"machine", "ingest-bot"},
 		{"outpost", "edge-1"},
 	}
 	ids := make(map[string]string, len(kinds))
 	for _, k := range kinds {
-		ids[k.kind] = insertPrincipalOfKind(t, conn, k.kind)
+		ids[k.kind] = insertUserOfKind(t, conn, k.kind)
 	}
 
 	// One group to roster all three in; each kind gets its own component and
@@ -192,7 +192,7 @@ func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 			}
 			var snapshot string
 			if err := conn.QueryRow(ctx,
-				`select coalesce(actor_username, '') from audit_log where actor_principal_id = $1::uuid order by ts desc limit 1`,
+				`select coalesce(actor_username, '') from audit_log where actor_user_id = $1::uuid order by ts desc limit 1`,
 				id).Scan(&snapshot); err != nil {
 				t.Fatalf("read the denormalized actor: %v", err)
 			}
@@ -243,7 +243,7 @@ func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 			}
 			var roster string
 			for _, m := range members {
-				if m.PrincipalID == id {
+				if m.UserID == id {
 					roster = m.Name
 				}
 			}
@@ -263,25 +263,30 @@ func orEmpty(s *string) string {
 	return *s
 }
 
-// insertPrincipalOfKind creates a principal of the given kind with its profile
+// insertUserOfKind creates a user of the given kind with its profile
 // row, and returns its id. The profile tables are written directly because two
 // of the three kinds have no gateway create path at all.
-func insertPrincipalOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
+func insertUserOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
 	t.Helper()
 	ctx := context.Background()
+	// An outpost is a machine user whose profile is its outpost row (ADR-2036).
+	dbKind := kind
+	if kind == "outpost" {
+		dbKind = "machine"
+	}
 	var pid string
 	if err := conn.QueryRow(ctx,
-		`insert into principal (kind) values ($1) returning id`, kind).Scan(&pid); err != nil {
-		t.Fatalf("insert %s principal: %v", kind, err)
+		`insert into users (kind) values ($1) returning id`, dbKind).Scan(&pid); err != nil {
+		t.Fatalf("insert %s user: %v", kind, err)
 	}
 	var profile string
 	switch kind {
-	case "human":
-		profile = `insert into human (principal_id, username) values ($1, 'jordan-ops')`
-	case "service":
-		profile = `insert into service (principal_id, name) values ($1, 'ingest-bot')`
+	case "person":
+		profile = `insert into person (user_id, username) values ($1, 'jordan-ops')`
+	case "machine":
+		profile = `insert into machine (user_id, name) values ($1, 'ingest-bot')`
 	case "outpost":
-		profile = `insert into outpost (principal_id, name) values ($1, 'edge-1')`
+		profile = `insert into outpost (user_id, name) values ($1, 'edge-1')`
 	}
 	if _, err := conn.Exec(ctx, profile, pid); err != nil {
 		t.Fatalf("insert %s profile: %v", kind, err)
@@ -289,12 +294,12 @@ func insertPrincipalOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
 	return pid
 }
 
-// TestPrincipalLabelIsNotAStoredFunction is the half of #564 that is about
+// TestUserLabelIsNotAStoredFunction is the half of #564 that is about
 // where logic lives rather than about what it returns. A gateway that resolved
 // the identifier in Go while the stored function sat unused in the schema would
 // have moved nothing: the exception to "logic lives in Go, never the database"
 // is the OBJECT, so the object has to be gone.
-func TestPrincipalLabelIsNotAStoredFunction(t *testing.T) {
+func TestUserLabelIsNotAStoredFunction(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -306,11 +311,11 @@ func TestPrincipalLabelIsNotAStoredFunction(t *testing.T) {
 
 	var n int
 	if err := conn.QueryRow(ctx,
-		`select count(*) from pg_proc where proname = 'principal_label'`).Scan(&n); err != nil {
+		`select count(*) from pg_proc where proname = 'user_label'`).Scan(&n); err != nil {
 		t.Fatalf("read pg_proc: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("the schema still defines principal_label(): %d overload(s). "+
+		t.Errorf("the schema still defines user_label(): %d overload(s). "+
 			"Resolving the identifier in Go moves nothing while the stored function is still there to be called", n)
 	}
 }

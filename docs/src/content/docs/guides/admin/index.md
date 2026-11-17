@@ -12,7 +12,7 @@ is [deployment](/guides/deployment/).
 The dividing line is the [two authorization layers](/architecture/identity-access/), both
 enforced in the app on every request: a `<resource>:<action>` **permission** checked on every
 route, and an ABAC **scope** injected by the Storage Gateway on every applicable query. An
-administrator is simply a user whose grants carry the admin-tier permissions (`principal:*`,
+administrator is simply a user whose grants carry the admin-tier permissions (`user:*`,
 `role:read:admin`, `audit:read:admin`, `secret:*`, and so on); the surfaces below render and refuse exactly
 along those grants, so what an administrator sees is what they are allowed to change.
 
@@ -25,7 +25,7 @@ Every task on these pages has two front doors, and they call the same API with t
   group. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
-  (`principal`, `principal-group`, `secret`, `variable`, and the rest, all in the [CLI
+  (`user`, `user-group`, `secret`, `variable`, and the rest, all in the [CLI
   reference](/reference/cli/)), plus the trusted direct-database lane (`bootstrap`, `token`,
   `set-password`) that mints the very first owner before any server is running.
 

@@ -75,7 +75,7 @@ func newSettleRig(t *testing.T, settle string) *settleRig {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	r := &settleRig{ctx: ctx, gw: gw, conn: conn}
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&r.actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&r.actor); err != nil {
 		t.Fatal(err)
 	}
 	return r
@@ -491,7 +491,7 @@ func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
 	r.ownerLevelDisplay(t)
 	all := scope.Set{All: true}
 	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('telnet', 'telnet', (select id from component where name = 'display'), (select principal_id from outpost where name = 'edge'), '{"target":"10.20.4.61:23"}'::jsonb)`); err != nil {
+		('telnet', 'telnet', (select id from component where name = 'display'), (select user_id from outpost where name = 'edge'), '{"target":"10.20.4.61:23"}'::jsonb)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.gw.InsertPropertySamples(r.ctx, storage.OutpostWriter("display", "telnet"), []storage.PropertySampleWrite{{

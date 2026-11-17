@@ -58,11 +58,11 @@ func taskID(endpointID, mode string, spec []byte) string {
 
 // taskSelectJoin is the task columns aliased to `t`, with Outpost PROJECTED from the
 // joined endpoint: a task carries no outpost column, so every read joins endpoint
-// to resolve placement. The endpoint arc stores outpost.principal_id, so the
+// to resolve placement. The endpoint arc stores outpost.user_id, so the
 // projection resolves it to the outpost's name, which is what Task.Outpost carries.
 // Callers always join `endpoint i on i.id = t.endpoint_id`.
 const taskSelectJoin = `t.id, coalesce(t.label, ''), t.mode, t.endpoint_id,
-	(select n.name from outpost n where n.principal_id = i.outpost_id) as outpost_id, i.outpost_id,
+	(select n.name from outpost n where n.user_id = i.outpost_id) as outpost_id, i.outpost_id,
 	t.spec, t.enabled, t.created_at, t.updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
@@ -197,7 +197,7 @@ type TaskOwner struct {
 	EndpointID   string
 	EndpointName string
 	Transport    string
-	// OutpostID is the outpost the task's endpoint is placed on (its principal id),
+	// OutpostID is the outpost the task's endpoint is placed on (its user id),
 	// the collector a metric series records (#1275).
 	OutpostID string
 }
@@ -224,7 +224,7 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (
 	// have the write side resolve it a second time is exactly the shape #627
 	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select i.component, (select n.name from outpost n where n.principal_id = i.outpost_id), i.id, i.name, i.transport,
+		select i.component, (select n.name from outpost n where n.user_id = i.outpost_id), i.id, i.name, i.transport,
 			coalesce(i.outpost_id::text, '')
 		from task t
 		join endpoint i on i.id = t.endpoint_id
@@ -264,7 +264,7 @@ func (p *PG) ResolveTaskOwners(ctx context.Context, outpostName string, taskIDs 
 		select t.id, i.component::text, i.id, i.name, i.transport, i.outpost_id::text
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		join outpost n on n.principal_id = i.outpost_id
+		join outpost n on n.user_id = i.outpost_id
 		where t.id = any($1::text[]) and n.name = $2 and i.component is not null`, taskIDs, outpostName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", outpostName, err)

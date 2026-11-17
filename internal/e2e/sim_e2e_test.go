@@ -90,7 +90,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		args []any
 	}{
 		{`update component set product_id = (select id from product where name = $1) where name = 'sim-dev'`, []any{product}},
-		{`insert into endpoint (name, transport, component, outpost_id, params) values ('sim-dev-tcp', 'tcp', (select id from component where name = 'sim-dev'), (select principal_id from outpost where name = 'edge-e'), jsonb_build_object('target', $1::text))`, []any{target}},
+		{`insert into endpoint (name, transport, component, outpost_id, params) values ('sim-dev-tcp', 'tcp', (select id from component where name = 'sim-dev'), (select user_id from outpost where name = 'edge-e'), jsonb_build_object('target', $1::text))`, []any{target}},
 		{`insert into task (id, mode, endpoint_id, enabled) values ('t-sim', 'poll', (select id from endpoint where name = 'sim-dev-tcp'), true)`, nil},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {

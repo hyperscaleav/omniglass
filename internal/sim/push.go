@@ -18,7 +18,7 @@ import (
 )
 
 // The push face (#1743): a device that is an outside actor, not a device on
-// the network, reporting by pushing. It holds a bearer token for a principal
+// the network, reporting by pushing. It holds a bearer token for a user
 // granted telemetry:push on the systems it reports for, reads those systems
 // off its own grant (GET /auth/me), and posts each one's batch through
 // POST /telemetry:push on its profile's cadence. The batch is the profile's
@@ -284,7 +284,7 @@ func (d *Device) pushOwner(ctx context.Context, server, token, owner string) err
 	return nil
 }
 
-// grantedSystems is every system the principal's grants name, off GET
+// grantedSystems is every system the user's grants name, off GET
 // /auth/me: the places it may push for, and nothing else.
 func grantedSystems(ctx context.Context, server, token string) ([]string, error) {
 	var me struct {

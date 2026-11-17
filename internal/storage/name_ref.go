@@ -22,7 +22,7 @@ import (
 //     partial indexes per table), the owner a component, system or location
 //     reference or `$platform`, the tier that has no name of its own;
 //   - a file is its filename, unique nowhere;
-//   - a principal group is its name, unique outright.
+//   - a user group is its name, unique outright.
 //
 // One rule runs through all of them, the one resolveRef already states: scope
 // decides before ambiguity does. Every candidate a name matches is narrowed to
@@ -444,11 +444,11 @@ func fileIDByRef(ctx context.Context, q querier, ref string, canAdmin bool) (str
 	return "", e
 }
 
-// --- principal group ---------------------------------------------------------
+// --- user group ---------------------------------------------------------
 
-// groupIDByRef resolves a principal group reference to its uuid: a uuid passes
+// groupIDByRef resolves a user group reference to its uuid: a uuid passes
 // through (the caller's existing not-found applies to it), and anything else is
-// the group's name, unique outright (principal_group_name_key). Every caller
+// the group's name, unique outright (user_group_name_key). Every caller
 // runs it after the all-scope check, so a non-all caller learns nothing about
 // which names exist.
 func groupIDByRef(ctx context.Context, q querier, ref string) (string, error) {
@@ -456,55 +456,55 @@ func groupIDByRef(ctx context.Context, q querier, ref string) (string, error) {
 		return ref, nil
 	}
 	var id string
-	err := q.QueryRow(ctx, `select id from principal_group where name = $1`, ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id from user_group where name = $1`, ref).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", unresolved("principal group", ref, ErrGroupNotFound)
+		return "", unresolved("user group", ref, ErrGroupNotFound)
 	}
 	if err != nil {
-		return "", fmt.Errorf("storage: resolve principal group %q: %w", ref, err)
+		return "", fmt.Errorf("storage: resolve user group %q: %w", ref, err)
 	}
 	return id, nil
 }
 
-// --- principal ---------------------------------------------------------------
+// --- user ---------------------------------------------------------------
 
-// principalIDByRef resolves a principal reference to its uuid: a uuid passes
+// userIDByRef resolves a user reference to its uuid: a uuid passes
 // through (any kind, and an unknown one too, so the caller's own not-found
-// applies unchanged), and anything else is a human's username or a service
+// applies unchanged), and anything else is a person's username or a service
 // account's name (#1133), each unique among its own kind. A word that is both
-// names no one principal and is refused with both uuids. An outpost is reached by
+// names no one user and is refused with both uuids. An outpost is reached by
 // its name on /outposts, not here.
-func principalIDByRef(ctx context.Context, q querier, ref string) (string, error) {
+func userIDByRef(ctx context.Context, q querier, ref string) (string, error) {
 	if isUUID(ref) {
 		return ref, nil
 	}
 	rows, err := q.Query(ctx, `
-		select principal_id from human where username = $1
+		select user_id from person where username = $1
 		union all
-		select principal_id from service where name = $1
+		select user_id from machine where name = $1
 		order by 1`, ref)
 	if err != nil {
-		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+		return "", fmt.Errorf("storage: resolve user ref %q: %w", ref, err)
 	}
 	defer rows.Close()
 	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return "", fmt.Errorf("storage: scan principal ref %q: %w", ref, err)
+			return "", fmt.Errorf("storage: scan user ref %q: %w", ref, err)
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+		return "", fmt.Errorf("storage: resolve user ref %q: %w", ref, err)
 	}
 	switch len(ids) {
 	case 0:
-		return "", unresolved("principal", ref, ErrPrincipalNotFound)
+		return "", unresolved("user", ref, ErrUserNotFound)
 	case 1:
 		return ids[0], nil
 	}
-	e := unresolved("principal", ref, ErrPrincipalNotFound)
+	e := unresolved("user", ref, ErrUserNotFound)
 	e.Candidates = ids
 	return "", e
 }

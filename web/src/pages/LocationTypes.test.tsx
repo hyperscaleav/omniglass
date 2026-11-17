@@ -35,8 +35,8 @@ const catalog: PropertyRow[] = [
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -636,7 +636,7 @@ describe("LocationTypes page", () => {
 // secret:read; secret is a sensitive resource off the viewer floor) lost the
 // location catalog it was entitled to. The split page must render from
 // /location-types alone and never have /secret-types on its path.
-describe("LocationTypes for a viewer-floor principal (#598)", () => {
+describe("LocationTypes for a viewer-floor user (#598)", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("renders the catalog from /location-types alone, never fetching /secret-types", async () => {

@@ -117,7 +117,7 @@ func newTickFixture(t *testing.T) *tickFixture {
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `
 		insert into endpoint (name, transport, component, outpost_id, params)
-		select c.name || '-tcp', 'tcp', c.id, n.principal_id, '{"target":"127.0.0.1:1"}'::jsonb
+		select c.name || '-tcp', 'tcp', c.id, n.user_id, '{"target":"127.0.0.1:1"}'::jsonb
 		from component c join outpost n on n.name = case when c.name = 'disp-b' then 'outpost-b' else 'outpost-a' end
 		where c.name like 'disp-%';
 		insert into task (id, mode, endpoint_id, enabled)

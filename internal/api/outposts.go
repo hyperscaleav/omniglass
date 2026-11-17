@@ -109,7 +109,7 @@ func registerOutpostRoutes(api huma.API, a *authenticator, gw storage.Gateway, n
 		}
 		ids := make([]string, len(outposts))
 		for i := range outposts {
-			ids[i] = outposts[i].PrincipalID
+			ids[i] = outposts[i].UserID
 		}
 		effTags, err := gw.EffectiveTags(ctx, "outpost", ids)
 		if err != nil {
@@ -119,7 +119,7 @@ func registerOutpostRoutes(api huma.API, a *authenticator, gw storage.Gateway, n
 		out.Body.Outposts = make([]outpostBody, 0, len(outposts))
 		for i := range outposts {
 			b := toOutpostBody(&outposts[i])
-			b.EffectiveTags = effTags[outposts[i].PrincipalID]
+			b.EffectiveTags = effTags[outposts[i].UserID]
 			out.Body.Outposts = append(out.Body.Outposts, b)
 		}
 		return out, nil
@@ -138,11 +138,11 @@ func registerOutpostRoutes(api huma.API, a *authenticator, gw storage.Gateway, n
 			return nil, mapOutpostErr(err)
 		}
 		b := toOutpostBody(n)
-		effTags, err := gw.EffectiveTags(ctx, "outpost", []string{n.PrincipalID})
+		effTags, err := gw.EffectiveTags(ctx, "outpost", []string{n.UserID})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("get outpost")
 		}
-		b.EffectiveTags = effTags[n.PrincipalID]
+		b.EffectiveTags = effTags[n.UserID]
 		return &outpostOutput{Body: b}, nil
 	})
 

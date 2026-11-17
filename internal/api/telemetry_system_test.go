@@ -251,7 +251,7 @@ func TestASystemPushIsFencedOnTheSystemTier(t *testing.T) {
 	}
 
 	// A push-only integration on sys-a pushes there and learns nothing else.
-	pushOnly := principalWithGrants(t, ctx, dsn, "push-only-a", []grant{{role: "push-only", scopeKind: "system", scopeID: ids["sys-a"]}})
+	pushOnly := userWithGrants(t, ctx, dsn, "push-only-a", []grant{{role: "push-only", scopeKind: "system", scopeID: ids["sys-a"]}})
 	push(pushOnly, "system", "sys-a", http.StatusAccepted)
 	push(pushOnly, "system", ids["sys-a"], http.StatusAccepted)
 	push(pushOnly, "system", "sys-b", http.StatusNotFound)
@@ -263,7 +263,7 @@ func TestASystemPushIsFencedOnTheSystemTier(t *testing.T) {
 
 	// A wide read and a narrow push: the read decides only the refusal, a
 	// truthful 403 on a system it can see but may not push to.
-	wideNarrow := setupScopedPrincipal(t, ctx, dsn, "wide-read-narrow-push-sys",
+	wideNarrow := setupScopedUser(t, ctx, dsn, "wide-read-narrow-push-sys",
 		grantSpec{role: "viewer", scopeKind: "all"},
 		grantSpec{role: "operator", scopeKind: "system", scopeID: ids["sys-b"]},
 	)

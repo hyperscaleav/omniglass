@@ -84,8 +84,8 @@ const rows: Command[] = [
   command({ id: 1, status: "timed-out", phase: "timed-out", settled_by: "window", reason: "queued for outpost edge-dark, which did not take it within its 15s settle window", issued_at: at(300), settled_at: at(285) }),
 ];
 
-const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "command:issue"], grants: [] };
-const viewer: Me = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] };
+const operator: Me = { user: { id: "op", kind: "person" }, permissions: ["*:read", "command:issue"], grants: [] };
+const viewer: Me = { user: { id: "vw", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 const endpoints = [{ id: uuidFor("cmd-ep"), name: "wss", transport: "wss", component_id: comp, driver: "kestrel-ws" }] as Endpoint[];
 const drivers = [

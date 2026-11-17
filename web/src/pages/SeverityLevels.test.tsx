@@ -20,12 +20,12 @@ import { EVENT_RULES_KEY } from "../lib/event_rules";
 // caller's all-scope permissions (fleet_permissions), like an event rule's. Data
 // is seeded into the query cache; writes are caught at fetch.
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
 // Owns one location, views the fleet: severity_level:* is in its flattened set,
 // but writing a level needs it on an all-scope grant, so the server refuses it.
 const placeOwner: Me = {
-  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+  user: { id: "u-po", kind: "person" }, person: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: "loc-hq" }, { role: "viewer", scope_kind: "all" }],
 };
 

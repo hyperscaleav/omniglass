@@ -50,11 +50,11 @@ func TestProbeStateLandsOnChangeOnly(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 	var telnetID string
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('icmp', 'icmp', $1::uuid, (select principal_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
+		('icmp', 'icmp', $1::uuid, (select user_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("icmp endpoint: %v", err)
 	}
 	if err := conn.QueryRow(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1:23"}'::jsonb) returning id`, comp.ID).Scan(&telnetID); err != nil {
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1:23"}'::jsonb) returning id`, comp.ID).Scan(&telnetID); err != nil {
 		t.Fatalf("telnet endpoint: %v", err)
 	}
 

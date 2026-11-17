@@ -81,16 +81,16 @@ Show
 Type "# A group, its member, a file and a grant's scope, each by name"
 Enter
 Wait
-Type `omniglass principal-group create --name night-shift | jq -c '{name}'`
+Type `omniglass user-group create --name night-shift | jq -c '{name}'`
 Enter
 Wait
-Type `omniglass principal-group member create night-shift --principal-id dev && omniglass principal-group member list night-shift | jq -c '[.members[] | .name]'`
+Type `omniglass user-group member create night-shift --user-id dev && omniglass user-group member list night-shift | jq -c '[.members[] | .name]'`
 Enter
 Wait
 Type `omniglass file download codec-firmware-2.1.4.txt | jq -c '{name, content_type}'`
 Enter
 Wait
-Type `omniglass principal-group grant create night-shift --role viewer --scope-kind location --scope-id hq.west.level-2.huddle | jq -c '{role, scope_kind}'`
+Type `omniglass user-group grant create night-shift --role viewer --scope-kind location --scope-id hq.west.level-2.huddle | jq -c '{role, scope_kind}'`
 Enter
 Wait
 
