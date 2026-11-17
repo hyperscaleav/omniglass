@@ -82,7 +82,7 @@ export const navItems: NavItem[] = [
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Declared values", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
+      { label: "Declared", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).

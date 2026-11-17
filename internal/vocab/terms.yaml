@@ -348,6 +348,7 @@ terms:
     definition: The state an operator declares a component or system should hold, which reconcile compares with what the device reports.
     audience: operator
     nav: /config
+    nav_label: Declared
     retired:
       - word: declared config
         pattern: '(?i)\bdeclared[- ]config\b'
