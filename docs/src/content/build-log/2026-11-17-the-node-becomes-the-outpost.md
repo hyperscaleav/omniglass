@@ -13,5 +13,6 @@ which always held the outpost's principal id, becomes `endpoint.outpost_id`.
 migration, migrates forward over it, and rolls it back. The Go, the API (`/outposts`, the
 `outpost:*` permissions), the generated CLI (`omniglass outpost run`, `OMNIGLASS_OUTPOST_*`), the
 console, the lab (`--no-outpost`) and the docs follow; the architecture page moves to
-`/architecture/outposts/` with a redirect. The vocabulary denylist retires `node` as the collector
+`/architecture/outposts/` with a redirect. Home's tile that counts them, which read Collectors (a
+word ADR-2031 rejected), reads Outposts. The vocabulary denylist retires `node` as the collector
 while allowing its tree, DOM and Node.js senses, so a stray one fails the lint.
