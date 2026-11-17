@@ -353,7 +353,7 @@ describe("PlatformHealth page", () => {
     expect(reads.some((u) => u.pathname.includes(uuidFor("server-b")))).toBe(false);
   });
 
-  // The view polls, and every poll is a new body: an operator's place on the
+  // The view polls, and every poll is a new body: an operator's location on the
   // page (a set they opened or closed, a row's chart, a key's tooltip) is the
   // same server, key and route in the next body, so it survives the poll.
   it("keeps an opened set, an expanded row and an open tooltip across a poll, with the poll's figures", async () => {

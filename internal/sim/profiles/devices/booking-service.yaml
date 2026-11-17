@@ -24,7 +24,7 @@ device_type: cloud-service
 slug_prefix: booking
 
 doc:
-  summary: "Room-booking platform's integration: pushes each booked place's day through /telemetry:push"
+  summary: "Room-booking platform's integration: pushes each booked location's day through /telemetry:push"
   description: |
     A scheduling platform's first-party integration. It pushes each
     system it is granted its booking count (meetings left today) and

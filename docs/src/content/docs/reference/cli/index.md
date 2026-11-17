@@ -43,7 +43,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
 | `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
-| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
 Example:
 
@@ -353,7 +353,7 @@ Creates a personal action rule: on which alarm transitions, when, what to send, 
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both |
 | `--targets` | string | (none) | Refused when set (a 422): a personal rule tells you alone and names no target |
-| `--when` | string | (none) | A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
+| `--when` | string | (none) | A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
 
 Example:
 
@@ -1265,13 +1265,13 @@ Start a component from a template
 omniglass component createFromTemplate [flags]
 ```
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--inputs` | string | (none) | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) |
 | `--label` | string | (none) | The component's label |
-| `--location` | string | (none) | The place the component sits in, by name or dotted path |
+| `--location` | string | (none) | The location the component sits in, by name or dotted path |
 | `--name` | string | (none) | The component's name; minted as an unnamed create mints it when empty |
 | `--node` | string | (none) | The node the endpoint is placed on; needed when inputs carry an address |
 | `--template` | string | (none) | The component template, by name |
@@ -1534,7 +1534,7 @@ Bind an identity a conduit reports to its owner
 omniglass component identity-binding update <name> <key> <value> [flags]
 ```
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 Arguments:
   <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1542,7 +1542,7 @@ Arguments:
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--owner` | string | (none) | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here |
+| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here |
 
 Example:
 
@@ -3205,20 +3205,20 @@ omniglass location create --location-type location_type
 
 ### `omniglass location createFromTemplate`
 
-Start a subtree of places from a template
+Start a subtree of locations from a template
 
 ```
 omniglass location createFromTemplate [flags]
 ```
 
-Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | The subtree root's label |
 | `--name` | string | (none) | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
-| `--parent` | string | (none) | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
-| `--template` | string | (none) | The place template, by name |
+| `--parent` | string | (none) | The location the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `--template` | string | (none) | The location template, by name |
 
 Example:
 
@@ -3415,7 +3415,7 @@ List a location's effective properties
 omniglass location property list <name>
 ```
 
-Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -3541,7 +3541,7 @@ Regenerate a location's name
 omniglass location resetName <name>
 ```
 
-Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -4516,7 +4516,7 @@ Create a notification type
 omniglass notification-type create [flags]
 ```
 
-Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4632,7 +4632,7 @@ Update a notification type
 omniglass notification-type update <name> [flags]
 ```
 
-Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5985,7 +5985,7 @@ Adds an operator severity level at a rank of its own, between two others without
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The level's name (lowercase kebab) |
-| `--rank` | int | `0` | Its place among the levels: higher is more severe; unique |
+| `--rank` | int | `0` | Its position among the levels: higher is more severe; unique |
 
 Example:
 
@@ -6056,7 +6056,7 @@ Patches an operator level's name, label, color or rank (an absent field is uncha
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | A new name; every alarm at this level follows |
-| `--rank` | int | `0` | Its place among the levels; unique |
+| `--rank` | int | `0` | Its position among the levels; unique |
 
 Example:
 
@@ -6137,7 +6137,7 @@ Add a simulated system
 omniglass simulation add-system <name> [flags]
 ```
 
-Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6600,13 +6600,13 @@ Start a whole system from a template
 omniglass system createFromTemplate [flags]
 ```
 
-Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--attach` | string | (none) | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
 | `--label` | string | (none) | The system's label |
-| `--location` | string | (none) | The place the system and its components sit in, by name or dotted path |
+| `--location` | string | (none) | The location the system and its components sit in, by name or dotted path |
 | `--name` | string | (none) | The system's name; minted from its type when empty |
 | `--node` | string | (none) | The node the endpoints are placed on; needed when any component attaches |
 | `--standard` | string | (none) | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |

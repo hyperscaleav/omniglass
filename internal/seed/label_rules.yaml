@@ -17,21 +17,21 @@ label_rules:
     template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
 
   - entity_kind: system
-    # A system reads as the place it monitors (#872). A system is the logical
-    # group of components that makes a place work, and nearly every room holds
-    # exactly one, so the operator's word for it is the place's: "Briefing
+    # A system reads as the location it monitors (#872). A system is the logical
+    # group of components that makes a location work, and nearly every room holds
+    # exactly one, so the operator's word for it is the location's: "Briefing
     # Room", not the kind of space ("Meeting Room") read back under a
     # breadcrumb that already says Briefing Room. The kind and the standard
     # stay attributes beside the label.
     #
-    # A place holding several systems names each one's kind after the place
+    # A location holding several systems names each one's kind after the location
     # ("Media Lab Meeting Room", "Media Lab Signage"), and the siblings restamp
     # as the count changes. An unclassified system has no kind to name, so it
     # names itself ("Media Lab Lobby Wall"). The ordinal still follows the NAME
     # (#693): the first of a stem is bare and the second carries its 2
     # ("Room A Boardroom", "Room A Boardroom 2").
     #
-    # A system with no place has nothing to lead with, so it reads its kind and
+    # A system with no location has nothing to lead with, so it reads its kind and
     # ordinal as before.
     #
     # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A

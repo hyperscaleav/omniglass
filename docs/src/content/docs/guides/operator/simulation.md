@@ -64,7 +64,7 @@ From a terminal the same view is `omniglass simulation get`, and one node's is
 `omniglass node simulation <node>`.
 
 A simulated component's own page carries a **Simulation** section (its node, address, hits, and
-anything broken on it), so the component and its simulation are one place. **Open simulation** opens the same
+anything broken on it), so the component and its simulation are one page. **Open simulation** opens the same
 simulation drawer a row on the Simulation page opens.
 
 ## Exercise a component
@@ -109,7 +109,7 @@ A simulated system is built to one of your **standards** (a meeting room, a hudd
 sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
 the roles it cannot fill yet, which stay short so the system honestly reads that way. On the
 Simulation page, **Add simulated system** asks for a node, a standard, a system type, and optionally a
-place and a name; choosing the standard previews its **plan** (each role, the product it gets and how
+location and a name; choosing the standard previews its **plan** (each role, the product it gets and how
 many, and any short role with its reason) before anything is created. From a terminal, preview the plan,
 then add it:
 

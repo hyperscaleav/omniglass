@@ -37,8 +37,8 @@ func checkOne(ctx context.Context, c *Catalog, gw storage.Gateway, t *Template) 
 		return checkComponent(ctx, gw, t.Component)
 	case KindSystem:
 		return checkSystem(ctx, c, gw, t.System)
-	case KindPlace:
-		return checkPlace(ctx, gw, t.Place, "")
+	case KindLocation:
+		return checkLocation(ctx, gw, t.Location, "")
 	}
 	return nil
 }
@@ -209,11 +209,11 @@ func checkAccepts(ctx context.Context, gw storage.Gateway, r Role, prod *storage
 	return fmt.Errorf("a %s, which the role (accepting %v) does not take", prod.ComponentType, r.AcceptedTypes)
 }
 
-// checkPlace holds each place's type to the shipped location types: the
-// type must exist, and a nested place's type must allow its parent's. The
+// checkLocation holds each location's type to the shipped location types: the
+// type must exist, and a nested location's type must allow its parent's. The
 // root's placement is the caller's to choose, so it is checked when the
 // template is created from.
-func checkPlace(ctx context.Context, gw storage.Gateway, p *Place, parentType string) []error {
+func checkLocation(ctx context.Context, gw storage.Gateway, p *Location, parentType string) []error {
 	var errs []error
 	lt, err := gw.GetLocationType(ctx, p.Type)
 	switch {
@@ -224,8 +224,8 @@ func checkPlace(ctx context.Context, gw storage.Gateway, p *Place, parentType st
 	case parentType != "" && !slices.Contains(lt.AllowedParentTypes, parentType):
 		errs = append(errs, fmt.Errorf("places a %s under a %s, which %s does not allow", p.Type, parentType, p.Type))
 	}
-	for i := range p.Places {
-		errs = append(errs, checkPlace(ctx, gw, &p.Places[i], p.Type)...)
+	for i := range p.Locations {
+		errs = append(errs, checkLocation(ctx, gw, &p.Locations[i], p.Type)...)
 	}
 	return errs
 }

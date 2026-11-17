@@ -86,28 +86,28 @@ type templateSystemBody struct {
 	Properties map[string]json.RawMessage      `json:"properties,omitempty" doc:"Declared system property values, by property name"`
 }
 
-type templatePlaceSystemBody struct {
-	Template string `json:"template" doc:"The system template that lands in the place"`
+type templateLocationSystemBody struct {
+	Template string `json:"template" doc:"The system template that lands in the location"`
 	Label    string `json:"label,omitempty" doc:"The system's label"`
 }
 
-type templatePlaceBody struct {
-	Type    string                    `json:"type" doc:"The place's location type"`
-	Name    string                    `json:"name,omitempty" doc:"The place's name; omitted where its type's name rule mints one, or the caller names it"`
-	Label   string                    `json:"label,omitempty" doc:"The place's label"`
-	Systems []templatePlaceSystemBody `json:"systems,omitempty" doc:"The system templates that land in the place"`
-	Places  []templatePlaceBody       `json:"places,omitempty" doc:"The places nested under this one"`
+type templateLocationBody struct {
+	Type      string                       `json:"type" doc:"The location's location type"`
+	Name      string                       `json:"name,omitempty" doc:"The location's name; omitted where its type's name rule mints one, or the caller names it"`
+	Label     string                       `json:"label,omitempty" doc:"The location's label"`
+	Systems   []templateLocationSystemBody `json:"systems,omitempty" doc:"The system templates that land in the location"`
+	Locations []templateLocationBody       `json:"locations,omitempty" doc:"The locations nested under this one"`
 }
 
 type templateBody struct {
-	Kind        string                 `json:"kind" enum:"standard_template,system_template,place_template,component_template" doc:"What the template creates"`
+	Kind        string                 `json:"kind" enum:"standard_template,system_template,location_template,component_template" doc:"What the template creates"`
 	Name        string                 `json:"name" doc:"The template's name, unique across the catalog"`
 	Label       string                 `json:"label" doc:"What an operator reads for the template"`
 	Description string                 `json:"description,omitempty" doc:"What the template is for"`
 	Standard    *templateStandardBody  `json:"standard,omitempty" doc:"A standard template's body: what creating a standard from it writes"`
 	Component   *templateComponentBody `json:"component,omitempty" doc:"A component template's body"`
 	System      *templateSystemBody    `json:"system,omitempty" doc:"A system template's body"`
-	Place       *templatePlaceBody     `json:"place,omitempty" doc:"A place template's body: the root of the subtree"`
+	Location    *templateLocationBody  `json:"location,omitempty" doc:"A location template's body: the root of the subtree"`
 }
 
 func toTemplateBody(t *template.Template) templateBody {
@@ -129,9 +129,9 @@ func toTemplateBody(t *template.Template) templateBody {
 			sys.Roles[role] = templateRoleFillBody{Component: f.Component, Product: f.Product}
 		}
 		out.System = sys
-	case t.Place != nil:
-		p := toTemplatePlaceBody(t.Place)
-		out.Place = &p
+	case t.Location != nil:
+		p := toTemplateLocationBody(t.Location)
+		out.Location = &p
 	}
 	return out
 }
@@ -167,19 +167,19 @@ func toTemplateStandardBody(s *template.Standard) *templateStandardBody {
 	return out
 }
 
-func toTemplatePlaceBody(p *template.Place) templatePlaceBody {
-	out := templatePlaceBody{Type: p.Type, Name: p.Name, Label: p.Label}
+func toTemplateLocationBody(p *template.Location) templateLocationBody {
+	out := templateLocationBody{Type: p.Type, Name: p.Name, Label: p.Label}
 	for _, s := range p.Systems {
-		out.Systems = append(out.Systems, templatePlaceSystemBody{Template: s.Template, Label: s.Label})
+		out.Systems = append(out.Systems, templateLocationSystemBody{Template: s.Template, Label: s.Label})
 	}
-	for i := range p.Places {
-		out.Places = append(out.Places, toTemplatePlaceBody(&p.Places[i]))
+	for i := range p.Locations {
+		out.Locations = append(out.Locations, toTemplateLocationBody(&p.Locations[i]))
 	}
 	return out
 }
 
 type listTemplatesInput struct {
-	Kind string `query:"kind" enum:"standard_template,system_template,place_template,component_template" doc:"Only templates of this kind; omitted lists every kind"`
+	Kind string `query:"kind" enum:"standard_template,system_template,location_template,component_template" doc:"Only templates of this kind; omitted lists every kind"`
 }
 
 type listTemplatesOutput struct {

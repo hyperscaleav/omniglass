@@ -17,7 +17,7 @@ type ActionInput struct {
 	Component      string `expr:"component" doc:"The component's name"`
 	ComponentLabel string `expr:"component_label" doc:"How the component reads: its label, else its name"`
 	ComponentType  string `expr:"component_type" doc:"The label of the component type its product classifies it as"`
-	Place          string `expr:"place" doc:"How the location the component sits at reads; empty when it sits at none of its own"`
+	Location       string `expr:"location" doc:"How the location the component sits at reads; empty when it sits at none of its own"`
 	Severity       string `expr:"severity" doc:"The severity level the alarm was raised at, by name"`
 	SeverityLabel  string `expr:"severity_label" doc:"That level's label, else its name"`
 	SeverityRank   int    `expr:"severity_rank" doc:"That level's rank: higher is worse (the shipped high is 40, so severity_rank >= 40 is high and above)"`

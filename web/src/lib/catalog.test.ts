@@ -32,13 +32,13 @@ describe("the catalog table's soon slots", () => {
 describe("the catalog table's Templates slots", () => {
   const rows = [
     { kind: "component_template" }, { kind: "component_template" },
-    { kind: "standard_template" }, { kind: "system_template" }, { kind: "place_template" },
+    { kind: "standard_template" }, { kind: "system_template" }, { kind: "location_template" },
   ];
 
   it("opens /templates filtered to each group's kinds, the Systems slot reaching standard templates too", () => {
     expect(entryHref(entry("Components", "Templates"))).toBe("/templates?kind=component_template");
     expect(entryHref(entry("Systems", "Templates"))).toBe("/templates?kind=standard_template,system_template");
-    expect(entryHref(entry("Locations", "Templates"))).toBe("/templates?kind=place_template");
+    expect(entryHref(entry("Locations", "Templates"))).toBe("/templates?kind=location_template");
     for (const g of ["Components", "Systems", "Locations"]) expect(entry(g, "Templates").soon).toBeFalsy();
   });
 
@@ -52,7 +52,7 @@ describe("the catalog table's Templates slots", () => {
   it("lights a slot only on its own kinds, and an unfiltered entry on its route alone", () => {
     const sys = entry("Systems", "Templates");
     expect(entryActive(sys, "/web/templates", "?kind=standard_template,system_template")).toBe(true);
-    expect(entryActive(sys, "/web/templates", "?kind=place_template")).toBe(false);
+    expect(entryActive(sys, "/web/templates", "?kind=location_template")).toBe(false);
     expect(entryActive(sys, "/web/standards", "")).toBe(false);
     expect(entryActive(entry("Systems", "Standards"), "/web/standards", "?open=mr55")).toBe(true);
   });

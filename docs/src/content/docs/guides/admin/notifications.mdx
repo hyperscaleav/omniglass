@@ -89,7 +89,7 @@ the same on every attempt, so a receiver can drop a redelivery.
 ## 3. Say when
 
 An action rule sends on an alarm's `raised`, `cleared`, or both, when its predicate holds. The
-predicate reads the alarm's facts (`component`, `place`, `severity`, `severity_rank`, `message`,
+predicate reads the alarm's facts (`component`, `location`, `severity`, `severity_rank`, `message`,
 `rule`, ...); `severity_rank >= 40` is high and above. On **Catalog, under Actions: Action rules**,
 choose **New action rule**: the transitions, the **When** (checked as you type, each fact it may name
 listed beneath with its type, a mistake pointed at by line and column; empty sends on every alarm),

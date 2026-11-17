@@ -126,7 +126,7 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
   });
 
-  it("leads back to Explore, where every place is listed now (#861)", async () => {
+  it("leads back to Explore, where every location is listed now (#861)", async () => {
     mount("/locations/create");
     fireEvent.click(await screen.findByRole("button", { name: /Explore/ }));
     expect(await screen.findByTestId("explore-page")).toBeTruthy();

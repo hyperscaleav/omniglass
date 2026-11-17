@@ -82,7 +82,7 @@ screen is open to you. The login is the same well-known one every walkthrough is
 the steps you follow match the screen you have. Every screen, the sign-in page included, carries a
 **Lab instance** banner, so a lab is never mistaken for a real deployment.
 
-The fleet is the dev fleet, the same one every walkthrough is recorded on: places with systems in
+The fleet is the dev fleet, the same one every walkthrough is recorded on: locations with systems in
 them, components of several products from several vendors, and the edge node `edge-hq` collecting
 from all of them.
 
@@ -951,8 +951,8 @@ The [delivery table](#reading-the-delivery-table)'s rows are exact figures, one 
 `delivery_loss/<hop>/<kind>` for every row the table prints a loss for (a kind with nothing in reads
 `-` and is no figure). A sim hop row names its protocol in place of the kind (`delivery_loss/sim/snmp`),
 and a push-lane row names its lane first (`delivery_loss/push/ingest/metric`), so it is never folded
-into the node lane's row for the same hop and kind. The publish row counts pushes, so it names them in
-place of a kind: `delivery_loss/push/publish/pushes`. Over several runs the worst run is the
+into the node lane's row for the same hop and kind. The publish row counts pushes, so it names them
+instead of a kind: `delivery_loss/push/publish/pushes`. Over several runs the worst run is the
 figure, and its note says what was lost, where, and the largest outcome behind it, the same cause the
 table prints:
 

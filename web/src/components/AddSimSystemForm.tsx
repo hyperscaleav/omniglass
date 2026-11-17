@@ -36,10 +36,10 @@ import {
 export default function AddSimSystemForm(props: { nodes: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
   const qc = useQueryClient();
   const me = useMe();
-  const canPlace = () => can(me.data, "location", "read");
+  const canReadLocations = () => can(me.data, "location", "read");
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const types = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canPlace() }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
   const [draft, setDraft] = createSignal<AddSystemDraft>({
     node: props.nodes.length === 1 ? props.nodes[0] : "",
     standard: "",
@@ -142,8 +142,8 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
           <For each={typeOptions()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
         </select>
       </FieldRow>
-      <Show when={canPlace()}>
-        <LoadError what="the places" query={locations} testid="locations-error" />
+      <Show when={canReadLocations()}>
+        <LoadError what="the locations" query={locations} testid="locations-error" />
         <FieldRow label="Location" info="Where the system and its components sit. Optional: an unplaced system is still served and collected.">
           <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
             <option value="">(unplaced)</option>

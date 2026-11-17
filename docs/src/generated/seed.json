@@ -1422,14 +1422,14 @@
    "label": "Alarm raised",
    "description": "Says an alarm opened: what is wrong, where, and how bad. The message an action rule on raised sends unless it names another type.",
    "subject": "[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}",
-   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.\n{{if .Link}}{{.Link}}{{end}}"
+   "text": "{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.\n{{if .Link}}{{.Link}}{{end}}"
   },
   {
    "name": "alarm-cleared",
    "label": "Alarm cleared",
    "description": "Says an alarm closed, so whoever was told it opened is told it is over. The message an action rule on cleared sends unless it names another type.",
    "subject": "[Cleared] {{.ComponentLabel}}: {{.Message}}",
-   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.\n{{if .Link}}{{.Link}}{{end}}"
+   "text": "{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.\n{{if .Link}}{{.Link}}{{end}}"
   }
  ],
  "secret_types": [
@@ -3392,11 +3392,11 @@
    }
   },
   {
-   "kind": "place_template",
+   "kind": "location_template",
    "name": "meeting-floor",
    "label": "A floor of meeting rooms",
    "description": "A floor with two Meeting Room 55 spaces and a Digital Sign 55 by the lifts.",
-   "place": {
+   "location": {
     "type": "floor",
     "label": "Meeting floor",
     "systems": [
@@ -3405,7 +3405,7 @@
       "label": "Lift lobby sign"
      }
     ],
-    "places": [
+    "locations": [
      {
       "type": "room",
       "name": "mr-1",

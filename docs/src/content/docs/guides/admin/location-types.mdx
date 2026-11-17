@@ -1,12 +1,12 @@
 ---
 title: Location types
-description: "The Location Types catalog: the place classifier registry (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
+description: "The Location Types catalog: the location classifier registry (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Locations: Types** (`/location-types`, with `location_type:read`, covered by every
-viewer's `*:read` floor) is the registry of **place classifiers**: the `location_type` a
+viewer's `*:read` floor) is the registry of **location classifiers**: the `location_type` a
 [location](/guides/operator/entities/) is classified by. It is one registry with one page on
 purpose; its former home, a tabbed Types page, shared a fetch with the secret type registry, and
 a viewer without `secret:read` lost both. The two now stand alone (secret shapes live on

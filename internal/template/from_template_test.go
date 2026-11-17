@@ -9,37 +9,37 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
-const placeFixture = `templates:
-  - kind: place_template
+const locationFixture = `templates:
+  - kind: location_template
     name: annex-wing
     label: An annex wing
-    place:
+    location:
       type: building
-      places:
+      locations:
         - { type: annex, name: a1 }
-  - kind: place_template
+  - kind: location_template
     name: upside-down
     label: Upside down
-    place:
+    location:
       type: room
-      places:
+      locations:
         - { type: floor, name: f1 }
-  - kind: place_template
+  - kind: location_template
     name: plain-floor
     label: A floor
-    place:
+    location:
       type: floor
 `
 
-// TestPlanPlacesRefusesWhatTheFleetCannotHold: a subtree naming a type the
+// TestPlanLocationsRefusesWhatTheFleetCannotHold: a subtree naming a type the
 // fleet lacks is refused naming the type, a nesting its types refuse is
 // refused naming the pair, and a root with no name and no name rule is
 // refused naming the type. Nothing is keyed on any particular type: the
 // fixture's types are only what the seed happens to ship.
-func TestPlanPlacesRefusesWhatTheFleetCannotHold(t *testing.T) {
+func TestPlanLocationsRefusesWhatTheFleetCannotHold(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
-	cat, err := template.Load(map[string][]byte{"p.yaml": []byte(placeFixture)})
+	cat, err := template.Load(map[string][]byte{"p.yaml": []byte(locationFixture)})
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -48,12 +48,12 @@ func TestPlanPlacesRefusesWhatTheFleetCannotHold(t *testing.T) {
 		{"upside-down", "r", "places a floor under a room"},
 		{"plain-floor", "", "a floor needs a name"},
 	} {
-		_, err := template.PlanPlaces(ctx, gw, cat, template.PlaceRequest{Template: tc.tmpl, Name: tc.name})
+		_, err := template.PlanLocations(ctx, gw, cat, template.LocationRequest{Template: tc.tmpl, Name: tc.name})
 		if !errors.Is(err, template.ErrInvalid) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want an ErrInvalid containing %q", tc.tmpl, err, tc.want)
 		}
 	}
-	if _, err := template.PlanPlaces(ctx, gw, cat, template.PlaceRequest{Template: "plain-floor", Name: "f1"}); err != nil {
+	if _, err := template.PlanLocations(ctx, gw, cat, template.LocationRequest{Template: "plain-floor", Name: "f1"}); err != nil {
 		t.Errorf("a named floor: %v", err)
 	}
 }

@@ -12,7 +12,7 @@ import (
 )
 
 // The planned create (#827, ADR-0827): the transactional half of the
-// planned-system primitive. A plan names places, systems, the components
+// planned-system primitive. A plan names locations, systems, the components
 // that fill each system's roles (with their endpoints and declared values)
 // and standalone components, and CreatePlan lands all of it in one
 // transaction or none of it. Every piece is the ordinary create, under the
@@ -29,40 +29,40 @@ type Plan struct {
 	// Standards are created from their templates, in order, unless a standard of that name
 	// already exists (then the existing one is used as it is).
 	Standards []StandardFromTemplate
-	// Places are created in order; a place's ParentKey names an earlier
+	// Locations are created in order; a location's ParentKey names an earlier
 	// place of the plan, else its Location.ParentName is used as given.
-	Places     []PlannedPlace
+	Locations  []PlannedLocation
 	Systems    []PlannedSystem
 	Components []PlannedComponent
 }
 
-// PlannedPlace is one place of a plan.
-type PlannedPlace struct {
+// PlannedLocation is one place of a plan.
+type PlannedLocation struct {
 	Key       string
 	ParentKey string
 	Location  LocationSpec
 }
 
 // PlannedSystem is one system of a plan and the components that fill its
-// roles. PlaceKey names a place of the plan to sit in, else the system's
+// roles. LocationKey names a location of the plan to sit in, else the system's
 // own LocationName is used.
 type PlannedSystem struct {
-	PlaceKey   string
-	System     SystemSpec
-	Components []PlannedComponent
-	Properties []PlannedValue
+	LocationKey string
+	System      SystemSpec
+	Components  []PlannedComponent
+	Properties  []PlannedValue
 }
 
 // PlannedComponent is one component of a plan. Role is the role it is
 // assigned in its system (empty for a standalone component). A component of
 // a system sits where the system sits; a standalone one where its spec says,
-// or in the place PlaceKey names. Each endpoint's Component is filled in.
+// or in the location LocationKey names. Each endpoint's Component is filled in.
 type PlannedComponent struct {
-	Role       string
-	PlaceKey   string
-	Component  ComponentSpec
-	Endpoints  []EndpointSpec
-	Properties []PlannedValue
+	Role        string
+	LocationKey string
+	Component   ComponentSpec
+	Endpoints   []EndpointSpec
+	Properties  []PlannedValue
 }
 
 // PlannedValue is a declared property value.
@@ -91,10 +91,10 @@ type PlanScopes struct {
 var ErrPlanStandardForbidden = errors.New("storage: creating the standard from its template needs standard:create")
 
 // PlanError says which piece of a plan failed, so a caller maps the cause
-// the way that piece's own route maps it. Stage is standard, place, system,
+// the way that piece's own route maps it. Stage is standard, location, system,
 // component, endpoint, role, property (a component's declared value) or
 // system-property; Ref names the piece (a role, a
-// place key, a standard, a property).
+// location key, a standard, a property).
 type PlanError struct {
 	Stage string
 	Role  string
@@ -117,7 +117,7 @@ func (e *PlanError) Unwrap() error { return e.Err }
 // Planned is what CreatePlan made, in plan order.
 type Planned struct {
 	CreatedStandards []*Standard
-	Places           []*Location
+	Locations        []*Location
 	Systems          []PlannedSystemResult
 	Components       []*Component
 }
@@ -130,7 +130,7 @@ type PlannedSystemResult struct {
 }
 
 // CreatePlan lands a plan whole, in one transaction: the standards it creates from templates,
-// its places parents first, each system then each of its components (with
+// its locations parents first, each system then each of its components (with
 // their endpoints, their declared values and their role assignment) and the
 // system's declared values, then the standalone components. Every piece is
 // the ordinary create with the caller's own scope and its own audit row, so
@@ -176,31 +176,31 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		out.CreatedStandards = append(out.CreatedStandards, st)
 	}
 
-	places := map[string]*Location{}
-	for _, pl := range plan.Places {
+	locations := map[string]*Location{}
+	for _, pl := range plan.Locations {
 		spec := pl.Location
 		if pl.ParentKey != "" {
-			parent, ok := places[pl.ParentKey]
+			parent, ok := locations[pl.ParentKey]
 			if !ok {
-				return nil, &PlanError{Stage: "place", Ref: pl.Key, Err: fmt.Errorf("parent %q is not an earlier place of the plan", pl.ParentKey)}
+				return nil, &PlanError{Stage: "location", Ref: pl.Key, Err: fmt.Errorf("parent %q is not an earlier place of the plan", pl.ParentKey)}
 			}
 			id := parent.ID
 			spec.ParentName = &id
 		}
 		l, err := p.createLocationTx(ctx, tx, actorID, spec, sc.LocationCreate)
 		if err != nil {
-			return nil, &PlanError{Stage: "place", Ref: pl.Key, Err: err}
+			return nil, &PlanError{Stage: "location", Ref: pl.Key, Err: err}
 		}
-		places[pl.Key] = l
-		out.Places = append(out.Places, l)
+		locations[pl.Key] = l
+		out.Locations = append(out.Locations, l)
 	}
 	placeOf := func(key string, given *string) (*string, error) {
 		if key == "" {
 			return given, nil
 		}
-		l, ok := places[key]
+		l, ok := locations[key]
 		if !ok {
-			return nil, fmt.Errorf("place %q is not a place of the plan", key)
+			return nil, fmt.Errorf("location %q is not a location of the plan", key)
 		}
 		id := l.ID
 		return &id, nil
@@ -208,7 +208,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 
 	for _, ps := range plan.Systems {
 		spec := ps.System
-		loc, err := placeOf(ps.PlaceKey, spec.LocationName)
+		loc, err := placeOf(ps.LocationKey, spec.LocationName)
 		if err != nil {
 			return nil, &PlanError{Stage: "system", Err: err}
 		}
@@ -241,7 +241,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 	}
 
 	for _, pc := range plan.Components {
-		loc, err := placeOf(pc.PlaceKey, pc.Component.LocationName)
+		loc, err := placeOf(pc.LocationKey, pc.Component.LocationName)
 		if err != nil {
 			return nil, &PlanError{Stage: "component", Err: err}
 		}

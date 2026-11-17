@@ -80,9 +80,9 @@
       "setup": []
     },
     {
-      "id": "find-and-fix-a-place",
-      "title": "Find a place and fix its label",
-      "description": "Drill Explore down to a place, open the system it holds, and rename the place from Configure. The new label follows everywhere the place is read.",
+      "id": "find-and-fix-a-location",
+      "title": "Find a location and fix its label",
+      "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
       "setup": []
     },
     {
@@ -193,7 +193,7 @@
     {
       "id": "start-from-template",
       "title": "Start a system from a template",
-      "description": "From a place, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
+      "description": "From a location, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
       "setup": []
     },
     {

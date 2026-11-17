@@ -59,11 +59,11 @@ export type NavCondition = "simulator";
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
-  // noun, ADR-0122), the outline of places (#861). It
+  // noun, ADR-0122), the outline of locations (#861). It
   // replaced the Fleet entry and the Explore stub once reserved for a data
-  // explorer, which takes a later name. Gated like the place tree it draws;
+  // explorer, which takes a later name. Gated like the location tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every place in the fleet, the systems that sit there, and what is in them." },
+  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every location in the fleet, the systems that sit there, and what is in them." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
@@ -173,7 +173,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
   { path: "/system-types", label: "System types", resource: "system_type", hint: "The coarse space registry: what kind of space a system is (a boardroom, a classroom, a video wall), each carrying the icon, stem, and abbreviation its systems inherit." },
-  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: the shipped types and your own, and where each may sit." },
+  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The location classifier registry: the shipped types and your own, and where each may sit." },
   { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },
   { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
   { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
@@ -189,7 +189,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/notification-targets", label: "Targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a group or a person. Admin-only." },
   // The template catalog (#1329), live inside the catalog shell: the
   // Components, Systems and Locations groups' Templates slots open it filtered.
-  { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of places from one, then own what you get." },
+  { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of locations from one, then own what you get." },
 ];
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,

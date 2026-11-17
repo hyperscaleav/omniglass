@@ -88,7 +88,7 @@ func TestBannedPatternsStaySane(t *testing.T) {
 		"a component template to clone",
 		"start from a template",
 		// ADR-0827 reclaims the bare kind names for the template catalog.
-		"component_template", "system_template", "standard_template", "place_template",
+		"component_template", "system_template", "standard_template", "location_template",
 		"POST /standards:createFromTemplate", "an operator forks a shipped row",
 	}
 	for _, s := range current {
@@ -345,5 +345,61 @@ func TestADR0115RestoreShippedFires(t *testing.T) {
 	}
 	if fires("that slot becomes **Restore default**, which discards your version") {
 		t.Error("the REPLACEMENT wording fired, so the entry would refuse the fix it asks for")
+	}
+}
+
+// TestADR2030PlaceAsANounFires proves the place-as-a-noun entry catches the
+// noun in the phrasings the sweep retired, and passes the English that keeps
+// the word: the verb, the idioms, and the other words built on it (placed,
+// placement, decimal places). It runs through scanLine, so the entry's
+// allowed phrasings are part of what it proves.
+func TestADR2030PlaceAsANounFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2030") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the place card names the system's type",
+		"A place holding exactly one system lands on it.",
+		"Start a subtree of places from a template",
+		"**Configure place**",
+		"Every place in the fleet, and what is in it.",
+		"a component's own place must be at or below its system's",
+		"a `place_template` lands a subtree",
+		"the alarm's facts (`component`, `place`, `severity`)",
+		"`?edit=place` opens that one",
+	} {
+		if !fires(line) {
+			t.Errorf("place as a noun passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the components placed at a location",
+		"a `placement: central` endpoint",
+		"the decimal places a rendered value keeps",
+		"the port edited in place connects",
+		"InfoTip takes children in place of its (i)",
+		"a new assertion earns its place by mutation",
+		"the only place a metric's latest value is said",
+		"theme tokens in one place",
+		"N inlined copies are N places to drift",
+		"a lab is never a place for real data",
+		"`corporate` places one booking service a site",
+		"a node delete re-places its tasks",
+		"`group_weight` places a group",
+		"where you place them, escaped",
+		"is not a number in the first place",
+		"both end up in the same place",
+		"an identity no binding places lands in the inbox",
+		"something in the middle answering in its place",
+		"the fix-an-endpoint-in-place walkthrough",
+	} {
+		if fires(line) {
+			t.Errorf("legitimate English fired: %q", line)
+		}
 	}
 }

@@ -20,30 +20,30 @@ import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
-import { landingFor, systemsAtPlace } from "../lib/detail";
+import { landingFor, systemsAtLocation } from "../lib/detail";
 import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 
-// A place's detail view (#635, reoriented in #872). Systems are the unit
-// Omniglass monitors and places are folders and metadata, so a place holding
+// A location's detail view (#635, reoriented in #872). Systems are the unit
+// Omniglass monitors and locations are folders and metadata, so a location holding
 // exactly one system has no view of its own: its address lands on that
-// system, whose view shows the place as a card of context. What remains here
-// is the folder: a place holding no system (a campus, a building, a floor),
+// system, whose view shows the location as a card of context. What remains here
+// is the folder: a location holding no system (a campus, a building, a floor),
 // or one shared by several. Its card is the subject, with its own tabs:
 // Overview (a brief card per system it holds, then what is beneath it as the
 // outline rooted here) and Configure (the one form).
 //
-// A place holding one system configures on that system's Configure tab, in a
-// Place section of its own (#872), so even an address asking to configure
-// the place lands there: ?tab=configure opens the tab, and ?edit=1 carries
-// over as edit=place, the place form's own intent.
+// A location holding one system configures on that system's Configure tab, in a
+// Location section of its own (#872), so even an address asking to configure
+// the location lands there: ?tab=configure opens the tab, and ?edit=1 carries
+// over as edit=location, the location form's own intent.
 export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   // The router's location, not the window's: on a client-side navigation the
   // window's query lags the route being rendered (#932).
-  const location = useLocation();
+  const route = useLocation();
   const id = () => params.id;
   const leave = createLeaveGuard();
   const me = useMe();
@@ -55,12 +55,12 @@ export default function LocationZoom() {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
-  const place = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
-  const type = createMemo(() => (types.data ?? []).find((t) => t.name === place()?.location_type));
+  const location = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
+  const type = createMemo(() => (types.data ?? []).find((t) => t.name === location()?.location_type));
   const tags = () => (locations.data ?? []).find((l) => l.id === id())?.effective_tags ?? {};
   // By id, compared by value: the cards key on these strings, so a fresh
   // fleet read updates a card in place rather than rebuilding it.
-  const systemsHere = createMemo(() => (view.data && place() ? systemsAtPlace(view.data, id()).map((s) => s.id) : []), undefined, {
+  const systemsHere = createMemo(() => (view.data && location() ? systemsAtLocation(view.data, id()).map((s) => s.id) : []), undefined, {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
@@ -80,21 +80,21 @@ export default function LocationZoom() {
   // Only an unambiguous name resolves: names scope to placement, so a bare
   // name can legally be two rows.
   createEffect(() => {
-    if (!view.data || place()) return;
+    if (!view.data || location()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
-    if (matches.length === 1) navigate(`/locations/${matches[0].id}${location.search}`, { replace: true });
+    if (matches.length === 1) navigate(`/locations/${matches[0].id}${route.search}`, { replace: true });
   });
-  // A place holding one system lands on it, query kept; a configure intent
-  // becomes the system's Configure tab and the place's own edit.
+  // A location holding one system lands on it, query kept; a configure intent
+  // becomes the system's Configure tab and the location's own edit.
   createEffect(() => {
-    if (!view.data || !place()) return;
+    if (!view.data || !location()) return;
     const landing = landingFor(view.data, id());
     if (landing.kind !== "system") return;
-    const q = new URLSearchParams(location.search);
+    const q = new URLSearchParams(route.search);
     if (q.get("edit") === "1") {
       q.delete("edit");
       q.set("tab", "configure");
-      q.set("edit", "place");
+      q.set("edit", "location");
     }
     const qs = q.toString();
     navigate(`/systems/${landing.id}${qs ? `?${qs}` : ""}`, { replace: true });
@@ -106,19 +106,19 @@ export default function LocationZoom() {
     return [
       // Back up lands where you were: the outline opened down to this row.
       { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
-      // The trail ends at the parent: the place itself is the page title.
+      // The trail ends at the parent: the location itself is the page title.
       ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
     ];
   });
 
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
-  const ambiguous = () => !!view.data && !view.isFetching && !place() && (view.data.locations ?? []).filter((x) => x.name === id()).length > 1;
-  const missing = () => !!view.data && !view.isFetching && !place() && !ambiguous();
+  const ambiguous = () => !!view.data && !view.isFetching && !location() && (view.data.locations ?? []).filter((x) => x.name === id()).length > 1;
+  const missing = () => !!view.data && !view.isFetching && !location() && !ambiguous();
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title={place() ? entityLabel(place()!) : "Location"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      <Page title={location() ? entityLabel(location()!) : "Location"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
         <DetailGate
@@ -130,25 +130,25 @@ export default function LocationZoom() {
           retrying={view.isFetching}
           onRetry={() => void view.refetch()}
         >
-          <section data-testid="place-subject" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
-            <div data-testid="place-header" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="Place" hint="A place is a folder and its facts. The systems in it, and in the places beneath it, are what Omniglass monitors." />
+          <section data-testid="location-subject" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+            <div data-testid="location-header" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-base-300 px-4 py-3 text-sm">
+              <Eyebrow label="Location" hint="A location is a folder and its facts. The systems in it, and in the locations beneath it, are what Omniglass monitors." />
               <span class="flex items-center gap-2">
                 <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
-                <span data-testid="place-type" class="text-base-content/70">{type() ? entityLabel(type()!) : place()?.location_type}</span>
+                <span data-testid="location-type" class="text-base-content/70">{type() ? entityLabel(type()!) : location()?.location_type}</span>
               </span>
               <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
             </div>
             <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
-              {/* Keyed on the id: another place is another face (#854). */}
+              {/* Keyed on the id: another location is another face (#854). */}
               <Show when={id()} keyed>{(lid) => <ConfigureFace kind="location" id={lid} guard={leave} />}</Show>
             </Show>
             <Show when={tab() === "overview"}>
-              <div data-testid="place-overview" class="flex flex-col gap-4 p-4">
+              <div data-testid="location-overview" class="flex flex-col gap-4 p-4">
                 <Show when={systemsHere().length > 0}>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label={systemsHere().length === 1 ? "System here" : "Systems here"} hint="Each system bound to this place, in brief. Open one for its components, map, data and history." />
+                    <Eyebrow label={systemsHere().length === 1 ? "System here" : "Systems here"} hint="Each system bound to this location, in brief. Open one for its components, map, data and history." />
                     <div class="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
                       <For each={systemsHere()}>{(sid) => <SystemSummary systemId={sid} />}</For>
                     </div>
@@ -157,7 +157,7 @@ export default function LocationZoom() {
                 <Show when={hasBeneath() || systemsHere().length === 0}>
                   <section data-testid="beneath" class="flex flex-col gap-2">
                     <Show when={systemsHere().length > 0}>
-                      <Eyebrow label="Beneath" hint="The places inside this one, as Explore draws them, counted by the systems they hold." />
+                      <Eyebrow label="Beneath" hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
                     </Show>
                     <OutlineWorkspace rootId={id()} />
                   </section>

@@ -156,7 +156,7 @@ const cases: {
   {
     name: "a system summary card's since-line",
     page: "guides/operator/fleet.md",
-    shot: "fleet-place-systems",
+    shot: "fleet-location-systems",
     value: "[data-testid=summary-since]",
     markup: summaryCard,
     narrow: "since Oct 4, 06:59 PM · 9s",

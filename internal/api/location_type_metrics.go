@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The location type declared-metric contract: the place-side mirror of the
+// The location type declared-metric contract: the location-side mirror of the
 // product and standard metric contracts, and the metric twin of the location
 // type property routes. A contract line only names a catalog metric and says
 // how the type presents it (an optional default, whether a location of the type

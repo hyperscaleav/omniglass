@@ -197,7 +197,7 @@ every window as platform metrics, 0 when nothing came in (#1659,
   samples read 0, and only someone who knew to look at the refusal counts would notice. The read
   names the largest outcome behind a loss as its **cause** instead.
 - **An unbound identity is accounted for, not lost.** An identity a conduit reports that no binding
-  places is the operator's configuration, not data omniglass dropped: the operator has not assigned
+  locations is the operator's configuration, not data omniglass dropped: the operator has not assigned
   it, and the conduit's [unbound inbox](/architecture/collection/#shared-api-collection-one-component-many-owners)
   already surfaces it (the count, the keys, how often it was heard). Like a device that fails to
   answer, it is accounted for, so a healthy fleet with an unassigned identity reads 0. The outcome is

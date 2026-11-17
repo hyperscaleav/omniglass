@@ -11,7 +11,7 @@ title: Fix a refused probe
 description: A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.
 steps:
   - goto: /systems/auditorium
-    caption: This place's system. Its touch panel fills the touch-control role, and a node collects it.
+    caption: This location's system. Its touch panel fills the touch-control role, and a node collects it.
   - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'

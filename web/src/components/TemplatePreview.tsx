@@ -6,7 +6,7 @@ import { entityLabel } from "../lib/entities";
 import {
   type Template,
   type TemplateRole,
-  placeTreeRows,
+  locationTreeRows,
   quorumText,
   systemRoleSlots,
   valueText,
@@ -31,7 +31,7 @@ export default function TemplatePreview(props: { template: Template; all: Templa
     <Switch>
       <Match when={props.template.standard}>{(s) => <StandardPreview standard={s()} />}</Match>
       <Match when={props.template.system && props.template}>{(t) => <SystemPreview template={t()} all={props.all} heldRoles={props.heldRoles} />}</Match>
-      <Match when={props.template.place}>{(p) => <PlacePreview template={props.template} all={props.all} place={p()} />}</Match>
+      <Match when={props.template.location}>{(p) => <LocationPreview template={props.template} all={props.all} location={p()} />}</Match>
       <Match when={props.template.component}>{(c) => <ComponentPreview component={c()} />}</Match>
     </Switch>
   );
@@ -169,21 +169,21 @@ function SystemPreview(props: { template: Template; all: Template[]; heldRoles?:
   );
 }
 
-function PlacePreview(props: { template: Template; all: Template[]; place: NonNullable<Template["place"]> }): JSX.Element {
-  const rows = () => placeTreeRows(props.place);
+function LocationPreview(props: { template: Template; all: Template[]; location: NonNullable<Template["location"]> }): JSX.Element {
+  const rows = () => locationTreeRows(props.location);
   const systemLabel = (name: string) => {
     const t = props.all.find((x) => x.kind === "system_template" && x.name === name);
     return t ? entityLabel(t) : name;
   };
   return (
-    <section class="flex flex-col gap-1.5" data-testid="preview-place">
-      <Eyebrow label="Places" hint="The subtree it creates, each place a location type this fleet holds, under a parent you choose, with the systems each template places in it. Each place's type has to be allowed under its parent's." />
+    <section class="flex flex-col gap-1.5" data-testid="preview-location">
+      <Eyebrow label="Locations" hint="The subtree it creates, each location of a type this fleet holds, under a parent you choose, with the systems each template puts in it. Each location's type has to be allowed under its parent's." />
       <ul class="flex flex-col rounded-box border border-base-300 py-1 text-sm" role="tree" aria-label="Places it creates">
         <For each={rows()}>
           {(r) => (
             <li role="treeitem" class="flex items-center gap-2 py-1 pr-3" style={{ "padding-left": `${12 + r.depth * 20}px` }} data-depth={r.depth}>
               <Show
-                when={r.kind === "place" && r}
+                when={r.kind === "location" && r}
                 fallback={
                   <>
                     <span class="flex-none text-base-content/50"><Box size={14} /></span>

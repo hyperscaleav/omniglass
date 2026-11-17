@@ -1848,7 +1848,7 @@ components:
             - array
             - "null"
         when:
-          description: A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column
+          description: A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column
           type: string
       required:
         - name
@@ -2019,7 +2019,7 @@ components:
           description: The component's label
           type: string
         location:
-          description: The place the component sits in, by name or dotted path
+          description: The location the component sits in, by name or dotted path
           type: string
         name:
           description: The component's name; minted as an unnamed create mints it when empty
@@ -2529,10 +2529,10 @@ components:
           description: The subtree root's name; omitted takes the template's, else its type's name rule mints one
           type: string
         parent:
-          description: The place the subtree sits under, by name or dotted path; omitted makes it a new top
+          description: The location the subtree sits under, by name or dotted path; omitted makes it a new top
           type: string
         template:
-          description: The place template, by name
+          description: The location template, by name
           examples:
             - meeting-floor
           minLength: 1
@@ -2550,10 +2550,10 @@ components:
           format: uri
           readOnly: true
           type: string
-        places:
-          description: The places created, parents first
+        locations:
+          description: The locations created, parents first
           items:
-            $ref: "#/components/schemas/CreatedPlaceBody"
+            $ref: "#/components/schemas/CreatedLocationBody"
           type:
             - array
             - "null"
@@ -2583,7 +2583,7 @@ components:
             - "null"
       required:
         - template
-        - places
+        - locations
         - systems
         - standards_created
         - to_attach
@@ -2886,7 +2886,7 @@ components:
             - array
             - "null"
         when:
-          description: A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read
+          description: A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read
           type: string
       required:
         - name
@@ -3080,7 +3080,7 @@ components:
           minLength: 1
           type: string
         rank:
-          description: "Its place among the levels: higher is more severe; unique"
+          description: "Its position among the levels: higher is more severe; unique"
           format: int64
           type: integer
       required:
@@ -3168,7 +3168,7 @@ components:
           description: The system's label
           type: string
         location:
-          description: The place the system and its components sit in, by name or dotted path
+          description: The location the system and its components sit in, by name or dotted path
           type: string
         name:
           description: The system's name; minted from its type when empty
@@ -3473,17 +3473,17 @@ components:
         - product
         - attached
       type: object
-    CreatedPlaceBody:
+    CreatedLocationBody:
       additionalProperties: false
       properties:
         location:
-          description: The place's name
+          description: The location's name
           type: string
         location_id:
-          description: The place's id, the stable address a link to it uses
+          description: The location's id, the stable address a link to it uses
           type: string
         parent:
-          description: The place it sits under, by name
+          description: The location it sits under, by name
           type: string
         type:
           description: Its location type
@@ -3497,7 +3497,7 @@ components:
       additionalProperties: false
       properties:
         location:
-          description: The place it sits in
+          description: The location it sits in
           type: string
         standard:
           description: The standard it is built to
@@ -4773,7 +4773,7 @@ components:
           readOnly: true
           type: string
         locations:
-          description: "Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read"
+          description: "Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than location without a second read"
           items:
             $ref: "#/components/schemas/FleetLocationBody"
           type:
@@ -6792,7 +6792,7 @@ components:
           description: "Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."
           type: string
         fleet_permissions:
-          description: The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
+          description: The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority.
           items:
             type: string
           type:
@@ -9229,7 +9229,7 @@ components:
           minLength: 1
           type: string
         owner_kind:
-          description: What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here
+          description: What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here
           enum:
             - component
             - system
@@ -12417,18 +12417,18 @@ components:
           enum:
             - standard_template
             - system_template
-            - place_template
+            - location_template
             - component_template
           type: string
         label:
           description: What an operator reads for the template
           type: string
+        location:
+          $ref: "#/components/schemas/TemplateLocationBody"
+          description: "A location template's body: the root of the subtree"
         name:
           description: The template's name, unique across the catalog
           type: string
-        place:
-          $ref: "#/components/schemas/TemplatePlaceBody"
-          description: "A place template's body: the root of the subtree"
         standard:
           $ref: "#/components/schemas/TemplateStandardBody"
           description: "A standard template's body: what creating a standard from it writes"
@@ -12496,6 +12496,47 @@ components:
       required:
         - name
       type: object
+    TemplateLocationBody:
+      additionalProperties: false
+      properties:
+        label:
+          description: The location's label
+          type: string
+        locations:
+          description: The locations nested under this one
+          items:
+            $ref: "#/components/schemas/TemplateLocationBody"
+          type:
+            - array
+            - "null"
+        name:
+          description: The location's name; omitted where its type's name rule mints one, or the caller names it
+          type: string
+        systems:
+          description: The system templates that land in the location
+          items:
+            $ref: "#/components/schemas/TemplateLocationSystemBody"
+          type:
+            - array
+            - "null"
+        type:
+          description: The location's location type
+          type: string
+      required:
+        - type
+      type: object
+    TemplateLocationSystemBody:
+      additionalProperties: false
+      properties:
+        label:
+          description: The system's label
+          type: string
+        template:
+          description: The system template that lands in the location
+          type: string
+      required:
+        - template
+      type: object
     TemplateMapBody:
       additionalProperties: false
       properties:
@@ -12537,47 +12578,6 @@ components:
         - position
         - x
         - "y"
-      type: object
-    TemplatePlaceBody:
-      additionalProperties: false
-      properties:
-        label:
-          description: The place's label
-          type: string
-        name:
-          description: The place's name; omitted where its type's name rule mints one, or the caller names it
-          type: string
-        places:
-          description: The places nested under this one
-          items:
-            $ref: "#/components/schemas/TemplatePlaceBody"
-          type:
-            - array
-            - "null"
-        systems:
-          description: The system templates that land in the place
-          items:
-            $ref: "#/components/schemas/TemplatePlaceSystemBody"
-          type:
-            - array
-            - "null"
-        type:
-          description: The place's location type
-          type: string
-      required:
-        - type
-      type: object
-    TemplatePlaceSystemBody:
-      additionalProperties: false
-      properties:
-        label:
-          description: The system's label
-          type: string
-        template:
-          description: The system template that lands in the place
-          type: string
-      required:
-        - template
       type: object
     TemplateRoleBody:
       additionalProperties: false
@@ -13601,7 +13601,7 @@ components:
           description: A new name; every alarm at this level follows
           type: string
         rank:
-          description: Its place among the levels; unique
+          description: Its position among the levels; unique
           format: int64
           type: integer
       type: object
@@ -16278,7 +16278,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: component:update
     put:
-      description: "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one."
+      description: "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one."
       operationId: put-identity-binding
       parameters:
         - description: Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -17071,7 +17071,7 @@ paths:
       x-omniglass-permission: component:update
   /components:createFromTemplate:
     post:
-      description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422."
+      description: "Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422."
       operationId: create-component-from-template
       requestBody:
         content:
@@ -18700,7 +18700,7 @@ paths:
       x-omniglass-permission: location:read
   /locations/{name}/properties:
     get:
-      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-properties
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -18919,7 +18919,7 @@ paths:
       x-omniglass-permission: location:rename
   /locations/{name}:resetName:
     post:
-      description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses."
+      description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses."
       operationId: reset-location-name
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -19004,7 +19004,7 @@ paths:
       x-omniglass-permission: location:update
   /locations:createFromTemplate:
     post:
-      description: "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair."
+      description: "Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair."
       operationId: create-locations-from-template
       requestBody:
         content:
@@ -19025,7 +19025,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Start a subtree of places from a template
+      summary: Start a subtree of locations from a template
       x-omniglass-mcp: {}
       x-omniglass-permission: location:create
   /locations:previewLabels:
@@ -19491,7 +19491,7 @@ paths:
       x-omniglass-permission: simulation:read
   /nodes/{name}/simulation/systems:
     post:
-      description: "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422."
+      description: "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422."
       operationId: add-node-simulation-system
       parameters:
         - description: The node whose simulator serves the system's components
@@ -19880,7 +19880,7 @@ paths:
       summary: List notification types
       x-omniglass-permission: notification_type:read
     post:
-      description: Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+      description: Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
       operationId: create-notification-type
       requestBody:
         content:
@@ -19986,7 +19986,7 @@ paths:
       summary: Get a notification type
       x-omniglass-permission: notification_type:read
     patch:
-      description: Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+      description: Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
       operationId: update-notification-type
       parameters:
         - description: The notification type's name or uuid
@@ -23827,7 +23827,7 @@ paths:
       x-omniglass-permission: system:update
   /systems:createFromTemplate:
     post:
-      description: "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles."
+      description: "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles."
       operationId: create-system-from-template
       requestBody:
         content:
@@ -24203,7 +24203,7 @@ paths:
             enum:
               - standard_template
               - system_template
-              - place_template
+              - location_template
               - component_template
             type: string
       responses:

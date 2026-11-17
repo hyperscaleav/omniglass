@@ -11,8 +11,8 @@ import type { BladeEdit } from "./blades";
 // handoffs (pendingedit, openPrincipalInEdit), which no URL could express.
 //
 // `value` names which editor the intent is for, where a page carries more than
-// one: a system's Configure holds its own form (`edit=1`) and its sole place's
-// (`edit=place`, #872), and each begins only on its own intent.
+// one: a system's Configure holds its own form (`edit=1`) and its sole location's
+// (`edit=location`, #872), and each begins only on its own intent.
 export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => boolean; canUpdate: () => boolean; value?: string }): { request: () => void } {
   const [params, setParams] = useSearchParams();
   const value = () => opts.value ?? "1";

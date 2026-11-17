@@ -321,7 +321,7 @@ button is greyed and its tooltip says so, while the two keys still read, so a vi
 operator what changed. **Retry** stays beside it for the rarer case where the original component
 came back.
 
-In the simulated fleet, the touch panel in the place named `briefing` pins the key it had before it
+In the simulated fleet, the touch panel in the location named `briefing` pins the key it had before it
 was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
 
 ::walkthrough{#trust-a-changed-host-key}
@@ -350,7 +350,7 @@ credential gates it, class `auth`, with the reason `auth: the component refused 
 was sent back to the login page (302 to /login)`), and an https certificate the endpoint refuses
 gates it at the handshake, a changed key offering **Trust this key**.
 
-In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
+In the simulated fleet, the touch panel in the location named `auditorium` answers SNMP, and its
 endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
 refused, class `auth`; pointing its `community` input at `sim-community` lifts the gate.
 

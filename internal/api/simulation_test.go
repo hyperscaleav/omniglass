@@ -70,7 +70,7 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 				t.Errorf("%s: %q names an interface; say surface, API or the protocol (ADR-0134)", p.Name, text)
 			}
 			for _, b := range docslint.Banned {
-				if b.Pattern.MatchString(text) {
+				if b.Matches(text) {
 					t.Errorf("%s: %q: %s (%s)", p.Name, text, b.Replacement, b.Origin)
 				}
 			}

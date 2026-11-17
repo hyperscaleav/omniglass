@@ -99,7 +99,7 @@ func (f *instFixture) principal(label string, g grant) string {
 }
 
 // split makes a principal holding role label fleet-wide and role
-// label-placed only under the place given.
+// label-placed only under the location given.
 func (f *instFixture) split(label, place string) string {
 	f.t.Helper()
 	tok := f.principal(label, grant{scopeKind: "all"})
@@ -265,7 +265,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	if n := f.count(`select count(*) from system`); n != before {
 		t.Fatal("a refused fork left a system")
 	}
-	// A place the caller cannot read is a 404; an unknown template or standard a 404.
+	// A location the caller cannot read is a 404; an unknown template or standard a 404.
 	hqOnly := f.split("annex-reader", "annex")
 	f.c.do(hqOnly, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusNotFound)
 	f.c.do(f.owner, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "nope", "location": "hq"}, http.StatusNotFound)
@@ -278,11 +278,11 @@ func TestCreateLocationsFromTemplateAPI(t *testing.T) {
 	t.Parallel()
 	f := newInstFixture(t)
 	type out struct {
-		Places []struct {
+		Locations []struct {
 			Location string `json:"location"`
 			Type     string `json:"type"`
 			Parent   string `json:"parent"`
-		} `json:"places"`
+		} `json:"locations"`
 		Systems []struct {
 			System   string `json:"system"`
 			Location string `json:"location"`
@@ -294,15 +294,15 @@ func TestCreateLocationsFromTemplateAPI(t *testing.T) {
 		map[string]any{"template": "meeting-floor", "parent": "hq", "name": "f3", "label": "Third floor"}, http.StatusCreated), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Places) != 3 || got.Places[0].Location != "f3" || got.Places[0].Parent != "hq" || got.Places[1].Parent != "f3" {
-		t.Fatalf("places = %+v, want f3 under hq with two rooms under it", got.Places)
+	if len(got.Locations) != 3 || got.Locations[0].Location != "f3" || got.Locations[0].Parent != "hq" || got.Locations[1].Parent != "f3" {
+		t.Fatalf("places = %+v, want f3 under hq with two rooms under it", got.Locations)
 	}
 	if len(got.Systems) != 3 || len(got.ToAttach) != 10 {
 		t.Fatalf("systems = %+v to_attach %d, want three systems, every component to attach", got.Systems, len(got.ToAttach))
 	}
 
 	// The root's type must allow the parent's: a floor under a room is refused, naming the pair.
-	room := got.Places[1].Location
+	room := got.Locations[1].Location
 	detail := string(f.c.do(f.owner, http.MethodPost, "/locations:createFromTemplate",
 		map[string]any{"template": "meeting-floor", "parent": "hq.f3." + room, "name": "f9"}, http.StatusUnprocessableEntity))
 	if !strings.Contains(detail, "floor is not allowed under room") {

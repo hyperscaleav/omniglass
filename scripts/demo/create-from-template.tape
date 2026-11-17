@@ -8,7 +8,7 @@
 Type "# A floor of meeting rooms under the West Building, systems and all"
 Enter
 Wait
-Type `omniglass location createFromTemplate --template meeting-floor --parent hq.west --name level-7 --label 'Level 7' | jq -c '{places: [.places[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
+Type `omniglass location createFromTemplate --template meeting-floor --parent hq.west --name level-7 --label 'Level 7' | jq -c '{locations: [.locations[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
 Enter
 Wait
 

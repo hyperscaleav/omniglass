@@ -29,7 +29,7 @@ screenshots:
       - "[data-testid=pipeline] ol >> xpath=.."
   # The node table sits under where work is lost and the server panels, whose height moves with the
   # routes a window saw, so this shot closes the server's panel set first: the
-  # table then sits at a fixed place under the header and the closed set.
+  # table then sits at a fixed position under the header and the closed set.
   - id: platform-health-nodes
     path: /web/platform
     alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the node table: one row per node, its liveness pill and verdict, and the Checkin and Schedule groups in view, with the rest of the columns past the table's right edge."
@@ -312,10 +312,10 @@ the node in the Nodes page instead, where enrollment and editing live.
 ## Without a fleet-wide read
 
 The rows are every node, so the page needs a fleet-wide `node:read`. If yours covers only some
-places, the page says it needs a fleet-wide node read instead of listing a partial fleet, and the
+locations, the page says it needs a fleet-wide node read instead of listing a partial fleet, and the
 Home tile reads the same.
 
-The platform components belong to no place, so only a fleet-wide (all-scope) read reaches them.
+The platform components belong to no location, so only a fleet-wide (all-scope) read reaches them.
 If your component read is scoped to part of the fleet, the page still lists every node with its
 pill, and one line says the platform figures need a fleet-wide read: the figures are left out, not
 shown as zero, and the server panels are left out whole. Where work is lost is left out with them,

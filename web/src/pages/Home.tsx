@@ -24,7 +24,7 @@ export default function Home() {
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, enabled: readsNodes() }));
   // The Platform tile (#1644): the platform system's verdict and how many
   // nodes are not up, the door to Platform health. Shown only where the page
-  // itself opens, a node read. A node read held for only some places is
+  // itself opens, a node read. A node read held for only some locations is
   // refused by the view, and the tile says so rather than reading forever.
   const platform = useQuery(() => ({ queryKey: PLATFORM_VIEW_KEY, queryFn: platformView, retry: retryPlatformView, enabled: readsNodes() }));
   const platformVerdict = () => verdictOf(platform.data?.system?.verdict);

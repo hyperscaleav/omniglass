@@ -66,7 +66,7 @@ describe("ancestors", () => {
 });
 
 describe("childrenIndex", () => {
-  it("inverts the parent pointers, so a place knows what sits beneath it", () => {
+  it("inverts the parent pointers, so a location knows what sits beneath it", () => {
     const kids = childrenIndex(view);
     expect((kids.get(uuidFor("l-b1")) ?? []).map((l) => l.name).sort()).toEqual(["hq-r1", "hq-r2"]);
     expect(kids.get(uuidFor("l-r1"))).toBeUndefined();

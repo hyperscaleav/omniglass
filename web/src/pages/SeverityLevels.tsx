@@ -247,7 +247,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
 // ---- the form ----------------------------------------------------------------
 
 // The query prefixes a level write moves: the levels themselves, the rules
-// naming them, every component's alarms, every system's and place's health,
+// naming them, every component's alarms, every system's and location's health,
 // the fleet verdicts and the fleet view.
 const LEVEL_DEPENDENTS: readonly (readonly string[])[] = [
   severityLevelsKey,

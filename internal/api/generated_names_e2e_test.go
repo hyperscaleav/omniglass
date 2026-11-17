@@ -158,7 +158,7 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 // location of a positional type created with no name comes back named, the
 // second takes the next ordinal, :rename claims the pen and :resetName returns
 // it, and the type's own rule round-trips on the registry surface so a console
-// can show which kinds of place the platform names.
+// can show which kinds of location the platform names.
 //
 // The positional type is MINTED HERE, over the same wire, because no shipped
 // location type carries a name rule (ADR-0103, reversed for `floor`: a

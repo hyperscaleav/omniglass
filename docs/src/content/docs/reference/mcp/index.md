@@ -92,7 +92,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
 | [`list-location-metrics`](#list-location-metrics) | List a location's effective metrics | `location:read` | read-only, idempotent |
 | [`list-location-properties`](#list-location-properties) | List a location's effective properties | `location:read` | read-only, idempotent |
-| [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of places from a template | `location:create` | adds |
+| [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of locations from a template | `location:create` | adds |
 | [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
 | [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
 | [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
@@ -538,7 +538,7 @@ The identity bindings of this conduit component: each value it reports under a m
 
 Bind an identity a conduit reports to its owner
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 - Route: `PUT /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
@@ -549,7 +549,7 @@ Ties this value, reported by the conduit component under this match key, to one 
 | `key` | string | yes | The match key, a registered property type |
 | `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `owner` | string | yes | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here |
+| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here |
 | `value` | string | yes | The identity value the conduit reports, 1 to 256 characters |
 
 ## `delete-identity-binding`
@@ -727,7 +727,7 @@ Binds a value for a key on a component. The key must exist and apply to this ent
 
 Start a component from a template
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
 
 - Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
@@ -737,7 +737,7 @@ Creates one component from a component template at a place: its product and the 
 |---|---|---|---|
 | `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) |
 | `label` | string | no | The component's label |
-| `location` | string | no | The place the component sits in, by name or dotted path |
+| `location` | string | no | The location the component sits in, by name or dotted path |
 | `name` | string | no | The component's name; minted as an unnamed create mints it when empty |
 | `node` | string | no | The node the endpoint is placed on; needed when inputs carry an address |
 | `template` | string | yes | The component template, by name |
@@ -1138,7 +1138,7 @@ Every metric the location's type declares, resolved to the newest observed or ca
 
 List a location's effective properties
 
-Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/properties`
 - Gate: `location:read`
@@ -1150,9 +1150,9 @@ Every property the location's type declares, resolved to the location's own valu
 
 ## `create-locations-from-template`
 
-Start a subtree of places from a template
+Start a subtree of locations from a template
 
-Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
 
 - Route: `POST /api/v1/locations:createFromTemplate`
 - Gate: `location:create`
@@ -1162,8 +1162,8 @@ Creates a subtree of places from a place template under a parent place (or as a 
 |---|---|---|---|
 | `label` | string | no | The subtree root's label |
 | `name` | string | no | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
-| `parent` | string | no | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
-| `template` | string | yes | The place template, by name |
+| `parent` | string | no | The location the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `template` | string | yes | The location template, by name |
 
 ## `list-nodes`
 
@@ -1503,7 +1503,7 @@ The change history behind the effective value for one property series, newest fi
 
 Start a whole system from a template
 
-Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
 
 - Route: `POST /api/v1/systems:createFromTemplate`
 - Gate: `system:create`
@@ -1513,7 +1513,7 @@ Creates a system from a system template at a place, built to the standard you na
 |---|---|---|---|
 | `attach` | object | no | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
 | `label` | string | no | The system's label |
-| `location` | string | no | The place the system and its components sit in, by name or dotted path |
+| `location` | string | no | The location the system and its components sit in, by name or dotted path |
 | `name` | string | no | The system's name; minted from its type when empty |
 | `node` | string | no | The node the endpoints are placed on; needed when any component attaches |
 | `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |

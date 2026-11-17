@@ -11,7 +11,7 @@ import (
 )
 
 // The location type declared-property contract: what a location type exposes, so
-// every location classified by it inherits the same set. The place-side mirror of
+// every location classified by it inherits the same set. The location-side mirror of
 // the product and standard contracts, and the same shape: a contract line only
 // names a catalog property and says how the type presents it (an optional
 // default, whether an instance must set it); data_type and validation stay in the

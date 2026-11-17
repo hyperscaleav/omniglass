@@ -3,7 +3,7 @@
 # kestrel-api driver, whose set-volume binding settles from the bar's reply.
 # Issuing from the bar's Activity tab raises a toast that follows the command
 # live (queued, awaiting its reply, settled) and opens its row, where the arc,
-# the reply and what carried it read in place. The briefing place holds one
+# the reply and what carried it read in place. The briefing location holds one
 # system, so its address lands on that system.
 title: Issue a command and follow it
 description: Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.

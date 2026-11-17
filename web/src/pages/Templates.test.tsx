@@ -39,14 +39,14 @@ const catalog: Template[] = [
     system: { standard: "mr55", system_type: "meeting", roles: { "video-bar": { component: "kestrel-vroom" }, "main-display": { component: "boreal-edge-55" } } },
   },
   {
-    kind: "place_template", name: "meeting-floor", label: "A floor of meeting rooms",
-    place: { type: "floor", label: "Meeting floor", places: [{ type: "room", name: "mr-1", label: "Meeting room 1", systems: [{ template: "mr55-system" }] }] },
+    kind: "location_template", name: "meeting-floor", label: "A floor of meeting rooms",
+    location: { type: "floor", label: "Meeting floor", locations: [{ type: "room", name: "mr-1", label: "Meeting room 1", systems: [{ template: "mr55-system" }] }] },
   },
   { kind: "component_template", name: "boreal-edge-55", label: "Boreal Edge 55 display", component: { product: "boreal-edge-55", inputs: { port: "161" } } },
   { kind: "component_template", name: "kestrel-vroom", label: "Kestrel VRoom video bar", component: { product: "kestrel-vroom", inputs: { port: "443", "tls-mode": "pin" } } },
 ];
 
-// Places are offered and posted by dotted path; the create flows carry a uuid.
+// Locations are offered and posted by dotted path; the create flows carry a uuid.
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", path: "hq" };
 const west: Location = { id: uuidFor("l-west"), name: "west", label: "West", location_type: "building", parent_id: hq.id, path: "hq.west" };
 const standards: Standard[] = [{ id: uuidFor("std-mr"), name: "meeting-room", label: "Meeting room", official: false }];
@@ -151,8 +151,8 @@ describe("Templates page", () => {
     expect(within(preview).getByText("Main display")).toBeInTheDocument();
   });
 
-  it("renders a place template as an indented tree with the systems that land in it", async () => {
-    mount("/templates?kind=place_template");
+  it("renders a location template as an indented tree with the systems that land in it", async () => {
+    mount("/templates?kind=location_template");
     const b = await blade("A floor of meeting rooms");
     const items = within(b).getAllByRole("treeitem");
     expect(items.map((i) => i.getAttribute("data-depth"))).toEqual(["0", "1", "2"]);
@@ -173,7 +173,7 @@ describe("Templates page", () => {
     expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs system:create, system:update, component:create, component:update, standard:create");
   });
 
-  it("starts a system at the carried place and lands on it with ?from=", async () => {
+  it("starts a system at the carried location and lands on it with ?from=", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -183,7 +183,7 @@ describe("Templates page", () => {
       }
       return json({});
     });
-    mount(`/templates?kind=system_template&place=${west.id}`);
+    mount(`/templates?kind=system_template&location=${west.id}`);
     const b = await blade("Meeting Room 55, staffed");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-system");
@@ -229,23 +229,23 @@ describe("Templates page", () => {
     expect(sent).toEqual({ template: "mr55", name: "mr55-east" });
   });
 
-  it("starts places under a parent and lands on the subtree's root", async () => {
+  it("starts locations under a parent and lands on the subtree's root", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST") {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "meeting-floor", places: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standards_created: [], to_attach: [] }, 201);
+        return json({ template: "meeting-floor", locations: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standards_created: [], to_attach: [] }, 201);
       }
       return json({});
     });
-    mount("/templates?kind=place_template");
+    mount("/templates?kind=location_template");
     const b = await blade("A floor of meeting rooms");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
-    const form = await screen.findByTestId("start-form-place");
-    await pickTree(within(form).getByLabelText("Parent place"), "West");
+    const form = await screen.findByTestId("start-form-location");
+    await pickTree(within(form).getByLabelText("Parent location"), "West");
     fireEvent.input(within(form).getByLabelText("Name"), { target: { value: "level-9" } });
-    fireEvent.click(screen.getByRole("button", { name: /start places/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start locations/i }));
     await waitFor(() => expect(landed).toBe(`/locations/${LVL_ID}?from=meeting-floor`));
     expect(sent).toEqual({ template: "meeting-floor", parent: "hq.west", name: "level-9" });
   });
@@ -260,7 +260,7 @@ describe("Templates page", () => {
       }
       return json({});
     });
-    mount(`/templates?kind=component_template&place=${hq.id}`);
+    mount(`/templates?kind=component_template&location=${hq.id}`);
     const b = await blade("Boreal Edge 55 display");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-component");

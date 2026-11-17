@@ -2,14 +2,14 @@ import { type FleetView } from "./fleet";
 import { verdictOf, type Verdict } from "./health";
 import { entityLabel } from "./entities";
 
-// The outline's model (#866): every place in the fleet as one tree, each
-// place wearing the system that sits there.
+// The outline's model (#866): every location in the fleet as one tree, each
+// location wearing the system that sits there.
 //
-// Operators think of a room AS its system: the location is the place in the
-// tree, and the system is what the place is (its standard, its health), not a
-// second node beneath it. So the tree holds places only. A place holding one
+// Operators think of a room AS its system: the location is the location in the
+// tree, and the system is what the location is (its standard, its health), not a
+// second node beneath it. So the tree holds locations only. A location holding one
 // system wears it on its own row and lists that system's components directly
-// beneath; a place holding several groups its components under one header per
+// beneath; a location holding several groups its components under one header per
 // system. Location types are customer data (ADR-0102), so nothing here reads a
 // type's name: the tree comes from parent links, counts come from the
 // registry's own labels, and folding comes from the tree's shape.
@@ -35,28 +35,28 @@ export type ComponentRow = {
 
 export type ComponentGroup = { system: SystemRef | null; components: ComponentRow[] };
 
-export type PlaceNode = {
-  // The deepest place in a folded chain: what selection, expansion and the
+export type LocationNode = {
+  // The deepest location in a folded chain: what selection, expansion and the
   // side panel act on.
   id: string;
-  // The places this row stands for, top first: one, or a folded chain.
+  // The locations this row stands for, top first: one, or a folded chain.
   chain: { id: string; label: string; typeName: string }[];
   type: string;
   typeName: string;
   icon: string;
   systems: SystemRef[];
   groups: ComponentGroup[];
-  children: PlaceNode[];
+  children: LocationNode[];
   contents: string;
   lights: Lights;
-  // The one system's health when the place holds exactly one; otherwise the
+  // The one system's health when the location holds exactly one; otherwise the
   // row's lights carry it.
   health: Verdict | null;
 };
 
 export type Outline = {
-  roots: PlaceNode[];
-  unplaced: PlaceNode | null;
+  roots: LocationNode[];
+  unplaced: LocationNode | null;
   systemCount: number;
   tags: Map<string, Record<string, string>>;
 };
@@ -70,7 +70,7 @@ export type OutlineInput = {
   types: TypeInfo[];
   standardLabel: (handle: string) => string;
   productLabel: (handle: string) => string;
-  // Effective tags by place, system or component id, for the tag filter.
+  // Effective tags by location, system or component id, for the tag filter.
   tags?: Map<string, Record<string, string>>;
   // A component's icon key from its product handle (product to component
   // type to that type's resolved icon).
@@ -149,7 +149,7 @@ export function buildOutline(input: OutlineInput): Outline {
     }
   }
 
-  // Components in no system, under the place they sit at; one placed nowhere
+  // Components in no system, under the location they sit at; one placed nowhere
   // the caller can read joins the node of things placed out of sight, so a
   // component created a moment ago without a placement is never invisible.
   const looseAt = new Map<string, ComponentRow[]>();
@@ -186,7 +186,7 @@ export function buildOutline(input: OutlineInput): Outline {
   };
 
   const visiting = new Set<string>();
-  const build = (loc: (typeof locations)[number], chain: PlaceNode["chain"]): PlaceNode | null => {
+  const build = (loc: (typeof locations)[number], chain: LocationNode["chain"]): LocationNode | null => {
     if (visiting.has(loc.id)) return null;
     visiting.add(loc.id);
     const here = (systemsAt.get(loc.id) ?? []).slice().sort((a, b) => entityLabel(a).localeCompare(entityLabel(b)) || a.id.localeCompare(b.id));
@@ -194,8 +194,8 @@ export function buildOutline(input: OutlineInput): Outline {
     const kids = (childrenOf.get(loc.id) ?? []).filter((k) => !visiting.has(k.id));
     const link = [...chain, { id: loc.id, label: entityLabel(loc), typeName: loc.location_type }];
 
-    // Fold: a place holding nothing of its own whose only child is another
-    // place becomes one row with that child.
+    // Fold: a location holding nothing of its own whose only child is another
+    // location becomes one row with that child.
     if (here.length === 0 && loose.length === 0 && kids.length === 1) {
       const folded = build(kids[0], link);
       if (folded) {
@@ -206,7 +206,7 @@ export function buildOutline(input: OutlineInput): Outline {
 
     const children = kids
       .map((k) => build(k, []))
-      .filter((n): n is PlaceNode => n !== null)
+      .filter((n): n is LocationNode => n !== null)
       .sort((a, b) => a.chain[0].label.localeCompare(b.chain[0].label) || a.id.localeCompare(b.id));
     visiting.delete(loc.id);
 
@@ -242,10 +242,10 @@ export function buildOutline(input: OutlineInput): Outline {
   const roots = locations
     .filter((l) => !l.parent || !locationIds.has(l.parent))
     .map((l) => build(l, []))
-    .filter((n): n is PlaceNode => n !== null)
+    .filter((n): n is LocationNode => n !== null)
     .sort((a, b) => a.chain[0].label.localeCompare(b.chain[0].label) || a.id.localeCompare(b.id));
 
-  let unplaced: PlaceNode | null = null;
+  let unplaced: LocationNode | null = null;
   if (unplacedSystems.length > 0 || looseNowhere.length > 0) {
     const systems = unplacedSystems.map(systemRef).sort(byLabel);
     const groups = groupsFor(unplacedSystems, looseNowhere);
@@ -271,10 +271,10 @@ export function buildOutline(input: OutlineInput): Outline {
   return { roots, unplaced, systemCount: fleetSystems.length, tags: input.tags ?? new Map() };
 }
 
-// One filterable row: a place or a component, with its path (the places above
+// One filterable row: a location or a component, with its path (the locations above
 // it, top first) and the facts the filter bar matches on.
 export type OutlineEntry = {
-  kind: "place" | "component";
+  kind: "location" | "component";
   id: string;
   label: string;
   path: string[];
@@ -293,23 +293,23 @@ const worst = (vs: (Verdict | null)[]): Verdict | null => {
   return w;
 };
 
-export function entriesOf(outline: Outline, roots?: PlaceNode[]): OutlineEntry[] {
+export function entriesOf(outline: Outline, roots?: LocationNode[]): OutlineEntry[] {
   const out: OutlineEntry[] = [];
-  const visit = (n: PlaceNode, above: string[]) => {
+  const visit = (n: LocationNode, above: string[]) => {
     const own = n.chain[n.chain.length - 1].label;
     const path = [...above, ...n.chain.slice(0, -1).map((c) => c.label)];
     out.push({
-      kind: "place",
+      kind: "location",
       id: n.id,
       label: own,
       path,
       type: n.type,
       standard: n.systems.map((s) => s.standard).filter(Boolean).join(" "),
       product: "",
-      // A place's own health is its systems'; a place holding none has none of
+      // A location's own health is its systems'; a location holding none has none of
       // its own to match on.
       verdict: worst(n.systems.map((s) => s.health)),
-      // A place's tags are its own, merged over the ones its systems carry.
+      // A location's tags are its own, merged over the ones its systems carry.
       tags: Object.assign({}, ...n.systems.map((s) => outline.tags.get(s.id) ?? {}), outline.tags.get(n.id) ?? {}),
       search: [own, ...n.systems.flatMap((s) => [s.label, s.name, s.standard])].join(" "),
     });
@@ -338,18 +338,18 @@ export function entriesOf(outline: Outline, roots?: PlaceNode[]): OutlineEntry[]
   return out;
 }
 
-// One place's own node, unfolded (#872): what a place's detail view lists
-// beneath its card. A fold may have swallowed the place into a chain
+// One location's own node, unfolded (#872): what a location's detail view lists
+// beneath its card. A fold may have swallowed the location into a chain
 // ("Headquarters / West"); rooted at Headquarters, the rest of the chain is
 // its one child, and rooted at West the row is West alone. Null when the
-// outline holds no such place.
-export function rootAt(outline: Outline, id: string): PlaceNode | null {
-  const find = (ns: PlaceNode[]): PlaceNode | null => {
+// outline holds no such location.
+export function rootAt(outline: Outline, id: string): LocationNode | null {
+  const find = (ns: LocationNode[]): LocationNode | null => {
     for (const n of ns) {
       const idx = n.chain.findIndex((c) => c.id === id);
       if (idx === n.chain.length - 1) return { ...n, chain: [n.chain[idx]] };
       if (idx >= 0) {
-        const rest: PlaceNode = { ...n, chain: n.chain.slice(idx + 1) };
+        const rest: LocationNode = { ...n, chain: n.chain.slice(idx + 1) };
         const own = n.chain[idx];
         return { ...n, id: own.id, chain: [own], systems: [], groups: [], health: null, children: [rest], contents: n.contents, lights: n.lights };
       }
@@ -361,13 +361,13 @@ export function rootAt(outline: Outline, id: string): PlaceNode | null {
   return find(outline.roots);
 }
 
-// The rows to expand, top first, so the row with this id shows: a place's
-// ancestors, or a component's place and that place's ancestors.
+// The rows to expand, top first, so the row with this id shows: a location's
+// ancestors, or a component's location and that location's ancestors.
 export function ancestorsOf(outline: Outline, id: string): string[] {
-  const walk = (n: PlaceNode, above: string[]): string[] | null => {
+  const walk = (n: LocationNode, above: string[]): string[] | null => {
     if (n.chain.some((c) => c.id === id)) return above;
     if (n.groups.some((g) => g.components.some((c) => c.id === id))) return [...above, n.id];
-    // A system shows as its place's own row, unless the place heads a row per
+    // A system shows as its location's own row, unless the location heads a row per
     // system (it holds several, or it is the node of things out of sight).
     if (n.groups.some((g) => g.system?.id === id)) return n.id === "unplaced" || n.systems.length > 1 ? [...above, n.id] : above;
     for (const k of n.children) {

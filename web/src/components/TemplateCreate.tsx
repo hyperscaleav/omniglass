@@ -53,7 +53,7 @@ export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: Create
   );
 }
 
-export default function TemplateCreate(props: { kind: TemplateKind; place?: string; onDone: (href: string) => void }): JSX.Element {
+export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void }): JSX.Element {
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
   // byLabel stays here (#757): the template catalog is served by kind then name
   // from the binary, not by the SQL label rule, so the order is composed here.
@@ -88,7 +88,7 @@ export default function TemplateCreate(props: { kind: TemplateKind; place?: stri
               <Show when={t.description}><p class="text-sm text-base-content/70">{t.description}</p></Show>
               <TemplatePreview template={t} all={templates.data ?? []} heldRoles={heldRoles()} />
             </section>
-            <StartFromTemplateForm template={t} all={templates.data ?? []} place={props.place} onDone={props.onDone} />
+            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} />
           </>
         )}
       </Show>

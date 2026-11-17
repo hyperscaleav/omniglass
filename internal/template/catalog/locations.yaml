@@ -1,27 +1,27 @@
-# The place templates (kind place_template): a subtree of places, each naming
+# The location templates (kind location_template): a subtree of locations, each naming
 # a location type, and the system templates that land in it. Creating from
 # one (POST /locations:createFromTemplate) creates the whole subtree under a parent
-# place, each place's type checked against its parent type's
+# location, each location's type checked against its parent type's
 # allowed_parent_types (the operator's effective row, a fork included), in
 # one transaction (ADR-0827).
 #
-# A place names its location type; a name is optional where the type has a
+# A location names its location type; a name is optional where the type has a
 # name rule to mint one, and the caller names the root. Nothing here is
 # special to any type: the types are the fleet's own vocabulary, and a
 # template naming a type the fleet lacks is refused naming it.
 templates:
-  - kind: place_template
+  - kind: location_template
     name: meeting-floor
     label: A floor of meeting rooms
     description: >-
       A floor with two Meeting Room 55 spaces and a Digital Sign 55 by the
       lifts.
-    place:
+    location:
       type: floor
       label: Meeting floor
       systems:
         - { template: ds55-system, label: Lift lobby sign }
-      places:
+      locations:
         - type: room
           name: mr-1
           label: Meeting room 1

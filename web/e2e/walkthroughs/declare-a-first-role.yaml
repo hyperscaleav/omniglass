@@ -1,5 +1,5 @@
 # Declare a first role (#321): a one-off system conforms to no standard, so
-# nothing declares its roles but the system itself. Its setup places
+# nothing declares its roles but the system itself. Its setup locations
 # lectern-cart in the Media Lab with no standard and no roles, off camera.
 title: Declare a first role
 description: Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.

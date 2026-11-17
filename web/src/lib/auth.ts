@@ -12,7 +12,7 @@ export type Me = {
   service?: { name: string };
   permissions: string[];
   // The permissions held on an all-scope grant: what reaches fleet-wide config
-  // (event rules), which a grant bounded to a place or system never does.
+  // (event rules), which a grant bounded to a location or system never does.
   fleet_permissions?: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
 };

@@ -336,7 +336,7 @@ Configuration is **two tiers**, and platform settings are deliberately **central
   DSN, the NATS embed-or-external choice and address, the `SecretProvider` key, the run mode, and the
   listen address. In all-in-one mode these have working defaults, so a desktop run needs **no configuration
   at all**; env vars override.
-- **The platform settings store (one place).** Everything else lives in the single, audited
+- **The platform settings store (a single home).** Everything else lives in the single, audited
   [settings engine](/architecture/settings/): feature flags, buffer and retention defaults, CDC routing,
   integration settings, UI defaults, official-registry overrides, resolved most-specific-wins down the
   principal hierarchy. An operator **settings file** (`settings.json` or YAML) is the GitOps layer, read

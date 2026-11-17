@@ -49,7 +49,7 @@ import {
 // the left. Every affordance is gated on the permission the server checks; a
 // reader gets the facts and no controls.
 //
-// Addressed by the component's uuid: the seeded fleet reuses names across places.
+// Addressed by the component's uuid: the seeded fleet reuses names across locations.
 export default function SimComponentDrawer(props: {
   id: string | null;
   onClose: () => void;

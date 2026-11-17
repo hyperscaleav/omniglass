@@ -14,13 +14,13 @@ Roughly 22 live pages (fleet, catalog, values, admin, plus the shell) ship as **
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: a fleet list page is CRUD over a scoped resource. The
 **Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
-surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
+surface that is neither: an outline of locations over one projection (`GET /views/fleet`) and
 the CRUD lists, and the detail views it opens. Its core is one pure model,
-`web/src/lib/outline.ts`, which nests the places, puts each system on the place where it
+`web/src/lib/outline.ts`, which nests the locations, puts each system on the location where it
 sits, folds single-child chains, counts what a row holds in the registry's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
 renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
-place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
+location from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
 (`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
 verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
@@ -64,21 +64,21 @@ chrome only where it says something a column cannot (a quorum beyond one, a shor
 unstaffed role). The platform-wide sweep of the older pages is tracked in #784.
 
 **A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
-unit Omniglass monitors; places are folders and metadata; components are pieces of systems.
-A system's view is its place card (type, tags, the place's own panel) above the system card
+unit Omniglass monitors; locations are folders and metadata; components are pieces of systems.
+A system's view is its location card (type, tags, the location's own panel) above the system card
 (verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
 URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
 occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
-logs), and Configure (the one form). A place holding exactly one system lands on it; a place
+logs), and Configure (the one form). A location holding exactly one system lands on it; a location
 holding none or several keeps its own view, a brief card per system and the outline rooted
-there; a component's view carries its place card, marked as its own or its system's. Its Vitals
+there; a component's view carries its location card, marked as its own or its system's. Its Vitals
 card reads each metric's unit off the effective-metrics read (the metric type's, one source, #1550),
 so an uptime reads `306 s`; a float keeps at most two decimals (`lib/component_leaf.ts`,
 `vitalValueText`) and the raw value sits on the title. The
-model behind it is pure, in `lib/detail.ts` (where a place lands, the path that names each
-place once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
+model behind it is pure, in `lib/detail.ts` (where a location lands, the path that names each
+location once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
-look, one altitude rule (Explore drills the place tree, systems open full screen,
+look, one altitude rule (Explore drills the location tree, systems open full screen,
 components open in blades), editing through the one `EntityForm` (ADR-0137). The side
 panel is the glance (verdict, why, context, identity and tags) and the configuration
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
@@ -203,7 +203,7 @@ Coded pages with rich interaction, all reading through views:
 Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
+   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
@@ -252,7 +252,7 @@ hang off it (#854):
    router-wide guard (a link out of the page, closing the tab) is not built.
 
 A changed route id resets the edit too: each host keys its Configure face on the id
-(`<Show when={id()} keyed>`), so another place, system or component is a new face with a fresh slot and
+(`<Show when={id()} keyed>`), so another location, system or component is a new face with a fresh slot and
 drafts, never the previous entity's half-typed edit under the new page.
 
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
@@ -283,7 +283,7 @@ interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
-outline of places. **Nodes**, the collection daemons, are infrastructure rather than fleet
+outline of locations. **Nodes**, the collection daemons, are infrastructure rather than fleet
 entities, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
 `node:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.

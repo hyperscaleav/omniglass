@@ -96,13 +96,13 @@ func TestLoadAcceptsAWellFormedCatalog(t *testing.T) {
       product: some-panel
       attach: { inputs: { port: "161" } }
       properties: { video-input: hdmi1, power: { on: true } }
-  - kind: place_template
+  - kind: location_template
     name: floor
     label: Floor
-    place:
+    location:
       type: floor
       systems: [{ template: base-system }]
-      places:
+      locations:
         - { type: room, name: a, systems: [{ template: base-system }] }
         - { type: room, name: b }
 `)})
@@ -226,10 +226,10 @@ func TestLoadRefuses(t *testing.T) {
     label: S
     system: { standard: base, roles: { display: { product: p } } }`, "with no alternate"},
 		{"place names a standard as a system", stdOK + `
-  - kind: place_template
+  - kind: location_template
     name: p
     label: P
-    place: { type: floor, systems: [{ template: base }] }`, "is a standard_template, not a system_template"},
+    location: { type: floor, systems: [{ template: base }] }`, "is a standard_template, not a system_template"},
 		{"map places one position twice", `
   - kind: standard_template
     name: x
@@ -242,11 +242,11 @@ func TestLoadRefuses(t *testing.T) {
     name: s
     label: S
     system: { standard: mr-55, roles: { whatever: { product: p } } }`, `builds to template: not in the catalog: "mr-55"`},
-		{"place holds two places of one name", `
-  - kind: place_template
+		{"place holds two locations of one name", `
+  - kind: location_template
     name: p
     label: P
-    place: { type: floor, places: [{ type: room, name: a }, { type: room, name: a }] }`, `two places named "a"`},
+    location: { type: floor, locations: [{ type: room, name: a }, { type: room, name: a }] }`, `two locations named "a"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

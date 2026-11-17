@@ -23,8 +23,8 @@ import { seedSeverityLevels } from "../lib/testseverity";
 
 // The fleet EntityBlade (#799, refit in #826, the glance since #872): verdict
 // and since lead, the alarms say why with their severity, the context the
-// operator came for follows (a system's place, a component's systems and
-// roles, a place's systems), then the form's identity, placement and tags,
+// operator came for follows (a system's location, a component's systems and
+// roles, a location's systems), then the form's identity, placement and tags,
 // read or edit through the blade's own footer. Configuration (roles,
 // properties, their cascade) is the detail view's Configure tab, one Expand
 // away. Every body self-fetches by id, so the registry serves any page.
@@ -146,17 +146,17 @@ describe("the system blade", () => {
   });
 
   // Each fact once (#872 drawer audit). The room's only system IS the room,
-  // so its place card names no place (the title does), and offers no second
-  // drawer for the room (its form is Configure place); the brief says the
+  // so its location card names no location (the title does), and offers no second
+  // drawer for the room (its form is Configure location); the brief says the
   // size, not the standard the form's Classification already says; the
   // read-only form drops the Label row the title already says.
-  it("says each fact once: no place name, no place drawer, no standard twice, no label row", async () => {
+  it("says each fact once: no location name, no location drawer, no standard twice, no label row", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
-    const card = within(blade).getByTestId("place-card");
+    const card = within(blade).getByTestId("location-card");
     expect(within(card).queryByText("Boardroom A")).toBeNull();
-    expect(within(card).queryByRole("button", { name: "Place details" })).toBeNull();
-    expect(within(card).getByRole("link", { name: "Configure place" })).toBeTruthy();
+    expect(within(card).queryByRole("button", { name: "Location details" })).toBeNull();
+    expect(within(card).getByRole("link", { name: "Configure location" })).toBeTruthy();
     const brief = within(blade).getByTestId("blade-brief");
     expect(within(brief).getByText("2 components")).toBeTruthy();
     expect(within(brief).queryByText("Huddle Room Standard")).toBeNull();
@@ -165,13 +165,13 @@ describe("the system blade", () => {
     expect(within(form).getAllByText("Huddle Room Standard").length).toBe(1);
   });
 
-  // A drawer has no breadcrumb, so its place card says where the place sits
+  // A drawer has no breadcrumb, so its location card says where the location sits
   // (#872): the path above it, the one fact the title does not already say.
   it("says where the room sits: the path above it, not its name", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
-    const card = within(blade).getByTestId("place-card");
-    expect(within(card).getByTestId("place-path").textContent).toBe("Level 2");
+    const card = within(blade).getByTestId("location-card");
+    expect(within(card).getByTestId("location-path").textContent).toBe("Level 2");
   });
 
   it("renders the form's identity, placement and tags, and leaves the roles to Configure", async () => {
@@ -217,12 +217,12 @@ describe("the component blade", () => {
   });
 
   // The component sits in the room its one system makes: "Serves Boardroom"
-  // already names that room, so a place card would name it twice.
-  it("shows no place card where its place is the room of the system it serves, and keeps the product's note in a tooltip", async () => {
+  // already names that room, so a location card would name it twice.
+  it("shows no location card where its location is the room of the system it serves, and keeps the product's note in a tooltip", async () => {
     mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     const blade = await screen.findByRole("dialog");
     await within(blade).findByTestId("blade-serves");
-    expect(within(blade).queryByTestId("place-card")).toBeNull();
+    expect(within(blade).queryByTestId("location-card")).toBeNull();
     await within(blade).findByTestId("entity-form");
     expect(within(blade).queryByText(/Fixed at creation/)).toBeNull();
   });
@@ -235,9 +235,9 @@ describe("the component blade", () => {
   });
 });
 
-describe("the component blade's place, by its primary system", () => {
+describe("the component blade's location, by its primary system", () => {
   // Memberships come back by system name, not primary first: a component with
-  // no place of its own must show its PRIMARY system's place, as its page does.
+  // no location of its own must show its PRIMARY system's location, as its page does.
   it("shows the primary system's place for a component placed nowhere of its own", async () => {
     const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     r.qc.setQueryData([...COMPONENTS_KEY], [{ id: uuidFor("eb-c-mic"), name: "mic-1", label: "", actions: [] }]);
@@ -257,7 +257,7 @@ describe("the component blade's place, by its primary system", () => {
 });
 
 describe("the location blade", () => {
-  it("says what the place holds: its systems, each with its verdict, opening the system", async () => {
+  it("says what the location holds: its systems, each with its verdict, opening the system", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const blade = await screen.findByRole("dialog");
     const here = within(blade).getByTestId("blade-systems");
@@ -268,9 +268,9 @@ describe("the location blade", () => {
   });
 
   // "Holds: Empty" beside a list of the room's systems was wrong: it counts
-  // only the places beneath. A place holding systems and no places says
-  // nothing about places at all.
-  it("says nothing about places beneath a room that holds systems and no places", async () => {
+  // only the locations beneath. A location holding systems and no locations says
+  // nothing about locations at all.
+  it("says nothing about locations beneath a room that holds systems and no locations", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const blade = await screen.findByRole("dialog");
     await within(blade).findByTestId("blade-systems");

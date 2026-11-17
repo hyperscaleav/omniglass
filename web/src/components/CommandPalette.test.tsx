@@ -43,7 +43,7 @@ describe("command palette source", () => {
     expect(commands.filter((c) => c.label === "Templates").map((c) => [c.group, c.path])).toEqual([
       ["Catalog · Components", "/templates?kind=component_template"],
       ["Catalog · Systems", "/templates?kind=standard_template,system_template"],
-      ["Catalog · Locations", "/templates?kind=place_template"],
+      ["Catalog · Locations", "/templates?kind=location_template"],
     ]);
     expect(commands.every((c) => c.path)).toBe(true);
   });

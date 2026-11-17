@@ -122,7 +122,7 @@ describe("a level draft", () => {
     expect(validateLevelDraft(emptyLevelDraft(), levels)).toEqual({
       name: "A name for the level.",
       color: "The hue its alarms wear.",
-      rank: "Its place among the levels.",
+      rank: "Its position among the levels.",
     });
   });
 

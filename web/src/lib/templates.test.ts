@@ -7,10 +7,10 @@ import {
   needsNode,
   ofKinds,
   parseKinds,
-  placeRef,
-  placeTreeRows,
-  placeValue,
-  placesBody,
+  locationRef,
+  locationTreeRows,
+  locationValue,
+  locationsBody,
   quorumText,
   missingNeeds,
   permText,
@@ -47,32 +47,32 @@ const sys: Template = {
   label: "Meeting Room 55, staffed",
   system: { standard: "mr55", roles: { "main-display": { component: "boreal-edge-55" }, "video-bar": { product: "kestrel-vroom" } } },
 };
-const place: Template = {
-  kind: "place_template",
+const location: Template = {
+  kind: "location_template",
   name: "meeting-floor",
   label: "A floor of meeting rooms",
-  place: {
+  location: {
     type: "floor",
     label: "Meeting floor",
     systems: [{ template: "ds55-system", label: "Lift lobby sign" }],
-    places: [
+    locations: [
       { type: "room", name: "mr-1", label: "Meeting room 1", systems: [{ template: "mr55-system" }] },
       { type: "room", name: "mr-2", systems: [{ template: "mr55-system" }] },
     ],
   },
 };
-const all = [std, sys, place, comp];
+const all = [std, sys, location, comp];
 
 describe("which kinds an address asks for", () => {
   it("reads a comma list in catalog order, dropping unknown words", () => {
     expect(parseKinds("system_template,standard_template,room_template")).toEqual(["standard_template", "system_template"]);
     expect(parseKinds(undefined)).toEqual([]);
-    expect(parseKinds(["place_template"])).toEqual(["place_template"]);
+    expect(parseKinds(["location_template"])).toEqual(["location_template"]);
   });
 
   it("builds the filtered address with the place a create flow carried", () => {
     expect(templatesHref(["standard_template", "system_template"])).toBe("/templates?kind=standard_template,system_template");
-    expect(templatesHref(["place_template"], "loc-uuid")).toBe("/templates?kind=place_template&place=loc-uuid");
+    expect(templatesHref(["location_template"], "loc-uuid")).toBe("/templates?kind=location_template&location=loc-uuid");
     expect(templatesHref([])).toBe("/templates");
   });
 
@@ -80,7 +80,7 @@ describe("which kinds an address asks for", () => {
     expect(kindChip(["system_template"])).toEqual([{ key: "kind", op: "eq", values: ["system_template"] }]);
     expect(kindChip([])).toEqual([]);
     const name = { key: "name", op: "contains" as const, values: ["mr"] };
-    const notKind = { key: "kind", op: "neq" as const, values: ["place_template"] };
+    const notKind = { key: "kind", op: "neq" as const, values: ["location_template"] };
     expect(splitKindChip([{ key: "kind", op: "eq", values: ["system_template", "standard_template", "bogus"] }, name, notKind])).toEqual({
       kinds: ["standard_template", "system_template"],
       rest: [name, notKind],
@@ -97,17 +97,17 @@ describe("what a template creates", () => {
   it("summarizes each kind from its own body", () => {
     expect(templateSummary(std)).toBe("2 roles, a variant of meeting-room");
     expect(templateSummary(sys)).toBe("built to mr55, 2 components");
-    expect(templateSummary(place)).toBe("3 places, 3 systems");
+    expect(templateSummary(location)).toBe("3 locations, 3 systems");
     expect(templateSummary(comp)).toBe("boreal-edge-55");
   });
 
-  it("flattens a place subtree in pre-order: a place, its systems, then the places beneath", () => {
-    expect(placeTreeRows(place.place!).map((r) => [r.kind, r.depth, r.kind === "place" ? r.type : r.template])).toEqual([
-      ["place", 0, "floor"],
+  it("flattens a location subtree in pre-order: a location, its systems, then the locations beneath", () => {
+    expect(locationTreeRows(location.location!).map((r) => [r.kind, r.depth, r.kind === "location" ? r.type : r.template])).toEqual([
+      ["location", 0, "floor"],
       ["system", 1, "ds55-system"],
-      ["place", 1, "room"],
+      ["location", 1, "room"],
       ["system", 2, "mr55-system"],
-      ["place", 1, "room"],
+      ["location", 1, "room"],
       ["system", 2, "mr55-system"],
     ]);
   });
@@ -158,9 +158,9 @@ describe("what a start needs, mirroring the routes", () => {
 
   it("asks places for location:create, and the system set when the subtree carries systems", () => {
     // meeting-floor's systems are ds55-system (not in this catalog) and mr55-system (built to mr55, held).
-    expect(startNeeds(place, ctx)).toEqual([["location", "create"], ...sysSet]);
-    expect(startNeeds(place, { ...ctx, held: holds() })).toEqual([["location", "create"], ...sysSet, ["standard", "create"]]);
-    const bare: Template = { kind: "place_template", name: "f", label: "F", place: { type: "floor" } };
+    expect(startNeeds(location, ctx)).toEqual([["location", "create"], ...sysSet]);
+    expect(startNeeds(location, { ...ctx, held: holds() })).toEqual([["location", "create"], ...sysSet, ["standard", "create"]]);
+    const bare: Template = { kind: "location_template", name: "f", label: "F", location: { type: "floor" } };
     expect(startNeeds(bare, ctx)).toEqual([["location", "create"]]);
   });
 
@@ -180,24 +180,24 @@ describe("what each start form posts", () => {
   });
 
   it("puts the address on the host input and a secret by its input name", () => {
-    expect(componentBody("boreal-edge-55", { place: "p1", name: "", label: "Lobby", node: "n1", address: " 10.0.0.9 ", secrets: { community: "snmp-ro", other: "" } })).toEqual({
+    expect(componentBody("boreal-edge-55", { location: "p1", name: "", label: "Lobby", node: "n1", address: " 10.0.0.9 ", secrets: { community: "snmp-ro", other: "" } })).toEqual({
       template: "boreal-edge-55", location: "p1", name: undefined, label: "Lobby", node: "n1", inputs: { host: "10.0.0.9", community: "snmp-ro" },
     });
-    expect(componentBody("x", { place: "", name: "", label: "", node: "", address: "", secrets: {} }).inputs).toBeUndefined();
+    expect(componentBody("x", { location: "", name: "", label: "", node: "", address: "", secrets: {} }).inputs).toBeUndefined();
   });
 
   it("attaches a system's roles in slot order up to the last address given", () => {
     const body = systemBody("mr55-system", {
-      place: "p1", name: "", label: "", standard: "", node: "n1",
+      location: "p1", name: "", label: "", standard: "", node: "n1",
       addresses: { "main-display": ["", "10.0.0.2"], "video-bar": [""] },
     });
     expect(body.attach).toEqual({ "main-display": [{}, { host: "10.0.0.2" }] });
     expect(body.standard).toBeUndefined();
-    expect(systemBody("s", { place: "", name: "", label: "", standard: "mine", node: "", addresses: {} })).toMatchObject({ standard: "mine", attach: undefined });
+    expect(systemBody("s", { location: "", name: "", label: "", standard: "mine", node: "", addresses: {} })).toMatchObject({ standard: "mine", attach: undefined });
   });
 
-  it("starts places under a parent, or as a new top", () => {
-    expect(placesBody("meeting-floor", { parent: "", name: "level-9", label: "" })).toEqual({ template: "meeting-floor", parent: undefined, name: "level-9", label: undefined });
+  it("starts locations under a parent, or as a new top", () => {
+    expect(locationsBody("meeting-floor", { parent: "", name: "level-9", label: "" })).toEqual({ template: "meeting-floor", parent: undefined, name: "level-9", label: undefined });
   });
 
   it("asks for a node exactly when an address is given", () => {
@@ -215,16 +215,16 @@ describe("which place", () => {
     { id: uuidFor("l-new"), name: "fresh" },
   ];
 
-  it("offers a place by its dotted path, a row not yet pathed by its uuid", () => {
-    expect(placeValue(rows[1])).toBe("hq.west");
-    expect(placeValue(rows[2])).toBe(uuidFor("l-new"));
+  it("offers a location by its dotted path, a row not yet pathed by its uuid", () => {
+    expect(locationValue(rows[1])).toBe("hq.west");
+    expect(locationValue(rows[2])).toBe(uuidFor("l-new"));
   });
 
   it("resolves a carried uuid, path or unique name to the offered value", () => {
-    expect(placeRef(rows, uuidFor("l-west"))).toBe("hq.west");
-    expect(placeRef(rows, "hq.west")).toBe("hq.west");
-    expect(placeRef(rows, "west")).toBe("hq.west");
-    expect(placeRef(rows, undefined)).toBe("");
+    expect(locationRef(rows, uuidFor("l-west"))).toBe("hq.west");
+    expect(locationRef(rows, "hq.west")).toBe("hq.west");
+    expect(locationRef(rows, "west")).toBe("hq.west");
+    expect(locationRef(rows, undefined)).toBe("");
   });
 
 });

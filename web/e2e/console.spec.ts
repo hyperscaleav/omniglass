@@ -59,7 +59,7 @@ test.describe("operator console", () => {
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // It appears as a new top-level place in the outline, under the label the
+    // It appears as a new top-level location in the outline, under the label the
     // rule rendered from the name typed above.
     await page.goto("/web/explore");
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: label }) });
@@ -170,7 +170,7 @@ test.describe("operator console", () => {
     test(`the outline keeps its Name column readable at ${width}px`, async ({ page }) => {
       // A place to measure, made through the API and removed after: a campus
       // of one building, so the row is a folded chain with a long outer name
-      // and a short place of its own.
+      // and a short location of its own.
       const made = await page.request.post("/api/v1/locations", { data: { name: `e2e-squeeze-${width}-${Date.now()}`, location_type: "campus" } });
       expect(made.ok(), `create: ${made.status()}`).toBeTruthy();
       const { id } = (await made.json()) as { id: string };
@@ -182,7 +182,7 @@ test.describe("operator console", () => {
         await page.goto("/web/explore");
         const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: new RegExp(`^Wing ${width}$`) }) });
         await expect(row).toBeVisible();
-        // The place's own name is what a folded row exists to show: the outer
+        // The location's own name is what a folded row exists to show: the outer
         // path gives way before it does.
         const clipped = await row.locator("[data-label]").evaluate((el) => el.scrollWidth > el.clientWidth);
         expect(clipped, `the row's own name is cut short at ${width}px`).toBe(false);
@@ -203,7 +203,7 @@ test.describe("operator console", () => {
   }
 
   test("explore: create where you stand, the outline shows it, a link reveals it, a row opens it", async ({ page }) => {
-    // The e2e database starts with the boot seed only, so the places under
+    // The e2e database starts with the boot seed only, so the locations under
     // test are created here: a campus, two buildings under it from the row's
     // own +, and a system in the first.
     const stamp = Date.now();
@@ -274,16 +274,16 @@ test.describe("operator console", () => {
     await page.goto(`/web/explore?node=${campus}-b`);
     await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
-    // A place holding one system opens as that system.
+    // A location holding one system opens as that system.
     await rowOf(buildingLabel).click();
     await expect(page.locator("aside[data-blade]")).toHaveAttribute("aria-labelledby", `blade-title-system-${systemId}`);
 
     // Its address lands on that system's view (#872): one view per system,
-    // titled by the place, the place a card of context.
+    // titled by the location, the place a card of context.
     await page.goto(`/web/locations/${buildingId}`);
     await page.waitForURL(new RegExp(`/web/systems/${systemId}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
-    await expect(page.getByTestId("place-card")).toBeVisible();
+    await expect(page.getByTestId("location-card")).toBeVisible();
     // The Explore crumb goes back up to where you were: the outline opened
     // down to this row and selected. The crumb is a link (#875), its
     // address in the DOM.
@@ -295,11 +295,11 @@ test.describe("operator console", () => {
 
     // The campus holds two buildings and no system: a folder, its own card
     // and the outline beneath it. And it settles: the live console once
-    // re-read the fleet view hundreds of times a second on a place's view.
+    // re-read the fleet view hundreds of times a second on a location's view.
     let fleetReads = 0;
     page.on("request", (r) => { if (r.url().includes("/api/v1/views/fleet")) fleetReads++; });
     await page.goto(`/web/locations/${campusId}`);
-    await expect(page.getByTestId("place-subject")).toBeVisible();
+    await expect(page.getByTestId("location-subject")).toBeVisible();
     await expect(page.getByTestId("beneath").getByRole("treeitem")).toHaveCount(2);
     await page.waitForTimeout(1500);
     expect(fleetReads, "fleet view reads while the folder sat open").toBeLessThan(5);
@@ -307,7 +307,7 @@ test.describe("operator console", () => {
     // The retired canvas address lands on the outline.
     await page.goto("/web/fleet");
     await page.waitForURL(/\/web\/explore$/);
-    await expect(page.getByRole("tree", { name: "Places" })).toBeVisible();
+    await expect(page.getByRole("tree", { name: "Locations" })).toBeVisible();
 
     // Clean up: the system through its blade (the blade delete under test),
     // then the locations through the API on the browser's own session.

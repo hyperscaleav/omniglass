@@ -1,12 +1,12 @@
-# Start a whole system from a template (#1329): from a place, create a system
+# Start a whole system from a template (#1329): from a location, create a system
 # the way any is created, choose From a template in the create page, read what
 # the template creates, and land on the system, which is the operator's own
 # from that moment.
 title: Start a system from a template
-description: From a place, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.
+description: From a location, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.
 steps:
   - goto: /locations/level-2
-    caption: Level 2 of the West Building, a floor of rooms. New systems start from the place they sit in.
+    caption: Level 2 of the West Building, a floor of rooms. New systems start from the location they sit in.
   - click: { role: button, name: New, exact: true }
     caption: New creates something here.
   - click: { role: button, name: System, exact: true }

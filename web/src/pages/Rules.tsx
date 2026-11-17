@@ -376,7 +376,7 @@ const STATE_ROWS = 8;
 
 // StateList renders one of a rule's live lists (open alarms, pending streaks):
 // each row names its component, linked by id, with where it sits (fleets reuse
-// names like display-1 across places, so a bare name is ambiguous) and the
+// names like display-1 across locations, so a bare name is ambiguous) and the
 // endpoint the row is about.
 function StateList<T extends { component: string; component_id: string; instance?: string }>(p: {
   items: T[];

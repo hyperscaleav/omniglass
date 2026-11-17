@@ -81,7 +81,7 @@ The 2026-07-30 drift-correction program ([#428](https://github.com/hyperscaleav/
 [#434](https://github.com/hyperscaleav/omniglass/issues/434)) has closed except for the telemetry-integrity half of
 [#430](https://github.com/hyperscaleav/omniglass/issues/430), which rides the release. The current workstream is
 [pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer (the clone model: standard,
-system, place and component templates an operator starts from, #827) has landed, and the
+system, location and component templates an operator starts from, #827) has landed, and the
 collection work after the tag on [#1187](https://github.com/hyperscaleav/omniglass/issues/1187).
 
 ## The architectural arc ahead
@@ -112,7 +112,7 @@ that describes the target:
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
    criteria and calc). [Templates](/architecture/templates/) (the clone model: standard, system,
-   place and component templates an operator starts from, #827) landed.
+   location and component templates an operator starts from, #827) landed.
 3. **Detection and verdict.** [Events](/architecture/events/) shipped (their registry, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
    has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its

@@ -292,7 +292,7 @@ export function CreateNotificationTypeForm(p: { onCreated: (r: NotificationTypeR
   const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [subject, setSubject] = createSignal("[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}");
-  const [text, setText] = createSignal("{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}}: {{.Message}}");
+  const [text, setText] = createSignal("{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}}: {{.Message}}");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 

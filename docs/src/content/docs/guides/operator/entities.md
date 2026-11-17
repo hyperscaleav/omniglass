@@ -6,7 +6,7 @@ screenshots:
     path: /web/explore
     alt: "A location's blade slides in from the right with its details and a footer action bar."
     # Harbor Point holds two buildings and no system, so its row opens the
-    # location's own blade (a place holding one system opens that system).
+    # location's own blade (a location holding one system opens that system).
     steps:
       - action: click
         selector: "[role=treeitem]:has-text('Harbor Point')"
@@ -27,7 +27,7 @@ screenshots:
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."
+    alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
     # No mask: the Configure tab replaces the overview (and its since-line
     # clock), and the form renders from the seed deterministically.
 ---
@@ -50,14 +50,14 @@ Enter to open it.
 
 A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
 from a row. It leads with the verdict and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's place (as a card saying where it
+with its severity, then the context you came for: a system's location (as a card saying where it
 sits, the path above it, since a blade has no breadcrumb) and its size;
-the systems a component serves, with the role it fills in each, and its place when that is
-somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
+the systems a component serves, with the role it fills in each, and its location when that is
+somewhere else; a location's systems, each with its verdict, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited
 in place. Each fact is said once: the blade's title is the label (the Label field appears only
-while editing), a room's only system is the room (its card names no place and offers no second
-blade for it, only **Configure place**), and the standard is in Classification, not repeated
+while editing), a room's only system is the room (its card names no location and offers no second
+blade for it, only **Configure location**), and the standard is in Classification, not repeated
 above it. Configuration (a
 system's roles, the properties and their cascade, the reconciliation, a component's
 endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
@@ -104,7 +104,7 @@ link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so 
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. A room holding one system is configured on its system's view, so `?edit=1` on that
 room's address lands on the system's Configure with the room's own form editing
-(`?edit=place`). The console itself uses these links for its handoffs: creating an entity lands on
+(`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
 
@@ -161,7 +161,7 @@ identity pages.
 
   The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
   **stem** comes from the type and the **number** is the lowest one free in that placement right now.
-  Some types carry no number on the first of their kind in a place, so the first boardroom in a place is
+  Some types carry no number on the first of their kind in a location, so the first boardroom in a location is
   `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
@@ -187,17 +187,17 @@ identity pages.
   A location's shipped rule reads its **own name as words**: create a location named `north-boardroom` and
   the locked field shows **North Boardroom**, because the rule splits the name on its hyphens, capitalises
   each word, and applies your [acronym list](/architecture/settings/) (so `hq-west` reads **HQ West** once
-  `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
+  `HQ` is on it). It only re-cases what you typed, so where the location's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
-  A system's shipped rule reads its **place**, because a system is what makes that place work: a
-  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a place holds several
+  A system's shipped rule reads its **location**, because a system is what makes that location work: a
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a location holds several
   systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
   first one restamps when the second arrives (and back when it leaves). Two of the same type add
   the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
   no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
   with a number in it means a name with the same number in it, and neither is a guess: both are read
-  from the placement you have just picked. A system with no place reads its type.
+  from the placement you have just picked. A system with no location reads its type.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -263,7 +263,7 @@ identity pages.
   re-parent that would put an entity under itself or one of its own children is refused); the console
   just has no picker for either yet. From the CLI, an entity's `<name>` argument takes a uuid, a bare
   name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
-  `$comp`/`$sys` accessor and the entity's own place from there. **Quote it**: an unquoted `$comp`
+  `$comp`/`$sys` accessor and the entity's own location from there. **Quote it**: an unquoted `$comp`
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
@@ -282,11 +282,11 @@ identity pages.
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
-  reads its place, so a room and its system read as one name instead of the room's name above the
+  reads its location, so a room and its system read as one name instead of the room's name above the
   system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
   old labels until you run `omniglass system previewLabels`, then `omniglass system
-  recomputeLabels`. Only the second of a kind in a place adds its type and number: a place with one
-  boardroom reads as the place, exactly as its name is `boardroom` rather than `boardroom-1`.
+  recomputeLabels`. Only the second of a kind in a location adds its type and number: a location with one
+  boardroom reads as the location, exactly as its name is `boardroom` rather than `boardroom-1`.
 
 ## Properties on the detail
 
@@ -304,7 +304,7 @@ an observation disagrees with want. A property nothing declares appears here onc
 commanded, with nothing wanted and so nothing to drift from; it stays out of the Properties panel,
 which holds only what is declared or calculated. A calculated property is not reconciled (nobody
 asked for its value), so it shows in Properties alone. A location has no Reconciliation panel: a
-place owns no observed value.
+location owns no observed value.
 
 ## Roles on a system
 

@@ -26,7 +26,7 @@
        "doc": "The label of the component type its product classifies it as"
       },
       {
-       "name": "place",
+       "name": "location",
        "type": "string",
        "doc": "How the location the component sits at reads; empty when it sits at none of its own"
       },

@@ -461,7 +461,7 @@ endpoint instance, severity, when) and its streaks waiting out a sustain (compon
 it points at fire or clear, since when). The list and a get carry the same state as counts
 (`conditions_in_force`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
 one list rather than a state read per rule. The state names components, so the lists and the counts
-cover only the components the caller's component read scope admits: a reader scoped to one place sees
+cover only the components the caller's component read scope admits: a reader scoped to one location sees
 every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
@@ -521,12 +521,12 @@ already taken is a 409, an official level is read-only). An alarm's `severity` r
 own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
 The console reads the registry everywhere a severity shows: every alarm chip (the component's
-alarms, a system's and a place's "why", a rule's open alarms) renders the level's label in its color
+alarms, a system's and a location's "why", a rule's open alarms) renders the level's label in its color
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
 **Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
 effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
 delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
-2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one place reads
+2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one location reads
 the levels but writes none (a 403). Official levels are read-only. Its form teaches the rank as it is typed: where the rank sits among the
 levels, and whether an alarm at it would take its component out or degrade it.
 
@@ -721,7 +721,7 @@ releases a personal rule naming it to the official type rather than being held b
 
 ```bash
 omniglass auth me action-rule create --name my-boardroom --on '["raised"]' \
-  --when 'place == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
+  --when 'location == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
 omniglass auth me action-rule test my-boardroom --when 'severity_rank >= 50'
 ```
 
@@ -751,11 +751,11 @@ what it queued before still delivers, and re-enabled it acts on the next transit
 
 ```bash
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
-  --when 'severity_rank >= 40 && place == "Boardroom"' --targets '["ops-chat"]'
+  --when 'severity_rank >= 40 && location == "Boardroom"' --targets '["ops-chat"]'
 ```
 
 `when` is the **action** site of the [expression engine](/architecture/expressions/): its bindings
-are the alarm facts above in snake_case (`component`, `place`, `severity`, `message`, `rule`, ...)
+are the alarm facts above in snake_case (`component`, `location`, `severity`, `message`, `rule`, ...)
 plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
 **Acknowledgement never notifies**, and neither does a snooze: an operator act is not a condition
 edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's

@@ -76,7 +76,7 @@ describe("Notifications page", () => {
       subject: "HIGH display-1",
       text: "no video",
       transition: "raised",
-      facts: [{ name: "Component", value: "display-1" }, { name: "Place", value: "" }],
+      facts: [{ name: "Component", value: "display-1" }, { name: "Location", value: "" }],
     } as lib.NotificationPreview);
     mount(admin);
     const blade = await openBlade("Page on-call");

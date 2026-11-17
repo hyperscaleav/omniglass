@@ -65,12 +65,12 @@ const PRIMED: [readonly string[], number][] = [
 ];
 
 // The one template catalog list the three Templates slots share, each counting
-// its own kinds of it: 5 component, 2 standard + 2 system, 1 place.
+// its own kinds of it: 5 component, 2 standard + 2 system, 1 location.
 const TEMPLATE_ROWS = [
   ...Array.from({ length: 5 }, (_, i) => ({ name: `c-${i}`, kind: "component_template" })),
   ...Array.from({ length: 2 }, (_, i) => ({ name: `st-${i}`, kind: "standard_template" })),
   ...Array.from({ length: 2 }, (_, i) => ({ name: `sy-${i}`, kind: "system_template" })),
-  { name: "p-0", kind: "place_template" },
+  { name: "p-0", kind: "location_template" },
 ];
 
 function mount(me: Me = owner, opts: { url?: string; skip?: (readonly string[])[] } = {}) {
@@ -121,7 +121,7 @@ describe("CatalogShell", () => {
       "/command-types", "/rules", "/calc-rules", "/severity-levels", "/notifications", "/action-rules", "/notification-targets",
       "/vendors", "/products", "/drivers", "/component-types", "/templates?kind=component_template",
       "/standards", "/system-types", "/templates?kind=standard_template,system_template",
-      "/location-types", "/templates?kind=place_template",
+      "/location-types", "/templates?kind=location_template",
       "/tags",
     ]);
     // The location-type entry reads "Types" (the Locations header says where it lives).
@@ -163,7 +163,7 @@ describe("CatalogShell", () => {
     const slot = (q: string) => nav().querySelector(`a[href="/templates?kind=${q}"]`)!;
     expect(slot("component_template").textContent).toBe("Templates5");
     expect(slot("standard_template,system_template").textContent).toBe("Templates4");
-    expect(slot("place_template").textContent).toBe("Templates1");
+    expect(slot("location_template").textContent).toBe("Templates1");
     // Notifications went live (#618): a plain link with its count.
     const a = nav().querySelector(`a[href="/notifications"]`)!;
     expect(a.textContent).toContain("2");
@@ -175,11 +175,11 @@ describe("CatalogShell", () => {
   });
 
   it("lights only the Templates slot whose kinds are showing", () => {
-    mount(owner, { url: "/templates?kind=place_template" });
+    mount(owner, { url: "/templates?kind=location_template" });
     const active = [...nav().querySelectorAll("a.menu-active")].map((a) => a.getAttribute("href"));
-    expect(active).toEqual(["/templates?kind=place_template"]);
+    expect(active).toEqual(["/templates?kind=location_template"]);
     const current = [...nav().querySelectorAll('a[aria-current="page"]')].map((a) => a.getAttribute("href"));
-    expect(current).toEqual(["/templates?kind=place_template"]);
+    expect(current).toEqual(["/templates?kind=location_template"]);
   });
 
   it("lights no Templates slot on the unfiltered catalog", () => {

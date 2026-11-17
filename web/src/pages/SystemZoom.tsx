@@ -7,7 +7,7 @@ import HealthBadge from "../components/HealthBadge";
 import HealthHistory from "../components/HealthHistory";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
-import PlaceCard from "../components/PlaceCard";
+import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
 import MemberRows from "../components/MemberRows";
 import OutlineWorkspace from "../components/OutlineWorkspace";
@@ -47,31 +47,31 @@ import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
 import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
-import { memberModel, systemCrumbs, systemsAtPlace, type MemberContext } from "../lib/detail";
+import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
-// Omniglass monitors; places are folders and metadata; components are the
+// Omniglass monitors; locations are folders and metadata; components are the
 // pieces of systems. So this one view is what an operator lands on from a
-// room: the place as a card of context, then the system itself (verdict,
+// room: the location as a card of context, then the system itself (verdict,
 // since-when, standard, slots only while something is missing) with its
 // three tabs. Overview reads top-down: why (cause before arithmetic), the
 // components as rows, the standard's map, the data. Activity is the history,
 // the events and the logs; Configure is the one form.
 //
-// A sole system's view is titled by its place, and its path ends at the
-// place's parent, so the room is named once. A place shared by several
-// systems keeps its own view and stays in the path. A place with places
+// A sole system's view is titled by its location, and its path ends at the
+// location's parent, so the room is named once. A location shared by several
+// systems keeps its own view and stays in the path. A location with locations
 // beneath it lists them under the system, as the outline rooted there.
 //
 // It refreshes on its own while open (#940), the way a component's view does
 // (#934): the system's own reads (its health report, which carries the
 // verdict, Why and the roles' staffing; its declared roles; its members, each
 // with its own verdict; its data) poll at the leaf's cadence. The fleet view
-// is read once, for the place, the path and who the members are; nothing
+// is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
 // The Data table reads a day at five-minute buckets (#1269): 288 of them, the
@@ -89,10 +89,10 @@ export default function SystemZoom() {
   const navigate = useNavigate();
   // The router's location, not the window's: on a client-side navigation the
   // window's query lags the route being rendered (#932).
-  const location = useLocation();
+  const route = useLocation();
   const me = useMe();
   const id = () => params.id;
-  // Unsaved Configure drafts (the system's and its sole place's) the tab rail asks about.
+  // Unsaved Configure drafts (the system's and its sole location's) the tab rail asks about.
   const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
@@ -114,16 +114,16 @@ export default function SystemZoom() {
   createEffect(() => {
     if (!view.data || system()) return;
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
-    if (matches.length === 1) navigate(`/systems/${matches[0].id}${location.search}`, { replace: true });
+    if (matches.length === 1) navigate(`/systems/${matches[0].id}${route.search}`, { replace: true });
   });
 
-  const placeId = () => system()?.location ?? null;
-  const place = createMemo(() => (placeId() ? (view.data?.locations ?? []).find((l) => l.id === placeId()) : undefined));
-  // A sole system is the room: the view wears the place's name. A shared
-  // place keeps its own view, so a system there wears its own.
-  const sole = createMemo(() => (view.data && placeId() ? systemsAtPlace(view.data, placeId()!).length === 1 : false));
-  const hasBeneath = createMemo(() => (view.data && placeId() ? (childrenIndex(view.data).get(placeId()!) ?? []).length > 0 : false));
-  const title = () => (sole() && place() ? entityLabel(place()!) : system() ? entityLabel(system()!) : "System");
+  const locationId = () => system()?.location ?? null;
+  const location = createMemo(() => (locationId() ? (view.data?.locations ?? []).find((l) => l.id === locationId()) : undefined));
+  // A sole system is the room: the view wears the location's name. A shared
+  // location keeps its own view, so a system there wears its own.
+  const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
+  const hasBeneath = createMemo(() => (view.data && locationId() ? (childrenIndex(view.data).get(locationId()!) ?? []).length > 0 : false));
+  const title = () => (sole() && location() ? entityLabel(location()!) : system() ? entityLabel(system()!) : "System");
 
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const systemsList = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
@@ -330,12 +330,12 @@ export default function SystemZoom() {
         onRetry={retry}
       >
         <div class="flex flex-col gap-3">
-          <Show when={placeId()}>
-            {(pid) => <PlaceCard placeId={pid()} showName={!sole()} />}
+          <Show when={locationId()}>
+            {(pid) => <LocationCard locationId={pid()} showName={!sole()} />}
           </Show>
           <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="System" hint="The logical group of components that makes this place work, and the thing Omniglass monitors: its verdict is what the components filling its roles add up to." />
+              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its roles add up to." />
               <HealthBadge verdict={health.data?.verdict} size="sm" />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
@@ -356,21 +356,21 @@ export default function SystemZoom() {
             </div>
             <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
-              {/* A sole system's place has no page of its own: it configures
+              {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
                   system's), in its own section with its own Edit (#872). A
-                  place shared by several systems keeps its own view and is
+                  location shared by several systems keeps its own view and is
                   configured there. */}
-              <Show when={sole() && placeId()} keyed>
+              <Show when={sole() && locationId()} keyed>
                 {(pid) => (
                   <section class="border-b border-base-300">
-                    <div class="px-4 pt-4"><Eyebrow label="Place" hint="Where this system sits: the place's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="place" testid="configure-face-place" guard={leave} />
+                    <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
+                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} />
                   </section>
                 )}
               </Show>
-              {/* Named only beside the place's section; alone it needs no name. */}
-              <Show when={sole() && placeId()}>
+              {/* Named only beside the location's section; alone it needs no name. */}
+              <Show when={sole() && locationId()}>
                 <div class="px-4 pt-4"><Eyebrow label="System" /></div>
               </Show>
               {/* Keyed on the id: another system is another face, so the edit
@@ -662,10 +662,10 @@ export default function SystemZoom() {
               )}
             </Show>
           </section>
-          <Show when={sole() && hasBeneath() && placeId()}>
+          <Show when={sole() && hasBeneath() && locationId()}>
             {(pid) => (
               <section data-testid="beneath" class="flex flex-col gap-2">
-                <Eyebrow label={`Beneath ${place() ? entityLabel(place()!) : "this place"}`} hint="The places inside this one, as Explore draws them, counted by the systems they hold." />
+                <Eyebrow label={`Beneath ${location() ? entityLabel(location()!) : "this location"}`} hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
                 <OutlineWorkspace rootId={pid()} />
               </section>
             )}

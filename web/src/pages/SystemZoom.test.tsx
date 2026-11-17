@@ -758,34 +758,34 @@ describe("the system card's header says each thing once (#872)", () => {
   });
 });
 
-describe("the place is context, the system the subject (#872)", () => {
-  it("titles a sole system's view by its place and ends the path at the place's parent", () => {
+describe("the location is context, the system the subject (#872)", () => {
+  it("titles a sole system's view by its location and ends the path at the location's parent", () => {
     mount();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
     expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
   });
 
-  it("shows the place as a card naming its type, without repeating its name", () => {
+  it("shows the location as a card naming its type, without repeating its name", () => {
     mount();
-    const card = screen.getByTestId("place-card");
-    expect(within(card).getByTestId("place-type").textContent).toBe("Room");
+    const card = screen.getByTestId("location-card");
+    expect(within(card).getByTestId("location-type").textContent).toBe("Room");
     expect(within(card).queryByText("Boardroom A")).toBeNull();
   });
 
   // A room holding one system IS the system: its own panel would only point
-  // back here, so the card offers none (#872 drawer audit); Configure place
+  // back here, so the card offers none (#872 drawer audit); Configure location
   // is where its form lives.
   it("offers no second panel for a sole system's room", () => {
     mount();
-    expect(within(screen.getByTestId("place-card")).queryByRole("button", { name: "Place details" })).toBeNull();
+    expect(within(screen.getByTestId("location-card")).queryByRole("button", { name: "Location details" })).toBeNull();
   });
 
-  // The place's own configuration (its properties and their cascade) lives on
-  // its Configure tab; a sole system's place lands on the system otherwise,
+  // The location's own configuration (its properties and their cascade) lives on
+  // its Configure tab; a sole system's location lands on the system otherwise,
   // so the card links straight to it (#872 review).
-  it("links to the place's own Configure from its card", async () => {
+  it("links to the location's own Configure from its card", async () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("link", { name: "Configure place" }));
+    fireEvent.click(within(screen.getByTestId("location-card")).getByRole("link", { name: "Configure location" }));
     expect(await screen.findByTestId("location-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
   });
@@ -799,10 +799,10 @@ describe("the place is context, the system the subject (#872)", () => {
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
   });
 
-  it("gives an unplaced system its own title and no place card", () => {
+  it("gives an unplaced system its own title and no location card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
-    expect(screen.queryByTestId("place-card")).toBeNull();
+    expect(screen.queryByTestId("location-card")).toBeNull();
   });
 
   it("offers Retry when a read fails, instead of a blank", async () => {
@@ -871,34 +871,34 @@ describe("the configure tab (#800)", () => {
 
 // Slice 2 of #800: ?edit=1 means the one editor, wherever it is typed. The
 // bare param lands the workspace on Configure, already editing.
-// A sole system's place has no page of its own (#872): it configures on the
+// A sole system's location has no page of its own (#872): it configures on the
 // system's Configure tab, in its own section with its own Edit, so the room
-// is one page even when its place's properties need changing.
-describe("the place configures beside its system (#872)", () => {
-  it("carries a System section and a Place section, each its own form", async () => {
+// is one page even when its location's properties need changing.
+describe("the location configures beside its system (#872)", () => {
+  it("carries a System section and a Location section, each its own form", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
-    const place = await screen.findByTestId("configure-face-place");
-    expect(within(place).getByText("Parent")).toBeTruthy();
-    // Place first, as the page reads: its card sits above the system's.
+    const location = await screen.findByTestId("configure-face-location");
+    expect(within(location).getByText("Parent")).toBeTruthy();
+    // Location first, as the page reads: its card sits above the system's.
     const system = screen.getByTestId("configure-face");
-    expect(place.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(location.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("?edit=place begins editing the place's form only", async () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=place`);
-    const place = await screen.findByTestId("configure-face-place");
-    expect(await within(place).findByRole("button", { name: /save changes/i })).toBeTruthy();
+  it("?edit=location begins editing the location's form only", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=location`);
+    const location = await screen.findByTestId("configure-face-location");
+    expect(await within(location).findByRole("button", { name: /save changes/i })).toBeTruthy();
     expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
   });
 
-  it("gives an unplaced system no Place section", async () => {
+  it("gives an unplaced system no Location section", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
     r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, roles: [], transitions: [] });
     r.qc.setQueryData([...systemRolesKey(uuidFor("szp-other"))], []);
     r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
-    expect(screen.queryByTestId("configure-face-place")).toBeNull();
+    expect(screen.queryByTestId("configure-face-location")).toBeNull();
   });
 });
 

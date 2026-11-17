@@ -456,8 +456,8 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
-        {/* A system's or component's place is the blade's own place card
-            (#872); only a location's parent, which is the place's own to
+        {/* A system's or component's location is the blade's own location card
+            (#872); only a location's parent, which is the location's own to
             move, stays in the blade's form. */}
         <Show when={props.host !== "blade" || props.kind === "location"}>
         <div class={SECTION}>
@@ -568,7 +568,7 @@ export function EntityCreateForm(props: {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
   // Every create reads the registry: a location's type list, and every kind's
-  // placement picker, which orders sibling places by their type's rank in the
+  // placement picker, which orders sibling locations by their type's rank in the
   // customer's hierarchy (never by a table of the shipped type names).
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const typeRank = createMemo(() => typeRanks(locationTypes.data ?? []));
@@ -694,7 +694,7 @@ export function EntityCreateForm(props: {
             </FieldRow>
           </Show>
           <Show when={isLocation()}>
-            <FieldRow label="Location type" hint="What kind of place this is. It decides which parents are legal, and whether the platform can name it.">
+            <FieldRow label="Location type" hint="What kind of location this is. It decides which parents are legal, and whether the platform can name it.">
               <select class="select select-bordered w-full" value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
                 <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
