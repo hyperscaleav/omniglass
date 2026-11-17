@@ -83,7 +83,7 @@ describe("Home Platform tile", () => {
   it("is absent for a caller without outpost:read", () => {
     mount(meWith(["location:read"]));
     expect(screen.queryByTestId("home-platform")).toBeNull();
-    expect(screen.queryByText("Collectors")).toBeNull();
+    expect(screen.queryByText("Outposts")).toBeNull();
   });
 
   // outpost:read held only for some locations is refused by the view: the tile says
@@ -104,7 +104,7 @@ describe("Home Platform tile", () => {
   });
 });
 
-// The count tiles (#983): Open alarms, Systems and Collectors read the scoped
+// The count tiles (#983): Open alarms, Systems and Outposts read the scoped
 // counts the console already has, and a tile that cannot say so reads an honest
 // state, never a dash under "collection pending".
 describe("Home count tiles", () => {
@@ -112,15 +112,15 @@ describe("Home count tiles", () => {
     mount(meWith(["location:read", "outpost:read", "system:read"]));
     await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
     expect(screen.getByTestId("home-systems")).toHaveTextContent("3");
-    expect(screen.getByTestId("home-collectors")).toHaveTextContent("2");
+    expect(screen.getByTestId("home-outposts")).toHaveTextContent("2");
     expect(screen.queryByText(/collection pending/)).toBeNull();
   });
 
-  it("opens the Systems and Collectors lists on click", async () => {
+  it("opens the Systems and Outposts lists on click", async () => {
     const { path } = mount(meWith(["location:read", "outpost:read"]));
     fireEvent.click(await screen.findByRole("button", { name: /Systems/ }));
     await waitFor(() => expect(path()).toBe("/systems"));
-    fireEvent.click(await screen.findByRole("button", { name: /Collectors/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Outposts/ }));
     await waitFor(() => expect(path()).toBe("/outposts"));
   });
 

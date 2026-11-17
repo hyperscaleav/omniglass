@@ -297,9 +297,9 @@ longer title.
 
 **Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
 placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
-`open_alarms` counts the alarms open on the components the caller may read), Collectors (the outpost
+`open_alarms` counts the alarms open on the components the caller may read), Outposts (the outpost
 list, shown to a caller who can read outposts) and Platform (the platform system's verdict and the
-outposts not up, same gate). Locations, Systems and Collectors open their lists; Open alarms is a plain
+outposts not up, same gate). Locations, Systems and Outposts open their lists; Open alarms is a plain
 figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
 permission it needs), never a dash.
 

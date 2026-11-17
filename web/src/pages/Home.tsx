@@ -20,7 +20,7 @@ export default function Home() {
   const locs = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const fleet = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const readsOutposts = () => can(me.data, "outpost", "read");
-  // The Collectors tile counts the outposts list, which the outpost read opens.
+  // The Outposts tile counts the outposts list, which the outpost read opens.
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: listOutposts, enabled: readsOutposts() }));
   // The Platform tile (#1644): the platform system's verdict and how many
   // outposts are not up, the door to Platform health. Shown only where the page
@@ -62,10 +62,10 @@ export default function Home() {
           />
         </Suspense>
         <Show when={readsOutposts()}>
-          <Suspense fallback={<Stat label="Collectors" testid="home-collectors" value="…" unit="enrolled" />}>
+          <Suspense fallback={<Stat label="Outposts" testid="home-outposts" value="…" unit="enrolled" />}>
             <Stat
-              label="Collectors"
-              testid="home-collectors"
+              label="Outposts"
+              testid="home-outposts"
               {...countOf(outposts.isError, outposts.data && outposts.data.length, "in your scope")}
               onClick={() => navigate("/outposts")}
             />
