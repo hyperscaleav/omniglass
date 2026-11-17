@@ -203,3 +203,27 @@ func decisions(o Outcome) string {
 	}
 	return strings.Join(s, ",")
 }
+
+// A chat is one conversation: each prompt continues the last, and a note told
+// between turns (a credential's reference) is in what the model reads next,
+// in the order it was told.
+func TestLoopKeepsTheConversation(t *testing.T) {
+	p := replay(t, "turns:\n  - text: hello\n  - text: attached\n")
+	l := &Loop{Provider: p, Tools: fleet()}
+	if _, err := l.Run(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	l.Tell("the secret lobby-community is yours to bind")
+	out, err := l.Run(context.Background(), "attach it")
+	if err != nil || out.Text != "attached" {
+		t.Fatalf("second run = %+v, %v", out, err)
+	}
+	var got []string
+	for _, m := range p.last {
+		got = append(got, string(m.Role)+":"+m.Text)
+	}
+	want := []string{"user:hi", "assistant:hello", "user:the secret lobby-community is yours to bind", "user:attach it"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("the model read %q, want %q", got, want)
+	}
+}

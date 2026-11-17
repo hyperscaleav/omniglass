@@ -165,6 +165,34 @@ tool calls and its last answer), which is how the tests and the demo drive it. `
 run (10 by default). Its writes land in the audit trail as yours, tagged `agent omnibot`, on the
 `omnibot` channel.
 
+Given no prompt, omnibot opens a chat: each line you type is a prompt, and each answer continues the
+conversation the last one left. `/exit` or Ctrl-D ends it.
+
+```bash
+omniglass omnibot --replay recording.yaml
+```
+
+### Giving omnibot a credential
+
+omnibot can bind a credential to a device without ever seeing it. In the chat, `/secret` hands it one:
+
+```text
+> /secret lobby-community snmp-community location:hq
+community:
+omnibot: stored the secret lobby-community; omnibot knows its name, not its value
+> poll amp-9 over SNMP with it
+```
+
+`/secret <name> <type> [location:<name>|component:<name>]` asks for each value the secret type
+takes, with the terminal's echo off for a sealed one, and creates the secret with **your** token, not
+omnibot's (it is a platform secret when no owner is named, which takes `platform:create`). The audit
+trail files that create as yours, with no agent. omnibot is then told only the secret's name, type and
+owner, and binds it by name, as `secret:bind` lets it (a `credential destination` call, which asks you
+first by default); the poll runs on the server with the bound credential. The value is in nothing the
+model is sent and nothing the CLI prints, including an error. Type a credential only after `/secret`
+asks for it: omnibot does not scan what you type for one, so a value typed as a prompt reaches the
+model.
+
 ## What the agent may assume, and what it should ask
 
 Every tool carries the MCP annotations, from one rule over its route's method and gate: **read-only**

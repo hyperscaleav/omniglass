@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +17,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 )
 
+// openModel loads the recording that plays the model; a test swaps it to see
+// what the model is sent.
+var openModel = func(path string) (provider.Provider, error) { return provider.LoadReplay(path) }
+
 // newOmnibotCmd is `omniglass omnibot` (#1166): the built-in assistant, a loop
 // that drives the MCP server for the person running it. It mints its own
 // one-day agent token from the person's, so everything it does is audited as
@@ -30,21 +33,24 @@ func newOmnibotCmd(version string) *cobra.Command {
 	var replay string
 	var maxSteps int
 	cmd := &cobra.Command{
-		Use:   "omnibot <prompt...>",
-		Short: "Run omnibot, the built-in assistant, on a prompt",
+		Use:   "omnibot [prompt...]",
+		Short: "Run omnibot, the built-in assistant, on a prompt or in a chat",
 		Long: "Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is " +
 			"given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its " +
 			"actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent " +
 			"policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it " +
-			"is declined), and one whose policy is never is not offered. The model is a recording (--replay) until a " +
-			"live provider lands.",
-		Example: `  omniglass omnibot --replay lobby.yaml "add a display to the lobby"`,
-		Args:    cobra.MinimumNArgs(1),
+			"is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line " +
+			"continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks " +
+			"for a credential without echo, stores it as a secret with your own token, and tells omnibot only its " +
+			"name, so the value never reaches the model. The model is a recording (--replay) until a live provider lands.",
+		Example: `  omniglass omnibot --replay lobby.yaml "add a display to the lobby"
+  omniglass omnibot --replay lobby.yaml`,
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			if replay == "" {
 				return errors.New("omnibot needs a model: pass --replay <recording.yaml> (a live model is not built yet)")
 			}
-			model, err := provider.LoadReplay(replay)
+			model, err := openModel(replay)
 			if err != nil {
 				return err
 			}
@@ -62,14 +68,18 @@ func newOmnibotCmd(version string) *cobra.Command {
 					fmt.Fprintln(cmd.ErrOrStderr(), err)
 				}
 			}()
+			con := newConsole(cmd.InOrStdin(), cmd.ErrOrStderr())
 			loop := &assistant.Loop{
 				Provider: model,
 				Tools:    sess,
 				MaxSteps: maxSteps,
-				Confirm:  confirmerFor(cmd),
+				Confirm:  confirmerFor(cmd, con),
 				Observe: func(c assistant.Call) {
 					fmt.Fprintln(cmd.ErrOrStderr(), observeLine(c))
 				},
+			}
+			if len(pos) == 0 {
+				return chat(ctx, con, cmd.OutOrStdout(), sess, loop)
 			}
 			out, err := loop.Run(ctx, strings.Join(pos, " "))
 			if err != nil {
@@ -90,21 +100,19 @@ func newOmnibotCmd(version string) *cobra.Command {
 // confirmerFor asks on the command's input when that is a person: a terminal,
 // or input a caller set in its place. Piped or redirected stdin has no one to
 // ask, so every ask is declined.
-func confirmerFor(cmd *cobra.Command) assistant.Confirmer {
-	in := cmd.InOrStdin()
-	if f, ok := in.(*os.File); ok {
+func confirmerFor(cmd *cobra.Command, con *console) assistant.Confirmer {
+	if f, ok := cmd.InOrStdin().(*os.File); ok {
 		if st, err := f.Stat(); err != nil || st.Mode()&os.ModeCharDevice == 0 {
 			return nil
 		}
 	}
-	return terminalConfirmer(in, cmd.ErrOrStderr())
+	return terminalConfirmer(con)
 }
 
-// terminalConfirmer puts each proposal to the person on out and reads the
-// answer from in: only y or yes runs it. A run cancelled while it waits (an
-// interrupt) stops waiting and ends with the cancellation.
-func terminalConfirmer(in io.Reader, out io.Writer) assistant.Confirmer {
-	r := bufio.NewReader(in)
+// terminalConfirmer puts each proposal to the person on the console and
+// reads the answer from it: only y or yes runs it. A run cancelled while it
+// waits (an interrupt) stops waiting and ends with the cancellation.
+func terminalConfirmer(con *console) assistant.Confirmer {
 	return func(ctx context.Context, p assistant.Proposal) (bool, error) {
 		args, _ := json.Marshal(p.Arguments)
 		if p.Arguments == nil {
@@ -118,34 +126,18 @@ func terminalConfirmer(in io.Reader, out io.Writer) assistant.Confirmer {
 		if title == "" {
 			title = p.Tool
 		}
-		fmt.Fprintf(out, "omnibot wants to run %s%s: %s\n  %s\nRun it? [y/N] ", p.Tool, kind, title, args)
-		type answer struct {
-			line string
-			err  error
+		fmt.Fprintf(con.out, "omnibot wants to run %s%s: %s\n  %s\nRun it? [y/N] ", p.Tool, kind, title, args)
+		line, err := con.line(ctx)
+		if errors.Is(err, io.EOF) {
+			fmt.Fprintln(con.out)
+			return false, nil
 		}
-		got := make(chan answer, 1)
-		go func() {
-			line, err := r.ReadString('\n')
-			got <- answer{line, err}
-		}()
-		var line string
-		var err error
-		select {
-		case <-ctx.Done():
-			fmt.Fprintln(out)
-			return false, ctx.Err()
-		case a := <-got:
-			line, err = a.line, a.err
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return false, err
 		}
 		switch strings.ToLower(strings.TrimSpace(line)) {
 		case "y", "yes":
 			return true, nil
-		}
-		if errors.Is(err, io.EOF) {
-			fmt.Fprintln(out)
 		}
 		return false, nil
 	}

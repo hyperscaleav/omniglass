@@ -80,10 +80,21 @@ type Loop struct {
 	MaxSteps int
 	// Observe, when set, sees each call as it is decided.
 	Observe func(Call)
+
+	// history is the conversation so far, so each Run continues the last.
+	history []provider.Message
+}
+
+// Tell adds a note from the person to the conversation without asking the
+// model anything; the model reads it with the next prompt. A credential's
+// reference reaches the model this way, never its value.
+func (l *Loop) Tell(text string) {
+	l.history = append(l.history, provider.Message{Role: provider.RoleUser, Text: text})
 }
 
 // Run sends prompt to the model and answers its calls until it replies with
-// no calls or the step ceiling is reached. A call the transport cannot make
+// no calls or the step ceiling is reached. Each Run continues the
+// conversation the last one left, so a chat is a Run per prompt. A call the transport cannot make
 // ends the run with its error: the session is gone, not the tool refused.
 func (l *Loop) Run(ctx context.Context, prompt string) (Outcome, error) {
 	listed, err := l.Tools.List(ctx)
@@ -95,15 +106,15 @@ func (l *Loop) Run(ctx context.Context, prompt string) (Outcome, error) {
 	if max <= 0 {
 		max = defaultMaxSteps
 	}
-	msgs := []provider.Message{{Role: provider.RoleUser, Text: prompt}}
+	l.history = append(l.history, provider.Message{Role: provider.RoleUser, Text: prompt})
 	var out Outcome
 	for out.Steps < max {
-		turn, err := l.Provider.Next(ctx, msgs, offer)
+		turn, err := l.Provider.Next(ctx, l.history, offer)
 		if err != nil {
 			return out, fmt.Errorf("the model: %w", err)
 		}
 		out.Steps++
-		msgs = append(msgs, provider.Message{Role: provider.RoleAssistant, Text: turn.Text, ToolCalls: turn.ToolCalls})
+		l.history = append(l.history, provider.Message{Role: provider.RoleAssistant, Text: turn.Text, ToolCalls: turn.ToolCalls})
 		if len(turn.ToolCalls) == 0 {
 			out.Text = turn.Text
 			return out, nil
@@ -117,7 +128,7 @@ func (l *Loop) Run(ctx context.Context, prompt string) (Outcome, error) {
 			if l.Observe != nil {
 				l.Observe(call)
 			}
-			msgs = append(msgs, provider.Message{Role: provider.RoleTool, ToolCallID: tc.ID, Text: call.Text, IsError: call.IsError})
+			l.history = append(l.history, provider.Message{Role: provider.RoleTool, ToolCallID: tc.ID, Text: call.Text, IsError: call.IsError})
 		}
 	}
 	out.Stopped = true
