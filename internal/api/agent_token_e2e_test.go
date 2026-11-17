@@ -277,6 +277,9 @@ func TestAgentTokenOmnibotChannel(t *testing.T) {
 	if code, body := s.c.send(s.owner, http.MethodPost, "/auth/me/tokens", map[string]any{"description": "o", "agent": "claude", "ttl_days": 1, "channels": []string{"omnibot"}}); code != http.StatusUnprocessableEntity {
 		t.Errorf("minting the omnibot channel for another agent = %d %s, want 422", code, body)
 	}
+	if code, body := s.c.send(s.owner, http.MethodPost, "/auth/me/tokens", map[string]any{"description": "o", "agent": "omnibot", "ttl_days": 2, "channels": []string{"omnibot"}}); code != http.StatusUnprocessableEntity {
+		t.Errorf("minting an omnibot token for two days = %d %s, want 422", code, body)
+	}
 	bot := mintAgent(t, s.c, s.owner, map[string]any{"description": "omnibot", "agent": "omnibot", "ttl_days": 1, "channels": []string{"omnibot"}})
 	s.c.do(bot.Token, http.MethodGet, "/components", nil, http.StatusForbidden)
 	s.c.do(bot.Token, http.MethodGet, "/auth/me", nil, http.StatusOK)

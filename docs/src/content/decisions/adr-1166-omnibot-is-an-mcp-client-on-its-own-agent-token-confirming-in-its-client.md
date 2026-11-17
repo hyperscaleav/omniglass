@@ -26,7 +26,7 @@ refs: [1166, 1161, 1179, 2048, 2063]
   4. **The channel is the credential's.** A token held to the `omnibot` channel alone is accepted
      only on the MCP server (and `/auth/me`), and `authn` stamps its rows `channel = 'omnibot'`. What
      the MCP client declares about itself stays in `client`, as asserted. Only the `omnibot` agent may
-     be minted for that channel, and only for it alone.
+     be minted for that channel, only for it alone, and for one day at most.
 - **Why:** the security rule that an agent never sees a credential holds by construction (the
   agent token cannot reveal plaintext, ADR-1179), and confirmation in the client is the same place
   every other MCP client confirms, so omnibot is held to no weaker and no stronger contract than

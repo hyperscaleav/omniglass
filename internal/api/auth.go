@@ -1073,6 +1073,9 @@ func (a *authenticator) validateAgentMint(ctx context.Context, in *createMeToken
 	if slices.Contains(b.Channels, agentChannelOmnibot) && b.Agent != agentChannelOmnibot {
 		return huma.Error422UnprocessableEntity("the omnibot channel is minted for the omnibot agent alone")
 	}
+	if b.Agent == agentChannelOmnibot && b.TTLDays > 1 {
+		return huma.Error422UnprocessableEntity("an omnibot token lasts one day at most")
+	}
 	if len(b.Roles) == 0 {
 		return nil
 	}
