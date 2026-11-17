@@ -1,4 +1,4 @@
-import { sendRaw } from "../api/client";
+import { api, sendRaw } from "../api/client";
 import { describeError } from "./format";
 
 // The omnibot panel's data layer (#1167). A run is the server's: the console
@@ -196,4 +196,12 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
     throw response.status === 403 ? new RunRefused(message) : new Error(message);
   }
   for await (const ev of readEvents(response.body)) onEvent(ev);
+}
+
+// startConversation makes the person a new conversation, named for them, the
+// one a panel's first prompt runs on.
+export async function startConversation(): Promise<string> {
+  const { data, error } = await api.POST("/assistant/conversations", { body: {} });
+  if (error) throw new Error(describeError(error));
+  return data.name;
 }
