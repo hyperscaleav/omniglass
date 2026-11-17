@@ -324,6 +324,120 @@
         ],
         "type": "object"
       },
+      "AgentClassPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "class": {
+            "description": "The operation class",
+            "enum": [
+              "read",
+              "write",
+              "destructive",
+              "credential_destination"
+            ],
+            "type": "string"
+          },
+          "policy": {
+            "description": "always runs; ask runs, and the client confirms with its person first; never is refused by the server",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "class",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "AgentPolicyOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/AgentPolicyOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "applies": {
+            "description": "Whether this request is an agent's (an agent token, or any request over MCP), so the policy governs it",
+            "type": "boolean"
+          },
+          "classes": {
+            "description": "The install's resolved policy for each operation class",
+            "items": {
+              "$ref": "#/components/schemas/AgentClassPolicy"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "applies",
+          "classes"
+        ],
+        "type": "object"
+      },
+      "AgentSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_destination": {
+            "default": "ask",
+            "description": "Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "destructive": {
+            "default": "ask",
+            "description": "Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "read": {
+            "default": "always",
+            "description": "Policy for an agent's reads (a GET, or a POST gated on a read permission)",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "write": {
+            "default": "ask",
+            "description": "Policy for an agent's writes that create or act (a POST that is not a read)",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "read",
+          "write",
+          "destructive",
+          "credential_destination"
+        ],
+        "type": "object"
+      },
       "AlarmBody": {
         "additionalProperties": false,
         "description": "A raised problem on a component, with a severity, from the moment it raises until it clears.",
@@ -14656,6 +14770,9 @@
       "Settings": {
         "additionalProperties": false,
         "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentSettings"
+          },
           "collection": {
             "$ref": "#/components/schemas/CollectionSettings"
           },
@@ -14685,7 +14802,8 @@
           "retention",
           "collection",
           "notification",
-          "database"
+          "database",
+          "agent"
         ],
         "type": "object"
       },
@@ -19729,6 +19847,36 @@
         },
         "summary": "Test a draft alarm subscription against your recent alarms",
         "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/agent-policy": {
+      "get": {
+        "description": "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+        "operationId": "get-auth-me-agent-policy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPolicyOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What the install lets an agent do",
+        "x-omniglass-mcp": {}
       }
     },
     "/auth/me/avatar": {

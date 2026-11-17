@@ -25,6 +25,7 @@ var ungated = map[string]bool{
 	"GET /healthz":                            true, // public, no auth
 	"GET /auth/status":                        true, // public: drives the login screen's bootstrap hint
 	"GET /auth/me":                            true, // authn-only: returns the caller's own principal
+	"GET /auth/me/agent-policy":               true, // authn-only: the install's agent policy and whether it governs the caller; refusing it would hide why an agent is refused
 	"GET /auth/me/avatar":                     true, // authn-only, self-scoped: reads only the caller's own profile picture
 	"PATCH /auth/me":                          true, // authn-only, self-scoped: edits only the caller's own profile
 	"POST /auth/login":                        true, // public by necessity: it establishes a session

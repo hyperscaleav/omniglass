@@ -113,6 +113,42 @@ func Annotate(method, permission string, h Hints) (Annotations, error) {
 	return a, nil
 }
 
+// Class is a tool class of the agent policy (#2063): what an operator sets an
+// agent's always, ask or never for, one class per operation.
+type Class string
+
+const (
+	ClassRead                  Class = "read"
+	ClassWrite                 Class = "write"
+	ClassDestructive           Class = "destructive"
+	ClassCredentialDestination Class = "credential_destination"
+)
+
+// Classes is every class, in the order the policy lists them.
+var Classes = []Class{ClassRead, ClassWrite, ClassDestructive, ClassCredentialDestination}
+
+// Classify is the class rule (#2063). An operation any of whose permissions is
+// a bind (a write that may hand a secret to a target) is a credential
+// destination, whatever else it does: it is the class an operator most wants to
+// hold apart. Otherwise a read-only operation is a read, a destructive one
+// destructive, and the rest a write. permissions are the route's gate and any
+// second gate it enforces on some requests, so the class is the most sensitive
+// thing the operation can do.
+func Classify(a Annotations, permissions ...string) Class {
+	for _, p := range permissions {
+		if gateAction(p) == "bind" {
+			return ClassCredentialDestination
+		}
+	}
+	switch {
+	case a.ReadOnly:
+		return ClassRead
+	case a.Destructive:
+		return ClassDestructive
+	}
+	return ClassWrite
+}
+
 // gateAction is a permission's action token, the second of `resource:action` or
 // `resource:action:admin`; empty for an authn-only route.
 func gateAction(permission string) string {
@@ -149,6 +185,10 @@ type Def struct {
 	// free-form merge patch): its one argument, body, is sent as the whole body.
 	BodyWhole   bool
 	Annotations Annotations
+	// Class is the operation's agent-policy class (Classify over its
+	// annotations, its gate and any second gate), which the install's agent
+	// policy is resolved against for the tool's _meta (#2063).
+	Class Class
 	// InputSchema is the tool's JSON Schema, every argument in one object.
 	InputSchema string
 }

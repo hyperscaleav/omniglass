@@ -26,6 +26,10 @@ type Settings struct {
 	// Database is how the server watches its own queries (#1627): platform
 	// domain and not client-visible, an admin's tuning of the server's log.
 	Database DatabaseSettings `json:"database" settings:"platform"`
+	// Agent is what an agent may do on a person's behalf (#2063): platform
+	// domain and not client-visible; a caller reads its own resolved policy
+	// from /auth/me/agent-policy instead.
+	Agent AgentSettings `json:"agent" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -153,6 +157,48 @@ type CollectionSettings struct {
 // re-reads it each report window, so a change takes without a restart.
 type DatabaseSettings struct {
 	SlowQueryMS int `json:"slow_query_ms" minimum:"0" maximum:"600000" default:"500" doc:"Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off"`
+}
+
+// AgentSettings is the agent namespace (#2063): the install's policy for each
+// class of operation an agent (an agent token, or any request over MCP) may
+// call. always lets it run; ask lets it run and tells the client to confirm
+// with the person first; never refuses it at the server, on every channel.
+// Every class but read defaults to ask, so a fresh install refuses nothing.
+type AgentSettings struct {
+	Read                  string `json:"read" enum:"always,ask,never" default:"always" doc:"Policy for an agent's reads (a GET, or a POST gated on a read permission)"`
+	Write                 string `json:"write" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's writes that create or act (a POST that is not a read)"`
+	Destructive           string `json:"destructive" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)"`
+	CredentialDestination string `json:"credential_destination" enum:"always,ask,never" default:"ask" doc:"Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)"`
+}
+
+// The three agent policies.
+const (
+	AgentAlways = "always"
+	AgentAsk    = "ask"
+	AgentNever  = "never"
+)
+
+// Policy is the policy for one operation class, falling back to the class's
+// default when unset (a zero value, as the unimplemented gateway returns), and
+// to ask for a class it does not know.
+func (a AgentSettings) Policy(class string) string {
+	var v, def string
+	switch class {
+	case "read":
+		v, def = a.Read, AgentAlways
+	case "write":
+		v, def = a.Write, AgentAsk
+	case "destructive":
+		v, def = a.Destructive, AgentAsk
+	case "credential_destination":
+		v, def = a.CredentialDestination, AgentAsk
+	default:
+		return AgentAsk
+	}
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 // LogDays is the window for one log retention band; 0 for an unknown band.

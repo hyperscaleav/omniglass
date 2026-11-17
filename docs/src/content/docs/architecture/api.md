@@ -1286,7 +1286,11 @@ token, so the route permission, the gateway scope and the same-transaction [audi
 row are exactly a direct call's, the row marked with the MCP channel. Each tool carries the MCP
 annotations one rule derives from its method and gate (read-only, destructive, idempotent, open-world),
 so any client can gate the writes behind its user's confirmation, and an error is the route's own
-problem+json. The server runs as the **authenticated `human` or `service` principal's** token, so its
+problem+json. Each tool also carries an **agent class** (read, write, destructive, credential
+destination), and the listing stamps the caller's resolved policy for it into the tool's `_meta`
+(`omniglass/agent_policy`); the server refuses a class the install sets to `never` for any agent
+request, MCP or REST, before the route runs, and `GET /auth/me/agent-policy` answers the caller's
+policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated `human` or `service` principal's** token, so its
 reach is exactly that principal's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
 that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
 own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));

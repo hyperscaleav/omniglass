@@ -7,7 +7,7 @@ Omniglass serves the **Model Context Protocol** (MCP), so an AI agent you alread
 any MCP client) can read your fleet and work in it. The agent drives omniglass through the same API as
 the console and the CLI: each MCP tool is one API operation, generated from the API by `make gen`, and
 each call runs with **your token**, so the agent sees and changes exactly what your permissions and
-scope allow and every change it makes is audited as yours, marked as having arrived over MCP. The
+scope allow (and the install's [agent policy](#what-an-agent-may-do) permits) and every change it makes is audited as yours, marked as having arrived over MCP. The
 [MCP tools reference](/reference/mcp/) lists every tool, its gate, and what a client may assume of it.
 The design is on the [API page](/architecture/api/#also-an-mcp-surface).
 
@@ -60,7 +60,8 @@ command), so it knows a credential is present and never what it is. Otherwise it
 may: with `secret:bind` it can attach an endpoint with a secret input, edit the address, node or
 secret of an endpoint that has one, create a system from a template that binds a secret, or add a
 simulated device that needs one, exactly as you could. Binding chooses where a credential goes, so
-decide in your MCP client whether such a tool runs always, asks first, or never; every write the
+decide in your MCP client whether such a tool runs always, asks first, or never (an admin can also
+refuse it to every agent: [what an agent may do](#what-an-agent-may-do)); every write the
 agent makes is audited as the agent's. An agent also never enrolls a node, since the enrollment
 token is itself a node credential. The same ceiling holds for any token, yours included, while it
 is used through MCP. An agent token also cannot mint another token, change your password or
@@ -153,7 +154,39 @@ Every tool carries the MCP annotations, from one rule over its route's method an
 tools change nothing, **destructive** ones overwrite, remove, or act on a component (issuing a command
 is one), and the rest add something. A well-behaved client runs the read-only tools freely and holds
 anything else for your confirmation; most clients do this by default, and you can tighten it in the
-client's own permission settings.
+client's own permission settings, or an admin can set it for every agent (below).
+
+## What an agent may do
+
+An admin sets, once for the install, what an agent may do in each **class** of operation, and the
+server enforces it. There are four classes, one per operation (the most sensitive wins), and the
+[MCP tools reference](/reference/mcp/) prints each tool's:
+
+| Class | What it covers | Default |
+| --- | --- | --- |
+| `read` | a GET, or a POST gated on a read permission | `always` |
+| `write` | a POST that creates or acts | `ask` |
+| `destructive` | a PATCH, PUT or DELETE: overwriting or removing | `ask` |
+| `credential_destination` | any operation that may point a stored credential somewhere (gated on `secret:bind`) | `ask` |
+
+Each class is `always` (run it), `ask` (run it, and the client confirms with its person first) or
+`never` (the server refuses it with a 403, and the audit trail records an `agent_refused` row as the
+agent's). The defaults refuse nothing: an agent may do what its person may, and its client asks
+before anything but a read. The policy governs an agent's requests: any call with an agent token,
+and any call over MCP whatever the token. Your own calls from the console or the CLI are untouched.
+
+```bash
+omniglass setting update agent --body '{"destructive":"never"}'   # admin: no agent overwrites or deletes
+omniglass auth agent-policy | jq                                   # the policy, and whether it governs this caller
+```
+
+Every tool the MCP server lists carries its class and the caller's policy for it in its `_meta`, as
+`omniglass/agent_policy` (`{"class":"destructive","policy":"never"}`), so a client can ask before an
+`ask` tool and hide a `never` one. A `never` tool is still listed: the server refuses the call
+whether or not the client hides it. Reading who you are and reading the policy itself are never
+refused, so a refused agent can always learn why. And no agent may change the policy itself: patching
+or restoring the `agent` settings, or restoring every setting, is refused to it whatever the classes
+say, so only its person can loosen what binds it.
 
 ## Tools the agent can call
 

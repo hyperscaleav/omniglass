@@ -110,7 +110,10 @@ Auth events ride a **second write lane**: login and logout run on read / no-tran
 they emit through a standalone non-transactional seam under `resource = 'auth'`,
 with the verbs `login`, `logout`, `login_failed` (a wrong password on a real account),
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
-lockout window), and `revoke_session` (an admin ending another principal's session). Self-service
+lockout window), `revoke_session` (an admin ending another principal's session), and
+`agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
+agent's with its channel). Self-service
 logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
 `resource_id` set to the target principal's id so the trail answers "whose sessions did this admin
 revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated principal,

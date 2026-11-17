@@ -231,6 +231,12 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		}
 		c = huma.WithContext(c, storage.WithAgent(c.Context(), pr.Agent.Name))
 	}
+	// The install's agent policy (#2063): a request under the agent ceiling is
+	// refused an operation whose class is set to never, here in authn so a REST
+	// call with an agent token and a tool call over MCP are refused alike.
+	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID) {
+		return
+	}
 	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))
 	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
 	if impMode != "" {

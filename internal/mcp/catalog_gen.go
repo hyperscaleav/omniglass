@@ -16,6 +16,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		QueryParams: []string{"unacknowledged", "limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"At most this many, the worst first; 0 or absent means 200\",\"format\":\"int64\",\"maximum\":1000,\"minimum\":0,\"type\":\"integer\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at: the queue an operator, or an agent, works\",\"type\":\"boolean\"}},\"type\":\"object\"}",
 	},
 	{
@@ -27,6 +28,7 @@ var catalog = []tooldef.Def{
 		Permission:  "audit:read:admin",
 		QueryParams: []string{"limit", "resource", "verb", "before", "agent"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"agent\":{\"description\":\"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)\",\"type\":\"string\"},\"before\":{\"description\":\"Only events strictly older than this RFC3339 timestamp (paging backward)\",\"type\":\"string\"},\"limit\":{\"description\":\"Max rows to return, newest first (default 100, capped at 500)\",\"format\":\"int64\",\"type\":\"integer\"},\"resource\":{\"description\":\"Filter to one resource kind (e.g. auth, principal_grant)\",\"type\":\"string\"},\"verb\":{\"description\":\"Filter to one verb (e.g. login, create)\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -37,6 +39,18 @@ var catalog = []tooldef.Def{
 		Path:        "/auth/me",
 		Permission:  "",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
+	},
+	{
+		Name:        "get-auth-me-agent-policy",
+		Title:       "What the install lets an agent do",
+		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+		Method:      "GET",
+		Path:        "/auth/me/agent-policy",
+		Permission:  "",
+		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -48,6 +62,7 @@ var catalog = []tooldef.Def{
 		Permission:  "notification:read",
 		QueryParams: []string{"unread", "limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"unread\":{\"description\":\"Only the entries not yet read\",\"type\":\"boolean\"}},\"type\":\"object\"}",
 	},
 	{
@@ -58,6 +73,7 @@ var catalog = []tooldef.Def{
 		Path:        "/calc-rules",
 		Permission:  "rule:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -69,6 +85,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The rule's name (its uuid is accepted too)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -81,6 +98,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"default\":100,\"description\":\"The most owners to list, in state order: failing, pending, missing an input (or with no members), valued, each by name\",\"format\":\"int64\",\"maximum\":1000,\"minimum\":1,\"type\":\"integer\"},\"name\":{\"description\":\"The rule's name (its uuid is accepted too)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -92,6 +110,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		BodyParams:  []string{"inputs", "name", "output_key", "owner_kind", "reduce", "selector"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"inputs\":{\"description\":\"The keys the rule reads, each by a unique alias its reduce uses\",\"items\":{\"additionalProperties\":false,\"properties\":{\"alias\":{\"description\":\"The name the reduce's expression binds the input by: an identifier of at most 64, not a keyword, a builtin or list function's name, or one of the calc site's own bindings (component, has, members, system, value); unique in the rule\",\"maxLength\":64,\"minLength\":1,\"pattern\":\"^[A-Za-z_][A-Za-z0-9_]*$\",\"type\":\"string\"},\"key\":{\"description\":\"The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing\",\"minLength\":1,\"type\":\"string\"},\"window_seconds\":{\"description\":\"Read the key over the last this many seconds (1 to 3600, a component rule's only) instead of its current values: the alias binds as the list of its samples in the window, oldest first, each a record with value, at (unix seconds) and instance, and the list functions fold it by value, so avg over it is a rolling mean. Absent or 0 reads current values\",\"format\":\"int64\",\"minimum\":0,\"type\":\"integer\"}},\"required\":[\"alias\",\"key\"],\"type\":\"object\"},\"maxItems\":16,\"minItems\":1,\"type\":[\"array\",\"null\"]},\"name\":{\"description\":\"A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule\",\"type\":\"string\"},\"output_key\":{\"description\":\"The property or metric the rule would write\",\"minLength\":1,\"type\":\"string\"},\"owner_kind\":{\"description\":\"What the rule derives a value on\",\"enum\":[\"component\",\"system\"],\"type\":\"string\"},\"reduce\":{\"additionalProperties\":false,\"properties\":{\"expr\":{\"description\":\"An expression over the inputs by alias, each bound as the list of its current values (one per instance on a component, every member's on a system), yielding the output key's type: max(tcp), avg(temp), any(call) || max(people) \\u003e 0\",\"minLength\":1,\"type\":\"string\"}},\"required\":[\"expr\"],\"type\":\"object\"},\"selector\":{\"additionalProperties\":false,\"properties\":{\"component_types\":{\"description\":\"A component rule: derive on components whose type falls within one of these component types\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"components\":{\"description\":\"A component rule: derive on these components (by name or id on write; ids on read)\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"system_types\":{\"description\":\"A system rule: derive on systems whose type falls within one of these system types (subtypes included)\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"systems\":{\"description\":\"A system rule: derive on these systems (by name or id on write; ids on read)\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]}},\"type\":\"object\"}},\"required\":[\"inputs\",\"output_key\",\"owner_kind\",\"reduce\"],\"type\":\"object\"}",
 	},
 	{
@@ -102,6 +121,7 @@ var catalog = []tooldef.Def{
 		Path:        "/component-types",
 		Permission:  "component_type:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -112,6 +132,7 @@ var catalog = []tooldef.Def{
 		Path:        "/components",
 		Permission:  "component:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -123,6 +144,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:create",
 		BodyParams:  []string{"expected_name", "label", "location", "name", "parent", "product", "system"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"expected_name\":{\"description\":\"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"label\":{\"description\":\"What an operator reads; the name is the address\",\"type\":\"string\"},\"location\":{\"description\":\"Location name this component is placed at\",\"type\":\"string\"},\"name\":{\"description\":\"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"parent\":{\"description\":\"Parent component name; omit for a root component\",\"type\":\"string\"},\"product\":{\"description\":\"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled.\",\"type\":\"string\"},\"system\":{\"description\":\"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone.\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -134,6 +156,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -146,6 +169,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"label", "product"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"A new operator-facing label\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"product\":{\"description\":\"Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow.\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -158,6 +182,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"include_cleared", "unacknowledged"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"include_cleared\":{\"description\":\"Include cleared alarms, so the list is the history rather than what is wrong now\",\"type\":\"boolean\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended\",\"type\":\"boolean\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -169,6 +194,7 @@ var catalog = []tooldef.Def{
 		Permission:  "alarm:acknowledge",
 		PathParams:  []string{"name", "id"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The alarm id\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -181,6 +207,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "id"},
 		BodyParams:  []string{"duration"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"duration\":{\"description\":\"How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer\",\"type\":\"string\"},\"id\":{\"description\":\"The alarm id: any alarm of the condition to snooze\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"duration\",\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -192,6 +219,7 @@ var catalog = []tooldef.Def{
 		Permission:  "alarm:read",
 		PathParams:  []string{"name", "id"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The alarm id\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -203,6 +231,7 @@ var catalog = []tooldef.Def{
 		Permission:  "alarm:snooze",
 		PathParams:  []string{"name", "id"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The alarm id\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -215,6 +244,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"status", "since", "until", "limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"default\":50,\"description\":\"How many to return, newest first (1 to 500)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"hq.west.level-2.boardroom-a.$comp.videobar-1\"],\"type\":\"string\"},\"since\":{\"description\":\"Only the commands issued at or after this RFC3339 time\",\"type\":\"string\"},\"status\":{\"description\":\"Only the commands with this recorded status; issued is every command still in flight\",\"enum\":[\"issued\",\"settled\",\"failed\",\"timed-out\"],\"type\":\"string\"},\"until\":{\"description\":\"Only the commands issued at or before this RFC3339 time\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -226,6 +256,7 @@ var catalog = []tooldef.Def{
 		Permission:  "command:read",
 		PathParams:  []string{"name", "id"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The command's id, as its issue answered it\",\"examples\":[42],\"format\":\"int64\",\"type\":\"integer\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"hq.west.level-2.boardroom-a.$comp.videobar-1\"],\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -239,6 +270,7 @@ var catalog = []tooldef.Def{
 		QueryParams: []string{"wait", "wait_timeout"},
 		BodyParams:  []string{"command_type", "instance", "params", "value"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"command_type\":{\"description\":\"The command_type to invoke\",\"minLength\":1,\"type\":\"string\"},\"instance\":{\"description\":\"The series discriminator (e.g. an endpoint), when the target is instanced\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"params\":{\"description\":\"The invocation params, stored on the command and the caused event\"},\"value\":{\"description\":\"The intended value for the target property (a settleable command)\"},\"wait\":{\"description\":\"Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on\",\"type\":\"boolean\"},\"wait_timeout\":{\"default\":30,\"description\":\"How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where\",\"format\":\"int64\",\"maximum\":120,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"command_type\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -250,6 +282,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"codec-1\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -262,6 +295,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"kind", "outlet", "upstream"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"kind\":{\"description\":\"How it depends: power, host or path\",\"enum\":[\"power\",\"host\",\"path\"],\"examples\":[\"power\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"codec-1\"],\"type\":\"string\"},\"outlet\":{\"description\":\"The upstream's outlet that feeds this component: required on a power edge, refused on any other\",\"examples\":[\"3\"],\"maxLength\":64,\"type\":\"string\"},\"upstream\":{\"description\":\"Name or uuid of the component this one depends on, or a dotted address\",\"examples\":[\"pdu-1\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"kind\",\"name\",\"upstream\"],\"type\":\"object\"}",
 	},
 	{
@@ -273,6 +307,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:update",
 		PathParams:  []string{"name", "kind", "upstream"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"kind\":{\"description\":\"The edge's kind\",\"enum\":[\"power\",\"host\",\"path\"],\"examples\":[\"power\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"codec-1\"],\"type\":\"string\"},\"upstream\":{\"description\":\"Name or uuid of the upstream component, or a dotted address\",\"examples\":[\"pdu-1\"],\"type\":\"string\"}},\"required\":[\"kind\",\"name\",\"upstream\"],\"type\":\"object\"}",
 	},
 	{
@@ -285,6 +320,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"system"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"system\":{\"description\":\"Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -296,6 +332,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -307,6 +344,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -319,6 +357,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "key", "value"},
 		BodyParams:  []string{"owner", "owner_kind"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"},\"owner\":{\"description\":\"Name or uuid of the owner the identity's values land on, or a dotted address\",\"examples\":[\"hq.west.level-2.boardroom-a.$sys.av\"],\"minLength\":1,\"type\":\"string\"},\"owner_kind\":{\"description\":\"What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here\",\"enum\":[\"component\",\"system\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"owner\",\"owner_kind\",\"value\"],\"type\":\"object\"}",
 	},
 	{
@@ -330,6 +369,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:update",
 		PathParams:  []string{"name", "key", "value"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The match key, a registered property type\",\"examples\":[\"ucc-room-id\"],\"type\":\"string\"},\"name\":{\"description\":\"Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"examples\":[\"ucc-platform\"],\"type\":\"string\"},\"value\":{\"description\":\"The identity value the conduit reports, 1 to 256 characters\",\"examples\":[\"room-17c-415a\"],\"maxLength\":256,\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"value\"],\"type\":\"object\"}",
 	},
 	{
@@ -342,6 +382,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"severity", "source"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"severity\":{\"description\":\"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out\",\"enum\":[\"emergency\",\"alert\",\"critical\",\"error\",\"warning\",\"notice\",\"info\",\"debug\"],\"type\":\"string\"},\"source\":{\"description\":\"Only lines that arrived on this channel\",\"maxLength\":100,\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -353,6 +394,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -365,6 +407,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "metric"},
 		QueryParams: []string{"hours", "limit", "resolution", "instance"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"hours\":{\"description\":\"The window in hours, counted back from now; 24 when unset\",\"format\":\"int64\",\"maximum\":720,\"minimum\":1,\"type\":\"integer\"},\"instance\":{\"description\":\"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution\",\"type\":\"string\"},\"limit\":{\"description\":\"The row cap, newest kept; 500 when unset. Ignored when a resolution is set\",\"format\":\"int64\",\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"},\"metric\":{\"description\":\"The metric_type name of the series\",\"type\":\"string\"},\"name\":{\"description\":\"The owner's name or uuid\",\"type\":\"string\"},\"resolution\":{\"description\":\"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused\",\"format\":\"int64\",\"maximum\":2592000,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"metric\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -376,6 +419,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -388,6 +432,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "property"},
 		QueryParams: []string{"hours", "limit", "resolution", "instance"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"hours\":{\"description\":\"The window in hours, counted back from now; 24 when unset\",\"format\":\"int64\",\"maximum\":720,\"minimum\":1,\"type\":\"integer\"},\"instance\":{\"description\":\"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it\",\"type\":\"string\"},\"limit\":{\"description\":\"The row cap, newest kept; 500 when unset. Ignored when a resolution is set\",\"format\":\"int64\",\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"},\"name\":{\"description\":\"The owner's name or uuid\",\"type\":\"string\"},\"property\":{\"description\":\"The property_type name of the series\",\"type\":\"string\"},\"resolution\":{\"description\":\"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused\",\"format\":\"int64\",\"maximum\":2592000,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"name\",\"property\"],\"type\":\"object\"}",
 	},
 	{
@@ -399,6 +444,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -410,6 +456,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)\",\"examples\":[\"hq.$comp.ucc-platform\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -421,6 +468,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -433,6 +481,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"key"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The tag key to remove\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.\",\"type\":\"string\"}},\"required\":[\"key\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -445,6 +494,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"key", "value"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"key\":{\"description\":\"The tag key (must exist and apply to this kind)\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.\",\"type\":\"string\"},\"value\":{\"description\":\"The bound value\",\"minLength\":1,\"type\":\"string\"}},\"required\":[\"key\",\"name\",\"value\"],\"type\":\"object\"}",
 	},
 	{
@@ -456,6 +506,7 @@ var catalog = []tooldef.Def{
 		Permission:  "component:create",
 		BodyParams:  []string{"inputs", "label", "location", "name", "node", "template"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassCredentialDestination,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"inputs\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)\",\"type\":\"object\"},\"label\":{\"description\":\"The component's label\",\"type\":\"string\"},\"location\":{\"description\":\"The location the component sits in, by name or dotted path\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name; minted as an unnamed create mints it when empty\",\"type\":\"string\"},\"node\":{\"description\":\"The node the endpoint is placed on; needed when inputs carry an address\",\"type\":\"string\"},\"template\":{\"description\":\"The component template, by name\",\"examples\":[\"kestrel-vroom\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
 	},
 	{
@@ -466,6 +517,7 @@ var catalog = []tooldef.Def{
 		Path:        "/drivers",
 		Permission:  "driver:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -477,6 +529,7 @@ var catalog = []tooldef.Def{
 		Permission:  "driver:create",
 		BodyParams:  []string{"label", "name", "spec", "version"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"What an operator reads in pickers and lists\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"The globally unique name; renameable\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"spec\":{\"description\":\"The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)\"},\"version\":{\"description\":\"A free-form version string, e.g. 1.0.0\",\"type\":\"string\"}},\"required\":[\"label\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -488,6 +541,7 @@ var catalog = []tooldef.Def{
 		Permission:  "driver:read",
 		PathParams:  []string{"id"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The driver, by name or uuid\",\"examples\":[\"snmp-generic\"],\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"}",
 	},
 	{
@@ -500,6 +554,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"id"},
 		BodyParams:  []string{"label", "spec", "version"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The driver, by name or uuid\",\"examples\":[\"snmp-generic\"],\"type\":\"string\"},\"label\":{\"description\":\"A new operator-facing label\",\"type\":\"string\"},\"spec\":{\"description\":\"A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted\"},\"version\":{\"description\":\"A new version string, e.g. 1.0.1\",\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"}",
 	},
 	{
@@ -511,6 +566,7 @@ var catalog = []tooldef.Def{
 		Permission:  "driver:preview",
 		BodyParams:  []string{"driver", "inputs", "node", "polls", "spec", "timeout_seconds"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassCredentialDestination,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"driver\":{\"description\":\"A stored driver to preview, by name; or give spec\",\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target\",\"type\":\"object\"},\"node\":{\"description\":\"The node that runs the preview, by name: the one that reaches the target\",\"examples\":[\"edge-hq\"],\"type\":\"string\"},\"polls\":{\"description\":\"The polls to run, by name; absent runs every poll\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"spec\":{\"description\":\"A driver spec to preview inline, unsaved; or give driver\"},\"timeout_seconds\":{\"description\":\"How long the node may take for the whole preview (default 15, at most 30)\",\"format\":\"int64\",\"maximum\":30,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"node\"],\"type\":\"object\"}",
 	},
 	{
@@ -522,6 +578,7 @@ var catalog = []tooldef.Def{
 		Permission:  "driver:read",
 		BodyParams:  []string{"spec"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"spec\":{\"description\":\"The driver spec to check, as create-driver takes it\"}},\"required\":[\"spec\"],\"type\":\"object\"}",
 	},
 	{
@@ -532,6 +589,7 @@ var catalog = []tooldef.Def{
 		Path:        "/endpoints",
 		Permission:  "endpoint:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -543,6 +601,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:create",
 		BodyParams:  []string{"component", "driver", "inputs", "label", "node", "out_of_band", "params", "transport"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassCredentialDestination,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"component\":{\"description\":\"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)\",\"type\":\"string\"},\"driver\":{\"description\":\"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions\",\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"}]},\"description\":\"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for\",\"maxLength\":200,\"type\":\"string\"},\"node\":{\"description\":\"Node placement, by name or id\",\"type\":\"string\"},\"out_of_band\":{\"description\":\"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open\",\"type\":\"boolean\"},\"params\":{\"description\":\"Address/target settings (jsonb); an attach derives them from the inputs instead\"},\"transport\":{\"description\":\"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -554,6 +613,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:read",
 		PathParams:  []string{"endpoint"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -566,6 +626,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"endpoint"},
 		BodyParams:  []string{"inputs", "label", "node", "out_of_band", "params", "transport"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassCredentialDestination,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"}]},\"description\":\"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it\",\"type\":\"object\"},\"label\":{\"description\":\"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone\",\"maxLength\":200,\"type\":\"string\"},\"node\":{\"description\":\"Reassign the node placement, by name or id\",\"type\":\"string\"},\"out_of_band\":{\"description\":\"Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone\",\"type\":\"boolean\"},\"params\":{\"description\":\"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs\"},\"transport\":{\"description\":\"The transport: a driver-attached endpoint takes only one its driver speaks\",\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -577,6 +638,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:delete",
 		PathParams:  []string{"endpoint"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -589,6 +651,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"endpoint", "poll"},
 		QueryParams: []string{"timeout_seconds"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e or its id\",\"examples\":[\"hq.west.level-2.huddle.$comp.panel-1/telnet\"],\"type\":\"string\"},\"poll\":{\"description\":\"The poll to run, by its function name\",\"examples\":[\"status\"],\"type\":\"string\"},\"timeout_seconds\":{\"description\":\"How long the node may take (default 15, at most 30)\",\"format\":\"int64\",\"maximum\":30,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"endpoint\",\"poll\"],\"type\":\"object\"}",
 	},
 	{
@@ -601,6 +664,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"endpoint"},
 		BodyParams:  []string{"certificate", "host_key"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"certificate\":{\"description\":\"A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged\",\"type\":\"string\"},\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"},\"host_key\":{\"description\":\"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged\",\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -612,6 +676,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:update",
 		PathParams:  []string{"endpoint"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -622,6 +687,7 @@ var catalog = []tooldef.Def{
 		Path:        "/event-rules",
 		Permission:  "rule:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -633,6 +699,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The rule's name\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -644,6 +711,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The rule's name\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -655,6 +723,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		BodyParams:  []string{"clear_criteria", "clear_sustain", "fire_criteria", "fire_sustain", "sample_key", "selector"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"clear_criteria\":{\"additionalProperties\":false,\"properties\":{\"expr\":{\"description\":\"The criterion as an expression over the sample (value, key, instance, component.name, component.type), yielding true or false; give this or op and value\",\"type\":\"string\"},\"op\":{\"description\":\"The short form's comparison: a property compares text with eq or ne; a metric compares numbers with any of them\",\"enum\":[\"eq\",\"ne\",\"gt\",\"ge\",\"lt\",\"le\"],\"type\":\"string\"},\"value\":{\"description\":\"The short form's threshold: text for a property, a number for a metric\"}},\"type\":\"object\"},\"clear_sustain\":{\"description\":\"Accepted and ignored, like fire_sustain\",\"type\":\"string\"},\"fire_criteria\":{\"additionalProperties\":false,\"properties\":{\"expr\":{\"description\":\"The criterion as an expression over the sample (value, key, instance, component.name, component.type), yielding true or false; give this or op and value\",\"type\":\"string\"},\"op\":{\"description\":\"The short form's comparison: a property compares text with eq or ne; a metric compares numbers with any of them\",\"enum\":[\"eq\",\"ne\",\"gt\",\"ge\",\"lt\",\"le\"],\"type\":\"string\"},\"value\":{\"description\":\"The short form's threshold: text for a property, a number for a metric\"}},\"type\":\"object\"},\"fire_sustain\":{\"description\":\"Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone\",\"type\":\"string\"},\"sample_key\":{\"description\":\"The property or metric the candidate rule reads\",\"minLength\":1,\"type\":\"string\"},\"selector\":{\"additionalProperties\":false,\"properties\":{\"component_types\":{\"description\":\"Watch components whose type falls within one of these component types\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"components\":{\"description\":\"Watch these components (by name or id on write; ids on read)\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]}},\"type\":\"object\"}},\"required\":[\"fire_criteria\",\"sample_key\"],\"type\":\"object\"}",
 	},
 	{
@@ -665,6 +734,7 @@ var catalog = []tooldef.Def{
 		Path:        "/event-types",
 		Permission:  "event_type:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -676,6 +746,7 @@ var catalog = []tooldef.Def{
 		Permission:  "rule:read",
 		BodyParams:  []string{"inputs", "key", "owner_kind", "site", "source"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"inputs\":{\"description\":\"For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid)\",\"items\":{\"additionalProperties\":false,\"properties\":{\"alias\":{\"description\":\"The name the reduce's expression binds the input by: an identifier of at most 64, not a keyword, a builtin or list function's name, or one of the calc site's own bindings (component, has, members, system, value); unique in the rule\",\"maxLength\":64,\"minLength\":1,\"pattern\":\"^[A-Za-z_][A-Za-z0-9_]*$\",\"type\":\"string\"},\"key\":{\"description\":\"The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing\",\"minLength\":1,\"type\":\"string\"},\"window_seconds\":{\"description\":\"Read the key over the last this many seconds (1 to 3600, a component rule's only) instead of its current values: the alias binds as the list of its samples in the window, oldest first, each a record with value, at (unix seconds) and instance, and the list functions fold it by value, so avg over it is a rolling mean. Absent or 0 reads current values\",\"format\":\"int64\",\"minimum\":0,\"type\":\"integer\"}},\"required\":[\"alias\",\"key\"],\"type\":\"object\"},\"type\":[\"array\",\"null\"]},\"key\":{\"description\":\"The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield\",\"type\":\"string\"},\"owner_kind\":{\"description\":\"For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.\\u003calias\\u003e and has.\\u003calias\\u003e per input; defaults to component\",\"enum\":[\"component\",\"system\"],\"type\":\"string\"},\"site\":{\"description\":\"Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria\",\"enum\":[\"action\",\"calc\",\"criteria\"],\"type\":\"string\"},\"source\":{\"description\":\"The expression\",\"type\":\"string\"}},\"required\":[\"site\",\"source\"],\"type\":\"object\"}",
 	},
 	{
@@ -686,6 +757,7 @@ var catalog = []tooldef.Def{
 		Path:        "/locations",
 		Permission:  "location:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -697,6 +769,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:create",
 		BodyParams:  []string{"expected_name", "label", "location_type", "name", "parent"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"expected_name\":{\"description\":\"The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"label\":{\"description\":\"What an operator reads; the name is the address\",\"type\":\"string\"},\"location_type\":{\"description\":\"The location_type, by name or uuid (campus, building, ...)\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"parent\":{\"description\":\"Parent location name; omit for a root location\",\"type\":\"string\"}},\"required\":[\"location_type\"],\"type\":\"object\"}",
 	},
 	{
@@ -708,6 +781,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The location's name, or a dotted address (e.g. boi.17c.415a)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -720,6 +794,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"label", "location_type"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"A new operator-facing label\",\"type\":\"string\"},\"location_type\":{\"description\":\"Re-types the location: a location_type, by name or uuid\",\"type\":\"string\"},\"name\":{\"description\":\"The location's name, or a dotted address (e.g. boi.17c.415a)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -731,6 +806,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The location's name, or a dotted address (e.g. boi.17c.415a)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -742,6 +818,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The location's name, or a dotted address (e.g. boi.17c.415a)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -753,6 +830,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The location's name, or a dotted address (e.g. boi.17c.415a)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -764,6 +842,7 @@ var catalog = []tooldef.Def{
 		Permission:  "location:create",
 		BodyParams:  []string{"label", "name", "parent", "template"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"The subtree root's label\",\"type\":\"string\"},\"name\":{\"description\":\"The subtree root's name; omitted takes the template's, else its type's name rule mints one\",\"type\":\"string\"},\"parent\":{\"description\":\"The location the subtree sits under, by name or dotted path; omitted makes it a new top\",\"type\":\"string\"},\"template\":{\"description\":\"The location template, by name\",\"examples\":[\"meeting-floor\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
 	},
 	{
@@ -774,6 +853,7 @@ var catalog = []tooldef.Def{
 		Path:        "/nodes",
 		Permission:  "node:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -785,6 +865,7 @@ var catalog = []tooldef.Def{
 		Permission:  "node:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The node's unique name\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -796,6 +877,7 @@ var catalog = []tooldef.Def{
 		Permission:  "node:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The node's unique name\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -808,6 +890,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"alarm", "component", "subject", "text", "transition"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"The alarm's id; absent previews the component's most recently raised alarm\",\"type\":\"string\"},\"component\":{\"description\":\"The component the alarm is on, by name or dotted address\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"The notification type's name or uuid\",\"type\":\"string\"},\"subject\":{\"description\":\"A draft subject template to render instead of the stored one, so an editor previews before it saves\",\"type\":\"string\"},\"text\":{\"description\":\"A draft text template to render instead of the stored one\",\"type\":\"string\"},\"transition\":{\"description\":\"The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)\",\"enum\":[\"raised\",\"cleared\"],\"type\":\"string\"}},\"required\":[\"component\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -819,6 +902,7 @@ var catalog = []tooldef.Def{
 		Permission:  "notification:read",
 		QueryParams: []string{"alarm", "target", "status", "limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"Only the notifications about this alarm (its uuid)\",\"type\":\"string\"},\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"status\":{\"description\":\"Only those in this status\",\"enum\":[\"queued\",\"sent\",\"failed\",\"suppressed\",\"\"],\"type\":\"string\"},\"target\":{\"description\":\"Only those to this target, by name\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -829,6 +913,7 @@ var catalog = []tooldef.Def{
 		Path:        "/products",
 		Permission:  "product:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -840,6 +925,7 @@ var catalog = []tooldef.Def{
 		Permission:  "product:read",
 		PathParams:  []string{"id"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"id\":{\"description\":\"The product, by name or uuid\",\"examples\":[\"boreal-edge-55\"],\"type\":\"string\"}},\"required\":[\"id\"],\"type\":\"object\"}",
 	},
 	{
@@ -850,6 +936,7 @@ var catalog = []tooldef.Def{
 		Path:        "/secret-types",
 		Permission:  "secret:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -860,6 +947,7 @@ var catalog = []tooldef.Def{
 		Path:        "/secrets",
 		Permission:  "secret:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -871,6 +959,7 @@ var catalog = []tooldef.Def{
 		Permission:  "standard:create",
 		BodyParams:  []string{"label", "name", "parent", "template"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassWrite,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"The standard's label; omitted takes the template's\",\"type\":\"string\"},\"name\":{\"description\":\"The name the standard takes; omitted takes the template's\",\"type\":\"string\"},\"parent\":{\"description\":\"For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent\",\"type\":\"string\"},\"template\":{\"description\":\"The standard template to create from, by name\",\"examples\":[\"meeting-room\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
 	},
 	{
@@ -881,6 +970,7 @@ var catalog = []tooldef.Def{
 		Path:        "/systems",
 		Permission:  "system:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -892,6 +982,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -904,6 +995,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"label", "standard_id", "system_type_id"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"A new operator-facing label\",\"type\":\"string\"},\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"},\"standard_id\":{\"description\":\"A new standard, by handle or uuid; \\\"\\\" clears it (a one-off system)\",\"type\":\"string\"},\"system_type_id\":{\"description\":\"A new system_type, by name or uuid; \\\"\\\" clears it (an unclassified system)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -915,6 +1007,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -926,6 +1019,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -937,6 +1031,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -949,6 +1044,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name"},
 		QueryParams: []string{"severity", "source"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"},\"severity\":{\"description\":\"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out\",\"enum\":[\"emergency\",\"alert\",\"critical\",\"error\",\"warning\",\"notice\",\"info\",\"debug\"],\"type\":\"string\"},\"source\":{\"description\":\"Only lines that arrived on this channel\",\"maxLength\":100,\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -960,6 +1056,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -971,6 +1068,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:update",
 		PathParams:  []string{"name", "component"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassDestructive,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"component\":{\"description\":\"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"name\":{\"description\":\"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"component\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -982,6 +1080,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -994,6 +1093,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "metric"},
 		QueryParams: []string{"hours", "limit", "resolution", "instance"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"hours\":{\"description\":\"The window in hours, counted back from now; 24 when unset\",\"format\":\"int64\",\"maximum\":720,\"minimum\":1,\"type\":\"integer\"},\"instance\":{\"description\":\"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution\",\"type\":\"string\"},\"limit\":{\"description\":\"The row cap, newest kept; 500 when unset. Ignored when a resolution is set\",\"format\":\"int64\",\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"},\"metric\":{\"description\":\"The metric_type name of the series\",\"type\":\"string\"},\"name\":{\"description\":\"The owner's name or uuid\",\"type\":\"string\"},\"resolution\":{\"description\":\"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused\",\"format\":\"int64\",\"maximum\":2592000,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"metric\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -1005,6 +1105,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:read",
 		PathParams:  []string{"name"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -1017,6 +1118,7 @@ var catalog = []tooldef.Def{
 		PathParams:  []string{"name", "property"},
 		QueryParams: []string{"hours", "limit", "resolution", "instance"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"hours\":{\"description\":\"The window in hours, counted back from now; 24 when unset\",\"format\":\"int64\",\"maximum\":720,\"minimum\":1,\"type\":\"integer\"},\"instance\":{\"description\":\"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it\",\"type\":\"string\"},\"limit\":{\"description\":\"The row cap, newest kept; 500 when unset. Ignored when a resolution is set\",\"format\":\"int64\",\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"},\"name\":{\"description\":\"The owner's name or uuid\",\"type\":\"string\"},\"property\":{\"description\":\"The property_type name of the series\",\"type\":\"string\"},\"resolution\":{\"description\":\"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused\",\"format\":\"int64\",\"maximum\":2592000,\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"name\",\"property\"],\"type\":\"object\"}",
 	},
 	{
@@ -1028,6 +1130,7 @@ var catalog = []tooldef.Def{
 		Permission:  "system:create",
 		BodyParams:  []string{"attach", "label", "location", "name", "node", "standard", "template"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Class:       tooldef.ClassCredentialDestination,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"attach\":{\"additionalProperties\":{\"items\":{\"additionalProperties\":{\"type\":\"string\"},\"type\":\"object\"},\"type\":[\"array\",\"null\"]},\"description\":\"Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached\",\"type\":\"object\"},\"label\":{\"description\":\"The system's label\",\"type\":\"string\"},\"location\":{\"description\":\"The location the system and its components sit in, by name or dotted path\",\"type\":\"string\"},\"name\":{\"description\":\"The system's name; minted from its type when empty\",\"type\":\"string\"},\"node\":{\"description\":\"The node the endpoints are placed on; needed when any component attaches\",\"type\":\"string\"},\"standard\":{\"description\":\"A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name\",\"type\":\"string\"},\"template\":{\"description\":\"The system template, by name\",\"examples\":[\"mr55-system\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
 	},
 	{
@@ -1038,6 +1141,7 @@ var catalog = []tooldef.Def{
 		Path:        "/tasks",
 		Permission:  "task:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -1049,6 +1153,7 @@ var catalog = []tooldef.Def{
 		Permission:  "template:read",
 		QueryParams: []string{"kind"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"kind\":{\"description\":\"Only templates of this kind; omitted lists every kind\",\"enum\":[\"standard_template\",\"system_template\",\"location_template\",\"component_template\"],\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -1060,6 +1165,7 @@ var catalog = []tooldef.Def{
 		Permission:  "template:read",
 		PathParams:  []string{"template"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"template\":{\"description\":\"The template, by name\",\"examples\":[\"meeting-room\"],\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
 	},
 	{
@@ -1070,6 +1176,7 @@ var catalog = []tooldef.Def{
 		Path:        "/transports",
 		Permission:  "endpoint:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -1080,6 +1187,7 @@ var catalog = []tooldef.Def{
 		Path:        "/unclaimed-sources",
 		Permission:  "node:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
@@ -1090,6 +1198,7 @@ var catalog = []tooldef.Def{
 		Path:        "/vendors",
 		Permission:  "vendor:read",
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		Class:       tooldef.ClassRead,
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 }

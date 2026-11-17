@@ -188,6 +188,16 @@ export interface paths {
       error: og.testAuthMeActionRulesDraftResponseError["data"];
     };
   };
+  "/auth/me/agent-policy": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getAuthMeAgentPolicyResponseSuccess["data"];
+      error: og.getAuthMeAgentPolicyResponseError["data"];
+    };
+  };
   "/auth/me/avatar": {
     get: {
       path: never;

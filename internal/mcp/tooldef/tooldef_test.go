@@ -106,3 +106,34 @@ func TestParseHints(t *testing.T) {
 		}
 	}
 }
+
+// Classify sorts an operation into the agent policy's tool classes (#2063): the
+// class an operator sets always, ask or never for. An operation that can hand a
+// credential to a target is a credential destination whatever else it does;
+// otherwise the annotations decide.
+func TestClassify(t *testing.T) {
+	ro := tooldef.Annotations{ReadOnly: true, Idempotent: true}
+	for _, c := range []struct {
+		name        string
+		annotations tooldef.Annotations
+		permissions []string
+		want        tooldef.Class
+	}{
+		{"a read", ro, []string{"component:read"}, tooldef.ClassRead},
+		{"an authn-only read", ro, nil, tooldef.ClassRead},
+		{"a create", tooldef.Annotations{}, []string{"component:create"}, tooldef.ClassWrite},
+		{"a patch", tooldef.Annotations{Destructive: true}, []string{"endpoint:update"}, tooldef.ClassDestructive},
+		{"a delete", tooldef.Annotations{Destructive: true, Idempotent: true}, []string{"endpoint:delete"}, tooldef.ClassDestructive},
+		{"a write that may bind a secret", tooldef.Annotations{}, []string{"endpoint:create", "secret:bind"}, tooldef.ClassCredentialDestination},
+		{"an overwrite that may bind a secret", tooldef.Annotations{Destructive: true}, []string{"endpoint:update", "secret:bind"}, tooldef.ClassCredentialDestination},
+		{"a gate on bind itself", tooldef.Annotations{}, []string{"secret:bind"}, tooldef.ClassCredentialDestination},
+		{"an admin-tier bind", tooldef.Annotations{}, []string{"secret:bind:admin"}, tooldef.ClassCredentialDestination},
+		{"an empty second permission adds nothing", tooldef.Annotations{}, []string{"component:create", ""}, tooldef.ClassWrite},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := tooldef.Classify(c.annotations, c.permissions...); got != c.want {
+				t.Fatalf("Classify(%+v, %v) = %q, want %q", c.annotations, c.permissions, got, c.want)
+			}
+		})
+	}
+}
