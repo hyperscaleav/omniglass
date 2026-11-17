@@ -27,8 +27,8 @@ screenshots:
     # a shadow below the row's own box, so the Why card is masked whole: a row
     # mask left that sliver live, moving with the age (#2117). Activity's
     # incident entries carry a stamp or a duration on every line and are masked
-    # whole (`xpath=ancestor::li[1]`), as are its logs and the charts. The summary card declares a box instead,
-    # since its since line ends its row.
+    # whole (`xpath=ancestor::li[1]`), as are its logs and the charts. The summary
+    # card declares a box instead, since its since line ends its row.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=leaf-alarms]"
