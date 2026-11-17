@@ -1218,6 +1218,18 @@ type Gateway interface {
 	UpdatePersonalRule(ctx context.Context, actorID, ownerID, ref string, patch PersonalRulePatch) (*ActionRule, error)
 	DeletePersonalRule(ctx context.Context, actorID, ownerID, ref string) error
 	TestPersonalRule(ctx context.Context, ownerID, ref string, draft RuleDraft, read scope.Set, limit int) ([]RuleMatch, error)
+	// Omnibot conversations (#2113): the owner's alone, every query carrying
+	// the ownership predicate; another's is ErrAssistantConversationNotFound.
+	CreateAssistantConversation(ctx context.Context, actorID, ownerID, name string) (*AssistantConversation, error)
+	ListAssistantConversations(ctx context.Context, ownerID string) ([]AssistantConversation, error)
+	GetAssistantConversation(ctx context.Context, ownerID, name string) (*AssistantConversation, []AssistantMessage, error)
+	AppendAssistantMessages(ctx context.Context, actorID, ownerID, name string, in AssistantAppend) (*AssistantConversation, error)
+	DeleteAssistantConversation(ctx context.Context, actorID, ownerID, name string) error
+	// PruneAssistantConversations deletes up to limit conversations last
+	// changed before before (#2113).
+	PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error)
+	// AssistantSettings is the effective assistant namespace (#2113).
+	AssistantSettings(ctx context.Context) (settings.AssistantSettings, error)
 	// Group opt-out (#1354): a person opts out of a platform rule that
 	// allows it, or back in.
 	SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error)

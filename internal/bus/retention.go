@@ -62,6 +62,8 @@ type retentionStore interface {
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
+	AssistantSettings(ctx context.Context) (settings.AssistantSettings, error)
+	PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -76,8 +78,10 @@ type retentionLane struct {
 // samples, each type with a window of its own (#417, named <lane>/<type>; the
 // lane's own prune skips it), then each log table's bands
 // (logline.RetentionBands), least severe first: log_line by the shared band
-// window, outpost_log by the outpost override where an admin set one (#1350).
-func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention) []retentionLane {
+// window, outpost_log by the outpost override where an admin set one (#1350),
+// then the stored omnibot conversations by conversationDays (#2113), left out
+// when it is zero (its settings read failed).
+func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention, conversationDays int) []retentionLane {
 	lanes := []retentionLane{}
 	for _, l := range []struct {
 		name string
@@ -104,6 +108,9 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 				return store.PruneLogs(ctx, table, band, before, limit)
 			}})
 		}
+	}
+	if conversationDays != 0 {
+		lanes = append(lanes, retentionLane{"assistant_conversation", conversationDays, store.PruneAssistantConversations})
 	}
 	return lanes
 }
@@ -224,7 +231,14 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	if err != nil {
 		errs = append(errs, fmt.Errorf("read type retention overrides: %w", err))
 	}
-	for _, lane := range retentionLanes(store, w, overrides) {
+	// The omnibot conversations' window. A failed read loses only their lane.
+	actx, adone := bounded()
+	assistant, err := store.AssistantSettings(actx)
+	adone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("read assistant settings: %w", err))
+	}
+	for _, lane := range retentionLanes(store, w, overrides, assistant.ConversationDays) {
 		if lane.days <= 0 || lane.days > settings.RetentionMaxDays {
 			errs = append(errs, fmt.Errorf("prune %s: a window of %d days is outside 1 to %d; not pruned", lane.name, lane.days, settings.RetentionMaxDays))
 			continue
