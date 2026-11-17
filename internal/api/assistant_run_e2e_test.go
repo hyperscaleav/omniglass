@@ -380,7 +380,7 @@ func TestOmnibotRunSaysItStoppedAtTheStepLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := newPeople(t, api.WithOmnibotModel(r.Positioned()))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "busy"}, http.StatusCreated)
 	status, evs := p.run(p.toks["olga"], "busy", prompt("look around"))
 	if status != http.StatusOK || len(evs) == 0 {
