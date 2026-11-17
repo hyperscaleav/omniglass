@@ -464,6 +464,10 @@ var operatorStrings = []string{
 	// The catalog pages' shared copy, where the retired word for a type
 	// registry row survived until ADR-2034.
 	filepath.Join("..", "..", "web", "src", "lib", "catalog.ts"),
+	// The product pages, whose create-form hint carried "genus" past the
+	// ADR-2034 sweep because nothing scanned them.
+	filepath.Join("..", "..", "web", "src", "lib", "products.ts"),
+	filepath.Join("..", "..", "web", "src", "pages", "Products.tsx"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

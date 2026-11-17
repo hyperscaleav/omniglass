@@ -307,7 +307,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
           <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
         </select>
       </FieldRow>
-      <FieldRow label="Type" hint="The device-class genus this SKU is classified under. Required.">
+      <FieldRow label="Type" hint="The device-class type this SKU is classified under. Required.">
         <TypeSelect value={componentType()} onChange={setComponentType} />
       </FieldRow>
       <FieldRow label="Icon" hint="A per-SKU override. Leave blank to use the type's icon.">
