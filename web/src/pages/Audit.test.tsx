@@ -26,6 +26,12 @@ const seed: AuditEvent[] = [
       Name: "ssh", host_key: "SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs",
       Params: { target: "127.60.0.19:22", timeout: "5s" }, Inputs: { host: "127.60.0.19", login: "touch-panel-login" },
     },
+  },  // An agent's change through the MCP server (#1178): the channel is server-
+  // stamped, the client is what the MCP client declared, and the agent is the
+  // name its agent token was minted with.
+  {
+    id: uuidFor("8"), ts: "2026-07-07T09:55:00Z", actor: "u-carol", actor_name: "carol", verb: "disable", resource: "component",
+    resource_id: "cmp_amp", new: { name: "rack-amp" }, channel: "mcp", client: "claude-code/2.1.0", agent: "claude-desktop",
   },
 ];
 
@@ -253,5 +259,82 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
       expect(cell.className).toContain("wrap-break-word");
     }
     expect(added.children[2].textContent).toBe("SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs");
+  });
+});
+
+// How a change arrived (#1178): a row that came over the MCP server wears a
+// channel pill with the client it declared beneath; a direct write wears none.
+// The agent that acted rides beside the person it acted for.
+describe("Audit channel and client (#1178)", () => {
+  it("marks an MCP write with a channel pill, the declared client as subtext", async () => {
+    render(() => <Audit />);
+    const pill = await screen.findByText("mcp", { selector: ".badge" });
+    expect(pill.className).toContain("badge-soft");
+    const cell = pill.closest("td")!;
+    expect(cell.textContent).toContain("claude-code/2.1.0");
+    const row = pill.closest("tr")!;
+    expect(row.textContent).toContain("carol");
+    expect(row.textContent).toContain("claude-desktop");
+  });
+
+  it("leaves a direct write without a pill", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    // Eight rows, one of them over MCP: exactly one pill.
+    expect(screen.getAllByTestId("audit-channel")).toHaveLength(1);
+    const loginRow = screen.getByText("login").closest("tr")!;
+    expect(loginRow.querySelector('[data-testid="audit-channel"]')).toBeNull();
+  });
+
+  const typeChip = (token: string) => {
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: token } });
+    fireEvent.keyDown(input, { key: "Enter" });
+  };
+
+  it("narrows to MCP writes with the channel filter, and to direct ones with channel:direct", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("channel:mcp");
+    expect(screen.getByText("rack-amp")).toBeTruthy();
+    expect(screen.queryByText("login")).toBeNull();
+    expect(screen.queryByText("core-snmp")).toBeNull();
+  });
+
+  it("offers direct as a channel, matching the rows with none", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("channel:direct");
+    expect(screen.getByText("login")).toBeTruthy();
+    expect(screen.queryByText("rack-amp")).toBeNull();
+  });
+
+  it("narrows to one client with the client search", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("client:claude");
+    expect(screen.getByText("rack-amp")).toBeTruthy();
+    expect(screen.queryByText("login")).toBeNull();
+  });
+
+  it("names the channel, the agent and the client in the drawer, the client as the agent reported it", async () => {
+    render(() => <Audit />);
+    fireEvent.click(await screen.findByText("rack-amp"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Channel");
+    expect(dialog.textContent).toContain("Client");
+    expect(dialog.textContent).toContain("as the agent reported it");
+    expect(dialog.textContent).toContain("claude-code/2.1.0");
+    expect(dialog.textContent).toContain("claude-desktop");
+    // The channel teaches what it proves and what it does not.
+    expect(screen.getByLabelText("More about Channel")).toBeTruthy();
+  });
+
+  it("names a direct write's channel as direct in the drawer, with no client", async () => {
+    render(() => <Audit />);
+    fireEvent.click(await screen.findByText("delete"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("direct");
+    expect(dialog.textContent).not.toContain("as the agent reported it");
   });
 });

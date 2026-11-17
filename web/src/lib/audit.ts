@@ -19,7 +19,21 @@ export type AuditEvent = {
   // owns redaction, so whatever arrives here is safe to render.
   old?: unknown;
   new?: unknown;
+  // How the action arrived (#1162): mcp for a tool call on the MCP server,
+  // absent for a direct API call. Stamped by the server, never by a caller.
+  channel?: string;
+  // The name and version the MCP client declared about itself, as asserted.
+  client?: string;
+  // The agent that acted on the actor's behalf, from its agent token (#1179).
+  agent?: string;
 };
+
+// DIRECT_CHANNEL names a row with no channel: a plain API call. It is the
+// filter value the API's `channel=direct` takes too, never a stored channel.
+export const DIRECT_CHANNEL = "direct";
+
+// channelOf is the channel a row arrived through, direct when it carries none.
+export const channelOf = (e: AuditEvent): string => e.channel || DIRECT_CHANNEL;
 
 export const AUDIT_KEY = ["audit-log"] as const;
 
@@ -102,7 +116,9 @@ const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].
 
 // auditFilterKeys are the faceted-search fields for the audit trail, consumed by
 // the shared FilterBar exactly as the inventory list views do: who (the acting
-// principal), action (the verb), resource (the kind), and id (the resource id).
+// principal), action (the verb), resource (the kind), id (the resource id), and
+// how it arrived: channel (direct or mcp), the client an MCP caller declared,
+// and the agent that acted.
 // Matching is client-side over the loaded rows via lib/predicate. `who` is the
 // substring default so a bare term searches the actor. Time is navigated by
 // load-older + newest-first, not a facet (the predicate compares gt/lt
@@ -114,4 +130,9 @@ export const auditFilterKeys: FilterKey<AuditEvent>[] = [
   { key: "action", type: "string", hint: "exact", get: (e) => e.verb, values: (rows) => uniqSorted(rows.map((e) => e.verb)) },
   { key: "resource", type: "string", hint: "exact", get: (e) => e.resource, values: (rows) => uniqSorted(rows.map((e) => e.resource)) },
   { key: "id", type: "string", hint: "substring", get: (e) => `${resourceLabel(e)} ${e.resource_id ?? ""}` },
+  // Direct is always offered: it is the channel most rows have, and the one
+  // that answers "what did NOT come through an agent?".
+  { key: "channel", type: "string", hint: "exact", get: channelOf, values: (rows) => uniqSorted([DIRECT_CHANNEL, ...rows.map(channelOf)]) },
+  { key: "client", type: "string", hint: "substring", get: (e) => e.client ?? "", values: (rows) => uniqSorted(rows.map((e) => e.client ?? "")) },
+  { key: "agent", type: "string", hint: "exact", get: (e) => e.agent ?? "", values: (rows) => uniqSorted(rows.map((e) => e.agent ?? "")) },
 ];
