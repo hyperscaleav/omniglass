@@ -344,7 +344,7 @@ keyboard**, or a keyboard user cannot scroll what a mouse user can. axe's `scrol
 link or a button already has its focus stop (the Drawer body holds its form fields, the calc-rule
 preview's owner list holds an owner link per row). A region of plain text has none: give it
 `tabindex="0"`, `role="region"` and an `aria-label` that names what it holds, and never `aria-hidden`,
-since a focusable outpost hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
+since a focusable node hidden from assistive tech is its own axe violation (`aria-hidden-focus`).
 `ExpressionField`'s source-and-caret echo is the worked example (#1101): it scrolls sideways because
 the caret under a column only stays aligned on one unwrapped line, so it takes the focus stop rather
 than wrapping.

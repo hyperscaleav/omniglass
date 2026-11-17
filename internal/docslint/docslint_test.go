@@ -407,9 +407,9 @@ func TestADR2030PlaceAsANounFires(t *testing.T) {
 // TestADR2031NodeAsTheCollectorFires proves the node-as-the-collector entry
 // catches the retired noun in every spelling the rename carried (the prose
 // noun, the column, the env prefix, the route, the permission, the command)
-// and passes the senses the word keeps: a node of a tree, a DOM node, the
-// Node.js runtime and its node: imports, the explore ?node= parameter, and
-// the D2 shape class the diagrams share.
+// and passes the senses the word keeps: a node of a tree, a DOM node, a
+// query plan's scan node, the Node.js runtime and its node: imports, the
+// explore ?node= parameter, and the D2 shape class the diagrams share.
 func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
 	fires := func(line string) bool {
 		for _, msg := range scanLine(line) {
@@ -438,6 +438,8 @@ func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
 		"a tree node carries its children",
 		"the leaf node wins over its ancestor nodes",
 		"the deepest node wins",
+		"A scan node can name an index",
+		"a focusable node hidden from assistive tech",
 		"the root node of the forest",
 		"a DOM node the test queries",
 		"built with Node.js 22",

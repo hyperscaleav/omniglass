@@ -324,7 +324,7 @@ func TestTermRecordsItsCause(t *testing.T) {
 		return b
 	}
 	header := nats.Header{jetstream.MsgIDHeader: []string{"outpost-a-boot-1-7"}}
-	const id = "og.v1.telemetry.outpost-an outpost-a-boot-1-7"
+	const id = "og.v1.telemetry.outpost-a outpost-a-boot-1-7"
 	transient := errors.New("database away")
 	refused := fmt.Errorf("land: %w", &storage.KeyWriterError{Key: "k"})
 	delivered := func(n uint64) *jetstream.MsgMetadata { return &jetstream.MsgMetadata{NumDelivered: n} }

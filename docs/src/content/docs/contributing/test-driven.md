@@ -251,7 +251,7 @@ Three rules, and an assertion that breaks one of them is worse than none:
 
 1. **One relation's access path, never the plan's shape.** Everything above the scan is
    stats-dependent and will flap.
-2. **Assert the index CONDITION, not only the index name.** A scan outpost can name an index
+2. **Assert the index CONDITION, not only the index name.** A scan node can name an index
    and carry no condition, meaning the planner walks the whole index and filters afterwards.
    That is the shape a coerced predicate produces, and it reads as a pass to anything that
    greps for the name. `Plan.MustReach` checks the name, the condition, and that the outpost is

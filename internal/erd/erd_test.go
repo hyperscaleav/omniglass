@@ -3,7 +3,7 @@ package erd
 import "testing"
 
 // TestRenderClustersAndEdges pins the D2 emission: named containers in cluster
-// order, each table a sql_table outpost listing only its primary-key and
+// order, each table a sql_table node listing only its primary-key and
 // foreign-key columns, foreign keys as cross-container edges, and a table absent
 // from every cluster placed in a trailing "unclustered" container so it is
 // visible rather than dropped.

@@ -67,17 +67,17 @@ describe("reduce", () => {
     expect(reduce([{ kind: "plan", surface: "probe", surfaces: 2 }, visit("route:/a"), visit("route:/b")]).findings).toEqual([]);
   });
 
-  it("sums an accessibility rule's outposts across surfaces", () => {
+  it("sums an accessibility rule's nodes across surfaces", () => {
     const d = reduce([
-      { kind: "axe", surface: "route:/b", id: "color-contrast", impact: "serious", help: "contrast", outposts: 3 },
-      { kind: "axe", surface: "route:/a", id: "color-contrast", impact: "serious", help: "contrast", outposts: 4 },
+      { kind: "axe", surface: "route:/b", id: "color-contrast", impact: "serious", help: "contrast", nodes: 3 },
+      { kind: "axe", surface: "route:/a", id: "color-contrast", impact: "serious", help: "contrast", nodes: 4 },
     ]);
-    expect(d.findings[0].detail).toBe("serious: contrast (7 outposts across 2 surfaces)");
+    expect(d.findings[0].detail).toBe("serious: contrast (7 nodes across 2 surfaces)");
   });
 
   it("ranks breakage above friction", () => {
     const d = reduce([
-      { kind: "axe", surface: "route:/a", id: "color-contrast", impact: "minor", help: "contrast", outposts: 3 },
+      { kind: "axe", surface: "route:/a", id: "color-contrast", impact: "minor", help: "contrast", nodes: 3 },
       { kind: "response", surface: "route:/a", method: "POST", url: "/api/v1/tags", status: 500, ms: 10 },
       { kind: "walkthrough", surface: "walkthrough:set-up-monitoring", ok: false, step: 4, reason: "never appeared" },
     ]);
@@ -105,7 +105,7 @@ describe("reduce", () => {
     const events = [
       { kind: "console", surface: "route:/b", text: "b" },
       { kind: "console", surface: "route:/a", text: "a" },
-      ...Array.from({ length: 8 }, (_, i) => ({ kind: "axe", surface: `route:/r${i}`, id: "label", impact: "critical", help: "labels", outposts: i + 1 })),
+      ...Array.from({ length: 8 }, (_, i) => ({ kind: "axe", surface: `route:/r${i}`, id: "label", impact: "critical", help: "labels", nodes: i + 1 })),
       ...Array.from({ length: 8 }, (_, i) => ({ kind: "console", surface: `route:/s${i}`, text: `shared fault ${i % 2 ? "x" : "y"}` })),
     ];
     expect(reduce(events)).toEqual(reduce([...events].reverse()));

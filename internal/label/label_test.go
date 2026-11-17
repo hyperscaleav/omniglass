@@ -246,7 +246,7 @@ func TestRenderRefusesAnAbsurdlyLongResult(t *testing.T) {
 // takes away.
 //
 // So the fix is the same argument that justified the closed data map, applied
-// to the other half of the sandbox: the grammar is a closed set of outpost types
+// to the other half of the sandbox: the grammar is a closed set of node types
 // and function names, and everything text/template otherwise offers is refused
 // at PARSE time, which is rule-edit time, before it can be stored.
 func TestParseRefusesTheConstructsThatMakeWorkUnbounded(t *testing.T) {
