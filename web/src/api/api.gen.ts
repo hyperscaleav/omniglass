@@ -78,10 +78,10 @@ export type AddMemberInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The principal to add: a human's username, a service account's name, or its uuid
+     * The user to add: a person's username, a machine user's name, or its uuid
      * @minLength 1
      */
-  principal_id: string;
+  user_id: string;
 };
 
 export type AddSimComponentInputBody = {
@@ -426,7 +426,7 @@ export type AlarmBody = {
   acknowledged: boolean;
   /** When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at */
   acknowledged_at?: string;
-  /** Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+  /** Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name) */
   acknowledged_by?: string;
   active: boolean;
   /** Null while the alarm is active */
@@ -446,7 +446,7 @@ export type AlarmBody = {
   raised_by_rule_id?: string;
   /** The severity level the alarm was raised at, by name (see /severity-levels) */
   severity: string;
-  /** Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name) */
+  /** Who snoozed the condition, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
   snoozed_by?: string;
   /** Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
@@ -504,7 +504,7 @@ export type AlarmTimelineEntryBody = {
   message?: string;
   /** A notification's uuid, what :retry names */
   notification?: string;
-  /** The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin */
+  /** The person a notification is addressed to, by username: shown to that person and to holders of user:read:admin */
   recipient?: string;
   /** True when a notification is addressed to a person whose name the caller may not see */
   recipient_withheld?: boolean;
@@ -1174,7 +1174,7 @@ export type CommandBody = {
   intended?: unknown;
   /** When it was issued */
   issued_at: string;
-  /** Who issued it, by name; empty once that principal is purged (the audit log keeps the name) */
+  /** Who issued it, by name; empty once that user is purged (the audit log keeps the name) */
   issuer?: string;
   /** The issuer's uuid, the actor on the command's audit row */
   issuer_id?: string;
@@ -2416,8 +2416,8 @@ export type CreateNotificationTargetInputBodyKind = typeof CreateNotificationTar
 export const CreateNotificationTargetInputBodyKind = {
   webhook: 'webhook',
   email: 'email',
-  principal_group: 'principal_group',
-  principal: 'principal',
+  user_group: 'user_group',
+  user: 'user',
 } as const;
 
 export type CreateNotificationTargetInputBody = {
@@ -2444,14 +2444,14 @@ export type CreateNotificationTargetInputBody = {
      * @minLength 1
      */
   name: string;
-  /** A principal target's person, by username or uuid; binding one takes principal:read:admin */
-  principal?: string;
-  /** A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin */
-  principal_group?: string;
   /** A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
   secret?: string;
   /** A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
   url?: string;
+  /** A user target's person, by username or uuid; binding one takes user:read:admin */
+  user?: string;
+  /** A user_group target's group, by name or uuid; binding one takes user_group:read:admin */
+  user_group?: string;
 };
 
 export type CreateNotificationTypeInputBody = {
@@ -2525,34 +2525,6 @@ export type CreatePersonalRuleInputBody = {
   targets?: string[] | null;
   /** A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read */
   when?: string;
-};
-
-export type CreatePrincipalInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * Contact email for the account
-     * @maxLength 320
-     */
-  email?: string;
-  /**
-     * What an operator reads in lists; falls back to the username
-     * @maxLength 200
-     */
-  label?: string;
-  /**
-     * Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
-     * @minLength 12
-     * @maxLength 256
-     */
-  password?: string;
-  /**
-     * Unique sign-in name (lowercase letters, digits, and . _ -)
-     * @minLength 1
-     * @maxLength 200
-     * @pattern ^[a-z0-9][a-z0-9._-]*$
-     */
-  username: string;
 };
 
 /**
@@ -2887,6 +2859,34 @@ export type CreateTagInputBody = {
   name: string;
   /** Whether bindings cascade to descendants; defaults true */
   propagates?: boolean;
+};
+
+export type CreateUserInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Contact email for the account
+     * @maxLength 320
+     */
+  email?: string;
+  /**
+     * What an operator reads in lists; falls back to the username
+     * @maxLength 200
+     */
+  label?: string;
+  /**
+     * Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
+     * @minLength 12
+     * @maxLength 256
+     */
+  password?: string;
+  /**
+     * Unique sign-in name (lowercase letters, digits, and . _ -)
+     * @minLength 1
+     * @maxLength 200
+     * @pattern ^[a-z0-9][a-z0-9._-]*$
+     */
+  username: string;
 };
 
 /**
@@ -3781,7 +3781,7 @@ export type HealthAlarmBody = {
   acknowledged: boolean;
   /** When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at */
   acknowledged_at?: string;
-  /** Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+  /** Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name) */
   acknowledged_by?: string;
   /** The component the alarm is on, by name */
   component: string;
@@ -3924,9 +3924,9 @@ export const GrantBodyScopeOp = {
 export type GrantBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited. */
+  /** The source group's name, the identifier /user-groups/{group} takes; present when the grant is inherited. */
   group?: string;
-  /** Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal. */
+  /** Set when this grant is inherited from a group the user belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the user. */
   group_id?: string;
   /** The source group's friendly label, present when the grant is inherited and the group has one. */
   group_label?: string;
@@ -3949,7 +3949,7 @@ export type GroupBody = {
   grant_count: number;
   id: string;
   label?: string;
-  /** How many principals belong to the group (populated on list and get; 0 from create/update). */
+  /** How many users belong to the group (populated on list and get; 0 from create/update). */
   member_count: number;
   name: string;
 };
@@ -3961,18 +3961,6 @@ export type HealthOutputBody = {
   db: string;
   /** Overall health: ok when all legs pass, degraded otherwise */
   status: string;
-};
-
-export type HumanBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  email?: string;
-  /** True when the principal has a profile picture; fetch it from the avatar endpoint. */
-  has_avatar?: boolean;
-  label?: string;
-  /** True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
-  must_change_password?: boolean;
-  username: string;
 };
 
 /**
@@ -4008,7 +3996,7 @@ export type IdentityBindingBody = {
 };
 
 /**
- * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal
+ * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user
  */
 export type ImpersonateInputBodyMode = typeof ImpersonateInputBodyMode[keyof typeof ImpersonateInputBodyMode];
 
@@ -4027,7 +4015,7 @@ export type ImpersonateInputBody = {
      * @maximum 1440
      */
   duration_minutes?: number;
-  /** view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal */
+  /** view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user */
   mode: ImpersonateInputBodyMode;
 };
 
@@ -4340,7 +4328,7 @@ export type NotificationBody = {
   notification_type: string;
   /** When its recipient read it, for an inbox entry */
   read_at?: string;
-  /** The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld) */
+  /** The person it is addressed to, by username: shown to that person and to holders of user:read:admin, withheld from everyone else (see recipient_withheld) */
   recipient?: string;
   /** True when the row is addressed to a person whose name the caller may not see */
   recipient_withheld?: boolean;
@@ -4558,9 +4546,9 @@ export type MemberBody = {
   kind: string;
   /** The friendly string, where the member is a human who has one */
   label?: string;
-  /** The member's identifier: a human's username, or a service account's name */
+  /** The member's identifier: a person's username, or a machine user's name */
   name?: string;
-  principal_id: string;
+  user_id: string;
 };
 
 export type ListMembersOutputBody = {
@@ -4628,7 +4616,7 @@ export const NotificationTargetBodyAuth = {
 } as const;
 
 /**
- * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
+ * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read
  */
 export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof typeof NotificationTargetBodyKind];
 
@@ -4636,8 +4624,8 @@ export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof
 export const NotificationTargetBodyKind = {
   webhook: 'webhook',
   email: 'email',
-  principal_group: 'principal_group',
-  principal: 'principal',
+  user_group: 'user_group',
+  user: 'user',
 } as const;
 
 /**
@@ -4663,18 +4651,10 @@ export type NotificationTargetBody = {
   enabled: boolean;
   /** The target's uuid, the stable form of name */
   id: string;
-  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read */
+  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read */
   kind: NotificationTargetBodyKind;
   label?: string;
   name: string;
-  /** The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope) */
-  principal?: string;
-  /** The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope) */
-  principal_group?: string;
-  /** The group's uuid */
-  principal_group_id?: string;
-  /** The person's uuid */
-  principal_id?: string;
   /** The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
   secret?: string;
   /** The bound secret's uuid, the stable form of secret */
@@ -4682,6 +4662,14 @@ export type NotificationTargetBody = {
   updated_at: string;
   /** A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
   url?: string;
+  /** The person a user target reaches, by username; shown to a caller who reads the user directory (user:read:admin, all-scope) */
+  user?: string;
+  /** The group a user_group target reaches, by name; shown to a caller who reads the group directory (user_group:read:admin, all-scope) */
+  user_group?: string;
+  /** The group's uuid */
+  user_group_id?: string;
+  /** The person's uuid */
+  user_id?: string;
 };
 
 export type ListNotificationTargetsOutputBody = {
@@ -4798,49 +4786,6 @@ export type ListPersonalRulesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   action_rules: PersonalRuleBody[] | null;
-};
-
-export type ListPrincipalSessionsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  sessions: SessionBody[] | null;
-};
-
-export type PrincipalGroupRef = {
-  id: string;
-  name: string;
-};
-
-export type SvcBody = {
-  /** The service account's identifier, unique across service principals */
-  name: string;
-};
-
-/**
- * Who a role is granted to, a person who signs in or a machine user that holds tokens.
- */
-export type PrincipalBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  active: boolean;
-  /** Set when the principal is archived (soft-deleted); absent means live */
-  archived_at?: string;
-  /** @nullable */
-  grants: GrantBody[] | null;
-  /** @nullable */
-  groups: PrincipalGroupRef[] | null;
-  human?: HumanBody;
-  id: string;
-  kind: string;
-  service?: SvcBody;
-};
-
-export type ListPrincipalsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  principals: PrincipalBody[] | null;
 };
 
 export type ProductMetricBody = {
@@ -5641,6 +5586,61 @@ export type ListUnclaimedSourcesOutputBody = {
   sources: UnclaimedSourceBody[] | null;
 };
 
+export type ListUserSessionsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  sessions: SessionBody[] | null;
+};
+
+export type UserGroupRef = {
+  id: string;
+  name: string;
+};
+
+export type MachineBody = {
+  /** The machine user's identifier, unique across machine users */
+  name: string;
+};
+
+export type PersonBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  email?: string;
+  /** True when the user has a profile picture; fetch it from the avatar endpoint. */
+  has_avatar?: boolean;
+  label?: string;
+  /** True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
+  must_change_password?: boolean;
+  username: string;
+};
+
+/**
+ * Who a role is granted to, a person who signs in or a machine user that holds tokens.
+ */
+export type UserBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  active: boolean;
+  /** Set when the user is archived (soft-deleted); absent means live */
+  archived_at?: string;
+  /** @nullable */
+  grants: GrantBody[] | null;
+  /** @nullable */
+  groups: UserGroupRef[] | null;
+  id: string;
+  kind: string;
+  machine?: MachineBody;
+  person?: PersonBody;
+};
+
+export type ListUsersOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  users: UserBody[] | null;
+};
+
 /**
  * A named value set at one level of the fleet and inherited below it, written into text as $var.
  */
@@ -5782,7 +5782,7 @@ export type MarkAllReadOutputBody = {
   marked: number;
 };
 
-export type PrincipalStruct = {
+export type UserStruct = {
   id: string;
   kind: string;
 };
@@ -5790,7 +5790,7 @@ export type PrincipalStruct = {
 export type MeOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling. */
+  /** Set when the request authenticated with an agent token: the agent acting on this user's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling. */
   agent?: string;
   /**
      * The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority.
@@ -5799,11 +5799,11 @@ export type MeOutputBody = {
   fleet_permissions: string[] | null;
   /** @nullable */
   grants: GrantBody[] | null;
-  human?: HumanBody;
+  machine?: MachineBody;
   /** @nullable */
   permissions: string[] | null;
-  principal: PrincipalStruct;
-  service?: SvcBody;
+  person?: PersonBody;
+  user: UserStruct;
 };
 
 export type MetricBucketBody = {
@@ -7338,24 +7338,24 @@ export type RevokeAllMeSessionsOutputBody = {
 };
 
 /**
- * Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens
+ * Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens
  */
-export type RevokeAllPrincipalSessionsInputBodyPurpose = typeof RevokeAllPrincipalSessionsInputBodyPurpose[keyof typeof RevokeAllPrincipalSessionsInputBodyPurpose];
+export type RevokeAllUserSessionsInputBodyPurpose = typeof RevokeAllUserSessionsInputBodyPurpose[keyof typeof RevokeAllUserSessionsInputBodyPurpose];
 
 
-export const RevokeAllPrincipalSessionsInputBodyPurpose = {
+export const RevokeAllUserSessionsInputBodyPurpose = {
   session: 'session',
   token: 'token',
 } as const;
 
-export type RevokeAllPrincipalSessionsInputBody = {
+export type RevokeAllUserSessionsInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens */
-  purpose: RevokeAllPrincipalSessionsInputBodyPurpose;
+  /** Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens */
+  purpose: RevokeAllUserSessionsInputBodyPurpose;
 };
 
-export type RevokeAllPrincipalSessionsOutputBody = {
+export type RevokeAllUserSessionsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** How many credentials were revoked */
@@ -8329,28 +8329,6 @@ export type UpdatePersonalRuleInputBody = {
   when?: string;
 };
 
-export type UpdatePrincipalInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * Email; empty clears it
-     * @maxLength 320
-     */
-  email?: string;
-  /**
-     * Label; empty clears it
-     * @maxLength 200
-     */
-  label?: string;
-  /**
-     * Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
-     * @minLength 1
-     * @maxLength 200
-     * @pattern ^[a-z0-9][a-z0-9._-]*$
-     */
-  username?: string;
-};
-
 /**
  * A new product class
  */
@@ -8491,6 +8469,28 @@ export type UpdateTagInputBody = {
   label?: string;
   /** Whether bindings cascade to descendants; defaults true */
   propagates?: boolean;
+};
+
+export type UpdateUserInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Email; empty clears it
+     * @maxLength 320
+     */
+  email?: string;
+  /**
+     * Label; empty clears it
+     * @maxLength 200
+     */
+  label?: string;
+  /**
+     * Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
+     * @minLength 1
+     * @maxLength 200
+     * @pattern ^[a-z0-9][a-z0-9._-]*$
+     */
+  username?: string;
 };
 
 export type UpdateVariableInputBody = {
@@ -8647,7 +8647,7 @@ export type ListAlarmsParams = {
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
   limit?: number;
-  /** Filter to one resource kind (e.g. auth, principal_grant) */
+  /** Filter to one resource kind (e.g. auth, user_grant) */
   resource?: string;
   /** Filter to one verb (e.g. login, create) */
   verb?: string;
@@ -8843,21 +8843,6 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
-export type ListPrincipalsParams = {
-  /** Optionally filter by principal kind */
-  kind?: ListPrincipalsKind;
-  /** Include archived (soft-deleted) principals, hidden by default */
-  include_archived?: boolean;
-};
-
-export type ListPrincipalsKind = typeof ListPrincipalsKind[keyof typeof ListPrincipalsKind];
-
-
-export const ListPrincipalsKind = {
-  human: 'human',
-  service: 'service',
-} as const;
-
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
@@ -8946,6 +8931,21 @@ export const ListTemplatesKind = {
   system_template: 'system_template',
   location_template: 'location_template',
   component_template: 'component_template',
+} as const;
+
+export type ListUsersParams = {
+  /** Optionally filter by user kind */
+  kind?: ListUsersKind;
+  /** Include archived (soft-deleted) users, hidden by default */
+  include_archived?: boolean;
+};
+
+export type ListUsersKind = typeof ListUsersKind[keyof typeof ListUsersKind];
+
+
+export const ListUsersKind = {
+  person: 'person',
+  machine: 'machine',
 } as const;
 
 export type HTTPStatusCode1xx = 100 | 101 | 102 | 103;
@@ -9539,8 +9539,8 @@ export const getGetAuthMeUrl = () => {
 }
 
 /**
- * Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
- * @summary The authenticated principal, its permissions, and grants
+ * Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+ * @summary The authenticated user, its permissions, and grants
  */
 export const getAuthMe = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getAuthMeResponse> => {
 
@@ -9556,7 +9556,7 @@ export const getAuthMe = async ( options?: Parameters<typeof ogFetch>[1]): Promi
 
 
 export type updateAuthMeResponse200 = {
-  data: HumanBody
+  data: PersonBody
   status: 200
 }
 
@@ -9583,7 +9583,7 @@ export const getUpdateAuthMeUrl = () => {
 }
 
 /**
- * Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+ * Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).
  * @summary Update your own profile
  */
 export const updateAuthMe = async (updateMeInputBody: NonReadonly<UpdateMeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateAuthMeResponse> => {
@@ -10102,7 +10102,7 @@ export const getListAuthMeNotificationsUrl = (params?: ListAuthMeNotificationsPa
 }
 
 /**
- * The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+ * The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
  * @summary List your inbox
  */
 export const listAuthMeNotifications = async (params?: ListAuthMeNotificationsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeNotificationsResponse> => {
@@ -10234,7 +10234,7 @@ export const getListAuthMeSessionsUrl = () => {
 }
 
 /**
- * Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+ * Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.
  * @summary List your own sessions and tokens
  */
 export const listAuthMeSessions = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeSessionsResponse> => {
@@ -18164,7 +18164,7 @@ export const getCreateNotificationTargetUrl = () => {
 }
 
 /**
- * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+ * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
  * @summary Create a notification target
  */
 export const createNotificationTarget = async (createNotificationTargetInputBody: NonReadonly<CreateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTargetResponse> => {
@@ -18831,7 +18831,7 @@ export const getListNotificationUrl = (params?: ListNotificationParams,) => {
 }
 
 /**
- * The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+ * The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
  * @summary List notifications
  */
 export const listNotification = async (params?: ListNotificationParams, options?: Parameters<typeof ogFetch>[1]): Promise<listNotificationResponse> => {
@@ -19703,1623 +19703,6 @@ return ogFetch<claimOutpostResponse>(getClaimOutpostUrl(),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(claimOutpostInputBody)
-  }
-);}
-
-
-
-export type listGroupsResponse200 = {
-  data: ListGroupsOutputBody
-  status: 200
-}
-
-export type listGroupsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listGroupsResponseSuccess = (listGroupsResponse200) & {
-  headers: Headers;
-};
-export type listGroupsResponseError = (listGroupsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listGroupsResponse = (listGroupsResponseSuccess | listGroupsResponseError)
-
-export const getListGroupsUrl = () => {
-
-
-
-
-  return `/principal-groups`
-}
-
-/**
- * Every principal group. Gated by principal_group:read:admin.
- * @summary List principal groups
- */
-export const listGroups = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listGroupsResponse> => {
-
-  return ogFetch<listGroupsResponse>(getListGroupsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createGroupResponse201 = {
-  data: GroupBody
-  status: 201
-}
-
-export type createGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createGroupResponseSuccess = (createGroupResponse201) & {
-  headers: Headers;
-};
-export type createGroupResponseError = (createGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type createGroupResponse = (createGroupResponseSuccess | createGroupResponseError)
-
-export const getCreateGroupUrl = () => {
-
-
-
-
-  return `/principal-groups`
-}
-
-/**
- * Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
- * @summary Create a principal group
- */
-export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGroupResponse>(getCreateGroupUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGroupInputBody)
-  }
-);}
-
-
-
-export type deleteGroupResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type deleteGroupResponseSuccess = (deleteGroupResponse204) & {
-  headers: Headers;
-};
-export type deleteGroupResponseError = (deleteGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type deleteGroupResponse = (deleteGroupResponseSuccess | deleteGroupResponseError)
-
-export const getDeleteGroupUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}`
-}
-
-/**
- * Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
- * @summary Delete a principal group
- */
-export const deleteGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteGroupResponse> => {
-
-  return ogFetch<deleteGroupResponse>(getDeleteGroupUrl(group),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type getGroupResponse200 = {
-  data: GroupBody
-  status: 200
-}
-
-export type getGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getGroupResponseSuccess = (getGroupResponse200) & {
-  headers: Headers;
-};
-export type getGroupResponseError = (getGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type getGroupResponse = (getGroupResponseSuccess | getGroupResponseError)
-
-export const getGetGroupUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}`
-}
-
-/**
- * One principal group, by name or uuid. Gated by principal_group:read:admin.
- * @summary Get a principal group
- */
-export const getGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<getGroupResponse> => {
-
-  return ogFetch<getGroupResponse>(getGetGroupUrl(group),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type updateGroupResponse200 = {
-  data: GroupBody
-  status: 200
-}
-
-export type updateGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type updateGroupResponseSuccess = (updateGroupResponse200) & {
-  headers: Headers;
-};
-export type updateGroupResponseError = (updateGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type updateGroupResponse = (updateGroupResponseSuccess | updateGroupResponseError)
-
-export const getUpdateGroupUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}`
-}
-
-/**
- * Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
- * @summary Update a principal group
- */
-export const updateGroup = async (group: string,
-    updateGroupInputBody: NonReadonly<UpdateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateGroupResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updateGroupInputBody)
-  }
-);}
-
-
-
-export type listGroupGrantsResponse200 = {
-  data: ListGroupGrantsOutputBody
-  status: 200
-}
-
-export type listGroupGrantsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listGroupGrantsResponseSuccess = (listGroupGrantsResponse200) & {
-  headers: Headers;
-};
-export type listGroupGrantsResponseError = (listGroupGrantsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listGroupGrantsResponse = (listGroupGrantsResponseSuccess | listGroupGrantsResponseError)
-
-export const getListGroupGrantsUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/grants`
-}
-
-/**
- * The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
- * @summary List a group's grants
- */
-export const listGroupGrants = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupGrantsResponse> => {
-
-  return ogFetch<listGroupGrantsResponse>(getListGroupGrantsUrl(group),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createGroupGrantResponse201 = {
-  data: GrantBody
-  status: 201
-}
-
-export type createGroupGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createGroupGrantResponseSuccess = (createGroupGrantResponse201) & {
-  headers: Headers;
-};
-export type createGroupGrantResponseError = (createGroupGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type createGroupGrantResponse = (createGroupGrantResponseSuccess | createGroupGrantResponseError)
-
-export const getCreateGroupGrantUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/grants`
-}
-
-/**
- * Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
- * @summary Grant a role to a group
- */
-export const createGroupGrant = async (group: string,
-    createGroupGrantInputBody: NonReadonly<CreateGroupGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupGrantResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGroupGrantInputBody)
-  }
-);}
-
-
-
-export type revokeGroupGrantResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokeGroupGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type revokeGroupGrantResponseSuccess = (revokeGroupGrantResponse204) & {
-  headers: Headers;
-};
-export type revokeGroupGrantResponseError = (revokeGroupGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type revokeGroupGrantResponse = (revokeGroupGrantResponseSuccess | revokeGroupGrantResponseError)
-
-export const getRevokeGroupGrantUrl = (group: string,
-    grantId: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/grants/${grantId}`
-}
-
-/**
- * Removes one grant from a group. Gated by principal_grant:delete (all-scope).
- * @summary Revoke a group grant
- */
-export const revokeGroupGrant = async (group: string,
-    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGroupGrantResponse> => {
-
-  return ogFetch<revokeGroupGrantResponse>(getRevokeGroupGrantUrl(group,grantId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type listGroupMembersResponse200 = {
-  data: ListMembersOutputBody
-  status: 200
-}
-
-export type listGroupMembersResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listGroupMembersResponseSuccess = (listGroupMembersResponse200) & {
-  headers: Headers;
-};
-export type listGroupMembersResponseError = (listGroupMembersResponseDefault) & {
-  headers: Headers;
-};
-
-export type listGroupMembersResponse = (listGroupMembersResponseSuccess | listGroupMembersResponseError)
-
-export const getListGroupMembersUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/members`
-}
-
-/**
- * The principals in a group. Gated by principal_group:read:admin.
- * @summary List a group's members
- */
-export const listGroupMembers = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupMembersResponse> => {
-
-  return ogFetch<listGroupMembersResponse>(getListGroupMembersUrl(group),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type addGroupMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type addGroupMemberResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type addGroupMemberResponseSuccess = (addGroupMemberResponse204) & {
-  headers: Headers;
-};
-export type addGroupMemberResponseError = (addGroupMemberResponseDefault) & {
-  headers: Headers;
-};
-
-export type addGroupMemberResponse = (addGroupMemberResponseSuccess | addGroupMemberResponseError)
-
-export const getAddGroupMemberUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/members`
-}
-
-/**
- * Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
- * @summary Add a member to a group
- */
-export const addGroupMember = async (group: string,
-    addMemberInputBody: NonReadonly<AddMemberInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addGroupMemberResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addMemberInputBody)
-  }
-);}
-
-
-
-export type removeGroupMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeGroupMemberResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removeGroupMemberResponseSuccess = (removeGroupMemberResponse204) & {
-  headers: Headers;
-};
-export type removeGroupMemberResponseError = (removeGroupMemberResponseDefault) & {
-  headers: Headers;
-};
-
-export type removeGroupMemberResponse = (removeGroupMemberResponseSuccess | removeGroupMemberResponseError)
-
-export const getRemoveGroupMemberUrl = (group: string,
-    principal: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/members/${principal}`
-}
-
-/**
- * Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
- * @summary Remove a member from a group
- */
-export const removeGroupMember = async (group: string,
-    principal: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeGroupMemberResponse> => {
-
-  return ogFetch<removeGroupMemberResponse>(getRemoveGroupMemberUrl(group,principal),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type renameGroupResponse200 = {
-  data: GroupBody
-  status: 200
-}
-
-export type renameGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type renameGroupResponseSuccess = (renameGroupResponse200) & {
-  headers: Headers;
-};
-export type renameGroupResponseError = (renameGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type renameGroupResponse = (renameGroupResponseSuccess | renameGroupResponseError)
-
-export const getRenameGroupUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}:rename`
-}
-
-/**
- * Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
- * @summary Rename a principal group
- */
-export const renameGroup = async (group: string,
-    renameGroupInputBody: NonReadonly<RenameGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameGroupResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameGroupInputBody)
-  }
-);}
-
-
-
-export type listPrincipalsResponse200 = {
-  data: ListPrincipalsOutputBody
-  status: 200
-}
-
-export type listPrincipalsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listPrincipalsResponseSuccess = (listPrincipalsResponse200) & {
-  headers: Headers;
-};
-export type listPrincipalsResponseError = (listPrincipalsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listPrincipalsResponse = (listPrincipalsResponseSuccess | listPrincipalsResponseError)
-
-export const getListPrincipalsUrl = (params?: ListPrincipalsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/principals?${stringifiedParams}` : `/principals`
-}
-
-/**
- * Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
- * @summary List principals
- */
-export const listPrincipals = async (params?: ListPrincipalsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listPrincipalsResponse> => {
-
-  return ogFetch<listPrincipalsResponse>(getListPrincipalsUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createPrincipalResponse201 = {
-  data: PrincipalBody
-  status: 201
-}
-
-export type createPrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createPrincipalResponseSuccess = (createPrincipalResponse201) & {
-  headers: Headers;
-};
-export type createPrincipalResponseError = (createPrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type createPrincipalResponse = (createPrincipalResponseSuccess | createPrincipalResponseError)
-
-export const getCreatePrincipalUrl = () => {
-
-
-
-
-  return `/principals`
-}
-
-/**
- * Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
- * @summary Create a human principal
- */
-export const createPrincipal = async (createPrincipalInputBody: NonReadonly<CreatePrincipalInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createPrincipalResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createPrincipalResponse>(getCreatePrincipalUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createPrincipalInputBody)
-  }
-);}
-
-
-
-export type getPrincipalResponse200 = {
-  data: PrincipalBody
-  status: 200
-}
-
-export type getPrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getPrincipalResponseSuccess = (getPrincipalResponse200) & {
-  headers: Headers;
-};
-export type getPrincipalResponseError = (getPrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type getPrincipalResponse = (getPrincipalResponseSuccess | getPrincipalResponseError)
-
-export const getGetPrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}`
-}
-
-/**
- * Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
- * @summary Get a principal
- */
-export const getPrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPrincipalResponse> => {
-
-  return ogFetch<getPrincipalResponse>(getGetPrincipalUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type updatePrincipalResponse200 = {
-  data: PrincipalBody
-  status: 200
-}
-
-export type updatePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type updatePrincipalResponseSuccess = (updatePrincipalResponse200) & {
-  headers: Headers;
-};
-export type updatePrincipalResponseError = (updatePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type updatePrincipalResponse = (updatePrincipalResponseSuccess | updatePrincipalResponseError)
-
-export const getUpdatePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}`
-}
-
-/**
- * Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
- * @summary Update a principal
- */
-export const updatePrincipal = async (id: string,
-    updatePrincipalInputBody: NonReadonly<UpdatePrincipalInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updatePrincipalResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updatePrincipalResponse>(getUpdatePrincipalUrl(id),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updatePrincipalInputBody)
-  }
-);}
-
-
-
-export type getPrincipalAvatarResponse200 = {
-  data: AvatarOutputBody
-  status: 200
-}
-
-export type getPrincipalAvatarResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getPrincipalAvatarResponseSuccess = (getPrincipalAvatarResponse200) & {
-  headers: Headers;
-};
-export type getPrincipalAvatarResponseError = (getPrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type getPrincipalAvatarResponse = (getPrincipalAvatarResponseSuccess | getPrincipalAvatarResponseError)
-
-export const getGetPrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/avatar`
-}
-
-/**
- * Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
- * @summary Get a principal's profile picture
- */
-export const getPrincipalAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPrincipalAvatarResponse> => {
-
-  return ogFetch<getPrincipalAvatarResponse>(getGetPrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createGrantResponse201 = {
-  data: GrantBody
-  status: 201
-}
-
-export type createGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createGrantResponseSuccess = (createGrantResponse201) & {
-  headers: Headers;
-};
-export type createGrantResponseError = (createGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type createGrantResponse = (createGrantResponseSuccess | createGrantResponseError)
-
-export const getCreateGrantUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/grants`
-}
-
-/**
- * Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
- * @summary Grant a role to a principal
- */
-export const createGrant = async (id: string,
-    createGrantInputBody: NonReadonly<CreateGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGrantResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGrantInputBody)
-  }
-);}
-
-
-
-export type revokeGrantResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokeGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type revokeGrantResponseSuccess = (revokeGrantResponse204) & {
-  headers: Headers;
-};
-export type revokeGrantResponseError = (revokeGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type revokeGrantResponse = (revokeGrantResponseSuccess | revokeGrantResponseError)
-
-export const getRevokeGrantUrl = (id: string,
-    grantId: string,) => {
-
-
-
-
-  return `/principals/${id}/grants/${grantId}`
-}
-
-/**
- * Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
- * @summary Revoke a grant
- */
-export const revokeGrant = async (id: string,
-    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
-
-  return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type listPrincipalSessionsResponse200 = {
-  data: ListPrincipalSessionsOutputBody
-  status: 200
-}
-
-export type listPrincipalSessionsResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type listPrincipalSessionsResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type listPrincipalSessionsResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type listPrincipalSessionsResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type listPrincipalSessionsResponseSuccess = (listPrincipalSessionsResponse200) & {
-  headers: Headers;
-};
-export type listPrincipalSessionsResponseError = (listPrincipalSessionsResponse403 | listPrincipalSessionsResponse404 | listPrincipalSessionsResponse422 | listPrincipalSessionsResponse500) & {
-  headers: Headers;
-};
-
-export type listPrincipalSessionsResponse = (listPrincipalSessionsResponseSuccess | listPrincipalSessionsResponseError)
-
-export const getListPrincipalSessionsUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/sessions`
-}
-
-/**
- * Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
- * @summary List a principal's sessions
- */
-export const listPrincipalSessions = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listPrincipalSessionsResponse> => {
-
-  return ogFetch<listPrincipalSessionsResponse>(getListPrincipalSessionsUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type revokePrincipalSessionResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokePrincipalSessionResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type revokePrincipalSessionResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type revokePrincipalSessionResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type revokePrincipalSessionResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type revokePrincipalSessionResponseSuccess = (revokePrincipalSessionResponse204) & {
-  headers: Headers;
-};
-export type revokePrincipalSessionResponseError = (revokePrincipalSessionResponse403 | revokePrincipalSessionResponse404 | revokePrincipalSessionResponse422 | revokePrincipalSessionResponse500) & {
-  headers: Headers;
-};
-
-export type revokePrincipalSessionResponse = (revokePrincipalSessionResponseSuccess | revokePrincipalSessionResponseError)
-
-export const getRevokePrincipalSessionUrl = (id: string,
-    sid: string,) => {
-
-
-
-
-  return `/principals/${id}/sessions/${sid}:revoke`
-}
-
-/**
- * Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
- * @summary Revoke a principal's session
- */
-export const revokePrincipalSession = async (id: string,
-    sid: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokePrincipalSessionResponse> => {
-
-  return ogFetch<revokePrincipalSessionResponse>(getRevokePrincipalSessionUrl(id,sid),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type revokeAllPrincipalSessionsResponse200 = {
-  data: RevokeAllPrincipalSessionsOutputBody
-  status: 200
-}
-
-export type revokeAllPrincipalSessionsResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type revokeAllPrincipalSessionsResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type revokeAllPrincipalSessionsResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type revokeAllPrincipalSessionsResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type revokeAllPrincipalSessionsResponseSuccess = (revokeAllPrincipalSessionsResponse200) & {
-  headers: Headers;
-};
-export type revokeAllPrincipalSessionsResponseError = (revokeAllPrincipalSessionsResponse403 | revokeAllPrincipalSessionsResponse404 | revokeAllPrincipalSessionsResponse422 | revokeAllPrincipalSessionsResponse500) & {
-  headers: Headers;
-};
-
-export type revokeAllPrincipalSessionsResponse = (revokeAllPrincipalSessionsResponseSuccess | revokeAllPrincipalSessionsResponseError)
-
-export const getRevokeAllPrincipalSessionsUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/sessions:revokeAll`
-}
-
-/**
- * Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
- * @summary Revoke all of a principal's sessions or tokens
- */
-export const revokeAllPrincipalSessions = async (id: string,
-    revokeAllPrincipalSessionsInputBody: NonReadonly<RevokeAllPrincipalSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllPrincipalSessionsResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<revokeAllPrincipalSessionsResponse>(getRevokeAllPrincipalSessionsUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(revokeAllPrincipalSessionsInputBody)
-  }
-);}
-
-
-
-export type archivePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type archivePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type archivePrincipalResponseSuccess = (archivePrincipalResponse204) & {
-  headers: Headers;
-};
-export type archivePrincipalResponseError = (archivePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type archivePrincipalResponse = (archivePrincipalResponseSuccess | archivePrincipalResponseError)
-
-export const getArchivePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:archive`
-}
-
-/**
- * Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
- * @summary Archive a principal
- */
-export const archivePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<archivePrincipalResponse> => {
-
-  return ogFetch<archivePrincipalResponse>(getArchivePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type disablePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type disablePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type disablePrincipalResponseSuccess = (disablePrincipalResponse204) & {
-  headers: Headers;
-};
-export type disablePrincipalResponseError = (disablePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type disablePrincipalResponse = (disablePrincipalResponseSuccess | disablePrincipalResponseError)
-
-export const getDisablePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:disable`
-}
-
-/**
- * Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
- * @summary Disable a principal
- */
-export const disablePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<disablePrincipalResponse> => {
-
-  return ogFetch<disablePrincipalResponse>(getDisablePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type enablePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type enablePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type enablePrincipalResponseSuccess = (enablePrincipalResponse204) & {
-  headers: Headers;
-};
-export type enablePrincipalResponseError = (enablePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type enablePrincipalResponse = (enablePrincipalResponseSuccess | enablePrincipalResponseError)
-
-export const getEnablePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:enable`
-}
-
-/**
- * Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
- * @summary Enable a principal
- */
-export const enablePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<enablePrincipalResponse> => {
-
-  return ogFetch<enablePrincipalResponse>(getEnablePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type impersonatePrincipalResponse201 = {
-  data: ImpersonateOutputBody
-  status: 201
-}
-
-export type impersonatePrincipalResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type impersonatePrincipalResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type impersonatePrincipalResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type impersonatePrincipalResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type impersonatePrincipalResponseSuccess = (impersonatePrincipalResponse201) & {
-  headers: Headers;
-};
-export type impersonatePrincipalResponseError = (impersonatePrincipalResponse403 | impersonatePrincipalResponse404 | impersonatePrincipalResponse422 | impersonatePrincipalResponse500) & {
-  headers: Headers;
-};
-
-export type impersonatePrincipalResponse = (impersonatePrincipalResponseSuccess | impersonatePrincipalResponseError)
-
-export const getImpersonatePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:impersonate`
-}
-
-/**
- * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
- * @summary Impersonate a principal (view-as or act-as)
- */
-export const impersonatePrincipal = async (id: string,
-    impersonateInputBody: NonReadonly<ImpersonateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<impersonatePrincipalResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<impersonatePrincipalResponse>(getImpersonatePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(impersonateInputBody)
-  }
-);}
-
-
-
-export type purgePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type purgePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type purgePrincipalResponseSuccess = (purgePrincipalResponse204) & {
-  headers: Headers;
-};
-export type purgePrincipalResponseError = (purgePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type purgePrincipalResponse = (purgePrincipalResponseSuccess | purgePrincipalResponseError)
-
-export const getPurgePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:purge`
-}
-
-/**
- * Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
- * @summary Purge a principal
- */
-export const purgePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<purgePrincipalResponse> => {
-
-  return ogFetch<purgePrincipalResponse>(getPurgePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type removePrincipalAvatarResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removePrincipalAvatarResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removePrincipalAvatarResponseSuccess = (removePrincipalAvatarResponse204) & {
-  headers: Headers;
-};
-export type removePrincipalAvatarResponseError = (removePrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type removePrincipalAvatarResponse = (removePrincipalAvatarResponseSuccess | removePrincipalAvatarResponseError)
-
-export const getRemovePrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:removeAvatar`
-}
-
-/**
- * Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
- * @summary Remove a principal's profile picture
- */
-export const removePrincipalAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<removePrincipalAvatarResponse> => {
-
-  return ogFetch<removePrincipalAvatarResponse>(getRemovePrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type resetPrincipalPasswordResponse204 = {
-  data: void
-  status: 204
-}
-
-export type resetPrincipalPasswordResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type resetPrincipalPasswordResponseSuccess = (resetPrincipalPasswordResponse204) & {
-  headers: Headers;
-};
-export type resetPrincipalPasswordResponseError = (resetPrincipalPasswordResponseDefault) & {
-  headers: Headers;
-};
-
-export type resetPrincipalPasswordResponse = (resetPrincipalPasswordResponseSuccess | resetPrincipalPasswordResponseError)
-
-export const getResetPrincipalPasswordUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:resetPassword`
-}
-
-/**
- * Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
- * @summary Reset a principal's password
- */
-export const resetPrincipalPassword = async (id: string,
-    resetPasswordInputBody: NonReadonly<ResetPasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<resetPrincipalPasswordResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<resetPrincipalPasswordResponse>(getResetPrincipalPasswordUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(resetPasswordInputBody)
-  }
-);}
-
-
-
-export type restorePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type restorePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type restorePrincipalResponseSuccess = (restorePrincipalResponse204) & {
-  headers: Headers;
-};
-export type restorePrincipalResponseError = (restorePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type restorePrincipalResponse = (restorePrincipalResponseSuccess | restorePrincipalResponseError)
-
-export const getRestorePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:restore`
-}
-
-/**
- * Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
- * @summary Restore a principal
- */
-export const restorePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restorePrincipalResponse> => {
-
-  return ogFetch<restorePrincipalResponse>(getRestorePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type setPrincipalAvatarResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setPrincipalAvatarResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type setPrincipalAvatarResponseSuccess = (setPrincipalAvatarResponse204) & {
-  headers: Headers;
-};
-export type setPrincipalAvatarResponseError = (setPrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type setPrincipalAvatarResponse = (setPrincipalAvatarResponseSuccess | setPrincipalAvatarResponseError)
-
-export const getSetPrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:setAvatar`
-}
-
-/**
- * Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
- * @summary Set a principal's profile picture
- */
-export const setPrincipalAvatar = async (id: string,
-    setAvatarInputBody: NonReadonly<SetAvatarInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setPrincipalAvatarResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setPrincipalAvatarResponse>(getSetPrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(setAvatarInputBody)
   }
 );}
 
@@ -22696,7 +21079,7 @@ export const getGetSettingsMeUrl = () => {
 }
 
 /**
- * The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+ * The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
  * @summary Get the caller's effective settings
  */
 export const getSettingsMe = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getSettingsMeResponse> => {
@@ -26804,6 +25187,1623 @@ export const listUnclaimedSources = async ( options?: Parameters<typeof ogFetch>
 
 
 
+export type listGroupsResponse200 = {
+  data: ListGroupsOutputBody
+  status: 200
+}
+
+export type listGroupsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupsResponseSuccess = (listGroupsResponse200) & {
+  headers: Headers;
+};
+export type listGroupsResponseError = (listGroupsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupsResponse = (listGroupsResponseSuccess | listGroupsResponseError)
+
+export const getListGroupsUrl = () => {
+
+
+
+
+  return `/user-groups`
+}
+
+/**
+ * Every user group. Gated by user_group:read:admin.
+ * @summary List user groups
+ */
+export const listGroups = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listGroupsResponse> => {
+
+  return ogFetch<listGroupsResponse>(getListGroupsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGroupResponse201 = {
+  data: GroupBody
+  status: 201
+}
+
+export type createGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGroupResponseSuccess = (createGroupResponse201) & {
+  headers: Headers;
+};
+export type createGroupResponseError = (createGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGroupResponse = (createGroupResponseSuccess | createGroupResponseError)
+
+export const getCreateGroupUrl = () => {
+
+
+
+
+  return `/user-groups`
+}
+
+/**
+ * Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.
+ * @summary Create a user group
+ */
+export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGroupResponse>(getCreateGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGroupInputBody)
+  }
+);}
+
+
+
+export type deleteGroupResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteGroupResponseSuccess = (deleteGroupResponse204) & {
+  headers: Headers;
+};
+export type deleteGroupResponseError = (deleteGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteGroupResponse = (deleteGroupResponseSuccess | deleteGroupResponseError)
+
+export const getDeleteGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).
+ * @summary Delete a user group
+ */
+export const deleteGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteGroupResponse> => {
+
+  return ogFetch<deleteGroupResponse>(getDeleteGroupUrl(group),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type getGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type getGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getGroupResponseSuccess = (getGroupResponse200) & {
+  headers: Headers;
+};
+export type getGroupResponseError = (getGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type getGroupResponse = (getGroupResponseSuccess | getGroupResponseError)
+
+export const getGetGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * One user group, by name or uuid. Gated by user_group:read:admin.
+ * @summary Get a user group
+ */
+export const getGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<getGroupResponse> => {
+
+  return ogFetch<getGroupResponse>(getGetGroupUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type updateGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type updateGroupResponseSuccess = (updateGroupResponse200) & {
+  headers: Headers;
+};
+export type updateGroupResponseError = (updateGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type updateGroupResponse = (updateGroupResponseSuccess | updateGroupResponseError)
+
+export const getUpdateGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).
+ * @summary Update a user group
+ */
+export const updateGroup = async (group: string,
+    updateGroupInputBody: NonReadonly<UpdateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateGroupInputBody)
+  }
+);}
+
+
+
+export type listGroupGrantsResponse200 = {
+  data: ListGroupGrantsOutputBody
+  status: 200
+}
+
+export type listGroupGrantsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupGrantsResponseSuccess = (listGroupGrantsResponse200) & {
+  headers: Headers;
+};
+export type listGroupGrantsResponseError = (listGroupGrantsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupGrantsResponse = (listGroupGrantsResponseSuccess | listGroupGrantsResponseError)
+
+export const getListGroupGrantsUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants`
+}
+
+/**
+ * The role x scope grants a group confers on its members. Gated by user_group:read:admin.
+ * @summary List a group's grants
+ */
+export const listGroupGrants = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupGrantsResponse> => {
+
+  return ogFetch<listGroupGrantsResponse>(getListGroupGrantsUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGroupGrantResponse201 = {
+  data: GrantBody
+  status: 201
+}
+
+export type createGroupGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGroupGrantResponseSuccess = (createGroupGrantResponse201) & {
+  headers: Headers;
+};
+export type createGroupGrantResponseError = (createGroupGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGroupGrantResponse = (createGroupGrantResponseSuccess | createGroupGrantResponseError)
+
+export const getCreateGroupGrantUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants`
+}
+
+/**
+ * Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+ * @summary Grant a role to a group
+ */
+export const createGroupGrant = async (group: string,
+    createGroupGrantInputBody: NonReadonly<CreateGroupGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupGrantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGroupGrantInputBody)
+  }
+);}
+
+
+
+export type revokeGroupGrantResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeGroupGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type revokeGroupGrantResponseSuccess = (revokeGroupGrantResponse204) & {
+  headers: Headers;
+};
+export type revokeGroupGrantResponseError = (revokeGroupGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type revokeGroupGrantResponse = (revokeGroupGrantResponseSuccess | revokeGroupGrantResponseError)
+
+export const getRevokeGroupGrantUrl = (group: string,
+    grantId: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants/${grantId}`
+}
+
+/**
+ * Removes one grant from a group. Gated by user_grant:delete (all-scope).
+ * @summary Revoke a group grant
+ */
+export const revokeGroupGrant = async (group: string,
+    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGroupGrantResponse> => {
+
+  return ogFetch<revokeGroupGrantResponse>(getRevokeGroupGrantUrl(group,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listGroupMembersResponse200 = {
+  data: ListMembersOutputBody
+  status: 200
+}
+
+export type listGroupMembersResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupMembersResponseSuccess = (listGroupMembersResponse200) & {
+  headers: Headers;
+};
+export type listGroupMembersResponseError = (listGroupMembersResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupMembersResponse = (listGroupMembersResponseSuccess | listGroupMembersResponseError)
+
+export const getListGroupMembersUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members`
+}
+
+/**
+ * The users in a group. Gated by user_group:read:admin.
+ * @summary List a group's members
+ */
+export const listGroupMembers = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupMembersResponse> => {
+
+  return ogFetch<listGroupMembersResponse>(getListGroupMembersUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addGroupMemberResponse204 = {
+  data: void
+  status: 204
+}
+
+export type addGroupMemberResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type addGroupMemberResponseSuccess = (addGroupMemberResponse204) & {
+  headers: Headers;
+};
+export type addGroupMemberResponseError = (addGroupMemberResponseDefault) & {
+  headers: Headers;
+};
+
+export type addGroupMemberResponse = (addGroupMemberResponseSuccess | addGroupMemberResponseError)
+
+export const getAddGroupMemberUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members`
+}
+
+/**
+ * Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+ * @summary Add a member to a group
+ */
+export const addGroupMember = async (group: string,
+    addMemberInputBody: NonReadonly<AddMemberInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addGroupMemberResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addMemberInputBody)
+  }
+);}
+
+
+
+export type removeGroupMemberResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeGroupMemberResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeGroupMemberResponseSuccess = (removeGroupMemberResponse204) & {
+  headers: Headers;
+};
+export type removeGroupMemberResponseError = (removeGroupMemberResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeGroupMemberResponse = (removeGroupMemberResponseSuccess | removeGroupMemberResponseError)
+
+export const getRemoveGroupMemberUrl = (group: string,
+    user: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members/${user}`
+}
+
+/**
+ * Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+ * @summary Remove a member from a group
+ */
+export const removeGroupMember = async (group: string,
+    user: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeGroupMemberResponse> => {
+
+  return ogFetch<removeGroupMemberResponse>(getRemoveGroupMemberUrl(group,user),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type renameGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type renameGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type renameGroupResponseSuccess = (renameGroupResponse200) & {
+  headers: Headers;
+};
+export type renameGroupResponseError = (renameGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type renameGroupResponse = (renameGroupResponseSuccess | renameGroupResponseError)
+
+export const getRenameGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}:rename`
+}
+
+/**
+ * Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).
+ * @summary Rename a user group
+ */
+export const renameGroup = async (group: string,
+    renameGroupInputBody: NonReadonly<RenameGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameGroupInputBody)
+  }
+);}
+
+
+
+export type listUsersResponse200 = {
+  data: ListUsersOutputBody
+  status: 200
+}
+
+export type listUsersResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listUsersResponseSuccess = (listUsersResponse200) & {
+  headers: Headers;
+};
+export type listUsersResponseError = (listUsersResponseDefault) & {
+  headers: Headers;
+};
+
+export type listUsersResponse = (listUsersResponseSuccess | listUsersResponseError)
+
+export const getListUsersUrl = (params?: ListUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/users?${stringifiedParams}` : `/users`
+}
+
+/**
+ * Lists all users (people and machine users) with their grants. Gated by user:read:admin.
+ * @summary List users
+ */
+export const listUsers = async (params?: ListUsersParams, options?: Parameters<typeof ogFetch>[1]): Promise<listUsersResponse> => {
+
+  return ogFetch<listUsersResponse>(getListUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserResponse201 = {
+  data: UserBody
+  status: 201
+}
+
+export type createUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createUserResponseSuccess = (createUserResponse201) & {
+  headers: Headers;
+};
+export type createUserResponseError = (createUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type createUserResponse = (createUserResponseSuccess | createUserResponseError)
+
+export const getCreateUserUrl = () => {
+
+
+
+
+  return `/users`
+}
+
+/**
+ * Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.
+ * @summary Create a person
+ */
+export const createUser = async (createUserInputBody: NonReadonly<CreateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createUserResponse>(getCreateUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createUserInputBody)
+  }
+);}
+
+
+
+export type getUserResponse200 = {
+  data: UserBody
+  status: 200
+}
+
+export type getUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getUserResponseSuccess = (getUserResponse200) & {
+  headers: Headers;
+};
+export type getUserResponseError = (getUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type getUserResponse = (getUserResponseSuccess | getUserResponseError)
+
+export const getGetUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}`
+}
+
+/**
+ * Fetches one user by id with its profile and grants. Gated by user:read:admin.
+ * @summary Get a user
+ */
+export const getUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getUserResponse> => {
+
+  return ogFetch<getUserResponse>(getGetUserUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateUserResponse200 = {
+  data: UserBody
+  status: 200
+}
+
+export type updateUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type updateUserResponseSuccess = (updateUserResponse200) & {
+  headers: Headers;
+};
+export type updateUserResponseError = (updateUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type updateUserResponse = (updateUserResponseSuccess | updateUserResponseError)
+
+export const getUpdateUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}`
+}
+
+/**
+ * Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+ * @summary Update a user
+ */
+export const updateUser = async (id: string,
+    updateUserInputBody: NonReadonly<UpdateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<updateUserResponse>(getUpdateUserUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateUserInputBody)
+  }
+);}
+
+
+
+export type getUserAvatarResponse200 = {
+  data: AvatarOutputBody
+  status: 200
+}
+
+export type getUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getUserAvatarResponseSuccess = (getUserAvatarResponse200) & {
+  headers: Headers;
+};
+export type getUserAvatarResponseError = (getUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type getUserAvatarResponse = (getUserAvatarResponseSuccess | getUserAvatarResponseError)
+
+export const getGetUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/avatar`
+}
+
+/**
+ * Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.
+ * @summary Get a user's profile picture
+ */
+export const getUserAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getUserAvatarResponse> => {
+
+  return ogFetch<getUserAvatarResponse>(getGetUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGrantResponse201 = {
+  data: GrantBody
+  status: 201
+}
+
+export type createGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGrantResponseSuccess = (createGrantResponse201) & {
+  headers: Headers;
+};
+export type createGrantResponseError = (createGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGrantResponse = (createGrantResponseSuccess | createGrantResponseError)
+
+export const getCreateGrantUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/grants`
+}
+
+/**
+ * Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+ * @summary Grant a role to a user
+ */
+export const createGrant = async (id: string,
+    createGrantInputBody: NonReadonly<CreateGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGrantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGrantInputBody)
+  }
+);}
+
+
+
+export type revokeGrantResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type revokeGrantResponseSuccess = (revokeGrantResponse204) & {
+  headers: Headers;
+};
+export type revokeGrantResponseError = (revokeGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type revokeGrantResponse = (revokeGrantResponseSuccess | revokeGrantResponseError)
+
+export const getRevokeGrantUrl = (id: string,
+    grantId: string,) => {
+
+
+
+
+  return `/users/${id}/grants/${grantId}`
+}
+
+/**
+ * Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.
+ * @summary Revoke a grant
+ */
+export const revokeGrant = async (id: string,
+    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
+
+  return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listUserSessionsResponse200 = {
+  data: ListUserSessionsOutputBody
+  status: 200
+}
+
+export type listUserSessionsResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type listUserSessionsResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type listUserSessionsResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type listUserSessionsResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type listUserSessionsResponseSuccess = (listUserSessionsResponse200) & {
+  headers: Headers;
+};
+export type listUserSessionsResponseError = (listUserSessionsResponse403 | listUserSessionsResponse404 | listUserSessionsResponse422 | listUserSessionsResponse500) & {
+  headers: Headers;
+};
+
+export type listUserSessionsResponse = (listUserSessionsResponseSuccess | listUserSessionsResponseError)
+
+export const getListUserSessionsUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/sessions`
+}
+
+/**
+ * Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).
+ * @summary List a user's sessions
+ */
+export const listUserSessions = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listUserSessionsResponse> => {
+
+  return ogFetch<listUserSessionsResponse>(getListUserSessionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type revokeUserSessionResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeUserSessionResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type revokeUserSessionResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type revokeUserSessionResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type revokeUserSessionResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type revokeUserSessionResponseSuccess = (revokeUserSessionResponse204) & {
+  headers: Headers;
+};
+export type revokeUserSessionResponseError = (revokeUserSessionResponse403 | revokeUserSessionResponse404 | revokeUserSessionResponse422 | revokeUserSessionResponse500) & {
+  headers: Headers;
+};
+
+export type revokeUserSessionResponse = (revokeUserSessionResponseSuccess | revokeUserSessionResponseError)
+
+export const getRevokeUserSessionUrl = (id: string,
+    sid: string,) => {
+
+
+
+
+  return `/users/${id}/sessions/${sid}:revoke`
+}
+
+/**
+ * Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+ * @summary Revoke a user's session
+ */
+export const revokeUserSession = async (id: string,
+    sid: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeUserSessionResponse> => {
+
+  return ogFetch<revokeUserSessionResponse>(getRevokeUserSessionUrl(id,sid),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type revokeAllUserSessionsResponse200 = {
+  data: RevokeAllUserSessionsOutputBody
+  status: 200
+}
+
+export type revokeAllUserSessionsResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type revokeAllUserSessionsResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type revokeAllUserSessionsResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type revokeAllUserSessionsResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type revokeAllUserSessionsResponseSuccess = (revokeAllUserSessionsResponse200) & {
+  headers: Headers;
+};
+export type revokeAllUserSessionsResponseError = (revokeAllUserSessionsResponse403 | revokeAllUserSessionsResponse404 | revokeAllUserSessionsResponse422 | revokeAllUserSessionsResponse500) & {
+  headers: Headers;
+};
+
+export type revokeAllUserSessionsResponse = (revokeAllUserSessionsResponseSuccess | revokeAllUserSessionsResponseError)
+
+export const getRevokeAllUserSessionsUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/sessions:revokeAll`
+}
+
+/**
+ * Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+ * @summary Revoke all of a user's sessions or tokens
+ */
+export const revokeAllUserSessions = async (id: string,
+    revokeAllUserSessionsInputBody: NonReadonly<RevokeAllUserSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllUserSessionsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<revokeAllUserSessionsResponse>(getRevokeAllUserSessionsUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(revokeAllUserSessionsInputBody)
+  }
+);}
+
+
+
+export type archiveUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type archiveUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type archiveUserResponseSuccess = (archiveUserResponse204) & {
+  headers: Headers;
+};
+export type archiveUserResponseError = (archiveUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type archiveUserResponse = (archiveUserResponseSuccess | archiveUserResponseError)
+
+export const getArchiveUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:archive`
+}
+
+/**
+ * Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.
+ * @summary Archive a user
+ */
+export const archiveUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<archiveUserResponse> => {
+
+  return ogFetch<archiveUserResponse>(getArchiveUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type disableUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type disableUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type disableUserResponseSuccess = (disableUserResponse204) & {
+  headers: Headers;
+};
+export type disableUserResponseError = (disableUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type disableUserResponse = (disableUserResponseSuccess | disableUserResponseError)
+
+export const getDisableUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:disable`
+}
+
+/**
+ * Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.
+ * @summary Disable a user
+ */
+export const disableUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<disableUserResponse> => {
+
+  return ogFetch<disableUserResponse>(getDisableUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type enableUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type enableUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type enableUserResponseSuccess = (enableUserResponse204) & {
+  headers: Headers;
+};
+export type enableUserResponseError = (enableUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type enableUserResponse = (enableUserResponseSuccess | enableUserResponseError)
+
+export const getEnableUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:enable`
+}
+
+/**
+ * Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).
+ * @summary Enable a user
+ */
+export const enableUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<enableUserResponse> => {
+
+  return ogFetch<enableUserResponse>(getEnableUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type impersonateUserResponse201 = {
+  data: ImpersonateOutputBody
+  status: 201
+}
+
+export type impersonateUserResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type impersonateUserResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type impersonateUserResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type impersonateUserResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type impersonateUserResponseSuccess = (impersonateUserResponse201) & {
+  headers: Headers;
+};
+export type impersonateUserResponseError = (impersonateUserResponse403 | impersonateUserResponse404 | impersonateUserResponse422 | impersonateUserResponse500) & {
+  headers: Headers;
+};
+
+export type impersonateUserResponse = (impersonateUserResponseSuccess | impersonateUserResponseError)
+
+export const getImpersonateUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:impersonate`
+}
+
+/**
+ * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
+ * @summary Impersonate a user (view-as or act-as)
+ */
+export const impersonateUser = async (id: string,
+    impersonateInputBody: NonReadonly<ImpersonateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<impersonateUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<impersonateUserResponse>(getImpersonateUserUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(impersonateInputBody)
+  }
+);}
+
+
+
+export type purgeUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type purgeUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type purgeUserResponseSuccess = (purgeUserResponse204) & {
+  headers: Headers;
+};
+export type purgeUserResponseError = (purgeUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type purgeUserResponse = (purgeUserResponseSuccess | purgeUserResponseError)
+
+export const getPurgeUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:purge`
+}
+
+/**
+ * Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.
+ * @summary Purge a user
+ */
+export const purgeUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<purgeUserResponse> => {
+
+  return ogFetch<purgeUserResponse>(getPurgeUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type removeUserAvatarResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeUserAvatarResponseSuccess = (removeUserAvatarResponse204) & {
+  headers: Headers;
+};
+export type removeUserAvatarResponseError = (removeUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeUserAvatarResponse = (removeUserAvatarResponseSuccess | removeUserAvatarResponseError)
+
+export const getRemoveUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:removeAvatar`
+}
+
+/**
+ * Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+ * @summary Remove a user's profile picture
+ */
+export const removeUserAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeUserAvatarResponse> => {
+
+  return ogFetch<removeUserAvatarResponse>(getRemoveUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type resetUserPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetUserPasswordResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type resetUserPasswordResponseSuccess = (resetUserPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetUserPasswordResponseError = (resetUserPasswordResponseDefault) & {
+  headers: Headers;
+};
+
+export type resetUserPasswordResponse = (resetUserPasswordResponseSuccess | resetUserPasswordResponseError)
+
+export const getResetUserPasswordUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:resetPassword`
+}
+
+/**
+ * Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+ * @summary Reset a user's password
+ */
+export const resetUserPassword = async (id: string,
+    resetPasswordInputBody: NonReadonly<ResetPasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<resetUserPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<resetUserPasswordResponse>(getResetUserPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resetPasswordInputBody)
+  }
+);}
+
+
+
+export type restoreUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type restoreUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type restoreUserResponseSuccess = (restoreUserResponse204) & {
+  headers: Headers;
+};
+export type restoreUserResponseError = (restoreUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type restoreUserResponse = (restoreUserResponseSuccess | restoreUserResponseError)
+
+export const getRestoreUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:restore`
+}
+
+/**
+ * Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).
+ * @summary Restore a user
+ */
+export const restoreUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreUserResponse> => {
+
+  return ogFetch<restoreUserResponse>(getRestoreUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type setUserAvatarResponse204 = {
+  data: void
+  status: 204
+}
+
+export type setUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type setUserAvatarResponseSuccess = (setUserAvatarResponse204) & {
+  headers: Headers;
+};
+export type setUserAvatarResponseError = (setUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type setUserAvatarResponse = (setUserAvatarResponseSuccess | setUserAvatarResponseError)
+
+export const getSetUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:setAvatar`
+}
+
+/**
+ * Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+ * @summary Set a user's profile picture
+ */
+export const setUserAvatar = async (id: string,
+    setAvatarInputBody: NonReadonly<SetAvatarInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setUserAvatarResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<setUserAvatarResponse>(getSetUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setAvatarInputBody)
+  }
+);}
+
+
+
 export type listVariablesResponse200 = {
   data: ListVariablesOutputBody
   status: 200
@@ -27620,7 +27620,7 @@ export const getReceiveWebhookUrl = (token: string,) => {
 }
 
 /**
- * The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+ * The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
  * @summary Receive a webhook post for an endpoint
  */
 export const receiveWebhook = async (token: string,

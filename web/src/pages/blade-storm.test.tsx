@@ -35,7 +35,7 @@ import Vendors from "./Vendors";
 // a healthy page reads the list a handful of times (the page, the title and
 // the body each mount an observer, and each stale mount may fetch once).
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 type Case = {
   page: Component;

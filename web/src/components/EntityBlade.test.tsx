@@ -29,7 +29,7 @@ import { seedSeverityLevels } from "../lib/testseverity";
 // properties, their cascade) is the detail view's Configure tab, one Expand
 // away. Every body self-fetches by id, so the catalog serves any page.
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [

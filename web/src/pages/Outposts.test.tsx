@@ -30,8 +30,8 @@ const locSeed: Location[] = [
 const taskSeed: Task[] = [{ id: "t-hq", endpoint_id: uuidFor("if-hq"), mode: "poll", enabled: true, outpost: "edge-hq" }];
 const ifaceSeed: Endpoint[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", transport: "tcp", component: "disp-1", outpost: "edge-hq" }];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
-const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["outpost:read"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
+const reader: Me = { user: { id: "r", kind: "person" }, permissions: ["outpost:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -281,7 +281,7 @@ describe("Outposts page", () => {
   });
 
   it("lets outpost:create without outpost:enroll create an outpost, and hides Enroll on its blade", async () => {
-    const creator: Me = { principal: { id: "c", kind: "human" }, permissions: ["outpost:read", "outpost:create"], grants: [] };
+    const creator: Me = { user: { id: "c", kind: "person" }, permissions: ["outpost:read", "outpost:create"], grants: [] };
     let created = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

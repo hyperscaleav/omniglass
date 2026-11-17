@@ -31,7 +31,7 @@ import type { EffectiveSlot } from "../lib/system_zoom";
 // build quiet, shared occupants chipped, and the no-slot strip a state rather
 // than an error. The identity route's default face (ADR-0129).
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [
@@ -252,21 +252,21 @@ describe("the system zoom", () => {
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
     const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
     const withAck = (ack: object): FleetHealth => ({
       ...health,
       slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
     }) as FleetHealth;
 
-    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+    it("offers Acknowledge on an unacknowledged causing alarm when the user may", () => {
       mount(undefined, health, [], [], responder);
       const strip = screen.getByTestId("alarm-strip");
       expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
       expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
     });
 
-    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+    it("hides Acknowledge from a user without alarm:acknowledge", () => {
       mount(undefined, health, [], [], viewer);
       expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
     });
@@ -861,7 +861,7 @@ describe("the configure tab (#800)", () => {
   });
 
   it("hides Configure from a caller with no edit verb", async () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
     mount(`/web/systems/${uuidFor("szp-sys")}`, health, [], [], viewer);
     await screen.findByTestId("tab-rail");
     expect(screen.queryByRole("tab", { name: "Configure" })).toBeNull();

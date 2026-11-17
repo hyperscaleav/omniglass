@@ -19,13 +19,13 @@ const seed: MetricRow[] = [
   { name: "boot-count", written_by: { rule: "boot-count-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "int", official: false },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
-// A role-scoped principal holding the resource the API stamps (metric_type),
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+// A role-scoped user holding the resource the API stamps (metric_type),
 // with no wildcard to blur a wrong gate string into a pass.
 const cataloger: Me = {
-  principal: { id: "u-cat", kind: "human" },
-  human: { username: "cataloger" },
+  user: { id: "u-cat", kind: "person" },
+  person: { username: "cataloger" },
   permissions: ["metric_type:create", "metric_type:update", "metric_type:delete"],
   grants: [],
 };
@@ -106,7 +106,7 @@ describe("Metrics page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
   });
 
-  it("lets a role-scoped metric_type principal edit a custom row", async () => {
+  it("lets a role-scoped metric_type user edit a custom row", async () => {
     mount(cataloger);
     const blade = await openBlade("boot-count");
     expect(within(blade).getByLabelText("Edit")).toBeInTheDocument();

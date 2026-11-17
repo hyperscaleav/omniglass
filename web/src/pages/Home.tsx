@@ -37,7 +37,7 @@ export default function Home() {
     const down = notUpCount(v);
     return `${down} ${down === 1 ? "outpost" : "outposts"} not up`;
   };
-  const who = () => me.data?.human?.username ?? me.data?.service?.name ?? "operator";
+  const who = () => me.data?.person?.username ?? me.data?.machine?.name ?? "operator";
 
   return (
     <Page title={`Welcome, ${who()}`}>

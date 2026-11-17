@@ -42,19 +42,19 @@ describe("targetDraftErrors", () => {
     expect(targetDraftErrors({ ...d, addresses: "ops@example.com" })).toEqual({});
   });
   it("needs a group or person on create, and a channel always, for people targets", () => {
-    const g = { ...emptyTargetDraft(), name: "on-call", kind: "principal_group" as const, channels: [] };
-    expect(targetDraftErrors(g)).toEqual({ principalGroup: expect.any(String), channels: expect.any(String) });
-    expect(targetDraftErrors({ ...g, principalGroup: "on-call", channels: ["inbox"] })).toEqual({});
-    const p = { ...emptyTargetDraft(), name: "ada", kind: "principal" as const };
-    expect(targetDraftErrors(p).principal).toBeTruthy();
+    const g = { ...emptyTargetDraft(), name: "on-call", kind: "user_group" as const, channels: [] };
+    expect(targetDraftErrors(g)).toEqual({ userGroup: expect.any(String), channels: expect.any(String) });
+    expect(targetDraftErrors({ ...g, userGroup: "on-call", channels: ["inbox"] })).toEqual({});
+    const p = { ...emptyTargetDraft(), name: "ada", kind: "user" as const };
+    expect(targetDraftErrors(p).user).toBeTruthy();
     expect(targetDraftErrors(p, true)).toEqual({});
   });
 });
 
 describe("createTargetBody", () => {
   it("sends only what the kind reads", () => {
-    const d = { ...emptyTargetDraft(), name: "on-call", label: " On call ", kind: "principal_group" as const, url: "https://left.over", principalGroup: "on-call", channels: ["inbox", "email"] as ("inbox" | "email")[] };
-    expect(createTargetBody(d)).toEqual({ name: "on-call", label: "On call", kind: "principal_group", enabled: true, principal_group: "on-call", channels: ["inbox", "email"] });
+    const d = { ...emptyTargetDraft(), name: "on-call", label: " On call ", kind: "user_group" as const, url: "https://left.over", userGroup: "on-call", channels: ["inbox", "email"] as ("inbox" | "email")[] };
+    expect(createTargetBody(d)).toEqual({ name: "on-call", label: "On call", kind: "user_group", enabled: true, user_group: "on-call", channels: ["inbox", "email"] });
   });
   it("binds a webhook's secret only when one is picked", () => {
     expect(createTargetBody({ ...emptyTargetDraft(), name: "h", url: "https://x.example/a" })).toEqual({ name: "h", kind: "webhook", enabled: true, url: "https://x.example/a" });
@@ -74,7 +74,7 @@ describe("updateTargetBody", () => {
     expect(updateTargetBody(d, hook)).toEqual({ url: "https://chat.example.com/hooks/new", secret: "", enabled: false });
   });
   it("sends a people target's channels only when they changed", () => {
-    const g: NotificationTarget = { ...hook, kind: "principal_group", url: undefined, secret: undefined, principal_group: "on-call", channels: ["inbox"] };
+    const g: NotificationTarget = { ...hook, kind: "user_group", url: undefined, secret: undefined, user_group: "on-call", channels: ["inbox"] };
     expect(updateTargetBody(targetDraftFrom(g), g)).toEqual({});
     expect(updateTargetBody({ ...targetDraftFrom(g), channels: ["inbox", "email"] }, g)).toEqual({ channels: ["inbox", "email"] });
   });
@@ -84,13 +84,13 @@ describe("the small readers", () => {
   it("tests only a webhook or a mailbox", () => {
     expect(testable("webhook")).toBe(true);
     expect(testable("email")).toBe(true);
-    expect(testable("principal_group")).toBe(false);
-    expect(testable("principal")).toBe(false);
+    expect(testable("user_group")).toBe(false);
+    expect(testable("user")).toBe(false);
   });
   it("says where each kind sends", () => {
     expect(destination(hook)).toBe("https://chat.example.com/…");
     expect(destination({ ...hook, kind: "email", addresses: ["a@x.io", "b@x.io"] })).toBe("a@x.io, b@x.io");
-    expect(destination({ ...hook, kind: "principal", principal: "ada" })).toBe("ada");
+    expect(destination({ ...hook, kind: "user", user: "ada" })).toBe("ada");
   });
   it("parses addresses, dropping empties", () => {
     expect(parseAddresses(" a@x.io, ,b@x.io ")).toEqual(["a@x.io", "b@x.io"]);

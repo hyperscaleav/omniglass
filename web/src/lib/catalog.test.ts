@@ -73,7 +73,7 @@ describe("visibleGroups", () => {
 
 // The gate mirror: every pathed entry's gate must equal what the route guard
 // enforces for its URL. Without this, editing a catalog.ts gate desyncs the
-// subrail and Overview from RouteGuard (an entry vanishes for a principal the
+// subrail and Overview from RouteGuard (an entry vanishes for a user the
 // route still admits, or renders for one it 403s), the exact two-surface drift
 // the one-table design exists to prevent.
 describe("catalog gates mirror the route guard", () => {
@@ -118,10 +118,10 @@ describe("shell route nesting", () => {
 // caller keeps a live Delete beside a greyed Edit, and a greyed Delete never
 // claims update would unlock it); both verbs held collapses to null (no lock).
 describe("catalogLock", () => {
-  const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-  const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "v" }, permissions: ["*:read"], grants: [] };
-  const deleteOnly: Me = { principal: { id: "u-del", kind: "human" }, human: { username: "d" }, permissions: ["*:read", "vendor:delete"], grants: [] };
-  const updateOnly: Me = { principal: { id: "u-upd", kind: "human" }, human: { username: "u" }, permissions: ["*:read", "vendor:update"], grants: [] };
+  const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+  const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "v" }, permissions: ["*:read"], grants: [] };
+  const deleteOnly: Me = { user: { id: "u-del", kind: "person" }, person: { username: "d" }, permissions: ["*:read", "vendor:delete"], grants: [] };
+  const updateOnly: Me = { user: { id: "u-upd", kind: "person" }, person: { username: "u" }, permissions: ["*:read", "vendor:update"], grants: [] };
 
   it("locks an official row with the official sentence, for the owner too", () => {
     expect(catalogLock({ official: true }, owner, "vendor")).toBe(OFFICIAL_LOCK);

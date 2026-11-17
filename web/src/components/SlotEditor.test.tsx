@@ -33,9 +33,9 @@ const productCatalog: Product[] = [
   { id: uuidFor("p-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), official: true },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 // A reader of everything: it can see the declarations but never write one.
-const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["*:read"], grants: [] };
+const reader: Me = { user: { id: "r", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -243,7 +243,7 @@ describe("SlotEditor on a standard", () => {
     expect(queryByLabelText("Withdraw table-mic")).toBeNull();
   });
 
-  it("hides the write controls from a principal without standard:update", () => {
+  it("hides the write controls from a user without standard:update", () => {
     const { getByText, queryByLabelText } = mount({ me: reader });
     expect(getByText("table-mic")).toBeTruthy();
     expect(queryByLabelText("Slot name")).toBeNull();

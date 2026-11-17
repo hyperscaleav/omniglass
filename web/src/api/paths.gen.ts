@@ -1998,302 +1998,6 @@ export interface paths {
       error: og.claimOutpostResponseError["data"];
     };
   };
-  "/principal-groups": {
-    get: {
-      path: never;
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listGroupsResponseSuccess["data"];
-      error: og.listGroupsResponseError["data"];
-    };
-    post: {
-      path: never;
-      query: never;
-      body: NonNullable<Parameters<typeof og.createGroup>[0]>;
-      bodyRequired: true;
-      data: og.createGroupResponseSuccess["data"];
-      error: og.createGroupResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}": {
-    get: {
-      path: { "group": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getGroupResponseSuccess["data"];
-      error: og.getGroupResponseError["data"];
-    };
-    delete: {
-      path: { "group": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.deleteGroupResponseSuccess["data"];
-      error: og.deleteGroupResponseError["data"];
-    };
-    patch: {
-      path: { "group": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.updateGroup>[1]>;
-      bodyRequired: true;
-      data: og.updateGroupResponseSuccess["data"];
-      error: og.updateGroupResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}/grants": {
-    get: {
-      path: { "group": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listGroupGrantsResponseSuccess["data"];
-      error: og.listGroupGrantsResponseError["data"];
-    };
-    post: {
-      path: { "group": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.createGroupGrant>[1]>;
-      bodyRequired: true;
-      data: og.createGroupGrantResponseSuccess["data"];
-      error: og.createGroupGrantResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}/grants/{grantId}": {
-    delete: {
-      path: { "group": string; "grantId": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.revokeGroupGrantResponseSuccess["data"];
-      error: og.revokeGroupGrantResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}/members": {
-    get: {
-      path: { "group": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listGroupMembersResponseSuccess["data"];
-      error: og.listGroupMembersResponseError["data"];
-    };
-    post: {
-      path: { "group": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.addGroupMember>[1]>;
-      bodyRequired: true;
-      data: og.addGroupMemberResponseSuccess["data"];
-      error: og.addGroupMemberResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}/members/{principal}": {
-    delete: {
-      path: { "group": string; "principal": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.removeGroupMemberResponseSuccess["data"];
-      error: og.removeGroupMemberResponseError["data"];
-    };
-  };
-  "/principal-groups/{group}:rename": {
-    post: {
-      path: { "group": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.renameGroup>[1]>;
-      bodyRequired: true;
-      data: og.renameGroupResponseSuccess["data"];
-      error: og.renameGroupResponseError["data"];
-    };
-  };
-  "/principals": {
-    get: {
-      path: never;
-      query: NonNullable<Parameters<typeof og.listPrincipals>[0]>;
-      body: never;
-      bodyRequired: false;
-      data: og.listPrincipalsResponseSuccess["data"];
-      error: og.listPrincipalsResponseError["data"];
-    };
-    post: {
-      path: never;
-      query: never;
-      body: NonNullable<Parameters<typeof og.createPrincipal>[0]>;
-      bodyRequired: true;
-      data: og.createPrincipalResponseSuccess["data"];
-      error: og.createPrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}": {
-    get: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getPrincipalResponseSuccess["data"];
-      error: og.getPrincipalResponseError["data"];
-    };
-    patch: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.updatePrincipal>[1]>;
-      bodyRequired: true;
-      data: og.updatePrincipalResponseSuccess["data"];
-      error: og.updatePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}/avatar": {
-    get: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getPrincipalAvatarResponseSuccess["data"];
-      error: og.getPrincipalAvatarResponseError["data"];
-    };
-  };
-  "/principals/{id}/grants": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.createGrant>[1]>;
-      bodyRequired: true;
-      data: og.createGrantResponseSuccess["data"];
-      error: og.createGrantResponseError["data"];
-    };
-  };
-  "/principals/{id}/grants/{grantId}": {
-    delete: {
-      path: { "id": string; "grantId": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.revokeGrantResponseSuccess["data"];
-      error: og.revokeGrantResponseError["data"];
-    };
-  };
-  "/principals/{id}/sessions": {
-    get: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listPrincipalSessionsResponseSuccess["data"];
-      error: og.listPrincipalSessionsResponseError["data"];
-    };
-  };
-  "/principals/{id}/sessions/{sid}:revoke": {
-    post: {
-      path: { "id": string; "sid": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.revokePrincipalSessionResponseSuccess["data"];
-      error: og.revokePrincipalSessionResponseError["data"];
-    };
-  };
-  "/principals/{id}/sessions:revokeAll": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.revokeAllPrincipalSessions>[1]>;
-      bodyRequired: true;
-      data: og.revokeAllPrincipalSessionsResponseSuccess["data"];
-      error: og.revokeAllPrincipalSessionsResponseError["data"];
-    };
-  };
-  "/principals/{id}:archive": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.archivePrincipalResponseSuccess["data"];
-      error: og.archivePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:disable": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.disablePrincipalResponseSuccess["data"];
-      error: og.disablePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:enable": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.enablePrincipalResponseSuccess["data"];
-      error: og.enablePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:impersonate": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.impersonatePrincipal>[1]>;
-      bodyRequired: true;
-      data: og.impersonatePrincipalResponseSuccess["data"];
-      error: og.impersonatePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:purge": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.purgePrincipalResponseSuccess["data"];
-      error: og.purgePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:removeAvatar": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.removePrincipalAvatarResponseSuccess["data"];
-      error: og.removePrincipalAvatarResponseError["data"];
-    };
-  };
-  "/principals/{id}:resetPassword": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.resetPrincipalPassword>[1]>;
-      bodyRequired: true;
-      data: og.resetPrincipalPasswordResponseSuccess["data"];
-      error: og.resetPrincipalPasswordResponseError["data"];
-    };
-  };
-  "/principals/{id}:restore": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.restorePrincipalResponseSuccess["data"];
-      error: og.restorePrincipalResponseError["data"];
-    };
-  };
-  "/principals/{id}:setAvatar": {
-    post: {
-      path: { "id": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.setPrincipalAvatar>[1]>;
-      bodyRequired: true;
-      data: og.setPrincipalAvatarResponseSuccess["data"];
-      error: og.setPrincipalAvatarResponseError["data"];
-    };
-  };
   "/products": {
     get: {
       path: never;
@@ -3330,6 +3034,302 @@ export interface paths {
       bodyRequired: false;
       data: og.listUnclaimedSourcesResponseSuccess["data"];
       error: og.listUnclaimedSourcesResponseError["data"];
+    };
+  };
+  "/user-groups": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listGroupsResponseSuccess["data"];
+      error: og.listGroupsResponseError["data"];
+    };
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.createGroup>[0]>;
+      bodyRequired: true;
+      data: og.createGroupResponseSuccess["data"];
+      error: og.createGroupResponseError["data"];
+    };
+  };
+  "/user-groups/{group}": {
+    get: {
+      path: { "group": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getGroupResponseSuccess["data"];
+      error: og.getGroupResponseError["data"];
+    };
+    delete: {
+      path: { "group": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteGroupResponseSuccess["data"];
+      error: og.deleteGroupResponseError["data"];
+    };
+    patch: {
+      path: { "group": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.updateGroup>[1]>;
+      bodyRequired: true;
+      data: og.updateGroupResponseSuccess["data"];
+      error: og.updateGroupResponseError["data"];
+    };
+  };
+  "/user-groups/{group}/grants": {
+    get: {
+      path: { "group": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listGroupGrantsResponseSuccess["data"];
+      error: og.listGroupGrantsResponseError["data"];
+    };
+    post: {
+      path: { "group": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createGroupGrant>[1]>;
+      bodyRequired: true;
+      data: og.createGroupGrantResponseSuccess["data"];
+      error: og.createGroupGrantResponseError["data"];
+    };
+  };
+  "/user-groups/{group}/grants/{grantId}": {
+    delete: {
+      path: { "group": string; "grantId": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.revokeGroupGrantResponseSuccess["data"];
+      error: og.revokeGroupGrantResponseError["data"];
+    };
+  };
+  "/user-groups/{group}/members": {
+    get: {
+      path: { "group": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listGroupMembersResponseSuccess["data"];
+      error: og.listGroupMembersResponseError["data"];
+    };
+    post: {
+      path: { "group": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.addGroupMember>[1]>;
+      bodyRequired: true;
+      data: og.addGroupMemberResponseSuccess["data"];
+      error: og.addGroupMemberResponseError["data"];
+    };
+  };
+  "/user-groups/{group}/members/{user}": {
+    delete: {
+      path: { "group": string; "user": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.removeGroupMemberResponseSuccess["data"];
+      error: og.removeGroupMemberResponseError["data"];
+    };
+  };
+  "/user-groups/{group}:rename": {
+    post: {
+      path: { "group": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.renameGroup>[1]>;
+      bodyRequired: true;
+      data: og.renameGroupResponseSuccess["data"];
+      error: og.renameGroupResponseError["data"];
+    };
+  };
+  "/users": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.listUsers>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.listUsersResponseSuccess["data"];
+      error: og.listUsersResponseError["data"];
+    };
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.createUser>[0]>;
+      bodyRequired: true;
+      data: og.createUserResponseSuccess["data"];
+      error: og.createUserResponseError["data"];
+    };
+  };
+  "/users/{id}": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getUserResponseSuccess["data"];
+      error: og.getUserResponseError["data"];
+    };
+    patch: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.updateUser>[1]>;
+      bodyRequired: true;
+      data: og.updateUserResponseSuccess["data"];
+      error: og.updateUserResponseError["data"];
+    };
+  };
+  "/users/{id}/avatar": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getUserAvatarResponseSuccess["data"];
+      error: og.getUserAvatarResponseError["data"];
+    };
+  };
+  "/users/{id}/grants": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createGrant>[1]>;
+      bodyRequired: true;
+      data: og.createGrantResponseSuccess["data"];
+      error: og.createGrantResponseError["data"];
+    };
+  };
+  "/users/{id}/grants/{grantId}": {
+    delete: {
+      path: { "id": string; "grantId": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.revokeGrantResponseSuccess["data"];
+      error: og.revokeGrantResponseError["data"];
+    };
+  };
+  "/users/{id}/sessions": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listUserSessionsResponseSuccess["data"];
+      error: og.listUserSessionsResponseError["data"];
+    };
+  };
+  "/users/{id}/sessions/{sid}:revoke": {
+    post: {
+      path: { "id": string; "sid": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.revokeUserSessionResponseSuccess["data"];
+      error: og.revokeUserSessionResponseError["data"];
+    };
+  };
+  "/users/{id}/sessions:revokeAll": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.revokeAllUserSessions>[1]>;
+      bodyRequired: true;
+      data: og.revokeAllUserSessionsResponseSuccess["data"];
+      error: og.revokeAllUserSessionsResponseError["data"];
+    };
+  };
+  "/users/{id}:archive": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.archiveUserResponseSuccess["data"];
+      error: og.archiveUserResponseError["data"];
+    };
+  };
+  "/users/{id}:disable": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.disableUserResponseSuccess["data"];
+      error: og.disableUserResponseError["data"];
+    };
+  };
+  "/users/{id}:enable": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.enableUserResponseSuccess["data"];
+      error: og.enableUserResponseError["data"];
+    };
+  };
+  "/users/{id}:impersonate": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.impersonateUser>[1]>;
+      bodyRequired: true;
+      data: og.impersonateUserResponseSuccess["data"];
+      error: og.impersonateUserResponseError["data"];
+    };
+  };
+  "/users/{id}:purge": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.purgeUserResponseSuccess["data"];
+      error: og.purgeUserResponseError["data"];
+    };
+  };
+  "/users/{id}:removeAvatar": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.removeUserAvatarResponseSuccess["data"];
+      error: og.removeUserAvatarResponseError["data"];
+    };
+  };
+  "/users/{id}:resetPassword": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.resetUserPassword>[1]>;
+      bodyRequired: true;
+      data: og.resetUserPasswordResponseSuccess["data"];
+      error: og.resetUserPasswordResponseError["data"];
+    };
+  };
+  "/users/{id}:restore": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.restoreUserResponseSuccess["data"];
+      error: og.restoreUserResponseError["data"];
+    };
+  };
+  "/users/{id}:setAvatar": {
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.setUserAvatar>[1]>;
+      bodyRequired: true;
+      data: og.setUserAvatarResponseSuccess["data"];
+      error: og.setUserAvatarResponseError["data"];
     };
   };
   "/variables": {

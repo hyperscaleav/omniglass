@@ -102,9 +102,9 @@ export const navItems: NavItem[] = [
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, user groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
     children: [
-      { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "People and machine users: status, grants, and tokens." },
+      { label: "Users", path: "/users", live: true, perm: "user:read:admin", hint: "People and machine users: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
-      { label: "User groups", path: "/user-groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
+      { label: "User groups", path: "/user-groups", live: true, perm: "user_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
       // Outposts and Platform health (#1644) are administration: enrolling an outpost
       // is an admin's job, and whether Omniglass itself is well is read off the
