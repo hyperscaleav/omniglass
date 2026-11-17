@@ -483,7 +483,7 @@ the same way.)
 
 A signed-in user manages its own account through the generated self-scoped commands
 (`omniglass auth me`, `auth update-profile`, `auth change-password`, `auth set-avatar` /
-`auth remove-avatar`); an administrator manages other users, roles, groups, secrets,
+`auth remove-avatar`); an administrator manages other users, roles, user groups, secrets,
 and variables through the resource commands, all covered in the [admin guide](/guides/admin/)
 and listed in full in the [CLI reference](/reference/cli/).
 

@@ -30,7 +30,7 @@ grant or deny the other.
 :::
 
 **Admin > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
-and Groups: a directory row per role (its **name**, whether it is **official**, what it inherits, and how many
+and User groups: a directory row per role (its **name**, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
 its read-only **blade**, which shows the role's permissions as a **net** view against the full set of
 capabilities the platform enforces (the **permission universe**). A `Held / Missing / All` toggle switches
@@ -73,7 +73,7 @@ member and grant subcommands (see the [CLI reference](/reference/cli/)).
 
 ## The grant builder
 
-Users and Groups share one control for assigning access. With `principal_grant:create` / `:delete`, the
+Users and User groups share one control for assigning access. With `principal_grant:create` / `:delete`, the
 detail panel's **grant builder** stages a set of changes and applies them only on **Save**, so there are no
 accidental edits.
 

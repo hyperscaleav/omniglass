@@ -64,7 +64,7 @@ endpoints) is the detail view's **Configure** tab, one **Expand** away, along wi
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
-The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
+The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
 trace where access comes from without leaving the page. Each page roots one entity and drills one direction (a
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a

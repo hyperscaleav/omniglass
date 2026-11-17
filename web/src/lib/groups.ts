@@ -9,7 +9,7 @@ import type { Grant, CreateGrant } from "./principals";
 export type Group = { id: string; name: string; label?: string; description?: string; member_count?: number; grant_count?: number };
 // A roster row carries the two facts apart: `name` is the member's identifier
 // (a person's username, a machine user's name) and `label` is the
-// friendly string, which only a human has. They used to arrive as one field
+// friendly string, which only a person has. They used to arrive as one field
 // carrying either, which is what #563 ended.
 export type GroupMember = { principal_id: string; kind: string; name?: string; label?: string };
 
