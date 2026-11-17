@@ -93,7 +93,7 @@ component set; the surfaces below are where they are mounted.
 | V26 | `ReachabilityPanel` row: `ReachLadder`, `SessionPill` and the responding / down / stale / unknown pill (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | derived | `getReachability` (`lib/reachability.ts`) | mount+focus, refreshed by the host's poll of the same key | new: reachability ladder |
 | V27 | `ReachLadder` and `SessionPill` in the Collection section (`pages/ComponentLeaf.tsx`) | `/components/<id>` | derived | `getReachability`; `getOutpost` per outpost | poll 5 s (reach), poll 10 s (outposts) | new: reachability ladder |
 | V28 | `ReachLadder` and `SessionPill` in the endpoint blade (`components/endpointBlades.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `getReachability` | poll 5 s | new: reachability ladder |
-| V29 | `RolesPanel` staffing badges: understaffed, short, spare, impact, down chips (`components/RolesPanel.tsx`) | `/systems/<id>` (Configure tab), system blades | derived | `systemRoles`, `systemHealth` | mount+focus (focus refetch off) | new: role staffing badges |
+| V29 | `SlotsPanel` staffing badges: understaffed, short, spare, impact, down chips (`components/SlotsPanel.tsx`) | `/systems/<id>` (Configure tab), system blades | derived | `systemSlots`, `systemHealth` | mount+focus (focus refetch off) | new: slot staffing badges |
 | V30 | `ReconciliationPanel` drift badge (`components/ReconciliationPanel.tsx`) | `/systems/<id>` and `/components/<id>` (Configure tab), blades | property | `ownerProperties` (`lib/properties.ts`) | mount+focus (focus refetch off) | new: drift badge |
 
 ## Timelines and state-over-time strips
@@ -235,7 +235,7 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: status pill | 1 | V22 |
 | new: system summary card | 1 | V18 |
 | new: verdict slots | 1 | V19 |
-| new: role staffing badges | 1 | V29 |
+| new: slot staffing badges | 1 | V29 |
 | new: drift badge | 1 | V30 |
 | new: audit list | 1 | V46 |
 | new: command list | 1 | V47 |

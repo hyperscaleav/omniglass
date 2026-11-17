@@ -15,7 +15,7 @@ long enough, its **condition** comes into force on that component: it writes an 
 has a severity, opens an alarm; when the value meets its **clear criteria** the condition ends, with
 its own event, and the alarm clears. A rule with no severity is **informational**: it writes its
 events and pages nobody. The alarm it opens is an ordinary alarm: it takes its
-component's verdict down, a system role the component fills stops counting it while it is out, and
+component's verdict down, a system slot the component fills stops counting it while it is out, and
 it can be acknowledged like any other ([alarms on a component](/guides/operator/entities/#alarms-on-a-component)).
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
 
@@ -188,7 +188,7 @@ A touch panel with two inputs reports the one it shows as its `video-input` prop
 Switch a simulated panel's input (`omniglass component simulation fire <panel> --surface nvp
 --command "SET INPUT hdmi2"`) and, on the next poll, the rule shows **1 open**, the panel's page
 shows the alarm in the level's color with the rule's label as its message, and the panel itself reads
-degraded (its system moves too if the panel fills one of its roles). Switch it back and it clears. On
+degraded (its system moves too if the panel fills one of its slots). Switch it back and it clears. On
 a panel with more than two inputs, fire on **is not** `hdmi1` instead, so any other input counts.
 
 ### Conditions, and what a rule writes

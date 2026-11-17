@@ -64,7 +64,7 @@ its own (its bindings, list functions, builtins and budget are in the generated 
 - **Each input binds by its alias as the list of its current values**, typed by its key (a metric's
   numbers, a property's text, a bool property's bools). On a **component** the list holds one value per
   instance of the key (the [instance rules](#how-a-calc-rule-runs) below); a key reported once is a
-  one-element list. On a **system** it holds every role-bound member's values, in member order (name,
+  one-element list. On a **system** it holds every slot-bound member's values, in member order (name,
   then id), and the members' records stay beside it ([system rules](#system-rules)). A **windowed**
   input binds instead as its samples over the window, one record each ([windowed inputs](#windowed-inputs)).
 - **List functions fold a list into one value**, each vetted as a builtin is (one charged pass, one
@@ -155,7 +155,7 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   does drops its mark and state there. Reclassifying a product (changing its component type) marks the
   type-selecting rules on every component of the product in one statement, and the serve settles each:
   it computes a rule a component came into and drops the state of one it left. A component staffing a
-  system role cannot be deleted, so a delete never leaves a system rule computing over a member that is
+  system slot cannot be deleted, so a delete never leaves a system rule computing over a member that is
   gone.
 - **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a
   10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
@@ -226,18 +226,18 @@ and `len(rtt)` how many samples it holds; a predicate reads a record's fields as
 
 ### System rules
 
-A **system rule** derives on each system its selector picks, from the system's **role-bound members**:
-the components assigned to one of its roles (declared on it or inherited from its standard), the same
+A **system rule** derives on each system its selector picks, from the system's **slot-bound members**:
+the components assigned to one of its slots (declared on it or inherited from its standard), the same
 set the health rollup resolves. A member's sample marks every enabled system rule reading its key whose
 selected systems it staffs, in the sample write's marking (one statement more, and only when a system
-rule reads one of the batch's keys); assigning or unassigning a role, declaring or withdrawing one, and
+rule reads one of the batch's keys); assigning or unassigning a slot, declaring or withdrawing one, and
 creating, retyping or re-standarding a system mark the system's rules, and a system a retype moves out
 of a rule's selector loses that rule's state there. Creating, enabling or editing a system rule marks
 every system it selects.
 
 Each input's alias binds the list of **every member's values**, under the same instance and staleness
 rules as on a component, in member order: `avg(temp)` is what the `average` reducer was. Beside the lists
-an expression reads the members as **records**: `members`, one per role-bound member, ordered by
+an expression reads the members as **records**: `members`, one per slot-bound member, ordered by
 component name then id, each holding the member's `id` and `name`, its own value of each input under
 `value.<alias>` (its aggregate instance's newest value, the type's zero when it has none) and whether it
 holds one under `has.<alias>`. One record per member keeps a member's inputs together, so

@@ -127,11 +127,11 @@ both are built from the platform's standards:
   endpoints on the dev outpost ([the dev fleet](#the-dev-fleet));
 - a **scale lab scenario**: a manifest (`internal/lab/scenario/manifests`) that names standards from the
   template catalog, the system type each is classified under, the shipped catalog product filling each
-  of a standard's roles, and how many sites of which shape hold how many systems of each. It resolves
+  of a standard's slots, and how many sites of which shape hold how many systems of each. It resolves
   at a size to a plan, and the [lab](/guides/lab/#scale-lab-scenarios) seeds the plan. A product the
   simulator does not serve is refused, so a scenario cannot invent a device.
 
-Neither has a vocabulary of its own: a role is a standard's role, a system type a registered one, a
+Neither has a vocabulary of its own: a slot is a standard's slot, a system type a registered one, a
 product a catalog product the catalog's device profiles serve. A device's identity is the one
 function of its id wherever it is listed: `fleet.Enrich` fills the blank hostname, serial, MAC and
 address a profile leaves, and the same id yields the same serial across restarts and reseeds.
@@ -641,20 +641,20 @@ restart. Changing its product among the products its profile simulates keeps its
 
 A simulated system is built to a **standard**, the platform's own archetype, not to a separate
 simulator vocabulary. `GET /simulation/standards/{standard}:plan` (`omniglass simulation plan-system
-<standard>`) staffs each of the standard's roles with the first simulated product that fits its
+<standard>`) staffs each of the standard's slots with the first simulated product that fits its
 accepted types and pins, as many as its quorum and at least one, capped at its capacity, and takes one
-alternate per choice (the first that can be fully staffed, else the one that staffs the most). A role no simulated product fits is left
+alternate per choice (the first that can be fully staffed, else the one that staffs the most). A slot no simulated product fits is left
 short, with the reason: that list is what the simulator's catalog still lacks.
 `POST /outposts/{name}/simulation/systems` (`omniglass simulation add-system <outpost> --standard <standard>
 --system-type <type>`) then creates the system, a component per staffed slot (named as an unnamed
-create names it), each at its own free address with its planned endpoint on the outpost, and each role
+create names it), each at its own free address with its planned endpoint on the outpost, and each slot
 assignment, in one transaction under the address lock, so the system lands whole or not at all. Every
 piece is the ordinary create with the caller's own scope and audit row. The simulator serves the
 components from its next pull. The plan and the write are the **planned-system primitive** a
 [system template](/architecture/templates/) also builds on: the pure planner
-(`internal/systemplan`) takes each role's candidate products as an input (here the products the
+(`internal/systemplan`) takes each slot's candidate products as an input (here the products the
 simulator serves), and the planned create (`storage.CreatePlan`) lands locations, systems, their
-components, endpoints, declared values and role assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
+components, endpoints, declared values and slot assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
 fleet manifests are retired (#914), and a scale lab scenario is the same standards-plus-counts
 ([fleets](#fleets)). The standard is the archetype
 ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names),

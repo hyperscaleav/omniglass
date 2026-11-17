@@ -70,7 +70,7 @@ room is a first-class system, not a tag, so health, alarms, and config attach at
 operate.
 
 **It runs the health model.** Signals roll up the tree into "is the room working," and the rollup is
-role-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
+slot-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
 *informational* sensor does not touch it. That turns a wall of red dots into one honest answer, and
 makes a real uptime SLA possible.
 

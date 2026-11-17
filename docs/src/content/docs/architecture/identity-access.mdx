@@ -28,7 +28,7 @@ guard**; **force-logout** revokes every target **session** while API **tokens** 
 its own bearer secret, not password-tied; a self-service change instead revokes the caller's other
 sessions, keeping the current one); **force-change-on-next-login** sets
 `human.must_change_password`, the `authn` choke point 403ing **every** route until the change except
-reading the caller's own principal and the change itself), **role assignment**
+reading the caller's own principal and the change itself), **granting roles**
 (`POST /principals/{id}/grants` / `DELETE /principals/{id}/grants/{grantId}`) with the
 **owner-invariant trigger**, the **principal lifecycle** (reversible
 `POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
@@ -178,13 +178,14 @@ converges.
 
 ## Roles and the role hierarchy
 
-:::note[One word, two models]
+:::note[Role is IAM's word]
 A **role** on this page is an IAM role: a capability set granted to a principal, in the `role` table, on the
-`/roles` routes. A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
-is a slot a system needs filled, in `system_role`, on the `/standards/{id}/roles` and `/systems/{name}/roles`
-routes. They are separate namespaces with no crossing, which is why the fleet-side storage methods are
-named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colliding with `ListRoles` /
-`UpsertRole`.
+`/roles` routes. A place a system needs filled is a
+**[system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)**, in `system_slot`, on
+the `/standards/{id}/slots` and `/systems/{name}/slots` routes, with storage methods `ListSystemSlots` /
+`SetSystemSlot` / `DeleteSystemSlot`. It was also called a role until
+[ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot); the
+word now means only the IAM role.
 :::
 
 A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable catalogs (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
@@ -479,7 +480,7 @@ A refusal picks its status from the **difference between two scopes**, not from 
 
 One primitive makes the split for every route that has one, `resolveScoped` in the Storage
 Gateway, so the ordering (read first, then action) exists in one place rather than once per
-route. Routes whose write takes no scope of its own, the alarm verbs, the system-role
+route. Routes whose write takes no scope of its own, the alarm verbs, the system-slot
 declarations, the command issue and the telemetry push, reach the same primitive through
 `ResolveActionTarget`.
 
@@ -633,7 +634,7 @@ promise:
   system's own type, for a create the platform then refused. The draft carries the create's
   conditional permission as well as its scope, so both halves of the gate rehearse.
 
-- **The component end of a membership or a role assignment** is the same bind seen from the other
+- **The component end of a membership or a slot assignment** is the same bind seen from the other
   end, and it costs a write on that end too
   ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends),
   [#510](https://github.com/hyperscaleav/omniglass/issues/510)). Binding a component into a system

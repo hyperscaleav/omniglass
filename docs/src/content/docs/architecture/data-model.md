@@ -84,17 +84,17 @@ identity: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
-  role_choice: {
+  service: {
+    shape: sql_table
+    principal_id: uuid {constraint: primary_key}
+  }
+  slot_choice: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     standard_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
-  service: {
-    shape: sql_table
-    principal_id: uuid {constraint: primary_key}
-  }
-  system_role: {
+  system_slot: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     alternate_id: uuid {constraint: foreign_key}
@@ -103,22 +103,22 @@ identity: {
     standard_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
-  system_role_assignment: {
+  system_slot_assignment: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
-    role_id: uuid {constraint: foreign_key}
+    slot_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
-  system_role_product: {
+  system_slot_product: {
     shape: sql_table
     product_id: uuid {constraint: primary_key}
-    role_id: uuid {constraint: primary_key}
+    slot_id: uuid {constraint: primary_key}
   }
-  system_role_type: {
+  system_slot_type: {
     shape: sql_table
     component_type_id: uuid {constraint: primary_key}
-    role_id: uuid {constraint: primary_key}
+    slot_id: uuid {constraint: primary_key}
   }
 }
 
@@ -677,10 +677,10 @@ fleet.system.standard_id -> catalog.standard.id
 fleet.system.system_type_id -> catalog.system_type.id
 fleet.system_member.component_id -> fleet.component.id
 fleet.system_member.system_id -> fleet.system.id
-identity.choice_alternate.choice_id -> identity.role_choice.id
-identity.choice_alternate.choice_id -> identity.role_choice.id
-identity.choice_alternate.owner_kind -> identity.role_choice.owner_kind
-identity.choice_alternate.owner_ref -> identity.role_choice.owner_ref
+identity.choice_alternate.choice_id -> identity.slot_choice.id
+identity.choice_alternate.choice_id -> identity.slot_choice.id
+identity.choice_alternate.owner_kind -> identity.slot_choice.owner_kind
+identity.choice_alternate.owner_ref -> identity.slot_choice.owner_ref
 identity.human.principal_id -> identity.principal.id
 identity.impersonation_session.real_actor_principal_id -> identity.principal.id
 identity.impersonation_session.target_principal_id -> identity.principal.id
@@ -689,21 +689,21 @@ identity.principal_grant.principal_id -> identity.principal.id
 identity.principal_grant.role_id -> identity.role.id
 identity.principal_group_member.group_id -> identity.principal_group.id
 identity.principal_group_member.principal_id -> identity.principal.id
-identity.role_choice.standard_id -> catalog.standard.id
-identity.role_choice.system_id -> fleet.system.id
 identity.service.principal_id -> identity.principal.id
-identity.system_role.alternate_id -> identity.choice_alternate.id
-identity.system_role.owner_kind -> identity.choice_alternate.owner_kind
-identity.system_role.owner_ref -> identity.choice_alternate.owner_ref
-identity.system_role.standard_id -> catalog.standard.id
-identity.system_role.system_id -> fleet.system.id
-identity.system_role_assignment.component_id -> fleet.component.id
-identity.system_role_assignment.role_id -> identity.system_role.id
-identity.system_role_assignment.system_id -> fleet.system.id
-identity.system_role_product.product_id -> catalog.product.id
-identity.system_role_product.role_id -> identity.system_role.id
-identity.system_role_type.component_type_id -> catalog.component_type.id
-identity.system_role_type.role_id -> identity.system_role.id
+identity.slot_choice.standard_id -> catalog.standard.id
+identity.slot_choice.system_id -> fleet.system.id
+identity.system_slot.alternate_id -> identity.choice_alternate.id
+identity.system_slot.owner_kind -> identity.choice_alternate.owner_kind
+identity.system_slot.owner_ref -> identity.choice_alternate.owner_ref
+identity.system_slot.standard_id -> catalog.standard.id
+identity.system_slot.system_id -> fleet.system.id
+identity.system_slot_assignment.component_id -> fleet.component.id
+identity.system_slot_assignment.slot_id -> identity.system_slot.id
+identity.system_slot_assignment.system_id -> fleet.system.id
+identity.system_slot_product.product_id -> catalog.product.id
+identity.system_slot_product.slot_id -> identity.system_slot.id
+identity.system_slot_type.component_type_id -> catalog.component_type.id
+identity.system_slot_type.slot_id -> identity.system_slot.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id
 telemetry.action_rule.owner_principal_id -> identity.principal.id
 telemetry.action_rule_opt_out.principal_id -> identity.principal.id
@@ -788,7 +788,7 @@ telemetry.property.system_id -> fleet.system.id
 ## The subsystems
 
 - **identity** - who can act and what they may do: principals (human and
-  service), groups, grants, roles, the typed-slot system-role guard, and the
+  service), groups, grants, roles, the typed-slot system-slot guard, and the
   impersonation trail.
 - **fleet** - what is being monitored: locations, systems, components, and the
   endpoints a component exposes.

@@ -107,11 +107,11 @@ signal (a read alone: observe or warn; a command binding makes it enforceable).
 ### Declaring at the system level
 
 Because config rides the cascade, you rarely declare on the device: declare `video-input = HDMI1` for
-the **main-display role** on the system's standard and the cascade resolves it onto whichever display
-fills that role; drift and reconcile follow.
+the **main-display slot** on the system's standard and the cascade resolves it onto whichever display
+fills that slot; drift and reconcile follow.
 
 :::caution[Open question]
-Resolving a value scoped to a role slot (the [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+Resolving a value scoped to a slot (the [system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 where quorum already lives) may need a new cascade level between system and component, alongside the
 per-item read and write binding shape on the driver.
 :::

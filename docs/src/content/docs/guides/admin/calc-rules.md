@@ -32,7 +32,7 @@ owner you can read, the owners that need a look first: those it **failed** on, t
 then those it wrote nothing for, then those holding a value. For each, the value it last wrote and when,
 at which version; what it found no value of; on a system, the members that held none (named when you can
 read them, counted when you cannot); whether the owner is pending; and, for a system that has no
-role-bound members, since when (its last value stands, unsupported, until a member returns). The blade
+slot-bound members, since when (its last value stands, unsupported, until a member returns). The blade
 lists the first twelve; **and N more** shows the rest.
 
 ## Write a rule
@@ -40,8 +40,8 @@ lists the first twelve; **and N more** shows the rest.
 **New rule** opens the form:
 
 - **Name** and **Label**, as for every catalog; the name is renameable later (Edit, the Name field).
-- **Derives on**: each component, or each system from its **role-bound members** (the components
-  assigned to its roles). Fixed when the rule is created.
+- **Derives on**: each component, or each system from its **slot-bound members** (the components
+  assigned to its slots). Fixed when the rule is created.
 - **Of types** and **Or** owners: the selector, as for event rules (a type includes its subtypes); both
   empty is every owner of the kind.
 - **Reads**: one or more inputs, each a **key** (the property or metric it reads) and the **alias** the
